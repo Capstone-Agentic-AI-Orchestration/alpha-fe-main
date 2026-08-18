@@ -14,8 +14,8 @@ import {
 import { AgentAutonomyLevel } from '../types';
 
 export const SettingsView: React.FC = () => {
-  const { settings, updateSettings } = useApp();
-  const [activeTab, setActiveTab] = useState<'general' | 'keys' | 'runtimes' | 'autonomy' | 'appearance'>('general');
+  const { settings, updateSettings, role } = useApp();
+  const [requestedTab, setActiveTab] = useState<'general' | 'keys' | 'runtimes' | 'autonomy' | 'appearance'>('general');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
 
@@ -43,13 +43,22 @@ export const SettingsView: React.FC = () => {
     setTimeout(() => setSavedSuccess(false), 3000);
   };
 
-  const tabs = [
-    { id: 'general', label: 'Workspace General', icon: <Layers className="w-4 h-4" /> },
-    { id: 'keys', label: 'API Keys Vault', icon: <Key className="w-4 h-4 text-amber-400" /> },
-    { id: 'runtimes', label: 'Local Inference Engine', icon: <Server className="w-4 h-4 text-teal-400" /> },
-    { id: 'autonomy', label: 'Autonomy Governance', icon: <Shield className="w-4 h-4 text-indigo-400" /> },
-    { id: 'appearance', label: 'Appearance & Themes', icon: <Palette className="w-4 h-4 text-pink-400" /> },
+  // Secrets and agent governance belong to whoever administers the workspace.
+  // A client's settings are their own profile and how they want to be contacted.
+  const allTabs = [
+    { id: 'general', label: 'Workspace General', icon: <Layers className="w-4 h-4" />, roles: ['client', 'dev', 'pm', 'admin'] },
+    { id: 'keys', label: 'API Keys Vault', icon: <Key className="w-4 h-4 text-amber-400" />, roles: ['admin'] },
+    { id: 'runtimes', label: 'Local Inference Engine', icon: <Server className="w-4 h-4 text-teal-400" />, roles: ['pm', 'admin'] },
+    { id: 'autonomy', label: 'Autonomy Governance', icon: <Shield className="w-4 h-4 text-indigo-400" />, roles: ['pm', 'admin'] },
+    { id: 'appearance', label: 'Appearance & Themes', icon: <Palette className="w-4 h-4 text-pink-400" />, roles: ['client', 'dev', 'pm', 'admin'] },
   ];
+  const tabs = allTabs.filter(t => t.roles.includes(role));
+
+  // A tab this role may not open resolves to the first one it can, derived
+  // rather than stored so no render-time state write is needed.
+  const activeTab = tabs.some(t => t.id === requestedTab)
+    ? requestedTab
+    : (tabs[0]?.id as typeof requestedTab);
 
   return (
     <div className="h-full flex flex-col md:flex-row overflow-hidden bg-background">

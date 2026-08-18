@@ -1,16 +1,19 @@
-import { 
-  Project, 
-  Agent, 
-  Squad, 
-  Issue, 
-  RuntimeEngine, 
-  Skill, 
-  Deployment, 
-  InboxNotification, 
-  AnalyticsData, 
+import {
+  Project,
+  Agent,
+  Squad,
+  Issue,
+  RuntimeEngine,
+  Skill,
+  Deployment,
+  InboxNotification,
+  AnalyticsData,
   WorkspaceSettings,
   ChatMessage,
-  ChatThread
+  ChatThread,
+  User,
+  RequirementDoc,
+  BudgetLedger
 } from '../types';
 
 export const initialProjects: Project[] = [
@@ -1005,8 +1008,38 @@ export const initialDeployments: Deployment[] = [
 
 export const initialInbox: InboxNotification[] = [
   {
+    id: 'notif-client-1',
+    type: 'agent_approval',
+    title: 'Scope and budget ready for your approval',
+    message:
+      'SPEC-1042 — "Appointment booking and reminders" is priced and ready for review. Nothing is built until you approve.',
+    read: false,
+    audience: 'client',
+    clientId: 'usr-client',
+    timestamp: new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString(),
+    entityType: 'issue',
+    entityId: 'doc-1042',
+    approvalStatus: 'pending',
+    meta: { issueIdentifier: 'SPEC-1042' }
+  },
+  {
+    id: 'notif-client-2',
+    type: 'agent_completed',
+    title: 'Patient intake form digitisation is underway',
+    message:
+      '4 of 10 items are complete. Your budget is tracking $650 above the approved baseline — your project manager will call before anything changes.',
+    read: true,
+    audience: 'client',
+    clientId: 'usr-client',
+    timestamp: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(),
+    entityType: 'issue',
+    entityId: 'doc-1041',
+    meta: { issueIdentifier: 'SPEC-1041' }
+  },
+  {
     id: 'notif-1',
     type: 'agent_failed',
+    audience: 'internal',
     title: 'make the send money and add money vi...',
     message: "Failed: There's an issue with the selected model context or socket stream.",
     read: false,
@@ -1022,6 +1055,7 @@ export const initialInbox: InboxNotification[] = [
   {
     id: 'notif-2',
     type: 'agent_failed',
+    audience: 'internal',
     title: 'Home screen redesign v2: delta badge...',
     message: 'Task failed during Playwright layout validation pass.',
     read: false,
@@ -1037,6 +1071,7 @@ export const initialInbox: InboxNotification[] = [
   {
     id: 'notif-3',
     type: 'agent_approval',
+    audience: 'internal',
     title: 'Home screen: 1:1 layout replication of r...',
     message: 'Opened [ALP-42](mention://issue/92283bc0-4e12) and generated patch diff ready for merge.',
     read: false,
@@ -1109,7 +1144,37 @@ export const initialSettings: WorkspaceSettings = {
 
 export const initialChatThreads: ChatThread[] = [
   {
+    id: 'th-client-1',
+    title: 'Dana Okafor — your project manager',
+    lastMessageSnippet: 'Happy to walk through it on a call before you decide.',
+    lastMessageAt: '2026-08-16T16:05:00Z',
+    pinned: true,
+    iconType: 'sparkle',
+    audience: 'client',
+    clientId: 'usr-client',
+    agentIds: [],
+    messages: [
+      {
+        id: 'cmsg-1',
+        senderType: 'user',
+        senderName: 'Marisol Reyes',
+        content:
+          'The deposit feature is pushing us close to our ceiling. Is it worth keeping for the first version?',
+        timestamp: '2026-08-16T15:52:00Z'
+      },
+      {
+        id: 'cmsg-2',
+        senderType: 'user',
+        senderName: 'Dana Okafor',
+        content:
+          "It is the single biggest lever on no-shows, but it is also the most expensive line at $4,108. You can untick it on the estimate and see the total move — nothing is locked until you approve. Happy to walk through it on a call before you decide.",
+        timestamp: '2026-08-16T16:05:00Z'
+      }
+    ]
+  },
+  {
     id: 'th-1',
+    audience: 'internal',
     title: 'Switch Frontend Squad to DeepSeek V4...',
     lastMessageSnippet: 'The workspace has no "reasonix" anywhere. Let me ...',
     lastMessageAt: '2026-08-14T18:22:00Z',
@@ -1301,4 +1366,324 @@ export const initialChatThreads: ChatThread[] = [
 ];
 
 export const initialChatMessages: ChatMessage[] = initialChatThreads[0]?.messages || [];
+
+/* ---------------------------------------------------------------------------
+ * People
+ * ------------------------------------------------------------------------ */
+
+export const initialUsers: User[] = [
+  {
+    id: 'usr-client',
+    name: 'Marisol Reyes',
+    email: 'marisol@northbaydental.ph',
+    role: 'client',
+    company: 'Northbay Dental Group',
+    projectIds: ['proj-4']
+  },
+  {
+    id: 'usr-dev',
+    name: 'lloyd lim',
+    email: 'lloyd@multica.io',
+    role: 'dev',
+    projectIds: ['proj-1', 'proj-3']
+  },
+  {
+    id: 'usr-pm',
+    name: 'Dana Okafor',
+    email: 'dana@multica.io',
+    role: 'pm',
+    projectIds: ['proj-1', 'proj-2', 'proj-3', 'proj-4']
+  },
+  {
+    id: 'usr-admin',
+    name: 'Francis Peña',
+    email: 'francis@multica.io',
+    role: 'admin'
+  }
+];
+
+/* ---------------------------------------------------------------------------
+ * Requirement documents
+ * ------------------------------------------------------------------------ */
+
+export const initialRequirementDocs: RequirementDoc[] = [
+  {
+    id: 'doc-1042',
+    identifier: 'SPEC-1042',
+    title: 'Appointment booking and reminders',
+    track: 'project',
+    status: 'awaiting_client',
+    version: 3,
+    clientId: 'usr-client',
+    clientName: 'Marisol Reyes',
+    company: 'Northbay Dental Group',
+    answers: {
+      title: 'Appointment booking and reminders',
+      problem:
+        'Patients book by calling the front desk during clinic hours. Staff spend most of the morning on the phone, and we still lose roughly a fifth of appointments to no-shows.',
+      affected: 'Front desk staff (4 people), and about 900 recurring patients',
+      currentWorkaround: 'A paper diary at each of our three branches, reconciled by hand every evening',
+      definitionOfDone:
+        'A patient can book, reschedule, or cancel online without calling, and gets an automatic reminder the day before.',
+      successMeasure: 'No-show rate under 8%, and at least half of bookings made online within three months',
+      urgency: 'high',
+      capabilities: [
+        'Let patients see open slots per branch and book one',
+        'Send a reminder by text 24 hours before the appointment',
+        'Let patients reschedule or cancel from the reminder',
+        'Take a small deposit at booking to reduce no-shows',
+        'Give front desk staff a daily view of every branch',
+        'Let staff block out holidays and dentist leave',
+        'Show patients where each branch is',
+        'Keep a record of past visits per patient',
+        'Send a confirmation email after each booking'
+      ],
+      outOfScope: 'Insurance claims, clinical records, and anything touching treatment notes',
+      concerns: ['Patient data privacy', 'Must work on older phones', 'Tagalog and English'],
+      targetDate: '2026-11-30',
+      budgetCeiling: 25000,
+      expectedUsers: 4000,
+      integrations: 'We use Xero for accounting. Nothing else that matters.',
+      attachments: [
+        { id: 'att-1', name: 'current-paper-diary-photo.jpg', sizeKb: 1840 },
+        { id: 'att-2', name: 'branch-opening-hours.xlsx', sizeKb: 22 }
+      ],
+      approvers: 'Me, and Dr. Alvarez for anything touching patient records',
+      updateCadence: 'weekly'
+    },
+    problemStatement:
+      'Northbay Dental Group takes all appointments by phone across three branches, reconciled nightly against paper diaries. Front-desk capacity is consumed by call handling and the no-show rate sits near 20%, costing both chair time and staff hours.',
+    goals: [
+      'Move at least 50% of bookings to self-service within three months of launch',
+      'Reduce no-show rate below 8%',
+      'Eliminate nightly manual reconciliation across branches'
+    ],
+    functionalRequirements: [
+      {
+        id: 'fr-1',
+        clientWording: 'Let patients see open slots per branch and book one',
+        requirement:
+          'Public booking interface showing real-time availability filtered by branch, service type, and practitioner, with atomic slot reservation to prevent double-booking.',
+        band: 'L',
+        acceptanceCriteria: [
+          'Availability reflects staff calendars within 60 seconds of a change',
+          'Two concurrent bookings for the same slot cannot both succeed',
+          'A booking can be completed in under 90 seconds on a 3G connection',
+          'Slots outside a branch\'s opening hours are never offered'
+        ],
+        included: true
+      },
+      {
+        id: 'fr-2',
+        clientWording: 'Send a reminder by text 24 hours before the appointment',
+        requirement:
+          'Scheduled SMS reminder dispatched 24 hours ahead, with delivery-failure retry and an opt-out path.',
+        band: 'M',
+        acceptanceCriteria: [
+          'Reminder sends within 5 minutes of the 24-hour mark',
+          'Failed sends retry twice before flagging staff',
+          'Patients can opt out by replying STOP'
+        ],
+        included: true
+      },
+      {
+        id: 'fr-3',
+        clientWording: 'Let patients reschedule or cancel from the reminder',
+        requirement:
+          'Tokenised self-service link in the reminder allowing reschedule or cancellation without login, honouring a configurable cut-off window.',
+        band: 'M',
+        acceptanceCriteria: [
+          'Link expires after the appointment time passes',
+          'Cancellation inside the cut-off window is refused with a clear reason',
+          'Freed slots return to public availability immediately'
+        ],
+        included: true
+      },
+      {
+        id: 'fr-4',
+        clientWording: 'Take a small deposit at booking to reduce no-shows',
+        requirement:
+          'Card deposit captured at booking with automatic refund on in-window cancellation and forfeit on no-show.',
+        band: 'L',
+        acceptanceCriteria: [
+          'Deposit amount is configurable per service type',
+          'In-window cancellations refund automatically within one business day',
+          'Failed payments do not consume the slot'
+        ],
+        included: true
+      },
+      {
+        id: 'fr-5',
+        clientWording: 'Give front desk staff a daily view of every branch',
+        requirement:
+          'Staff console presenting a combined and per-branch day view with check-in state, filterable by practitioner.',
+        band: 'M',
+        acceptanceCriteria: [
+          'Day view loads in under 2 seconds with 200 appointments',
+          'Check-in state updates across open sessions without refresh',
+          'Staff see only branches they are assigned to'
+        ],
+        included: true
+      },
+      {
+        id: 'fr-6',
+        clientWording: 'Let staff block out holidays and dentist leave',
+        requirement:
+          'Availability exception management for public holidays, practitioner leave, and ad-hoc closures, applied ahead of slot generation.',
+        band: 'S',
+        acceptanceCriteria: [
+          'A blocked range immediately withdraws affected open slots',
+          'Existing bookings in a newly blocked range are flagged, never silently cancelled'
+        ],
+        included: true
+      },
+      {
+        id: 'fr-7',
+        clientWording: 'Show patients where each branch is',
+        requirement: 'Branch locator with map, address, and travel directions per branch.',
+        band: 'S',
+        acceptanceCriteria: [
+          'Each branch shows an accurate pin and a directions link',
+          'Locator is usable without JavaScript geolocation permission'
+        ],
+        included: true
+      },
+      {
+        id: 'fr-8',
+        clientWording: 'Keep a record of past visits per patient',
+        requirement:
+          'Patient-facing appointment history limited to scheduling metadata, explicitly excluding clinical notes.',
+        band: 'S',
+        acceptanceCriteria: [
+          'History shows date, branch, practitioner, and service only',
+          'No clinical or treatment field is reachable from this surface'
+        ],
+        included: true
+      },
+      {
+        id: 'fr-9',
+        clientWording: 'Send a confirmation email after each booking',
+        requirement:
+          'Transactional confirmation email with calendar attachment, sent on booking and on any subsequent change.',
+        band: 'S',
+        acceptanceCriteria: [
+          'Email arrives within 2 minutes of booking',
+          'Attached calendar entry opens correctly in Google and Apple calendars'
+        ],
+        included: true
+      }
+    ],
+    nonFunctionalRequirements: [
+      'Patient data handled under Philippine Data Privacy Act; deposits never store raw card data',
+      'Interface must remain usable on Android 8 and Safari 13',
+      'Tagalog and English throughout, switchable per patient',
+      'Availability target 99.5% during clinic opening hours'
+    ],
+    constraints: [
+      'Target launch 30 November 2026',
+      'Client budget ceiling stated as $25,000 for the build',
+      'Xero is the only existing system requiring integration'
+    ],
+    outOfScope: [
+      'Insurance claim submission',
+      'Clinical records and treatment notes',
+      'Practitioner payroll'
+    ],
+    estimateId: 'est-1042',
+    createdAt: '2026-08-14T09:12:00Z',
+    updatedAt: '2026-08-16T15:40:00Z'
+  },
+  {
+    id: 'doc-1041',
+    identifier: 'SPEC-1041',
+    title: 'Patient intake form digitisation',
+    track: 'project',
+    status: 'approved',
+    version: 2,
+    clientId: 'usr-client',
+    clientName: 'Marisol Reyes',
+    company: 'Northbay Dental Group',
+    answers: {
+      title: 'Patient intake form digitisation',
+      problem: 'New patients fill a four-page paper form in the waiting room; staff retype it later.',
+      affected: 'Front desk staff and every new patient',
+      currentWorkaround: 'Paper forms, retyped into a spreadsheet each evening',
+      definitionOfDone: 'New patients complete intake on their phone before arriving.',
+      successMeasure: 'Zero retyping; intake completed before arrival for 70% of new patients',
+      urgency: 'medium',
+      capabilities: [
+        'Send an intake link when an appointment is booked',
+        'Let patients fill the form on a phone',
+        'Flag incomplete forms for staff'
+      ],
+      outOfScope: 'Clinical assessment forms',
+      concerns: ['Patient data privacy'],
+      targetDate: '2026-09-30',
+      expectedUsers: 4000,
+      integrations: 'None',
+      attachments: [{ id: 'att-3', name: 'existing-intake-form.pdf', sizeKb: 410 }],
+      approvers: 'Me',
+      updateCadence: 'on_milestone'
+    },
+    problemStatement:
+      'New-patient intake is captured on paper and manually retyped, creating duplicate effort and transcription errors.',
+    goals: ['Eliminate retyping', 'Complete intake before arrival for most new patients'],
+    functionalRequirements: [
+      {
+        id: 'fr-1041-1',
+        clientWording: 'Send an intake link when an appointment is booked',
+        requirement: 'Tokenised intake link issued on booking confirmation email.',
+        band: 'S',
+        acceptanceCriteria: ['Link issued within 2 minutes of booking', 'Link expires after the appointment'],
+        included: true
+      },
+      {
+        id: 'fr-1041-2',
+        clientWording: 'Let patients fill the form on a phone',
+        requirement: 'Mobile-first multi-step intake form with per-step autosave.',
+        band: 'M',
+        acceptanceCriteria: ['Partial answers survive a dropped connection', 'Completable on a 360px viewport'],
+        included: true
+      },
+      {
+        id: 'fr-1041-3',
+        clientWording: 'Flag incomplete forms for staff',
+        requirement: 'Staff queue listing incomplete intakes ahead of the appointment date.',
+        band: 'S',
+        acceptanceCriteria: ['Queue sorts by appointment time', 'Completed forms leave the queue automatically'],
+        included: true
+      }
+    ],
+    nonFunctionalRequirements: ['Data Privacy Act compliance', 'Usable on Android 8'],
+    constraints: ['Launch before the booking system'],
+    outOfScope: ['Clinical assessment forms'],
+    estimateId: 'est-1041',
+    projectId: 'proj-4',
+    approvedBy: 'Marisol Reyes',
+    approvedAt: '2026-08-12T10:30:00Z',
+    createdAt: '2026-08-08T11:00:00Z',
+    updatedAt: '2026-08-12T10:30:00Z'
+  }
+];
+
+/* ---------------------------------------------------------------------------
+ * Budget ledger — actual accrued against the approved baseline
+ * ------------------------------------------------------------------------ */
+
+export const initialLedgers: BudgetLedger[] = [
+  {
+    projectId: 'proj-4',
+    estimateId: 'est-1041',
+    baseline: 6240,
+    actualToDate: 4180,
+    projectedFinal: 6890,
+    entries: [
+      { id: 'le-1', date: '2026-08-13T09:00:00Z', label: 'Dev oversight — week 1', lineId: 'ln-dev', amount: 1560, source: 'logged_hours' },
+      { id: 'le-2', date: '2026-08-14T09:00:00Z', label: 'Agent runs — intake form scaffold', lineId: 'ln-tokens', amount: 0.42, source: 'agent_run' },
+      { id: 'le-3', date: '2026-08-15T09:00:00Z', label: 'PM review and client call', lineId: 'ln-pm', amount: 520, source: 'logged_hours' },
+      { id: 'le-4', date: '2026-08-16T09:00:00Z', label: 'Dev oversight — week 2', lineId: 'ln-dev', amount: 2080, source: 'logged_hours' },
+      { id: 'le-5', date: '2026-08-16T18:00:00Z', label: 'Staging hosting', lineId: 'ln-hosting', amount: 20, source: 'infrastructure' }
+    ]
+  }
+];
 

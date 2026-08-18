@@ -28,7 +28,9 @@ export const CommandPalette: React.FC = () => {
     squads, 
     projects, 
     scanLocalRuntimes,
-    triggerDeployment
+    triggerDeployment,
+    visibleTabs,
+    can
   } = useApp();
 
   const [query, setQuery] = useState('');
@@ -41,7 +43,9 @@ export const CommandPalette: React.FC = () => {
     }
   }, [commandPaletteOpen]);
 
-  const navigationItems: { id: string; title: string; subtitle: string; icon: React.ReactNode; tab: NavigationTab }[] = [
+  // The palette is a navigation surface like any other: it must not offer a
+  // destination the current role is not permitted to open.
+  const allNavigationItems: { id: string; title: string; subtitle: string; icon: React.ReactNode; tab: NavigationTab }[] = [
     { id: 'nav-inbox', title: 'Inbox & Approvals', subtitle: 'View issue updates & agent approvals', icon: <Inbox className="w-4 h-4 text-amber-400" />, tab: 'inbox' },
     { id: 'nav-chat', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', icon: <MessageSquare className="w-4 h-4 text-cyan-400" />, tab: 'chat' },
     { id: 'nav-issues', title: 'Issues & Tasks', subtitle: 'Kanban board & issue tracking', icon: <CheckSquare className="w-4 h-4 text-indigo-400" />, tab: 'issues' },
@@ -54,6 +58,8 @@ export const CommandPalette: React.FC = () => {
     { id: 'nav-deployments', title: 'Deployments & CI/CD', subtitle: 'Release pipelines & preview builds', icon: <Rocket className="w-4 h-4 text-pink-400" />, tab: 'deployments' },
     { id: 'nav-settings', title: 'Settings', subtitle: 'Workspace preferences & API keys', icon: <Settings className="w-4 h-4 text-gray-400" />, tab: 'settings' },
   ];
+
+  const navigationItems = allNavigationItems.filter(item => visibleTabs.includes(item.tab));
 
   const filteredItems = useMemo(() => {
     const q = query.toLowerCase().trim();
@@ -85,7 +91,7 @@ export const CommandPalette: React.FC = () => {
     });
 
     // Search issues
-    issues.forEach(iss => {
+    if (visibleTabs.includes('issues')) issues.forEach(iss => {
       if (iss.identifier.toLowerCase().includes(q) || iss.title.toLowerCase().includes(q)) {
         results.push({
           id: `iss-${iss.id}`,
@@ -102,7 +108,7 @@ export const CommandPalette: React.FC = () => {
     });
 
     // Search agents
-    agents.forEach(agent => {
+    if (visibleTabs.includes('agents')) agents.forEach(agent => {
       if (agent.name.toLowerCase().includes(q) || agent.role.toLowerCase().includes(q) || agent.modelName.toLowerCase().includes(q)) {
         results.push({
           id: `agent-${agent.id}`,
@@ -119,7 +125,7 @@ export const CommandPalette: React.FC = () => {
     });
 
     // Search squads
-    squads.forEach(sq => {
+    if (visibleTabs.includes('squads')) squads.forEach(sq => {
       if (sq.name.toLowerCase().includes(q) || sq.mission.toLowerCase().includes(q)) {
         results.push({
           id: `sq-${sq.id}`,
@@ -136,7 +142,7 @@ export const CommandPalette: React.FC = () => {
     });
 
     // Search projects
-    projects.forEach(proj => {
+    if (visibleTabs.includes('projects')) projects.forEach(proj => {
       if (proj.name.toLowerCase().includes(q) || proj.key.toLowerCase().includes(q)) {
         results.push({
           id: `proj-${proj.id}`,
@@ -152,8 +158,8 @@ export const CommandPalette: React.FC = () => {
       }
     });
 
-    // Quick Actions
-    if ('scan local runtimes ollama lmstudio'.includes(q)) {
+    // Quick Actions — gated on capability, not just tab visibility
+    if (can('run_agents') && 'scan local runtimes ollama lmstudio'.includes(q)) {
       results.push({
         id: 'action-scan-runtimes',
         title: 'Action: Scan Local AI Runtimes (Ollama/LM Studio)',
@@ -168,7 +174,7 @@ export const CommandPalette: React.FC = () => {
       });
     }
 
-    if ('deploy staging pipeline release build'.includes(q)) {
+    if (can('approve_production') && 'deploy staging pipeline release build'.includes(q)) {
       results.push({
         id: 'action-deploy-staging',
         title: 'Action: Trigger Staging CI/CD Deployment',

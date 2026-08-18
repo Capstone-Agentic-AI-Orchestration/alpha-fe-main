@@ -1,15 +1,20 @@
-export type NavigationTab = 
-  | 'inbox' 
-  | 'chat' 
+export type NavigationTab =
+  | 'portal'
+  | 'intake'
+  | 'documents'
+  | 'estimates'
+  | 'billing'
+  | 'inbox'
+  | 'chat'
   | 'my_issues'
-  | 'issues' 
-  | 'projects' 
-  | 'agents' 
-  | 'squads' 
-  | 'analytics' 
-  | 'runtimes' 
-  | 'skills' 
-  | 'deployments' 
+  | 'issues'
+  | 'projects'
+  | 'agents'
+  | 'squads'
+  | 'analytics'
+  | 'runtimes'
+  | 'skills'
+  | 'deployments'
   | 'settings';
 
 export interface TabItem {
@@ -281,6 +286,9 @@ export type NotificationType =
   | 'mention' 
   | 'deployment_status';
 
+/** Who a notification is written for. Internal items never reach a client. */
+export type Audience = 'client' | 'internal';
+
 export interface InboxNotification {
   id: string;
   type: NotificationType;
@@ -289,6 +297,12 @@ export interface InboxNotification {
   read: boolean;
   archived?: boolean;
   timestamp: string;
+  /** Defaults to 'internal' when absent — the safe direction. */
+  audience?: Audience;
+  /** Restricts an internal item further, to one staff member. */
+  forUserId?: string;
+  /** Scopes a client item to the client who owns it. */
+  clientId?: string;
   entityType: 'issue' | 'agent' | 'squad' | 'deployment';
   entityId: string;
   approvalStatus?: 'pending' | 'approved' | 'rejected';
@@ -333,6 +347,13 @@ export interface ChatThread {
   isFailed?: boolean;
   iconType?: 'asterisk' | 'flame' | 'sparkle' | 'bot';
   messages?: ChatMessage[];
+  /**
+   * 'internal' threads are staff talking to agents. 'client' threads are a
+   * client talking to their project manager — never to an agent directly.
+   * Defaults to 'internal' when absent.
+   */
+  audience?: Audience;
+  clientId?: string;
 }
 
 export interface AnalyticsData {
@@ -363,4 +384,181 @@ export interface WorkspaceSettings {
   notificationsEnabled: boolean;
   telemetryEnabled: boolean;
   maxParallelAgentRuns: number;
+}
+
+/* ---------------------------------------------------------------------------
+ * Identity & access
+ * ------------------------------------------------------------------------ */
+
+export type UserRole = 'client' | 'dev' | 'pm' | 'admin';
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: UserRole;
+  avatar?: string;
+  /** Organisation the client belongs to. Absent for internal staff. */
+  company?: string;
+  /** Project ids this user may see. Admin ignores this. */
+  projectIds?: string[];
+}
+
+/* ---------------------------------------------------------------------------
+ * Requirement documents (client intake -> specification)
+ * ------------------------------------------------------------------------ */
+
+/** Sizing band the architect assigns per requirement. Drives the estimate. */
+export type ComplexityBand = 'S' | 'M' | 'L' | 'XL';
+
+export type RequirementDocStatus =
+  | 'draft'          // wizard answers captured, not yet compiled
+  | 'in_review'      // compiled, PM refining
+  | 'awaiting_client'// sent to client with an estimate attached
+  | 'approved'       // scope + budget signed off
+  | 'superseded';
+
+export type RequestTrack = 'quick_task' | 'project';
+
+export interface FunctionalRequirement {
+  id: string;
+  /** Plain-language line the client wrote, kept verbatim for traceability. */
+  clientWording: string;
+  /** Architect's formalised restatement. */
+  requirement: string;
+  band: ComplexityBand;
+  acceptanceCriteria: string[];
+  /** Client can drop this at the approval gate; recalculates the estimate. */
+  included: boolean;
+}
+
+export interface IntakeAnswers {
+  // Step 1 - problem & background
+  title: string;
+  problem: string;
+  affected: string;
+  currentWorkaround: string;
+  // Step 2 - goals & success
+  definitionOfDone: string;
+  successMeasure: string;
+  urgency: IssuePriority;
+  // Step 3 - scope
+  capabilities: string[];
+  outOfScope: string;
+  concerns: string[];
+  // Step 4 - constraints & references
+  targetDate: string;
+  budgetCeiling?: number;
+  expectedUsers: number;
+  integrations: string;
+  attachments: { id: string; name: string; sizeKb: number }[];
+  // Step 5 - stakeholders
+  approvers: string;
+  updateCadence: 'daily' | 'weekly' | 'on_milestone';
+}
+
+export interface RequirementDoc {
+  id: string;
+  identifier: string;        // SPEC-1042
+  title: string;
+  track: RequestTrack;
+  status: RequirementDocStatus;
+  version: number;
+  clientId: string;
+  clientName: string;
+  company?: string;
+  answers: IntakeAnswers;
+  /** Compiled by the architect agent from `answers`. */
+  problemStatement: string;
+  goals: string[];
+  functionalRequirements: FunctionalRequirement[];
+  nonFunctionalRequirements: string[];
+  constraints: string[];
+  outOfScope: string[];
+  estimateId?: string;
+  projectId?: string;        // set once converted
+  approvedBy?: string;
+  approvedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/* ---------------------------------------------------------------------------
+ * Cost estimation
+ * ------------------------------------------------------------------------ */
+
+/** One-time build vs recurring monthly vs usage-priced. Never blended. */
+export type CostClass = 'build' | 'infrastructure' | 'service';
+export type CostCadence = 'one_time' | 'monthly' | 'per_transaction';
+
+export interface EstimateLine {
+  id: string;
+  label: string;
+  costClass: CostClass;
+  cadence: CostCadence;
+  /** What this figure rests on, shown to the client verbatim. */
+  basis: string;
+  amount: number;
+  /** Fractional confidence band, e.g. 0.18 renders as +/-18%. */
+  confidence: number;
+  /** Requirement that forces this cost, for service lines. */
+  forcedBy?: string;
+  /** Free-text override when the figure is not a plain number. */
+  displayOverride?: string;
+}
+
+export interface RateCard {
+  devHourly: number;
+  pmHourly: number;
+  qaHourly: number;
+  /** Blended USD per million tokens, derived from live analytics. */
+  tokenRatePerMillion: number;
+  /** PM-applied contingency on the build total, e.g. 0.1 for 10%. */
+  contingency: number;
+}
+
+export type EstimateStatus = 'draft' | 'awaiting_client' | 'approved' | 'rejected' | 'superseded';
+
+export interface Estimate {
+  id: string;
+  identifier: string;        // EST-1042
+  docId: string;
+  revision: number;
+  status: EstimateStatus;
+  lines: EstimateLine[];
+  rateCard: RateCard;
+  buildTotal: number;
+  buildLow: number;
+  buildHigh: number;
+  monthlyTotal: number;
+  monthlyLow: number;
+  monthlyHigh: number;
+  /**
+   * Count of genuinely comparable finished requirements behind these ranges.
+   * 0 means no history — the figures are seeded defaults, not measurements.
+   */
+  comparableSampleSize: number;
+  /** False while history is too thin to treat the bands as evidenced. */
+  calibrated: boolean;
+  approvedBy?: string;
+  approvedAt?: string;
+  createdAt: string;
+}
+
+/** Actual spend accrued against an approved estimate. */
+export interface BudgetLedger {
+  projectId: string;
+  estimateId: string;
+  baseline: number;
+  actualToDate: number;
+  /** Straight-line projection to completion at the current burn rate. */
+  projectedFinal: number;
+  entries: {
+    id: string;
+    date: string;
+    label: string;
+    lineId: string;
+    amount: number;
+    source: 'agent_run' | 'logged_hours' | 'infrastructure';
+  }[];
 }

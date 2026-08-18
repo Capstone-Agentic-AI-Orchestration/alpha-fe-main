@@ -1,35 +1,47 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { 
-  NavigationTab, 
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import {
+  NavigationTab,
   TabItem,
-  Issue, 
-  IssueStatus, 
-  Project, 
-  Agent, 
-  Squad, 
-  RuntimeEngine, 
-  Skill, 
-  Deployment, 
-  InboxNotification, 
-  AnalyticsData, 
-  WorkspaceSettings, 
+  Issue,
+  IssueStatus,
+  Project,
+  Agent,
+  Squad,
+  RuntimeEngine,
+  Skill,
+  Deployment,
+  InboxNotification,
+  AnalyticsData,
+  WorkspaceSettings,
   ChatMessage,
-  ChatThread
+  ChatThread,
+  User,
+  UserRole,
+  RequirementDoc,
+  IntakeAnswers,
+  Estimate,
+  RateCard,
+  BudgetLedger,
+  Milestone
 } from '../types';
-import { 
-  initialIssues, 
-  initialProjects, 
-  initialAgents, 
-  initialSquads, 
-  initialRuntimes, 
-  initialSkills, 
-  initialDeployments, 
-  initialInbox, 
-  initialAnalytics, 
-  initialSettings, 
+import {
+  initialIssues,
+  initialProjects,
+  initialAgents,
+  initialSquads,
+  initialRuntimes,
+  initialSkills,
+  initialDeployments,
+  initialInbox,
+  initialAnalytics,
+  initialSettings,
   initialChatMessages,
-  initialChatThreads
+  initialChatThreads,
+  initialUsers,
+  initialRequirementDocs,
+  initialLedgers
 } from '../data/mockData';
+import { buildEstimate, DEFAULT_RATE_CARD } from '../lib/estimator';
 
 interface AppContextType {
   activeTab: NavigationTab;
@@ -115,7 +127,108 @@ interface AppContextType {
   // Settings
   settings: WorkspaceSettings;
   updateSettings: (updates: Partial<WorkspaceSettings>) => void;
+
+  // Identity & access
+  currentUser: User;
+  users: User[];
+  role: UserRole;
+  switchRole: (role: UserRole) => void;
+  can: (capability: Capability) => boolean;
+  visibleTabs: NavigationTab[];
+
+  // Requirement documents
+  requirementDocs: RequirementDoc[];
+  submitIntake: (answers: IntakeAnswers) => RequirementDoc;
+  updateRequirementDoc: (id: string, updates: Partial<RequirementDoc>) => void;
+  toggleRequirementIncluded: (docId: string, reqId: string) => void;
+  sendDocToClient: (docId: string) => void;
+
+  // Estimates
+  estimates: Estimate[];
+  estimateForDoc: (docId: string) => Estimate | undefined;
+  regenerateEstimate: (docId: string, rateCard?: RateCard) => Estimate | undefined;
+  approveScopeAndBudget: (docId: string) => Project | undefined;
+  rejectEstimate: (docId: string, reason: string) => void;
+
+  // Budget tracking
+  ledgers: BudgetLedger[];
+  ledgerForProject: (projectId: string) => BudgetLedger | undefined;
 }
+
+/* Capability names are behavioural, not tab names, so a surface can be shared
+ * by two roles while the actions on it differ. */
+export type Capability =
+  | 'create_project'
+  | 'author_estimate'
+  | 'approve_budget'
+  | 'approve_production'
+  | 'manage_agents'
+  | 'run_agents'
+  | 'contact_client'
+  | 'view_margin'
+  | 'manage_billing'
+  | 'submit_intake';
+
+const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
+  client: ['approve_budget', 'submit_intake'],
+  dev: ['run_agents'],
+  pm: [
+    'create_project',
+    'author_estimate',
+    'approve_production',
+    'manage_agents',
+    'run_agents',
+    'contact_client'
+  ],
+  admin: [
+    'create_project',
+    'author_estimate',
+    'approve_production',
+    'manage_agents',
+    'run_agents',
+    'contact_client',
+    'view_margin',
+    'manage_billing'
+  ]
+};
+
+const ROLE_TABS: Record<UserRole, NavigationTab[]> = {
+  client: ['portal', 'intake', 'documents', 'estimates', 'inbox', 'chat', 'settings'],
+  dev: ['my_issues', 'issues', 'documents', 'inbox', 'chat', 'agents', 'deployments', 'runtimes', 'skills', 'settings'],
+  pm: [
+    'inbox',
+    'chat',
+    'my_issues',
+    'issues',
+    'projects',
+    'documents',
+    'estimates',
+    'deployments',
+    'agents',
+    'squads',
+    'analytics',
+    'runtimes',
+    'skills',
+    'settings'
+  ],
+  admin: [
+    'inbox',
+    'chat',
+    'my_issues',
+    'issues',
+    'projects',
+    'documents',
+    'estimates',
+    'billing',
+    'deployments',
+    'agents',
+    'squads',
+    'analytics',
+    'runtimes',
+    'skills',
+    'settings'
+  ]
+};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -139,7 +252,12 @@ function saveToStorage<T>(key: string, value: T): void {
 }
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const initialDefaultTabs: TabItem[] = [{ id: 'tab-default', view: 'issues' }];
+  // Role is resolved before any tab state, because what a tab is allowed to be
+  // depends on it.
+  const [role, setRole] = useState<UserRole>(() => loadFromStorage<UserRole>('active_role', 'pm'));
+  const roleTabs = ROLE_TABS[role];
+
+  const initialDefaultTabs: TabItem[] = [{ id: 'tab-default', view: roleTabs[0] }];
 
   const [tabs, setTabs] = useState<TabItem[]>(() => {
     const saved = loadFromStorage<TabItem[]>('workspace_tabs_v2', initialDefaultTabs);
@@ -154,9 +272,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved || 'tab-default';
   });
 
-  // Calculate current active tab view
+  // Calculate current active tab view.
+  // A view the current role may not open resolves to that role's landing
+  // surface. Hiding it from the sidebar is not enough on its own — persisted
+  // tabs, deep links, and the command palette can all point somewhere else.
   const currentTab = tabs.find(t => t.id === activeTabId) || tabs[0] || initialDefaultTabs[0];
-  const activeTab: NavigationTab = currentTab ? currentTab.view : 'issues';
+  const requestedTab: NavigationTab = currentTab ? currentTab.view : roleTabs[0];
+  const activeTab: NavigationTab = roleTabs.includes(requestedTab) ? requestedTab : roleTabs[0];
 
   // When clicking any section / sidebar / command:
   // It navigates inside the CURRENT active tab without creating a new tab!
@@ -178,7 +300,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Only when user presses + (and selects a destination):
   // Creates a brand new tab and activates it!
-  const openNewTab = (view: NavigationTab = 'issues') => {
+  const openNewTab = (view: NavigationTab = roleTabs[0]) => {
     const newTabId = `tab-${Date.now()}`;
     const newTab: TabItem = { id: newTabId, view };
     setTabs(prev => [...prev, newTab]);
@@ -189,7 +311,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setTabs(prev => {
       const filtered = prev.filter(t => t.id !== tabIdToClose);
       if (filtered.length === 0) {
-        const fallbackTab: TabItem = { id: `tab-${Date.now()}`, view: 'issues' };
+        const fallbackTab: TabItem = { id: `tab-${Date.now()}`, view: roleTabs[0] };
         setActiveTabId(fallbackTab.id);
         return [fallbackTab];
       }
@@ -205,6 +327,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
+  // Raw collections. These are never handed to a view directly — the scoped
+  // derivations further down are what the provider exposes, so a view cannot
+  // accidentally render another persona's data.
   const [issues, setIssues] = useState<Issue[]>(() => loadFromStorage('issues', initialIssues));
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage('projects', initialProjects));
   const [agents, setAgents] = useState<Agent[]>(() => loadFromStorage('agents', initialAgents));
@@ -218,6 +343,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => loadFromStorage('chat_threads', initialChatThreads));
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage('chat_messages', initialChatMessages));
+
+  const [users] = useState<User[]>(initialUsers);
+  const [requirementDocs, setRequirementDocs] = useState<RequirementDoc[]>(() =>
+    loadFromStorage('requirement_docs', initialRequirementDocs)
+  );
+  const [estimates, setEstimates] = useState<Estimate[]>(() => {
+    const saved = loadFromStorage<Estimate[]>('estimates', []);
+    if (saved.length > 0) return saved;
+
+    // Price the seeded specifications with the real engine rather than
+    // hardcoding figures, so the demo numbers move when the rate card,
+    // agent telemetry, or scope changes.
+    return initialRequirementDocs.map(doc => {
+      const est = buildEstimate(
+        doc,
+        initialAgents,
+        initialAnalytics,
+        DEFAULT_RATE_CARD,
+        undefined,
+        initialIssues
+      );
+      return {
+        ...est,
+        id: doc.estimateId ?? est.id,
+        revision: doc.version,
+        status:
+          doc.status === 'approved'
+            ? 'approved'
+            : doc.status === 'awaiting_client'
+              ? 'awaiting_client'
+              : 'draft',
+        approvedBy: doc.approvedBy,
+        approvedAt: doc.approvedAt
+      } as Estimate;
+    });
+  });
+  const [ledgers, setLedgers] = useState<BudgetLedger[]>(() => loadFromStorage('ledgers', initialLedgers));
 
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
   const [isAgentTyping, setIsAgentTyping] = useState(false);
@@ -239,6 +401,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('settings', settings); }, [settings]);
   useEffect(() => { saveToStorage('chat_threads', chatThreads); }, [chatThreads]);
   useEffect(() => { saveToStorage('chat_messages', chatMessages); }, [chatMessages]);
+  useEffect(() => { saveToStorage('active_role', role); }, [role]);
+  useEffect(() => { saveToStorage('requirement_docs', requirementDocs); }, [requirementDocs]);
+  useEffect(() => { saveToStorage('estimates', estimates); }, [estimates]);
+  useEffect(() => { saveToStorage('ledgers', ledgers); }, [ledgers]);
 
   // Global Keyboard shortcuts (Cmd+K for command palette)
   useEffect(() => {
@@ -252,8 +418,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Unread inbox count
-  const unreadInboxCount = inbox.filter(n => !n.read).length;
+  // Unread count is derived from the scoped inbox further down, not from the
+  // raw list — a client must not be given a badge for internal traffic.
 
   // Issue CRUD
   const createIssue = (input: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }): Issue => {
@@ -292,6 +458,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: `New Issue Created: ${identifier}`,
       message: `${newIssue.title} was created in project ${project ? project.name : 'Alpha'}.`,
       read: false,
+      audience: 'internal',
       timestamp: new Date().toISOString(),
       entityType: 'issue',
       entityId: newIssue.id,
@@ -379,6 +546,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: `Agent Approval: ${targetIssue.identifier}`,
       message: `${assignedAgent.name} finished autonomous patch for "${targetIssue.title}" and requests code review approval.`,
       read: false,
+      audience: 'internal',
       timestamp: new Date().toISOString(),
       entityType: 'issue',
       entityId: targetIssue.id,
@@ -535,6 +703,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       title: `Squad Swarm Run Initiated: ${squad.name}`,
       message: `Mission: "${missionGoal || squad.mission}". Topology: ${squad.topology.toUpperCase()}. ${squad.memberAgentIds.length} agents coordinating.`,
       read: false,
+      audience: 'internal',
       timestamp: new Date().toISOString(),
       entityType: 'squad',
       entityId: squad.id
@@ -657,6 +826,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: `${env} Deployment Succeeded`,
         message: `${proj.name} successfully deployed to ${env}.`,
         read: false,
+        audience: 'internal',
         timestamp: new Date().toISOString(),
         entityType: 'deployment',
         entityId: newDep.id
@@ -691,14 +861,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Chat & Threads
   const createNewThread = (title = 'New Conversation') => {
     const newThreadId = `th-${Date.now()}`;
+    const isClientThread = role === 'client';
+
+    // A thread must be created in the audience of whoever opened it, or its
+    // author would immediately lose sight of it.
     const newThread: ChatThread = {
       id: newThreadId,
-      title,
-      lastMessageSnippet: 'Ready for instructions...',
+      title: isClientThread ? 'Message your project manager' : title,
+      lastMessageSnippet: isClientThread ? 'Ask us anything about your request.' : 'Ready for instructions...',
       lastMessageAt: new Date().toISOString(),
       pinned: false,
-      iconType: 'asterisk',
-      agentIds: [agents[0]?.id || 'agent-1'],
+      iconType: isClientThread ? 'sparkle' : 'asterisk',
+      audience: isClientThread ? 'client' : 'internal',
+      clientId: isClientThread ? currentUser.id : undefined,
+      agentIds: isClientThread ? [] : [agents[0]?.id || 'agent-1'],
       messages: []
     };
     setChatThreads(prev => [newThread, ...prev]);
@@ -722,7 +898,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
       senderType: 'user',
-      senderName: 'You (Lead)',
+      senderName: currentUser.name,
       content,
       timestamp: new Date().toISOString()
     };
@@ -741,6 +917,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }));
 
     setChatMessages(prev => [...prev, userMsg]);
+
+    // A client is talking to a person, not an agent. The message is delivered
+    // to the project manager's queue and left there — no synthetic reply is
+    // fabricated on the PM's behalf.
+    if (role === 'client') {
+      const pm = users.find(u => u.role === 'pm');
+      setInbox(prev => [
+        {
+          id: `notif-${Date.now()}`,
+          type: 'mention',
+          title: `Message from ${currentUser.company || currentUser.name}`,
+          message: content,
+          read: false,
+          audience: 'internal',
+          forUserId: pm?.id,
+          timestamp: new Date().toISOString(),
+          entityType: 'issue',
+          entityId: targetThreadId
+        },
+        ...prev
+      ]);
+      return;
+    }
+
     setIsAgentTyping(true);
 
     // Pick responder agent
@@ -842,6 +1042,474 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSettings(prev => ({ ...prev, ...updates }));
   };
 
+  /* ---------------------------------------------------------------------
+   * Identity & access
+   * ------------------------------------------------------------------ */
+
+  const currentUser = users.find(u => u.role === role) || users[0];
+  const visibleTabs = roleTabs;
+  const can = (capability: Capability) => ROLE_CAPABILITIES[role].includes(capability);
+
+  const switchRole = (next: UserRole) => {
+    setRole(next);
+    // Reset the workspace to a landing surface that role is actually allowed on,
+    // so no tab from the previous role survives the switch.
+    const resetTab: TabItem = { id: `tab-${Date.now()}`, view: ROLE_TABS[next][0] };
+    setTabs([resetTab]);
+    setActiveTabId(resetTab.id);
+  };
+
+  /* ---------------------------------------------------------------------
+   * Requirement documents
+   *
+   * Compilation is a deterministic template-fill for now, standing in for the
+   * architect agent. Shape first, model later.
+   * ------------------------------------------------------------------ */
+
+  const inferBand = (capability: string): 'S' | 'M' | 'L' | 'XL' => {
+    const text = capability.toLowerCase();
+    if (/payment|deposit|booking|book one|real-?time|sync|availability|schedul/.test(text)) return 'L';
+    if (/reminder|reschedul|cancel|dashboard|view of|console|report|search|history of/.test(text)) return 'M';
+    if (/show|display|list|record|block|email|link/.test(text)) return 'S';
+    return 'M';
+  };
+
+  const formaliseRequirement = (capability: string): string => {
+    const trimmed = capability.trim().replace(/^let\s+/i, '').replace(/^(give|send|show|keep)\s+/i, '$1 ');
+    return trimmed.charAt(0).toUpperCase() + trimmed.slice(1) + '.';
+  };
+
+  const draftCriteria = (capability: string): string[] => {
+    const base = capability.toLowerCase();
+    const criteria = [`${capability.charAt(0).toUpperCase() + capability.slice(1)} works end to end.`];
+    if (/payment|deposit/.test(base)) criteria.push('A failed payment never consumes the reserved slot.');
+    if (/reminder|email|text|sms/.test(base)) criteria.push('Delivery failures retry before staff are alerted.');
+    if (/book|schedul|availab/.test(base)) criteria.push('Two concurrent attempts on the same slot cannot both succeed.');
+    criteria.push('Behaviour is verified on a 360px viewport.');
+    return criteria;
+  };
+
+  const submitIntake = (answers: IntakeAnswers): RequirementDoc => {
+    const seq = 1043 + requirementDocs.filter(d => d.track === 'project').length - 2;
+    const identifier = `SPEC-${seq}`;
+
+    const doc: RequirementDoc = {
+      id: `doc-${Date.now()}`,
+      identifier,
+      title: answers.title || 'Untitled request',
+      track: 'project',
+      status: 'in_review',
+      version: 1,
+      clientId: currentUser.id,
+      clientName: currentUser.name,
+      company: currentUser.company,
+      answers,
+      problemStatement: answers.problem,
+      goals: [answers.definitionOfDone, answers.successMeasure].filter(Boolean),
+      functionalRequirements: answers.capabilities
+        .filter(c => c.trim())
+        .map((capability, i) => ({
+          id: `fr-${Date.now()}-${i}`,
+          clientWording: capability,
+          requirement: formaliseRequirement(capability),
+          band: inferBand(capability),
+          acceptanceCriteria: draftCriteria(capability),
+          included: true
+        })),
+      nonFunctionalRequirements: answers.concerns.filter(Boolean),
+      constraints: [
+        answers.targetDate ? `Target launch ${answers.targetDate}` : '',
+        answers.budgetCeiling ? `Client budget ceiling stated as $${answers.budgetCeiling.toLocaleString()}` : '',
+        answers.integrations ? `Integrations: ${answers.integrations}` : ''
+      ].filter(Boolean),
+      outOfScope: answers.outOfScope ? [answers.outOfScope] : [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    setRequirementDocs(prev => [doc, ...prev]);
+
+    // The estimate is generated immediately so the PM has something to adjust.
+    const estimate = buildEstimate(doc, agents, analytics, DEFAULT_RATE_CARD, undefined, issues);
+    setEstimates(prev => [estimate, ...prev]);
+    setRequirementDocs(prev => prev.map(d => (d.id === doc.id ? { ...d, estimateId: estimate.id } : d)));
+
+    setInbox(prev => [
+      {
+        id: `notif-${Date.now()}`,
+        type: 'issue_assigned',
+        title: `New request from ${doc.company || doc.clientName}`,
+        message: `${identifier} — "${doc.title}". ${doc.functionalRequirements.length} requirements compiled and priced. Awaiting PM review.`,
+        read: false,
+        audience: 'internal',
+        timestamp: new Date().toISOString(),
+        entityType: 'issue',
+        entityId: doc.id,
+        meta: { issueIdentifier: identifier }
+      },
+      ...prev
+    ]);
+
+    return { ...doc, estimateId: estimate.id };
+  };
+
+  const updateRequirementDoc = (id: string, updates: Partial<RequirementDoc>) => {
+    setRequirementDocs(prev =>
+      prev.map(d => (d.id === id ? { ...d, ...updates, updatedAt: new Date().toISOString() } : d))
+    );
+  };
+
+  // Reads the scoped list, so a role that may not see pricing gets nothing here.
+  const estimateForDoc = (docId: string) =>
+    scopedEstimates.find(e => e.docId === docId && e.status !== 'superseded');
+
+  const regenerateEstimate = (docId: string, rateCard?: RateCard): Estimate | undefined => {
+    const doc = requirementDocs.find(d => d.id === docId);
+    if (!doc) return undefined;
+
+    const previous = estimates.find(e => e.docId === docId && e.status !== 'superseded');
+    const next = buildEstimate(
+      doc,
+      agents,
+      analytics,
+      rateCard ?? previous?.rateCard ?? DEFAULT_RATE_CARD,
+      previous,
+      issues
+    );
+
+    setEstimates(prev => [next, ...prev.filter(e => e.id !== next.id)]);
+    updateRequirementDoc(docId, { estimateId: next.id });
+    return next;
+  };
+
+  /** Dropping a requirement at the gate re-prices the whole estimate. */
+  const toggleRequirementIncluded = (docId: string, reqId: string) => {
+    const doc = requirementDocs.find(d => d.id === docId);
+    if (!doc) return;
+
+    const nextDoc: RequirementDoc = {
+      ...doc,
+      functionalRequirements: doc.functionalRequirements.map(r =>
+        r.id === reqId ? { ...r, included: !r.included } : r
+      ),
+      updatedAt: new Date().toISOString()
+    };
+
+    setRequirementDocs(prev => prev.map(d => (d.id === docId ? nextDoc : d)));
+
+    const previous = estimates.find(e => e.docId === docId && e.status !== 'superseded');
+    const next = buildEstimate(
+      nextDoc,
+      agents,
+      analytics,
+      previous?.rateCard ?? DEFAULT_RATE_CARD,
+      previous,
+      issues
+    );
+    setEstimates(prev => [next, ...prev.filter(e => e.id !== next.id)]);
+  };
+
+  const sendDocToClient = (docId: string) => {
+    updateRequirementDoc(docId, { status: 'awaiting_client' });
+    setEstimates(prev => prev.map(e => (e.docId === docId ? { ...e, status: 'awaiting_client' } : e)));
+
+    const doc = requirementDocs.find(d => d.id === docId);
+    setInbox(prev => [
+      {
+        id: `notif-${Date.now()}`,
+        type: 'agent_approval',
+        title: `Scope and budget ready for your approval`,
+        message: `${doc?.identifier} — "${doc?.title}" is ready for review. Nothing is built until you approve.`,
+        read: false,
+        audience: 'client',
+        clientId: doc?.clientId,
+        timestamp: new Date().toISOString(),
+        entityType: 'issue',
+        entityId: docId,
+        approvalStatus: 'pending',
+        meta: { issueIdentifier: doc?.identifier }
+      },
+      ...prev
+    ]);
+  };
+
+  /* ---------------------------------------------------------------------
+   * The gate: approving scope and budget converts the spec into a project
+   * ------------------------------------------------------------------ */
+
+  const approveScopeAndBudget = (docId: string): Project | undefined => {
+    const doc = requirementDocs.find(d => d.id === docId);
+    const estimate = estimates.find(e => e.docId === docId && e.status !== 'superseded');
+    if (!doc || !estimate) return undefined;
+
+    const included = doc.functionalRequirements.filter(r => r.included);
+    const now = new Date().toISOString();
+    const key = (doc.company || doc.title).slice(0, 3).toUpperCase();
+
+    const milestones: Milestone[] = doc.goals.slice(0, 3).map((goal, i) => ({
+      id: `m-${Date.now()}-${i}`,
+      title: goal.length > 60 ? goal.slice(0, 57) + '…' : goal,
+      targetDate: doc.answers.targetDate,
+      completed: false
+    }));
+
+    const project: Project = {
+      id: `proj-${Date.now()}`,
+      name: doc.title,
+      key,
+      description: doc.problemStatement,
+      color: '#6366f1',
+      icon: '📁',
+      status: 'planned',
+      priority: doc.answers.urgency === 'none' ? 'medium' : doc.answers.urgency,
+      startDate: now.slice(0, 10),
+      targetDate: doc.answers.targetDate,
+      leadType: 'member',
+      leadName: users.find(u => u.role === 'pm')?.name,
+      resources: [],
+      totalIssues: included.length,
+      completedIssues: 0,
+      progressPercentage: 0,
+      milestones,
+      createdAt: now
+    };
+
+    // Requirements become issues; acceptance criteria become subtasks;
+    // non-functional requirements become labels.
+    const labels = doc.nonFunctionalRequirements
+      .map(nfr => nfr.toLowerCase().split(/[\s,;]+/)[0].replace(/[^a-z]/g, ''))
+      .filter(Boolean)
+      .slice(0, 3);
+
+    const newIssues: Issue[] = included.map((req, i) => ({
+      id: `iss-${Date.now()}-${i}`,
+      identifier: `${key}-${101 + i}`,
+      title: req.clientWording,
+      description: `${req.requirement}\n\nFrom ${doc.identifier} (approved rev ${estimate.revision}). Complexity band ${req.band}.`,
+      status: 'backlog',
+      priority: doc.answers.urgency === 'none' ? 'medium' : doc.answers.urgency,
+      projectId: project.id,
+      labels: [...labels, `band-${req.band.toLowerCase()}`],
+      subtasks: req.acceptanceCriteria.map((c, ci) => ({
+        id: `sub-${Date.now()}-${i}-${ci}`,
+        title: c,
+        completed: false
+      })),
+      comments: [
+        {
+          id: `comm-${Date.now()}-${i}`,
+          authorType: 'system',
+          authorName: 'System',
+          content: `Created from approved specification ${doc.identifier}. Acceptance criteria were fixed at approval and are not editable without a new client sign-off.`,
+          createdAt: now
+        }
+      ],
+      createdAt: now,
+      updatedAt: now
+    }));
+
+    setProjects(prev => [project, ...prev]);
+    setIssues(prev => [...newIssues, ...prev]);
+
+    setRequirementDocs(prev =>
+      prev.map(d =>
+        d.id === docId
+          ? { ...d, status: 'approved', projectId: project.id, approvedBy: currentUser.name, approvedAt: now, updatedAt: now }
+          : d
+      )
+    );
+    setEstimates(prev =>
+      prev.map(e =>
+        e.id === estimate.id ? { ...e, status: 'approved', approvedBy: currentUser.name, approvedAt: now } : e
+      )
+    );
+
+    // Open a budget ledger so drift is trackable from day one.
+    setLedgers(prev => [
+      {
+        projectId: project.id,
+        estimateId: estimate.id,
+        baseline: estimate.buildTotal,
+        actualToDate: 0,
+        projectedFinal: estimate.buildTotal,
+        entries: []
+      },
+      ...prev
+    ]);
+
+    setInbox(prev => [
+      {
+        id: `notif-${Date.now()}`,
+        type: 'agent_completed',
+        title: `${doc.identifier} approved — project created`,
+        message: `${doc.clientName} approved scope and budget. ${newIssues.length} issues created in ${project.name} against a $${estimate.buildTotal.toLocaleString()} baseline.`,
+        read: false,
+        audience: 'internal',
+        timestamp: now,
+        entityType: 'issue',
+        entityId: project.id,
+        meta: { issueIdentifier: doc.identifier }
+      },
+      ...prev
+    ]);
+
+    return project;
+  };
+
+  const rejectEstimate = (docId: string, reason: string) => {
+    updateRequirementDoc(docId, { status: 'in_review' });
+    setEstimates(prev => prev.map(e => (e.docId === docId ? { ...e, status: 'rejected' } : e)));
+
+    const doc = requirementDocs.find(d => d.id === docId);
+    setInbox(prev => [
+      {
+        id: `notif-${Date.now()}`,
+        type: 'agent_failed',
+        title: `Changes requested on ${doc?.identifier}`,
+        message: reason || 'The client requested changes before approving.',
+        read: false,
+        audience: 'internal',
+        timestamp: new Date().toISOString(),
+        entityType: 'issue',
+        entityId: docId,
+        meta: { issueIdentifier: doc?.identifier }
+      },
+      ...prev
+    ]);
+  };
+
+  const ledgerForProject = (projectId: string) => scopedLedgers.find(l => l.projectId === projectId);
+
+  /* =====================================================================
+   * Scoping layer
+   *
+   * Navigation gating alone is not access control: a hidden tab still leaves
+   * the data reachable through search, a persisted tab, or a sibling view.
+   * Everything below narrows each collection to what the current role is
+   * entitled to, and these are the values the provider publishes.
+   * ================================================================== */
+
+  /** Projects this role may know exist at all. */
+  const scopedProjects = useMemo(() => {
+    if (role === 'admin') return projects;
+    if (role === 'client') {
+      const mine = requirementDocs
+        .filter(d => d.clientId === currentUser.id && d.projectId)
+        .map(d => d.projectId);
+      return projects.filter(p => mine.includes(p.id));
+    }
+    // PM and dev are scoped to their assignment list.
+    const assigned = currentUser.projectIds ?? [];
+    return projects.filter(p => assigned.includes(p.id));
+  }, [projects, requirementDocs, role, currentUser]);
+
+  const scopedProjectIds = useMemo(() => scopedProjects.map(p => p.id), [scopedProjects]);
+
+  /** A client never sees issues at all; a dev sees only what is theirs. */
+  const scopedIssues = useMemo(() => {
+    if (role === 'admin') return issues;
+    if (role === 'client') return [];
+    const inScope = issues.filter(i => scopedProjectIds.includes(i.projectId));
+    if (role === 'pm') return inScope;
+    return inScope.filter(
+      i => i.assignedHuman === currentUser.name || !i.assignedHuman
+    );
+  }, [issues, scopedProjectIds, role, currentUser]);
+
+  /** Specifications: a client sees only their own; staff see their projects'. */
+  const scopedDocs = useMemo(() => {
+    if (role === 'admin') return requirementDocs;
+    if (role === 'client') return requirementDocs.filter(d => d.clientId === currentUser.id);
+    return requirementDocs.filter(d => !d.projectId || scopedProjectIds.includes(d.projectId));
+  }, [requirementDocs, scopedProjectIds, role, currentUser]);
+
+  const scopedDocIds = useMemo(() => scopedDocs.map(d => d.id), [scopedDocs]);
+
+  /** Pricing follows the specification it belongs to. Devs see no pricing. */
+  const scopedEstimates = useMemo(() => {
+    if (role === 'admin') return estimates;
+    if (role === 'dev') return [];
+    return estimates.filter(e => scopedDocIds.includes(e.docId));
+  }, [estimates, scopedDocIds, role]);
+
+  const scopedLedgers = useMemo(() => {
+    if (role === 'admin') return ledgers;
+    if (role === 'dev') return [];
+    return ledgers.filter(l => scopedProjectIds.includes(l.projectId));
+  }, [ledgers, scopedProjectIds, role]);
+
+  /** Agents are invisible to clients and narrowed to ownership for devs. */
+  const scopedAgents = useMemo(() => {
+    if (role === 'client') return [];
+    if (role === 'dev') return agents.filter(a => a.isMine || a.allowedUsers === 'everyone');
+    return agents;
+  }, [agents, role]);
+
+  const scopedSquads = useMemo(() => (role === 'client' ? [] : squads), [squads, role]);
+
+  const scopedDeployments = useMemo(() => {
+    if (role === 'admin') return deployments;
+    if (role === 'client') return [];
+    return deployments.filter(d => scopedProjectIds.includes(d.projectId));
+  }, [deployments, scopedProjectIds, role]);
+
+  /**
+   * Notifications carry an explicit audience. Anything unlabelled is treated
+   * as internal, so a new notification added later fails closed rather than
+   * leaking to a client.
+   */
+  const scopedInbox = useMemo(() => {
+    if (role === 'client') {
+      return inbox.filter(
+        n => n.audience === 'client' && (!n.clientId || n.clientId === currentUser.id)
+      );
+    }
+    const internal = inbox.filter(n => n.audience !== 'client');
+    if (role === 'admin' || role === 'pm') return internal;
+    return internal.filter(n => !n.forUserId || n.forUserId === currentUser.id);
+  }, [inbox, role, currentUser]);
+
+  /** Clients talk to their project manager; staff talk to agents. */
+  const scopedChatThreads = useMemo(() => {
+    if (role === 'client') {
+      return chatThreads.filter(
+        t => t.audience === 'client' && (!t.clientId || t.clientId === currentUser.id)
+      );
+    }
+    return chatThreads.filter(t => t.audience !== 'client');
+  }, [chatThreads, role, currentUser]);
+
+  /**
+   * Analytics is the same telemetry rendered at three altitudes. A client is
+   * given no token or latency figures at all — their money view is the budget
+   * ledger, which speaks in dollars.
+   */
+  const scopedAnalytics = useMemo<AnalyticsData>(() => {
+    if (role === 'admin' || role === 'pm') return analytics;
+    if (role === 'client') {
+      return { ...analytics, agentBreakdown: [], modelBreakdown: [], tokenTimeline: [] };
+    }
+    // A dev sees their own agents' consumption, not the workspace's spend.
+    const mine = scopedAgents.map(a => a.id);
+    return {
+      ...analytics,
+      totalCost24h: 0,
+      agentBreakdown: analytics.agentBreakdown.filter(b => mine.includes(b.agentId)),
+      modelBreakdown: []
+    };
+  }, [analytics, role, scopedAgents]);
+
+  /** Secrets are admin-only. Everyone else gets the shape with nothing in it. */
+  const scopedSettings = useMemo<WorkspaceSettings>(() => {
+    if (role === 'admin') return settings;
+    return {
+      ...settings,
+      apiKeys: { openai: '', anthropic: '', gemini: '', groq: '', huggingface: '' }
+    };
+  }, [settings, role]);
+
+  const unreadInboxCountScoped = scopedInbox.filter(n => !n.read).length;
+
   return (
     <AppContext.Provider value={{
       activeTab,
@@ -853,17 +1521,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       closeTab,
       commandPaletteOpen,
       setCommandPaletteOpen,
-      issues,
+      issues: scopedIssues,
       createIssue,
       updateIssueStatus,
       updateIssue,
       deleteIssue,
       runAgentOnIssue,
-      projects,
+      projects: scopedProjects,
       createProject,
       updateProject,
       deleteProject,
-      agents,
+      agents: scopedAgents,
       createAgent,
       updateAgent,
       duplicateAgent,
@@ -872,7 +1540,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteAgent,
       bulkUpdateAgents,
       bulkArchiveAgents,
-      squads,
+      squads: scopedSquads,
       createSquad,
       triggerSquadRun,
       runtimes,
@@ -881,16 +1549,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setDefaultRuntime,
       skills,
       toggleSkill,
-      deployments,
+      deployments: scopedDeployments,
       triggerDeployment,
-      inbox,
-      unreadInboxCount,
+      inbox: scopedInbox,
+      unreadInboxCount: unreadInboxCountScoped,
       markNotificationRead,
       markAllNotificationsRead,
       archiveNotification,
       handleApproval,
-      analytics,
-      chatThreads,
+      analytics: scopedAnalytics,
+      chatThreads: scopedChatThreads,
       activeThreadId,
       setActiveThreadId,
       createNewThread,
@@ -903,8 +1571,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveChatSquadId,
       sendChatMessage,
       clearChat,
-      settings,
-      updateSettings
+      settings: scopedSettings,
+      updateSettings,
+      currentUser,
+      users,
+      role,
+      switchRole,
+      can,
+      visibleTabs,
+      requirementDocs: scopedDocs,
+      submitIntake,
+      updateRequirementDoc,
+      toggleRequirementIncluded,
+      sendDocToClient,
+      estimates: scopedEstimates,
+      estimateForDoc,
+      regenerateEstimate,
+      approveScopeAndBudget,
+      rejectEstimate,
+      ledgers: scopedLedgers,
+      ledgerForProject
     }}>
       {children}
     </AppContext.Provider>
