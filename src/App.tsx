@@ -17,25 +17,40 @@ import { RuntimesView } from './views/RuntimesView';
 import { SkillsView } from './views/SkillsView';
 import { DeploymentsView } from './views/DeploymentsView';
 import { SettingsView } from './views/SettingsView';
+import { ClientPortalView } from './views/ClientPortalView';
+import { IntakeWizardView } from './views/IntakeWizardView';
+import { DocumentsView } from './views/DocumentsView';
+import { EstimatesView } from './views/EstimatesView';
+import { BillingView } from './views/BillingView';
 import { NavigationTab } from './types';
-import { 
-  Inbox, 
-  MessageSquare, 
+import {
+  Inbox,
+  MessageSquare,
   User,
-  CheckSquare, 
-  FolderKanban, 
-  Bot, 
-  Users, 
-  BarChart3, 
-  Monitor, 
-  BookOpen, 
-  Settings, 
-  Rocket, 
+  CheckSquare,
+  FolderKanban,
+  Bot,
+  Users,
+  BarChart3,
+  Monitor,
+  BookOpen,
+  Settings,
+  Rocket,
   Plus,
-  X
+  X,
+  FileText,
+  Receipt,
+  CreditCard,
+  LayoutDashboard,
+  PenLine
 } from 'lucide-react';
 
 const ALL_TABS: { id: NavigationTab; title: string; subtitle: string; icon: React.ReactNode }[] = [
+  { id: 'portal', title: 'Overview', subtitle: 'Your requests, progress, and budget', icon: <LayoutDashboard className="w-4 h-4" /> },
+  { id: 'intake', title: 'New Request', subtitle: 'Describe what you need in plain language', icon: <PenLine className="w-4 h-4" /> },
+  { id: 'documents', title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', icon: <FileText className="w-4 h-4" /> },
+  { id: 'estimates', title: 'Estimates', subtitle: 'Priced scope, ranges, and approval', icon: <Receipt className="w-4 h-4" /> },
+  { id: 'billing', title: 'Billing & Usage', subtitle: 'Committed value, delivery cost, and margin', icon: <CreditCard className="w-4 h-4" /> },
   { id: 'inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', icon: <Inbox className="w-4 h-4" /> },
   { id: 'chat', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', icon: <MessageSquare className="w-4 h-4" /> },
   { id: 'my_issues', title: 'My Issues', subtitle: 'Tasks assigned to you across projects', icon: <User className="w-4 h-4" /> },
@@ -51,7 +66,14 @@ const ALL_TABS: { id: NavigationTab; title: string; subtitle: string; icon: Reac
 ];
 
 export const App: React.FC = () => {
-  const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab } = useApp();
+  const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role } = useApp();
+  const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
+  const isClient = role === 'client';
+
+  // A tab persisted under a different role must not keep its old label in the
+  // strip; resolve it the same way the context resolves the rendered view.
+  const resolveView = (view: NavigationTab): NavigationTab =>
+    visibleTabs.includes(view) ? view : visibleTabs[0];
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
@@ -81,6 +103,11 @@ export const App: React.FC = () => {
 
   const getTabIcon = (tab: NavigationTab) => {
     switch (tab) {
+      case 'portal': return <LayoutDashboard className="w-3.5 h-3.5" />;
+      case 'intake': return <PenLine className="w-3.5 h-3.5" />;
+      case 'documents': return <FileText className="w-3.5 h-3.5" />;
+      case 'estimates': return <Receipt className="w-3.5 h-3.5" />;
+      case 'billing': return <CreditCard className="w-3.5 h-3.5" />;
       case 'inbox': return <Inbox className="w-3.5 h-3.5" />;
       case 'chat': return <MessageSquare className="w-3.5 h-3.5" />;
       case 'my_issues': return <User className="w-3.5 h-3.5" />;
@@ -99,8 +126,13 @@ export const App: React.FC = () => {
 
   const getTabTitle = (tab: NavigationTab) => {
     switch (tab) {
+      case 'portal': return 'Overview';
+      case 'intake': return 'New Request';
+      case 'documents': return isClient ? 'My Requests' : 'Specifications';
+      case 'estimates': return isClient ? 'Costs' : 'Estimates';
+      case 'billing': return 'Billing';
+      case 'chat': return isClient ? 'Messages' : 'Chat';
       case 'inbox': return 'Inbox';
-      case 'chat': return 'Chat';
       case 'my_issues': return 'My Issues';
       case 'issues': return 'Issues';
       case 'projects': return 'Projects';
@@ -149,9 +181,9 @@ export const App: React.FC = () => {
                   }`}
                 >
                   <span className={`flex-shrink-0 ${isActive ? 'text-brand-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
-                    {getTabIcon(tab.view)}
+                    {getTabIcon(resolveView(tab.view))}
                   </span>
-                  <span className="truncate flex-1 text-left">{getTabTitle(tab.view)}</span>
+                  <span className="truncate flex-1 text-left">{getTabTitle(resolveView(tab.view))}</span>
                   {tabs.length > 1 && (
                     <button
                       onClick={(e) => {
@@ -190,7 +222,7 @@ export const App: React.FC = () => {
                   Open New Tab
                 </div>
                 <div className="max-h-80 overflow-y-auto space-y-0.5">
-                  {ALL_TABS.map((item) => {
+                  {availableTabs.map((item) => {
                     return (
                       <button
                         key={item.id}
@@ -220,6 +252,11 @@ export const App: React.FC = () => {
 
         {/* Dynamic View Content */}
         <main className="flex-1 overflow-hidden relative">
+          {activeTab === 'portal' && <ClientPortalView />}
+          {activeTab === 'intake' && <IntakeWizardView />}
+          {activeTab === 'documents' && <DocumentsView />}
+          {activeTab === 'estimates' && <EstimatesView />}
+          {activeTab === 'billing' && <BillingView />}
           {activeTab === 'inbox' && <InboxView />}
           {activeTab === 'chat' && <ChatView />}
           {activeTab === 'my_issues' && <IssuesView onlyMyIssues={true} onOpenNewIssue={() => setCreateIssueOpen(true)} />}

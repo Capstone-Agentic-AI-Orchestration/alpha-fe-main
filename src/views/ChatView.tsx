@@ -30,8 +30,10 @@ export const ChatView: React.FC = () => {
     isAgentTyping, 
     agents, 
     skills,
-    activeChatAgentId, 
-    updateAgent
+    activeChatAgentId,
+    updateAgent,
+    role,
+    users
   } = useApp();
 
   const [input, setInput] = useState('');
@@ -82,13 +84,24 @@ export const ChatView: React.FC = () => {
   };
 
   const activeAgent = agents.find(a => a.id === activeChatAgentId) || agents[0];
+  const isClient = role === 'client';
+  const pmName = users.find(u => u.role === 'pm')?.name ?? 'your project manager';
 
-  const quickStarters = [
-    { label: 'Switch Squad Model', prompt: 'Switch Frontend Squad to DeepSeek V4 reasonix model.' },
-    { label: 'Audit Socket Backoff', prompt: '@Ada @Kaelen please audit our WebSocket reconnect strategy on ALF-104 with jitter.' },
-    { label: 'Generate Playwright Tests', prompt: '@Nyx generate end-to-end regression tests for the Agent Canvas.' },
-    { label: 'Security & Static Analysis', prompt: '@Vesper run static analysis on recent PR diffs for injection hazards.' },
-  ];
+  // A client is talking to a person about scope and money, not to an agent
+  // about models and test suites.
+  const quickStarters = isClient
+    ? [
+        { label: 'Ask about the price', prompt: 'Can you explain what is driving the engineering oversight figure?' },
+        { label: 'Change something', prompt: 'I would like to drop a feature from the first version — what happens to the timeline?' },
+        { label: 'Ask about timing', prompt: 'When would we realistically be able to launch this?' },
+        { label: 'Request a call', prompt: 'Could we talk this through on a call before I approve?' }
+      ]
+    : [
+        { label: 'Switch Squad Model', prompt: 'Switch Frontend Squad to DeepSeek V4 reasonix model.' },
+        { label: 'Audit Socket Backoff', prompt: '@Ada @Kaelen please audit our WebSocket reconnect strategy on ALF-104 with jitter.' },
+        { label: 'Generate Playwright Tests', prompt: '@Nyx generate end-to-end regression tests for the Agent Canvas.' },
+        { label: 'Security & Static Analysis', prompt: '@Vesper run static analysis on recent PR diffs for injection hazards.' }
+      ];
 
   return (
     <div className="h-full flex overflow-hidden bg-[#121315] text-sm text-gray-200">
@@ -96,7 +109,9 @@ export const ChatView: React.FC = () => {
       <div className="w-80 sm:w-96 border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-[#101113]">
         {/* Chat Threads Header */}
         <div className="h-14 px-4 border-b border-white/[0.08] flex items-center justify-between">
-          <h2 className="text-base font-semibold text-white">Chat</h2>
+          <h2 className="text-base font-semibold text-white">
+            {isClient ? 'Messages' : 'Chat'}
+          </h2>
 
           <button
             onClick={() => createNewThread()}
@@ -176,7 +191,9 @@ export const ChatView: React.FC = () => {
                     {activeThread.title}
                   </h2>
                   <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                    <span className="text-brand-400">Multi-Agent Swarm</span>
+                    <span className="text-brand-400">
+                      {isClient ? `${pmName} · Project Manager` : 'Multi-Agent Swarm'}
+                    </span>
                     <span>•</span>
                     <span>{currentMessages.length} messages</span>
                   </div>
@@ -184,18 +201,22 @@ export const ChatView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setShowInspector(!showInspector)}
-                  className={`p-2 rounded-md text-xs flex items-center gap-1.5 transition-colors ${
-                    showInspector 
-                      ? 'bg-white/[0.05] text-white'
-                      : 'text-gray-400 hover:text-white hover:bg-white/[0.03]'
-                  }`}
-                  title="Toggle Agent Inspector"
-                >
-                  <SlidersHorizontal className="w-4 h-4" />
-                  <span className="hidden sm:inline font-sans">Inspector</span>
-                </button>
+                {/* The inspector configures an agent's model and prompt. There
+                    is no agent behind a client conversation. */}
+                {!isClient && (
+                  <button
+                    onClick={() => setShowInspector(!showInspector)}
+                    className={`p-2 rounded-md text-xs flex items-center gap-1.5 transition-colors ${
+                      showInspector
+                        ? 'bg-white/[0.05] text-white'
+                        : 'text-gray-400 hover:text-white hover:bg-white/[0.03]'
+                    }`}
+                    title="Toggle Agent Inspector"
+                  >
+                    <SlidersHorizontal className="w-4 h-4" />
+                    <span className="hidden sm:inline font-sans">Inspector</span>
+                  </button>
+                )}
 
                 <button
                   onClick={() => clearChat()}
@@ -223,9 +244,13 @@ export const ChatView: React.FC = () => {
                     <Sparkles className="w-6 h-6" />
                   </div>
                   <div className="space-y-1">
-                    <h3 className="text-base font-semibold text-white">Start a new agent session</h3>
+                    <h3 className="text-base font-semibold text-white">
+                      {isClient ? `Message ${pmName}` : 'Start a new agent session'}
+                    </h3>
                     <p className="text-xs text-gray-400 max-w-sm">
-                      Summon any agent by typing @Ada, @Kaelen, @Vesper, @Nyx, @Cipher, or start asking questions below.
+                      {isClient
+                        ? `${pmName} manages your project and usually replies within a few hours. Ask about scope, price, or timing.`
+                        : 'Summon any agent by typing @Ada, @Kaelen, @Vesper, @Nyx, @Cipher, or start asking questions below.'}
                     </p>
                   </div>
                 </div>
@@ -256,12 +281,18 @@ export const ChatView: React.FC = () => {
                         <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
                           U
                         </div>
-                      ) : (
+                      ) : msg.senderAvatar || activeAgent?.avatar ? (
                         <img
-                          src={msg.senderAvatar || activeAgent.avatar}
+                          src={msg.senderAvatar || activeAgent?.avatar}
                           alt=""
                           className="w-9 h-9 rounded-full object-cover ring-1 ring-white/10 flex-shrink-0"
                         />
+                      ) : (
+                        // Client threads have no agent behind them — the other
+                        // party is a person, shown by initial.
+                        <div className="w-9 h-9 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center text-xs font-semibold text-gray-200 flex-shrink-0">
+                          {msg.senderName?.[0] ?? '·'}
+                        </div>
                       )}
 
                       {/* Message Body */}
@@ -364,7 +395,11 @@ export const ChatView: React.FC = () => {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  placeholder="Ask an agent, summon a squad (@Ada, @Kaelen), or execute code..."
+                  placeholder={
+                    isClient
+                      ? `Write a message to ${pmName}...`
+                      : 'Ask an agent, summon a squad (@Ada, @Kaelen), or execute code...'
+                  }
                   disabled={isAgentTyping}
                   className="w-full bg-surface-100 border border-white/10 rounded-2xl px-5 py-3.5 text-sm sm:text-base text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-medium pr-14 disabled:opacity-50"
                 />
