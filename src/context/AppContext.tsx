@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { 
   NavigationTab, 
   TabItem,
@@ -14,7 +14,9 @@ import {
   AnalyticsData, 
   WorkspaceSettings, 
   ChatMessage,
-  ChatThread
+  ChatThread,
+  PrototypeRun,
+  ToastMessage
 } from '../types';
 import { 
   initialIssues, 
@@ -48,7 +50,14 @@ interface AppContextType {
   updateIssueStatus: (id: string, status: IssueStatus) => void;
   updateIssue: (id: string, updates: Partial<Issue>) => void;
   deleteIssue: (id: string) => void;
-  runAgentOnIssue: (issueId: string, agentId?: string) => Promise<void>;
+  runAgentOnIssue: (issueId: string, agentId?: string) => void;
+  prototypeRuns: PrototypeRun[];
+  runSetupIssueId: string | null;
+  runSetupAgentId: string | null;
+  closeRunSetup: () => void;
+  startPrototypeRun: (issueId: string, agentId: string, plan: string[], scenario: PrototypeRun['scenario']) => PrototypeRun | null;
+  cancelPrototypeRun: (runId: string) => void;
+  retryPrototypeRun: (runId: string) => void;
   
   // Projects
   projects: Project[];
@@ -84,7 +93,11 @@ interface AppContextType {
   
   // Deployments
   deployments: Deployment[];
-  triggerDeployment: (projectId: string, env?: 'Production' | 'Staging' | 'Preview') => Promise<void>;
+  triggerDeployment: (
+    projectId: string,
+    env?: 'Production' | 'Staging' | 'Preview',
+    source?: { issueId?: string; runId?: string }
+  ) => Promise<void>;
   
   // Inbox
   inbox: InboxNotification[];
@@ -115,6 +128,11 @@ interface AppContextType {
   // Settings
   settings: WorkspaceSettings;
   updateSettings: (updates: Partial<WorkspaceSettings>) => void;
+
+  // Prototype feedback
+  toasts: ToastMessage[];
+  showToast: (title: string, description?: string, tone?: ToastMessage['tone']) => void;
+  dismissToast: (id: string) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -218,6 +236,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => loadFromStorage('chat_threads', initialChatThreads));
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage('chat_messages', initialChatMessages));
+  const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() => loadFromStorage('prototype_runs', []));
+  const [runSetupIssueId, setRunSetupIssueId] = useState<string | null>(null);
+  const [runSetupAgentId, setRunSetupAgentId] = useState<string | null>(null);
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+  const handledRunEventsRef = useRef<Set<string>>(new Set());
 
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
   const [isAgentTyping, setIsAgentTyping] = useState(false);
@@ -239,6 +262,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('settings', settings); }, [settings]);
   useEffect(() => { saveToStorage('chat_threads', chatThreads); }, [chatThreads]);
   useEffect(() => { saveToStorage('chat_messages', chatMessages); }, [chatMessages]);
+  useEffect(() => { saveToStorage('prototype_runs', prototypeRuns); }, [prototypeRuns]);
+
+  const dismissToast = (id: string) => {
+    setToasts(prev => prev.filter(toast => toast.id !== id));
+  };
+
+  const showToast = (title: string, description?: string, tone: ToastMessage['tone'] = 'info') => {
+    const id = `toast-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setToasts(prev => {
+      if (prev.some(toast => toast.title === title && toast.description === description)) return prev;
+      return [...prev.slice(-3), { id, title, description, tone }];
+    });
+    window.setTimeout(() => dismissToast(id), 4200);
+  };
 
   // Global Keyboard shortcuts (Cmd+K for command palette)
   useEffect(() => {
@@ -316,83 +353,361 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIssues(prev => prev.filter(iss => iss.id !== id));
   };
 
-  // Run autonomous agent on issue
-  const runAgentOnIssue = async (issueId: string, agentId?: string) => {
-    const targetIssue = issues.find(i => i.id === issueId);
+  // Prototype agent-run setup and lifecycle
+  const runAgentOnIssue = (issueId: string, agentId?: string) => {
+    const targetIssue = issues.find(issue => issue.id === issueId);
     if (!targetIssue) return;
 
-    const assignedAgent = agents.find(a => a.id === (agentId || targetIssue.assignedAgentId)) || agents[1]; // Kaelen Vance
+    const blockingRun = prototypeRuns.find(run =>
+      run.issueId === issueId && ['running', 'awaiting_approval', 'validating'].includes(run.status)
+    );
+    if (blockingRun) {
+      showToast('Run already in progress', 'Open the issue to view its current status.', 'info');
+      return;
+    }
 
-    // 1. Set status to agent_running
-    updateIssueStatus(issueId, 'agent_running');
-    
-    // Add comment that agent has started
-    const startComment = {
-      id: `comm-${Date.now()}`,
-      authorType: 'agent' as const,
-      authorName: assignedAgent.name,
-      authorAvatar: assignedAgent.avatar,
-      agentId: assignedAgent.id,
-      content: `⚡ **${assignedAgent.name}** (${assignedAgent.role}) has taken ownership of **${targetIssue.identifier}**. Inspecting files and compiling execution plan...`,
-      createdAt: new Date().toISOString(),
-      isThinking: true
-    };
-
-    setIssues(prev => prev.map(iss => iss.id === issueId ? {
-      ...iss,
-      assignedAgentId: assignedAgent.id,
-      comments: [...iss.comments, startComment]
-    } : iss));
-
-    // Simulate agent work delay
-    await new Promise(r => setTimeout(r, 2200));
-
-    // 2. Complete subtasks and add final agent comment
-    const completedComment = {
-      id: `comm-${Date.now() + 1}`,
-      authorType: 'agent' as const,
-      authorName: assignedAgent.name,
-      authorAvatar: assignedAgent.avatar,
-      agentId: assignedAgent.id,
-      content: `✅ Implementation completed! Generated branch \`feat/${targetIssue.identifier.toLowerCase()}\` with passing unit tests.\n\nReady for code review.`,
-      createdAt: new Date().toISOString(),
-      isThinking: false
-    };
-
-    setIssues(prev => prev.map(iss => {
-      if (iss.id !== issueId) return iss;
-      return {
-        ...iss,
-        status: 'review',
-        branchName: `feat/${iss.identifier.toLowerCase()}-auto-patch`,
-        prUrl: `https://github.com/multica/alpha-engine/pull/${Math.floor(Math.random() * 80) + 10}`,
-        subtasks: iss.subtasks.map(st => ({ ...st, completed: true })),
-        comments: [...iss.comments, completedComment],
-        updatedAt: new Date().toISOString()
-      };
-    }));
-
-    // Add inbox approval request
-    const approvalNotif: InboxNotification = {
-      id: `notif-${Date.now()}`,
-      type: 'agent_approval',
-      title: `Agent Approval: ${targetIssue.identifier}`,
-      message: `${assignedAgent.name} finished autonomous patch for "${targetIssue.title}" and requests code review approval.`,
-      read: false,
-      timestamp: new Date().toISOString(),
-      entityType: 'issue',
-      entityId: targetIssue.id,
-      approvalStatus: 'pending',
-      meta: {
-        agentName: assignedAgent.name,
-        agentRole: assignedAgent.role,
-        issueIdentifier: targetIssue.identifier,
-        proposedChanges: '84 insertions, 12 deletions in 2 files. 100% tests green.',
-        costTokens: 3850
-      }
-    };
-    setInbox(prev => [approvalNotif, ...prev]);
+    setRunSetupIssueId(issueId);
+    setRunSetupAgentId(agentId || targetIssue.assignedAgentId || agents[0]?.id || null);
   };
+
+  const closeRunSetup = () => {
+    setRunSetupIssueId(null);
+    setRunSetupAgentId(null);
+  };
+
+  const buildRunStages = (startedAt: string): PrototypeRun['stages'] => [
+    {
+      id: 'workspace',
+      label: 'Preparing workspace',
+      description: 'Restoring project context and opening a safe working branch.',
+      status: 'running',
+      durationMs: 1100,
+      logs: ['Workspace context restored.', 'Created isolated prototype branch.'],
+      startedAt
+    },
+    {
+      id: 'analysis',
+      label: 'Analyzing issue',
+      description: 'Reviewing the issue, subtasks, and connected project resources.',
+      status: 'pending',
+      durationMs: 1250,
+      logs: ['Issue requirements indexed.', 'Relevant project files identified.']
+    },
+    {
+      id: 'implementation',
+      label: 'Implementing changes',
+      description: 'Applying the approved plan to the simulated workspace.',
+      status: 'pending',
+      durationMs: 1700,
+      logs: ['Implementation patch generated.', 'Changed files formatted.']
+    },
+    {
+      id: 'tests',
+      label: 'Running tests',
+      description: 'Checking types, unit tests, and expected behavior.',
+      status: 'pending',
+      durationMs: 1450,
+      logs: ['Type checking passed.', 'Test suite completed.']
+    },
+    {
+      id: 'review',
+      label: 'Preparing review',
+      description: 'Summarizing changes and preparing a mock pull request.',
+      status: 'pending',
+      durationMs: 1050,
+      logs: ['Change summary generated.', 'Review artifacts prepared.']
+    }
+  ];
+
+  const startPrototypeRun = (
+    issueId: string,
+    agentId: string,
+    plan: string[],
+    scenario: PrototypeRun['scenario']
+  ): PrototypeRun | null => {
+    const targetIssue = issues.find(issue => issue.id === issueId);
+    const assignedAgent = agents.find(agent => agent.id === agentId);
+    if (!targetIssue || !assignedAgent) return null;
+
+    const now = new Date().toISOString();
+    const run: PrototypeRun = {
+      id: `run-${Date.now()}`,
+      issueId,
+      projectId: targetIssue.projectId,
+      agentId,
+      status: 'running',
+      scenario,
+      plan,
+      stages: buildRunStages(now),
+      currentStageIndex: 0,
+      createdAt: now,
+      updatedAt: now
+    };
+
+    setPrototypeRuns(prev => [run, ...prev]);
+    setIssues(prev => prev.map(issue => issue.id === issueId ? {
+      ...issue,
+      status: 'agent_running',
+      assignedAgentId: agentId,
+      comments: [...issue.comments, {
+        id: `comm-${run.id}-started`,
+        authorType: 'agent' as const,
+        authorName: assignedAgent.name,
+        authorAvatar: assignedAgent.avatar,
+        agentId,
+        content: `Started the approved prototype plan for ${targetIssue.identifier}. Progress is available in the run timeline.`,
+        createdAt: now,
+        isThinking: true
+      }],
+      updatedAt: now
+    } : issue));
+    setAgents(prev => prev.map(agent => agent.id === agentId ? {
+      ...agent,
+      status: 'executing',
+      workStatus: 'working',
+      currentTask: targetIssue.identifier
+    } : agent));
+    closeRunSetup();
+    showToast('Agent run started', `${assignedAgent.name} is working on ${targetIssue.identifier}.`, 'success');
+    return run;
+  };
+
+  const cancelPrototypeRun = (runId: string) => {
+    const run = prototypeRuns.find(item => item.id === runId);
+    if (!run || run.status !== 'running') return;
+    const now = new Date().toISOString();
+
+    setPrototypeRuns(prev => prev.map(item => item.id === runId ? {
+      ...item,
+      status: 'cancelled',
+      updatedAt: now,
+      stages: item.stages.map((stage, index) => index === item.currentStageIndex
+        ? { ...stage, status: 'cancelled', completedAt: now }
+        : stage)
+    } : item));
+    setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
+      ...issue,
+      status: 'in_progress',
+      comments: [...issue.comments, {
+        id: `comm-${run.id}-cancelled`,
+        authorType: 'system' as const,
+        authorName: 'Prototype runner',
+        content: 'Run cancelled. The issue remains in progress and can be started again.',
+        createdAt: now
+      }],
+      updatedAt: now
+    } : issue));
+    setAgents(prev => prev.map(agent => agent.id === run.agentId ? {
+      ...agent,
+      status: 'idle',
+      workStatus: 'idle',
+      currentTask: undefined
+    } : agent));
+    showToast('Run cancelled', 'No prototype changes were submitted for review.', 'info');
+  };
+
+  const retryPrototypeRun = (runId: string) => {
+    const run = prototypeRuns.find(item => item.id === runId);
+    if (!run || !['failed', 'changes_requested', 'cancelled'].includes(run.status)) return;
+    const now = new Date().toISOString();
+
+    setPrototypeRuns(prev => prev.map(item => item.id === runId ? {
+      ...item,
+      status: 'running',
+      scenario: 'success',
+      stages: buildRunStages(now),
+      currentStageIndex: 0,
+      updatedAt: now,
+      branchName: undefined,
+      prUrl: undefined,
+      testSummary: undefined
+    } : item));
+    setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
+      ...issue,
+      status: 'agent_running',
+      comments: [...issue.comments, {
+        id: `comm-${run.id}-retry-${Date.now()}`,
+        authorType: 'system' as const,
+        authorName: 'Prototype runner',
+        content: 'Run restarted with the previous plan and a clean simulated workspace.',
+        createdAt: now
+      }],
+      updatedAt: now
+    } : issue));
+    setAgents(prev => prev.map(agent => agent.id === run.agentId ? {
+      ...agent,
+      status: 'executing',
+      workStatus: 'working'
+    } : agent));
+    showToast('Run restarted', 'The failed stage will be attempted again.', 'success');
+  };
+
+  // Advance simulated stages from their stored timestamps so a refresh can resume a run.
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const nowMs = Date.now();
+      setPrototypeRuns(prev => prev.map(run => {
+        if (run.status !== 'running') return run;
+
+        const currentStage = run.stages[run.currentStageIndex];
+        if (!currentStage) return run;
+        const startedAt = currentStage.startedAt || run.updatedAt;
+        if (nowMs - new Date(startedAt).getTime() < currentStage.durationMs) return run;
+
+        const completedAt = new Date(nowMs).toISOString();
+        const shouldFail = run.scenario === 'test_failure' && currentStage.id === 'tests';
+        if (shouldFail) {
+          return {
+            ...run,
+            status: 'failed',
+            testSummary: '2 tests failed · retry available',
+            updatedAt: completedAt,
+            stages: run.stages.map((stage, index) => index === run.currentStageIndex ? {
+              ...stage,
+              status: 'failed',
+              completedAt,
+              logs: ['Type checking passed.', '2 tests failed in the simulated regression suite.']
+            } : stage)
+          };
+        }
+
+        const nextIndex = run.currentStageIndex + 1;
+        const hasNextStage = nextIndex < run.stages.length;
+        const nextStages = run.stages.map((stage, index) => {
+          if (index === run.currentStageIndex) {
+            return { ...stage, status: 'success' as const, completedAt };
+          }
+          if (index === nextIndex) {
+            return { ...stage, status: 'running' as const, startedAt: completedAt };
+          }
+          return stage;
+        });
+
+        return {
+          ...run,
+          status: hasNextStage ? 'running' : 'awaiting_approval',
+          currentStageIndex: hasNextStage ? nextIndex : run.currentStageIndex,
+          changedFiles: hasNextStage ? run.changedFiles : 4,
+          insertions: hasNextStage ? run.insertions : 86,
+          deletions: hasNextStage ? run.deletions : 14,
+          testSummary: hasNextStage ? run.testSummary : '42 tests passed',
+          updatedAt: completedAt,
+          stages: nextStages
+        };
+      }));
+    }, 350);
+
+    return () => window.clearInterval(timer);
+  }, []);
+
+  // Materialize review and failure events into the existing issue and inbox views.
+  useEffect(() => {
+    prototypeRuns.forEach(run => {
+      if (!['awaiting_approval', 'failed'].includes(run.status)) return;
+      const eventKey = `${run.id}:${run.status}`;
+      if (handledRunEventsRef.current.has(eventKey)) return;
+      handledRunEventsRef.current.add(eventKey);
+
+      const targetIssue = issues.find(issue => issue.id === run.issueId);
+      const assignedAgent = agents.find(agent => agent.id === run.agentId);
+      if (!targetIssue || !assignedAgent) return;
+      const now = new Date().toISOString();
+
+      setAgents(prev => prev.map(agent => agent.id === run.agentId ? {
+        ...agent,
+        status: 'idle',
+        workStatus: 'idle',
+        currentTask: undefined,
+        stats: {
+          ...agent.stats,
+          totalRuns: agent.stats.totalRuns + 1
+        }
+      } : agent));
+
+      if (run.status === 'failed') {
+        setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
+          ...issue,
+          status: 'in_progress',
+          comments: issue.comments.some(comment => comment.id === `comm-${run.id}-failed`)
+            ? issue.comments
+            : [...issue.comments, {
+                id: `comm-${run.id}-failed`,
+                authorType: 'agent' as const,
+                authorName: assignedAgent.name,
+                authorAvatar: assignedAgent.avatar,
+                agentId: assignedAgent.id,
+                content: 'The simulated test stage found two regressions. Review the run and retry when ready.',
+                createdAt: now
+              }],
+          updatedAt: now
+        } : issue));
+        setInbox(prev => prev.some(item => item.id === `notif-${run.id}-failed`) ? prev : [{
+          id: `notif-${run.id}-failed`,
+          type: 'agent_failed',
+          title: `Run needs attention: ${targetIssue.identifier}`,
+          message: `${assignedAgent.name} stopped after the simulated test stage failed.`,
+          read: false,
+          timestamp: now,
+          entityType: 'issue',
+          entityId: targetIssue.id,
+          meta: {
+            agentName: assignedAgent.name,
+            agentRole: assignedAgent.role,
+            issueIdentifier: targetIssue.identifier
+          }
+        }, ...prev]);
+        showToast('Run needs attention', 'The simulated tests failed. Open the issue to retry.', 'error');
+        return;
+      }
+
+      const branchName = `feat/${targetIssue.identifier.toLowerCase()}-prototype`;
+      const prUrl = `https://github.com/multica/alpha-engine/pull/${Math.floor(Math.random() * 80) + 10}`;
+      setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
+        ...item,
+        branchName,
+        prUrl
+      } : item));
+      setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
+        ...issue,
+        status: 'review',
+        branchName,
+        prUrl,
+        subtasks: issue.subtasks.map(subtask => ({ ...subtask, completed: true })),
+        comments: issue.comments.some(comment => comment.id === `comm-${run.id}-review`)
+          ? issue.comments
+          : [...issue.comments, {
+              id: `comm-${run.id}-review`,
+              authorType: 'agent' as const,
+              authorName: assignedAgent.name,
+              authorAvatar: assignedAgent.avatar,
+              agentId: assignedAgent.id,
+              content: `Implementation is ready for review. ${run.changedFiles || 4} files changed and ${run.testSummary || 'all tests passed'}.`,
+              createdAt: now,
+              isThinking: false
+            }],
+        updatedAt: now
+      } : issue));
+      setInbox(prev => prev.some(item => item.id === `notif-${run.id}-approval`) ? prev : [{
+        id: `notif-${run.id}-approval`,
+        type: 'agent_approval',
+        title: `Review requested: ${targetIssue.identifier}`,
+        message: `${assignedAgent.name} completed the approved plan and prepared a simulated pull request.`,
+        read: false,
+        timestamp: now,
+        entityType: 'issue',
+        entityId: targetIssue.id,
+        approvalStatus: 'pending',
+        meta: {
+          agentName: assignedAgent.name,
+          agentRole: assignedAgent.role,
+          issueIdentifier: targetIssue.identifier,
+          proposedChanges: `${run.insertions || 86} insertions, ${run.deletions || 14} deletions in ${run.changedFiles || 4} files.`,
+          costTokens: 3850
+        }
+      }, ...prev]);
+      showToast('Review ready', `${targetIssue.identifier} is waiting in Inbox.`, 'success');
+    });
+  }, [prototypeRuns, issues, agents]);
 
   // Projects
   const createProject = (input: Omit<Project, 'id' | 'totalIssues' | 'completedIssues' | 'progressPercentage' | 'milestones'>): Project => {
@@ -587,7 +902,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Deployments
-  const triggerDeployment = async (projectId: string, env: 'Production' | 'Staging' | 'Preview' = 'Staging') => {
+  const triggerDeployment = async (
+    projectId: string,
+    env: 'Production' | 'Staging' | 'Preview' = 'Staging',
+    source?: { issueId?: string; runId?: string }
+  ) => {
     const proj = projects.find(p => p.id === projectId) || projects[0];
     const newDep: Deployment = {
       id: `dep-${Date.now()}`,
@@ -605,6 +924,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
       durationSec: 0,
       startedAt: new Date().toISOString(),
+      sourceIssueId: source?.issueId,
+      sourceRunId: source?.runId,
       stages: [
         { name: 'Lint & Strict Typecheck', status: 'running', logs: ['Starting TypeScript compiler...'] },
         { name: 'Autonomous Agent QA Tests', status: 'pending', logs: [] },
@@ -661,6 +982,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         entityType: 'deployment',
         entityId: newDep.id
       }, ...prev]);
+
+      if (source?.issueId) {
+        const completedAt = new Date().toISOString();
+        setIssues(prev => prev.map(issue => issue.id === source.issueId ? {
+          ...issue,
+          status: 'done',
+          comments: issue.comments.some(comment => comment.id === `comm-${source.runId}-validated`)
+            ? issue.comments
+            : [...issue.comments, {
+                id: `comm-${source.runId}-validated`,
+                authorType: 'system' as const,
+                authorName: 'Prototype CI',
+                content: `Preview validation completed successfully. The issue is ready for delivery.`,
+                createdAt: completedAt
+              }],
+          updatedAt: completedAt
+        } : issue));
+      }
+
+      if (source?.runId) {
+        setPrototypeRuns(prev => prev.map(run => run.id === source.runId ? {
+          ...run,
+          status: 'completed',
+          updatedAt: new Date().toISOString()
+        } : run));
+        showToast('Prototype delivery complete', `${proj.name} passed the Preview pipeline.`, 'success');
+      }
     }, 4500);
   };
 
@@ -683,9 +1031,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
 
-    if (notif.entityType === 'issue' && action === 'approved') {
-      updateIssueStatus(notif.entityId, 'done');
+    if (notif.entityType !== 'issue') return;
+
+    const run = prototypeRuns.find(item =>
+      item.issueId === notif.entityId && item.status === 'awaiting_approval'
+    );
+
+    // Preserve approval behavior for older seeded notifications that are not tied to a run.
+    if (!run) {
+      if (action === 'approved') updateIssueStatus(notif.entityId, 'done');
+      showToast(action === 'approved' ? 'Work approved' : 'Changes requested', undefined, action === 'approved' ? 'success' : 'info');
+      return;
     }
+
+    const now = new Date().toISOString();
+    if (action === 'approved') {
+      setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
+        ...item,
+        status: 'validating',
+        updatedAt: now
+      } : item));
+      setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
+        ...issue,
+        comments: [...issue.comments, {
+          id: `comm-${run.id}-approved`,
+          authorType: 'system' as const,
+          authorName: 'Prototype runner',
+          content: 'Review approved. A simulated Preview validation has started.',
+          createdAt: now
+        }],
+        updatedAt: now
+      } : issue));
+      void triggerDeployment(run.projectId, 'Preview', { issueId: run.issueId, runId: run.id });
+      showToast('Review approved', 'Preview validation is now running in CI/CD.', 'success');
+      return;
+    }
+
+    setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
+      ...item,
+      status: 'changes_requested',
+      updatedAt: now
+    } : item));
+    setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
+      ...issue,
+      status: 'in_progress',
+      comments: [...issue.comments, {
+        id: `comm-${run.id}-rejected`,
+        authorType: 'system' as const,
+        authorName: 'Prototype runner',
+        content: 'Changes requested during review. The run can be retried from the issue.',
+        createdAt: now
+      }],
+      updatedAt: now
+    } : issue));
+    showToast('Changes requested', 'Return to the issue when you are ready to retry.', 'info');
   };
 
   // Chat & Threads
@@ -859,6 +1258,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateIssue,
       deleteIssue,
       runAgentOnIssue,
+      prototypeRuns,
+      runSetupIssueId,
+      runSetupAgentId,
+      closeRunSetup,
+      startPrototypeRun,
+      cancelPrototypeRun,
+      retryPrototypeRun,
       projects,
       createProject,
       updateProject,
@@ -904,7 +1310,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sendChatMessage,
       clearChat,
       settings,
-      updateSettings
+      updateSettings,
+      toasts,
+      showToast,
+      dismissToast
     }}>
       {children}
     </AppContext.Provider>

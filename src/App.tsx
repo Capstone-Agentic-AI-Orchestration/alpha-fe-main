@@ -3,6 +3,9 @@ import { useApp } from './context/AppContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { CommandPalette } from './components/common/CommandPalette';
 import { CreateIssueModal } from './components/issues/CreateIssueModal';
+import { AgentRunModal } from './components/issues/AgentRunModal';
+import { PrototypeGuide } from './components/onboarding/PrototypeGuide';
+import { ToastRegion } from './components/common/ToastRegion';
 import { InboxView } from './views/InboxView';
 import { ChatView } from './views/ChatView';
 import { IssuesView } from './views/IssuesView';
@@ -33,18 +36,18 @@ import {
 } from 'lucide-react';
 
 const ALL_TABS: { id: NavigationTab; title: string; subtitle: string; icon: React.ReactNode }[] = [
-  { id: 'inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', icon: <Inbox className="w-4 h-4 text-amber-400" /> },
-  { id: 'chat', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', icon: <MessageSquare className="w-4 h-4 text-cyan-400" /> },
-  { id: 'my_issues', title: 'My Issues', subtitle: 'Tasks assigned to you across projects', icon: <User className="w-4 h-4 text-emerald-400" /> },
-  { id: 'issues', title: 'Issues & Tasks', subtitle: 'Kanban board & issue tracking', icon: <CheckSquare className="w-4 h-4 text-indigo-400" /> },
-  { id: 'projects', title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', icon: <FolderKanban className="w-4 h-4 text-blue-400" /> },
-  { id: 'deployments', title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', icon: <Rocket className="w-4 h-4 text-pink-400" /> },
-  { id: 'agents', title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', icon: <Bot className="w-4 h-4 text-purple-400" /> },
-  { id: 'squads', title: 'Agent Squads', subtitle: 'Configure multi-agent topologies', icon: <Users className="w-4 h-4 text-teal-400" /> },
-  { id: 'analytics', title: 'Token & Cost Analytics', subtitle: 'Token consumption & model latency', icon: <BarChart3 className="w-4 h-4 text-rose-400" /> },
-  { id: 'runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', icon: <Monitor className="w-4 h-4 text-orange-400" /> },
-  { id: 'skills', title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', icon: <BookOpen className="w-4 h-4 text-sky-400" /> },
-  { id: 'settings', title: 'Workspace Settings', subtitle: 'Preferences, keys, and autonomy governance', icon: <Settings className="w-4 h-4 text-gray-400" /> },
+  { id: 'inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', icon: <Inbox className="w-4 h-4" /> },
+  { id: 'chat', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', icon: <MessageSquare className="w-4 h-4" /> },
+  { id: 'my_issues', title: 'My Issues', subtitle: 'Tasks assigned to you across projects', icon: <User className="w-4 h-4" /> },
+  { id: 'issues', title: 'Issues & Tasks', subtitle: 'Kanban board & issue tracking', icon: <CheckSquare className="w-4 h-4" /> },
+  { id: 'projects', title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', icon: <FolderKanban className="w-4 h-4" /> },
+  { id: 'deployments', title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', icon: <Rocket className="w-4 h-4" /> },
+  { id: 'agents', title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', icon: <Bot className="w-4 h-4" /> },
+  { id: 'squads', title: 'Agent Squads', subtitle: 'Configure multi-agent topologies', icon: <Users className="w-4 h-4" /> },
+  { id: 'analytics', title: 'Token & Cost Analytics', subtitle: 'Token consumption & model latency', icon: <BarChart3 className="w-4 h-4" /> },
+  { id: 'runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', icon: <Monitor className="w-4 h-4" /> },
+  { id: 'skills', title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', icon: <BookOpen className="w-4 h-4" /> },
+  { id: 'settings', title: 'Workspace Settings', subtitle: 'Preferences, keys, and autonomy governance', icon: <Settings className="w-4 h-4" /> },
 ];
 
 export const App: React.FC = () => {
@@ -113,7 +116,7 @@ export const App: React.FC = () => {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#111217] text-gray-100 font-sans overflow-hidden select-none text-sm">
+    <div className="flex h-screen w-screen bg-background text-gray-100 font-sans overflow-hidden text-sm">
       {/* Multica Sidebar */}
       <Sidebar 
         collapsed={sidebarCollapsed}
@@ -122,9 +125,9 @@ export const App: React.FC = () => {
       />
 
       {/* Main Workspace Frame */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#16171D] overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-[#121315] overflow-hidden">
         {/* Multica Top Window Tab Bar */}
-        <div className="h-11 bg-[#121318] border-b border-white/[0.06] flex items-center px-3 z-20 relative">
+        <div className="h-10 bg-[#101113] border-b border-white/[0.06] flex items-center px-3 z-20 relative">
           {/* Scrollable Open Tabs List */}
           <div className="flex items-center gap-1 overflow-x-auto max-w-[calc(100%-60px)] no-scrollbar py-1">
             {tabs.map((tab) => {
@@ -139,10 +142,10 @@ export const App: React.FC = () => {
                       closeTab(tab.id);
                     }
                   }}
-                  className={`group flex items-center gap-2 px-3 py-1.5 rounded-t-lg text-xs font-medium cursor-pointer transition-all border-t border-x select-none max-w-[200px] min-w-[110px] ${
+                  className={`group flex h-10 items-center gap-2 px-3 text-xs font-medium cursor-pointer transition-colors border-b select-none max-w-[200px] min-w-[110px] ${
                     isActive
-                      ? 'bg-[#16171D] border-white/[0.08] text-white shadow-sm'
-                      : 'bg-transparent border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/[0.03]'
+                      ? 'border-brand-400 text-white'
+                      : 'border-transparent text-gray-500 hover:text-gray-200'
                   }`}
                 >
                   <span className={`flex-shrink-0 ${isActive ? 'text-brand-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
@@ -170,7 +173,7 @@ export const App: React.FC = () => {
           <div className="relative ml-1 flex-shrink-0" ref={newTabMenuRef}>
             <button
               onClick={() => setNewTabMenuOpen(prev => !prev)}
-              className={`p-1.5 rounded-lg transition-colors ${
+              className={`p-1.5 rounded-md transition-colors ${
                 newTabMenuOpen 
                   ? 'bg-white/10 text-white' 
                   : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
@@ -182,8 +185,8 @@ export const App: React.FC = () => {
 
             {/* New Tab Dropdown Menu */}
             {newTabMenuOpen && (
-              <div className="absolute left-0 top-full mt-1.5 w-72 bg-[#1A1B22] border border-white/10 rounded-xl shadow-2xl p-2 z-50 animate-slide-up space-y-1">
-                <div className="text-[11px] font-mono uppercase tracking-wider text-gray-500 px-2.5 py-1">
+              <div className="absolute left-0 top-full mt-1.5 w-72 bg-[#191A1D] border border-white/[0.08] rounded-lg shadow-2xl p-2 z-50 animate-slide-up space-y-1">
+                <div className="text-xs font-medium text-gray-500 px-2.5 py-1">
                   Open New Tab
                 </div>
                 <div className="max-h-80 overflow-y-auto space-y-0.5">
@@ -195,10 +198,10 @@ export const App: React.FC = () => {
                           openNewTab(item.id);
                           setNewTabMenuOpen(false);
                         }}
-                        className="w-full flex items-center justify-between p-2 rounded-lg text-left transition-colors hover:bg-white/[0.05] text-gray-300 hover:text-white"
+                        className="w-full flex items-center justify-between p-2 rounded-md text-left transition-colors hover:bg-white/[0.04] text-gray-300 hover:text-white"
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="p-1 rounded-md bg-white/[0.04] flex-shrink-0">
+                          <div className="p-1 flex-shrink-0 text-gray-500">
                             {item.icon}
                           </div>
                           <div className="min-w-0">
@@ -240,6 +243,10 @@ export const App: React.FC = () => {
         isOpen={createIssueOpen}
         onClose={() => setCreateIssueOpen(false)}
       />
+
+      <AgentRunModal />
+      <PrototypeGuide />
+      <ToastRegion />
     </div>
   );
 };

@@ -25,7 +25,9 @@ export const InboxView: React.FC = () => {
     markNotificationRead, 
     archiveNotification,
     setActiveTab,
-    runAgentOnIssue
+    runAgentOnIssue,
+    prototypeRuns,
+    retryPrototypeRun
   } = useApp();
 
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(inbox[0]?.id || null);
@@ -60,17 +62,17 @@ export const InboxView: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex overflow-hidden bg-[#16171D] text-gray-200 text-sm">
+    <div className="h-full flex overflow-hidden bg-[#121315] text-gray-200 text-sm">
       {/* Left Column: Notifications Feed (Spacious & Scaled) */}
-      <div className="w-96 md:w-[420px] border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-[#14151B]">
+      <div className="w-96 md:w-[420px] border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-[#101113]">
         {/* Inbox Header */}
         <div className="h-14 px-5 border-b border-white/[0.06] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-base font-bold text-white tracking-tight">
+            <h2 className="text-base font-semibold text-white">
               {showArchived ? 'Archived Notifications' : 'Inbox'}
             </h2>
             {activeNotifications.length > 0 && !showArchived && (
-              <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-white/10 text-gray-300">
+              <span className="text-xs tabular-nums text-gray-500">
                 {activeNotifications.length}
               </span>
             )}
@@ -105,16 +107,16 @@ export const InboxView: React.FC = () => {
                     setSelectedNotifId(notif.id);
                     if (!notif.read) markNotificationRead(notif.id);
                   }}
-                  className={`p-4 px-5 flex items-start gap-3.5 transition-colors cursor-pointer select-none ${
+                  className={`p-4 px-5 flex items-start gap-3.5 border-l-2 transition-colors cursor-pointer select-none ${
                     isSelected 
-                      ? 'bg-white/[0.08]' 
-                      : notif.read 
-                        ? 'hover:bg-white/[0.03] opacity-75' 
-                        : 'bg-white/[0.02] hover:bg-white/[0.05]'
+                      ? 'border-brand-400 bg-white/[0.045]'
+                      : notif.read
+                        ? 'border-transparent hover:bg-white/[0.025] opacity-75'
+                        : 'border-transparent hover:bg-white/[0.035]'
                   }`}
                 >
                   {/* Left Flame / Status Avatar */}
-                  <div className="w-9 h-9 rounded-full bg-surface-100 border border-white/10 flex items-center justify-center text-base flex-shrink-0 shadow-sm mt-0.5">
+                  <div className="w-7 h-7 flex items-center justify-center text-base flex-shrink-0 mt-0.5">
                     <Flame className="w-4.5 h-4.5 text-orange-400 fill-orange-400/20" />
                   </div>
 
@@ -163,25 +165,26 @@ export const InboxView: React.FC = () => {
       </div>
 
       {/* Right Column: Notification Inspector / Empty State */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#16171D]">
+      <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#121315]">
         {selectedNotif ? (
           <div className="p-8 md:p-10 max-w-4xl space-y-7 animate-fade-in">
             {/* Top Row: Title + Author */}
             <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] pb-6">
               <div className="space-y-2.5">
-                <div className="flex items-center gap-2 text-xs font-mono">
-                  <span className={`px-2.5 py-1 rounded text-xs font-semibold uppercase ${
-                    selectedNotif.type === 'agent_approval' ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' :
-                    selectedNotif.type === 'agent_failed' ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' :
-                    'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-                  }`}>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span className={`h-1.5 w-1.5 rounded-full ${
+                    selectedNotif.type === 'agent_approval' ? 'bg-amber-400' :
+                    selectedNotif.type === 'agent_failed' ? 'bg-rose-400' :
+                    'bg-emerald-400'
+                  }`} aria-hidden="true" />
+                  <span className="font-medium capitalize text-gray-400">
                     {selectedNotif.type.replace('_', ' ')}
                   </span>
-                  <span className="text-gray-500">•</span>
+                  <span>•</span>
                   <span className="text-gray-400">{new Date(selectedNotif.timestamp).toLocaleString()}</span>
                 </div>
 
-                <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                <h1 className="text-xl sm:text-2xl font-semibold text-white">
                   {selectedNotif.title}
                 </h1>
                 <p className="text-sm text-gray-300 leading-relaxed">
@@ -192,7 +195,7 @@ export const InboxView: React.FC = () => {
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={() => archiveNotification(selectedNotif.id)}
-                  className="px-3.5 py-2 rounded-xl bg-surface-200 hover:bg-surface-100 border border-white/10 text-gray-300 hover:text-white transition-colors text-xs font-medium flex items-center gap-2"
+                  className="px-2 py-2 rounded-md hover:bg-white/[0.035] text-gray-400 hover:text-white transition-colors text-xs font-medium flex items-center gap-2"
                   title="Archive Notification"
                 >
                   <Archive className="w-4 h-4" />
@@ -203,7 +206,7 @@ export const InboxView: React.FC = () => {
 
             {/* If Failure: Retry Task Button */}
             {selectedNotif.type === 'agent_failed' && (
-              <div className="p-5 rounded-2xl bg-rose-950/20 border border-rose-500/30 space-y-3.5">
+              <div className="p-5 rounded-lg bg-rose-950/15 border border-rose-500/20 space-y-3.5">
                 <div className="flex items-center gap-2 text-sm font-semibold text-rose-300">
                   <AlertTriangle className="w-4.5 h-4.5" />
                   <span>Agent Execution Exception</span>
@@ -213,7 +216,13 @@ export const InboxView: React.FC = () => {
                 </p>
                 {selectedNotif.entityType === 'issue' && selectedNotif.entityId && (
                   <button
-                    onClick={() => runAgentOnIssue(selectedNotif.entityId)}
+                    onClick={() => {
+                      const failedRun = prototypeRuns.find(run =>
+                        run.issueId === selectedNotif.entityId && run.status === 'failed'
+                      );
+                      if (failedRun) retryPrototypeRun(failedRun.id);
+                      else runAgentOnIssue(selectedNotif.entityId);
+                    }}
                     className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold shadow-sm transition-colors"
                   >
                     <RotateCcw className="w-4 h-4" />
@@ -225,7 +234,7 @@ export const InboxView: React.FC = () => {
 
             {/* Approval Diff Card (Human-in-the-Loop) */}
             {selectedNotif.type === 'agent_approval' && (
-              <div className="p-6 rounded-2xl bg-surface-200/60 border border-white/10 space-y-5 shadow-lg">
+              <div className="py-5 border-y border-white/[0.07] space-y-5">
                 <div className="flex items-center justify-between text-sm">
                   <div className="flex items-center gap-2 text-indigo-300 font-semibold">
                     <Bot className="w-4.5 h-4.5" />
@@ -261,22 +270,37 @@ export const InboxView: React.FC = () => {
                 )}
 
                 {/* Approve / Reject Actions */}
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
-                  <button
-                    onClick={() => handleApproval(selectedNotif.id, 'rejected')}
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-surface-100 hover:bg-rose-500/20 hover:text-rose-300 text-gray-300 text-xs font-semibold border border-white/10 transition-all"
-                  >
-                    <XCircle className="w-4 h-4" />
-                    <span>Reject</span>
-                  </button>
-                  <button
-                    onClick={() => handleApproval(selectedNotif.id, 'approved')}
-                    className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white text-xs font-semibold shadow-glow-emerald transition-all"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                    <span>Approve & Merge</span>
-                  </button>
-                </div>
+                {!selectedNotif.approvalStatus || selectedNotif.approvalStatus === 'pending' ? (
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
+                    <button
+                      onClick={() => handleApproval(selectedNotif.id, 'rejected')}
+                      className="flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-gray-300 transition-colors hover:text-rose-300"
+                    >
+                      <XCircle className="w-4 h-4" />
+                      <span>Request changes</span>
+                    </button>
+                    <button
+                      onClick={() => handleApproval(selectedNotif.id, 'approved')}
+                      className="flex items-center gap-2 bg-emerald-500 px-6 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600"
+                    >
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Approve & validate</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-4 border-t border-white/[0.06] pt-4 text-xs">
+                    <span className={selectedNotif.approvalStatus === 'approved' ? 'text-emerald-300' : 'text-amber-300'}>
+                      {selectedNotif.approvalStatus === 'approved' ? 'Approved · Preview validation started' : 'Changes requested'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setActiveTab(selectedNotif.approvalStatus === 'approved' ? 'deployments' : 'issues')}
+                      className="font-medium text-brand-300 hover:text-brand-200"
+                    >
+                      {selectedNotif.approvalStatus === 'approved' ? 'Open CI/CD →' : 'Return to issue →'}
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

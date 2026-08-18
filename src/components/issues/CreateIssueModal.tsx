@@ -501,18 +501,18 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
           </div>
 
           {/* Bottom Footer Action Bar */}
-          <div className="flex items-center justify-between pt-4 border-t border-white/5 text-sm">
+          <div className="flex flex-col gap-3 border-t border-white/5 pt-4 text-sm sm:flex-row sm:items-center sm:justify-between">
             {/* Left: Attachment */}
             <button
               type="button"
               className="text-gray-400 hover:text-white p-2 rounded-lg hover:bg-white/5 transition-colors"
               title="Attach screenshot or file"
             >
-              <Paperclip className="w-4.5 h-4.5" />
+              <Paperclip className="h-5 w-5" />
             </button>
 
             {/* Right: Switch Mode + Create Another Toggle + Submit Button */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center justify-end gap-3">
               {/* Switch to Agent / Switch to Manual */}
               <button
                 type="button"
@@ -522,7 +522,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
                     setTitle(promptText.split('\n')[0]);
                   }
                 }}
-                className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold transition-all ${
+                className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
                   mode === 'manual'
                     ? 'bg-gradient-to-r from-cyan-500/20 via-brand-500/20 to-purple-500/20 border border-brand-500/50 text-brand-200 shadow-glow-brand'
                     : 'text-gray-300 hover:text-white border border-white/10 hover:border-white/20 bg-surface-200'
@@ -533,32 +533,35 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
               </button>
 
               {/* Create Another Toggle */}
-              <label className="flex items-center gap-2.5 cursor-pointer select-none text-gray-300 hover:text-white">
-                <div 
+              <div className="flex min-h-9 select-none items-center gap-2 text-gray-300">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={createAnother}
+                  aria-label="Create another issue after this one"
                   onClick={() => setCreateAnother(!createAnother)}
-                  className={`w-8 h-4.5 flex items-center rounded-full p-0.5 transition-colors ${
-                    createAnother ? 'bg-brand-500' : 'bg-gray-700'
+                  className={`flex h-5 w-9 items-center rounded-full border p-0.5 transition-colors ${
+                    createAnother
+                      ? 'border-brand-400 bg-brand-500'
+                      : 'border-white/10 bg-white/10 hover:border-white/20'
                   }`}
                 >
-                  <div className={`bg-white w-3.5 h-3.5 rounded-full shadow-md transform transition-transform ${
-                    createAnother ? 'translate-x-3.5' : 'translate-x-0'
+                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                    createAnother ? 'translate-x-4' : 'translate-x-0'
                   }`} />
-                </div>
+                </button>
                 <span className="text-xs font-medium">Create another</span>
-              </label>
+              </div>
 
               {/* Submit Button */}
               <button
                 type="button"
                 onClick={handleSubmit}
                 disabled={mode === 'agent' ? !promptText.trim() : (!title.trim() && !promptText.trim())}
-                className="flex items-center gap-2 px-4.5 py-2 rounded-xl bg-white hover:bg-gray-100 text-gray-900 font-bold text-xs transition-all disabled:opacity-30 disabled:hover:bg-white shadow-sm"
+                className="inline-flex min-w-[112px] items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2.5 text-xs font-semibold text-gray-900 shadow-sm transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-white"
+                title="Create issue (Ctrl/Cmd + Enter)"
               >
-                <span>{mode === 'agent' ? 'Create' : 'Create Issue'}</span>
-                <span className="flex items-center gap-0.5 text-gray-600 font-mono text-[11px] bg-black/10 px-1.5 py-0.5 rounded ml-1">
-                  <span>⌘</span>
-                  <span>↵</span>
-                </span>
+                <span>Create issue</span>
               </button>
             </div>
           </div>

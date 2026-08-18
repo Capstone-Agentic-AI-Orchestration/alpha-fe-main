@@ -8,13 +8,13 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#0B0D13',
+        background: '#0D0E10',
         surface: {
-          50: '#1e2230',
-          100: '#161922',
-          200: '#11141D',
-          300: '#0E1017',
-          DEFAULT: '#11141D',
+          50: '#202124',
+          100: '#191A1D',
+          200: '#141518',
+          300: '#101114',
+          DEFAULT: '#141518',
         },
         border: {
           subtle: 'rgba(255, 255, 255, 0.06)',
@@ -40,13 +40,22 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
+        sans: ['DM Sans', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'sans-serif'],
+        mono: ['IBM Plex Mono', 'SFMono-Regular', 'Consolas', 'monospace'],
+      },
+      borderRadius: {
+        sm: '3px',
+        DEFAULT: '4px',
+        md: '5px',
+        lg: '6px',
+        xl: '8px',
+        '2xl': '10px',
+        '3xl': '12px',
       },
       boxShadow: {
-        'glow-brand': '0 0 25px -5px rgba(99, 102, 241, 0.25)',
-        'glow-emerald': '0 0 25px -5px rgba(52, 211, 153, 0.25)',
-        'glow-cyan': '0 0 25px -5px rgba(56, 189, 248, 0.25)',
+        'glow-brand': 'none',
+        'glow-emerald': 'none',
+        'glow-cyan': 'none',
       },
       animation: {
         'pulse-subtle': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

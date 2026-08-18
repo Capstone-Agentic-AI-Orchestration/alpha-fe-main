@@ -1,6 +1,6 @@
 # Design System & Aesthetic Principles
 
-This document defines the core UI/UX philosophy, design tokens, component guidelines, and interaction patterns for the **Multica** application.
+This document defines the core UI/UX philosophy, design tokens, component guidelines, and interaction patterns for the **Alpha** client MVP. The product keeps the proven human-and-agent workspace model popularized by Multica while adapting the experience to our client's workflow and identity.
 
 ---
 
@@ -19,11 +19,11 @@ We design for developers, engineering leads, and autonomous AI agents. Every pix
 
 | Token / Usage | Hex / Tailwind | Purpose |
 | :--- | :--- | :--- |
-| **Canvas Background** | `#0E0E12` (`bg-[#0E0E12]`) | Primary application backdrop |
-| **Surface Level 1 (Inputs/Cards)** | `#14151B` (`bg-[#14151B]`) | Search boxes, tables, rows, secondary containers |
-| **Surface Level 2 (Modals/Popups)** | `#121318` / `#1A1B22` | Centered dialog popups, popover menus, inspectors |
-| **Surface Level 3 (Active/Hover)** | `#1B1C23` (`bg-[#1B1C23]`) | Hover states, subtle button backings |
-| **Borders (Subtle)** | `rgba(255, 255, 255, 0.04)` | Default component boundaries and dividers |
+| **Canvas Background** | `#0D0E10` (`bg-background`) | Primary application backdrop |
+| **Surface Level 1** | `#141518` (`bg-surface-200`) | Inputs and content that require a defined boundary |
+| **Surface Level 2** | `#191A1D` (`bg-surface-100`) | Popovers, modals, and inspectors |
+| **Surface Level 3** | `#202124` (`bg-surface-50`) | Active and hover states used sparingly |
+| **Borders (Subtle)** | `rgba(255, 255, 255, 0.06)` | Section boundaries and dividers |
 | **Borders (Active/Focus)** | `rgba(255, 255, 255, 0.12)` | Hover states, active tabs, focused inputs |
 | **Primary Text** | `#FFFFFF` (`text-white`) | Headings, project names, active states |
 | **Secondary Text** | `#9CA3AF` (`text-gray-400`) | Descriptions, column headers, icons |
@@ -36,13 +36,14 @@ We design for developers, engineering leads, and autonomous AI agents. Every pix
 
 ## 3. Typography & Hierarchy
 
-* **Font Family**: Modern sans-serif (`Inter`, system UI font stack) for UI text, with `font-mono` (`JetBrains Mono`, `ui-monospace`) for identifiers, keys, timestamps, and file paths.
+* **Font Family**: `DM Sans` for interface copy and hierarchy, with system sans-serif fallbacks. `IBM Plex Mono` is reserved for code, commands, file paths, commit hashes, and machine-readable identifiers.
+* **Monospace Restraint**: Do not use `font-mono` merely to make metadata feel technical. Counts, dates, status labels, roles, and navigation use the primary sans-serif face unless fixed-width alignment is functionally useful.
 * **Type Scale**:
-  * **View Title**: `text-sm font-semibold text-white` (clean, non-oversized).
+  * **View Title**: `text-base font-semibold text-white` (clear but non-oversized).
   * **Section Headers / Table Columns**: `text-xs font-normal text-gray-500 tracking-normal`.
   * **Row Titles**: `text-xs font-medium text-white group-hover:text-gray-200`.
-  * **Metadata & Roles**: `text-[11px] font-mono text-gray-500` (e.g. `• Coder`, `• Architect`).
-  * **Counters & Timestamps**: `text-xs font-mono text-gray-500`.
+  * **Metadata & Roles**: `text-[11px] font-medium text-gray-500` (e.g. `• Coder`, `• Architect`).
+  * **Counters & Timestamps**: `text-xs tabular-nums text-gray-500`.
 
 ---
 
@@ -72,11 +73,18 @@ We design for developers, engineering leads, and autonomous AI agents. Every pix
 * **Unassigned**: Subtle dashed circular placeholder with a dash (`◯ —`).
 
 ### 4.5. Inspection & Detail Views: Centered Modals vs Slide-In Drawers
-* **Centered Pop-up Modals (e.g. Agent Profiles, Create Flows)**:
+* **Centered Pop-up Modals (e.g. Agent Profiles, Create Flows, CI/CD Runs)**:
   * Open in the center of the screen with a dark backdrop blur (`fixed inset-0 flex items-center justify-center bg-black/80 backdrop-blur-sm`).
   * Ideal for complex entity configuration with multiple sub-tabs (Instructions, Skills & MCP, Secrets & Env, Run History).
-* **Slide-In Focus Drawers (e.g. Projects, CI/CD Runs)**:
+* **Slide-In Focus Drawers (e.g. Issue Inspectors)**:
   * Open from the right edge (`fixed inset-y-0 right-0 w-full max-w-xl`) when contextual side inspection is desired alongside the roster.
+
+### 4.6. Containers, Radius, and Elevation
+* A container must communicate grouping, interaction, safety, or hierarchy. Do not place a bordered card inside another bordered card solely for decoration.
+* Prefer whitespace, typography, dividers, and alignment before adding another surface.
+* Standard controls use a restrained `3px–8px` radius. Larger radii are reserved for modals and substantial overlays; `rounded-full` is reserved for avatars, status dots, and genuinely circular controls.
+* Avoid glow shadows. Use a subtle border and conventional shadow only when a popover or modal must sit above the workspace.
+* Inputs, error states, approval decisions, code blocks, and destructive confirmations may retain clear containers because their boundaries are meaningful.
 
 ---
 
@@ -101,3 +109,102 @@ We design for developers, engineering leads, and autonomous AI agents. Every pix
 * **Keep forms concise**: Clean modal dialogs with auto-saving and clear defaults.
 * **Always provide 1-click copy** for code paths, CLI commands, endpoints, and identifiers.
 * **Preserve keyboard friendliness**: Support <kbd>Enter</kbd> to submit inline items and <kbd>Esc</kbd> to close dialogs/drawers.
+
+---
+
+## 7. MVP Visual Refinement — 2026-08-17
+
+### Objective
+
+Make the initial prototype feel like a credible client-facing productivity tool rather than a game-inspired agent dashboard. Preserve the Multica-style workspace, tabs, issue flow, projects, agents, and simulated MVP behavior while reducing decorative UI weight.
+
+### Implemented changes
+
+* Replaced `Inter` and `JetBrains Mono` with `DM Sans` and `IBM Plex Mono`.
+* Neutralized the canvas and surface palette while retaining the existing indigo action accent.
+* Reduced the global radius scale and removed brand, cyan, and emerald glow shadows.
+* Changed top-level workspace tabs from boxed browser-style tabs to a simple active underline.
+* Simplified the sidebar with neutral icons, flatter rows, and a narrow active-section marker.
+* Replaced boxed status, priority, role, runtime, and deployment pills with lightweight icons, dots, and text.
+* Flattened the primary Inbox, Chat, Issues, and Projects surfaces by removing redundant backgrounds and nested borders.
+* Converted CI/CD run details from a fixed right-side drawer into a centered, responsive modal with a dimmed workspace backdrop, outside-click dismissal, and Escape-key dismissal.
+* Reorganized CI/CD details into repository context, a scan-friendly stage list, and a dedicated execution-log region that uses the wider modal space effectively.
+* Kept strong containers for inputs, popovers, modals, errors, approvals, and technical output where boundaries improve comprehension.
+* Removed the nonfunctional Projects “Table” control from the MVP surface.
+
+### Behavior intentionally preserved
+
+* Existing tab navigation and command palette behavior.
+* Issue, project, inbox, chat, agent, and deployment interactions.
+* Browser `localStorage` persistence and all current mock-data simulations.
+* The existing information architecture and Multica-inspired human-and-agent collaboration model.
+
+### Files changed
+
+* `index.html`
+* `tailwind.config.js`
+* `src/index.css`
+* `src/App.tsx`
+* `src/components/common/Badge.tsx`
+* `src/components/layout/Sidebar.tsx`
+* `src/views/InboxView.tsx`
+* `src/views/ChatView.tsx`
+* `src/views/IssuesView.tsx`
+* `src/views/ProjectsView.tsx`
+* `src/views/DeploymentsView.tsx`
+
+### Verification
+
+* Strict TypeScript validation passes with `tsc --noEmit`.
+* The Vite production build completes successfully.
+* No environment configuration or application data contracts were changed.
+
+---
+
+## 8. Guided Prototype Workflow — 2026-08-18
+
+### Objective
+
+Turn the existing mock screens into one understandable frontend-only journey before backend integration. A user should be able to move from project context to an approved agent plan, follow simulated work, review its output, and observe Preview validation without encountering a dead end.
+
+### Primary journey
+
+`Project → Issue → Agent plan → Simulated run → Inbox review → Preview CI/CD → Completed issue`
+
+### Implemented behavior
+
+* Added a three-step first-visit guide with persistent dismissal and a replay action in the sidebar.
+* Replaced immediate issue execution with a preparation modal that exposes project context, agent selection, repository readiness, and an issue-specific plan before approval.
+* Added optional successful and test-failure demo scenarios so both the happy path and retry path can be presented without external services.
+* Added a persisted prototype run lifecycle with workspace, analysis, implementation, testing, and review stages.
+* Embedded compact run progress, logs, cancellation, retry, review, and CI/CD navigation in the issue inspector.
+* Connected successful runs to Inbox approval requests and connected approvals to simulated Preview deployments.
+* Kept rejected work in progress, allowed retry after failures or requested changes, and marked issues complete only after Preview validation succeeds.
+* Added lightweight toast feedback for important transitions without introducing another notification container inside each view.
+* Improved the shared modal with dialog semantics, labelled titles, Escape dismissal, and focus restoration.
+
+### State and integration boundaries
+
+* Prototype runs use the existing `AppContext` and `localStorage` persistence model.
+* Stage timestamps allow a running simulation to continue after navigation or refresh.
+* Repository links, pull requests, logs, tests, and deployments remain clearly simulated.
+* No backend, authentication, GitHub integration, API contract, environment file, or package dependency was added.
+
+### Main files
+
+* `src/types/index.ts`
+* `src/context/AppContext.tsx`
+* `src/App.tsx`
+* `src/components/common/Modal.tsx`
+* `src/components/common/ToastRegion.tsx`
+* `src/components/onboarding/PrototypeGuide.tsx`
+* `src/components/issues/AgentRunModal.tsx`
+* `src/components/issues/AgentRunProgress.tsx`
+* `src/components/layout/Sidebar.tsx`
+* `src/views/IssuesView.tsx`
+* `src/views/ProjectsView.tsx`
+* `src/views/InboxView.tsx`
+
+### Prototype acceptance target
+
+A first-time user can understand the workflow and complete a successful simulated issue-to-validation journey in approximately two to three minutes. The same prototype also demonstrates cancellation, test failure, retry, requested changes, empty context, and reload persistence.

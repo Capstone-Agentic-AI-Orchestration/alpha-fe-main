@@ -38,18 +38,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
 
   return (
-    <aside className="w-64 bg-[#121318] border-r border-white/[0.06] flex flex-col flex-shrink-0 select-none z-20 text-gray-300 font-sans text-sm">
+    <aside className="w-60 bg-[#101113] border-r border-white/[0.06] flex flex-col flex-shrink-0 select-none z-20 text-gray-300 font-sans text-sm">
       {/* Top Window Header: Workspace Switcher */}
-      <div className="pt-3 px-4 pb-3 space-y-3">
+      <div className="pt-3 px-3 pb-3 space-y-3">
 
         {/* Workspace Dropdown */}
         <div className="relative">
           <button
             onClick={() => setWorkspaceMenuOpen(!workspaceMenuOpen)}
-            className="w-full flex items-center justify-between p-2 rounded-xl hover:bg-white/[0.05] transition-colors text-left"
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-white/[0.035] transition-colors text-left"
           >
             <div className="flex items-center gap-2.5 truncate">
-              <div className="w-6 h-6 rounded-full bg-white/10 text-gray-200 flex items-center justify-center text-xs font-bold">
+              <div className="w-6 h-6 rounded-md bg-white/[0.07] text-gray-300 flex items-center justify-center text-xs font-semibold">
                 A
               </div>
               <span className="text-sm font-semibold text-white truncate">
@@ -61,9 +61,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
 
           {/* Workspace Switcher Menu */}
           {workspaceMenuOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-[#1A1B22] border border-white/10 rounded-xl shadow-2xl p-2 space-y-1 animate-slide-up text-sm">
-              <div className="text-xs font-mono uppercase text-gray-500 px-2 py-1">Workspaces</div>
-              <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-brand-500/20 text-white font-medium">
+            <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-[#191A1D] border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-1 animate-slide-up text-sm">
+              <div className="text-xs font-medium text-gray-500 px-2 py-1">Workspaces</div>
+              <div className="flex items-center gap-2.5 px-3 py-2 rounded-md bg-white/[0.04] text-white font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 <span className="truncate">{settings.workspaceName || 'Alpha work'}</span>
               </div>
@@ -72,7 +72,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
                   setActiveTab('settings');
                   setWorkspaceMenuOpen(false);
                 }}
-                className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/5 rounded-lg"
+                className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/[0.035] rounded-md"
               >
                 Workspace Settings
               </button>
@@ -84,26 +84,26 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
         <div className="space-y-1.5 pt-1">
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/[0.04] text-gray-400 hover:text-gray-200 transition-colors text-sm"
+            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-white/[0.035] text-gray-400 hover:text-gray-200 transition-colors text-sm"
           >
             <div className="flex items-center gap-3">
               <Search className="w-4 h-4 text-gray-500" />
               <span>Search...</span>
             </div>
-            <kbd className="text-xs font-mono text-gray-400 bg-white/5 px-1.5 py-0.5 rounded border border-white/5">
+            <kbd className="text-[11px] text-gray-500 px-1.5 py-0.5">
               ⌘ K
             </kbd>
           </button>
 
           <button
             onClick={onOpenNewIssue}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-white/[0.04] text-gray-400 hover:text-gray-200 transition-colors text-sm"
+            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-white/[0.035] text-gray-400 hover:text-gray-200 transition-colors text-sm"
           >
             <div className="flex items-center gap-3">
               <Edit3 className="w-4 h-4 text-gray-500" />
               <span>New Issue</span>
             </div>
-            <kbd className="text-xs font-mono text-gray-400 bg-white/5 px-2 py-0.5 rounded border border-white/5">
+            <kbd className="text-[11px] text-gray-500 px-2 py-0.5">
               C
             </kbd>
           </button>
@@ -111,15 +111,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
       </div>
 
       {/* Main Navigation List */}
-      <div className="flex-1 overflow-y-auto px-2.5 space-y-5 py-2">
+      <div className="flex-1 overflow-y-auto px-2 space-y-5 py-2">
         {/* Top 3 Core Items */}
         <div className="space-y-1">
           <button
             onClick={() => setActiveTab('inbox')}
-            className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl transition-colors ${
+            className={`w-full flex items-center justify-between px-3 py-2 rounded-md border-l-2 transition-colors ${
               activeTab === 'inbox'
-                ? 'bg-white/[0.08] text-white font-semibold'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]'
+                ? 'border-brand-400 bg-white/[0.035] text-white font-medium'
+                : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/[0.025]'
             }`}
           >
             <div className="flex items-center gap-3">
@@ -127,7 +127,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
               <span>Inbox</span>
             </div>
             {unreadInboxCount > 0 && (
-              <span className="text-xs font-mono px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 font-semibold">
+              <span className="text-xs tabular-nums text-amber-300 font-medium">
                 {unreadInboxCount}
               </span>
             )}
@@ -135,10 +135,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
 
           <button
             onClick={() => setActiveTab('chat')}
-            className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-xl transition-colors ${
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md border-l-2 transition-colors ${
               activeTab === 'chat'
-                ? 'bg-white/[0.08] text-white font-semibold'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]'
+                ? 'border-brand-400 bg-white/[0.035] text-white font-medium'
+                : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/[0.025]'
             }`}
           >
             <MessageSquare className="w-4 h-4" />
@@ -147,10 +147,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
 
           <button
             onClick={() => setActiveTab('my_issues')}
-            className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-xl transition-colors ${
+            className={`w-full flex items-center gap-3 px-3 py-2 rounded-md border-l-2 transition-colors ${
               activeTab === 'my_issues'
-                ? 'bg-white/[0.08] text-white font-semibold'
-                : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]'
+                ? 'border-brand-400 bg-white/[0.035] text-white font-medium'
+                : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/[0.025]'
             }`}
           >
             <User className="w-4 h-4" />
@@ -160,7 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
 
         {/* Section: Workspace */}
         <div className="space-y-1">
-          <div className="px-3.5 text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+          <div className="px-3 text-[11px] font-medium text-gray-600 mb-1.5">
             Workspace
           </div>
 
@@ -175,10 +175,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id as NavigationTab)}
-              className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-xl transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md border-l-2 transition-colors ${
                 activeTab === item.id
-                  ? 'bg-white/[0.08] text-white font-semibold'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]'
+                  ? 'border-brand-400 bg-white/[0.035] text-white font-medium'
+                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/[0.025]'
               }`}
             >
               <span>{item.icon}</span>
@@ -189,7 +189,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
 
         {/* Section: Configure */}
         <div className="space-y-1">
-          <div className="px-3.5 text-xs font-semibold uppercase tracking-wider text-gray-500 mb-1.5">
+          <div className="px-3 text-[11px] font-medium text-gray-600 mb-1.5">
             Configure
           </div>
 
@@ -201,10 +201,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id as NavigationTab)}
-              className={`w-full flex items-center gap-3 px-3.5 py-2 rounded-xl transition-colors ${
+              className={`w-full flex items-center gap-3 px-3 py-2 rounded-md border-l-2 transition-colors ${
                 activeTab === item.id
-                  ? 'bg-white/[0.08] text-white font-semibold'
-                  : 'text-gray-400 hover:text-gray-200 hover:bg-white/[0.04]'
+                  ? 'border-brand-400 bg-white/[0.035] text-white font-medium'
+                  : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/[0.025]'
               }`}
             >
               <span>{item.icon}</span>
@@ -217,11 +217,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
       {/* Bottom Footer: Help & Feedback */}
       <div className="px-4 py-3 border-t border-white/[0.06] flex items-center justify-between text-gray-400 text-xs">
         <button
-          onClick={() => setActiveTab('settings')}
+          onClick={() => window.dispatchEvent(new Event('alpha:open-prototype-guide'))}
           className="flex items-center gap-2 hover:text-gray-200 transition-colors font-medium"
         >
           <HelpCircle className="w-4 h-4 text-gray-500" />
-          <span>Help & Support</span>
+          <span>Prototype guide</span>
         </button>
         <span className="font-mono text-[10px] text-gray-600">v1.4.0</span>
       </div>

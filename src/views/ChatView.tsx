@@ -91,12 +91,12 @@ export const ChatView: React.FC = () => {
   ];
 
   return (
-    <div className="h-full flex overflow-hidden bg-[#121318] text-sm text-gray-200">
+    <div className="h-full flex overflow-hidden bg-[#121315] text-sm text-gray-200">
       {/* Left Column: Chat Conversations List (Matching Exact Screenshot Design) */}
-      <div className="w-80 sm:w-96 border-r border-white/[0.08] flex flex-col flex-shrink-0 bg-[#14151B]">
+      <div className="w-80 sm:w-96 border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-[#101113]">
         {/* Chat Threads Header */}
         <div className="h-14 px-4 border-b border-white/[0.08] flex items-center justify-between">
-          <h2 className="text-base font-bold text-white tracking-tight">Chat</h2>
+          <h2 className="text-base font-semibold text-white">Chat</h2>
 
           <button
             onClick={() => createNewThread()}
@@ -122,8 +122,8 @@ export const ChatView: React.FC = () => {
                     : 'hover:bg-white/[0.04]'
                 }`}
               >
-                {/* Thread Icon (Star / Asterisk / Flame in circular dark badge) */}
-                <div className="w-8 h-8 rounded-full bg-[#1f2029] border border-white/[0.08] flex items-center justify-center flex-shrink-0 mt-0.5">
+                {/* Thread identity stays visible without adding another decorative container. */}
+                <div className="w-6 h-8 flex items-center justify-center flex-shrink-0 mt-0.5">
                   {thread.iconType === 'flame' ? (
                     <Flame className="w-4 h-4 text-orange-400 fill-orange-400/20" />
                   ) : (
@@ -139,7 +139,7 @@ export const ChatView: React.FC = () => {
                     }`}>
                       {thread.title}
                     </h3>
-                    <span className="text-[11px] font-mono text-gray-500 flex-shrink-0">
+                    <span className="text-[11px] tabular-nums text-gray-500 flex-shrink-0">
                       {formatThreadDate(thread.lastMessageAt)}
                     </span>
                   </div>
@@ -157,13 +157,13 @@ export const ChatView: React.FC = () => {
       </div>
 
       {/* Right Column: Active Conversation Canvas or Empty State */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#16171D]">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#121315]">
         {activeThread ? (
           <>
             {/* Active Thread Header */}
-            <div className="h-14 px-6 border-b border-white/[0.08] bg-[#14151B]/60 flex items-center justify-between">
+            <div className="h-14 px-6 border-b border-white/[0.06] bg-[#121315] flex items-center justify-between">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-[#1f2029] border border-white/[0.08] flex items-center justify-center flex-shrink-0">
+                <div className="w-6 h-8 flex items-center justify-center flex-shrink-0">
                   {activeThread.iconType === 'flame' ? (
                     <Flame className="w-4 h-4 text-orange-400 fill-orange-400/20" />
                   ) : (
@@ -172,10 +172,10 @@ export const ChatView: React.FC = () => {
                 </div>
 
                 <div className="min-w-0">
-                  <h2 className="text-sm font-bold text-white truncate tracking-tight">
+                  <h2 className="text-sm font-semibold text-white truncate">
                     {activeThread.title}
                   </h2>
-                  <div className="flex items-center gap-2 text-[11px] text-gray-400 font-mono">
+                  <div className="flex items-center gap-2 text-[11px] text-gray-500">
                     <span className="text-brand-400">Multi-Agent Swarm</span>
                     <span>•</span>
                     <span>{currentMessages.length} messages</span>
@@ -186,10 +186,10 @@ export const ChatView: React.FC = () => {
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => setShowInspector(!showInspector)}
-                  className={`p-2 rounded-lg text-xs font-mono flex items-center gap-1.5 border transition-colors ${
+                  className={`p-2 rounded-md text-xs flex items-center gap-1.5 transition-colors ${
                     showInspector 
-                      ? 'bg-white/10 text-white border-white/20' 
-                      : 'text-gray-400 hover:text-white border-transparent hover:bg-white/5'
+                      ? 'bg-white/[0.05] text-white'
+                      : 'text-gray-400 hover:text-white hover:bg-white/[0.03]'
                   }`}
                   title="Toggle Agent Inspector"
                 >
@@ -219,11 +219,11 @@ export const ChatView: React.FC = () => {
             <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5">
               {currentMessages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
-                  <div className="w-12 h-12 rounded-2xl bg-surface-100 border border-white/10 flex items-center justify-center text-brand-400">
+                  <div className="w-10 h-10 flex items-center justify-center text-brand-400">
                     <Sparkles className="w-6 h-6" />
                   </div>
                   <div className="space-y-1">
-                    <h3 className="text-base font-bold text-white">Start a new agent session</h3>
+                    <h3 className="text-base font-semibold text-white">Start a new agent session</h3>
                     <p className="text-xs text-gray-400 max-w-sm">
                       Summon any agent by typing @Ada, @Kaelen, @Vesper, @Nyx, @Cipher, or start asking questions below.
                     </p>

@@ -7,7 +7,6 @@ import {
   Filter, 
   ArrowDown, 
   ArrowUp, 
-  Table as TableIcon, 
   Check, 
   Edit3, 
   Trash2, 
@@ -210,10 +209,10 @@ export const ProjectsView: React.FC = () => {
     const progressPercent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
     return (
-      <div className="h-full flex flex-col overflow-hidden bg-[#0E0E12] text-gray-300 select-none font-sans">
+      <div className="h-full flex flex-col overflow-hidden bg-[#121315] text-gray-300 select-none font-sans">
         
         {/* ================= WORKSPACE TOP BREADCRUMB & ACTION BAR ================= */}
-        <div className="px-6 py-3.5 border-b border-white/5 bg-[#121318] flex items-center justify-between gap-4 flex-shrink-0">
+        <div className="px-6 py-3.5 border-b border-white/[0.06] bg-[#121315] flex items-center justify-between gap-4 flex-shrink-0">
           
           {/* Left: Breadcrumbs navigation */}
           <div className="flex items-center gap-3 min-w-0">
@@ -405,6 +404,10 @@ export const ProjectsView: React.FC = () => {
                                 <span className="flex items-center gap-1 text-[10px] text-cyan-400 animate-pulse font-sans">
                                   <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" /> Running
                                 </span>
+                              ) : issue.status === 'review' ? (
+                                <span className="text-[10px] font-sans text-amber-300">Awaiting review</span>
+                              ) : issue.status === 'done' ? (
+                                <span className="text-[10px] font-sans text-emerald-300">Completed</span>
                               ) : (
                                 <button
                                   onClick={(e) => {
@@ -747,20 +750,23 @@ export const ProjectsView: React.FC = () => {
   // VIEW 2: MAIN PROJECTS TABLE LIST
   // =========================================================================
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-[#0E0E12] text-gray-300 p-6 space-y-6 select-none font-sans relative">
+    <div className="h-full flex flex-col overflow-y-auto bg-[#121315] text-gray-300 p-6 space-y-6 select-none font-sans relative">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Folder className="w-4 h-4 text-gray-400" />
-          <h1 className="text-sm font-semibold text-white tracking-wide">Projects</h1>
-          <span className="text-xs text-gray-500 font-mono">{projects.length}</span>
+        <div>
+          <div className="flex items-center gap-2">
+            <Folder className="w-4 h-4 text-gray-400" />
+            <h1 className="text-base font-semibold text-white">Projects</h1>
+            <span className="text-xs tabular-nums text-gray-500">{projects.length}</span>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">Choose a project, then open an issue to prepare an agent run.</p>
         </div>
 
         {/* + New project button */}
         <button
           onClick={() => setCreateModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-xs font-medium text-white transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>New project</span>
@@ -777,7 +783,7 @@ export const ProjectsView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search projects..."
-            className="w-full bg-[#14151B] border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-[#17181B] border border-white/[0.07] rounded-md pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
 
@@ -794,7 +800,7 @@ export const ProjectsView: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 statusFilter !== 'all' || priorityFilter !== 'all' 
                   ? 'bg-brand-500/20 text-brand-300 border-brand-500/40' 
-                  : 'bg-[#14151B] hover:bg-[#1C1D24] text-gray-400 hover:text-white border-white/5'
+                  : 'bg-transparent hover:bg-white/[0.03] text-gray-400 hover:text-white border-transparent'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -852,7 +858,7 @@ export const ProjectsView: React.FC = () => {
                 setSortDropdownOpen(prev => !prev);
                 setFilterDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] hover:bg-[#1C1D24] border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-white hover:bg-white/[0.03] transition-colors"
             >
               {sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
               <span>{sortBy === 'name' ? 'Name' : sortBy === 'progress' ? 'Progress' : sortBy === 'targetDate' ? 'Target date' : 'Created'}</span>
@@ -892,13 +898,6 @@ export const ProjectsView: React.FC = () => {
             )}
           </div>
 
-          {/* Table View Button */}
-          <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
-          >
-            <TableIcon className="w-3.5 h-3.5" />
-            <span>Table</span>
-          </button>
         </div>
       </div>
 

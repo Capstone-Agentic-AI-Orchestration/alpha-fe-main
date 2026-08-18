@@ -58,6 +58,55 @@ export interface Issue {
   updatedAt: string;
 }
 
+export type PrototypeRunStatus =
+  | 'running'
+  | 'awaiting_approval'
+  | 'validating'
+  | 'failed'
+  | 'changes_requested'
+  | 'cancelled'
+  | 'completed';
+
+export type PrototypeRunStageStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled';
+
+export interface PrototypeRunStage {
+  id: string;
+  label: string;
+  description: string;
+  status: PrototypeRunStageStatus;
+  durationMs: number;
+  logs: string[];
+  startedAt?: string;
+  completedAt?: string;
+}
+
+export interface PrototypeRun {
+  id: string;
+  issueId: string;
+  projectId: string;
+  agentId: string;
+  status: PrototypeRunStatus;
+  scenario: 'success' | 'test_failure';
+  plan: string[];
+  stages: PrototypeRunStage[];
+  currentStageIndex: number;
+  createdAt: string;
+  updatedAt: string;
+  branchName?: string;
+  prUrl?: string;
+  changedFiles?: number;
+  insertions?: number;
+  deletions?: number;
+  testSummary?: string;
+}
+
+export interface ToastMessage {
+  id: string;
+  title: string;
+  description?: string;
+  tone: 'info' | 'success' | 'error';
+}
+
 export type ProjectStatus = 'planned' | 'in_progress' | 'paused' | 'completed' | 'cancelled' | 'active';
 export type ProjectPriority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 
@@ -271,6 +320,8 @@ export interface Deployment {
   startedAt: string;
   stages: PipelineStage[];
   previewUrl?: string;
+  sourceIssueId?: string;
+  sourceRunId?: string;
 }
 
 export type NotificationType = 

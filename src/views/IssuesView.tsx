@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
 import { IssueStatus, IssuePriority, Issue } from '../types';
 import { StatusBadge, PriorityBadge } from '../components/common/Badge';
+import { AgentRunProgress } from '../components/issues/AgentRunProgress';
 import { 
   Kanban, 
   List, 
@@ -40,6 +41,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
     updateIssueStatus, 
     updateIssue, 
     runAgentOnIssue, 
+    prototypeRuns,
     projects, 
     agents, 
     squads 
@@ -260,9 +262,9 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-[#121318] text-sm text-gray-200">
+    <div className="h-full flex flex-col overflow-hidden bg-[#121315] text-sm text-gray-200">
       {/* Header & Jira-like Control Bar */}
-      <div className="px-6 py-4 border-b border-white/[0.08] bg-[#14151B] space-y-3">
+      <div className="px-6 py-4 border-b border-white/[0.06] bg-[#121315] space-y-3">
         {/* Top Row: Title, Filters & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           {/* Left: Issues title & category pills */}
@@ -273,46 +275,46 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
               ) : (
                 <CheckSquare className="w-4 h-4 text-gray-400" />
               )}
-              <h1 className="text-base font-bold text-white tracking-tight">
+              <h1 className="text-base font-semibold text-white">
                 {onlyMyIssues ? 'My Issues' : 'Issues'}
               </h1>
             </div>
 
-            {/* Jira-like Filter Pills: All, Members, Agents, Layers */}
-            <div className="flex items-center gap-1.5 bg-[#1a1c24] p-1 rounded-lg border border-white/[0.08] text-xs">
+            {/* Scope is a compact text control, not a second container inside the header. */}
+            <div className="flex items-center gap-1 text-xs">
               <button
                 onClick={() => setFilterCategory('all')}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                className={`px-2 py-1 border-b font-medium transition-colors ${
                   filterCategory === 'all'
-                    ? 'bg-white/[0.12] text-white shadow-sm font-semibold'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'border-brand-400 text-white'
+                    : 'border-transparent text-gray-500 hover:text-white'
                 }`}
               >
                 All
               </button>
               <button
                 onClick={() => setFilterCategory('members')}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                className={`px-2 py-1 border-b font-medium transition-colors ${
                   filterCategory === 'members'
-                    ? 'bg-white/[0.12] text-white shadow-sm font-semibold'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'border-brand-400 text-white'
+                    : 'border-transparent text-gray-500 hover:text-white'
                 }`}
               >
                 Members
               </button>
               <button
                 onClick={() => setFilterCategory('agents')}
-                className={`px-3 py-1 rounded-md font-medium transition-all ${
+                className={`px-2 py-1 border-b font-medium transition-colors ${
                   filterCategory === 'agents'
-                    ? 'bg-white/[0.12] text-white shadow-sm font-semibold'
-                    : 'text-gray-400 hover:text-white'
+                    ? 'border-brand-400 text-white'
+                    : 'border-transparent text-gray-500 hover:text-white'
                 }`}
               >
                 Agents
               </button>
               <button
                 onClick={() => setFilterCategory('all')}
-                className="p-1 rounded-md text-gray-400 hover:text-white transition-colors"
+                className="p-1 text-gray-500 hover:text-white transition-colors"
                 title="Group / Stack options"
               >
                 <Layers className="w-3.5 h-3.5" />
@@ -322,12 +324,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
 
           {/* Right: Actions, Status telemetry & View switches */}
           <div className="flex items-center gap-2.5">
-            {/* Active Agents Running telemetry badge */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-gray-400">
+            {/* Active work remains visible as plain status text. */}
+            <div className="flex items-center gap-1.5 px-1 py-1.5 text-xs text-gray-500">
               {runningAgentsCount > 0 ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                  <span className="text-cyan-300 font-semibold">{runningAgentsCount} agents working</span>
+                  <span className="text-cyan-300 font-medium">{runningAgentsCount} agents working</span>
                 </>
               ) : (
                 <span>0 agents working</span>
@@ -337,10 +339,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
             {/* Filter Toggle Button */}
             <button
               onClick={() => setShowFilterBar(!showFilterBar)}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+              className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 showFilterBar || selectedProject !== 'all' || selectedPriority !== 'all'
-                  ? 'bg-white/10 text-white border-white/20'
-                  : 'bg-white/[0.04] text-gray-300 hover:text-white border-white/[0.08] hover:bg-white/[0.08]'
+                  ? 'bg-white/[0.05] text-white'
+                  : 'text-gray-400 hover:text-white hover:bg-white/[0.03]'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -350,18 +352,18 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
             {/* Display Button */}
             <button
               onClick={() => setShowFilterBar(!showFilterBar)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white/[0.04] text-gray-300 hover:text-white border border-white/[0.08] hover:bg-white/[0.08] transition-colors"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-white hover:bg-white/[0.03] transition-colors"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>Display</span>
             </button>
 
             {/* View Mode Toggle: Board vs List */}
-            <div className="flex items-center bg-[#1a1c24] p-1 rounded-lg border border-white/[0.08] text-xs">
+            <div className="flex items-center text-xs">
               <button
                 onClick={() => setViewMode('list')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-colors ${
-                  viewMode === 'list' ? 'bg-white/[0.12] text-white shadow-sm font-semibold' : 'text-gray-400 hover:text-white'
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md font-medium transition-colors ${
+                  viewMode === 'list' ? 'bg-white/[0.05] text-white' : 'text-gray-500 hover:text-white'
                 }`}
                 title="List View"
               >
@@ -370,8 +372,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
               </button>
               <button
                 onClick={() => setViewMode('board')}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-md font-medium transition-colors ${
-                  viewMode === 'board' ? 'bg-white/[0.12] text-white shadow-sm font-semibold' : 'text-gray-400 hover:text-white'
+                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md font-medium transition-colors ${
+                  viewMode === 'board' ? 'bg-white/[0.05] text-white' : 'text-gray-500 hover:text-white'
                 }`}
                 title="Board View"
               >
@@ -383,7 +385,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
             {/* New Issue Button */}
             <button
               onClick={onOpenNewIssue}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-semibold text-xs shadow-glow-brand transition-all"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>New Issue</span>
@@ -670,7 +672,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                     type="text"
                     value={selectedIssue.title}
                     onChange={(e) => updateIssue(selectedIssue.id, { title: e.target.value })}
-                    className="w-full bg-transparent text-xl font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500 rounded p-1.5"
+                    className="w-full select-text cursor-text bg-transparent text-xl font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500 rounded p-1.5"
                   />
                 </div>
 
@@ -682,7 +684,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                     rows={5}
                     value={selectedIssue.description}
                     onChange={(e) => updateIssue(selectedIssue.id, { description: e.target.value })}
-                    className="w-full bg-surface-200 border border-white/10 rounded-xl p-4 text-sm text-gray-200 font-mono leading-relaxed focus:outline-none focus:border-brand-500"
+                    className="w-full select-text cursor-text bg-surface-200 border border-white/10 rounded-xl p-4 text-sm text-gray-200 font-mono leading-relaxed focus:outline-none focus:border-brand-500"
                   />
                 </div>
 
@@ -720,7 +722,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                       value={newSubtaskTitle}
                       onChange={(e) => setNewSubtaskTitle(e.target.value)}
                       placeholder="Add a new subtask..."
-                      className="flex-1 bg-surface-200 border border-white/10 rounded-xl px-4 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                      className="flex-1 select-text cursor-text bg-surface-200 border border-white/10 rounded-xl px-4 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
                     />
                     <button
                       type="submit"
@@ -763,7 +765,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                       value={newCommentContent}
                       onChange={(e) => setNewCommentContent(e.target.value)}
                       placeholder="Leave a comment or instruction for the agent..."
-                      className="flex-1 bg-surface-200 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                      className="flex-1 select-text cursor-text bg-surface-200 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
                     />
                     <button
                       type="submit"
@@ -780,7 +782,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
               {/* Right Sidebar Metadata */}
               <div className="w-full md:w-80 bg-surface-200/40 p-6 space-y-6 flex-shrink-0 text-xs">
                 {/* Trigger Action */}
-                {selectedIssue.status !== 'done' && (
+                {selectedIssue.status !== 'done' && !prototypeRuns.some(run => run.issueId === selectedIssue.id) && (
                   <button
                     onClick={() => runAgentOnIssue(selectedIssue.id)}
                     disabled={selectedIssue.status === 'agent_running'}
@@ -790,6 +792,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                     <span>{selectedIssue.status === 'agent_running' ? 'Agent Running...' : 'Launch Autonomous Agent'}</span>
                   </button>
                 )}
+
+                <AgentRunProgress issueId={selectedIssue.id} />
 
                 {/* Status Picker */}
                 <div className="space-y-1.5">

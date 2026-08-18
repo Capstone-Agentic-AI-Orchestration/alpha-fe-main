@@ -13,7 +13,6 @@ import {
   ArrowUp, 
   Table as TableIcon, 
   Check, 
-  X, 
   Copy, 
   AlertCircle 
 } from 'lucide-react';
@@ -189,10 +188,13 @@ export const DeploymentsView: React.FC = () => {
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Rocket className="w-4 h-4 text-gray-400" />
-          <h1 className="text-sm font-semibold text-white tracking-wide">CI/CD Platform</h1>
-          <span className="text-xs text-gray-500 font-mono">{deployments.length}</span>
+        <div>
+          <div className="flex items-center gap-2">
+            <Rocket className="w-4 h-4 text-gray-400" />
+            <h1 className="text-sm font-semibold text-white tracking-wide">CI/CD Platform</h1>
+            <span className="text-xs text-gray-500 font-mono">{deployments.length}</span>
+          </div>
+          <p className="mt-1 text-xs text-gray-500">Inspect Preview validation after approving agent output in Inbox.</p>
         </div>
 
         {/* Trigger run button */}
@@ -406,143 +408,115 @@ export const DeploymentsView: React.FC = () => {
         </div>
       </div>
 
-      {/* ================= PIPELINE INSPECTOR DRAWER ================= */}
+      {/* ================= PIPELINE RUN MODAL ================= */}
       {selectedDeployment && (
-        <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-[#111218] border-l border-white/10 shadow-2xl z-50 flex flex-col animate-slide-left font-sans">
-          
-          {/* Drawer Header */}
-          <div className="p-5 border-b border-white/5 flex items-start justify-between bg-[#14151B]">
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-surface-100 border border-white/10 flex items-center justify-center text-xl shadow-md flex-shrink-0">
-                <Rocket className="w-5 h-5 text-pink-400" />
+        <Modal
+          isOpen={true}
+          onClose={() => setSelectedDepId(null)}
+          title={selectedDeployment.name}
+          subtitle={`${selectedDeployment.projectName} · ${selectedDeployment.commitSha}`}
+          maxWidth="max-w-4xl"
+        >
+          <div className="space-y-6 text-xs text-gray-300">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] pb-4">
+              <div className="flex items-center gap-2">
+                <Rocket className="h-4 w-4 text-pink-400" />
+                {renderStatusBadge(selectedDeployment.status)}
+                {renderEnvBadge(selectedDeployment.environment)}
               </div>
-              <div className="min-w-0 space-y-1">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-base font-semibold text-white truncate">{selectedDeployment.name}</h2>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-gray-400">
-                    {selectedDeployment.commitSha}
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {renderStatusBadge(selectedDeployment.status)}
-                  {renderEnvBadge(selectedDeployment.environment)}
-                  <span className="text-[11px] text-gray-500 font-mono">
-                    {selectedDeployment.durationSec}s runtime
-                  </span>
-                </div>
-              </div>
+              <span className="text-[11px] tabular-nums text-gray-500">
+                {selectedDeployment.durationSec}s runtime
+              </span>
             </div>
 
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setSelectedDepId(null)}
-                className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Drawer Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-6 text-xs text-gray-300">
-            
-            {/* Git Metadata Block */}
-            <div className="p-3.5 rounded-xl bg-[#15161D] border border-white/5 space-y-2">
-              <div className="flex items-center justify-between text-[11px] text-gray-400 font-mono">
-                <span className="flex items-center gap-1.5 text-gray-300">
-                  <GitBranch className="w-3.5 h-3.5 text-indigo-400" /> {selectedDeployment.branch}
+            {/* Repository and commit context */}
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-gray-400">
+                <span className="flex items-center gap-1.5 font-mono text-gray-300">
+                  <GitBranch className="h-3.5 w-3.5 text-indigo-400" />
+                  {selectedDeployment.branch}
                 </span>
                 <span>Triggered by {selectedDeployment.triggeredBy.name}</span>
               </div>
-              <p className="text-xs text-white font-mono bg-black/30 p-2.5 rounded-lg border border-white/5">
+              <p className="rounded-md border border-white/[0.06] bg-[#0D0E10] p-3 font-mono text-xs text-gray-200">
                 {selectedDeployment.commitMessage}
               </p>
               {selectedDeployment.previewUrl && (
-                <div className="flex items-center justify-between pt-1 text-[11px]">
-                  <span className="text-gray-500">Live Preview:</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                  <span className="text-gray-500">Live preview</span>
                   <a
                     href={selectedDeployment.previewUrl}
                     target="_blank"
                     rel="noreferrer"
-                    className="flex items-center gap-1 text-brand-400 hover:underline font-mono"
+                    className="flex min-w-0 items-center gap-1 font-mono text-brand-400 hover:underline"
                   >
-                    <span>{selectedDeployment.previewUrl}</span>
-                    <ExternalLink className="w-3 h-3" />
+                    <span className="truncate">{selectedDeployment.previewUrl}</span>
+                    <ExternalLink className="h-3 w-3 flex-shrink-0" />
                   </a>
                 </div>
               )}
             </div>
 
-            {/* Stages Sequence */}
-            <div className="space-y-2.5">
-              <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                Pipeline Stages Execution
-              </div>
+            <div className="grid gap-6 lg:grid-cols-[0.9fr_1.1fr]">
+              {/* Pipeline stages */}
+              <section className="space-y-2.5">
+                <h3 className="text-xs font-medium text-gray-400">Pipeline stages</h3>
+                <div className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+                  {selectedDeployment.stages.map((stage, idx) => {
+                    const isSuccess = stage.status === 'success';
+                    const isRunning = stage.status === 'running';
+                    const isFailed = stage.status === 'failed';
 
-              <div className="space-y-2">
-                {selectedDeployment.stages.map((stage, idx) => {
-                  const isSuccess = stage.status === 'success';
-                  const isRunning = stage.status === 'running';
-                  const isFailed = stage.status === 'failed';
-
-                  return (
-                    <div
-                      key={idx}
-                      className="p-3 rounded-xl bg-[#15161D] border border-white/5 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        {isSuccess && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
-                        {isRunning && <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-pulse flex-shrink-0" />}
-                        {isFailed && <AlertCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />}
-                        {!isSuccess && !isRunning && !isFailed && <span className="w-2 h-2 rounded-full bg-gray-600 flex-shrink-0" />}
-                        
-                        <div>
-                          <div className="font-medium text-white">{stage.name}</div>
-                          <div className="text-[10px] text-gray-500 font-mono capitalize">{stage.status}</div>
+                    return (
+                      <div key={idx} className="flex items-center justify-between gap-4 py-3">
+                        <div className="flex min-w-0 items-center gap-3">
+                          {isSuccess && <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-emerald-400" />}
+                          {isRunning && <span className="h-2.5 w-2.5 flex-shrink-0 animate-pulse rounded-full bg-cyan-400" />}
+                          {isFailed && <AlertCircle className="h-4 w-4 flex-shrink-0 text-rose-400" />}
+                          {!isSuccess && !isRunning && !isFailed && <span className="h-2 w-2 flex-shrink-0 rounded-full bg-gray-600" />}
+                          <div className="min-w-0">
+                            <div className="truncate font-medium text-white">{stage.name}</div>
+                            <div className="text-[10px] capitalize text-gray-500">{stage.status}</div>
+                          </div>
                         </div>
+                        {stage.durationSec !== undefined && (
+                          <span className="text-[11px] tabular-nums text-gray-500">{stage.durationSec}s</span>
+                        )}
                       </div>
-
-                      {stage.durationSec !== undefined && (
-                        <span className="text-[11px] font-mono text-gray-400">
-                          {stage.durationSec}s
-                        </span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Monospace Execution Logs */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-[11px] font-medium text-gray-400">
-                <div className="flex items-center gap-1.5">
-                  <Terminal className="w-3.5 h-3.5 text-brand-400" />
-                  <span>Streaming Execution Logs</span>
+                    );
+                  })}
                 </div>
-                <button
-                  onClick={() => handleCopyLogs(selectedDeployment)}
-                  className="flex items-center gap-1 px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 text-gray-400 hover:text-white transition-colors"
-                >
-                  {copiedLogId ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedLogId ? 'Copied' : 'Copy logs'}</span>
-                </button>
-              </div>
+              </section>
 
-              <div className="p-3.5 rounded-xl bg-[#090A0E] border border-white/5 font-mono text-[11px] text-gray-300 space-y-1.5 max-h-64 overflow-y-auto">
-                {selectedDeployment.stages.flatMap((s, si) => s.logs.map((log, li) => (
-                  <div key={`${si}-${li}`} className="flex items-start gap-2 leading-relaxed">
-                    <span className="text-gray-600 select-none">[{s.name.split(' ')[0]}]</span>
-                    <span className={log.includes('Error') ? 'text-rose-300' : 'text-gray-300'}>
-                      {log}
-                    </span>
+              {/* Execution logs */}
+              <section className="space-y-2.5">
+                <div className="flex items-center justify-between text-xs font-medium text-gray-400">
+                  <div className="flex items-center gap-1.5">
+                    <Terminal className="h-3.5 w-3.5 text-brand-400" />
+                    <h3>Execution logs</h3>
                   </div>
-                )))}
-              </div>
+                  <button
+                    onClick={() => handleCopyLogs(selectedDeployment)}
+                    className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-500 transition-colors hover:bg-white/[0.04] hover:text-white"
+                  >
+                    {copiedLogId ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                    <span>{copiedLogId ? 'Copied' : 'Copy logs'}</span>
+                  </button>
+                </div>
+                <div className="max-h-72 min-h-52 space-y-1.5 overflow-y-auto rounded-md border border-white/[0.06] bg-[#090A0C] p-3.5 font-mono text-[11px] text-gray-300">
+                  {selectedDeployment.stages.flatMap((stage, stageIndex) =>
+                    stage.logs.map((log, logIndex) => (
+                      <div key={`${stageIndex}-${logIndex}`} className="flex items-start gap-2 leading-relaxed">
+                        <span className="select-none text-gray-600">[{stage.name.split(' ')[0]}]</span>
+                        <span className={log.includes('Error') ? 'text-rose-300' : 'text-gray-300'}>{log}</span>
+                      </div>
+                    )),
+                  )}
+                </div>
+              </section>
             </div>
-
           </div>
-        </div>
+        </Modal>
       )}
 
       {/* ================= TRIGGER RUN MODAL ================= */}
