@@ -1,27 +1,31 @@
-import React from 'react';
-import { useApp } from '../../context/AppContext';
+import React, { useState } from 'react';
+import { useApp } from '@/app/AppContext';
 import { 
   Search, 
   Bot, 
   Cpu, 
   Plus, 
   Bell,
-  ChevronRight
+  ChevronRight,
+  Download
 } from 'lucide-react';
+import { DownloadDesktopModal } from '@/shared/components/DownloadDesktopModal';
 
 interface HeaderProps {
   onOpenNewIssue: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const { 
     activeTab, 
     setCommandPaletteOpen, 
     unreadInboxCount, 
     setActiveTab, 
-    agents, 
+    agents,
     runtimes,
-    settings 
+    settings,
+    serverStatus
   } = useApp();
 
   const activeAgentsRunning = agents.filter(a => a.status === 'executing' || a.status === 'thinking').length;
@@ -46,6 +50,28 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
 
   return (
     <header className="h-14 bg-surface-200/90 backdrop-blur-md border-b border-white/10 px-4 sm:px-6 flex items-center justify-between z-10">
+      {/* Daemon reachability. Agents cannot run while this is offline, so it is
+          stated plainly rather than left for a failed run to reveal. */}
+      {serverStatus !== 'online' && (
+        <div
+          className="flex items-center gap-1.5 text-[11px] font-medium mr-3"
+          title={
+            serverStatus === 'offline'
+              ? 'Showing cached data. Start the Alpha daemon to run agents.'
+              : 'Connecting to the Alpha daemon…'
+          }
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              serverStatus === 'offline' ? 'bg-rose-400' : 'bg-amber-400 animate-pulse'
+            }`}
+          />
+          <span className={serverStatus === 'offline' ? 'text-gray-400' : 'text-amber-300'}>
+            {serverStatus === 'offline' ? 'Daemon offline' : 'Connecting'}
+          </span>
+        </div>
+      )}
+
       {/* Multica Breadcrumb */}
       <div className="flex items-center gap-2 text-xs">
         <span className="text-gray-400 font-medium hover:text-white cursor-pointer" onClick={() => setActiveTab('issues')}>
@@ -122,6 +148,16 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
           )}
         </button>
 
+        {/* Download Desktop App (.exe) Button */}
+        <button
+          onClick={() => setDownloadModalOpen(true)}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 hover:text-white hover:bg-indigo-500/25 text-xs font-semibold transition-all shadow-sm"
+          title="Download Desktop App Mode (.exe)"
+        >
+          <Download className="w-3.5 h-3.5 text-indigo-400" />
+          <span className="hidden md:inline">Desktop App (.exe)</span>
+        </button>
+
         {/* New Issue Button */}
         <button
           onClick={onOpenNewIssue}
@@ -131,6 +167,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
           <span className="hidden sm:inline">New Issue</span>
         </button>
       </div>
+
+      {/* Desktop App Download Modal */}
+      <DownloadDesktopModal
+        isOpen={downloadModalOpen}
+        onClose={() => setDownloadModalOpen(false)}
+      />
     </header>
   );
 };

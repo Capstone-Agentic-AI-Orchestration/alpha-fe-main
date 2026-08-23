@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useApp } from '../../context/AppContext';
+import { useApp } from '@/app/AppContext';
 import { 
   Search, 
   Bot, 
@@ -16,7 +16,7 @@ import {
   ArrowRight,
   Sparkles
 } from 'lucide-react';
-import { NavigationTab } from '../../types';
+import { NavigationTab } from '@/shared/types';
 
 export const CommandPalette: React.FC = () => {
   const { 

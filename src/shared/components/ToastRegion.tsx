@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
-import { useApp } from '../../context/AppContext';
+import { useApp } from '@/app/AppContext';
 
 export const ToastRegion: React.FC = () => {
   const { toasts, dismissToast } = useApp();

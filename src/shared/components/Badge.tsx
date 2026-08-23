@@ -5,7 +5,7 @@ import type {
   IssuePriority,
   IssueStatus,
   RuntimeStatus,
-} from '../../types';
+} from '@/shared/types';
 import {
   Activity,
   AlertCircle,

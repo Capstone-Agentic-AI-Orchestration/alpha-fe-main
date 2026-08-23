@@ -2,7 +2,6 @@ export type NavigationTab =
   | 'portal'
   | 'intake'
   | 'documents'
-  | 'estimates'
   | 'billing'
   | 'inbox'
   | 'chat'
@@ -79,7 +78,7 @@ export interface PrototypeRunStage {
   label: string;
   description: string;
   status: PrototypeRunStageStatus;
-  durationMs: number;
+  durationMs?: number;
   logs: string[];
   startedAt?: string;
   completedAt?: string;
@@ -91,7 +90,7 @@ export interface PrototypeRun {
   projectId: string;
   agentId: string;
   status: PrototypeRunStatus;
-  scenario: 'success' | 'test_failure';
+  scenario?: 'success' | 'test_failure' | 'review_required';
   plan: string[];
   stages: PrototypeRunStage[];
   currentStageIndex: number;
@@ -167,13 +166,19 @@ export type AgentAutonomyLevel =
   | 'Semi-Autonomous (Requires Approval)' 
   | 'Full Autonomy';
 
-export type ModelProvider = 
-  | 'Anthropic' 
-  | 'OpenAI' 
-  | 'DeepSeek' 
-  | 'Ollama' 
-  | 'LM Studio' 
-  | 'Google Gemini' 
+export type ModelProvider =
+  | 'Anthropic'
+  | 'OpenAI'
+  /**
+   * Google Antigravity (`agy`). Fronts Gemini 3.x, Claude and GPT-OSS through a
+   * single CLI, and is what is actually installed on a machine with the
+   * Antigravity IDE — the standalone `gemini` CLI usually is not.
+   */
+  | 'Antigravity'
+  | 'DeepSeek'
+  | 'Ollama'
+  | 'LM Studio'
+  | 'Google Gemini'
   | 'Groq';
 
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'error' | 'offline';
@@ -259,17 +264,25 @@ export type RuntimeStatus = 'online' | 'offline' | 'degraded' | 'scanning';
 export interface RuntimeEngine {
   id: string;
   name: string;
-  type: RuntimeType;
+  type?: RuntimeType;
   provider: ModelProvider;
-  endpoint: string;
+  endpoint?: string;
   port?: number;
   status: RuntimeStatus;
-  latencyMs: number;
-  modelsLoaded: string[];
+  latencyMs?: number;
+  modelsLoaded?: string[];
+  models?: string[];
+  version?: string;
+  account?: {
+    email?: string;
+    org?: string;
+    billing?: 'subscription' | 'api';
+    plan?: string;
+  };
   vramUsageGb?: number;
   vramTotalGb?: number;
   gpuName?: string;
-  isDefault: boolean;
+  isDefault?: boolean;
   detectedAt?: string;
 }
 
@@ -405,6 +418,8 @@ export interface ChatThread {
    */
   audience?: Audience;
   clientId?: string;
+  /** Set on creation. Matches `chat_threads.created_at` in the backend schema. */
+  createdAt?: string;
 }
 
 export interface AnalyticsData {

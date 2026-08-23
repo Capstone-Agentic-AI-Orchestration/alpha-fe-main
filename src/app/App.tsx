@@ -1,28 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useApp } from './context/AppContext';
-import { Sidebar } from './components/layout/Sidebar';
-import { CommandPalette } from './components/common/CommandPalette';
-import { CreateIssueModal } from './components/issues/CreateIssueModal';
-import { AgentRunModal } from './components/issues/AgentRunModal';
-import { PrototypeGuide } from './components/onboarding/PrototypeGuide';
-import { ToastRegion } from './components/common/ToastRegion';
-import { InboxView } from './views/InboxView';
-import { ChatView } from './views/ChatView';
-import { IssuesView } from './views/IssuesView';
-import { ProjectsView } from './views/ProjectsView';
-import { AgentsView } from './views/AgentsView';
-import { SquadsView } from './views/SquadsView';
-import { AnalyticsView } from './views/AnalyticsView';
-import { RuntimesView } from './views/RuntimesView';
-import { SkillsView } from './views/SkillsView';
-import { DeploymentsView } from './views/DeploymentsView';
-import { SettingsView } from './views/SettingsView';
-import { ClientPortalView } from './views/ClientPortalView';
-import { IntakeWizardView } from './views/IntakeWizardView';
-import { DocumentsView } from './views/DocumentsView';
-import { EstimatesView } from './views/EstimatesView';
-import { BillingView } from './views/BillingView';
-import { NavigationTab } from './types';
+import { useApp } from '@/app/AppContext';
+import { Sidebar } from '@/shared/layout/Sidebar';
+import { CommandPalette } from '@/shared/components/CommandPalette';
+import { CreateIssueModal } from '@/features/issues/CreateIssueModal';
+import { AgentRunModal } from '@/features/runs/AgentRunModal';
+import { PrototypeGuide } from '@/features/onboarding/PrototypeGuide';
+import { ToastRegion } from '@/shared/components/ToastRegion';
+import { DownloadDesktopModal } from '@/shared/components/DownloadDesktopModal';
+import { InboxView } from '@/features/inbox/InboxView';
+import { ChatView } from '@/features/chat/ChatView';
+import { IssuesView } from '@/features/issues/IssuesView';
+import { ProjectsView } from '@/features/projects/ProjectsView';
+import { AgentsView } from '@/features/agents/AgentsView';
+import { SquadsView } from '@/features/squads/SquadsView';
+import { AnalyticsView } from '@/features/analytics/AnalyticsView';
+import { RuntimesView } from '@/features/runtimes/RuntimesView';
+import { SkillsView } from '@/features/skills/SkillsView';
+import { DeploymentsView } from '@/features/deployments/DeploymentsView';
+import { SettingsView } from '@/features/settings/SettingsView';
+import { ClientPortalView } from '@/features/delivery/ClientPortalView';
+import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
+import { DocumentsView } from '@/features/delivery/DocumentsView';
+import { BillingView } from '@/features/delivery/BillingView';
+import { NavigationTab } from '@/shared/types';
 import {
   Inbox,
   MessageSquare,
@@ -39,17 +39,16 @@ import {
   Plus,
   X,
   FileText,
-  Receipt,
   CreditCard,
   LayoutDashboard,
-  PenLine
+  PenLine,
+  Download
 } from 'lucide-react';
 
 const ALL_TABS: { id: NavigationTab; title: string; subtitle: string; icon: React.ReactNode }[] = [
   { id: 'portal', title: 'Overview', subtitle: 'Your requests, progress, and budget', icon: <LayoutDashboard className="w-4 h-4" /> },
   { id: 'intake', title: 'New Request', subtitle: 'Describe what you need in plain language', icon: <PenLine className="w-4 h-4" /> },
   { id: 'documents', title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', icon: <FileText className="w-4 h-4" /> },
-  { id: 'estimates', title: 'Estimates', subtitle: 'Priced scope, ranges, and approval', icon: <Receipt className="w-4 h-4" /> },
   { id: 'billing', title: 'Billing & Usage', subtitle: 'Committed value, delivery cost, and margin', icon: <CreditCard className="w-4 h-4" /> },
   { id: 'inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', icon: <Inbox className="w-4 h-4" /> },
   { id: 'chat', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', icon: <MessageSquare className="w-4 h-4" /> },
@@ -75,6 +74,7 @@ export const App: React.FC = () => {
   const resolveView = (view: NavigationTab): NavigationTab =>
     visibleTabs.includes(view) ? view : visibleTabs[0];
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
   const newTabMenuRef = useRef<HTMLDivElement>(null);
@@ -106,7 +106,6 @@ export const App: React.FC = () => {
       case 'portal': return <LayoutDashboard className="w-3.5 h-3.5" />;
       case 'intake': return <PenLine className="w-3.5 h-3.5" />;
       case 'documents': return <FileText className="w-3.5 h-3.5" />;
-      case 'estimates': return <Receipt className="w-3.5 h-3.5" />;
       case 'billing': return <CreditCard className="w-3.5 h-3.5" />;
       case 'inbox': return <Inbox className="w-3.5 h-3.5" />;
       case 'chat': return <MessageSquare className="w-3.5 h-3.5" />;
@@ -129,7 +128,6 @@ export const App: React.FC = () => {
       case 'portal': return 'Overview';
       case 'intake': return 'New Request';
       case 'documents': return isClient ? 'My Requests' : 'Specifications';
-      case 'estimates': return isClient ? 'Costs' : 'Estimates';
       case 'billing': return 'Billing';
       case 'chat': return isClient ? 'Messages' : 'Chat';
       case 'inbox': return 'Inbox';
@@ -248,6 +246,18 @@ export const App: React.FC = () => {
               </div>
             )}
           </div>
+
+          {/* Right Actions */}
+          <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+            <button
+              onClick={() => setDownloadModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-all shadow-glow-brand cursor-pointer"
+              title="Download Desktop App Mode (.exe)"
+            >
+              <Download className="w-3.5 h-3.5" />
+              <span>Desktop App (.exe)</span>
+            </button>
+          </div>
         </div>
 
         {/* Dynamic View Content */}
@@ -255,7 +265,6 @@ export const App: React.FC = () => {
           {activeTab === 'portal' && <ClientPortalView />}
           {activeTab === 'intake' && <IntakeWizardView />}
           {activeTab === 'documents' && <DocumentsView />}
-          {activeTab === 'estimates' && <EstimatesView />}
           {activeTab === 'billing' && <BillingView />}
           {activeTab === 'inbox' && <InboxView />}
           {activeTab === 'chat' && <ChatView />}
@@ -279,6 +288,11 @@ export const App: React.FC = () => {
       <CreateIssueModal
         isOpen={createIssueOpen}
         onClose={() => setCreateIssueOpen(false)}
+      />
+
+      <DownloadDesktopModal
+        isOpen={downloadModalOpen}
+        onClose={() => setDownloadModalOpen(false)}
       />
 
       <AgentRunModal />

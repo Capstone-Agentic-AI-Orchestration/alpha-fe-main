@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useApp } from '../../context/AppContext';
-import { NavigationTab, UserRole } from '../../types';
+import { useApp } from '@/app/AppContext';
+import { NavigationTab, UserRole } from '@/shared/types';
 import {
   Inbox,
   MessageSquare,
@@ -19,7 +19,6 @@ import {
   HelpCircle,
   Rocket,
   FileText,
-  Receipt,
   CreditCard,
   LayoutDashboard,
   PenLine
@@ -42,7 +41,6 @@ const NAV_META: Record<
   chat:        { label: 'Chat', clientLabel: 'Messages', icon: <MessageSquare className="w-4 h-4" />, group: 'primary' },
   my_issues:   { label: 'My Issues', icon: <User className="w-4 h-4" />, group: 'primary' },
   documents:   { label: 'Specifications', clientLabel: 'My requests', icon: <FileText className="w-4 h-4" />, group: 'workspace' },
-  estimates:   { label: 'Estimates', clientLabel: 'Costs', icon: <Receipt className="w-4 h-4" />, group: 'workspace' },
   issues:      { label: 'Issues', icon: <CheckSquare className="w-4 h-4" />, group: 'workspace' },
   projects:    { label: 'Projects', icon: <FolderKanban className="w-4 h-4" />, group: 'workspace' },
   deployments: { label: 'CI/CD Platform', icon: <Rocket className="w-4 h-4" />, group: 'workspace' },
@@ -267,7 +265,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
           <HelpCircle className="w-4 h-4 text-gray-500" />
           <span>Prototype guide</span>
         </button>
-        <span className="font-mono text-[10px] text-gray-600">v1.5.0</span>
+        <span className="font-mono text-[10px] text-brand-400 font-medium">v2.0.0</span>
       </div>
     </aside>
   );
