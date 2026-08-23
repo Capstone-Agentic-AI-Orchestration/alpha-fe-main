@@ -13,6 +13,13 @@ import { ModelProvider, RuntimeEngine } from '@/shared/types';
  */
 
 export interface ProviderOption {
+  /**
+   * The runtime this option came from. Provider and runtime are one axis here —
+   * `RUNTIME_TO_PROVIDER` is keyed by runtime id, so each detected runtime
+   * yields exactly one provider — and carrying the id means a picker can store
+   * `runtimeId` instead of re-deriving it from the provider label later.
+   */
+  runtimeId: string;
   provider: ModelProvider;
   label: string;
   /** Detected models, empty when the runtime has not reported any. */
@@ -42,6 +49,7 @@ export function providerOptions(runtimes: RuntimeEngine[]): ProviderOption[] {
     const models = runtime.models ?? runtime.modelsLoaded ?? [];
 
     options.push({
+      runtimeId: runtime.id,
       provider,
       // Surface why a choice is unusable rather than hiding it — an installed
       // but signed-out CLI is a fixable state, not an absent one.
@@ -69,4 +77,47 @@ export function modelsForProvider(runtimes: RuntimeEngine[], provider: ModelProv
 /** First detected model for a provider — used when switching provider. */
 export function defaultModelFor(runtimes: RuntimeEngine[], provider: ModelProvider): string {
   return modelsForProvider(runtimes, provider)[0] ?? '';
+}
+
+/* ---------------------------------------------------------------------------
+ * Runtime-keyed views of the same data.
+ *
+ * An agent stores `runtimeId` — that is what the daemon dispatches on — while
+ * `modelProvider` is a display echo of it. Creation therefore picks a runtime
+ * and derives the provider, never the other way round.
+ * ------------------------------------------------------------------------ */
+
+export function runtimeOption(
+  runtimes: RuntimeEngine[],
+  runtimeId: string
+): ProviderOption | undefined {
+  return providerOptions(runtimes).find(o => o.runtimeId === runtimeId);
+}
+
+/** The provider value to store alongside a chosen runtime. */
+export function providerForRuntime(
+  runtimes: RuntimeEngine[],
+  runtimeId: string
+): ModelProvider | null {
+  return runtimeOption(runtimes, runtimeId)?.provider ?? null;
+}
+
+/** Models to offer for a runtime, or [] when nothing was detected. */
+export function modelsForRuntime(runtimes: RuntimeEngine[], runtimeId: string): string[] {
+  return runtimeOption(runtimes, runtimeId)?.models ?? [];
+}
+
+/** First detected model for a runtime — used when switching runtime. */
+export function defaultModelForRuntime(runtimes: RuntimeEngine[], runtimeId: string): string {
+  return modelsForRuntime(runtimes, runtimeId)[0] ?? '';
+}
+
+/**
+ * The runtime a new agent should start on: the first usable one, falling back
+ * to the first detected at all so the form still has a selection to show on a
+ * machine where every CLI is signed out.
+ */
+export function preferredRuntimeId(runtimes: RuntimeEngine[]): string {
+  const options = providerOptions(runtimes);
+  return options.find(o => o.available)?.runtimeId ?? options[0]?.runtimeId ?? '';
 }

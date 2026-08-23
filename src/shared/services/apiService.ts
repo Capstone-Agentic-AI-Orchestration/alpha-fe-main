@@ -21,7 +21,17 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const errorText = await res.text().catch(() => res.statusText);
-    throw new Error(`API Error [${res.status}]: ${errorText}`);
+    // The daemon answers failures with `{ "error": "..." }`. Unwrap it — a
+    // message shown to a user should read as a sentence, not as a JSON blob
+    // with the sentence buried inside it.
+    let detail = errorText;
+    try {
+      const parsed = JSON.parse(errorText);
+      if (parsed && typeof parsed.error === 'string') detail = parsed.error;
+    } catch {
+      /* not JSON — the raw text is the best we have */
+    }
+    throw new Error(`API Error [${res.status}]: ${detail}`);
   }
   return res.json();
 }
@@ -137,6 +147,17 @@ export const apiService = {
     fetchJson<Agent>(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteAgent: (id: string) =>
     fetchJson<{ success: boolean }>(`/agents/${id}`, { method: 'DELETE' }),
+
+  /**
+   * One turn of the conversational agent builder. `message` is already the
+   * encoded envelope — see `builderProtocol.encodeBuilderInput`. `sessionId` is
+   * minted by the client and is what makes the next turn a continuation.
+   */
+  sendBuilderMessage: (payload: { sessionId: string; runtimeId: string; message: string }) =>
+    fetchJson<{ content: string; runtimeId: string; provider: string; modelName: string }>(
+      '/agents/builder/message',
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
 
   // Issues
   getIssues: async (): Promise<Issue[]> => {
