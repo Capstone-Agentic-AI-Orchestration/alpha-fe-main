@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp } from '@/app/AppContext';
 import { 
   Plus, 
@@ -22,6 +22,8 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
+import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
+import { deriveProjectKey } from '@/features/projects/useProjectsViewModel';
 import { Project, ProjectStatus, ProjectPriority, IssueStatus } from '@/shared/types';
 import { Modal } from '@/shared/components/Modal';
 
@@ -58,19 +60,20 @@ export const ProjectsView: React.FC = () => {
   const [boardSearchQuery, setBoardSearchQuery] = useState<string>('');
   const [addingToStatus, setAddingToStatus] = useState<IssueStatus | null>(null);
   const [newIssueTitle, setNewIssueTitle] = useState<string>('');
-  const [copiedResId, setCopiedResId] = useState<string | null>(null);
 
   // Selected project memo
   const selectedProject = useMemo(() => {
     return projects.find(p => p.id === selectedProjectId) || null;
   }, [projects, selectedProjectId]);
 
-  // Copy helper
-  const handleCopyResourcePath = useCallback((resId: string, path: string) => {
-    navigator.clipboard.writeText(path);
-    setCopiedResId(resId);
-    setTimeout(() => setCopiedResId(null), 2000);
-  }, []);
+  // `key` is UNIQUE in the daemon's schema and a duplicate makes the write fail
+  // with nothing on screen to explain it. Flag it while the dialog is still open.
+  const keyCollision = useMemo(() => {
+    if (!editingProject) return false;
+    const key = editingProject.key.trim().toUpperCase();
+    if (!key) return false;
+    return projects.some(p => p.id !== editingProject.id && p.key.toUpperCase() === key);
+  }, [editingProject, projects]);
 
   // Filter and Sort Main Projects List
   const filteredProjects = useMemo(() => {
@@ -570,31 +573,13 @@ export const ProjectsView: React.FC = () => {
                 <span className="text-[10px] text-gray-500 font-mono">{(selectedProject.resources || []).length} attached</span>
               </div>
 
-              {(selectedProject.resources || []).length === 0 ? (
-                <p className="p-3 rounded-xl bg-[#0A0B0E] text-gray-500 italic text-[11px]">
-                  No repositories attached.
-                </p>
-              ) : (
-                <div className="space-y-1.5">
-                  {(selectedProject.resources || []).map(res => (
-                    <div 
-                      key={res.id} 
-                      className="p-2.5 rounded-xl bg-[#0A0B0E] border border-white/5 flex items-center justify-between font-mono text-[11px]"
-                    >
-                      <div className="flex items-center gap-2 truncate min-w-0 pr-2">
-                        <GitBranch className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
-                        <span className="text-white truncate">{res.pathOrUrl}</span>
-                      </div>
-                      <button
-                        onClick={() => handleCopyResourcePath(res.id, res.pathOrUrl)}
-                        className="text-gray-400 hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors text-[10px] flex-shrink-0"
-                      >
-                        {copiedResId === res.id ? 'Copied' : 'Copy'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
+              {/* Attaching used to be possible only inside the create wizard, so
+                  a project that shipped without a repo could never gain one. */}
+              <ProjectResourcesPanel
+                resources={selectedProject.resources || []}
+                onChange={(next) => updateProject(selectedProject.id, { resources: next })}
+                description={selectedProject.description}
+              />
             </div>
 
             {/* 5. Active Agents in this Board */}
@@ -638,20 +623,72 @@ export const ProjectsView: React.FC = () => {
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                updateProject(editingProject.id, editingProject);
+                // An empty key would break every issue identifier in the
+                // project (`<KEY>-101`), so fall back to a derived one.
+                const key = editingProject.key.trim().toUpperCase()
+                  || deriveProjectKey(editingProject.name, projects, editingProject.id);
+                updateProject(editingProject.id, { ...editingProject, key });
                 setEditingProject(null);
               }}
               className="space-y-4 text-xs"
             >
-              <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1">Project Name</label>
-                <input
-                  type="text"
-                  value={editingProject.name}
-                  onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })}
-                  className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
-                />
+              {/* Icon, name and key. Creation derives the key and never shows
+                  these three, so this is where they stay editable. */}
+              <div className="flex items-start gap-3">
+                <div className="space-y-1">
+                  <label className="block text-[11px] font-medium text-gray-400">Icon</label>
+                  <div className="relative group">
+                    <div className="w-12 h-[38px] rounded-xl bg-[#181920] border border-white/10 flex items-center justify-center text-xl cursor-pointer hover:border-brand-500/50 transition-colors">
+                      {editingProject.icon || '⚡'}
+                    </div>
+                    <div className="absolute top-full left-0 mt-1 p-2 bg-surface-100 border border-white/15 rounded-xl shadow-2xl z-30 hidden group-hover:grid grid-cols-4 gap-1.5 w-40">
+                      {['⚡', '🎨', '🚀', '🛡️', '💳', '🧠', '📦', '🌐', '⚙️', '🎯', '📱', '🔒'].map(emoji => (
+                        <button
+                          key={emoji}
+                          type="button"
+                          onClick={() => setEditingProject({ ...editingProject, icon: emoji })}
+                          className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-lg transition-colors"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex-1">
+                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Project Name</label>
+                  <input
+                    type="text"
+                    value={editingProject.name}
+                    onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })}
+                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div className="w-24">
+                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Key</label>
+                  <input
+                    type="text"
+                    maxLength={5}
+                    value={editingProject.key}
+                    onChange={(e) => setEditingProject({ ...editingProject, key: e.target.value.toUpperCase() })}
+                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white font-mono uppercase text-center focus:outline-none focus:border-brand-500"
+                  />
+                </div>
               </div>
+
+              {/* The daemon enforces UNIQUE on key, and the write fails silently
+                  from the user's side. Catch the clash before they hit Save. */}
+              {keyCollision && (
+                <p className="text-[11px] text-amber-300">
+                  Key <span className="font-mono">{editingProject.key.toUpperCase()}</span> is already
+                  used by another project. Saving will fail — try{' '}
+                  <span className="font-mono">
+                    {deriveProjectKey(editingProject.name, projects, editingProject.id)}
+                  </span>.
+                </p>
+              )}
 
               <div>
                 <label className="block text-[11px] font-medium text-gray-400 mb-1">
@@ -706,6 +743,28 @@ export const ProjectsView: React.FC = () => {
                   placeholder="e.g. lloyd lim"
                   className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Start Date</label>
+                  <input
+                    type="date"
+                    value={editingProject.startDate || ''}
+                    onChange={(e) => setEditingProject({ ...editingProject, startDate: e.target.value })}
+                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Target Date</label>
+                  <input
+                    type="date"
+                    value={editingProject.targetDate || ''}
+                    onChange={(e) => setEditingProject({ ...editingProject, targetDate: e.target.value })}
+                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
+                  />
+                </div>
               </div>
 
               <div className="flex items-center justify-between pt-4 border-t border-white/10">
@@ -1009,6 +1068,8 @@ export const ProjectsView: React.FC = () => {
       <CreateProjectModal
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
+        // Land inside the new project rather than back on the list.
+        onCreated={(project) => setSelectedProjectId(project.id)}
       />
 
     </div>

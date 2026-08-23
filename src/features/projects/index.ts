@@ -4,3 +4,4 @@
 export * from './CreateProjectModal';
 export * from './ProjectsView';
 export * from './useProjectsViewModel';
+export * from './ProjectResourcesPanel';

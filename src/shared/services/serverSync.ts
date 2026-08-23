@@ -81,6 +81,27 @@ export async function probeServer(): Promise<boolean> {
  * The alternative — awaiting every write — would make the UI wait on a subprocess-
  * heavy local server for what is usually a form submit.
  */
+/**
+ * Reduce a failed write to one line a person can act on.
+ *
+ * Express serves its default HTML error page on an unhandled throw, so a
+ * constraint violation arrives as a full document with a stack trace in a
+ * `<pre>`. Shown verbatim in a toast or beside a submit button that is several
+ * hundred characters of markup. Pull the real error out when it is in there.
+ */
+export function describeWriteError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+
+  // `SqliteError: UNIQUE constraint failed: projects.key` and friends.
+  const sqlite = raw.match(/\b(\w*(?:Error|Exception)): ([^<\n]{1,160})/);
+  if (raw.includes('<!DOCTYPE') && sqlite) {
+    return `${sqlite[1]}: ${sqlite[2]}`.trim();
+  }
+
+  const firstLine = raw.split('\n')[0].trim();
+  return firstLine.length > 200 ? `${firstLine.slice(0, 200)}…` : firstLine;
+}
+
 export function persist<T>(
   op: () => Promise<T>,
   onReconcile: (serverValue: T) => void,

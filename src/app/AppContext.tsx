@@ -40,7 +40,7 @@ import {
 import { buildEstimate, DEFAULT_RATE_CARD } from '@/features/delivery/estimator';
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
-import { fetchServerSnapshot, persist, ServerStatus } from '@/shared/services/serverSync';
+import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 
 interface AppContextType {
   /** Reachability of the local Alpha daemon. Agents cannot run while 'offline'. */
@@ -72,7 +72,7 @@ interface AppContextType {
   
   // Projects
   projects: Project[];
-  createProject: (project: Omit<Project, 'id' | 'totalIssues' | 'completedIssues' | 'progressPercentage' | 'milestones'>) => Project;
+  createProject: (project: Omit<Project, 'id' | 'totalIssues' | 'completedIssues' | 'progressPercentage' | 'milestones'>) => Promise<Project>;
   updateProject: (id: string, updates: Partial<Project>) => void;
   deleteProject: (id: string) => void;
   
@@ -1105,9 +1105,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   }, [prototypeRuns, issues, agents]);
 
-  // Projects
-  const createProject = (input: Omit<Project, 'id' | 'totalIssues' | 'completedIssues' | 'progressPercentage' | 'milestones'>): Project => {
-    const newProj: Project = {
+  /* Projects
+   *
+   * Create is the one project write that is not optimistic, unlike the update
+   * and delete below. A failed edit can roll back into a row that still exists;
+   * a failed create cannot. `key` is UNIQUE in the daemon's schema and it is now
+   * derived rather than typed, so a rejected insert is a reachable case — and an
+   * optimistic row would sit in the list looking real, accept issues, and vanish
+   * on the next reload. Wait for the write instead and surface the failure.
+   */
+  const createProject = async (
+    input: Omit<Project, 'id' | 'totalIssues' | 'completedIssues' | 'progressPercentage' | 'milestones'>
+  ): Promise<Project> => {
+    const draft: Project = {
       ...input,
       id: `proj-${Date.now()}`,
       status: input.status || 'planned',
@@ -1121,17 +1131,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         { id: `m-${Date.now()}`, title: 'Initial Architecture Scaffolding', targetDate: input.targetDate, completed: false }
       ]
     };
-    setProjects(prev => [newProj, ...prev]);
 
-    // Optimistic: the row is already on screen. The daemon's canonical copy
-    // (with its own id) replaces it when the write lands.
-    persist(
-      () => apiService.createProject(newProj),
-      saved => setProjects(prev => prev.map(p => (p.id === newProj.id ? saved : p))),
-      msg => showToast('Project not saved', msg, 'error')
-    );
-
-    return newProj;
+    try {
+      const saved = await apiService.createProject(draft);
+      // Take only the id from the server. The daemon echoes the draft back
+      // unchanged, but the Supabase fallback returns a snake_case row, and
+      // spreading that would put `start_date`-shaped keys into state.
+      const project: Project = { ...draft, id: saved?.id ?? draft.id };
+      setProjects(prev => [project, ...prev]);
+      return project;
+    } catch (err) {
+      const message = describeWriteError(err);
+      console.warn('[sync] project create failed:', err);
+      showToast('Project not saved', message, 'error');
+      // Re-throw the tidied message so the dialog shows the same one line the
+      // toast does, not Express's HTML error page.
+      throw new Error(message);
+    }
   };
 
   const updateProject = (id: string, updates: Partial<Project>) => {
