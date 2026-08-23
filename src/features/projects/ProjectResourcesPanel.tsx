@@ -8,8 +8,11 @@ interface ProjectResourcesPanelProps {
   onChange: (next: ProjectResource[]) => void;
   /** Seeds the description of any GitHub repo created from here. */
   description?: string;
-  /** Hides the "Create a GitHub repository" block where creating one makes no sense. */
-  allowRepoCreation?: boolean;
+  /**
+   * `full` shows the create-repo and attach forms; `inline` renders only the
+   * list of what is already attached, for places too narrow to hold a form.
+   */
+  variant?: 'full' | 'inline';
 }
 
 /**
@@ -24,8 +27,10 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   resources,
   onChange,
   description,
-  allowRepoCreation = true
+  variant = 'full'
 }) => {
+  const isFull = variant === 'full';
+
   /* -------------------------------------------------------------------------
    * Create a GitHub repository for this project.
    *
@@ -44,12 +49,14 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   const [ghOwner, setGhOwner] = useState('');
 
   useEffect(() => {
-    if (!allowRepoCreation) return;
+    // The inline variant has no create form, so it also skips the two auth
+    // round-trips — those used to fire on every project you opened.
+    if (!isFull) return;
     apiService.checkGitHubAuth().then(setGhAuth).catch(() => setGhAuth({ authenticated: false }));
     // Orgs are a separate call so a missing read:org scope degrades to
     // "personal only" instead of breaking the whole panel.
     apiService.listGitHubOrgs().then(setGhOrgs).catch(() => setGhOrgs([]));
-  }, [allowRepoCreation]);
+  }, [isFull]);
 
   const handleCreateRepo = async () => {
     const repoName = ghRepoName.trim();
@@ -166,7 +173,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   return (
     <div className="space-y-3 text-xs">
       {/* Create a GitHub repository for this project */}
-      {allowRepoCreation && (
+      {isFull && (
         <div className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-gray-300 flex items-center gap-1.5">
@@ -313,68 +320,72 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         </p>
       )}
 
-      {/* Hidden native OS folder picker input */}
-      <input
-        ref={folderInputRef}
-        type="file"
-        {...({ webkitdirectory: '', directory: '' } as any)}
-        className="hidden"
-        onChange={handleFolderInputChange}
-      />
-
-      {/* Attach an existing repository or directory */}
-      <div className="p-3.5 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-2.5">
-        <span className="text-[11px] font-medium text-gray-300">Attach Resource</span>
-        <div className="flex items-center gap-2">
-          <select
-            value={newResType}
-            onChange={(e) => {
-              setNewResType(e.target.value as 'github_repo' | 'local_dir');
-              setNewResPath('');
-            }}
-            className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 w-32 flex-shrink-0"
-          >
-            <option value="local_dir">Local Folder</option>
-            <option value="github_repo">GitHub Repo</option>
-          </select>
-
+      {isFull && (
+        <>
+          {/* Hidden native OS folder picker input */}
           <input
-            type="text"
-            value={newResPath}
-            onChange={(e) => setNewResPath(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.preventDefault();
-                handleAddResource();
-              }
-            }}
-            placeholder={newResType === 'local_dir' ? 'C:/path/to/local/project or Browse...' : 'github.com/owner/repo'}
-            className="flex-1 min-w-0 bg-[#14151B] border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+            ref={folderInputRef}
+            type="file"
+            {...({ webkitdirectory: '', directory: '' } as any)}
+            className="hidden"
+            onChange={handleFolderInputChange}
           />
 
-          {newResType === 'local_dir' && (
-            <button
-              type="button"
-              onClick={handleOpenFolderPicker}
-              className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-medium text-gray-200 hover:text-white transition-colors flex-shrink-0 flex items-center gap-1.5"
-              title="Open OS file dialog to pick a folder"
-            >
-              <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
-              <span>Browse...</span>
-            </button>
-          )}
+          {/* Attach an existing repository or directory */}
+          <div className="p-3.5 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-2.5">
+            <span className="text-[11px] font-medium text-gray-300">Attach Resource</span>
+            <div className="flex items-center gap-2">
+              <select
+                value={newResType}
+                onChange={(e) => {
+                  setNewResType(e.target.value as 'github_repo' | 'local_dir');
+                  setNewResPath('');
+                }}
+                className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 w-32 flex-shrink-0"
+              >
+                <option value="local_dir">Local Folder</option>
+                <option value="github_repo">GitHub Repo</option>
+              </select>
 
-          <button
-            type="button"
-            onClick={handleAddResource}
-            className="px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-semibold text-white transition-colors flex-shrink-0 flex items-center gap-1 shadow-sm"
-            title="Add resource"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Add</span>
-          </button>
-        </div>
-      </div>
+              <input
+                type="text"
+                value={newResPath}
+                onChange={(e) => setNewResPath(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    handleAddResource();
+                  }
+                }}
+                placeholder={newResType === 'local_dir' ? 'C:/path/to/local/project or Browse...' : 'github.com/owner/repo'}
+                className="flex-1 min-w-0 bg-[#14151B] border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+              />
+
+              {newResType === 'local_dir' && (
+                <button
+                  type="button"
+                  onClick={handleOpenFolderPicker}
+                  className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-medium text-gray-200 hover:text-white transition-colors flex-shrink-0 flex items-center gap-1.5"
+                  title="Open OS file dialog to pick a folder"
+                >
+                  <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <span>Browse...</span>
+                </button>
+              )}
+
+              <button
+                type="button"
+                onClick={handleAddResource}
+                className="px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-semibold text-white transition-colors flex-shrink-0 flex items-center gap-1 shadow-sm"
+                title="Add resource"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add</span>
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

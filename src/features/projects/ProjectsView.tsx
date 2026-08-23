@@ -45,7 +45,8 @@ export const ProjectsView: React.FC = () => {
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  
+  const [resourcesModalOpen, setResourcesModalOpen] = useState<boolean>(false);
+
   // Search & Filters on main list
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -491,18 +492,11 @@ export const ProjectsView: React.FC = () => {
           {/* ================= RIGHT SIDE PANEL: PROPERTIES, STATUS, RESOURCES ================= */}
           <div className="w-80 border-l border-white/5 bg-[#121318] p-5 overflow-y-auto flex-shrink-0 space-y-6 text-xs font-sans">
             
-            {/* 1. Project Header & Progress */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-gray-400">Project Progress</span>
-                <span className="text-emerald-400 font-mono font-medium">{doneCount}/{totalCount} done ({progressPercent}%)</span>
-              </div>
-              <div className="w-full h-1.5 bg-[#0E0E12] rounded-full overflow-hidden">
-                <div 
-                  className="h-full bg-emerald-400 rounded-full transition-all duration-500"
-                  style={{ width: `${progressPercent}%` }}
-                />
-              </div>
+            {/* 1. Progress. The bar duplicated the per-column counts sitting a
+                few inches to the left, so only the number survives. */}
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-medium text-gray-400">Progress</span>
+              <span className="text-emerald-400 tabular-nums">{doneCount}/{totalCount} done ({progressPercent}%)</span>
             </div>
 
             {/* 2. Metadata / Properties List */}
@@ -542,12 +536,6 @@ export const ProjectsView: React.FC = () => {
                 <span className="text-gray-500">Target Date</span>
                 <span className="font-mono text-gray-300">{selectedProject.targetDate || 'No deadline'}</span>
               </div>
-
-              {/* Created */}
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500">Created</span>
-                <span className="font-mono text-gray-500">{selectedProject.createdAt || 'Recent'}</span>
-              </div>
             </div>
 
             {/* 3. Ground Rules & Agent Directive */}
@@ -563,34 +551,40 @@ export const ProjectsView: React.FC = () => {
               </p>
             </div>
 
-            {/* 4. Connected Code Resources */}
+            {/* 4. Connected Code Resources. The rail lists what is attached and
+                nothing more — both attach forms carry eight controls between
+                them, which never fit a 320px column, so they live in a dialog. */}
             <div className="space-y-2 pt-2 border-t border-white/5">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-gray-400 flex items-center gap-1.5">
                   <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Connected Repositories</span>
                 </span>
-                <span className="text-[10px] text-gray-500 font-mono">{(selectedProject.resources || []).length} attached</span>
+                <button
+                  onClick={() => setResourcesModalOpen(true)}
+                  className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white transition-colors"
+                  title="Attach or create a repository"
+                >
+                  <Plus className="w-3 h-3" />
+                  <span>Attach</span>
+                </button>
               </div>
 
-              {/* Attaching used to be possible only inside the create wizard, so
-                  a project that shipped without a repo could never gain one. */}
               <ProjectResourcesPanel
+                variant="inline"
                 resources={selectedProject.resources || []}
                 onChange={(next) => updateProject(selectedProject.id, { resources: next })}
-                description={selectedProject.description}
               />
             </div>
 
-            {/* 5. Active Agents in this Board */}
-            <div className="space-y-2 pt-2 border-t border-white/5">
-              <span className="text-[11px] font-medium text-gray-400 block">
-                Active Agents ({boundAgents.length})
-              </span>
-              
-              {boundAgents.length === 0 ? (
-                <p className="text-gray-500 italic text-[11px]">No active agents on this board.</p>
-              ) : (
+            {/* 5. Active Agents. Dropped entirely when there are none — a
+                header plus an italic "no agents" line is pure noise. */}
+            {boundAgents.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-white/5">
+                <span className="text-[11px] font-medium text-gray-400 block">
+                  Active Agents ({boundAgents.length})
+                </span>
+
                 <div className="space-y-1.5">
                   {boundAgents.map(agent => (
                     <div key={agent.id} className="p-2 rounded-xl bg-[#0A0B0E] border border-white/5 flex items-center gap-2.5">
@@ -605,12 +599,31 @@ export const ProjectsView: React.FC = () => {
                     </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
 
           </div>
 
         </div>
+
+        {/* ================= RESOURCES MODAL =================
+            Repo creation and attachment both changed the project the moment you
+            hit the button, so they cannot live behind a Save/Cancel form — this
+            dialog keeps the immediate writes and only borrows the room. */}
+        {resourcesModalOpen && (
+          <Modal
+            isOpen={true}
+            onClose={() => setResourcesModalOpen(false)}
+            title="Project Resources"
+            subtitle="Create a repository, or attach an existing repo or local folder."
+          >
+            <ProjectResourcesPanel
+              resources={selectedProject.resources || []}
+              onChange={(next) => updateProject(selectedProject.id, { resources: next })}
+              description={selectedProject.description}
+            />
+          </Modal>
+        )}
 
         {/* ================= EDIT PROJECT MODAL ================= */}
         {editingProject && (
@@ -618,7 +631,7 @@ export const ProjectsView: React.FC = () => {
             isOpen={true}
             onClose={() => setEditingProject(null)}
             title="Edit Project"
-            subtitle="Update status, priority, lead, or attached resources."
+            subtitle="Update status, priority, lead, or target dates."
           >
             <form
               onSubmit={(e) => {
