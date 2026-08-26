@@ -1,13 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { apiService } from '@/shared/services/apiService';
-import { ProjectResource } from '@/shared/types';
+import { ProjectResource, ScaffoldStack } from '@/shared/types';
 import { GitBranch, Folder, FolderOpen, Plus, Trash2 } from 'lucide-react';
 
 interface ProjectResourcesPanelProps {
+  /** Owning project. Repositories are scaffolded against it, never standalone. */
+  projectId: string;
   resources: ProjectResource[];
   onChange: (next: ProjectResource[]) => void;
-  /** Seeds the description of any GitHub repo created from here. */
-  description?: string;
+  /**
+   * Organization this project creates repositories under. Once set it is fixed:
+   * every repository in a project belongs to the same org, so the picker becomes
+   * a label rather than a choice.
+   */
+  githubOrg?: string;
+  /** Fires the first time an organization is chosen, so the project can store it. */
+  onOrgChange?: (org: string) => void;
   /**
    * `full` shows the create-repo and attach forms; `inline` renders only the
    * list of what is already attached, for places too narrow to hold a form.
@@ -24,9 +32,11 @@ interface ProjectResourcesPanelProps {
  * with nothing pointing at it. It belongs on the project instead.
  */
 export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
+  projectId,
   resources,
   onChange,
-  description,
+  githubOrg,
+  onOrgChange,
   variant = 'full'
 }) => {
   const isFull = variant === 'full';
@@ -44,9 +54,21 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   const [ghBusy, setGhBusy] = useState(false);
   const [ghError, setGhError] = useState<string | null>(null);
 
-  // Repository owner: '' means the personal account, anything else is an org login.
+  // Repository owner. Organizations only — Alpha creates no personal repos, so
+  // there is no empty "personal" option here and the daemon rejects a request
+  // without an org regardless of what this form sends.
   const [ghOrgs, setGhOrgs] = useState<Array<{ login: string; role: string }>>([]);
-  const [ghOwner, setGhOwner] = useState('');
+  const [ghOwner, setGhOwner] = useState(githubOrg ?? '');
+  const [ghStack, setGhStack] = useState<ScaffoldStack>('nodejs');
+
+  // Once the project has an org, it is settled for every repository in it.
+  const orgLocked = Boolean(githubOrg);
+  const effectiveOrg = githubOrg ?? ghOwner;
+
+  // Only warn when membership is actually known. A locked org that is missing
+  // from the list (orgs failed to load) is not evidence of a permission problem.
+  const orgMembership = ghOrgs.find(o => o.login === effectiveOrg);
+  const showMemberWarning = Boolean(orgMembership) && orgMembership?.role !== 'admin';
 
   useEffect(() => {
     // The inline variant has no create form, so it also skips the two auth
@@ -62,15 +84,21 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
     const repoName = ghRepoName.trim();
     if (!repoName) return;
 
+    const org = effectiveOrg.trim();
+    if (!org) {
+      setGhError('Choose an organization first. Alpha does not create personal repositories.');
+      return;
+    }
+
     setGhBusy(true);
     setGhError(null);
     try {
-      const repo = await apiService.createGitHubRepo({
-        name: repoName,
-        visibility: ghVisibility,
-        description: description?.trim() || undefined,
-        org: ghOwner || undefined,
-        initReadme: true
+      const repo = await apiService.scaffoldGitHubRepo({
+        projectId,
+        repoName,
+        stack: ghStack,
+        org,
+        visibility: ghVisibility
       });
 
       onChange([
@@ -80,9 +108,17 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
           type: 'github_repo',
           name: repo.nameWithOwner,
           pathOrUrl: repo.url,
-          branchOrMachine: 'main'
+          branchOrMachine: 'main',
+          stack: ghStack,
+          shape: 'standalone',
+          // Alpha pushed from this directory, so it is already a working copy —
+          // nothing needs cloning for a repository created here.
+          localPath: repo.localPath
         }
       ]);
+
+      // First repository settles the organization for the whole project.
+      if (!orgLocked) onOrgChange?.(org);
       setGhRepoName('');
     } catch (err) {
       // Surface the real reason — a name collision is the common case and the
@@ -200,22 +236,29 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <select
-                  value={ghOwner}
-                  onChange={(e) => setGhOwner(e.target.value)}
-                  disabled={ghBusy}
-                  title="Repository owner"
-                  className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-brand-500 disabled:opacity-50 max-w-[11rem]"
-                >
-                  <option value="">{ghAuth?.username ?? 'Personal'}</option>
-                  {ghOrgs.length > 0 && (
-                    <optgroup label="Organizations">
-                      {ghOrgs.map(o => (
-                        <option key={o.login} value={o.login}>{o.login}</option>
-                      ))}
-                    </optgroup>
-                  )}
-                </select>
+                {orgLocked ? (
+                  // Settled for this project — a control that only ever has one
+                  // value is a label, so it reads as one.
+                  <span
+                    title="Every repository in this project belongs to this organization"
+                    className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-gray-300 max-w-[11rem] truncate"
+                  >
+                    {githubOrg}
+                  </span>
+                ) : (
+                  <select
+                    value={ghOwner}
+                    onChange={(e) => setGhOwner(e.target.value)}
+                    disabled={ghBusy || ghOrgs.length === 0}
+                    title="Owning organization"
+                    className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-brand-500 disabled:opacity-50 max-w-[11rem]"
+                  >
+                    <option value="" disabled>Organization…</option>
+                    {ghOrgs.map(o => (
+                      <option key={o.login} value={o.login}>{o.login}</option>
+                    ))}
+                  </select>
+                )}
                 <span className="text-xs text-gray-500 flex-shrink-0">/</span>
                 <input
                   type="text"
@@ -225,7 +268,40 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   disabled={ghBusy}
                   className="flex-1 min-w-0 bg-[#14151B] border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 disabled:opacity-50"
                 />
+                <button
+                  type="button"
+                  onClick={handleCreateRepo}
+                  disabled={ghBusy || !ghRepoName.trim() || !effectiveOrg}
+                  className="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-medium text-white disabled:opacity-40 transition-colors flex-shrink-0"
+                >
+                  {ghBusy ? 'Creating…' : 'Create'}
+                </button>
+              </div>
+
+              {/* Stack and visibility sit on their own row: the first already
+                  carries the owner, the name and the action. */}
+              <div className="flex items-center gap-2">
+                <label htmlFor="gh-stack" className="text-[11px] text-gray-500 flex-shrink-0">
+                  Stack
+                </label>
                 <select
+                  id="gh-stack"
+                  value={ghStack}
+                  onChange={(e) => setGhStack(e.target.value as ScaffoldStack)}
+                  disabled={ghBusy}
+                  className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                >
+                  <option value="nodejs">Node.js</option>
+                  <option value="nestjs">NestJS</option>
+                  <option value="nextjs">Next.js</option>
+                  <option value="react">React</option>
+                </select>
+
+                <label htmlFor="gh-visibility" className="text-[11px] text-gray-500 flex-shrink-0 ml-1">
+                  Visibility
+                </label>
+                <select
+                  id="gh-visibility"
                   value={ghVisibility}
                   onChange={(e) => setGhVisibility(e.target.value as 'private' | 'public')}
                   disabled={ghBusy}
@@ -234,21 +310,29 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   <option value="private">Private</option>
                   <option value="public">Public</option>
                 </select>
-                <button
-                  type="button"
-                  onClick={handleCreateRepo}
-                  disabled={ghBusy || !ghRepoName.trim()}
-                  className="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-medium text-white disabled:opacity-40 transition-colors flex-shrink-0"
-                >
-                  {ghBusy ? 'Creating…' : 'Create'}
-                </button>
               </div>
+
+              <p className="text-[11px] text-gray-500">
+                Creates the repository with a starter structure — package.json, tsconfig, lint,
+                tests and a README. No CI workflows.
+              </p>
+
+              {/* With personal repositories removed, no organizations means no
+                  creation at all — and the usual cause is a missing scope, not
+                  a missing membership. Say which. */}
+              {!orgLocked && ghOrgs.length === 0 && (
+                <p className="text-[11px] text-amber-300">
+                  No organizations found. Run{' '}
+                  <code className="text-gray-300">gh auth refresh -s read:org</code> and reopen this
+                  dialog — Alpha only creates repositories in an organization.
+                </p>
+              )}
 
               {/* Plain members may be blocked by org policy, which is not
                   visible from the API — warn rather than fail at submit. */}
-              {ghOwner && ghOrgs.find(o => o.login === ghOwner)?.role !== 'admin' && (
+              {showMemberWarning && (
                 <p className="text-[11px] text-amber-300">
-                  You are a member of {ghOwner}, not an owner. Some organizations
+                  You are a member of {effectiveOrg}, not an owner. Some organizations
                   only let owners create repositories.
                 </p>
               )}

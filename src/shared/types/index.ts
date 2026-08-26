@@ -114,12 +114,21 @@ export interface ToastMessage {
 export type ProjectStatus = 'planned' | 'in_progress' | 'paused' | 'completed' | 'cancelled' | 'active';
 export type ProjectPriority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 
+/** Stacks the scaffold can generate, in the order the UI offers them. */
+export type ScaffoldStack = 'nodejs' | 'nestjs' | 'nextjs' | 'react';
+
 export interface ProjectResource {
   id: string;
   type: 'github_repo' | 'local_dir';
   name: string;
   pathOrUrl: string;
   branchOrMachine?: string;
+  /** Stack the scaffold was generated from. Absent on attached repositories. */
+  stack?: ScaffoldStack;
+  /** Repository shape the scaffold used. Absent on attached repositories. */
+  shape?: string;
+  /** Managed working copy on this machine, when Alpha created or cloned it. */
+  localPath?: string;
 }
 
 export interface Milestone {
@@ -145,6 +154,12 @@ export interface Project {
   leadAgentId?: string;
   leadSquadId?: string;
   resources?: ProjectResource[];
+  /**
+   * GitHub organization every repository for this project is created under.
+   * Alpha creates no personal repositories, so a project without one cannot
+   * create a repository until it is set.
+   */
+  githubOrg?: string;
   progressPercentage?: number;
   totalIssues?: number;
   completedIssues?: number;

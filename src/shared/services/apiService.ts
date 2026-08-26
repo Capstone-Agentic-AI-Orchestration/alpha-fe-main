@@ -8,7 +8,8 @@ import {
   RuntimeEngine,
   PrototypeRun,
   ChatThread,
-  ChatMessage
+  ChatMessage,
+  ScaffoldStack
 } from '@/shared/types';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
@@ -307,6 +308,24 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+
+  /**
+   * Create an organization repository that starts with a project structure.
+   * The organization comes from the project; `org` only seeds it the first time.
+   */
+  scaffoldGitHubRepo: (payload: {
+    projectId: string;
+    repoName: string;
+    stack: ScaffoldStack;
+    org?: string;
+    visibility?: 'private' | 'public';
+    shape?: string;
+    includeDocker?: boolean;
+  }) =>
+    fetchJson<{ url: string; nameWithOwner: string; localPath: string; files: string[] }>(
+      '/github/repos/scaffold',
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
 
   cloneGitHubRepo: (payload: { repo: string; intoDir: string }) =>
     fetchJson<{ path: string }>('/github/repos/clone', {
