@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, FileText, Loader2, RotateCcw, Save } from 'lucide-react';
+import {
+  AlertTriangle,
+  Check,
+  Download,
+  FileText,
+  Loader2,
+  RotateCcw,
+  Save
+} from 'lucide-react';
 
 import { apiService } from '@/shared/services/apiService';
 import { AgentPersonaFile } from '@/shared/types';
@@ -91,6 +99,29 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
     }
   };
 
+  /**
+   * Download the persona file so it can be handed to someone else.
+   *
+   * The file carries the whole definition — name, role, provider, model,
+   * autonomy, skills, appearance and the persona itself — so a teammate can
+   * import it and run the agent on their own CLI. It deliberately carries no
+   * environment variables, so it is safe to send.
+   *
+   * Exports what is on disk rather than the draft: sending an unsaved edit
+   * would hand over something that does not exist on the sender's machine.
+   */
+  const exportFile = () => {
+    const blob = new Blob([onDisk.current], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+
+    link.href = url;
+    link.download = `${agentId}.md`;
+    link.click();
+
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center gap-2 text-gray-500 text-xs py-8 justify-center">
@@ -123,6 +154,15 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
               <Check size={11} /> saved
             </span>
           )}
+
+          <button
+            onClick={exportFile}
+            disabled={!file?.exists}
+            title="Download this persona file to share with a teammate"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border border-white/10 text-gray-400 hover:text-white hover:border-white/30 disabled:opacity-30 transition-colors"
+          >
+            <Download size={11} /> Export
+          </button>
 
           <button
             onClick={() => {

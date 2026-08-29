@@ -167,6 +167,19 @@ export const apiService = {
     }),
 
   /**
+   * Create an agent from a persona file someone shared.
+   *
+   * The counterpart to downloading a persona file. An agent definition is data,
+   * not execution, so it travels between machines without carrying the sender's
+   * keys or subscription — the recipient runs it on their own CLI.
+   */
+  importAgent: (content: string) =>
+    fetchJson<{ agent: Agent; warnings: string[] }>('/agents/import', {
+      method: 'POST',
+      body: JSON.stringify({ content })
+    }),
+
+  /**
    * One turn of the conversational agent builder. `message` is already the
    * encoded envelope — see `builderProtocol.encodeBuilderInput`. `sessionId` is
    * minted by the client and is what makes the next turn a continuation.

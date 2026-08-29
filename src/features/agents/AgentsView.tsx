@@ -17,7 +17,8 @@ import {
   Server, 
   Eye, 
   EyeOff, 
-  Trash2
+  Trash2,
+  Upload
 } from 'lucide-react';
 import { CreateAgentModal } from '@/features/agents/CreateAgentModal';
 import { PersonaFileEditor } from '@/features/agents/PersonaFileEditor';
@@ -46,6 +47,7 @@ export const AgentsView: React.FC = () => {
     bulkUpdateAgents, 
     bulkArchiveAgents, 
     setActiveTab, 
+    importAgent,
     setActiveChatAgentId 
   } = useApp();
 
@@ -68,6 +70,36 @@ export const AgentsView: React.FC = () => {
   const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [bulkAccessMenuOpen, setBulkAccessMenuOpen] = useState<boolean>(false);
+
+  /**
+   * Import an agent from a persona file a teammate exported.
+   *
+   * A hidden file input rather than a drop zone: this is a rare action, and a
+   * drop target competing with the roster for the same pixels is worse than a
+   * button that opens the picker.
+   */
+  const importInputRef = React.useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  const handleImportFile = async (fileList: FileList | null) => {
+    const file = fileList?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const { agent, warnings } = await importAgent(await file.text());
+      // Open the imported agent so its warnings, and its blank model, are seen
+      // rather than left to be discovered later.
+      setSelectedAgentId(agent.id);
+      setProfileTab(warnings.length ? 'persona' : 'instructions');
+    } catch (err: any) {
+      window.alert(err?.message ?? 'Could not import that persona file.');
+    } finally {
+      setImporting(false);
+      // Reset so importing the same file twice still fires a change event.
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
 
   // Pop-up Sub-tabs
   const [profileTab, setProfileTab] = useState<'instructions' | 'persona' | 'skills' | 'env' | 'mcp' | 'history'>('instructions');
@@ -235,6 +267,24 @@ export const AgentsView: React.FC = () => {
           <h1 className="text-sm font-semibold text-white tracking-wide">Agents</h1>
           <span className="text-xs text-gray-500 font-mono">{agents.length}</span>
         </div>
+
+        {/* Import from a shared persona file */}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".md,text/markdown"
+          className="hidden"
+          onChange={(e) => void handleImportFile(e.target.files)}
+        />
+        <button
+          onClick={() => importInputRef.current?.click()}
+          disabled={importing}
+          title="Import an agent from a persona file a teammate shared"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-xs font-medium text-gray-300 hover:text-white transition-colors shadow-sm disabled:opacity-40"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          <span>{importing ? 'Importing...' : 'Import'}</span>
+        </button>
 
         {/* + New agent button */}
         <button

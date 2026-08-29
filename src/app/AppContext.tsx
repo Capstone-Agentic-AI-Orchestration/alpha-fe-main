@@ -80,6 +80,15 @@ interface AppContextType {
   // Agents
   agents: Agent[];
   createAgent: (agent: Omit<Agent, 'id' | 'stats' | 'status'>) => Agent;
+  /**
+   * Create an agent from a persona file someone shared.
+   *
+   * The daemon owns this one rather than the client: it parses the file,
+   * validates it, mints an id that does not collide on this machine, and writes
+   * the persona to disk. Resolves with anything the file declared that had to be
+   * ignored, so the importer can be told rather than left guessing.
+   */
+  importAgent: (content: string) => Promise<{ agent: Agent; warnings: string[] }>;
   updateAgent: (id: string, updates: Partial<Agent>) => void;
   duplicateAgent: (id: string) => Agent | null;
   archiveAgent: (id: string) => void;
@@ -1165,6 +1174,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newAgent;
   };
 
+  const importAgent = async (content: string) => {
+    // No optimistic insert: the id and the validated fields are decided by the
+    // daemon, so there is nothing meaningful to show until it answers.
+    const result = await apiService.importAgent(content);
+    setAgents(prev => [result.agent, ...prev]);
+    return result;
+  };
+
   const updateAgent = (id: string, updates: Partial<Agent>) => {
     setAgents(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     persist(
@@ -2222,6 +2239,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteProject,
       agents: scopedAgents,
       createAgent,
+    importAgent,
       updateAgent,
       duplicateAgent,
       archiveAgent,
