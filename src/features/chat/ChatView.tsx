@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { RoleBadge } from '@/shared/components/Badge';
 import { ChatMessage, ToolExecutionRecord } from '@/shared/types';
+import { AgentReadinessNotice } from '@/features/agents/AgentReadinessNotice';
 
 export const ChatView: React.FC = () => {
   const { 
@@ -32,6 +33,7 @@ export const ChatView: React.FC = () => {
     skills,
     activeChatAgentId,
     updateAgent,
+    setActiveTab,
     role,
     users
   } = useApp();
@@ -445,7 +447,16 @@ export const ChatView: React.FC = () => {
             </div>
 
             {/* Input Composer Bar */}
-            <div className="p-4 sm:p-5 border-t border-white/[0.08] bg-[#14151B]">
+            <div className="p-4 sm:p-5 border-t border-white/[0.08] bg-[#14151B] space-y-3">
+              {/* Shown above the composer rather than after a failed send: the
+                  agent cannot answer, and finding that out by waiting for an
+                  error is the experience this replaces. */}
+              {activeAgent && (
+                <AgentReadinessNotice
+                  agent={activeAgent}
+                  onOpenRuntimes={() => setActiveTab('runtimes')}
+                />
+              )}
               <form onSubmit={handleSend} className="relative flex items-center gap-2">
                 {/* @mention picker — only while an @token is being typed */}
                 {mentionMatches.length > 0 && (

@@ -264,6 +264,26 @@ export interface Agent {
    * lets the UI say so instead of offering an input that silently reverts.
    */
   managedByFile?: string[];
+  /**
+   * Whether the CLI behind this agent is usable on this machine.
+   *
+   * Alpha stores no provider credentials — agents run by spawning `claude`,
+   * `codex` or `agy`, which authenticate from the machine's own keychain. So an
+   * agent is only as available as its CLI, and that differs per person. Shown
+   * on the roster because that is where someone looks before sending a message,
+   * rather than after one has already failed.
+   */
+  readiness?: AgentReadiness;
+}
+
+export type AgentReadinessStatus = 'ready' | 'signed_out' | 'not_installed' | 'unknown';
+
+export interface AgentReadiness {
+  status: AgentReadinessStatus;
+  /** One sentence naming what to do about it. */
+  detail: string;
+  /** The command to run, when there is one. */
+  command?: string;
 }
 
 /**

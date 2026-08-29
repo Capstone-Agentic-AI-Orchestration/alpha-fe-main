@@ -26,6 +26,10 @@ import {
   isManagedByFile,
   MANAGED_INPUT_CLASS
 } from '@/features/agents/FileManagedBadge';
+import {
+  AgentReadinessDot,
+  AgentReadinessNotice
+} from '@/features/agents/AgentReadinessNotice';
 
 import { Agent, AgentAccessLevel, ModelProvider } from '@/shared/types';
 import { providerOptions, modelsForProvider, defaultModelFor } from '@/shared/lib/providers';
@@ -463,6 +467,7 @@ export const AgentsView: React.FC = () => {
                 {/* 2. Status (Clean Dot & Text - No Pill Container) */}
                 <div className="col-span-2">
                   {renderStatus(agent)}
+                  <AgentReadinessDot agent={agent} />
                 </div>
 
                 {/* 3. Machine & Model (Plain Text) */}
@@ -597,6 +602,12 @@ export const AgentsView: React.FC = () => {
 
             {/* Modal Body Content */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs text-gray-300">
+              {/* Said before any tab, because it decides whether the rest of
+                  this profile can do anything at all. */}
+              <AgentReadinessNotice
+                agent={selectedAgent}
+                onOpenRuntimes={() => setActiveTab('runtimes')}
+              />
               
               {/* Tab 1: Instructions & Persona */}
               {profileTab === 'instructions' && (
