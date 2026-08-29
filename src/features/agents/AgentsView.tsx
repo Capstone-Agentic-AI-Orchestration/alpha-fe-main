@@ -20,6 +20,7 @@ import {
   Trash2
 } from 'lucide-react';
 import { CreateAgentModal } from '@/features/agents/CreateAgentModal';
+import { PersonaFileEditor } from '@/features/agents/PersonaFileEditor';
 import { Agent, AgentAccessLevel, ModelProvider } from '@/shared/types';
 import { providerOptions, modelsForProvider, defaultModelFor } from '@/shared/lib/providers';
 
@@ -59,7 +60,7 @@ export const AgentsView: React.FC = () => {
   const [bulkAccessMenuOpen, setBulkAccessMenuOpen] = useState<boolean>(false);
 
   // Pop-up Sub-tabs
-  const [profileTab, setProfileTab] = useState<'instructions' | 'skills' | 'env' | 'mcp' | 'history'>('instructions');
+  const [profileTab, setProfileTab] = useState<'instructions' | 'persona' | 'skills' | 'env' | 'mcp' | 'history'>('instructions');
   const [revealedEnvKeys, setRevealedEnvKeys] = useState<Record<string, boolean>>({});
   const [newEnvKey, setNewEnvKey] = useState<string>('');
   const [newEnvValue, setNewEnvValue] = useState<string>('');
@@ -568,6 +569,7 @@ export const AgentsView: React.FC = () => {
             <div className="flex items-center gap-1 px-5 pt-2 border-b border-white/5 bg-[#15161D] text-xs">
               {[
                 { id: 'instructions', label: 'Instructions' },
+                { id: 'persona', label: 'Persona File' },
                 { id: 'skills', label: 'Skills & Tools' },
                 { id: 'env', label: 'Secrets & Env' },
                 { id: 'mcp', label: 'MCP & CLI' },
@@ -614,6 +616,15 @@ export const AgentsView: React.FC = () => {
                       onChange={(e) => updateAgent(selectedAgent.id, { systemPrompt: e.target.value })}
                       className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30"
                     />
+                    {/* Say so here rather than let someone edit this field and
+                        wonder why the agent ignored it. */}
+                    <button
+                      onClick={() => setProfileTab('persona')}
+                      className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors text-left"
+                    >
+                      The agent&apos;s persona file overrides this when it has a body —
+                      <span className="underline underline-offset-2 ml-1">open Persona File</span>
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
@@ -692,7 +703,10 @@ export const AgentsView: React.FC = () => {
                 </div>
               )}
 
-              {/* Tab 2: Skills & MCP Tools */}
+              {/* Tab 2: The persona file itself — overrides the fields above */}
+              {profileTab === 'persona' && <PersonaFileEditor agentId={selectedAgent.id} />}
+
+              {/* Tab 3: Skills & MCP Tools */}
               {profileTab === 'skills' && (
                 <div className="space-y-3">
                   <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
@@ -843,9 +857,17 @@ export const AgentsView: React.FC = () => {
                       type="text"
                       value={selectedAgent.customCliArgs || ''}
                       onChange={(e) => updateAgent(selectedAgent.id, { customCliArgs: e.target.value })}
-                      placeholder="e.g. --strict-mode --max-depth 4"
+                      placeholder="e.g. --debug --fallback-model haiku"
                       className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-white/30"
                     />
+                    {/* These flags are now actually passed to the CLI, so say
+                        which ones will not be — a refused flag is otherwise
+                        indistinguishable from one that did nothing. */}
+                    <p className="text-[10px] text-gray-600 leading-snug">
+                      Passed to the agent&apos;s CLI. Flags Alpha sets itself are ignored —
+                      model, session, output format, tool permissions, MCP config and the
+                      system prompt.
+                    </p>
                   </div>
                 </div>
               )}

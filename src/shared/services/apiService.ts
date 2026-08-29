@@ -1,6 +1,7 @@
 import {
   Project,
   Agent,
+  AgentPersonaFile,
   Issue,
   IssueComment,
   Squad,
@@ -148,6 +149,22 @@ export const apiService = {
     fetchJson<Agent>(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteAgent: (id: string) =>
     fetchJson<{ success: boolean }>(`/agents/${id}`, { method: 'DELETE' }),
+
+  /**
+   * The agent's persona file — `~/.alpha/agents/{id}.md` — as text.
+   *
+   * Separate from `updateAgent` because the two write different stores and one
+   * overrides the other: the file wins for whatever its frontmatter declares.
+   * `effective` is what the agent actually resolves to once the file is merged
+   * over the database row, which is the only place that answer exists.
+   */
+  getAgentPersona: (id: string) => fetchJson<AgentPersonaFile>(`/agents/${id}/persona`),
+
+  saveAgentPersona: (id: string, content: string) =>
+    fetchJson<AgentPersonaFile>(`/agents/${id}/persona`, {
+      method: 'PUT',
+      body: JSON.stringify({ content })
+    }),
 
   /**
    * One turn of the conversational agent builder. `message` is already the

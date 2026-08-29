@@ -257,6 +257,37 @@ export interface Agent {
   currentTask?: string;
 }
 
+/**
+ * An agent's persona file on the machine running the daemon.
+ *
+ * The file is the editable source for the system prompt, and its frontmatter
+ * overrides the matching database columns. `effective` is the merged result —
+ * what the agent will actually be on its next run — which neither the file nor
+ * the agent record shows on its own.
+ */
+export interface AgentPersonaFile {
+  agentId: string;
+  /** Absolute path on the daemon's machine, shown so the file can be found. */
+  path: string;
+  exists: boolean;
+  /** Raw markdown, frontmatter included. */
+  content: string;
+  /** Values the file declared but that had to be ignored, in plain language. */
+  warnings: string[];
+  effective: {
+    name: string;
+    role: AgentRole;
+    modelProvider: ModelProvider;
+    modelName: string;
+    autonomyLevel: AgentAutonomyLevel;
+    skills: string[];
+    mcpServers: string[];
+    systemPromptChars: number;
+    /** 'agents/{id}.md' when the file supplied the prompt, else 'alpha.db'. */
+    promptSource: string;
+  };
+}
+
 export type SquadTopology = 'hierarchical' | 'sequential' | 'swarm' | 'consensus';
 
 export interface Squad {

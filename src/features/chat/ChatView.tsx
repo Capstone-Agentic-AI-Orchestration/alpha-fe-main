@@ -559,21 +559,24 @@ export const ChatView: React.FC = () => {
             </div>
           </div>
 
-          {/* Temperature Slider */}
-          <div className="space-y-2">
+          {/*
+            Temperature is stored but cannot be applied.
+              claude   — no temperature flag at all
+              agy      — none documented
+              codex    — only reachable via `-c key=value`, unverified
+            This was a working slider that reached nothing: moving it changed the
+            database and never the model. Shown read-only rather than deleted,
+            so the stored value stays visible and the reason is stated where
+            someone would otherwise go looking for the control.
+          */}
+          <div className="space-y-1">
             <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-gray-400">Temperature</span>
-              <span className="text-brand-400 font-bold">{activeAgent.temperature.toFixed(2)}</span>
+              <span className="text-gray-500">Temperature</span>
+              <span className="text-gray-500">{activeAgent.temperature?.toFixed(2) ?? '—'}</span>
             </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={activeAgent.temperature}
-              onChange={(e) => updateAgent(activeAgent.id, { temperature: parseFloat(e.target.value) })}
-              className="w-full accent-brand-500 bg-surface-100 rounded-lg cursor-pointer"
-            />
+            <p className="text-[10px] text-gray-600 leading-snug">
+              Not applied — the agent CLIs accept no temperature setting.
+            </p>
           </div>
 
           {/* Persona Directives */}
