@@ -255,6 +255,15 @@ export interface Agent {
   stats: AgentStats;
   status: AgentStatus;
   currentTask?: string;
+  /**
+   * Fields whose value comes from the agent's persona file rather than the
+   * database, and which therefore cannot be changed from these controls.
+   *
+   * The daemon merges the file over the row before returning an agent, so the
+   * values here are what the agent will actually run with. This list is what
+   * lets the UI say so instead of offering an input that silently reverts.
+   */
+  managedByFile?: string[];
 }
 
 /**

@@ -21,6 +21,12 @@ import {
 } from 'lucide-react';
 import { CreateAgentModal } from '@/features/agents/CreateAgentModal';
 import { PersonaFileEditor } from '@/features/agents/PersonaFileEditor';
+import {
+  FileManagedBadge,
+  isManagedByFile,
+  MANAGED_INPUT_CLASS
+} from '@/features/agents/FileManagedBadge';
+
 import { Agent, AgentAccessLevel, ModelProvider } from '@/shared/types';
 import { providerOptions, modelsForProvider, defaultModelFor } from '@/shared/lib/providers';
 
@@ -596,7 +602,12 @@ export const AgentsView: React.FC = () => {
               {profileTab === 'instructions' && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Specialization Description</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-medium text-gray-400">Specialization Description</label>
+                      {isManagedByFile(selectedAgent, 'description') && (
+                        <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={selectedAgent.description || ''}
@@ -608,13 +619,20 @@ export const AgentsView: React.FC = () => {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-medium text-gray-400">System Prompt & Persona</label>
-                      <span className="text-[10px] text-gray-500 font-mono">Auto-saved</span>
+                      {isManagedByFile(selectedAgent, 'systemPrompt') ? (
+                        <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                      ) : (
+                        <span className="text-[10px] text-gray-500 font-mono">Auto-saved</span>
+                      )}
                     </div>
                     <textarea
                       rows={7}
                       value={selectedAgent.systemPrompt || ''}
+                      readOnly={isManagedByFile(selectedAgent, 'systemPrompt')}
                       onChange={(e) => updateAgent(selectedAgent.id, { systemPrompt: e.target.value })}
-                      className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30"
+                      className={`w-full bg-[#0A0B0E] border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30 ${
+                        isManagedByFile(selectedAgent, 'systemPrompt') ? MANAGED_INPUT_CLASS : ''
+                      }`}
                     />
                     {/* Say so here rather than let someone edit this field and
                         wonder why the agent ignored it. */}
@@ -629,7 +647,12 @@ export const AgentsView: React.FC = () => {
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
                     <div>
-                      <label className="text-[10px] text-gray-500 font-mono uppercase block mb-1">Provider</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500 font-mono uppercase">Provider</label>
+                        {isManagedByFile(selectedAgent, 'modelProvider') && (
+                          <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                        )}
+                      </div>
                       <select
                         value={selectedAgent.modelProvider || 'Anthropic'}
                         onChange={(e) => {
@@ -650,7 +673,12 @@ export const AgentsView: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-gray-500 font-mono uppercase block mb-1">Model Name</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500 font-mono uppercase">Model Name</label>
+                        {isManagedByFile(selectedAgent, 'modelName') && (
+                          <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                        )}
+                      </div>
                       {/* A real dropdown of the models this provider reported.
                           Falls back to free text only when the scan found none
                           (runtime offline, or its model list never loaded). */}
@@ -688,7 +716,12 @@ export const AgentsView: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-gray-500 font-mono uppercase block mb-1">Autonomy Level</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500 font-mono uppercase">Autonomy Level</label>
+                        {isManagedByFile(selectedAgent, 'autonomyLevel') && (
+                          <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                        )}
+                      </div>
                       <select
                         value={selectedAgent.autonomyLevel || 'Semi-Autonomous (Requires Approval)'}
                         onChange={(e) => updateAgent(selectedAgent.id, { autonomyLevel: e.target.value as any })}
