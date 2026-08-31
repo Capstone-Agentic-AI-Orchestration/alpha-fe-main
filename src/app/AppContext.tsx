@@ -1608,32 +1608,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setIsAgentTyping(true);
 
-    // Pick responder agent
-    let responder = agents[0]; // Ada
-    if (activeChatAgentId) {
-      responder = agents.find(a => a.id === activeChatAgentId) || agents[0];
-    } else if (content.toLowerCase().includes('@kaelen') || content.toLowerCase().includes('code') || content.toLowerCase().includes('bug')) {
-      responder = agents[1]; // Kaelen
-    } else if (content.toLowerCase().includes('@vesper') || content.toLowerCase().includes('security') || content.toLowerCase().includes('review')) {
-      responder = agents[2]; // Vesper
-    } else if (content.toLowerCase().includes('@nyx') || content.toLowerCase().includes('test')) {
-      responder = agents[3]; // Nyx
-    } else if (content.toLowerCase().includes('@cipher') || content.toLowerCase().includes('deploy')) {
-      responder = agents[4]; // Cipher
-    }
+    /**
+     * Who will answer is decided by the daemon, from the @mentions in this
+     * message. The client does not guess.
+     *
+     * It used to. This defaulted to `agents[0]` and then reassigned on
+     * keywords — the bare word "code", "bug", "test", "review" or "deploy"
+     * anywhere in a message picked a different agent, by array position, with
+     * comments naming agents ("Nyx", "Cipher") that are not in the roster. The
+     * final message was then attributed to that guess rather than to the agent
+     * that actually replied, so the name and avatar on a reply could belong to
+     * someone who was never involved.
+     *
+     * `mentionedAgent` is only for the placeholder shown while waiting, and
+     * only when the message names someone unambiguously. Everything after the
+     * response comes from the response.
+     */
+    const mentionedAgent = agents.find(a => {
+      const first = a.name.split(' ')[0].toLowerCase();
+      return new RegExp(`@${first}\b`, 'i').test(content);
+    });
 
     // Streaming placeholder
     const streamingMsgId = `msg-${Date.now() + 1}`;
     const streamingMsg: ChatMessage = {
       id: streamingMsgId,
       senderType: 'agent',
-      agentId: responder.id,
-      senderName: responder.name,
-      senderAvatar: responder.avatar,
+      agentId: mentionedAgent?.id,
+      // Alpha answers anything that names no agent, so that is what the
+      // placeholder says rather than borrowing an agent's name.
+      senderName: mentionedAgent?.name ?? 'Alpha',
+      senderAvatar: mentionedAgent?.avatar,
       content: 'Thinking...',
       timestamp: new Date().toISOString(),
       isStreaming: true,
-      thinkingProcess: `Analyzing prompt intent using ${responder.modelName} on ${responder.modelProvider}...`
+      thinkingProcess: mentionedAgent
+        ? `Analyzing prompt intent using ${mentionedAgent.modelName} on ${mentionedAgent.modelProvider}...`
+        : 'Answering directly on the default runtime...'
     };
 
     setChatThreads(prev => prev.map(t => {
@@ -1656,14 +1667,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       const finalAgentMsg: ChatMessage = {
         id: res.agentMessage.id || streamingMsgId,
-        senderType: 'agent',
-        agentId: responder.id,
-        senderName: responder.name,
-        senderAvatar: responder.avatar,
+        senderType: res.agentMessage.senderType ?? 'agent',
+        // From the daemon, which knows who actually replied. Taking this from a
+        // client-side guess is how a reply ended up labelled with the wrong
+        // agent's name and face.
+        agentId: res.agentMessage.agentId,
+        senderName: res.agentMessage.senderName ?? 'Alpha',
+        senderAvatar: agents.find(a => a.id === res.agentMessage.agentId)?.avatar,
         content: res.agentMessage.content,
         timestamp: res.agentMessage.timestamp || new Date().toISOString(),
         isStreaming: false,
-        thinkingProcess: res.agentMessage.thinkingProcess || `Response generated via ${responder.modelName} on ${responder.modelProvider}.`,
+        thinkingProcess: res.agentMessage.thinkingProcess,
         toolsExecuted: (res.agentMessage.toolsExecuted || []).map((t: any) => ({
           name: t.toolName || t.name || 'tool',
           input: typeof t.parameters === 'object' ? JSON.stringify(t.parameters) : String(t.parameters || '{}'),
@@ -1686,14 +1700,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err: any) {
       console.warn('Real AI chat service unavailable, falling back to local persona:', err);
 
-      // Fallback response generator if backend offline
-      let responseText = `[${responder.name} · ${responder.modelName}]: I have received your request regarding: "${content}". Backend connection established.`;
-      
+      /**
+       * Say the daemon is unreachable, rather than answering for it.
+       *
+       * This used to reply "[Agent · model]: I have received your request …
+       * Backend connection established." — a fabricated success, in an agent's
+       * voice, at the exact moment the backend could not be reached. Nothing
+       * had been received and no connection was established.
+       */
       const fallbackMsg: ChatMessage = {
         ...streamingMsg,
-        content: responseText,
+        senderType: 'system',
+        senderName: 'Alpha',
+        senderAvatar: undefined,
+        content: [
+          'I could not reach the Alpha daemon, so nobody has seen this message yet.',
+          '',
+          `Reason: ${err?.message ?? 'the request failed'}`,
+          '',
+          'Check that the backend is running, then send it again.'
+        ].join('\n'),
         isStreaming: false,
-        thinkingProcess: `Generated response via ${responder.modelName}.`,
+        thinkingProcess: undefined,
         toolsExecuted: []
       };
 
@@ -1702,7 +1730,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const msgs = t.messages || [];
         return {
           ...t,
-          lastMessageSnippet: responseText.slice(0, 60) + '...',
+          lastMessageSnippet: 'Could not reach the Alpha daemon.',
           messages: msgs.map(m => m.id === streamingMsgId ? fallbackMsg : m)
         };
       }));
