@@ -807,18 +807,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     closeRunSetup();
     showToast('Agent run started', `${assignedAgent.name} is working on ${targetIssue.identifier}.`, 'success');
 
-    // Trigger real backend run
+    /**
+     * Trigger the real backend run, and adopt the id it assigns.
+     *
+     * This used to write `id: run.id` — keeping the optimistic id and throwing
+     * the backend's away. Both sides mint `run-${Date.now()}`, at different
+     * moments, so the two never matched, and every socket handler below
+     * ('stage_update', 'log_chunk', 'run_completed', 'run_failed') selects by
+     * `run.id === runId`. Nothing the real agent did could reach this row: no
+     * stage transitions, no logs, no final diff, and no token counts. What
+     * looked like a working run was the local timer, which is why it always
+     * finished in about seven seconds with the same numbers.
+     *
+     * `cancelRun` was posting that unknown id too, so cancelling never reached
+     * the process either.
+     */
     apiService.startRun({ issueId, agentId, plan, scenario }).then((realRun) => {
       if (realRun && realRun.id) {
         setPrototypeRuns(prev => prev.map(r => r.id === run.id ? {
           ...r,
           ...realRun,
-          id: run.id,
           scenario: (realRun.scenario || scenario || 'success') as any
         } : r));
       }
     }).catch(err => {
-      console.warn('Real run dispatched with local fallback:', err);
+      /**
+       * Say the run did not start, rather than leaving it "running" forever.
+       *
+       * The previous handler logged "Real run dispatched with local fallback"
+       * and left the optimistic row alone for the simulation to complete, so a
+       * backend that was down, or a project with no working copy, still
+       * produced a finished run on screen.
+       */
+      const detail = err instanceof Error ? err.message : String(err);
+      setPrototypeRuns(prev => prev.map(r => r.id === run.id ? {
+        ...r,
+        status: 'failed',
+        testSummary: `The run could not be started: ${detail}`,
+        updatedAt: new Date().toISOString()
+      } : r));
+      setAgents(prev => prev.map(agent => agent.id === agentId ? {
+        ...agent,
+        status: 'idle',
+        workStatus: 'idle',
+        currentTask: undefined
+      } : agent));
+      showToast('Run could not start', detail, 'error');
     });
 
     return run;
@@ -898,64 +932,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Run restarted', 'The failed stage will be attempted again.', 'success');
   };
 
-  // Advance simulated stages from their stored timestamps so a refresh can resume a run.
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const nowMs = Date.now();
-      setPrototypeRuns(prev => prev.map(run => {
-        if (run.status !== 'running') return run;
+  /**
+   * The simulated stage advancer is gone.
+   *
+   * It ran every 350ms over every run whose status was 'running' and, once
+   * each stage's `durationMs ?? 1500` had elapsed, advanced it — finally
+   * writing `changedFiles: 4, insertions: 86, deletions: 14, testSummary:
+   * '42 tests passed'` and flipping the run to 'awaiting_approval'.
+   *
+   * It applied to real backend runs as well as local ones, so about seven
+   * seconds after starting anything the UI reported a finished run with those
+   * four invented numbers, whatever the agent was actually doing. The honest
+   * diff statistics the daemon computes were overwritten before they arrived,
+   * and a run that later genuinely failed had already been shown as reviewed.
+   *
+   * Runs are driven by the backend: 'stage_update' and 'log_chunk' move them
+   * along, 'run_completed' and 'run_failed' finish them, and the snapshot
+   * fetch restores them after a refresh. A run that starts is now allowed to
+   * stay running until something real says otherwise.
+   */
 
-        const currentStage = run.stages[run.currentStageIndex];
-        if (!currentStage) return run;
-        const startedAt = currentStage.startedAt || run.updatedAt;
-        const duration = currentStage.durationMs ?? 1500;
-        if (nowMs - new Date(startedAt).getTime() < duration) return run;
-
-        const completedAt = new Date(nowMs).toISOString();
-        const shouldFail = run.scenario === 'test_failure' && currentStage.id === 'tests';
-        if (shouldFail) {
-          return {
-            ...run,
-            status: 'failed',
-            testSummary: '2 tests failed · retry available',
-            updatedAt: completedAt,
-            stages: run.stages.map((stage, index) => index === run.currentStageIndex ? {
-              ...stage,
-              status: 'failed',
-              completedAt,
-              logs: ['Type checking passed.', '2 tests failed in the simulated regression suite.']
-            } : stage)
-          };
-        }
-
-        const nextIndex = run.currentStageIndex + 1;
-        const hasNextStage = nextIndex < run.stages.length;
-        const nextStages = run.stages.map((stage, index) => {
-          if (index === run.currentStageIndex) {
-            return { ...stage, status: 'success' as const, completedAt };
-          }
-          if (index === nextIndex) {
-            return { ...stage, status: 'running' as const, startedAt: completedAt };
-          }
-          return stage;
-        });
-
-        return {
-          ...run,
-          status: hasNextStage ? 'running' : 'awaiting_approval',
-          currentStageIndex: hasNextStage ? nextIndex : run.currentStageIndex,
-          changedFiles: hasNextStage ? run.changedFiles : 4,
-          insertions: hasNextStage ? run.insertions : 86,
-          deletions: hasNextStage ? run.deletions : 14,
-          testSummary: hasNextStage ? run.testSummary : '42 tests passed',
-          updatedAt: completedAt,
-          stages: nextStages
-        };
-      }));
-    }, 350);
-
-    return () => window.clearInterval(timer);
-  }, []);
 
   // Materialize review and failure events into the existing issue and inbox views.
   useEffect(() => {
@@ -1040,7 +1036,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               authorName: assignedAgent.name,
               authorAvatar: assignedAgent.avatar,
               agentId: assignedAgent.id,
-              content: `Implementation is ready for review. ${run.changedFiles || 4} files changed and ${run.testSummary || 'all tests passed'}.`,
+              /**
+               * The run's own numbers, including none.
+               *
+               * This read `${run.changedFiles || 4} files changed and
+               * ${run.testSummary || 'all tests passed'}` — so a run that
+               * changed nothing announced four files and passing tests, in the
+               * agent's own voice, on the issue. Alpha does not run the tests
+               * and cannot claim they passed; the daemon's testSummary already
+               * says so honestly, and is used verbatim when present.
+               */
+              content: run.changedFiles
+                ? `Implementation is ready for review: ${run.changedFiles} file(s) changed.` +
+                  (run.testSummary ? ` ${run.testSummary}` : '')
+                : 'The run finished without changing any files. Check the run log before reviewing.',
               createdAt: now,
               isThinking: false
             }],
@@ -1060,8 +1069,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           agentName: assignedAgent.name,
           agentRole: assignedAgent.role,
           issueIdentifier: targetIssue.identifier,
-          proposedChanges: `${run.insertions || 86} insertions, ${run.deletions || 14} deletions in ${run.changedFiles || 4} files.`,
-          costTokens: 3850
+          proposedChanges: run.changedFiles
+            ? `${run.insertions ?? 0} insertions, ${run.deletions ?? 0} deletions in ${run.changedFiles} files.`
+            : 'No files were changed.',
+          /**
+           * Real tokens, reported by the CLI, or nothing.
+           *
+           * This was the constant 3850 on every approval. The count now comes
+           * from the run's stored usage, cache reads included — they are the
+           * bulk of a turn and cheaper per token, not free. Left undefined for
+           * a run whose CLI reported no figures, so the Inbox omits the line
+           * rather than showing an invented one.
+           */
+          costTokens: runTokenTotal(run)
         }
       }, ...prev]);
       showToast('Review ready', `${targetIssue.identifier} is waiting in Inbox.`, 'success');

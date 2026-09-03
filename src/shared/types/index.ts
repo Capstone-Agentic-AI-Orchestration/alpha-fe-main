@@ -102,6 +102,25 @@ export interface PrototypeRun {
   insertions?: number;
   deletions?: number;
   testSummary?: string;
+  usage?: RunUsage;
+}
+
+/**
+ * Token and cost figures the CLI reported for a run.
+ *
+ * Every field is optional and absence is meaningful: it means the CLI did not
+ * report that figure, not that the figure was zero. codex reports no cache
+ * reads, Claude no separate thinking tokens, Antigravity no cost — so render
+ * a missing value as unknown rather than as 0.
+ */
+export interface RunUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  thinkingTokens?: number;
+  costUsd?: number;
+  numTurns?: number;
 }
 
 export interface ToastMessage {
@@ -220,8 +239,15 @@ export interface AgentRunLog {
 export interface AgentStats {
   totalRuns: number;
   successRate: number;
+  /** Summed across this agent's runs, cache reads included. 0 until it runs. */
   tokensUsed: number;
   avgLatencyMs: number;
+  /**
+   * What the CLIs said the equivalent API calls would have cost. Alpha spawns
+   * subscription CLIs, so this is a comparison figure, not a bill — and it is
+   * absent for any provider whose CLI does not report cost.
+   */
+  costUsd?: number;
 }
 
 export interface Agent {
