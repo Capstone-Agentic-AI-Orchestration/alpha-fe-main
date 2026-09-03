@@ -23,7 +23,6 @@ import {
   IntakeAnswers,
   Estimate,
   RateCard,
-  BudgetLedger,
   Milestone
 } from '@/shared/types';
 import {
@@ -35,13 +34,13 @@ import {
   initialSettings,
   initialUsers,
   initialRequirementDocs,
-  initialLedgers
 } from '@/data/mockData';
 import { buildEstimate, DEFAULT_RATE_CARD } from '@/features/delivery/estimator';
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
+import { runTokenTotal } from '@/shared/lib/runUsage';
 
 interface AppContextType {
   /** Reachability of the local Alpha daemon. Agents cannot run while 'offline'. */
@@ -176,9 +175,6 @@ interface AppContextType {
   approveScopeAndBudget: (docId: string) => Project | undefined;
   rejectEstimate: (docId: string, reason: string) => void;
 
-  // Budget tracking
-  ledgers: BudgetLedger[];
-  ledgerForProject: (projectId: string) => BudgetLedger | undefined;
 }
 
 /* Capability names are behavioural, not tab names, so a surface can be shared
@@ -389,7 +385,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } as Estimate;
     });
   });
-  const [ledgers, setLedgers] = useState<BudgetLedger[]>(() => loadFromStorage('ledgers', initialLedgers));
 
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
   const [isAgentTyping, setIsAgentTyping] = useState(false);
@@ -490,7 +485,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('active_role', role); }, [role]);
   useEffect(() => { saveToStorage('requirement_docs', requirementDocs); }, [requirementDocs]);
   useEffect(() => { saveToStorage('estimates', estimates); }, [estimates]);
-  useEffect(() => { saveToStorage('ledgers', ledgers); }, [ledgers]);
 
   const dismissToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
@@ -2062,19 +2056,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    // Open a budget ledger so drift is trackable from day one.
-    setLedgers(prev => [
-      {
-        projectId: project.id,
-        estimateId: estimate.id,
-        baseline: estimate.buildTotal,
-        actualToDate: 0,
-        projectedFinal: estimate.buildTotal,
-        entries: []
-      },
-      ...prev
-    ]);
-
     setInbox(prev => [
       {
         id: `notif-${Date.now()}`,
@@ -2115,8 +2096,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev
     ]);
   };
-
-  const ledgerForProject = (projectId: string) => scopedLedgers.find(l => l.projectId === projectId);
 
   /* =====================================================================
    * Scoping layer
@@ -2178,12 +2157,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return estimates.filter(e => scopedDocIds.includes(e.docId));
   }, [estimates, scopedDocIds, role]);
 
-  const scopedLedgers = useMemo(() => {
-    if (role === 'admin') return ledgers;
-    if (role === 'dev') return [];
-    return ledgers.filter(l => scopedProjectIds.includes(l.projectId));
-  }, [ledgers, scopedProjectIds, role]);
-
   /** Agents are invisible to clients and narrowed to ownership for devs. */
   const scopedAgents = useMemo(() => {
     if (role === 'client') return [];
@@ -2227,8 +2200,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /**
    * Analytics is the same telemetry rendered at three altitudes. A client is
-   * given no token or latency figures at all — their money view is the budget
-   * ledger, which speaks in dollars.
+   * given no token or latency figures at all.
    */
   const scopedAnalytics = useMemo<AnalyticsData>(() => {
     if (role === 'admin' || role === 'pm') return analytics;
@@ -2347,8 +2319,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       regenerateEstimate,
       approveScopeAndBudget,
       rejectEstimate,
-      ledgers: scopedLedgers,
-      ledgerForProject
     }}>
       {children}
     </AppContext.Provider>

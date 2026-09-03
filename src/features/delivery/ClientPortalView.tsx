@@ -11,7 +11,6 @@ export const ClientPortalView: React.FC = () => {
     estimateForDoc,
     projects,
     issues,
-    ledgers,
     setActiveTab
   } = useApp();
 
@@ -99,11 +98,6 @@ export const ClientPortalView: React.FC = () => {
                 const project = projects.find(p => p.id === d.projectId);
                 const projectIssues = issues.filter(i => i.projectId === d.projectId);
                 const done = projectIssues.filter(i => i.status === 'done').length;
-                const ledger = ledgers.find(l => l.projectId === d.projectId);
-
-                const overBaseline = ledger ? ledger.projectedFinal > ledger.baseline * 1.05 : false;
-                const burnPct = ledger && ledger.baseline > 0 ? ledger.actualToDate / ledger.baseline : 0;
-
                 return (
                   <div key={d.id} className="py-4 flex items-center gap-5">
                     <ProgressRing
@@ -118,29 +112,6 @@ export const ClientPortalView: React.FC = () => {
                         {done} of {projectIssues.length} items complete
                       </p>
                     </div>
-
-                    {ledger && (
-                      <div className="text-right flex-shrink-0 space-y-1">
-                        <p className="font-mono text-xs text-gray-200 tabular-nums">
-                          {formatMoney(ledger.actualToDate, { cents: false })}
-                          <span className="text-gray-600"> / {formatMoney(ledger.baseline, { cents: false })}</span>
-                        </p>
-                        <p
-                          className={`flex items-center justify-end gap-1.5 text-[11px] ${
-                            overBaseline ? 'text-amber-300' : 'text-emerald-300'
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              overBaseline ? 'bg-amber-400' : 'bg-emerald-400'
-                            }`}
-                          />
-                          {overBaseline
-                            ? `tracking ${formatMoney(ledger.projectedFinal - ledger.baseline, { cents: false })} over`
-                            : `${Math.round(burnPct * 100)}% of budget used`}
-                        </p>
-                      </div>
-                    )}
                   </div>
                 );
               })}

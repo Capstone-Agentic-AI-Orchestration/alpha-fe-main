@@ -49,7 +49,7 @@ const ALL_TABS: { id: NavigationTab; title: string; subtitle: string; icon: Reac
   { id: 'portal', title: 'Overview', subtitle: 'Your requests, progress, and budget', icon: <LayoutDashboard className="w-4 h-4" /> },
   { id: 'intake', title: 'New Request', subtitle: 'Describe what you need in plain language', icon: <PenLine className="w-4 h-4" /> },
   { id: 'documents', title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', icon: <FileText className="w-4 h-4" /> },
-  { id: 'billing', title: 'Billing & Usage', subtitle: 'Committed value, delivery cost, and margin', icon: <CreditCard className="w-4 h-4" /> },
+  { id: 'billing', title: 'Billing & Usage', subtitle: 'Committed client value and agent compute', icon: <CreditCard className="w-4 h-4" /> },
   { id: 'inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', icon: <Inbox className="w-4 h-4" /> },
   { id: 'chat', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', icon: <MessageSquare className="w-4 h-4" /> },
   { id: 'my_issues', title: 'My Issues', subtitle: 'Tasks assigned to you across projects', icon: <User className="w-4 h-4" /> },

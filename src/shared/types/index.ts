@@ -713,19 +713,3 @@ export interface Estimate {
 }
 
 /** Actual spend accrued against an approved estimate. */
-export interface BudgetLedger {
-  projectId: string;
-  estimateId: string;
-  baseline: number;
-  actualToDate: number;
-  /** Straight-line projection to completion at the current burn rate. */
-  projectedFinal: number;
-  entries: {
-    id: string;
-    date: string;
-    label: string;
-    lineId: string;
-    amount: number;
-    source: 'agent_run' | 'logged_hours' | 'infrastructure';
-  }[];
-}
