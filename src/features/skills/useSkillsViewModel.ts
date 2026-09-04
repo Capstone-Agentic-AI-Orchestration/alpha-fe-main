@@ -6,7 +6,6 @@ export function useSkillsViewModel() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
 
   const categories = useMemo(() => {
     const set = new Set(skills.map(s => s.category));
@@ -31,15 +30,6 @@ export function useSkillsViewModel() {
     toggleSkill(id);
   };
 
-  const handleScanMcp = async () => {
-    setIsScanning(true);
-    try {
-      await new Promise(r => setTimeout(r, 1200));
-    } finally {
-      setIsScanning(false);
-    }
-  };
-
   return {
     skills,
     filteredSkills,
@@ -51,8 +41,6 @@ export function useSkillsViewModel() {
     selectedSkill,
     selectedSkillId,
     setSelectedSkillId,
-    isScanning,
-    handleToggleSkill,
-    handleScanMcp
+    handleToggleSkill
   };
 }

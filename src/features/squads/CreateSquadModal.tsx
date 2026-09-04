@@ -30,7 +30,14 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
   const [mission, setMission] = useState('Coordinate autonomous tasks with high concurrency and fault tolerance.');
 
   // Step 2: Topology & Leader
-  const [topology, setTopology] = useState<SquadTopology>('hierarchical');
+  /**
+   * Sequential, because it is the only topology the daemon implements.
+   *
+   * This defaulted to 'hierarchical', so a squad created without touching the
+   * picker could never run — the launch panel just reported "hierarchical is
+   * not implemented yet" once it was too late to change it.
+   */
+  const [topology, setTopology] = useState<SquadTopology>('sequential');
   const [leaderAgentId, setLeaderAgentId] = useState(agents[0]?.id || 'agent-1');
 
   // Step 3: Member Agents
@@ -44,10 +51,12 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
 
   const getTopologyDescription = (top: SquadTopology) => {
     switch (top) {
-      case 'hierarchical': return 'Leader delegates to worker agents and aggregates results with a final verification pass.';
       case 'sequential': return 'Linear pipeline where Agent A output serves as input context for Agent B.';
-      case 'swarm': return 'Decentralized peer agents collaborating asynchronously on shared memory state.';
-      case 'consensus': return 'Multi-agent voting requiring majority approval before committing workspace state.';
+      // Described in the future tense on purpose: these are designs, not
+      // behaviour, and the picker disables them for that reason.
+      case 'hierarchical': return 'Not implemented. Would have a leader delegate to workers and aggregate the results.';
+      case 'swarm': return 'Not implemented. Would run peer agents asynchronously over shared memory.';
+      case 'consensus': return 'Not implemented. Would require majority approval before committing.';
     }
   };
 
@@ -219,10 +228,15 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                 onChange={(e) => setTopology(e.target.value as SquadTopology)}
                 className="w-full bg-[#14151B] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
               >
-                <option value="hierarchical">Hierarchical (Leader delegates & aggregates)</option>
+                {/*
+                  Only Sequential is disabled=false: the other three have no
+                  daemon behaviour, and offering them as equal choices is what
+                  produced squads that could not be launched.
+                */}
                 <option value="sequential">Sequential (Step-by-step pipeline)</option>
-                <option value="swarm">Swarm (Autonomous peer nodes)</option>
-                <option value="consensus">Consensus (Multi-agent voting gate)</option>
+                <option value="hierarchical" disabled>Hierarchical — not implemented yet</option>
+                <option value="swarm" disabled>Swarm — not implemented yet</option>
+                <option value="consensus" disabled>Consensus — not implemented yet</option>
               </select>
               <p className="text-[11px] text-gray-400 bg-[#0A0B0E] p-2.5 rounded-lg border border-white/5 font-mono leading-relaxed">
                 {getTopologyDescription(topology)}

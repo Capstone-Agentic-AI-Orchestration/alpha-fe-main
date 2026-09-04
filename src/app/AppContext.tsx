@@ -3,6 +3,7 @@ import {
   NavigationTab,
   TabItem,
   Issue,
+  IssueComment,
   IssueStatus,
   Project,
   Agent,
@@ -19,6 +20,7 @@ import {
   ToastMessage,
   User,
   UserRole,
+  SquadRun,
   RequirementDoc,
   IntakeAnswers,
   Estimate,
@@ -60,6 +62,7 @@ interface AppContextType {
   createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }) => Issue;
   updateIssueStatus: (id: string, status: IssueStatus) => void;
   updateIssue: (id: string, updates: Partial<Issue>) => void;
+  addIssueComment: (issueId: string, comment: IssueComment) => void;
   deleteIssue: (id: string) => void;
   runAgentOnIssue: (issueId: string, agentId?: string) => void;
   prototypeRuns: PrototypeRun[];
@@ -99,7 +102,14 @@ interface AppContextType {
   // Squads
   squads: Squad[];
   createSquad: (squad: Omit<Squad, 'id' | 'activeRunsCount' | 'completedRunsCount'>) => Squad;
-  triggerSquadRun: (squadId: string, missionGoal?: string) => Promise<void>;
+  updateSquad: (id: string, updates: Partial<Squad>) => void;
+  deleteSquad: (id: string) => void;
+  squadRuns: SquadRun[];
+  /**
+   * A squad works on an issue. `issueId` is required because there is no
+   * longer a way to run a squad against nothing — that was the old timer.
+   */
+  triggerSquadRun: (squadId: string, issueId: string, plan?: string[], missionGoal?: string) => Promise<void>;
   
   // Runtimes
   runtimes: RuntimeEngine[];
@@ -345,6 +355,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage<ChatMessage[]>('chat_messages', []));
   const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() => loadFromStorage('prototype_runs', []));
+  const [squadRuns, setSquadRuns] = useState<SquadRun[]>(() => loadFromStorage('squad_runs', []));
   const [runSetupIssueId, setRunSetupIssueId] = useState<string | null>(null);
   const [runSetupAgentId, setRunSetupAgentId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -427,6 +438,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       if (snapshot.chatThreads) setChatThreads(snapshot.chatThreads as ChatThread[]);
       if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
+      if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
 
       setServerStatus('online');
     };
@@ -482,6 +494,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('chat_threads', chatThreads); }, [chatThreads]);
   useEffect(() => { saveToStorage('chat_messages', chatMessages); }, [chatMessages]);
   useEffect(() => { saveToStorage('prototype_runs', prototypeRuns); }, [prototypeRuns]);
+  useEffect(() => { saveToStorage('squad_runs', squadRuns); }, [squadRuns]);
   useEffect(() => { saveToStorage('active_role', role); }, [role]);
   useEffect(() => { saveToStorage('requirement_docs', requirementDocs); }, [requirementDocs]);
   useEffect(() => { saveToStorage('estimates', estimates); }, [estimates]);
@@ -668,6 +681,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       () => apiService.updateIssue(id, updates),
       () => {},
       msg => showToast('Issue not saved', msg, 'error')
+    );
+  };
+
+  /**
+   * Comments have their own endpoint because they have their own table.
+   *
+   * The board used to add one with `updateIssue(id, { comments: [...] })`, and
+   * that silently discarded it: `UPDATE issues SET ...` has no comments column,
+   * so nothing was written — but the handler returns the merged object with the
+   * comment included, so the response looked like a save and the UI agreed until
+   * the next reload.
+   */
+  const addIssueComment = (issueId: string, comment: IssueComment) => {
+    setIssues(prev =>
+      prev.map(iss =>
+        iss.id === issueId ? { ...iss, comments: [...(iss.comments ?? []), comment] } : iss
+      )
+    );
+    persist(
+      () => apiService.addIssueComment(issueId, comment),
+      saved =>
+        setIssues(prev =>
+          prev.map(iss =>
+            iss.id === issueId
+              ? { ...iss, comments: (iss.comments ?? []).map(c => (c.id === comment.id ? saved : c)) }
+              : iss
+          )
+        ),
+      msg => {
+        setIssues(prev =>
+          prev.map(iss =>
+            iss.id === issueId
+              ? { ...iss, comments: (iss.comments ?? []).filter(c => c.id !== comment.id) }
+              : iss
+          )
+        );
+        showToast('Comment not saved', msg, 'error');
+      }
     );
   };
 
@@ -1200,7 +1251,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setAgents(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     persist(
       () => apiService.updateAgent(id, updates),
-      () => {},
+      /**
+       * Take the daemon's answer, do not keep the optimistic guess.
+       *
+       * Two fields on an agent are computed by the daemon and cannot be derived
+       * here: `readiness`, which depends on the model list each CLI currently
+       * advertises, and `managedByFile`, which depends on the persona file on
+       * the daemon's machine. The optimistic merge above can only apply the
+       * fields the user just edited, so both keep whatever the last full roster
+       * fetch left behind.
+       *
+       * That showed up as an agent switched from codex to Antigravity still
+       * displaying "codex is installed but not signed in, so this agent cannot
+       * answer" — advice about a CLI it no longer used, on an agent that was
+       * working. `createAgent` above already reconciles this way; this was the
+       * odd one out.
+       */
+      saved => setAgents(prev => prev.map(a => (a.id === id ? saved : a))),
       msg => showToast('Agent not saved', msg, 'error')
     );
   };
@@ -1235,16 +1302,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setAgents(prev => [newAgent, ...prev]);
+    // A duplicate is a new agent, so it is created the same way one typed into
+    // the builder is. Without this the copy existed only in this tab and was
+    // gone on reload, having looked saved the whole time.
+    persist(
+      () => apiService.createAgent(newAgent),
+      saved => setAgents(prev => prev.map(a => (a.id === newAgent.id ? saved : a))),
+      msg => {
+        setAgents(prev => prev.filter(a => a.id !== newAgent.id));
+        showToast('Agent not duplicated', msg, 'error');
+      }
+    );
     return newAgent;
   };
 
-  const archiveAgent = (id: string) => {
-    setAgents(prev => prev.map(a => a.id === id ? { ...a, isArchived: true, status: 'offline', workStatus: 'idle' } : a));
+  /**
+   * Archive and restore write `isArchived` and nothing else.
+   *
+   * `status` and `workStatus` are not columns — the daemon derives them, and it
+   * now reports `offline` for an archived row rather than the hardcoded `idle`
+   * it used to. So the optimistic values here agree with what comes back, and
+   * the reconcile is not fighting the local guess.
+   */
+  const setAgentArchived = (id: string, isArchived: boolean) => {
+    setAgents(prev =>
+      prev.map(a =>
+        a.id === id
+          ? { ...a, isArchived, status: isArchived ? 'offline' : 'idle', workStatus: 'idle' }
+          : a
+      )
+    );
+    persist(
+      () => apiService.updateAgent(id, { isArchived }),
+      saved => setAgents(prev => prev.map(a => (a.id === id ? saved : a))),
+      msg => {
+        setAgents(prev => prev.map(a => (a.id === id ? { ...a, isArchived: !isArchived } : a)));
+        showToast(isArchived ? 'Agent not archived' : 'Agent not restored', msg, 'error');
+      }
+    );
   };
 
-  const restoreAgent = (id: string) => {
-    setAgents(prev => prev.map(a => a.id === id ? { ...a, isArchived: false, status: 'idle' } : a));
-  };
+  const archiveAgent = (id: string) => setAgentArchived(id, true);
+  const restoreAgent = (id: string) => setAgentArchived(id, false);
 
   const deleteAgent = (id: string) => {
     const removed = agents.find(a => a.id === id);
@@ -1259,12 +1358,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  /**
+   * One request per agent, because the daemon has no bulk endpoint.
+   *
+   * Deliberately not wrapped in a single all-or-nothing call: a partial failure
+   * is reported per agent and the ones that succeeded stay succeeded, which is
+   * what someone selecting eight rows and changing a model expects. A failure
+   * toast names the agent rather than the count, so the retry is targeted.
+   */
   const bulkUpdateAgents = (ids: string[], updates: Partial<Agent>) => {
     setAgents(prev => prev.map(a => ids.includes(a.id) ? { ...a, ...updates } : a));
+    for (const id of ids) {
+      persist(
+        () => apiService.updateAgent(id, updates),
+        saved => setAgents(prev => prev.map(a => (a.id === id ? saved : a))),
+        msg => showToast(`${agents.find(a => a.id === id)?.name ?? id} not saved`, msg, 'error')
+      );
+    }
   };
 
   const bulkArchiveAgents = (ids: string[]) => {
-    setAgents(prev => prev.map(a => ids.includes(a.id) ? { ...a, isArchived: true, status: 'offline', workStatus: 'idle' } : a));
+    for (const id of ids) setAgentArchived(id, true);
   };
 
   // Squads
@@ -1276,36 +1390,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       completedRunsCount: 0
     };
     setSquads(prev => [...prev, newSquad]);
+    // `POST /squads` and `apiService.createSquad` both already existed; nothing
+    // called them, so a squad assembled in the UI lived in one tab and vanished
+    // on reload.
+    persist(
+      () => apiService.createSquad(newSquad),
+      saved => setSquads(prev => prev.map(s => (s.id === newSquad.id ? saved : s))),
+      msg => {
+        setSquads(prev => prev.filter(s => s.id !== newSquad.id));
+        showToast('Squad not saved', msg, 'error');
+      }
+    );
     return newSquad;
   };
 
-  const triggerSquadRun = async (squadId: string, missionGoal?: string) => {
+  const updateSquad = (id: string, updates: Partial<Squad>) => {
+    setSquads(prev => prev.map(s => (s.id === id ? { ...s, ...updates } : s)));
+    persist(
+      () => apiService.updateSquad(id, updates),
+      saved => setSquads(prev => prev.map(s => (s.id === id ? saved : s))),
+      msg => showToast('Squad not saved', msg, 'error')
+    );
+  };
+
+  const deleteSquad = (id: string) => {
+    const removed = squads.find(s => s.id === id);
+    setSquads(prev => prev.filter(s => s.id !== id));
+    persist(
+      () => apiService.deleteSquad(id),
+      () => {},
+      msg => {
+        // Put it back rather than leave the roster lying about what exists.
+        if (removed) setSquads(prev => [...prev, removed]);
+        showToast('Squad not deleted', msg, 'error');
+      }
+    );
+  };
+
+  /**
+   * Run a squad over an issue.
+   *
+   * This used to be theatre: it incremented activeRunsCount, posted an inbox
+   * notification saying "N agents coordinating", and set a 4.5 second timer
+   * that moved the run into completedRunsCount. No endpoint was called, no
+   * process was spawned, and no agent was told anything — the daemon had no
+   * concept of more than one agent per run.
+   *
+   * It now starts a real sequential squad run: one shared branch, members in
+   * order, each one handed a summary of what the members before it did. The
+   * issue is required because a squad works on something; there is no longer a
+   * way to "run a squad" against nothing.
+   */
+  const triggerSquadRun = async (squadId: string, issueId: string, plan?: string[], missionGoal?: string) => {
     const squad = squads.find(s => s.id === squadId);
     if (!squad) return;
 
-    setSquads(prev => prev.map(s => s.id === squadId ? { ...s, activeRunsCount: s.activeRunsCount + 1 } : s));
+    try {
+      const squadRun = await apiService.runSquad(squadId, { issueId, plan, mission: missionGoal });
 
-    // Add inbox item
-    const runNotif: InboxNotification = {
-      id: `notif-${Date.now()}`,
-      type: 'agent_completed',
-      title: `Squad Swarm Run Initiated: ${squad.name}`,
-      message: `Mission: "${missionGoal || squad.mission}". Topology: ${squad.topology.toUpperCase()}. ${squad.memberAgentIds.length} agents coordinating.`,
-      read: false,
-      audience: 'internal',
-      timestamp: new Date().toISOString(),
-      entityType: 'squad',
-      entityId: squad.id
-    };
-    setInbox(prev => [runNotif, ...prev]);
+      setSquadRuns(prev => [squadRun, ...prev.filter(r => r.id !== squadRun.id)]);
+      setSquads(prev => prev.map(s => s.id === squadId ? { ...s, activeRunsCount: s.activeRunsCount + 1 } : s));
 
-    setTimeout(() => {
-      setSquads(prev => prev.map(s => s.id === squadId ? { 
-        ...s, 
-        activeRunsCount: Math.max(0, s.activeRunsCount - 1),
-        completedRunsCount: s.completedRunsCount + 1 
-      } : s));
-    }, 4500);
+      const issue = issues.find(i => i.id === issueId);
+      setInbox(prev => [{
+        id: `notif-${Date.now()}`,
+        type: 'agent_completed',
+        title: `${squad.name} started on ${issue?.identifier ?? 'an issue'}`,
+        message:
+          `${squadRun.memberAgentIds.length} member(s) will work in sequence on \`${squadRun.branchName}\`. ` +
+          `Mission: "${squadRun.mission}".`,
+        read: false,
+        audience: 'internal',
+        timestamp: new Date().toISOString(),
+        entityType: 'squad',
+        entityId: squad.id
+      }, ...prev]);
+
+      showToast('Squad run started', `${squad.name} is working on ${issue?.identifier ?? 'the issue'}.`, 'success');
+    } catch (err) {
+      /**
+       * Say why it did not start.
+       *
+       * The daemon refuses a squad it cannot honestly run — an unimplemented
+       * topology, no members, members that were archived — and that reason is
+       * worth more to the user than a generic failure.
+       */
+      const detail = err instanceof Error ? err.message : String(err);
+      showToast('Squad run could not start', detail, 'error');
+    }
   };
 
   // Runtimes
@@ -1333,7 +1505,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Skills
   const toggleSkill = (id: string) => {
-    setSkills(prev => prev.map(sk => sk.id === id ? { ...sk, enabled: !sk.enabled } : sk));
+    const next = !skills.find(sk => sk.id === id)?.enabled;
+    setSkills(prev => prev.map(sk => sk.id === id ? { ...sk, enabled: next } : sk));
+    /**
+     * A skill toggle decides what tools an agent's turn is allowed to use, so
+     * losing it on reload silently changed what the agents could do. The route
+     * (`PUT /skills/:id`) and the client method both existed already.
+     *
+     * The response is `{ success }` rather than the skill, so there is nothing
+     * to reconcile — the optimistic value is the value.
+     */
+    persist(
+      () => apiService.setSkillEnabled(id, next),
+      () => {},
+      msg => {
+        setSkills(prev => prev.map(sk => sk.id === id ? { ...sk, enabled: !next } : sk));
+        showToast('Skill not saved', msg, 'error');
+      }
+    );
   };
 
   // Deployments
@@ -1679,38 +1868,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         senderName: currentUser.name
       });
 
-      const finalAgentMsg: ChatMessage = {
-        id: res.agentMessage.id || streamingMsgId,
-        senderType: res.agentMessage.senderType ?? 'agent',
-        // From the daemon, which knows who actually replied. Taking this from a
-        // client-side guess is how a reply ended up labelled with the wrong
-        // agent's name and face.
-        agentId: res.agentMessage.agentId,
-        senderName: res.agentMessage.senderName ?? 'Alpha',
-        senderAvatar: agents.find(a => a.id === res.agentMessage.agentId)?.avatar,
-        content: res.agentMessage.content,
-        timestamp: res.agentMessage.timestamp || new Date().toISOString(),
-        isStreaming: false,
-        thinkingProcess: res.agentMessage.thinkingProcess,
-        toolsExecuted: (res.agentMessage.toolsExecuted || []).map((t: any) => ({
-          name: t.toolName || t.name || 'tool',
-          input: typeof t.parameters === 'object' ? JSON.stringify(t.parameters) : String(t.parameters || '{}'),
-          output: t.output || 'Execution completed',
-          durationMs: t.durationMs || 120
-        }))
-      };
+      /**
+       * One reply, or several.
+       *
+       * Addressing a squad expands to its members and each one answers in
+       * turn, so the daemon returns a list. `agentMessage` is the first of
+       * them and is still sent for callers that expect exactly one; the
+       * placeholder becomes that first reply and the rest are appended after
+       * it, in the order the members spoke.
+       */
+      const replies = (res.agentMessages?.length ? res.agentMessages : [res.agentMessage]).map(
+        (reply: any, index: number): ChatMessage => ({
+          // The first reply takes over the placeholder's id so it replaces it
+          // in place; the others are new messages.
+          id: index === 0 ? (reply.id || streamingMsgId) : reply.id,
+          senderType: reply.senderType ?? 'agent',
+          // From the daemon, which knows who actually replied. Taking this from
+          // a client-side guess is how a reply ended up labelled with the wrong
+          // agent's name and face.
+          agentId: reply.agentId,
+          senderName: reply.senderName ?? 'Alpha',
+          senderAvatar: agents.find(a => a.id === reply.agentId)?.avatar,
+          content: reply.content,
+          timestamp: reply.timestamp || new Date().toISOString(),
+          isStreaming: false,
+          thinkingProcess: reply.thinkingProcess,
+          toolsExecuted: (reply.toolsExecuted || []).map((t: any) => ({
+            name: t.toolName || t.name || 'tool',
+            input: typeof t.parameters === 'object' ? JSON.stringify(t.parameters) : String(t.parameters || '{}'),
+            output: t.output || 'Execution completed',
+            durationMs: t.durationMs || 120
+          }))
+        })
+      );
+
+      const [firstReply, ...laterReplies] = replies;
 
       setChatThreads(prev => prev.map(t => {
         if (t.id !== targetThreadId) return t;
         const msgs = t.messages || [];
         return {
           ...t,
-          lastMessageSnippet: res.agentMessage.content.slice(0, 60) + '...',
-          messages: msgs.map(m => m.id === streamingMsgId ? finalAgentMsg : m)
+          // The last speaker is what the thread list should preview.
+          lastMessageSnippet: replies[replies.length - 1].content.slice(0, 60) + '...',
+          messages: [...msgs.map(m => m.id === streamingMsgId ? firstReply : m), ...laterReplies]
         };
       }));
 
-      setChatMessages(prev => prev.map(m => m.id === streamingMsgId ? finalAgentMsg : m));
+      setChatMessages(prev => [
+        ...prev.map(m => m.id === streamingMsgId ? firstReply : m),
+        ...laterReplies
+      ]);
     } catch (err: any) {
       console.warn('Real AI chat service unavailable, falling back to local persona:', err);
 
@@ -2261,6 +2469,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createAgent,
     importAgent,
       updateAgent,
+      addIssueComment,
       duplicateAgent,
       archiveAgent,
       restoreAgent,
@@ -2269,6 +2478,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bulkArchiveAgents,
       squads: scopedSquads,
       createSquad,
+      updateSquad,
+      deleteSquad,
+      squadRuns,
       triggerSquadRun,
       runtimes,
       isScanningRuntimes,

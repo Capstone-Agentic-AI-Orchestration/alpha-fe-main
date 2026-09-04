@@ -8,9 +8,12 @@ import {
   Skill,
   RuntimeEngine,
   PrototypeRun,
+  SquadRun,
   ChatThread,
   ChatMessage,
-  ScaffoldStack
+  ScaffoldStack,
+  McpServer,
+  McpServerInput
 } from '@/shared/types';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
@@ -149,6 +152,25 @@ export const apiService = {
     fetchJson<Agent>(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteAgent: (id: string) =>
     fetchJson<{ success: boolean }>(`/agents/${id}`, { method: 'DELETE' }),
+  /**
+   * Alpha's MCP catalog.
+   *
+   * Separate from anything the machine owner has configured for their own CLI:
+   * agents are fenced to this list alone. `getMcpServers` returns built-ins and
+   * catalog entries together, flagged, because the panel shows one list.
+   *
+   * The write calls return the whole list rather than the single row they
+   * changed — saving one entry can flip another's `overridden` flag, and the
+   * panel would otherwise render it stale.
+   */
+  getMcpServers: () => fetchJson<McpServer[]>('/mcp/servers'),
+  saveMcpServer: (name: string, server: McpServerInput) =>
+    fetchJson<McpServer[]>(`/mcp/servers/${encodeURIComponent(name)}`, {
+      method: 'PUT',
+      body: JSON.stringify(server)
+    }),
+  deleteMcpServer: (name: string) =>
+    fetchJson<McpServer[]>(`/mcp/servers/${encodeURIComponent(name)}`, { method: 'DELETE' }),
 
   /**
    * The agent's persona file — `~/.alpha/agents/{id}.md` — as text.
@@ -259,6 +281,10 @@ export const apiService = {
   getSquads: () => fetchJson<Squad[]>('/squads'),
   createSquad: (squad: Partial<Squad>) =>
     fetchJson<Squad>('/squads', { method: 'POST', body: JSON.stringify(squad) }),
+  updateSquad: (id: string, updates: Partial<Squad>) =>
+    fetchJson<Squad>(`/squads/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
+  deleteSquad: (id: string) =>
+    fetchJson<{ success: boolean }>(`/squads/${id}`, { method: 'DELETE' }),
 
   // Skills
   getSkills: () => fetchJson<Skill[]>('/skills'),
@@ -278,13 +304,28 @@ export const apiService = {
   retryRun: (id: string) =>
     fetchJson<PrototypeRun>(`/runs/${id}/retry`, { method: 'POST' }),
 
+  // Squad runs
+  getSquadRuns: () => fetchJson<SquadRun[]>('/squad-runs'),
+  getSquadRun: (id: string) =>
+    fetchJson<SquadRun & { runs: PrototypeRun[] }>(`/squad-runs/${id}`),
+  runSquad: (squadId: string, payload: { issueId: string; plan?: string[]; mission?: string }) =>
+    fetchJson<SquadRun>(`/squads/${squadId}/run`, { method: 'POST', body: JSON.stringify(payload) }),
+
   // Chat
   getChatThreads: () => fetchJson<ChatThread[]>('/chat/threads'),
   createChatThread: (thread: Partial<ChatThread>) =>
     fetchJson<ChatThread>('/chat/threads', { method: 'POST', body: JSON.stringify(thread) }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
   sendChatMessage: (payload: { threadId: string; content: string; senderName?: string }) =>
-    fetchJson<{ userMessage: ChatMessage; agentMessage: ChatMessage }>('/chat/messages', {
+    fetchJson<{
+      userMessage: ChatMessage;
+      agentMessage: ChatMessage;
+      /**
+       * Every reply. More than one when a squad was addressed — each member
+       * answers in turn. `agentMessage` is the first of these.
+       */
+      agentMessages?: ChatMessage[];
+    }>('/chat/messages', {
       method: 'POST',
       body: JSON.stringify(payload)
     }),

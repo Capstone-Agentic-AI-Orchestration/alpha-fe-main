@@ -103,6 +103,10 @@ export interface PrototypeRun {
   deletions?: number;
   testSummary?: string;
   usage?: RunUsage;
+  /** Set when this run is one member's turn inside a squad run. */
+  squadRunId?: string;
+  /** This member's position in the squad's order, 0-based. */
+  squadOrder?: number;
 }
 
 /**
@@ -121,6 +125,29 @@ export interface RunUsage {
   thinkingTokens?: number;
   costUsd?: number;
   numTurns?: number;
+}
+
+/**
+ * One squad working one issue: an ordered list of member runs sharing a branch.
+ *
+ * Until this existed, "run squad" incremented a counter and set a 4.5 second
+ * timer — no endpoint, no process, no agent.
+ */
+export interface SquadRun {
+  id: string;
+  squadId: string;
+  issueId: string;
+  projectId: string;
+  branchName: string;
+  memberAgentIds: string[];
+  currentMemberIndex: number;
+  status: 'running' | 'awaiting_approval' | 'failed' | 'cancelled';
+  mission: string;
+  plan: string[];
+  /** Why the squad stopped early, when it did. */
+  stoppedReason?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ToastMessage {
@@ -302,7 +329,55 @@ export interface Agent {
   readiness?: AgentReadiness;
 }
 
-export type AgentReadinessStatus = 'ready' | 'signed_out' | 'not_installed' | 'unknown';
+/**
+ * One MCP server in Alpha's catalog.
+ *
+ * Alpha's own registry is the whole list an agent can be granted from — the
+ * runner passes `--strict-mcp-config` unconditionally, so nothing configured
+ * for the machine owner's personal CLI is reachable from here.
+ */
+/** How a server is reached: a process Alpha spawns, or a URL it connects to. */
+export type McpTransport = 'stdio' | 'http' | 'sse';
+
+export interface McpServer {
+  name: string;
+  transport: McpTransport;
+
+  /** stdio only — the command Alpha spawns, and its argv. */
+  command?: string;
+  args?: string[];
+  /**
+   * Key names only. The daemon never returns env values, because a catalog
+   * entry can carry an API token and the panel only needs to count and replace
+   * them, never read them back.
+   */
+  envKeys?: string[];
+
+  /** http/sse only — the endpoint the CLI connects to. */
+  url?: string;
+  /** Header names only, for the same reason envKeys omits values. */
+  headerKeys?: string[];
+
+  /** Ships with Alpha; lives in code, not the catalog file. */
+  builtin: boolean;
+  /** A catalog entry of the same name is shadowing a built-in. */
+  overridden: boolean;
+  /** Agent ids granting this server, so a delete can name them before removing. */
+  grantedTo: string[];
+}
+
+/** What the panel sends when adding or editing a catalog entry. */
+export type McpServerInput =
+  | { type?: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
+  | { type: 'http' | 'sse'; url: string; headers?: Record<string, string> };
+
+export type AgentReadinessStatus =
+  | 'ready'
+  | 'signed_out'
+  | 'not_installed'
+  /** CLI is fine; the model this agent is pinned to is not offered any more. */
+  | 'stale_model'
+  | 'unknown';
 
 export interface AgentReadiness {
   status: AgentReadinessStatus;

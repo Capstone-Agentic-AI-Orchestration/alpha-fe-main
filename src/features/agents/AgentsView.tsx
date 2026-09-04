@@ -27,6 +27,7 @@ import {
   isManagedByFile,
   MANAGED_INPUT_CLASS
 } from '@/features/agents/FileManagedBadge';
+import { AgentMcpGrants } from '@/features/agents/AgentMcpGrants';
 import {
   AgentReadinessDot,
   AgentReadinessNotice
@@ -804,7 +805,7 @@ export const AgentsView: React.FC = () => {
               {profileTab === 'skills' && (
                 <div className="space-y-3">
                   <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                    Available MCP Tool Bindings
+                    Skills
                   </div>
 
                   <div className="space-y-1.5">
@@ -939,10 +940,12 @@ export const AgentsView: React.FC = () => {
               {profileTab === 'mcp' && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Connected MCP Server Sockets</label>
-                    <div className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 font-mono text-xs text-gray-300">
-                      {(selectedAgent.mcpServers || []).join(', ') || 'git, filesystem, browser'}
-                    </div>
+                    <label className="text-[11px] font-medium text-gray-400">MCP Servers</label>
+                    <AgentMcpGrants
+                      agent={selectedAgent}
+                      onChange={next => updateAgent(selectedAgent.id, { mcpServers: next })}
+                      onOpenFile={() => setProfileTab('persona')}
+                    />
                   </div>
 
                   <div className="space-y-1.5">

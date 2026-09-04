@@ -16,27 +16,42 @@ import { Agent } from '@/shared/types';
  * anyone else has to find out one broken chat at a time.
  */
 
-/** True when this agent can actually answer right now. */
+/**
+ * True when this agent can actually answer right now.
+ *
+ * 'stale_model' counts as cannot: the CLI is healthy, but it will reject the
+ * model this agent is pinned to, and the error it returns blames the install
+ * rather than the pin. Better to say so before the message is sent.
+ */
 export function canAnswer(agent: Pick<Agent, 'readiness'>): boolean {
   const status = agent.readiness?.status;
   // 'unknown' is not a failure — a scan may simply not have run yet, and
   // blocking on it would be worse than letting the turn try.
-  return status !== 'signed_out' && status !== 'not_installed';
+  return status !== 'signed_out' && status !== 'not_installed' && status !== 'stale_model';
 }
 
 /** Compact marker for a roster row, where there is no space for a sentence. */
 export function AgentReadinessDot({ agent }: { agent: Pick<Agent, 'readiness'> }) {
   if (canAnswer(agent)) return null;
 
-  const signedOut = agent.readiness?.status === 'signed_out';
+  const status = agent.readiness?.status;
+
+  // Three distinct fixes, so three distinct markers: sign in, install, or
+  // repick the model. Collapsing them would send someone to the wrong page.
+  const { Icon, label } =
+    status === 'signed_out'
+      ? { Icon: LogIn, label: 'signed out' }
+      : status === 'stale_model'
+        ? { Icon: AlertTriangle, label: 'model retired' }
+        : { Icon: PackageX, label: 'not installed' };
 
   return (
     <span
       title={agent.readiness?.detail}
       className="flex items-center gap-1 text-[10px] text-amber-300 font-medium whitespace-nowrap"
     >
-      {signedOut ? <LogIn size={10} /> : <PackageX size={10} />}
-      {signedOut ? 'signed out' : 'not installed'}
+      <Icon size={10} />
+      {label}
     </span>
   );
 }

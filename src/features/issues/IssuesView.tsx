@@ -39,7 +39,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
   const { 
     issues, 
     updateIssueStatus, 
-    updateIssue, 
+    updateIssue,
+    addIssueComment, 
     runAgentOnIssue, 
     prototypeRuns,
     projects, 
@@ -179,7 +180,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
       content: newCommentContent.trim(),
       createdAt: new Date().toISOString()
     };
-    updateIssue(selectedIssue.id, { comments: [...selectedIssue.comments, newComment] });
+    addIssueComment(selectedIssue.id, newComment);
     setNewCommentContent('');
   };
 
