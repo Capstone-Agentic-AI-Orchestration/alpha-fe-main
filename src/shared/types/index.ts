@@ -102,6 +102,52 @@ export interface PrototypeRun {
   insertions?: number;
   deletions?: number;
   testSummary?: string;
+  usage?: RunUsage;
+  /** Set when this run is one member's turn inside a squad run. */
+  squadRunId?: string;
+  /** This member's position in the squad's order, 0-based. */
+  squadOrder?: number;
+}
+
+/**
+ * Token and cost figures the CLI reported for a run.
+ *
+ * Every field is optional and absence is meaningful: it means the CLI did not
+ * report that figure, not that the figure was zero. codex reports no cache
+ * reads, Claude no separate thinking tokens, Antigravity no cost — so render
+ * a missing value as unknown rather than as 0.
+ */
+export interface RunUsage {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  thinkingTokens?: number;
+  costUsd?: number;
+  numTurns?: number;
+}
+
+/**
+ * One squad working one issue: an ordered list of member runs sharing a branch.
+ *
+ * Until this existed, "run squad" incremented a counter and set a 4.5 second
+ * timer — no endpoint, no process, no agent.
+ */
+export interface SquadRun {
+  id: string;
+  squadId: string;
+  issueId: string;
+  projectId: string;
+  branchName: string;
+  memberAgentIds: string[];
+  currentMemberIndex: number;
+  status: 'running' | 'awaiting_approval' | 'failed' | 'cancelled';
+  mission: string;
+  plan: string[];
+  /** Why the squad stopped early, when it did. */
+  stoppedReason?: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ToastMessage {
@@ -114,12 +160,21 @@ export interface ToastMessage {
 export type ProjectStatus = 'planned' | 'in_progress' | 'paused' | 'completed' | 'cancelled' | 'active';
 export type ProjectPriority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 
+/** Stacks the scaffold can generate, in the order the UI offers them. */
+export type ScaffoldStack = 'nodejs' | 'nestjs' | 'nextjs' | 'react';
+
 export interface ProjectResource {
   id: string;
   type: 'github_repo' | 'local_dir';
   name: string;
   pathOrUrl: string;
   branchOrMachine?: string;
+  /** Stack the scaffold was generated from. Absent on attached repositories. */
+  stack?: ScaffoldStack;
+  /** Repository shape the scaffold used. Absent on attached repositories. */
+  shape?: string;
+  /** Managed working copy on this machine, when Alpha created or cloned it. */
+  localPath?: string;
 }
 
 export interface Milestone {
@@ -145,6 +200,12 @@ export interface Project {
   leadAgentId?: string;
   leadSquadId?: string;
   resources?: ProjectResource[];
+  /**
+   * GitHub organization every repository for this project is created under.
+   * Alpha creates no personal repositories, so a project without one cannot
+   * create a repository until it is set.
+   */
+  githubOrg?: string;
   progressPercentage?: number;
   totalIssues?: number;
   completedIssues?: number;
@@ -205,8 +266,15 @@ export interface AgentRunLog {
 export interface AgentStats {
   totalRuns: number;
   successRate: number;
+  /** Summed across this agent's runs, cache reads included. 0 until it runs. */
   tokensUsed: number;
   avgLatencyMs: number;
+  /**
+   * What the CLIs said the equivalent API calls would have cost. Alpha spawns
+   * subscription CLIs, so this is a comparison figure, not a bill — and it is
+   * absent for any provider whose CLI does not report cost.
+   */
+  costUsd?: number;
 }
 
 export interface Agent {
@@ -240,6 +308,114 @@ export interface Agent {
   stats: AgentStats;
   status: AgentStatus;
   currentTask?: string;
+  /**
+   * Fields whose value comes from the agent's persona file rather than the
+   * database, and which therefore cannot be changed from these controls.
+   *
+   * The daemon merges the file over the row before returning an agent, so the
+   * values here are what the agent will actually run with. This list is what
+   * lets the UI say so instead of offering an input that silently reverts.
+   */
+  managedByFile?: string[];
+  /**
+   * Whether the CLI behind this agent is usable on this machine.
+   *
+   * Alpha stores no provider credentials — agents run by spawning `claude`,
+   * `codex` or `agy`, which authenticate from the machine's own keychain. So an
+   * agent is only as available as its CLI, and that differs per person. Shown
+   * on the roster because that is where someone looks before sending a message,
+   * rather than after one has already failed.
+   */
+  readiness?: AgentReadiness;
+}
+
+/**
+ * One MCP server in Alpha's catalog.
+ *
+ * Alpha's own registry is the whole list an agent can be granted from — the
+ * runner passes `--strict-mcp-config` unconditionally, so nothing configured
+ * for the machine owner's personal CLI is reachable from here.
+ */
+/** How a server is reached: a process Alpha spawns, or a URL it connects to. */
+export type McpTransport = 'stdio' | 'http' | 'sse';
+
+export interface McpServer {
+  name: string;
+  transport: McpTransport;
+
+  /** stdio only — the command Alpha spawns, and its argv. */
+  command?: string;
+  args?: string[];
+  /**
+   * Key names only. The daemon never returns env values, because a catalog
+   * entry can carry an API token and the panel only needs to count and replace
+   * them, never read them back.
+   */
+  envKeys?: string[];
+
+  /** http/sse only — the endpoint the CLI connects to. */
+  url?: string;
+  /** Header names only, for the same reason envKeys omits values. */
+  headerKeys?: string[];
+
+  /** Ships with Alpha; lives in code, not the catalog file. */
+  builtin: boolean;
+  /** A catalog entry of the same name is shadowing a built-in. */
+  overridden: boolean;
+  /** Agent ids granting this server, so a delete can name them before removing. */
+  grantedTo: string[];
+}
+
+/** What the panel sends when adding or editing a catalog entry. */
+export type McpServerInput =
+  | { type?: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
+  | { type: 'http' | 'sse'; url: string; headers?: Record<string, string> };
+
+export type AgentReadinessStatus =
+  | 'ready'
+  | 'signed_out'
+  | 'not_installed'
+  /** CLI is fine; the model this agent is pinned to is not offered any more. */
+  | 'stale_model'
+  | 'unknown';
+
+export interface AgentReadiness {
+  status: AgentReadinessStatus;
+  /** One sentence naming what to do about it. */
+  detail: string;
+  /** The command to run, when there is one. */
+  command?: string;
+}
+
+/**
+ * An agent's persona file on the machine running the daemon.
+ *
+ * The file is the editable source for the system prompt, and its frontmatter
+ * overrides the matching database columns. `effective` is the merged result —
+ * what the agent will actually be on its next run — which neither the file nor
+ * the agent record shows on its own.
+ */
+export interface AgentPersonaFile {
+  agentId: string;
+  /** Absolute path on the daemon's machine, shown so the file can be found. */
+  path: string;
+  exists: boolean;
+  /** Raw markdown, frontmatter included. */
+  content: string;
+  /** Values the file declared but that had to be ignored, in plain language. */
+  warnings: string[];
+  effective: {
+    name: string;
+    role: AgentRole;
+    modelProvider: ModelProvider;
+    modelName: string;
+    autonomyLevel: AgentAutonomyLevel;
+    skills: string[];
+    mcpServers: string[];
+    systemPromptChars: number;
+    /** 'agents/{id}.md' when the file supplied the prompt, else 'alpha.db'. */
+    promptSource: string;
+  };
 }
 
 export type SquadTopology = 'hierarchical' | 'sequential' | 'swarm' | 'consensus';
@@ -612,19 +788,3 @@ export interface Estimate {
 }
 
 /** Actual spend accrued against an approved estimate. */
-export interface BudgetLedger {
-  projectId: string;
-  estimateId: string;
-  baseline: number;
-  actualToDate: number;
-  /** Straight-line projection to completion at the current burn rate. */
-  projectedFinal: number;
-  entries: {
-    id: string;
-    date: string;
-    label: string;
-    lineId: string;
-    amount: number;
-    source: 'agent_run' | 'logged_hours' | 'infrastructure';
-  }[];
-}

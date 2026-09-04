@@ -4,7 +4,6 @@ import {
   Terminal, 
   Search, 
   Code, 
-  Database, 
   Globe, 
   FolderKanban, 
   Command, 
@@ -18,8 +17,7 @@ import {
   ArrowDown, 
   ArrowUp, 
   Table as TableIcon, 
-  X,
-  RefreshCw
+  X
 } from 'lucide-react';
 import { SkillCategory } from '@/shared/types';
 
@@ -55,7 +53,6 @@ export const SkillsView: React.FC = () => {
     'Browser & Web',
     'Terminal & Shell',
     'Git & GitHub',
-    'MCP Servers',
     'Cloud & API'
   ];
 
@@ -66,7 +63,6 @@ export const SkillsView: React.FC = () => {
       case 'Browser & Web': return <Globe className="w-3.5 h-3.5 text-blue-400" />;
       case 'Terminal & Shell': return <Command className="w-3.5 h-3.5 text-amber-400" />;
       case 'Git & GitHub': return <GitBranch className="w-3.5 h-3.5 text-purple-400" />;
-      case 'MCP Servers': return <Database className="w-3.5 h-3.5 text-pink-400" />;
       case 'Cloud & API': return <Box className="w-3.5 h-3.5 text-indigo-400" />;
       default: return <Terminal className="w-3.5 h-3.5 text-gray-400" />;
     }
@@ -125,14 +121,6 @@ export const SkillsView: React.FC = () => {
           <span className="text-xs text-gray-500 font-mono">{enabledCount}/{skills.length} active</span>
         </div>
 
-        {/* Scan / Register Tools button */}
-        <button
-          onClick={() => {}}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
-        >
-          <RefreshCw className="w-3.5 h-3.5" />
-          <span>Scan MCP tools</span>
-        </button>
       </div>
 
       {/* ================= SEARCH & ACTION ROW ================= */}
@@ -144,7 +132,7 @@ export const SkillsView: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search tools & MCP schemas..."
+            placeholder="Search skills..."
             className="w-full bg-[#14151B] border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
@@ -300,9 +288,6 @@ export const SkillsView: React.FC = () => {
                       <span className="font-medium text-white truncate group-hover:text-gray-200">
                         {skill.name}
                       </span>
-                      {skill.source === 'mcp_server' && (
-                        <span className="text-[10px] text-cyan-400 font-mono">MCP</span>
-                      )}
                     </div>
 
                     {skill.commandExample && (

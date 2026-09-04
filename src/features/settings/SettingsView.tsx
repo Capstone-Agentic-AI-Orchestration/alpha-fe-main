@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { AgentAutonomyLevel } from '@/shared/types';
 import { GitHubConnectionPanel } from './GitHubConnectionPanel';
+import { McpServersPanel } from './McpServersPanel';
 
 export const SettingsView: React.FC = () => {
   const { settings, updateSettings, role } = useApp();
@@ -184,8 +185,17 @@ export const SettingsView: React.FC = () => {
             </div>
           )}
 
-          {/* API Keys Vault Tab */}
-          {activeTab === 'integrations' && <GitHubConnectionPanel />}
+          {/* Connected Accounts: external wiring, per machine. GitHub is an
+              account Alpha signs into; MCP servers are tools it may spawn.
+              Both are 'what this machine can reach', so they share a tab. */}
+          {activeTab === 'integrations' && (
+            <div className="space-y-8">
+              <GitHubConnectionPanel />
+              <div className="border-t border-white/5 pt-6">
+                <McpServersPanel />
+              </div>
+            </div>
+          )}
 
           {activeTab === 'keys' && (
             <div className="p-6 rounded-2xl bg-surface-200/50 border border-white/10 space-y-4">

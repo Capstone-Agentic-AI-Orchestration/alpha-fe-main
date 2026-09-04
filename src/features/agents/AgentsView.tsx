@@ -17,9 +17,22 @@ import {
   Server, 
   Eye, 
   EyeOff, 
-  Trash2
+  Trash2,
+  Upload
 } from 'lucide-react';
 import { CreateAgentModal } from '@/features/agents/CreateAgentModal';
+import { PersonaFileEditor } from '@/features/agents/PersonaFileEditor';
+import {
+  FileManagedBadge,
+  isManagedByFile,
+  MANAGED_INPUT_CLASS
+} from '@/features/agents/FileManagedBadge';
+import { AgentMcpGrants } from '@/features/agents/AgentMcpGrants';
+import {
+  AgentReadinessDot,
+  AgentReadinessNotice
+} from '@/features/agents/AgentReadinessNotice';
+
 import { Agent, AgentAccessLevel, ModelProvider } from '@/shared/types';
 import { providerOptions, modelsForProvider, defaultModelFor } from '@/shared/lib/providers';
 
@@ -35,6 +48,7 @@ export const AgentsView: React.FC = () => {
     bulkUpdateAgents, 
     bulkArchiveAgents, 
     setActiveTab, 
+    importAgent,
     setActiveChatAgentId 
   } = useApp();
 
@@ -58,8 +72,38 @@ export const AgentsView: React.FC = () => {
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [bulkAccessMenuOpen, setBulkAccessMenuOpen] = useState<boolean>(false);
 
+  /**
+   * Import an agent from a persona file a teammate exported.
+   *
+   * A hidden file input rather than a drop zone: this is a rare action, and a
+   * drop target competing with the roster for the same pixels is worse than a
+   * button that opens the picker.
+   */
+  const importInputRef = React.useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+
+  const handleImportFile = async (fileList: FileList | null) => {
+    const file = fileList?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    try {
+      const { agent, warnings } = await importAgent(await file.text());
+      // Open the imported agent so its warnings, and its blank model, are seen
+      // rather than left to be discovered later.
+      setSelectedAgentId(agent.id);
+      setProfileTab(warnings.length ? 'persona' : 'instructions');
+    } catch (err: any) {
+      window.alert(err?.message ?? 'Could not import that persona file.');
+    } finally {
+      setImporting(false);
+      // Reset so importing the same file twice still fires a change event.
+      if (importInputRef.current) importInputRef.current.value = '';
+    }
+  };
+
   // Pop-up Sub-tabs
-  const [profileTab, setProfileTab] = useState<'instructions' | 'skills' | 'env' | 'mcp' | 'history'>('instructions');
+  const [profileTab, setProfileTab] = useState<'instructions' | 'persona' | 'skills' | 'env' | 'mcp' | 'history'>('instructions');
   const [revealedEnvKeys, setRevealedEnvKeys] = useState<Record<string, boolean>>({});
   const [newEnvKey, setNewEnvKey] = useState<string>('');
   const [newEnvValue, setNewEnvValue] = useState<string>('');
@@ -224,6 +268,24 @@ export const AgentsView: React.FC = () => {
           <h1 className="text-sm font-semibold text-white tracking-wide">Agents</h1>
           <span className="text-xs text-gray-500 font-mono">{agents.length}</span>
         </div>
+
+        {/* Import from a shared persona file */}
+        <input
+          ref={importInputRef}
+          type="file"
+          accept=".md,text/markdown"
+          className="hidden"
+          onChange={(e) => void handleImportFile(e.target.files)}
+        />
+        <button
+          onClick={() => importInputRef.current?.click()}
+          disabled={importing}
+          title="Import an agent from a persona file a teammate shared"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-xs font-medium text-gray-300 hover:text-white transition-colors shadow-sm disabled:opacity-40"
+        >
+          <Upload className="w-3.5 h-3.5" />
+          <span>{importing ? 'Importing...' : 'Import'}</span>
+        </button>
 
         {/* + New agent button */}
         <button
@@ -456,6 +518,7 @@ export const AgentsView: React.FC = () => {
                 {/* 2. Status (Clean Dot & Text - No Pill Container) */}
                 <div className="col-span-2">
                   {renderStatus(agent)}
+                  <AgentReadinessDot agent={agent} />
                 </div>
 
                 {/* 3. Machine & Model (Plain Text) */}
@@ -568,6 +631,7 @@ export const AgentsView: React.FC = () => {
             <div className="flex items-center gap-1 px-5 pt-2 border-b border-white/5 bg-[#15161D] text-xs">
               {[
                 { id: 'instructions', label: 'Instructions' },
+                { id: 'persona', label: 'Persona File' },
                 { id: 'skills', label: 'Skills & Tools' },
                 { id: 'env', label: 'Secrets & Env' },
                 { id: 'mcp', label: 'MCP & CLI' },
@@ -589,12 +653,23 @@ export const AgentsView: React.FC = () => {
 
             {/* Modal Body Content */}
             <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs text-gray-300">
+              {/* Said before any tab, because it decides whether the rest of
+                  this profile can do anything at all. */}
+              <AgentReadinessNotice
+                agent={selectedAgent}
+                onOpenRuntimes={() => setActiveTab('runtimes')}
+              />
               
               {/* Tab 1: Instructions & Persona */}
               {profileTab === 'instructions' && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Specialization Description</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-medium text-gray-400">Specialization Description</label>
+                      {isManagedByFile(selectedAgent, 'description') && (
+                        <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                      )}
+                    </div>
                     <input
                       type="text"
                       value={selectedAgent.description || ''}
@@ -606,19 +681,40 @@ export const AgentsView: React.FC = () => {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-medium text-gray-400">System Prompt & Persona</label>
-                      <span className="text-[10px] text-gray-500 font-mono">Auto-saved</span>
+                      {isManagedByFile(selectedAgent, 'systemPrompt') ? (
+                        <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                      ) : (
+                        <span className="text-[10px] text-gray-500 font-mono">Auto-saved</span>
+                      )}
                     </div>
                     <textarea
                       rows={7}
                       value={selectedAgent.systemPrompt || ''}
+                      readOnly={isManagedByFile(selectedAgent, 'systemPrompt')}
                       onChange={(e) => updateAgent(selectedAgent.id, { systemPrompt: e.target.value })}
-                      className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30"
+                      className={`w-full bg-[#0A0B0E] border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30 ${
+                        isManagedByFile(selectedAgent, 'systemPrompt') ? MANAGED_INPUT_CLASS : ''
+                      }`}
                     />
+                    {/* Say so here rather than let someone edit this field and
+                        wonder why the agent ignored it. */}
+                    <button
+                      onClick={() => setProfileTab('persona')}
+                      className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors text-left"
+                    >
+                      The agent&apos;s persona file overrides this when it has a body —
+                      <span className="underline underline-offset-2 ml-1">open Persona File</span>
+                    </button>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
                     <div>
-                      <label className="text-[10px] text-gray-500 font-mono uppercase block mb-1">Provider</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500 font-mono uppercase">Provider</label>
+                        {isManagedByFile(selectedAgent, 'modelProvider') && (
+                          <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                        )}
+                      </div>
                       <select
                         value={selectedAgent.modelProvider || 'Anthropic'}
                         onChange={(e) => {
@@ -639,7 +735,12 @@ export const AgentsView: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-gray-500 font-mono uppercase block mb-1">Model Name</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500 font-mono uppercase">Model Name</label>
+                        {isManagedByFile(selectedAgent, 'modelName') && (
+                          <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                        )}
+                      </div>
                       {/* A real dropdown of the models this provider reported.
                           Falls back to free text only when the scan found none
                           (runtime offline, or its model list never loaded). */}
@@ -677,7 +778,12 @@ export const AgentsView: React.FC = () => {
                     </div>
 
                     <div>
-                      <label className="text-[10px] text-gray-500 font-mono uppercase block mb-1">Autonomy Level</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500 font-mono uppercase">Autonomy Level</label>
+                        {isManagedByFile(selectedAgent, 'autonomyLevel') && (
+                          <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                        )}
+                      </div>
                       <select
                         value={selectedAgent.autonomyLevel || 'Semi-Autonomous (Requires Approval)'}
                         onChange={(e) => updateAgent(selectedAgent.id, { autonomyLevel: e.target.value as any })}
@@ -692,11 +798,14 @@ export const AgentsView: React.FC = () => {
                 </div>
               )}
 
-              {/* Tab 2: Skills & MCP Tools */}
+              {/* Tab 2: The persona file itself — overrides the fields above */}
+              {profileTab === 'persona' && <PersonaFileEditor agentId={selectedAgent.id} />}
+
+              {/* Tab 3: Skills & MCP Tools */}
               {profileTab === 'skills' && (
                 <div className="space-y-3">
                   <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                    Available MCP Tool Bindings
+                    Skills
                   </div>
 
                   <div className="space-y-1.5">
@@ -831,10 +940,12 @@ export const AgentsView: React.FC = () => {
               {profileTab === 'mcp' && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Connected MCP Server Sockets</label>
-                    <div className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 font-mono text-xs text-gray-300">
-                      {(selectedAgent.mcpServers || []).join(', ') || 'git, filesystem, browser'}
-                    </div>
+                    <label className="text-[11px] font-medium text-gray-400">MCP Servers</label>
+                    <AgentMcpGrants
+                      agent={selectedAgent}
+                      onChange={next => updateAgent(selectedAgent.id, { mcpServers: next })}
+                      onOpenFile={() => setProfileTab('persona')}
+                    />
                   </div>
 
                   <div className="space-y-1.5">
@@ -843,9 +954,17 @@ export const AgentsView: React.FC = () => {
                       type="text"
                       value={selectedAgent.customCliArgs || ''}
                       onChange={(e) => updateAgent(selectedAgent.id, { customCliArgs: e.target.value })}
-                      placeholder="e.g. --strict-mode --max-depth 4"
+                      placeholder="e.g. --debug --fallback-model haiku"
                       className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-white/30"
                     />
+                    {/* These flags are now actually passed to the CLI, so say
+                        which ones will not be — a refused flag is otherwise
+                        indistinguishable from one that did nothing. */}
+                    <p className="text-[10px] text-gray-600 leading-snug">
+                      Passed to the agent&apos;s CLI. Flags Alpha sets itself are ignored —
+                      model, session, output format, tool permissions, MCP config and the
+                      system prompt.
+                    </p>
                   </div>
                 </div>
               )}

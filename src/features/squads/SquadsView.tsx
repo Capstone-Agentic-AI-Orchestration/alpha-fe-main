@@ -18,7 +18,25 @@ import {
 import { CreateSquadModal } from '@/features/squads/CreateSquadModal';
 
 export const SquadsView: React.FC = () => {
-  const { squads, agents, triggerSquadRun } = useApp();
+  const { squads, agents, issues, projects, triggerSquadRun } = useApp();
+
+  /**
+   * Which squad is waiting to be pointed at an issue.
+   *
+   * "Launch" used to fire immediately, because the run it started was a 4.5
+   * second timer that needed nothing to work on. A real squad run edits a
+   * repository on a branch, so it has to be told which issue — asking is the
+   * whole difference between a button and a build.
+   */
+  const [launchSquadId, setLaunchSquadId] = useState<string | null>(null);
+
+  const launchSquad = squads.find(s => s.id === launchSquadId);
+
+  /** Anything not already delivered. A squad cannot work on a closed issue. */
+  const runnableIssues = useMemo(
+    () => issues.filter(i => i.status !== 'done'),
+    [issues]
+  );
   
   // Selected squad for centered pop-up modal
   const [selectedSquadId, setSelectedAgentSquadId] = useState<string | null>(null);
@@ -320,7 +338,7 @@ export const SquadsView: React.FC = () => {
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      triggerSquadRun(squad.id);
+                      setLaunchSquadId(squad.id);
                     }}
                     className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors"
                     title="Launch Swarm Run"
@@ -380,7 +398,7 @@ export const SquadsView: React.FC = () => {
 
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => triggerSquadRun(selectedSquad.id)}
+                  onClick={() => setLaunchSquadId(selectedSquad.id)}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs transition-colors"
                 >
                   <Play className="w-3.5 h-3.5 fill-white" />
@@ -553,7 +571,7 @@ export const SquadsView: React.FC = () => {
               </span>
               <button
                 onClick={() => {
-                  triggerSquadRun(selectedSquad.id);
+                  setLaunchSquadId(selectedSquad.id);
                   setSelectedAgentSquadId(null);
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
@@ -572,6 +590,72 @@ export const SquadsView: React.FC = () => {
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
       />
+
+      {/* ================= LAUNCH: PICK AN ISSUE ================= */}
+      {launchSquad && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-6"
+          onClick={() => setLaunchSquadId(null)}
+        >
+          <div
+            className="w-full max-w-lg rounded-xl border border-white/10 bg-[#15161D] shadow-2xl"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="border-b border-white/5 p-4">
+              <h2 className="text-sm font-semibold text-white">Run {launchSquad.name}</h2>
+              <p className="mt-1 text-[11px] text-gray-500">
+                {launchSquad.memberAgentIds.length} member(s) will work in sequence on one branch, each
+                handed a summary of what the members before it did. Pick the issue they work on.
+              </p>
+            </div>
+
+            <div className="max-h-80 overflow-y-auto p-2">
+              {runnableIssues.length === 0 ? (
+                <p className="p-6 text-center text-xs text-gray-500">
+                  No open issues. A squad works on an issue, so there is nothing to run yet.
+                </p>
+              ) : (
+                runnableIssues.map(issue => (
+                  <button
+                    key={issue.id}
+                    onClick={async () => {
+                      setLaunchSquadId(null);
+                      await triggerSquadRun(launchSquad.id, issue.id);
+                    }}
+                    className="flex w-full items-center gap-3 rounded-lg p-3 text-left transition-colors hover:bg-white/5"
+                  >
+                    <span className="font-mono text-[11px] text-gray-500">{issue.identifier}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs text-gray-200">{issue.title}</span>
+                    <span className="font-mono text-[10px] uppercase text-gray-600">
+                      {projects.find(p => p.id === issue.projectId)?.key ?? ''}
+                    </span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="flex items-center justify-between border-t border-white/5 p-3">
+              {/*
+                * Only Sequential runs. Hierarchical and Consensus were always
+                * selectable and never did anything different — the daemon
+                * refuses them rather than running them as Sequential under
+                * another name.
+                */}
+              <span className="font-mono text-[10px] uppercase tracking-wider text-gray-600">
+                {String(launchSquad.topology).toLowerCase() === 'sequential'
+                  ? 'Sequential'
+                  : `${launchSquad.topology} is not implemented yet`}
+              </span>
+              <button
+                onClick={() => setLaunchSquadId(null)}
+                className="px-3 py-1.5 text-xs text-gray-400 transition-colors hover:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

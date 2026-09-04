@@ -13,10 +13,10 @@ import {
   SlidersHorizontal,
   Plus,
   Flame,
-  Asterisk
-} from 'lucide-react';
+  Asterisk, Users} from 'lucide-react';
 import { RoleBadge } from '@/shared/components/Badge';
 import { ChatMessage, ToolExecutionRecord } from '@/shared/types';
+import { AgentReadinessNotice } from '@/features/agents/AgentReadinessNotice';
 
 export const ChatView: React.FC = () => {
   const { 
@@ -32,9 +32,11 @@ export const ChatView: React.FC = () => {
     skills,
     activeChatAgentId,
     updateAgent,
+    setActiveTab,
     role,
     users
   } = useApp();
+  const { squads } = useApp();
 
   const [input, setInput] = useState('');
   const [expandedThinking, setExpandedThinking] = useState<Record<string, boolean>>({});
@@ -81,25 +83,59 @@ export const ChatView: React.FC = () => {
     return match ? match[1].toLowerCase() : null;
   })();
 
-  const mentionMatches = mentionQuery === null
+  /**
+   * Agents first, then squads.
+   *
+   * A squad is offered as one entry that expands to its members when the
+   * daemon resolves it — addressing four agents without typing four names.
+   * The completion inserts the squad's name with the spaces removed, which is
+   * what chatService matches on; it deliberately does NOT match a squad's
+   * first word, because "Alpha Core Execution Squad" would otherwise make
+   * "@Alpha" summon four agents instead of Alpha answering.
+   */
+  type MentionOption =
+    | { kind: 'agent'; id: string; label: string; detail: string; token: string; agent: any }
+    | { kind: 'squad'; id: string; label: string; detail: string; token: string };
+
+  const mentionMatches: MentionOption[] = mentionQuery === null
     ? []
-    : agents
-        .filter(a => !a.isArchived)
-        .filter(a =>
-          !mentionQuery ||
-          a.name.toLowerCase().replace(/\s+/g, '').includes(mentionQuery) ||
-          a.role.toLowerCase().replace(/\s+/g, '').includes(mentionQuery)
-        )
-        .slice(0, 6);
+    : [
+        ...agents
+          .filter(a => !a.isArchived)
+          .filter(a =>
+            !mentionQuery ||
+            a.name.toLowerCase().replace(/\s+/g, '').includes(mentionQuery) ||
+            a.role.toLowerCase().replace(/\s+/g, '').includes(mentionQuery)
+          )
+          .map((a): MentionOption => ({
+            kind: 'agent',
+            id: a.id,
+            label: a.name,
+            detail: `${a.role} · ${a.modelProvider}`,
+            // First name is enough for an agent and is what people type.
+            token: a.name.split(' ')[0],
+            agent: a
+          })),
+        ...squads
+          .filter(sq =>
+            !mentionQuery || sq.name.toLowerCase().replace(/\s+/g, '').includes(mentionQuery)
+          )
+          .map((sq): MentionOption => ({
+            kind: 'squad',
+            id: sq.id,
+            label: sq.name,
+            detail: `${sq.memberAgentIds.length} agents, in sequence`,
+            token: sq.name.replace(/\s+/g, '')
+          }))
+      ].slice(0, 6);
 
   const [mentionIndex, setMentionIndex] = useState(0);
   useEffect(() => { setMentionIndex(0); }, [input]);
 
-  const applyMention = (agentName: string) => {
-    // Replace the partial @token with the agent's first name — that is what
-    // chatService.resolveMentions() matches on.
-    const firstName = agentName.split(' ')[0];
-    setInput(prev => prev.replace(/(^|\s)@([a-zA-Z0-9_-]*)$/, `$1@${firstName} `));
+  const applyMention = (token: string) => {
+    // The token is what chatService.resolveMentions() matches on: an agent's
+    // first name, or a squad's name with the spaces removed.
+    setInput(prev => prev.replace(/(^|\s)@([a-zA-Z0-9_-]*)$/, `$1@${token} `));
     inputRef.current?.focus();
   };
 
@@ -115,7 +151,7 @@ export const ChatView: React.FC = () => {
     } else if (e.key === 'Enter' || e.key === 'Tab') {
       // Enter completes the mention instead of sending a half-typed name.
       e.preventDefault();
-      applyMention(mentionMatches[mentionIndex].name);
+      applyMention(mentionMatches[mentionIndex].token);
     } else if (e.key === 'Escape') {
       setMentionIndex(0);
       setInput(prev => prev + ' ');
@@ -445,41 +481,60 @@ export const ChatView: React.FC = () => {
             </div>
 
             {/* Input Composer Bar */}
-            <div className="p-4 sm:p-5 border-t border-white/[0.08] bg-[#14151B]">
+            <div className="p-4 sm:p-5 border-t border-white/[0.08] bg-[#14151B] space-y-3">
+              {/* Shown above the composer rather than after a failed send: the
+                  agent cannot answer, and finding that out by waiting for an
+                  error is the experience this replaces. */}
+              {activeAgent && (
+                <AgentReadinessNotice
+                  agent={activeAgent}
+                  onOpenRuntimes={() => setActiveTab('runtimes')}
+                />
+              )}
               <form onSubmit={handleSend} className="relative flex items-center gap-2">
                 {/* @mention picker — only while an @token is being typed */}
                 {mentionMatches.length > 0 && (
                   <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-[#1A1B22] shadow-2xl z-30 py-1">
                     <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-gray-500 border-b border-white/5">
-                      Mention an agent
+                      Mention an agent or squad
                     </div>
-                    {mentionMatches.map((agent, i) => (
+                    {mentionMatches.map((option, i) => (
                       <button
-                        key={agent.id}
+                        key={option.id}
                         type="button"
                         onMouseEnter={() => setMentionIndex(i)}
-                        onClick={() => applyMention(agent.name)}
+                        onClick={() => applyMention(option.token)}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
                           i === mentionIndex ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'
                         }`}
                       >
                         <span
-                          className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
-                          style={{ backgroundColor: agent.color || '#6366f1' }}
+                          className={`w-6 h-6 flex items-center justify-center text-[10px] font-semibold text-white shrink-0 ${
+                            option.kind === 'squad' ? 'rounded-md bg-white/10' : 'rounded-full'
+                          }`}
+                          style={
+                            option.kind === 'agent'
+                              ? { backgroundColor: option.agent.color || '#6366f1' }
+                              : undefined
+                          }
                         >
-                          {agent.name.charAt(0)}
+                          {option.kind === 'squad' ? <Users className="w-3 h-3" /> : option.label.charAt(0)}
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-xs text-white truncate">{agent.name}</span>
-                          <span className="block text-[10px] text-gray-500 truncate">
-                            {agent.role} · {agent.modelProvider}
-                          </span>
+                          <span className="block text-xs text-white truncate">{option.label}</span>
+                          <span className="block text-[10px] text-gray-500 truncate">{option.detail}</span>
                         </span>
-                        <span
-                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                            agent.machineStatus === 'offline' ? 'bg-rose-400' : 'bg-emerald-400'
-                          }`}
-                        />
+                        {option.kind === 'agent' ? (
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              option.agent.machineStatus === 'offline' ? 'bg-rose-400' : 'bg-emerald-400'
+                            }`}
+                          />
+                        ) : (
+                          <span className="font-mono text-[9px] uppercase tracking-wider text-gray-600 shrink-0">
+                            squad
+                          </span>
+                        )}
                       </button>
                     ))}
                     <div className="px-3 py-1.5 text-[10px] text-gray-600 border-t border-white/5">
@@ -559,21 +614,24 @@ export const ChatView: React.FC = () => {
             </div>
           </div>
 
-          {/* Temperature Slider */}
-          <div className="space-y-2">
+          {/*
+            Temperature is stored but cannot be applied.
+              claude   — no temperature flag at all
+              agy      — none documented
+              codex    — only reachable via `-c key=value`, unverified
+            This was a working slider that reached nothing: moving it changed the
+            database and never the model. Shown read-only rather than deleted,
+            so the stored value stays visible and the reason is stated where
+            someone would otherwise go looking for the control.
+          */}
+          <div className="space-y-1">
             <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-gray-400">Temperature</span>
-              <span className="text-brand-400 font-bold">{activeAgent.temperature.toFixed(2)}</span>
+              <span className="text-gray-500">Temperature</span>
+              <span className="text-gray-500">{activeAgent.temperature?.toFixed(2) ?? '—'}</span>
             </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={activeAgent.temperature}
-              onChange={(e) => updateAgent(activeAgent.id, { temperature: parseFloat(e.target.value) })}
-              className="w-full accent-brand-500 bg-surface-100 rounded-lg cursor-pointer"
-            />
+            <p className="text-[10px] text-gray-600 leading-snug">
+              Not applied — the agent CLIs accept no temperature setting.
+            </p>
           </div>
 
           {/* Persona Directives */}

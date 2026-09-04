@@ -572,6 +572,7 @@ export const ProjectsView: React.FC = () => {
 
               <ProjectResourcesPanel
                 variant="inline"
+                projectId={selectedProject.id}
                 resources={selectedProject.resources || []}
                 onChange={(next) => updateProject(selectedProject.id, { resources: next })}
               />
@@ -618,9 +619,11 @@ export const ProjectsView: React.FC = () => {
             subtitle="Create a repository, or attach an existing repo or local folder."
           >
             <ProjectResourcesPanel
+              projectId={selectedProject.id}
               resources={selectedProject.resources || []}
               onChange={(next) => updateProject(selectedProject.id, { resources: next })}
-              description={selectedProject.description}
+              githubOrg={selectedProject.githubOrg}
+              onOrgChange={(org) => updateProject(selectedProject.id, { githubOrg: org })}
             />
           </Modal>
         )}

@@ -3,6 +3,7 @@ import {
   NavigationTab,
   TabItem,
   Issue,
+  IssueComment,
   IssueStatus,
   Project,
   Agent,
@@ -19,11 +20,11 @@ import {
   ToastMessage,
   User,
   UserRole,
+  SquadRun,
   RequirementDoc,
   IntakeAnswers,
   Estimate,
   RateCard,
-  BudgetLedger,
   Milestone
 } from '@/shared/types';
 import {
@@ -35,13 +36,13 @@ import {
   initialSettings,
   initialUsers,
   initialRequirementDocs,
-  initialLedgers
 } from '@/data/mockData';
 import { buildEstimate, DEFAULT_RATE_CARD } from '@/features/delivery/estimator';
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
+import { runTokenTotal } from '@/shared/lib/runUsage';
 
 interface AppContextType {
   /** Reachability of the local Alpha daemon. Agents cannot run while 'offline'. */
@@ -61,6 +62,7 @@ interface AppContextType {
   createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }) => Issue;
   updateIssueStatus: (id: string, status: IssueStatus) => void;
   updateIssue: (id: string, updates: Partial<Issue>) => void;
+  addIssueComment: (issueId: string, comment: IssueComment) => void;
   deleteIssue: (id: string) => void;
   runAgentOnIssue: (issueId: string, agentId?: string) => void;
   prototypeRuns: PrototypeRun[];
@@ -80,6 +82,15 @@ interface AppContextType {
   // Agents
   agents: Agent[];
   createAgent: (agent: Omit<Agent, 'id' | 'stats' | 'status'>) => Agent;
+  /**
+   * Create an agent from a persona file someone shared.
+   *
+   * The daemon owns this one rather than the client: it parses the file,
+   * validates it, mints an id that does not collide on this machine, and writes
+   * the persona to disk. Resolves with anything the file declared that had to be
+   * ignored, so the importer can be told rather than left guessing.
+   */
+  importAgent: (content: string) => Promise<{ agent: Agent; warnings: string[] }>;
   updateAgent: (id: string, updates: Partial<Agent>) => void;
   duplicateAgent: (id: string) => Agent | null;
   archiveAgent: (id: string) => void;
@@ -91,7 +102,14 @@ interface AppContextType {
   // Squads
   squads: Squad[];
   createSquad: (squad: Omit<Squad, 'id' | 'activeRunsCount' | 'completedRunsCount'>) => Squad;
-  triggerSquadRun: (squadId: string, missionGoal?: string) => Promise<void>;
+  updateSquad: (id: string, updates: Partial<Squad>) => void;
+  deleteSquad: (id: string) => void;
+  squadRuns: SquadRun[];
+  /**
+   * A squad works on an issue. `issueId` is required because there is no
+   * longer a way to run a squad against nothing — that was the old timer.
+   */
+  triggerSquadRun: (squadId: string, issueId: string, plan?: string[], missionGoal?: string) => Promise<void>;
   
   // Runtimes
   runtimes: RuntimeEngine[];
@@ -167,9 +185,6 @@ interface AppContextType {
   approveScopeAndBudget: (docId: string) => Project | undefined;
   rejectEstimate: (docId: string, reason: string) => void;
 
-  // Budget tracking
-  ledgers: BudgetLedger[];
-  ledgerForProject: (projectId: string) => BudgetLedger | undefined;
 }
 
 /* Capability names are behavioural, not tab names, so a surface can be shared
@@ -340,6 +355,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage<ChatMessage[]>('chat_messages', []));
   const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() => loadFromStorage('prototype_runs', []));
+  const [squadRuns, setSquadRuns] = useState<SquadRun[]>(() => loadFromStorage('squad_runs', []));
   const [runSetupIssueId, setRunSetupIssueId] = useState<string | null>(null);
   const [runSetupAgentId, setRunSetupAgentId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -380,7 +396,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       } as Estimate;
     });
   });
-  const [ledgers, setLedgers] = useState<BudgetLedger[]>(() => loadFromStorage('ledgers', initialLedgers));
 
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
   const [isAgentTyping, setIsAgentTyping] = useState(false);
@@ -423,6 +438,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       if (snapshot.chatThreads) setChatThreads(snapshot.chatThreads as ChatThread[]);
       if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
+      if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
 
       setServerStatus('online');
     };
@@ -478,10 +494,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('chat_threads', chatThreads); }, [chatThreads]);
   useEffect(() => { saveToStorage('chat_messages', chatMessages); }, [chatMessages]);
   useEffect(() => { saveToStorage('prototype_runs', prototypeRuns); }, [prototypeRuns]);
+  useEffect(() => { saveToStorage('squad_runs', squadRuns); }, [squadRuns]);
   useEffect(() => { saveToStorage('active_role', role); }, [role]);
   useEffect(() => { saveToStorage('requirement_docs', requirementDocs); }, [requirementDocs]);
   useEffect(() => { saveToStorage('estimates', estimates); }, [estimates]);
-  useEffect(() => { saveToStorage('ledgers', ledgers); }, [ledgers]);
 
   const dismissToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
@@ -668,6 +684,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  /**
+   * Comments have their own endpoint because they have their own table.
+   *
+   * The board used to add one with `updateIssue(id, { comments: [...] })`, and
+   * that silently discarded it: `UPDATE issues SET ...` has no comments column,
+   * so nothing was written — but the handler returns the merged object with the
+   * comment included, so the response looked like a save and the UI agreed until
+   * the next reload.
+   */
+  const addIssueComment = (issueId: string, comment: IssueComment) => {
+    setIssues(prev =>
+      prev.map(iss =>
+        iss.id === issueId ? { ...iss, comments: [...(iss.comments ?? []), comment] } : iss
+      )
+    );
+    persist(
+      () => apiService.addIssueComment(issueId, comment),
+      saved =>
+        setIssues(prev =>
+          prev.map(iss =>
+            iss.id === issueId
+              ? { ...iss, comments: (iss.comments ?? []).map(c => (c.id === comment.id ? saved : c)) }
+              : iss
+          )
+        ),
+      msg => {
+        setIssues(prev =>
+          prev.map(iss =>
+            iss.id === issueId
+              ? { ...iss, comments: (iss.comments ?? []).filter(c => c.id !== comment.id) }
+              : iss
+          )
+        );
+        showToast('Comment not saved', msg, 'error');
+      }
+    );
+  };
+
   const deleteIssue = (id: string) => {
     const removed = issues.find(iss => iss.id === id);
     setIssues(prev => prev.filter(iss => iss.id !== id));
@@ -798,18 +852,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     closeRunSetup();
     showToast('Agent run started', `${assignedAgent.name} is working on ${targetIssue.identifier}.`, 'success');
 
-    // Trigger real backend run
+    /**
+     * Trigger the real backend run, and adopt the id it assigns.
+     *
+     * This used to write `id: run.id` — keeping the optimistic id and throwing
+     * the backend's away. Both sides mint `run-${Date.now()}`, at different
+     * moments, so the two never matched, and every socket handler below
+     * ('stage_update', 'log_chunk', 'run_completed', 'run_failed') selects by
+     * `run.id === runId`. Nothing the real agent did could reach this row: no
+     * stage transitions, no logs, no final diff, and no token counts. What
+     * looked like a working run was the local timer, which is why it always
+     * finished in about seven seconds with the same numbers.
+     *
+     * `cancelRun` was posting that unknown id too, so cancelling never reached
+     * the process either.
+     */
     apiService.startRun({ issueId, agentId, plan, scenario }).then((realRun) => {
       if (realRun && realRun.id) {
         setPrototypeRuns(prev => prev.map(r => r.id === run.id ? {
           ...r,
           ...realRun,
-          id: run.id,
           scenario: (realRun.scenario || scenario || 'success') as any
         } : r));
       }
     }).catch(err => {
-      console.warn('Real run dispatched with local fallback:', err);
+      /**
+       * Say the run did not start, rather than leaving it "running" forever.
+       *
+       * The previous handler logged "Real run dispatched with local fallback"
+       * and left the optimistic row alone for the simulation to complete, so a
+       * backend that was down, or a project with no working copy, still
+       * produced a finished run on screen.
+       */
+      const detail = err instanceof Error ? err.message : String(err);
+      setPrototypeRuns(prev => prev.map(r => r.id === run.id ? {
+        ...r,
+        status: 'failed',
+        testSummary: `The run could not be started: ${detail}`,
+        updatedAt: new Date().toISOString()
+      } : r));
+      setAgents(prev => prev.map(agent => agent.id === agentId ? {
+        ...agent,
+        status: 'idle',
+        workStatus: 'idle',
+        currentTask: undefined
+      } : agent));
+      showToast('Run could not start', detail, 'error');
     });
 
     return run;
@@ -889,64 +977,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Run restarted', 'The failed stage will be attempted again.', 'success');
   };
 
-  // Advance simulated stages from their stored timestamps so a refresh can resume a run.
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      const nowMs = Date.now();
-      setPrototypeRuns(prev => prev.map(run => {
-        if (run.status !== 'running') return run;
+  /**
+   * The simulated stage advancer is gone.
+   *
+   * It ran every 350ms over every run whose status was 'running' and, once
+   * each stage's `durationMs ?? 1500` had elapsed, advanced it — finally
+   * writing `changedFiles: 4, insertions: 86, deletions: 14, testSummary:
+   * '42 tests passed'` and flipping the run to 'awaiting_approval'.
+   *
+   * It applied to real backend runs as well as local ones, so about seven
+   * seconds after starting anything the UI reported a finished run with those
+   * four invented numbers, whatever the agent was actually doing. The honest
+   * diff statistics the daemon computes were overwritten before they arrived,
+   * and a run that later genuinely failed had already been shown as reviewed.
+   *
+   * Runs are driven by the backend: 'stage_update' and 'log_chunk' move them
+   * along, 'run_completed' and 'run_failed' finish them, and the snapshot
+   * fetch restores them after a refresh. A run that starts is now allowed to
+   * stay running until something real says otherwise.
+   */
 
-        const currentStage = run.stages[run.currentStageIndex];
-        if (!currentStage) return run;
-        const startedAt = currentStage.startedAt || run.updatedAt;
-        const duration = currentStage.durationMs ?? 1500;
-        if (nowMs - new Date(startedAt).getTime() < duration) return run;
-
-        const completedAt = new Date(nowMs).toISOString();
-        const shouldFail = run.scenario === 'test_failure' && currentStage.id === 'tests';
-        if (shouldFail) {
-          return {
-            ...run,
-            status: 'failed',
-            testSummary: '2 tests failed · retry available',
-            updatedAt: completedAt,
-            stages: run.stages.map((stage, index) => index === run.currentStageIndex ? {
-              ...stage,
-              status: 'failed',
-              completedAt,
-              logs: ['Type checking passed.', '2 tests failed in the simulated regression suite.']
-            } : stage)
-          };
-        }
-
-        const nextIndex = run.currentStageIndex + 1;
-        const hasNextStage = nextIndex < run.stages.length;
-        const nextStages = run.stages.map((stage, index) => {
-          if (index === run.currentStageIndex) {
-            return { ...stage, status: 'success' as const, completedAt };
-          }
-          if (index === nextIndex) {
-            return { ...stage, status: 'running' as const, startedAt: completedAt };
-          }
-          return stage;
-        });
-
-        return {
-          ...run,
-          status: hasNextStage ? 'running' : 'awaiting_approval',
-          currentStageIndex: hasNextStage ? nextIndex : run.currentStageIndex,
-          changedFiles: hasNextStage ? run.changedFiles : 4,
-          insertions: hasNextStage ? run.insertions : 86,
-          deletions: hasNextStage ? run.deletions : 14,
-          testSummary: hasNextStage ? run.testSummary : '42 tests passed',
-          updatedAt: completedAt,
-          stages: nextStages
-        };
-      }));
-    }, 350);
-
-    return () => window.clearInterval(timer);
-  }, []);
 
   // Materialize review and failure events into the existing issue and inbox views.
   useEffect(() => {
@@ -1031,7 +1081,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               authorName: assignedAgent.name,
               authorAvatar: assignedAgent.avatar,
               agentId: assignedAgent.id,
-              content: `Implementation is ready for review. ${run.changedFiles || 4} files changed and ${run.testSummary || 'all tests passed'}.`,
+              /**
+               * The run's own numbers, including none.
+               *
+               * This read `${run.changedFiles || 4} files changed and
+               * ${run.testSummary || 'all tests passed'}` — so a run that
+               * changed nothing announced four files and passing tests, in the
+               * agent's own voice, on the issue. Alpha does not run the tests
+               * and cannot claim they passed; the daemon's testSummary already
+               * says so honestly, and is used verbatim when present.
+               */
+              content: run.changedFiles
+                ? `Implementation is ready for review: ${run.changedFiles} file(s) changed.` +
+                  (run.testSummary ? ` ${run.testSummary}` : '')
+                : 'The run finished without changing any files. Check the run log before reviewing.',
               createdAt: now,
               isThinking: false
             }],
@@ -1051,8 +1114,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           agentName: assignedAgent.name,
           agentRole: assignedAgent.role,
           issueIdentifier: targetIssue.identifier,
-          proposedChanges: `${run.insertions || 86} insertions, ${run.deletions || 14} deletions in ${run.changedFiles || 4} files.`,
-          costTokens: 3850
+          proposedChanges: run.changedFiles
+            ? `${run.insertions ?? 0} insertions, ${run.deletions ?? 0} deletions in ${run.changedFiles} files.`
+            : 'No files were changed.',
+          /**
+           * Real tokens, reported by the CLI, or nothing.
+           *
+           * This was the constant 3850 on every approval. The count now comes
+           * from the run's stored usage, cache reads included — they are the
+           * bulk of a turn and cheaper per token, not free. Left undefined for
+           * a run whose CLI reported no figures, so the Inbox omits the line
+           * rather than showing an invented one.
+           */
+          costTokens: runTokenTotal(run)
         }
       }, ...prev]);
       showToast('Review ready', `${targetIssue.identifier} is waiting in Inbox.`, 'success');
@@ -1165,11 +1239,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newAgent;
   };
 
+  const importAgent = async (content: string) => {
+    // No optimistic insert: the id and the validated fields are decided by the
+    // daemon, so there is nothing meaningful to show until it answers.
+    const result = await apiService.importAgent(content);
+    setAgents(prev => [result.agent, ...prev]);
+    return result;
+  };
+
   const updateAgent = (id: string, updates: Partial<Agent>) => {
     setAgents(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     persist(
       () => apiService.updateAgent(id, updates),
-      () => {},
+      /**
+       * Take the daemon's answer, do not keep the optimistic guess.
+       *
+       * Two fields on an agent are computed by the daemon and cannot be derived
+       * here: `readiness`, which depends on the model list each CLI currently
+       * advertises, and `managedByFile`, which depends on the persona file on
+       * the daemon's machine. The optimistic merge above can only apply the
+       * fields the user just edited, so both keep whatever the last full roster
+       * fetch left behind.
+       *
+       * That showed up as an agent switched from codex to Antigravity still
+       * displaying "codex is installed but not signed in, so this agent cannot
+       * answer" — advice about a CLI it no longer used, on an agent that was
+       * working. `createAgent` above already reconciles this way; this was the
+       * odd one out.
+       */
+      saved => setAgents(prev => prev.map(a => (a.id === id ? saved : a))),
       msg => showToast('Agent not saved', msg, 'error')
     );
   };
@@ -1204,16 +1302,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setAgents(prev => [newAgent, ...prev]);
+    // A duplicate is a new agent, so it is created the same way one typed into
+    // the builder is. Without this the copy existed only in this tab and was
+    // gone on reload, having looked saved the whole time.
+    persist(
+      () => apiService.createAgent(newAgent),
+      saved => setAgents(prev => prev.map(a => (a.id === newAgent.id ? saved : a))),
+      msg => {
+        setAgents(prev => prev.filter(a => a.id !== newAgent.id));
+        showToast('Agent not duplicated', msg, 'error');
+      }
+    );
     return newAgent;
   };
 
-  const archiveAgent = (id: string) => {
-    setAgents(prev => prev.map(a => a.id === id ? { ...a, isArchived: true, status: 'offline', workStatus: 'idle' } : a));
+  /**
+   * Archive and restore write `isArchived` and nothing else.
+   *
+   * `status` and `workStatus` are not columns — the daemon derives them, and it
+   * now reports `offline` for an archived row rather than the hardcoded `idle`
+   * it used to. So the optimistic values here agree with what comes back, and
+   * the reconcile is not fighting the local guess.
+   */
+  const setAgentArchived = (id: string, isArchived: boolean) => {
+    setAgents(prev =>
+      prev.map(a =>
+        a.id === id
+          ? { ...a, isArchived, status: isArchived ? 'offline' : 'idle', workStatus: 'idle' }
+          : a
+      )
+    );
+    persist(
+      () => apiService.updateAgent(id, { isArchived }),
+      saved => setAgents(prev => prev.map(a => (a.id === id ? saved : a))),
+      msg => {
+        setAgents(prev => prev.map(a => (a.id === id ? { ...a, isArchived: !isArchived } : a)));
+        showToast(isArchived ? 'Agent not archived' : 'Agent not restored', msg, 'error');
+      }
+    );
   };
 
-  const restoreAgent = (id: string) => {
-    setAgents(prev => prev.map(a => a.id === id ? { ...a, isArchived: false, status: 'idle' } : a));
-  };
+  const archiveAgent = (id: string) => setAgentArchived(id, true);
+  const restoreAgent = (id: string) => setAgentArchived(id, false);
 
   const deleteAgent = (id: string) => {
     const removed = agents.find(a => a.id === id);
@@ -1228,12 +1358,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  /**
+   * One request per agent, because the daemon has no bulk endpoint.
+   *
+   * Deliberately not wrapped in a single all-or-nothing call: a partial failure
+   * is reported per agent and the ones that succeeded stay succeeded, which is
+   * what someone selecting eight rows and changing a model expects. A failure
+   * toast names the agent rather than the count, so the retry is targeted.
+   */
   const bulkUpdateAgents = (ids: string[], updates: Partial<Agent>) => {
     setAgents(prev => prev.map(a => ids.includes(a.id) ? { ...a, ...updates } : a));
+    for (const id of ids) {
+      persist(
+        () => apiService.updateAgent(id, updates),
+        saved => setAgents(prev => prev.map(a => (a.id === id ? saved : a))),
+        msg => showToast(`${agents.find(a => a.id === id)?.name ?? id} not saved`, msg, 'error')
+      );
+    }
   };
 
   const bulkArchiveAgents = (ids: string[]) => {
-    setAgents(prev => prev.map(a => ids.includes(a.id) ? { ...a, isArchived: true, status: 'offline', workStatus: 'idle' } : a));
+    for (const id of ids) setAgentArchived(id, true);
   };
 
   // Squads
@@ -1245,36 +1390,94 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       completedRunsCount: 0
     };
     setSquads(prev => [...prev, newSquad]);
+    // `POST /squads` and `apiService.createSquad` both already existed; nothing
+    // called them, so a squad assembled in the UI lived in one tab and vanished
+    // on reload.
+    persist(
+      () => apiService.createSquad(newSquad),
+      saved => setSquads(prev => prev.map(s => (s.id === newSquad.id ? saved : s))),
+      msg => {
+        setSquads(prev => prev.filter(s => s.id !== newSquad.id));
+        showToast('Squad not saved', msg, 'error');
+      }
+    );
     return newSquad;
   };
 
-  const triggerSquadRun = async (squadId: string, missionGoal?: string) => {
+  const updateSquad = (id: string, updates: Partial<Squad>) => {
+    setSquads(prev => prev.map(s => (s.id === id ? { ...s, ...updates } : s)));
+    persist(
+      () => apiService.updateSquad(id, updates),
+      saved => setSquads(prev => prev.map(s => (s.id === id ? saved : s))),
+      msg => showToast('Squad not saved', msg, 'error')
+    );
+  };
+
+  const deleteSquad = (id: string) => {
+    const removed = squads.find(s => s.id === id);
+    setSquads(prev => prev.filter(s => s.id !== id));
+    persist(
+      () => apiService.deleteSquad(id),
+      () => {},
+      msg => {
+        // Put it back rather than leave the roster lying about what exists.
+        if (removed) setSquads(prev => [...prev, removed]);
+        showToast('Squad not deleted', msg, 'error');
+      }
+    );
+  };
+
+  /**
+   * Run a squad over an issue.
+   *
+   * This used to be theatre: it incremented activeRunsCount, posted an inbox
+   * notification saying "N agents coordinating", and set a 4.5 second timer
+   * that moved the run into completedRunsCount. No endpoint was called, no
+   * process was spawned, and no agent was told anything — the daemon had no
+   * concept of more than one agent per run.
+   *
+   * It now starts a real sequential squad run: one shared branch, members in
+   * order, each one handed a summary of what the members before it did. The
+   * issue is required because a squad works on something; there is no longer a
+   * way to "run a squad" against nothing.
+   */
+  const triggerSquadRun = async (squadId: string, issueId: string, plan?: string[], missionGoal?: string) => {
     const squad = squads.find(s => s.id === squadId);
     if (!squad) return;
 
-    setSquads(prev => prev.map(s => s.id === squadId ? { ...s, activeRunsCount: s.activeRunsCount + 1 } : s));
+    try {
+      const squadRun = await apiService.runSquad(squadId, { issueId, plan, mission: missionGoal });
 
-    // Add inbox item
-    const runNotif: InboxNotification = {
-      id: `notif-${Date.now()}`,
-      type: 'agent_completed',
-      title: `Squad Swarm Run Initiated: ${squad.name}`,
-      message: `Mission: "${missionGoal || squad.mission}". Topology: ${squad.topology.toUpperCase()}. ${squad.memberAgentIds.length} agents coordinating.`,
-      read: false,
-      audience: 'internal',
-      timestamp: new Date().toISOString(),
-      entityType: 'squad',
-      entityId: squad.id
-    };
-    setInbox(prev => [runNotif, ...prev]);
+      setSquadRuns(prev => [squadRun, ...prev.filter(r => r.id !== squadRun.id)]);
+      setSquads(prev => prev.map(s => s.id === squadId ? { ...s, activeRunsCount: s.activeRunsCount + 1 } : s));
 
-    setTimeout(() => {
-      setSquads(prev => prev.map(s => s.id === squadId ? { 
-        ...s, 
-        activeRunsCount: Math.max(0, s.activeRunsCount - 1),
-        completedRunsCount: s.completedRunsCount + 1 
-      } : s));
-    }, 4500);
+      const issue = issues.find(i => i.id === issueId);
+      setInbox(prev => [{
+        id: `notif-${Date.now()}`,
+        type: 'agent_completed',
+        title: `${squad.name} started on ${issue?.identifier ?? 'an issue'}`,
+        message:
+          `${squadRun.memberAgentIds.length} member(s) will work in sequence on \`${squadRun.branchName}\`. ` +
+          `Mission: "${squadRun.mission}".`,
+        read: false,
+        audience: 'internal',
+        timestamp: new Date().toISOString(),
+        entityType: 'squad',
+        entityId: squad.id
+      }, ...prev]);
+
+      showToast('Squad run started', `${squad.name} is working on ${issue?.identifier ?? 'the issue'}.`, 'success');
+    } catch (err) {
+      /**
+       * Say why it did not start.
+       *
+       * The daemon refuses a squad it cannot honestly run — an unimplemented
+       * topology, no members, members that were archived — and that reason is
+       * worth more to the user than a generic failure.
+       */
+      const detail = err instanceof Error ? err.message : String(err);
+      showToast('Squad run could not start', detail, 'error');
+    }
   };
 
   // Runtimes
@@ -1302,7 +1505,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Skills
   const toggleSkill = (id: string) => {
-    setSkills(prev => prev.map(sk => sk.id === id ? { ...sk, enabled: !sk.enabled } : sk));
+    const next = !skills.find(sk => sk.id === id)?.enabled;
+    setSkills(prev => prev.map(sk => sk.id === id ? { ...sk, enabled: next } : sk));
+    /**
+     * A skill toggle decides what tools an agent's turn is allowed to use, so
+     * losing it on reload silently changed what the agents could do. The route
+     * (`PUT /skills/:id`) and the client method both existed already.
+     *
+     * The response is `{ success }` rather than the skill, so there is nothing
+     * to reconcile — the optimistic value is the value.
+     */
+    persist(
+      () => apiService.setSkillEnabled(id, next),
+      () => {},
+      msg => {
+        setSkills(prev => prev.map(sk => sk.id === id ? { ...sk, enabled: !next } : sk));
+        showToast('Skill not saved', msg, 'error');
+      }
+    );
   };
 
   // Deployments
@@ -1591,32 +1811,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setIsAgentTyping(true);
 
-    // Pick responder agent
-    let responder = agents[0]; // Ada
-    if (activeChatAgentId) {
-      responder = agents.find(a => a.id === activeChatAgentId) || agents[0];
-    } else if (content.toLowerCase().includes('@kaelen') || content.toLowerCase().includes('code') || content.toLowerCase().includes('bug')) {
-      responder = agents[1]; // Kaelen
-    } else if (content.toLowerCase().includes('@vesper') || content.toLowerCase().includes('security') || content.toLowerCase().includes('review')) {
-      responder = agents[2]; // Vesper
-    } else if (content.toLowerCase().includes('@nyx') || content.toLowerCase().includes('test')) {
-      responder = agents[3]; // Nyx
-    } else if (content.toLowerCase().includes('@cipher') || content.toLowerCase().includes('deploy')) {
-      responder = agents[4]; // Cipher
-    }
+    /**
+     * Who will answer is decided by the daemon, from the @mentions in this
+     * message. The client does not guess.
+     *
+     * It used to. This defaulted to `agents[0]` and then reassigned on
+     * keywords — the bare word "code", "bug", "test", "review" or "deploy"
+     * anywhere in a message picked a different agent, by array position, with
+     * comments naming agents ("Nyx", "Cipher") that are not in the roster. The
+     * final message was then attributed to that guess rather than to the agent
+     * that actually replied, so the name and avatar on a reply could belong to
+     * someone who was never involved.
+     *
+     * `mentionedAgent` is only for the placeholder shown while waiting, and
+     * only when the message names someone unambiguously. Everything after the
+     * response comes from the response.
+     */
+    const mentionedAgent = agents.find(a => {
+      const first = a.name.split(' ')[0].toLowerCase();
+      return new RegExp(`@${first}\b`, 'i').test(content);
+    });
 
     // Streaming placeholder
     const streamingMsgId = `msg-${Date.now() + 1}`;
     const streamingMsg: ChatMessage = {
       id: streamingMsgId,
       senderType: 'agent',
-      agentId: responder.id,
-      senderName: responder.name,
-      senderAvatar: responder.avatar,
+      agentId: mentionedAgent?.id,
+      // Alpha answers anything that names no agent, so that is what the
+      // placeholder says rather than borrowing an agent's name.
+      senderName: mentionedAgent?.name ?? 'Alpha',
+      senderAvatar: mentionedAgent?.avatar,
       content: 'Thinking...',
       timestamp: new Date().toISOString(),
       isStreaming: true,
-      thinkingProcess: `Analyzing prompt intent using ${responder.modelName} on ${responder.modelProvider}...`
+      thinkingProcess: mentionedAgent
+        ? `Analyzing prompt intent using ${mentionedAgent.modelName} on ${mentionedAgent.modelProvider}...`
+        : 'Answering directly on the default runtime...'
     };
 
     setChatThreads(prev => prev.map(t => {
@@ -1637,46 +1868,82 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         senderName: currentUser.name
       });
 
-      const finalAgentMsg: ChatMessage = {
-        id: res.agentMessage.id || streamingMsgId,
-        senderType: 'agent',
-        agentId: responder.id,
-        senderName: responder.name,
-        senderAvatar: responder.avatar,
-        content: res.agentMessage.content,
-        timestamp: res.agentMessage.timestamp || new Date().toISOString(),
-        isStreaming: false,
-        thinkingProcess: res.agentMessage.thinkingProcess || `Response generated via ${responder.modelName} on ${responder.modelProvider}.`,
-        toolsExecuted: (res.agentMessage.toolsExecuted || []).map((t: any) => ({
-          name: t.toolName || t.name || 'tool',
-          input: typeof t.parameters === 'object' ? JSON.stringify(t.parameters) : String(t.parameters || '{}'),
-          output: t.output || 'Execution completed',
-          durationMs: t.durationMs || 120
-        }))
-      };
+      /**
+       * One reply, or several.
+       *
+       * Addressing a squad expands to its members and each one answers in
+       * turn, so the daemon returns a list. `agentMessage` is the first of
+       * them and is still sent for callers that expect exactly one; the
+       * placeholder becomes that first reply and the rest are appended after
+       * it, in the order the members spoke.
+       */
+      const replies = (res.agentMessages?.length ? res.agentMessages : [res.agentMessage]).map(
+        (reply: any, index: number): ChatMessage => ({
+          // The first reply takes over the placeholder's id so it replaces it
+          // in place; the others are new messages.
+          id: index === 0 ? (reply.id || streamingMsgId) : reply.id,
+          senderType: reply.senderType ?? 'agent',
+          // From the daemon, which knows who actually replied. Taking this from
+          // a client-side guess is how a reply ended up labelled with the wrong
+          // agent's name and face.
+          agentId: reply.agentId,
+          senderName: reply.senderName ?? 'Alpha',
+          senderAvatar: agents.find(a => a.id === reply.agentId)?.avatar,
+          content: reply.content,
+          timestamp: reply.timestamp || new Date().toISOString(),
+          isStreaming: false,
+          thinkingProcess: reply.thinkingProcess,
+          toolsExecuted: (reply.toolsExecuted || []).map((t: any) => ({
+            name: t.toolName || t.name || 'tool',
+            input: typeof t.parameters === 'object' ? JSON.stringify(t.parameters) : String(t.parameters || '{}'),
+            output: t.output || 'Execution completed',
+            durationMs: t.durationMs || 120
+          }))
+        })
+      );
+
+      const [firstReply, ...laterReplies] = replies;
 
       setChatThreads(prev => prev.map(t => {
         if (t.id !== targetThreadId) return t;
         const msgs = t.messages || [];
         return {
           ...t,
-          lastMessageSnippet: res.agentMessage.content.slice(0, 60) + '...',
-          messages: msgs.map(m => m.id === streamingMsgId ? finalAgentMsg : m)
+          // The last speaker is what the thread list should preview.
+          lastMessageSnippet: replies[replies.length - 1].content.slice(0, 60) + '...',
+          messages: [...msgs.map(m => m.id === streamingMsgId ? firstReply : m), ...laterReplies]
         };
       }));
 
-      setChatMessages(prev => prev.map(m => m.id === streamingMsgId ? finalAgentMsg : m));
+      setChatMessages(prev => [
+        ...prev.map(m => m.id === streamingMsgId ? firstReply : m),
+        ...laterReplies
+      ]);
     } catch (err: any) {
       console.warn('Real AI chat service unavailable, falling back to local persona:', err);
 
-      // Fallback response generator if backend offline
-      let responseText = `[${responder.name} · ${responder.modelName}]: I have received your request regarding: "${content}". Backend connection established.`;
-      
+      /**
+       * Say the daemon is unreachable, rather than answering for it.
+       *
+       * This used to reply "[Agent · model]: I have received your request …
+       * Backend connection established." — a fabricated success, in an agent's
+       * voice, at the exact moment the backend could not be reached. Nothing
+       * had been received and no connection was established.
+       */
       const fallbackMsg: ChatMessage = {
         ...streamingMsg,
-        content: responseText,
+        senderType: 'system',
+        senderName: 'Alpha',
+        senderAvatar: undefined,
+        content: [
+          'I could not reach the Alpha daemon, so nobody has seen this message yet.',
+          '',
+          `Reason: ${err?.message ?? 'the request failed'}`,
+          '',
+          'Check that the backend is running, then send it again.'
+        ].join('\n'),
         isStreaming: false,
-        thinkingProcess: `Generated response via ${responder.modelName}.`,
+        thinkingProcess: undefined,
         toolsExecuted: []
       };
 
@@ -1685,7 +1952,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const msgs = t.messages || [];
         return {
           ...t,
-          lastMessageSnippet: responseText.slice(0, 60) + '...',
+          lastMessageSnippet: 'Could not reach the Alpha daemon.',
           messages: msgs.map(m => m.id === streamingMsgId ? fallbackMsg : m)
         };
       }));
@@ -1997,19 +2264,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       )
     );
 
-    // Open a budget ledger so drift is trackable from day one.
-    setLedgers(prev => [
-      {
-        projectId: project.id,
-        estimateId: estimate.id,
-        baseline: estimate.buildTotal,
-        actualToDate: 0,
-        projectedFinal: estimate.buildTotal,
-        entries: []
-      },
-      ...prev
-    ]);
-
     setInbox(prev => [
       {
         id: `notif-${Date.now()}`,
@@ -2050,8 +2304,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev
     ]);
   };
-
-  const ledgerForProject = (projectId: string) => scopedLedgers.find(l => l.projectId === projectId);
 
   /* =====================================================================
    * Scoping layer
@@ -2113,12 +2365,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return estimates.filter(e => scopedDocIds.includes(e.docId));
   }, [estimates, scopedDocIds, role]);
 
-  const scopedLedgers = useMemo(() => {
-    if (role === 'admin') return ledgers;
-    if (role === 'dev') return [];
-    return ledgers.filter(l => scopedProjectIds.includes(l.projectId));
-  }, [ledgers, scopedProjectIds, role]);
-
   /** Agents are invisible to clients and narrowed to ownership for devs. */
   const scopedAgents = useMemo(() => {
     if (role === 'client') return [];
@@ -2162,8 +2408,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   /**
    * Analytics is the same telemetry rendered at three altitudes. A client is
-   * given no token or latency figures at all — their money view is the budget
-   * ledger, which speaks in dollars.
+   * given no token or latency figures at all.
    */
   const scopedAnalytics = useMemo<AnalyticsData>(() => {
     if (role === 'admin' || role === 'pm') return analytics;
@@ -2222,7 +2467,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteProject,
       agents: scopedAgents,
       createAgent,
+    importAgent,
       updateAgent,
+      addIssueComment,
       duplicateAgent,
       archiveAgent,
       restoreAgent,
@@ -2231,6 +2478,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bulkArchiveAgents,
       squads: scopedSquads,
       createSquad,
+      updateSquad,
+      deleteSquad,
+      squadRuns,
       triggerSquadRun,
       runtimes,
       isScanningRuntimes,
@@ -2281,8 +2531,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       regenerateEstimate,
       approveScopeAndBudget,
       rejectEstimate,
-      ledgers: scopedLedgers,
-      ledgerForProject
     }}>
       {children}
     </AppContext.Provider>

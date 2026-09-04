@@ -6,8 +6,7 @@ import {
   AnalyticsData,
   WorkspaceSettings,
   User,
-  RequirementDoc,
-  BudgetLedger
+  RequirementDoc
 } from '@/shared/types';
 export const initialAgents: Agent[] = [
   {
@@ -1135,24 +1134,4 @@ export const initialRequirementDocs: RequirementDoc[] = [
   }
 ];
 
-/* ---------------------------------------------------------------------------
- * Budget ledger — actual accrued against the approved baseline
- * ------------------------------------------------------------------------ */
-
-export const initialLedgers: BudgetLedger[] = [
-  {
-    projectId: 'proj-4',
-    estimateId: 'est-1041',
-    baseline: 6240,
-    actualToDate: 4180,
-    projectedFinal: 6890,
-    entries: [
-      { id: 'le-1', date: '2026-08-13T09:00:00Z', label: 'Dev oversight — week 1', lineId: 'ln-dev', amount: 1560, source: 'logged_hours' },
-      { id: 'le-2', date: '2026-08-14T09:00:00Z', label: 'Agent runs — intake form scaffold', lineId: 'ln-tokens', amount: 0.42, source: 'agent_run' },
-      { id: 'le-3', date: '2026-08-15T09:00:00Z', label: 'PM review and client call', lineId: 'ln-pm', amount: 520, source: 'logged_hours' },
-      { id: 'le-4', date: '2026-08-16T09:00:00Z', label: 'Dev oversight — week 2', lineId: 'ln-dev', amount: 2080, source: 'logged_hours' },
-      { id: 'le-5', date: '2026-08-16T18:00:00Z', label: 'Staging hosting', lineId: 'ln-hosting', amount: 20, source: 'infrastructure' }
-    ]
-  }
-];
 

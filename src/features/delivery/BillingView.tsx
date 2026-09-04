@@ -1,22 +1,27 @@
 import React from 'react';
 import { useApp } from '@/app/AppContext';
 import { formatMoney, blendedTokenRate } from '@/features/delivery/estimator';
-import { ProgressRing, SectionLabel } from '@/features/delivery/Ledger';
+import { SectionLabel } from '@/features/delivery/Ledger';
 
 /**
- * Admin-only. The one surface that shows estimate-versus-actual margin —
- * what the client was quoted against what delivery is actually consuming.
+ * Admin-only. Committed client value, and what the agents are consuming.
+ *
+ * Per-project cost tracking used to live here — a baseline/actual/projected
+ * table fed by a BudgetLedger. Only half of it was ever built: a ledger was
+ * opened when a client approved an estimate and then never written to again,
+ * so `actualToDate` stayed at 0 and `projectedFinal` stayed equal to the
+ * baseline for the life of every project. The drift the table existed to show
+ * could not occur, and the margin tile it fed read exactly $0 forever.
+ *
+ * Removed rather than wired up: Alpha is not tracking spend per project.
+ * Committed value still comes from approved estimates, and agent compute is
+ * measured for real from the token counts each run reports.
  */
 export const BillingView: React.FC = () => {
-  const { ledgers, projects, requirementDocs, estimates, analytics, agents, users } = useApp();
+  const { requirementDocs, estimates, analytics, agents, users } = useApp();
 
   const tokenRate = blendedTokenRate(analytics);
   const clients = users.filter(u => u.role === 'client');
-
-  const totalBaseline = ledgers.reduce((s, l) => s + l.baseline, 0);
-  const totalActual = ledgers.reduce((s, l) => s + l.actualToDate, 0);
-  const totalProjected = ledgers.reduce((s, l) => s + l.projectedFinal, 0);
-  const margin = totalBaseline - totalProjected;
 
   const approvedValue = estimates
     .filter(e => e.status === 'approved')
@@ -33,96 +38,25 @@ export const BillingView: React.FC = () => {
         <div className="space-y-1.5">
           <h1 className="text-lg font-semibold text-white tracking-tight">Billing and usage</h1>
           <p className="text-sm text-gray-500">
-            Committed value, delivery cost, and the margin between them.
+            Committed client value, and what the agents are consuming.
           </p>
         </div>
 
         {/* Headline figures */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-8">
+        <div className="grid grid-cols-2 gap-8 max-w-lg">
           {[
             { label: 'Approved value', value: formatMoney(approvedValue, { cents: false }), note: 'signed off by clients' },
-            { label: 'In pipeline', value: formatMoney(pipelineValue, { cents: false }), note: 'awaiting client approval' },
-            { label: 'Delivery cost to date', value: formatMoney(totalActual, { cents: false }), note: 'hours and compute accrued' },
-            {
-              label: 'Projected margin',
-              value: formatMoney(Math.abs(margin), { cents: false }),
-              note: margin >= 0 ? 'under baseline' : 'over baseline',
-              tone: margin >= 0 ? 'text-emerald-300' : 'text-rose-300'
-            }
+            { label: 'In pipeline', value: formatMoney(pipelineValue, { cents: false }), note: 'awaiting client approval' }
           ].map(stat => (
             <div key={stat.label} className="space-y-1.5">
               <SectionLabel>{stat.label}</SectionLabel>
-              <p className={`font-mono text-xl tabular-nums tracking-tight ${stat.tone || 'text-white'}`}>
+              <p className="font-mono text-xl tabular-nums tracking-tight text-white">
                 {stat.value}
               </p>
               <p className="text-[11px] text-gray-600">{stat.note}</p>
             </div>
           ))}
         </div>
-
-        {/* Per-project margin */}
-        <section className="space-y-3">
-          <SectionLabel>Estimate versus actual, by project</SectionLabel>
-          {ledgers.length === 0 ? (
-            <p className="py-8 text-xs text-gray-500">No approved projects yet.</p>
-          ) : (
-            <table className="w-full">
-              <thead>
-                <tr className="text-[11px] font-mono uppercase tracking-wider text-gray-500">
-                  <th className="text-left font-normal pb-2">Project</th>
-                  <th className="text-left font-normal pb-2 hidden sm:table-cell">Client</th>
-                  <th className="text-right font-normal pb-2">Baseline</th>
-                  <th className="text-right font-normal pb-2">Actual</th>
-                  <th className="text-right font-normal pb-2">Projected</th>
-                  <th className="text-right font-normal pb-2 w-24">Burn</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/[0.03]">
-                {ledgers.map(l => {
-                  const project = projects.find(p => p.id === l.projectId);
-                  const doc = requirementDocs.find(d => d.projectId === l.projectId);
-                  const over = l.projectedFinal > l.baseline * 1.05;
-                  const pct = l.baseline > 0 ? l.actualToDate / l.baseline : 0;
-
-                  return (
-                    <tr key={l.projectId}>
-                      <td className="py-3 text-xs text-gray-200 pr-4">{project?.name || '—'}</td>
-                      <td className="py-3 text-xs text-gray-500 pr-4 hidden sm:table-cell">
-                        {doc?.company || doc?.clientName || '—'}
-                      </td>
-                      <td className="py-3 text-right font-mono text-xs text-gray-300 tabular-nums">
-                        {formatMoney(l.baseline, { cents: false })}
-                      </td>
-                      <td className="py-3 text-right font-mono text-xs text-gray-300 tabular-nums">
-                        {formatMoney(l.actualToDate, { cents: false })}
-                      </td>
-                      <td
-                        className={`py-3 text-right font-mono text-xs tabular-nums ${
-                          over ? 'text-amber-300' : 'text-emerald-300'
-                        }`}
-                      >
-                        {formatMoney(l.projectedFinal, { cents: false })}
-                      </td>
-                      <td className="py-3">
-                        <div className="flex items-center justify-end gap-2">
-                          <span className="font-mono text-[11px] text-gray-500 tabular-nums">
-                            {Math.round(pct * 100)}%
-                          </span>
-                          <ProgressRing
-                            value={l.actualToDate}
-                            total={l.baseline}
-                            size={22}
-                            tone={over ? 'amber' : 'emerald'}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </section>
 
         {/* Compute cost — the honest small number */}
         <section className="space-y-3">
