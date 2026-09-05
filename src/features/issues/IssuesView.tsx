@@ -4,6 +4,7 @@ import { IssueStatus, IssuePriority, Issue } from '@/shared/types';
 import { StatusBadge, PriorityBadge } from '@/shared/components/Badge';
 import { AgentRunProgress } from '@/features/runs/AgentRunProgress';
 import { 
+  Users,
   Kanban, 
   List, 
   Plus, 
@@ -45,7 +46,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
     prototypeRuns,
     projects, 
     agents, 
-    squads 
+    squads,
+    triggerSquadRun
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'board' | 'list'>('list');
@@ -794,6 +796,34 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                   </button>
                 )}
 
+                {/*
+                  Launching a squad was only possible from the Squads page, so
+                  the multi-agent path could not be started from the board where
+                  the work actually lives. Shown only when a squad is assigned,
+                  and only while a single-agent run is not already underway.
+                */}
+                {selectedIssue.assignedSquadId &&
+                  selectedIssue.status !== 'done' &&
+                  !prototypeRuns.some(run => run.issueId === selectedIssue.id) && (
+                    <button
+                      onClick={() =>
+                        void triggerSquadRun(
+                          selectedIssue.assignedSquadId!,
+                          selectedIssue.id,
+                          [],
+                          selectedIssue.title
+                        )
+                      }
+                      disabled={selectedIssue.status === 'agent_running'}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50 border border-white/10 text-white font-medium text-sm transition-colors"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>
+                        Launch {squads.find(sq => sq.id === selectedIssue.assignedSquadId)?.name ?? 'Squad'}
+                      </span>
+                    </button>
+                  )}
+
                 <AgentRunProgress issueId={selectedIssue.id} />
 
                 {/* Status Picker */}
@@ -840,6 +870,28 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                     <option value="">Unassigned</option>
                     {agents.map(a => (
                       <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/*
+                  A squad could be chosen when an issue was created and never
+                  afterwards — and the choice was discarded anyway, because the
+                  column did not exist. Sitting under the agent picker because
+                  they answer the same question: who owns this issue.
+                */}
+                <div className="space-y-1.5">
+                  <label className="text-gray-400 font-medium">Assigned Squad</label>
+                  <select
+                    value={selectedIssue.assignedSquadId || ''}
+                    onChange={(e) => updateIssue(selectedIssue.id, { assignedSquadId: e.target.value || undefined })}
+                    className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500"
+                  >
+                    <option value="">No squad</option>
+                    {squads.map(sq => (
+                      <option key={sq.id} value={sq.id}>
+                        {sq.name} ({sq.memberAgentIds.length})
+                      </option>
                     ))}
                   </select>
                 </div>
