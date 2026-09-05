@@ -31,7 +31,6 @@ import {
   initialIssues,
   initialAgents,
   initialDeployments,
-  initialInbox,
   initialAnalytics,
   initialSettings,
   initialUsers,
@@ -348,7 +347,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [runtimes, setRuntimes] = useState<RuntimeEngine[]>(() => loadFromStorage<RuntimeEngine[]>('runtimes', []));
   const [skills, setSkills] = useState<Skill[]>(() => loadFromStorage<Skill[]>('skills', []));
   const [deployments, setDeployments] = useState<Deployment[]>(() => loadFromStorage('deployments', initialDeployments));
-  const [inbox, setInbox] = useState<InboxNotification[]>(() => loadFromStorage('inbox', initialInbox));
+  /**
+   * Starts empty, not seeded.
+   *
+   * `initialInbox` shipped three notifications about work nobody in this
+   * install had done — a money-transfer view, two home-screen redesigns — sitting
+   * above the real run notifications and indistinguishable from them at a
+   * glance. An inbox that invents its own contents cannot be trusted for the
+   * ones that matter.
+   */
+  const [inbox, setInbox] = useState<InboxNotification[]>(() => loadFromStorage<InboxNotification[]>('inbox', []));
   const [analytics, setAnalytics] = useState<AnalyticsData>(() => loadFromStorage('analytics', initialAnalytics));
   const [settings, setSettings] = useState<WorkspaceSettings>(() => loadFromStorage('settings', initialSettings));
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => loadFromStorage<ChatThread[]>('chat_threads', []));
@@ -1127,18 +1135,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
+      /**
+       * A branch name, and no invented pull request.
+       *
+       * This minted `github.com/multica/alpha-engine/pull/<random 10-89>` — a
+       * repository nobody here owns, numbered at random. It is where
+       * `pull/mock-alf-101` came from, and a plausible-looking URL is worse
+       * than an empty field: the Inbox rendered it as a real review link.
+       *
+       * A real run sets `prUrl` from what `gh` actually opened. If there is no
+       * remote there is no pull request, and the UI should say so.
+       */
       const branchName = `feat/${targetIssue.identifier.toLowerCase()}-prototype`;
-      const prUrl = `https://github.com/multica/alpha-engine/pull/${Math.floor(Math.random() * 80) + 10}`;
       setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
         ...item,
-        branchName,
-        prUrl
+        branchName
       } : item));
       setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
         ...issue,
         status: 'review',
         branchName,
-        prUrl,
         subtasks: issue.subtasks.map(subtask => ({ ...subtask, completed: true })),
         comments: issue.comments.some(comment => comment.id === `comm-${run.id}-review`)
           ? issue.comments
@@ -1171,7 +1187,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: `notif-${run.id}-approval`,
         type: 'agent_approval',
         title: `Review requested: ${targetIssue.identifier}`,
-        message: `${assignedAgent.name} completed the approved plan and prepared a simulated pull request.`,
+        /**
+         * What actually happened, which is not always the same thing.
+         *
+         * This read "prepared a simulated pull request" for every run. It was
+         * written when a run was a 4.5s timer and a mock URL, and stayed after
+         * runs became real — so a run that opened a genuine pull request still
+         * announced itself as simulated. Three outcomes are possible and they
+         * are not interchangeable: a real PR, a commit with no remote to push
+         * to, or no change at all.
+         */
+        message: run.prUrl && !run.prUrl.includes('mock-')
+          ? `${assignedAgent.name} opened a pull request: ${run.prUrl}`
+          : run.changedFiles
+            ? `${assignedAgent.name} committed ${run.changedFiles} file(s) to ${run.branchName ?? 'the branch'}. No pull request — the repository has no remote configured.`
+            : `${assignedAgent.name} finished without changing any files. Check the run log.`,
         read: false,
         timestamp: now,
         entityType: 'issue',
@@ -1658,7 +1688,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...d,
           status: 'success',
           durationSec: 48,
-          previewUrl: `https://${env.toLowerCase()}-alpha.multica.internal`,
+          // Was `https://<env>-alpha.multica.internal`, an internal hostname of
+          // an organisation unrelated to this install that resolves nowhere.
+          previewUrl: undefined,
           stages: [
             { name: 'Lint & Strict Typecheck', status: 'success', durationSec: 10, logs: ['0 errors found.'] },
             { name: 'Autonomous Agent QA Tests', status: 'success', durationSec: 18, logs: ['All 42 tests passed.'] },
@@ -1743,6 +1775,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const now = new Date().toISOString();
+
+    /**
+     * Tell the daemon, so the decision outlives this tab.
+     *
+     * The state changes below are optimistic; without this the run stayed
+     * `awaiting_approval` in SQLite and the same notification returned on the
+     * next reload.
+     */
+    persist(
+      () => apiService.approveRun(run.id, action === 'approved'),
+      () => {},
+      msg => showToast('Review not recorded', msg, 'error')
+    );
+
     if (action === 'approved') {
       setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
         ...item,

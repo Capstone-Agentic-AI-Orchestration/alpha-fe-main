@@ -27,8 +27,18 @@ export const DownloadDesktopModal: React.FC<DownloadDesktopModalProps> = ({ isOp
     window.open('http://localhost:3001/api/download/exe', '_blank');
   };
 
+  /**
+   * The launcher by name, not by one machine's path.
+   *
+   * This copied `C:\Users\Lloyd\Documents\Projects\Capstone\Alpha-v2\start-alpha.bat`
+   * to every user's clipboard — a directory nobody else has. The browser cannot
+   * know where someone cloned Alpha, and the file sits at the root of that
+   * checkout, so naming it is the honest answer.
+   */
+  const LAUNCHER_FILE = 'start-alpha.bat';
+
   const handleCopyPath = () => {
-    navigator.clipboard.writeText('C:\\Users\\Lloyd\\Documents\\Projects\\Capstone\\Alpha-v2\\start-alpha.bat');
+    navigator.clipboard.writeText(LAUNCHER_FILE);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -137,8 +147,9 @@ export const DownloadDesktopModal: React.FC<DownloadDesktopModalProps> = ({ isOp
         {/* Local File Path Reference */}
         <div className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 flex items-center justify-between gap-2 font-mono text-[11px]">
           <div className="truncate text-gray-400">
-            <span className="text-gray-500">Local path: </span>
-            <span>C:\Users\Lloyd\Documents\Projects\Capstone\Alpha-v2\start-alpha.bat</span>
+            <span className="text-gray-500">Launcher: </span>
+            <span>{LAUNCHER_FILE}</span>
+            <span className="text-gray-600"> — in your Alpha folder</span>
           </div>
           <button
             type="button"

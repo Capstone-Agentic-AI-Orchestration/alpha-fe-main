@@ -310,6 +310,12 @@ export const apiService = {
   getRuns: () => fetchJson<PrototypeRun[]>('/runs'),
   startRun: (payload: { issueId: string; agentId: string; plan?: string[]; scenario?: string }) =>
     fetchJson<PrototypeRun>('/runs/start', { method: 'POST', body: JSON.stringify(payload) }),
+  /** Settle a run waiting at the review gate. */
+  approveRun: (id: string, approved: boolean) =>
+    fetchJson<PrototypeRun>(`/runs/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ approved })
+    }),
   cancelRun: (id: string) =>
     fetchJson<{ success: boolean }>(`/runs/${id}/cancel`, { method: 'POST' }),
   retryRun: (id: string) =>
