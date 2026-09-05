@@ -17,6 +17,7 @@ import {
 import { RoleBadge } from '@/shared/components/Badge';
 import { ChatMessage, ToolExecutionRecord } from '@/shared/types';
 import { AgentReadinessNotice } from '@/features/agents/AgentReadinessNotice';
+import { ThreadProjectPicker } from '@/features/chat/ThreadProjectPicker';
 
 export const ChatView: React.FC = () => {
   const { 
@@ -293,6 +294,16 @@ export const ChatView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Which repository the agents in this thread can read. Hidden
+                    for client threads, which never address an agent. */}
+                {!isClient && (
+                  <ThreadProjectPicker
+                    key={activeThread.id}
+                    threadId={activeThread.id}
+                    projectId={activeThread.projectId}
+                  />
+                )}
+
                 {/* The inspector configures an agent's model and prompt. There
                     is no agent behind a client conversation. */}
                 {!isClient && (

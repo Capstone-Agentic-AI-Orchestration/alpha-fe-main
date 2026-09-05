@@ -165,7 +165,17 @@ export type ScaffoldStack = 'nodejs' | 'nestjs' | 'nextjs' | 'react';
 
 export interface ProjectResource {
   id: string;
-  type: 'github_repo' | 'local_dir';
+  /**
+   * Mirrors the daemon's `ProjectResource['type']`, which this was missing two
+   * members of.
+   *
+   * `local_path` is the one that matters: it is what an attached working copy
+   * is stored as, and what `resolveProjectWorkspace` looks for. The seeded
+   * project used it, so the client has always received values its own type said
+   * were impossible — narrowing that TypeScript could not catch, because the
+   * data arrives as JSON.
+   */
+  type: 'github_repo' | 'local_path' | 'local_dir' | 'documentation' | 'api_endpoint';
   name: string;
   pathOrUrl: string;
   branchOrMachine?: string;
@@ -580,6 +590,13 @@ export interface ChatThread {
   id: string;
   title: string;
   agentIds: string[];
+  /**
+   * Which project this conversation is about, when it is about one.
+   *
+   * Decides the directory the agents in this thread can read. Absent means the
+   * managed workspace root, which is right for a chat that is not about code.
+   */
+  projectId?: string;
   squadId?: string;
   lastMessageAt: string;
   pinned: boolean;
