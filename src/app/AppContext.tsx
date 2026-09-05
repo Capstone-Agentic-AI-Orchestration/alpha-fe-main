@@ -353,6 +353,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [settings, setSettings] = useState<WorkspaceSettings>(() => loadFromStorage('settings', initialSettings));
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => loadFromStorage<ChatThread[]>('chat_threads', []));
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
+  /**
+   * Threads whose messages have been fetched this session.
+   *
+   * A ref rather than state: it must not trigger a render, and it must not be
+   * stale inside the effect that reads it. Without it, re-opening a thread
+   * would re-fetch on every switch.
+   */
+  const loadedThreadsRef = useRef<Set<string>>(new Set());
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage<ChatMessage[]>('chat_messages', []));
   const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() => loadFromStorage('prototype_runs', []));
   const [squadRuns, setSquadRuns] = useState<SquadRun[]>(() => loadFromStorage('squad_runs', []));
@@ -436,7 +444,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (snapshot.squads) setSquads(snapshot.squads as Squad[]);
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
-      if (snapshot.chatThreads) setChatThreads(snapshot.chatThreads as ChatThread[]);
+      /**
+       * Keep whatever messages are already loaded.
+       *
+       * `GET /chat/threads` returns thread rows and nothing else — the daemon
+       * keeps messages in their own table, while the client nests them inside
+       * the thread. So a plain replace handed every thread `messages:
+       * undefined`, wiping the conversation out of state, and the persistence
+       * effect below then wrote that empty version back over localStorage.
+       *
+       * The transcript was never lost — 217 rows sat in SQLite the whole time —
+       * but the UI destroyed its own copy on every page load and had no way to
+       * ask for it back. Merging keeps what is in hand; `loadThreadMessages`
+       * fetches the rest when a thread is opened.
+       */
+      if (snapshot.chatThreads) {
+        setChatThreads(prev => {
+          const loaded = new Map(prev.map(t => [t.id, t.messages]));
+          return (snapshot.chatThreads as ChatThread[]).map(t => ({
+            ...t,
+            messages: t.messages ?? loaded.get(t.id)
+          }));
+        });
+      }
       if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
 
@@ -477,6 +507,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const id = window.setInterval(refresh, REFRESH_MS);
     return () => { cancelled = true; window.clearInterval(id); };
   }, []);
+
+  /**
+   * Load a thread's transcript from the daemon when it is opened.
+   *
+   * The daemon has always served this (`GET /chat/threads/:id/messages`) and
+   * `apiService.getChatMessages` has always existed — nothing called either.
+   * `useChatViewModel` even implements the loader, but no component mounts it,
+   * so the route had no caller at all and a conversation only existed in
+   * whatever the browser happened to still hold.
+   *
+   * Fetched once per thread per session. Live sends append to state directly,
+   * so re-fetching on every switch would cost a request to learn what is
+   * already on screen.
+   */
+  useEffect(() => {
+    const threadId = activeThreadId;
+    if (!threadId || loadedThreadsRef.current.has(threadId)) return;
+
+    let cancelled = false;
+    loadedThreadsRef.current.add(threadId);
+
+    apiService
+      .getChatMessages(threadId)
+      .then(messages => {
+        if (cancelled || !messages) return;
+        setChatThreads(prev =>
+          prev.map(t => (t.id === threadId ? { ...t, messages } : t))
+        );
+      })
+      .catch(() => {
+        // Allow a retry on the next open rather than leaving the thread
+        // permanently marked as loaded against a daemon that was briefly down.
+        loadedThreadsRef.current.delete(threadId);
+      });
+
+    return () => { cancelled = true; };
+  }, [activeThreadId]);
 
   // Sync to local storage
   useEffect(() => { saveToStorage('workspace_tabs_v2', tabs); }, [tabs]);
@@ -1751,10 +1818,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteThread = (id: string) => {
+    const removed = chatThreads.find(t => t.id === id);
+    const wasActive = activeThreadId === id;
+
     setChatThreads(prev => prev.filter(t => t.id !== id));
-    if (activeThreadId === id) {
-      setActiveThreadId(null);
-    }
+    if (wasActive) setActiveThreadId(null);
+
+    /**
+     * This button removed the thread from React state and nothing else, so the
+     * rows stayed in SQLite. It looked convincing because hydration was wiping
+     * the client's messages anyway — the thread came back empty and read as
+     * deleted. Now that transcripts are re-fetched, a delete that does not
+     * reach the daemon would visibly undo itself on the next reload.
+     */
+    persist(
+      () => apiService.deleteChatThread(id),
+      () => { loadedThreadsRef.current.delete(id); },
+      msg => {
+        if (removed) setChatThreads(prev => [removed, ...prev]);
+        if (wasActive) setActiveThreadId(id);
+        showToast('Conversation not deleted', msg, 'error');
+      }
+    );
   };
 
   const sendChatMessage = async (content: string) => {
@@ -1971,10 +2056,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const clearChat = () => {
-    if (activeThreadId) {
-      setChatThreads(prev => prev.map(t => t.id === activeThreadId ? { ...t, messages: [], lastMessageSnippet: '' } : t));
-    }
+    const id = activeThreadId;
+    if (!id) return;
+
+    const previous = chatThreads.find(t => t.id === id)?.messages;
+    setChatThreads(prev =>
+      prev.map(t => (t.id === id ? { ...t, messages: [], lastMessageSnippet: '' } : t))
+    );
     setChatMessages([]);
+
+    // Emptied on the daemon too, session rows included — a resumed CLI session
+    // would otherwise answer from the history that was just cleared.
+    persist(
+      () => apiService.clearChatMessages(id),
+      () => { loadedThreadsRef.current.delete(id); },
+      msg => {
+        setChatThreads(prev =>
+          prev.map(t => (t.id === id ? { ...t, messages: previous } : t))
+        );
+        showToast('Conversation not cleared', msg, 'error');
+      }
+    );
   };
 
   // Settings

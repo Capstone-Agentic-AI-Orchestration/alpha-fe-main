@@ -103,6 +103,17 @@ export const apiService = {
     }
   },
 
+  /**
+   * Is this folder usable as a project working copy?
+   *
+   * Asked before saving so a bad path is reported while the person is looking
+   * at the field, not during the workspace stage of an agent run.
+   */
+  checkWorkspace: (path: string) =>
+    fetchJson<{ ok: boolean; problem?: string; detail?: string }>('/projects/check-workspace', {
+      method: 'POST',
+      body: JSON.stringify({ path })
+    }),
   updateProject: (id: string, updates: Partial<Project>) =>
     fetchJson<Project>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteProject: (id: string) =>
@@ -313,8 +324,28 @@ export const apiService = {
 
   // Chat
   getChatThreads: () => fetchJson<ChatThread[]>('/chat/threads'),
+  /**
+   * Point a thread at a project, or at nothing.
+   *
+   * Returns the thread plus `workspaceDir` — the directory that choice actually
+   * resolved to, which is not always the obvious one when a project holds both
+   * a scaffolded checkout and a hand-attached folder.
+   */
+  setThreadProject: (id: string, projectId: string | null) =>
+    fetchJson<ChatThread & { workspaceDir: string | null; workspaceManaged: boolean | null }>(
+      `/chat/threads/${id}`,
+      { method: 'PUT', body: JSON.stringify({ projectId }) }
+    ),
   createChatThread: (thread: Partial<ChatThread>) =>
     fetchJson<ChatThread>('/chat/threads', { method: 'POST', body: JSON.stringify(thread) }),
+  /** Delete a conversation. Its messages cascade; its CLI session rows go too. */
+  deleteChatThread: (id: string) =>
+    fetchJson<{ success: boolean }>(`/chat/threads/${id}`, { method: 'DELETE' }),
+  /** Empty a conversation but keep it. */
+  clearChatMessages: (id: string) =>
+    fetchJson<{ success: boolean; removed: number }>(`/chat/threads/${id}/messages`, {
+      method: 'DELETE'
+    }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
   sendChatMessage: (payload: { threadId: string; content: string; senderName?: string }) =>
     fetchJson<{

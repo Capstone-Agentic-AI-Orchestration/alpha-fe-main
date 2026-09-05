@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { apiService } from '@/shared/services/apiService';
 import { ProjectResource, ScaffoldStack } from '@/shared/types';
 import { GitBranch, Folder, FolderOpen, Plus, Trash2 } from 'lucide-react';
+import { AttachWorkspaceForm } from './AttachWorkspaceForm';
 
 interface ProjectResourcesPanelProps {
   /** Owning project. Repositories are scaffolded against it, never standalone. */
@@ -345,11 +346,26 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         </div>
       )}
 
+      {/*
+        Attaching a checkout is the first thing a new collaborator does, and
+        there was no way to do it — the panel could only scaffold a brand new
+        repository, which is the wrong shape for someone who has just cloned
+        the team's. Placed above the list because on a fresh project the list
+        is empty and this is the only useful control on the screen.
+      */}
+      {variant === 'full' && (
+        <AttachWorkspaceForm
+          project={{ id: projectId, resources }}
+          onAttached={onChange}
+        />
+      )}
+
       {/* Attached resources */}
       <div className="space-y-2 max-h-48 overflow-y-auto">
         {resources.length === 0 ? (
           <p className="p-3 text-gray-500 italic bg-[#0A0B0E] rounded-xl border border-white/5">
-            No resources attached yet. Agents will work in the default workspace.
+            Nothing attached yet. Agents need a working copy before they can run —
+            attach a folder above.
           </p>
         ) : (
           resources.map((res) => (
