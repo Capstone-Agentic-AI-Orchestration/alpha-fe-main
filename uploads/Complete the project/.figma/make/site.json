@@ -1,0 +1,10 @@
+{
+  "description": "This web application streamlines project management by guiding users through tasks with step-by-step checklists, ensuring completion and quality.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
