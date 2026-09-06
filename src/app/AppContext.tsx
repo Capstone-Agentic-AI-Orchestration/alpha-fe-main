@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { ROLE_NAV } from '@/config/navigation';
 import {
   NavigationTab,
   TabItem,
@@ -240,41 +241,14 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
   ]
 };
 
-const ROLE_TABS: Record<UserRole, NavigationTab[]> = {
-  client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
-  dev: ['my_issues', 'issues', 'documents', 'inbox', 'chat', 'agents', 'deployments', 'runtimes', 'skills', 'settings'],
-  pm: [
-    'inbox',
-    'chat',
-    'my_issues',
-    'issues',
-    'projects',
-    'documents',
-    'deployments',
-    'agents',
-    'squads',
-    'analytics',
-    'runtimes',
-    'skills',
-    'settings'
-  ],
-  admin: [
-    'inbox',
-    'chat',
-    'my_issues',
-    'issues',
-    'projects',
-    'documents',
-    'billing',
-    'deployments',
-    'agents',
-    'squads',
-    'analytics',
-    'runtimes',
-    'skills',
-    'settings'
-  ]
-};
+/**
+ * Which destinations each role may reach.
+ *
+ * Was a literal here, a second table in Sidebar.tsx, and two switch statements
+ * in App.tsx — four copies that had already diverged. Now one table in
+ * config/navigation, and this is the alias the rest of the store still reads.
+ */
+const ROLE_TABS = ROLE_NAV;
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 

@@ -1,28 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { navItem, navIcon, navLabel } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
-import {
-  Inbox,
-  MessageSquare,
-  User,
-  CheckSquare,
-  FolderKanban,
-  Bot,
-  Users,
-  BarChart3,
-  Monitor,
-  BookOpen,
-  Settings,
-  Search,
-  Edit3,
-  ChevronDown,
-  HelpCircle,
-  Rocket,
-  FileText,
-  CreditCard,
-  LayoutDashboard,
-  PenLine
-} from 'lucide-react';
+import { Search, Edit3, ChevronDown, HelpCircle } from 'lucide-react';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -30,29 +10,13 @@ interface SidebarProps {
   onOpenNewIssue: () => void;
 }
 
-/** Labels differ per persona: same record, named the way the reader recognises it. */
-const NAV_META: Record<
-  NavigationTab,
-  { label: string; clientLabel?: string; icon: React.ReactNode; group: 'primary' | 'workspace' | 'configure' }
-> = {
-  portal:      { label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" />, group: 'primary' },
-  intake:      { label: 'New request', icon: <PenLine className="w-4 h-4" />, group: 'primary' },
-  inbox:       { label: 'Inbox', icon: <Inbox className="w-4 h-4" />, group: 'primary' },
-  chat:        { label: 'Chat', clientLabel: 'Messages', icon: <MessageSquare className="w-4 h-4" />, group: 'primary' },
-  my_issues:   { label: 'My Issues', icon: <User className="w-4 h-4" />, group: 'primary' },
-  documents:   { label: 'Specifications', clientLabel: 'My requests', icon: <FileText className="w-4 h-4" />, group: 'workspace' },
-  issues:      { label: 'Issues', icon: <CheckSquare className="w-4 h-4" />, group: 'workspace' },
-  projects:    { label: 'Projects', icon: <FolderKanban className="w-4 h-4" />, group: 'workspace' },
-  deployments: { label: 'CI/CD Platform', icon: <Rocket className="w-4 h-4" />, group: 'workspace' },
-  agents:      { label: 'Agents', icon: <Bot className="w-4 h-4" />, group: 'workspace' },
-  squads:      { label: 'Squads', icon: <Users className="w-4 h-4" />, group: 'workspace' },
-  analytics:   { label: 'Analytics', icon: <BarChart3 className="w-4 h-4" />, group: 'workspace' },
-  billing:     { label: 'Billing & Usage', icon: <CreditCard className="w-4 h-4" />, group: 'workspace' },
-  runtimes:    { label: 'Runtimes', icon: <Monitor className="w-4 h-4" />, group: 'configure' },
-  skills:      { label: 'Skills', icon: <BookOpen className="w-4 h-4" />, group: 'configure' },
-  settings:    { label: 'Settings', icon: <Settings className="w-4 h-4" />, group: 'configure' }
-};
-
+/**
+ * The navigation table used to be duplicated here.
+ *
+ * Labels, icons and grouping lived in a `NAV_META` record that App.tsx
+ * mirrored in three more places, and they had already drifted — App.tsx knew
+ * nothing about `portal` or `intake`. All four now read config/navigation.
+ */
 const ROLE_LABEL: Record<UserRole, string> = {
   client: 'Client',
   dev: 'Developer',
@@ -93,11 +57,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
   }, [roleMenuOpen]);
 
   const isClient = role === 'client';
-  const labelFor = (tab: NavigationTab) =>
-    (isClient && NAV_META[tab].clientLabel) || NAV_META[tab].label;
+  const labelFor = (tab: NavigationTab) => navLabel(tab, role);
 
   const group = (name: 'primary' | 'workspace' | 'configure') =>
-    visibleTabs.filter(t => NAV_META[t].group === name);
+    visibleTabs.filter(t => navItem(t).group === name);
 
   const navButton = (tab: NavigationTab) => (
     <button
@@ -110,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
       }`}
     >
       <div className="flex items-center gap-3">
-        {NAV_META[tab].icon}
+        {navIcon(tab)}
         <span>{labelFor(tab)}</span>
       </div>
       {tab === 'inbox' && unreadInboxCount > 0 && (
