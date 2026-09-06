@@ -34,7 +34,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
     visibleTabs,
     role,
     switchRole,
-    currentUser
+    currentUser,
+    identity,
+    roleIsOverridden
   } = useApp();
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
@@ -55,6 +57,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
       document.removeEventListener('keydown', onKey);
     };
   }, [roleMenuOpen]);
+
+  /**
+   * What this workspace is actually called.
+   *
+   * Defaulted to "Multica Alpha Workspace" — a product this is not — seeded
+   * from mockData and shown to everyone who never opened Settings. The
+   * organisation the daemon derived from the attached repositories is a true
+   * answer and needs no configuring.
+   */
+  const workspaceName =
+    settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
 
   const isClient = role === 'client';
   const labelFor = (tab: NavigationTab) => navLabel(tab, role);
@@ -97,7 +110,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
                 {isClient ? (currentUser.company?.[0] ?? 'C') : 'A'}
               </div>
               <span className="text-sm font-semibold text-white truncate">
-                {isClient ? currentUser.company : settings.workspaceName || 'Alpha work'}
+                {isClient ? currentUser.company : workspaceName}
               </span>
             </div>
             <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
@@ -109,7 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
               <div className="flex items-center gap-2.5 px-3 py-2 rounded-md bg-white/[0.04] text-white font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 <span className="truncate">
-                  {isClient ? currentUser.company : settings.workspaceName || 'Alpha work'}
+                  {isClient ? currentUser.company : workspaceName}
                 </span>
               </div>
               <button
@@ -186,12 +199,28 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
           onClick={() => setRoleMenuOpen(!roleMenuOpen)}
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-white/[0.035] transition-colors text-left"
         >
+          {/*
+            Who you actually are.
+            
+            This read `currentUser`, which is picked from a mock array by
+            whichever role the switcher is on — so the footer showed a person
+            who does not exist while the daemon knew perfectly well it was
+            talking to a GitHub account. `identity` is that account; the mock
+            remains only as the fallback for a machine with no gh at all.
+          */}
           <div className="w-7 h-7 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center text-xs font-semibold text-gray-200 flex-shrink-0">
-            {currentUser.name[0]}
+            {(identity?.login ?? currentUser.name)[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-white truncate">{currentUser.name}</p>
-            <p className="text-[11px] text-gray-500">{ROLE_LABEL[role]}</p>
+            <p className="text-xs text-white truncate">{identity?.login ?? currentUser.name}</p>
+            <p className="text-[11px] text-gray-500 flex items-center gap-1">
+              <span>{ROLE_LABEL[role]}</span>
+              {/*
+                Say when the role is not the one GitHub gave you. Without it the
+                footer asserts a persona you are only borrowing.
+              */}
+              {roleIsOverridden && <span className="text-amber-500/80">· viewing as</span>}
+            </p>
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
         </button>

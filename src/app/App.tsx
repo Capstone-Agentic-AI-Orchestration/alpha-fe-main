@@ -110,7 +110,7 @@ export const App: React.FC = () => {
 
   return (
     <div className="flex h-screen w-screen bg-background text-gray-100 font-sans overflow-hidden text-sm">
-      {/* Multica Sidebar */}
+      {/* Sidebar */}
       <Sidebar 
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -119,7 +119,7 @@ export const App: React.FC = () => {
 
       {/* Main Workspace Frame */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#121315] overflow-hidden">
-        {/* Multica Top Window Tab Bar */}
+        {/* Tab bar */}
         <div className="h-10 bg-[#101113] border-b border-white/[0.06] flex items-center px-3 z-20 relative">
           {/* Scrollable Open Tabs List */}
           <div className="flex items-center gap-1 overflow-x-auto max-w-[calc(100%-60px)] no-scrollbar py-1">
@@ -247,7 +247,7 @@ export const App: React.FC = () => {
       {/* Global ⌘K Command Palette */}
       <CommandPalette />
 
-      {/* Multica Create Issue Modal */}
+      {/* Create issue */}
       <CreateIssueModal
         isOpen={createIssueOpen}
         onClose={() => setCreateIssueOpen(false)}

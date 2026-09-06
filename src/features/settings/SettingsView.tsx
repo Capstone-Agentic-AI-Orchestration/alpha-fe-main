@@ -97,7 +97,7 @@ export const SettingsView: React.FC = () => {
               {tabs.find(t => t.id === activeTab)?.label}
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Configure system parameters and preferences for your Multica workspace.
+              Configure system parameters and preferences for your Alpha workspace.
             </p>
           </div>
 
@@ -259,7 +259,7 @@ export const SettingsView: React.FC = () => {
                   <Server className="w-4 h-4" /> Local Engine Probe
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  When enabled, Multica polls `http://localhost:11434/api/tags` and `http://localhost:1234/v1/models` every 30s to discover newly downloaded models.
+                  When enabled, Alpha polls `http://localhost:11434/api/tags` and `http://localhost:1234/v1/models` every 30s to discover newly downloaded models.
                 </p>
               </div>
             </div>

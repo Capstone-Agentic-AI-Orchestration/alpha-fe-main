@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
       case 'skills': return 'MCP & Tool Registry';
       case 'deployments': return 'CI/CD Deployments';
       case 'settings': return 'Settings';
-      default: return 'Multica';
+      default: return 'Alpha';
     }
   };
 
@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
         </div>
       )}
 
-      {/* Multica Breadcrumb */}
+      {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs">
         <span className="text-gray-400 font-medium hover:text-white cursor-pointer" onClick={() => setActiveTab('issues')}>
           {settings.workspaceName}

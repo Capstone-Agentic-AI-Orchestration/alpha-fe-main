@@ -114,7 +114,7 @@ input[type='radio']:disabled {
   opacity: 0.45;
 }
 
-/* Custom Scrollbar for sleek Linear/Multica aesthetic */
+/* Custom Scrollbar for sleek Linear-like aesthetic */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;

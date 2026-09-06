@@ -165,7 +165,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
         }}
       />
 
-      {/* Multica Card Dialog (Spacious & Scaled) */}
+      {/* Card dialog */}
       <div 
         className={`relative w-full ${isFullscreen ? 'max-w-5xl h-[88vh]' : 'max-w-3xl min-h-[440px]'} bg-[#16171D] border border-white/15 rounded-2xl shadow-2xl overflow-visible z-10 animate-slide-up flex flex-col justify-between text-[15px]`}
         onClick={() => openMenu && setOpenMenu(null)}

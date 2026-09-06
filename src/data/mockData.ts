@@ -822,7 +822,7 @@ export const initialAnalytics: AnalyticsData = {
 };
 
 export const initialSettings: WorkspaceSettings = {
-  workspaceName: 'Multica Alpha Workspace',
+  workspaceName: '',
   workspaceSlug: 'alpha-multica-hq',
   activeTheme: 'dark',
   apiKeys: {
