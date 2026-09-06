@@ -1,4 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { NoTeamAccess } from '@/features/onboarding/NoTeamAccess';
+import { GitHubSetup } from '@/features/onboarding/GitHubSetup';
 import { useApp } from '@/app/AppContext';
 import { Sidebar } from '@/shared/layout/Sidebar';
 import { CommandPalette } from '@/shared/components/CommandPalette';
@@ -65,7 +67,10 @@ const ALL_TABS: { id: NavigationTab; title: string; subtitle: string; icon: Reac
 ];
 
 export const App: React.FC = () => {
-  const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role } = useApp();
+  const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role,
+    identity,
+    refreshIdentity
+  } = useApp();
   const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
   const isClient = role === 'client';
 
@@ -144,6 +149,30 @@ export const App: React.FC = () => {
       default: return 'Inbox';
     }
   };
+
+  /**
+   * No role from GitHub means no workspace, not an empty one.
+   *
+   * Checked here rather than inside the shell because `ROLE_TABS[role]` drives
+   * navigation and its first entry is the default tab — a role with no tabs
+   * renders nothing and reads as a broken build. Only `no_team` blocks; the
+   * daemon has already excluded the cases where a missing role means "not yet
+   * known" rather than "nobody".
+   */
+  /**
+   * Setup comes before the role check.
+   *
+   * Without `gh` there is no identity, so there is no role either — showing
+   * "you have no team" to someone who has not installed the CLI would send
+   * them to an org owner for a problem they can fix themselves in a minute.
+   */
+  if (identity && identity.github && identity.github !== 'ok') {
+    return <GitHubSetup identity={identity} onRetry={refreshIdentity} />;
+  }
+
+  if (identity?.access === 'no_team') {
+    return <NoTeamAccess identity={identity} onRetry={refreshIdentity} />;
+  }
 
   return (
     <div className="flex h-screen w-screen bg-background text-gray-100 font-sans overflow-hidden text-sm">
@@ -270,7 +299,7 @@ export const App: React.FC = () => {
           {activeTab === 'chat' && <ChatView />}
           {activeTab === 'my_issues' && <IssuesView onlyMyIssues={true} onOpenNewIssue={() => setCreateIssueOpen(true)} />}
           {activeTab === 'issues' && <IssuesView onOpenNewIssue={() => setCreateIssueOpen(true)} />}
-          {activeTab === 'projects' && <ProjectsView />}
+          {activeTab === 'projects' && <ProjectsView onOpenNewIssue={() => setCreateIssueOpen(true)} />}
           {activeTab === 'agents' && <AgentsView />}
           {activeTab === 'squads' && <SquadsView />}
           {activeTab === 'analytics' && <AnalyticsView />}

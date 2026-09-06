@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   NavigationTab,
   TabItem,
@@ -25,7 +25,8 @@ import {
   IntakeAnswers,
   Estimate,
   RateCard,
-  Milestone
+  Milestone,
+  Identity
 } from '@/shared/types';
 import {
   initialIssues,
@@ -164,9 +165,25 @@ interface AppContextType {
   dismissToast: (id: string) => void;
   // Identity & access
   currentUser: User;
+  /**
+   * Who the daemon says you are. Undefined until it answers, and `source`
+   * distinguishes a GitHub login from a bare OS username.
+   */
+  identity?: Identity;
+  /** Re-resolve identity, for after someone is added to a team. */
+  refreshIdentity: () => Promise<void>;
+  /** Pull the board from GitHub now. */
+  syncBoard: () => Promise<void>;
+  /** When the last successful sync finished, or null if none has. */
+  lastSyncedAt: string | null;
+  syncing: boolean;
   users: User[];
   role: UserRole;
   switchRole: (role: UserRole) => void;
+  /** True when the role came from the picker rather than from GitHub. */
+  roleIsOverridden: boolean;
+  /** Drop the override and go back to what GitHub says. */
+  clearRoleOverride: () => void;
   can: (capability: Capability) => boolean;
   visibleTabs: NavigationTab[];
 
@@ -264,7 +281,88 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Role is resolved before any tab state, because what a tab is allowed to be
   // depends on it.
-  const [role, setRole] = useState<UserRole>(() => loadFromStorage<UserRole>('active_role', 'pm'));
+  /**
+   * Resolved once from the daemon, which reads it from `gh`.
+   *
+   * Not persisted: signing in or out on the machine changes the answer, and a
+   * stale login attributing issues to the wrong person is worse than a moment
+   * without one.
+   */
+  const [identity, setIdentity] = useState<Identity | undefined>(undefined);
+
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  /** Guards against overlapping syncs without waiting for a re-render. */
+  const syncingRef = useRef(false);
+
+  /**
+   * Pull the board from GitHub.
+   *
+   * One at a time: the poll and the button share this, and two overlapping
+   * pulls race to write the same cards — the second to finish leaves the board
+   * holding the older answer.
+   */
+  const syncBoard = useCallback(async () => {
+    if (syncingRef.current) return;
+    syncingRef.current = true;
+    setSyncing(true);
+    try {
+      const report = await apiService.syncBoard();
+      // Re-read rather than patching from the report: the daemon already
+      // assembled the board consistently, and rebuilding it from a summary is
+      // how the two versions drift apart.
+      const fresh = await apiService.getIssues();
+      if (fresh?.length) setIssues(fresh as any);
+      setLastSyncedAt(new Date().toISOString());
+
+      if (report.created + report.updated > 0) {
+        showToast('Board synced', `${report.created} new, ${report.updated} updated from GitHub.`, 'success');
+      }
+      // A workspace where one repository is unreachable still synced the
+      // others, so failures are named rather than failing the whole run.
+      for (const e of report.errors ?? []) {
+        showToast(`${e.project} did not sync`, e.detail, 'error');
+      }
+    } catch (err) {
+      showToast('Sync failed', err instanceof Error ? err.message : String(err), 'error');
+    } finally {
+      syncingRef.current = false;
+      setSyncing(false);
+    }
+  }, []);
+
+  /**
+    * The role you chose, which is an override rather than the answer.
+    *
+    * GitHub knows the answer — team membership in the workspace org — so this
+    * is only consulted when someone has deliberately switched. Kept because a
+    * capstone has to demonstrate four personas from one laptop, and the person
+    * demonstrating them is in exactly one team.
+    */
+  const [roleOverride, setRoleOverride] = useState<UserRole | null>(() =>
+    loadFromStorage<UserRole | null>('role_override', null)
+  );
+
+  /**
+   * What you actually are: GitHub first, your override only if you set one.
+   *
+   * `pm` remains the fallback for the case where nothing knows — no GitHub
+   * sign-in, or a workspace whose teams are named something the daemon does not
+   * recognise. It is the role that can see the most, so an unknown user gets a
+   * usable app rather than an empty one; the daemon still refuses anything they
+   * are not entitled to, and GitHub refuses it again after that.
+   */
+  /**
+   * What you actually are: GitHub first, your override only if you set one.
+   *
+   * The `pm` fallback is for the cases where nothing can know yet — identity
+   * still resolving, no GitHub sign-in, no workspace organisation. It is not a
+   * decision, and it no longer covers the case where GitHub *did* answer and
+   * the answer was nobody: that is `access === 'no_team'`, and the shell shows
+   * an explanation instead of a workspace. Falling through to `pm` there gave
+   * an unrecognised member the most powerful role in the product.
+   */
+  const role: UserRole = roleOverride ?? identity?.role ?? 'pm';
   const roleTabs = ROLE_TABS[role];
 
   const initialDefaultTabs: TabItem[] = [{ id: 'tab-default', view: roleTabs[0] }];
@@ -372,6 +470,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage<ChatMessage[]>('chat_messages', []));
   const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() => loadFromStorage('prototype_runs', []));
   const [squadRuns, setSquadRuns] = useState<SquadRun[]>(() => loadFromStorage('squad_runs', []));
+
   const [runSetupIssueId, setRunSetupIssueId] = useState<string | null>(null);
   const [runSetupAgentId, setRunSetupAgentId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -570,7 +669,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('chat_messages', chatMessages); }, [chatMessages]);
   useEffect(() => { saveToStorage('prototype_runs', prototypeRuns); }, [prototypeRuns]);
   useEffect(() => { saveToStorage('squad_runs', squadRuns); }, [squadRuns]);
-  useEffect(() => { saveToStorage('active_role', role); }, [role]);
+  useEffect(() => { saveToStorage('role_override', roleOverride); }, [roleOverride]);
+
+  /**
+   * Pull the board every minute, and once on load.
+   *
+   * A webhook would be push-based and instant, and it needs a public URL a
+   * laptop does not have — which would mean hosting something, the thing this
+   * architecture exists to avoid. A minute is well inside what anyone notices
+   * on a six-person board, and it costs four API calls against a limit of five
+   * thousand an hour.
+   *
+   * Paused while the tab is hidden: a laptop with Alpha open in a background
+   * tab for a week should not spend the rate limit on a board nobody is
+   * looking at.
+   */
+  useEffect(() => {
+    const tick = () => {
+      if (document.visibilityState === 'visible') void syncBoard();
+    };
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    // Catch up immediately when someone comes back to the tab, rather than
+    // showing a stale board until the next interval.
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [syncBoard]);
   useEffect(() => { saveToStorage('requirement_docs', requirementDocs); }, [requirementDocs]);
   useEffect(() => { saveToStorage('estimates', estimates); }, [estimates]);
 
@@ -631,8 +758,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
     });
 
+    /**
+     * A queued run reaching the front of its workspace queue.
+     *
+     * Runs sharing a project share its checkout, so the daemon serialises them.
+     * Nothing else rewrites `status` between accepting a run and finishing it,
+     * so without this a queued run would read as queued for its whole life.
+     */
+    const unsubStarted = runnerSocket.on('run_started', (startedRun) => {
+      setPrototypeRuns(prev => prev.map(r => r.id === startedRun.id ? startedRun : r));
+    });
+
+    /**
+     * A member finishing is not the squad finishing.
+     *
+     * Every member of a squad emits `run_completed`, so a four-member squad
+     * fired this handler four times: four "Run completed" toasts, and the card
+     * moved to Review while three agents were still working the branch. A run
+     * carrying a `squadRunId` records its result and stops there —
+     * `squad_run_completed` below is the event that means the work is done.
+     */
     const unsubComplete = runnerSocket.on('run_completed', (finalRun) => {
       setPrototypeRuns(prev => prev.map(r => r.id === finalRun.id ? finalRun : r));
+
+      if (finalRun.squadRunId) {
+        // Only the last member opens a pull request. Record the link the moment
+        // it exists, but leave the card where it is until the squad is done.
+        if (finalRun.prUrl) {
+          setIssues(prev => prev.map(i =>
+            i.id === finalRun.issueId ? { ...i, prUrl: finalRun.prUrl } : i
+          ));
+        }
+        return;
+      }
+
       setIssues(prev => prev.map(i => i.id === finalRun.issueId ? {
         ...i,
         status: 'review',
@@ -644,21 +803,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const unsubFailed = runnerSocket.on('run_failed', (failedRun) => {
       setPrototypeRuns(prev => prev.map(r => r.id === failedRun.id ? failedRun : r));
+      // A failed member stops its squad, and `squad_run_failed` says so with the
+      // reason and the position it stopped at. Reporting both is reporting twice.
+      if (failedRun.squadRunId) return;
       setIssues(prev => prev.map(i => i.id === failedRun.issueId ? { ...i, status: 'in_progress', updatedAt: new Date().toISOString() } : i));
       showToast('Run failed', failedRun.testSummary || 'Agent encountered an error.', 'error');
+    });
+
+    /**
+     * Who is working now.
+     *
+     * The daemon raises this at each handoff. What the context keeps is only
+     * the pointer every view needs — which member is live — while SquadRunFlow
+     * re-reads the run itself. Rebuilding a squad run from event payloads is
+     * how the two versions of it drift apart.
+     */
+    const unsubSquadMember = runnerSocket.on('squad_member_started', ({ squadRunId, memberIndex, memberCount, agentName }) => {
+      setSquadRuns(prev => prev.map(sr => sr.id === squadRunId
+        ? { ...sr, currentMemberIndex: memberIndex, status: 'running' as const, updatedAt: new Date().toISOString() }
+        : sr));
+      // Handoffs only. triggerSquadRun already announced the first member.
+      if (memberIndex > 0) {
+        showToast('Squad handoff', `${agentName} picked up member ${memberIndex + 1} of ${memberCount}.`, 'info');
+      }
+    });
+
+    const unsubSquadDone = runnerSocket.on('squad_run_completed', (squadRun) => {
+      setSquadRuns(prev => prev.map(sr => sr.id === squadRun.id ? squadRun : sr));
+      setSquads(prev => prev.map(s => s.id === squadRun.squadId
+        ? { ...s, activeRunsCount: Math.max(0, s.activeRunsCount - 1) }
+        : s));
+      setIssues(prev => prev.map(i => i.id === squadRun.issueId
+        ? { ...i, status: 'review', updatedAt: new Date().toISOString() }
+        : i));
+      showToast(
+        'Squad run finished',
+        `${squadRun.memberAgentIds.length} member(s) worked on ${squadRun.branchName}.`,
+        'success'
+      );
+    });
+
+    const unsubSquadFailed = runnerSocket.on('squad_run_failed', (squadRun) => {
+      setSquadRuns(prev => prev.map(sr => sr.id === squadRun.id ? squadRun : sr));
+      setSquads(prev => prev.map(s => s.id === squadRun.squadId
+        ? { ...s, activeRunsCount: Math.max(0, s.activeRunsCount - 1) }
+        : s));
+      setIssues(prev => prev.map(i => i.id === squadRun.issueId
+        ? { ...i, status: 'in_progress', updatedAt: new Date().toISOString() }
+        : i));
+      // The daemon's reason names the member and the position. It is better
+      // than anything this side could reconstruct.
+      showToast('Squad run stopped', squadRun.stoppedReason ?? 'A member did not finish.', 'error');
     });
 
     // Fetch initial persistent real state from backend
     apiService.checkHealth().then(async () => {
       try {
-        const [dbProjects, dbAgents, dbIssues, dbSquads, dbRuntimes, dbSkills, dbRuns] = await Promise.all([
+        const [dbProjects, dbAgents, dbIssues, dbSquads, dbRuntimes, dbSkills, dbRuns, dbSquadRuns] = await Promise.all([
           apiService.getProjects(),
           apiService.getAgents(),
           apiService.getIssues(),
           apiService.getSquads(),
           apiService.getRuntimes(),
           apiService.getSkills(),
-          apiService.getRuns()
+          apiService.getRuns(),
+          // Squad runs came from localStorage and nowhere else, so a reload
+          // mid-run left the flow view with nothing to show for a squad that
+          // was still working.
+          apiService.getSquadRuns()
         ]);
         if (dbProjects?.length) setProjects(dbProjects as any);
         if (dbAgents?.length) setAgents(dbAgents as any);
@@ -667,6 +879,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (dbRuntimes?.length) setRuntimes(dbRuntimes as any);
         if (dbSkills?.length) setSkills(dbSkills as any);
         if (dbRuns?.length) setPrototypeRuns(dbRuns as any);
+        if (dbSquadRuns?.length) setSquadRuns(dbSquadRuns as any);
+        apiService.getIdentity().then(setIdentity).catch(() => {
+          // An older daemon has no /me. The board still works; "Mine" does not.
+        });
       } catch (err) {
         console.warn('Backend sync error:', err);
       }
@@ -677,8 +893,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => {
       unsubStage();
       unsubLog();
+      unsubStarted();
       unsubComplete();
       unsubFailed();
+      unsubSquadMember();
+      unsubSquadDone();
+      unsubSquadFailed();
     };
   }, []);
 
@@ -688,13 +908,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Issue CRUD
   const createIssue = (input: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }): Issue => {
     const project = projects.find(p => p.id === input.projectId) || projects[0];
-    const nextNum = issues.length + 101;
-    const identifier = `${project ? project.key : 'ALF'}-${nextNum}`;
-    
+
+    /**
+     * A placeholder, not a guess.
+     *
+     * This used to compute `${key}-${issues.length + 101}` — a count of every
+     * issue in every project — and the daemon honoured whatever it was sent, so
+     * that number became the real one. The first issue of a new project came
+     * out as TES-107 because six issues happened to exist elsewhere.
+     *
+     * The daemon numbers per project and owns it now. This label exists only
+     * for the moment between the click and the response, and says so rather
+     * than inventing a number that is about to change under the reader.
+     */
+    const placeholder = `${project ? project.key : 'NEW'}-…`;
+
     const newIssue: Issue = {
       ...input,
       id: `iss-${Date.now()}`,
-      identifier,
+      identifier: placeholder,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       subtasks: (input.subtasks || []).map((st, i) => ({
@@ -702,15 +934,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         title: st,
         completed: false
       })),
-      comments: [
-        {
-          id: `comm-${Date.now()}`,
-          authorType: 'system',
-          authorName: 'System',
-          content: `Issue ${identifier} created and queued.`,
-          createdAt: new Date().toISOString()
-        }
-      ]
+      // The opening comment is written by the daemon, where the real identifier
+      // and the real author are both known.
+      comments: []
     };
 
     setIssues(prev => [newIssue, ...prev]);
@@ -719,7 +945,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newNotification: InboxNotification = {
       id: `notif-${Date.now()}`,
       type: 'issue_assigned',
-      title: `New Issue Created: ${identifier}`,
+      title: 'New issue created',
       message: `${newIssue.title} was created in project ${project ? project.name : 'Alpha'}.`,
       read: false,
       audience: 'internal',
@@ -727,7 +953,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       entityType: 'issue',
       entityId: newIssue.id,
       meta: {
-        issueIdentifier: identifier
+        issueIdentifier: placeholder
       }
     };
     setInbox(prev => [newNotification, ...prev]);
@@ -816,7 +1042,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!targetIssue) return;
 
     const blockingRun = prototypeRuns.find(run =>
-      run.issueId === issueId && ['running', 'awaiting_approval', 'validating'].includes(run.status)
+      run.issueId === issueId && ['queued', 'running', 'awaiting_approval', 'validating'].includes(run.status)
     );
     if (blockingRun) {
       showToast('Run already in progress', 'Open the issue to view its current status.', 'info');
@@ -1783,39 +2009,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
      * `awaiting_approval` in SQLite and the same notification returned on the
      * next reload.
      */
-    persist(
-      () => apiService.approveRun(run.id, action === 'approved'),
-      () => {},
-      msg => showToast('Review not recorded', msg, 'error')
-    );
-
     if (action === 'approved') {
-      setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
-        ...item,
-        status: 'validating',
-        updatedAt: now
-      } : item));
-      setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
-        ...issue,
-        comments: [...issue.comments, {
-          id: `comm-${run.id}-approved`,
-          authorType: 'system' as const,
-          authorName: 'Prototype runner',
-          content: 'Review approved. Merge triggered & Preview validation started.',
-          createdAt: now
-        }],
-        updatedAt: now
-      } : issue));
+      /**
+       * The daemon merges; this waits to hear whether it did.
+       *
+       * Two things used to happen here at once: `approveRun` recorded the
+       * decision and a separate `mergeGitHubPR` call did the merging, with its
+       * failure going to `console.warn`. So a merge blocked by a required check
+       * or a conflict still produced "Review approved", the card moved to Done,
+       * and the pull request stayed open with nobody told.
+       *
+       * The merge now belongs to the approve endpoint, which reports what
+       * actually happened. Nothing here moves until it answers.
+       */
+      apiService
+        .approveRun(run.id, true)
+        .then(() => {
+          setPrototypeRuns(prev => prev.map(item =>
+            item.id === run.id ? { ...item, status: 'completed', updatedAt: new Date().toISOString() } : item
+          ));
+          setIssues(prev => prev.map(issue =>
+            issue.id === run.issueId ? { ...issue, status: 'done', updatedAt: new Date().toISOString() } : issue
+          ));
+          showToast(
+            'Review approved',
+            run.prUrl ? `Merged ${run.prUrl}.` : 'No pull request to merge.',
+            'success'
+          );
+        })
+        .catch((err: unknown) => {
+          // Put the decision back: the run is still at the gate, and the
+          // notification must return rather than read as handled.
+          setInbox(prev => prev.map(n =>
+            n.id === notificationId ? { ...n, approvalStatus: undefined, read: true } : n
+          ));
+          const detail = err instanceof Error ? err.message : String(err);
+          showToast('Not merged', detail, 'error');
+        });
 
-      // If a real GitHub PR exists for this run, merge it
-      if (run.prUrl && !run.prUrl.includes('mock-')) {
-        apiService.mergeGitHubPR({ prUrl: run.prUrl })
-          .then(() => showToast('GitHub PR Merged', `Squashed and merged ${run.prUrl}`, 'success'))
-          .catch(err => console.warn('PR auto-merge warning:', err));
-      }
-
-      void triggerDeployment(run.projectId, 'Preview', { issueId: run.issueId, runId: run.id });
-      showToast('Review approved', 'PR merge dispatched and validation running in CI/CD.', 'success');
       return;
     }
 
@@ -2139,7 +2370,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const can = (capability: Capability) => ROLE_CAPABILITIES[role].includes(capability);
 
   const switchRole = (next: UserRole) => {
-    setRole(next);
+    setRoleOverride(next);
     // Reset the workspace to a landing surface that role is actually allowed on,
     // so no tab from the previous role survives the switch.
     const resetTab: TabItem = { id: `tab-${Date.now()}`, view: ROLE_TABS[next][0] };
@@ -2629,6 +2860,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updateSquad,
       deleteSquad,
       squadRuns,
+      identity,
+      lastSyncedAt,
+      syncing,
+      syncBoard,
+      refreshIdentity: async () => {
+        try {
+          setIdentity(await apiService.getIdentity());
+        } catch {
+          // An unreachable daemon leaves the last answer standing.
+        }
+      },
+      roleIsOverridden: roleOverride !== null,
+      clearRoleOverride: () => setRoleOverride(null),
       triggerSquadRun,
       runtimes,
       isScanningRuntimes,

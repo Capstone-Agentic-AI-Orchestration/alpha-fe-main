@@ -16,6 +16,7 @@ import {
   Workflow
 } from 'lucide-react';
 import { CreateSquadModal } from '@/features/squads/CreateSquadModal';
+import { SquadRunFlow } from '@/features/runs/SquadRunFlow';
 
 export const SquadsView: React.FC = () => {
   const { squads, agents, issues, projects, triggerSquadRun } = useApp();
@@ -478,6 +479,13 @@ export const SquadsView: React.FC = () => {
                       );
                     })}
                   </div>
+
+                  {/*
+                    The diagram above is the squad as configured. This is the
+                    squad as it actually ran — the same order, with the live
+                    member marked. It renders nothing until there is a run.
+                  */}
+                  <SquadRunFlow squadId={selectedSquad.id} />
                 </div>
               )}
 
