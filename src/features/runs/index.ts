@@ -3,4 +3,6 @@
 
 export * from './AgentRunModal';
 export * from './AgentRunProgress';
+export * from './RemoteActivity';
+export * from './SquadRunFlow';
 export * from './useAgentRunViewModel';

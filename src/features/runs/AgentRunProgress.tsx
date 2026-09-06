@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, GitBranch, Loader2, RotateCcw, Square } from 'lucide-react';
 import { describeRunUsage } from '@/shared/lib/runUsage';
 import { useApp } from '@/app/AppContext';
+import { RemoteActivity } from '@/features/runs/RemoteActivity';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 
 interface AgentRunProgressProps {
@@ -9,6 +10,7 @@ interface AgentRunProgressProps {
 }
 
 const statusCopy = {
+  queued: 'Queued — the workspace is busy',
   running: 'Running',
   awaiting_approval: 'Awaiting review',
   validating: 'Validating in CI/CD',
@@ -60,6 +62,7 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
         <div>
           <p className="text-[11px] font-medium text-gray-500">Agent run</p>
           <div className="mt-1 flex items-center gap-2 text-xs font-medium text-gray-200">
+            {run.status === 'queued' && <Circle className="h-3.5 w-3.5 text-gray-500" />}
             {run.status === 'running' && <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />}
             {run.status === 'completed' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
             {run.status === 'failed' && <AlertCircle className="h-3.5 w-3.5 text-rose-400" />}
@@ -188,6 +191,9 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
           Open CI/CD validation →
         </button>
       )}
+
+      {/* What the run did to the remote. Renders nothing until something did. */}
+      <RemoteActivity runId={run.id} />
     </section>
   );
 };
