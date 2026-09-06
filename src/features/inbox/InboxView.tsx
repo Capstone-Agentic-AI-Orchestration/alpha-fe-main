@@ -62,9 +62,9 @@ export const InboxView: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex overflow-hidden bg-[#121315] text-gray-200 text-sm">
+    <div className="h-full flex overflow-hidden bg-shell text-gray-200 text-sm">
       {/* Left Column: Notifications Feed (Spacious & Scaled) */}
-      <div className="w-96 md:w-[420px] border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-[#101113]">
+      <div className="w-96 md:w-[420px] border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-shell">
         {/* Inbox Header */}
         <div className="h-14 px-5 border-b border-white/[0.06] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -165,7 +165,7 @@ export const InboxView: React.FC = () => {
       </div>
 
       {/* Right Column: Notification Inspector / Empty State */}
-      <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-[#121315]">
+      <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-shell">
         {selectedNotif ? (
           <div className="p-8 md:p-10 max-w-4xl space-y-7 animate-fade-in">
             {/* Top Row: Title + Author */}
@@ -223,7 +223,7 @@ export const InboxView: React.FC = () => {
                       if (failedRun) retryPrototypeRun(failedRun.id);
                       else runAgentOnIssue(selectedNotif.entityId);
                     }}
-                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-semibold shadow-sm transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-600 text-on-accent text-xs font-semibold shadow-sm transition-colors"
                   >
                     <RotateCcw className="w-4 h-4" />
                     <span>Retry Agent Execution</span>
@@ -281,7 +281,7 @@ export const InboxView: React.FC = () => {
                     </button>
                     <button
                       onClick={() => handleApproval(selectedNotif.id, 'approved')}
-                      className="flex items-center gap-2 bg-emerald-500 px-6 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-emerald-600"
+                      className="flex items-center gap-2 bg-emerald-500 px-6 py-2.5 text-xs font-semibold text-on-accent transition-colors hover:bg-emerald-600"
                     >
                       <CheckCircle2 className="w-4 h-4" />
                       <span>Approve & validate</span>

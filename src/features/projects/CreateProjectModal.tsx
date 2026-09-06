@@ -302,7 +302,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
             <button
               type="button"
               onClick={toggle('icon')}
-              className="w-11 h-10 rounded-xl bg-[#14151B] border border-white/10 flex items-center justify-center text-xl hover:border-brand-500/50 transition-colors"
+              className="w-11 h-10 rounded-xl bg-surface border border-white/10 flex items-center justify-center text-xl hover:border-brand-500/50 transition-colors"
               title="Project icon"
             >
               {icon}
@@ -343,7 +343,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
               }}
               placeholder="Project name"
               autoFocus
-              className="w-full bg-[#14151B] border border-white/10 rounded-xl pl-3.5 pr-16 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+              className="w-full bg-surface border border-white/10 rounded-xl pl-3.5 pr-16 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
             />
             {/* Derived, not typed — it prefixes every issue in the project. */}
             {name.trim() && (
@@ -364,7 +364,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="Goal & ground rules — objective, stack, architectural constraints…"
-            className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl p-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 leading-relaxed"
+            className="w-full bg-well border border-white/10 rounded-xl p-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 leading-relaxed"
           />
           <p className="text-[11px] text-gray-500">
             Shared with agents as context for every issue in this project.
@@ -377,7 +377,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
             {resources.map(res => (
               <div
                 key={res.id}
-                className="flex items-center justify-between p-2 rounded-lg bg-[#0A0B0E] border border-white/5 font-mono text-[11px]"
+                className="flex items-center justify-between p-2 rounded-lg bg-well border border-white/5 font-mono text-[11px]"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   {res.type === 'github_repo'
@@ -463,7 +463,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
                       setLeadMemberName(e.target.value);
                     }}
                     placeholder="e.g. Alex Rivers"
-                    className="w-full bg-[#14151B] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
                   />
                 </div>
                 <p className="text-[11px] text-gray-500 px-2 pt-1.5">
@@ -495,13 +495,13 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
                       }
                     }}
                     placeholder="github.com/owner/repo"
-                    className="flex-1 min-w-0 bg-[#14151B] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                    className="flex-1 min-w-0 bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
                   />
                   <button
                     type="button"
                     onClick={handleAddRepo}
                     disabled={!repoUrl.trim()}
-                    className="px-2.5 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-xs font-medium text-white disabled:opacity-40 transition-colors flex-shrink-0"
+                    className="px-2.5 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-xs font-medium text-on-accent disabled:opacity-40 transition-colors flex-shrink-0"
                   >
                     Add
                   </button>
@@ -548,7 +548,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
                   type="date"
                   value={targetDate}
                   onChange={(e) => setTargetDate(e.target.value)}
-                  className="w-full bg-[#14151B] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-brand-500"
                 />
                 {targetDate && (
                   <button
@@ -594,7 +594,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
               }`}
             >
               <span
-                className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                className={`h-4 w-4 rounded-full bg-on-accent shadow-sm transition-transform ${
                   createAnother ? 'translate-x-4' : 'translate-x-0'
                 }`}
               />
@@ -615,7 +615,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
               onClick={handleSubmit}
               disabled={!canSubmit}
               title="Create project (Ctrl/Cmd + Enter)"
-              className="inline-flex min-w-[112px] items-center justify-center rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-xs font-semibold text-white transition-colors disabled:cursor-not-allowed disabled:opacity-40"
+              className="inline-flex min-w-[112px] items-center justify-center rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-xs font-semibold text-on-accent transition-colors disabled:cursor-not-allowed disabled:opacity-40"
             >
               {submitting ? 'Creating…' : 'Create project'}
             </button>

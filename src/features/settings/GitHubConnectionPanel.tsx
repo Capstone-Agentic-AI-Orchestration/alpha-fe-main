@@ -292,7 +292,7 @@ export const GitHubConnectionPanel: React.FC = () => {
           type="button"
           onClick={connect}
           disabled={busy}
-          className="flex items-center gap-2 text-xs font-semibold text-white bg-brand-500 hover:bg-brand-600 rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 text-xs font-semibold text-on-accent bg-brand-500 hover:bg-brand-600 rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50"
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
           Connect to GitHub

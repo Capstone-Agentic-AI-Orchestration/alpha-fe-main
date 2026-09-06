@@ -70,7 +70,7 @@ export function RemoteActivity({ runId }: Readonly<Props>) {
   if (!actions.length) return null;
 
   return (
-    <div className="space-y-2 rounded-xl border border-white/5 bg-[#0A0B0E] p-3">
+    <div className="space-y-2 rounded-xl border border-white/5 bg-well p-3">
       <div className="flex items-center justify-between">
         <span className="text-[11px] font-medium text-gray-400">Remote activity</span>
         <span className="font-mono text-[10px] text-gray-500">{actions.length}</span>

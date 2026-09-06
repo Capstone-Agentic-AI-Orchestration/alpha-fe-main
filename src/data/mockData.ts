@@ -782,7 +782,7 @@ export const initialInbox: InboxNotification[] = [
       agentRole: 'Architect',
       issueIdentifier: 'ALP-42',
       proposedChanges: `+ export const InboxView: React.FC = () => {
-+   return <div className="h-full flex bg-[#16171D]">{/* 2-pane split inbox */}</div>;
++   return <div className="h-full flex bg-surface">{/* 2-pane split inbox */}</div>;
 + };`,
       costTokens: 3820
     }

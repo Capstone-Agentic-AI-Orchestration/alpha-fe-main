@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { navItem, navIcon, navLabel } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
-import { Search, Edit3, ChevronDown, HelpCircle } from 'lucide-react';
+import { Search, Edit3, ChevronDown, HelpCircle, Sun, Moon } from 'lucide-react';
+import { useTheme } from '@/shared/hooks/useTheme';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -38,6 +39,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
     identity,
     roleIsOverridden
   } = useApp();
+
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
@@ -96,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
   );
 
   return (
-    <aside className="w-60 bg-[#101113] border-r border-white/[0.06] flex flex-col flex-shrink-0 select-none z-20 text-gray-300 font-sans text-sm">
+    <aside className="w-60 bg-shell border-r border-white/[0.06] flex flex-col flex-shrink-0 select-none z-20 text-gray-300 font-sans text-sm">
 
       {/* Workspace */}
       <div className="pt-3 px-3 pb-3 space-y-3">
@@ -117,7 +120,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
           </button>
 
           {workspaceMenuOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-[#191A1D] border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-1 animate-slide-up text-sm">
+            <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-1 animate-slide-up text-sm">
               <div className="text-xs font-medium text-gray-500 px-2 py-1">Workspaces</div>
               <div className="flex items-center gap-2.5 px-3 py-2 rounded-md bg-white/[0.04] text-white font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
@@ -226,7 +229,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
         </button>
 
         {roleMenuOpen && (
-          <div className="absolute bottom-full left-2.5 right-2.5 mb-1.5 z-30 bg-[#191A1D] border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-0.5 animate-slide-up">
+          <div className="absolute bottom-full left-2.5 right-2.5 mb-1.5 z-30 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-0.5 animate-slide-up">
             <div className="text-xs font-medium text-gray-500 px-2.5 py-1.5">
               View as
             </div>
@@ -257,7 +260,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
           <HelpCircle className="w-4 h-4 text-gray-500" />
           <span>Prototype guide</span>
         </button>
-        <span className="font-mono text-[10px] text-brand-400 font-medium">v2.0.0</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            className="p-1 rounded hover:bg-white/[0.06] hover:text-gray-200 transition-colors"
+          >
+            {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+          </button>
+          <span className="font-mono text-[10px] text-brand-400 font-medium">v2.0.0</span>
+        </div>
       </div>
     </aside>
   );

@@ -191,10 +191,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     const progressPercent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
     return (
-      <div className="h-full flex flex-col overflow-hidden bg-[#121315] text-gray-300 select-none font-sans">
+      <div className="h-full flex flex-col overflow-hidden bg-shell text-gray-300 select-none font-sans">
         
         {/* ================= WORKSPACE TOP BREADCRUMB & ACTION BAR ================= */}
-        <div className="px-6 py-3.5 border-b border-white/[0.06] bg-[#121315] flex items-center justify-between gap-4 flex-shrink-0">
+        <div className="px-6 py-3.5 border-b border-white/[0.06] bg-shell flex items-center justify-between gap-4 flex-shrink-0">
           
           {/* Left: Breadcrumbs navigation */}
           <div className="flex items-center gap-3 min-w-0">
@@ -228,12 +228,12 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 value={boardSearchQuery}
                 onChange={(e) => setBoardSearchQuery(e.target.value)}
                 placeholder="Search issues..."
-                className="w-full bg-[#181920] border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+                className="w-full bg-surface-raised border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
               />
             </div>
 
             {/* View Mode Toggle (Kanban vs List) */}
-            <div className="flex items-center bg-[#181920] border border-white/5 rounded-xl p-0.5 text-xs">
+            <div className="flex items-center bg-surface-raised border border-white/5 rounded-xl p-0.5 text-xs">
               <button
                 onClick={() => setBoardViewMode('kanban')}
                 className={`p-1.5 rounded-lg transition-colors ${
@@ -257,7 +257,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             {/* Edit Project */}
             <button
               onClick={() => setEditingProject(selectedProject)}
-              className="p-1.5 rounded-xl bg-[#181920] hover:bg-[#22242D] border border-white/5 text-gray-400 hover:text-white transition-colors"
+              className="p-1.5 rounded-xl bg-surface-raised hover:bg-surface-high border border-white/5 text-gray-400 hover:text-white transition-colors"
               title="Edit Project Details"
             >
               <Edit3 className="w-4 h-4" />
@@ -266,7 +266,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             {/* New Issue Button */}
             <button
               onClick={() => onOpenNewIssue?.()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold shadow-glow-brand transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent text-xs font-semibold shadow-glow-brand transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Add issue</span>
@@ -298,7 +298,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
           </div>
 
           {/* ================= RIGHT SIDE PANEL: PROPERTIES, STATUS, RESOURCES ================= */}
-          <div className="w-80 border-l border-white/5 bg-[#121318] p-5 overflow-y-auto flex-shrink-0 space-y-6 text-xs font-sans">
+          <div className="w-80 border-l border-white/5 bg-shell p-5 overflow-y-auto flex-shrink-0 space-y-6 text-xs font-sans">
             
             {/* 1. Progress. The bar duplicated the per-column counts sitting a
                 few inches to the left, so only the number survives. */}
@@ -354,7 +354,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   <span>Ground Rules & Context</span>
                 </span>
               </div>
-              <p className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 text-gray-300 leading-relaxed font-mono text-[11px]">
+              <p className="p-3 rounded-xl bg-well border border-white/5 text-gray-300 leading-relaxed font-mono text-[11px]">
                 {selectedProject.description || 'No specific ground rules configured.'}
               </p>
             </div>
@@ -404,7 +404,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
                 <div className="space-y-1.5">
                   {boundAgents.map(agent => (
-                    <div key={agent.id} className="p-2 rounded-xl bg-[#0A0B0E] border border-white/5 flex items-center gap-2.5">
+                    <div key={agent.id} className="p-2 rounded-xl bg-well border border-white/5 flex items-center gap-2.5">
                       <img src={agent.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
                       <div className="min-w-0 flex-1">
                         <div className="text-xs font-medium text-white truncate">{agent.name}</div>
@@ -470,7 +470,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 <div className="space-y-1">
                   <label className="block text-[11px] font-medium text-gray-400">Icon</label>
                   <div className="relative group">
-                    <div className="w-12 h-[38px] rounded-xl bg-[#181920] border border-white/10 flex items-center justify-center text-xl cursor-pointer hover:border-brand-500/50 transition-colors">
+                    <div className="w-12 h-[38px] rounded-xl bg-surface-raised border border-white/10 flex items-center justify-center text-xl cursor-pointer hover:border-brand-500/50 transition-colors">
                       {editingProject.icon || '⚡'}
                     </div>
                     <div className="absolute top-full left-0 mt-1 p-2 bg-surface-100 border border-white/15 rounded-xl shadow-2xl z-30 hidden group-hover:grid grid-cols-4 gap-1.5 w-40">
@@ -494,7 +494,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                     type="text"
                     value={editingProject.name}
                     onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })}
-                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
                   />
                 </div>
 
@@ -505,7 +505,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                     maxLength={5}
                     value={editingProject.key}
                     onChange={(e) => setEditingProject({ ...editingProject, key: e.target.value.toUpperCase() })}
-                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white font-mono uppercase text-center focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white font-mono uppercase text-center focus:outline-none focus:border-brand-500"
                   />
                 </div>
               </div>
@@ -530,7 +530,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   rows={3}
                   value={editingProject.description}
                   onChange={(e) => setEditingProject({ ...editingProject, description: e.target.value })}
-                  className="w-full bg-[#181920] border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-brand-500 font-mono text-[11px]"
+                  className="w-full bg-surface-raised border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-brand-500 font-mono text-[11px]"
                 />
               </div>
 
@@ -540,7 +540,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   <select
                     value={editingProject.status}
                     onChange={(e) => setEditingProject({ ...editingProject, status: e.target.value as ProjectStatus })}
-                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
                   >
                     <option value="planned">Planned</option>
                     <option value="in_progress">In progress</option>
@@ -555,7 +555,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   <select
                     value={editingProject.priority || 'none'}
                     onChange={(e) => setEditingProject({ ...editingProject, priority: e.target.value as ProjectPriority })}
-                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
                   >
                     <option value="none">No priority</option>
                     <option value="urgent">Urgent</option>
@@ -573,7 +573,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   value={editingProject.leadName || ''}
                   onChange={(e) => setEditingProject({ ...editingProject, leadName: e.target.value })}
                   placeholder="e.g. lloyd lim"
-                  className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
                 />
               </div>
 
@@ -584,7 +584,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                     type="date"
                     value={editingProject.startDate || ''}
                     onChange={(e) => setEditingProject({ ...editingProject, startDate: e.target.value })}
-                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
                   />
                 </div>
 
@@ -594,7 +594,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                     type="date"
                     value={editingProject.targetDate || ''}
                     onChange={(e) => setEditingProject({ ...editingProject, targetDate: e.target.value })}
-                    className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
                   />
                 </div>
               </div>
@@ -623,7 +623,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium"
+                    className="px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-medium"
                   >
                     Save
                   </button>
@@ -641,7 +641,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   // VIEW 2: MAIN PROJECTS TABLE LIST
   // =========================================================================
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-[#121315] text-gray-300 p-6 space-y-6 select-none font-sans relative">
+    <div className="h-full flex flex-col overflow-y-auto bg-shell text-gray-300 p-6 space-y-6 select-none font-sans relative">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
@@ -657,7 +657,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
         {/* + New project button */}
         <button
           onClick={() => setCreateModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-xs font-medium text-white transition-colors"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-xs font-medium text-on-accent transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>New project</span>
@@ -674,7 +674,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search projects..."
-            className="w-full bg-[#17181B] border border-white/[0.07] rounded-md pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-surface border border-white/[0.07] rounded-md pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
 
@@ -700,7 +700,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
             {/* Filter Dropdown */}
             {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
+              <div className="absolute right-0 mt-1.5 w-52 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
                 <div>
                   <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Status</div>
                   {['all', 'in_progress', 'planned', 'paused', 'completed'].map((st) => (
@@ -757,7 +757,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
             {/* Sort Dropdown */}
             {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
+              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
                 {(['createdAt', 'name', 'progress', 'targetDate'] as const).map((field) => (
                   <button
                     key={field}

@@ -72,7 +72,7 @@ export const DownloadDesktopModal: React.FC<DownloadDesktopModalProps> = ({ isOp
         {/* Action Download Buttons */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {/* Primary .EXE / Full Platform Bundle */}
-          <div className="p-4 rounded-xl bg-[#0E0F14] border border-white/10 space-y-3 flex flex-col justify-between">
+          <div className="p-4 rounded-xl bg-well border border-white/10 space-y-3 flex flex-col justify-between">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-white text-xs">Full Desktop Bundle</span>
@@ -85,7 +85,7 @@ export const DownloadDesktopModal: React.FC<DownloadDesktopModalProps> = ({ isOp
             <button
               type="button"
               onClick={handleDownloadPackage}
-              className="w-full py-2.5 px-3 rounded-xl bg-brand-500 hover:bg-brand-600 font-semibold text-white transition-all shadow-glow-brand flex items-center justify-center gap-2"
+              className="w-full py-2.5 px-3 rounded-xl bg-brand-500 hover:bg-brand-600 font-semibold text-on-accent transition-all shadow-glow-brand flex items-center justify-center gap-2"
             >
               <Download className="w-4 h-4" />
               <span>Download Full Package (.zip)</span>
@@ -93,7 +93,7 @@ export const DownloadDesktopModal: React.FC<DownloadDesktopModalProps> = ({ isOp
           </div>
 
           {/* 1-Click Launcher .BAT */}
-          <div className="p-4 rounded-xl bg-[#0E0F14] border border-white/10 space-y-3 flex flex-col justify-between">
+          <div className="p-4 rounded-xl bg-well border border-white/10 space-y-3 flex flex-col justify-between">
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <span className="font-semibold text-white text-xs">1-Click Local Launcher</span>
@@ -120,21 +120,21 @@ export const DownloadDesktopModal: React.FC<DownloadDesktopModalProps> = ({ isOp
             Why Use Native Desktop Mode
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
-            <div className="p-3 rounded-xl bg-[#14151B] border border-white/5 space-y-1">
+            <div className="p-3 rounded-xl bg-surface border border-white/5 space-y-1">
               <div className="flex items-center gap-1.5 font-medium text-white">
                 <FolderCheck className="w-3.5 h-3.5 text-amber-400" />
                 <span>Native Folders</span>
               </div>
               <p className="text-gray-400 text-[10px]">Direct path selection without browser "Upload" prompts.</p>
             </div>
-            <div className="p-3 rounded-xl bg-[#14151B] border border-white/5 space-y-1">
+            <div className="p-3 rounded-xl bg-surface border border-white/5 space-y-1">
               <div className="flex items-center gap-1.5 font-medium text-white">
                 <Sparkles className="w-3.5 h-3.5 text-teal-400" />
                 <span>Zero Latency</span>
               </div>
               <p className="text-gray-400 text-[10px]">Instant IPC communication with local AI subagents.</p>
             </div>
-            <div className="p-3 rounded-xl bg-[#14151B] border border-white/5 space-y-1">
+            <div className="p-3 rounded-xl bg-surface border border-white/5 space-y-1">
               <div className="flex items-center gap-1.5 font-medium text-white">
                 <ShieldCheck className="w-3.5 h-3.5 text-indigo-400" />
                 <span>Allowlist Sandbox</span>
@@ -145,7 +145,7 @@ export const DownloadDesktopModal: React.FC<DownloadDesktopModalProps> = ({ isOp
         </div>
 
         {/* Local File Path Reference */}
-        <div className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 flex items-center justify-between gap-2 font-mono text-[11px]">
+        <div className="p-3 rounded-xl bg-well border border-white/5 flex items-center justify-between gap-2 font-mono text-[11px]">
           <div className="truncate text-gray-400">
             <span className="text-gray-500">Launcher: </span>
             <span>{LAUNCHER_FILE}</span>

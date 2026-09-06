@@ -98,7 +98,7 @@ export function SquadRunFlow({ issueId, squadId }: Readonly<Props>) {
   const status = detail?.status ?? squadRun.status;
 
   return (
-    <div className="space-y-2 rounded-xl border border-white/5 bg-[#0A0B0E] p-3">
+    <div className="space-y-2 rounded-xl border border-white/5 bg-well p-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-[11px] font-medium text-white">

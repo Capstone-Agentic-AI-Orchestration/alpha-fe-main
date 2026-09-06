@@ -2,12 +2,92 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * The two palettes.
+ *
+ * Light is the default and dark is opt-in under `.dark`, because a variable
+ * that is only defined inside a class stops existing the moment the class is
+ * absent — a thumbnail, a print stylesheet or a failed hydration would render
+ * an unstyled page. Defining light on bare `:root` means the app always has a
+ * complete palette and `.dark` only overrides it.
+ *
+ * `--c-white` is a role, not a colour: "whatever contrasts with the page". Some
+ * 1,150 utilities are white-alpha overlays (`border-white/[0.06]`,
+ * `bg-white/[0.04]`) used for hairlines and hover states, and they invert with
+ * this one value. Where a literal white is meant — text on a saturated button —
+ * the token is `--c-on-accent`, which never changes.
+ */
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
     font-size: 15px;
+
+    --c-white: 17 24 39;
+    --c-on-accent: 255 255 255;
+
+    /* Elevation reads by getting lighter in the dark theme and by separating
+       from a near-white page in the light one, so the ramp is not a simple
+       inversion of the other. */
+    --c-canvas: 246 247 249;
+    --c-well: 236 238 242;
+    --c-shell: 255 255 255;
+    --c-surface: 255 255 255;
+    --c-raised: 243 244 246;
+    --c-raised-2: 229 231 235;
+
+    /* The gray ramp runs dark-to-light here, the reverse of Tailwind's own, so
+       that `text-gray-100` stays "the most prominent text" in both themes
+       rather than becoming invisible in one. */
+    --c-gray-50: 3 7 18;
+    --c-gray-100: 17 24 39;
+    --c-gray-200: 31 41 55;
+    --c-gray-300: 55 65 81;
+    --c-gray-400: 75 85 99;
+    --c-gray-500: 107 114 128;
+    --c-gray-600: 130 138 152;
+    --c-gray-700: 156 163 175;
+    --c-gray-800: 209 213 219;
+    --c-gray-900: 229 231 235;
+    --c-gray-950: 243 244 246;
+
+    --c-scrollbar: 17 24 39;
+    --c-glass: 255 255 255;
   }
-  
+
+  .dark {
+    color-scheme: dark;
+
+    --c-white: 255 255 255;
+    --c-on-accent: 255 255 255;
+
+    /* The values the app shipped with. Twenty-six near-identical hex literals
+       had accumulated across 36 files — #14151b, #15161d, #16171d and #17181b
+       among them, differences no eye resolves — so they collapse to one step
+       each here rather than being preserved individually. */
+    --c-canvas: 13 14 16;
+    --c-well: 10 11 14;
+    --c-shell: 18 19 21;
+    --c-surface: 20 21 27;
+    --c-raised: 26 27 34;
+    --c-raised-2: 34 36 45;
+
+    /* Tailwind's own gray, unchanged, so nothing in the dark theme moves. */
+    --c-gray-50: 249 250 251;
+    --c-gray-100: 243 244 246;
+    --c-gray-200: 229 231 235;
+    --c-gray-300: 209 213 219;
+    --c-gray-400: 156 163 175;
+    --c-gray-500: 107 114 128;
+    --c-gray-600: 75 85 99;
+    --c-gray-700: 55 65 81;
+    --c-gray-800: 31 41 55;
+    --c-gray-900: 17 24 39;
+    --c-gray-950: 3 7 18;
+
+    --c-scrollbar: 255 255 255;
+    --c-glass: 20 21 24;
+  }
+
   html {
     font-size: 15px;
     -webkit-font-smoothing: antialiased;
@@ -16,8 +96,8 @@
   }
 
   body {
-    background-color: #0D0E10;
-    color: #e7e7e9;
+    background-color: rgb(var(--c-canvas));
+    color: rgb(var(--c-gray-100));
     font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     font-size: 14px;
     line-height: 1.55;
@@ -67,8 +147,8 @@ input[type='radio'] {
   height: 16px;
   margin: 0;
   flex: 0 0 auto;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background-color: #141518;
+  border: 1px solid rgb(var(--c-white) / 0.18);
+  background-color: rgb(var(--c-surface));
   background-position: center;
   background-repeat: no-repeat;
   cursor: pointer;
@@ -81,7 +161,7 @@ input[type='checkbox'] {
 
 input[type='checkbox']:hover,
 input[type='radio']:hover {
-  border-color: rgba(165, 180, 252, 0.68);
+  border-color: rgba(129, 140, 248, 0.68);
 }
 
 input[type='checkbox']:checked {
@@ -98,7 +178,9 @@ input[type='radio'] {
 input[type='radio']:checked {
   border-color: #818cf8;
   background-color: #818cf8;
-  box-shadow: inset 0 0 0 3px #141518;
+  /* The dot is punched out of the control with the surface behind it, so it has
+     to follow the theme rather than stay a fixed near-black. */
+  box-shadow: inset 0 0 0 3px rgb(var(--c-surface));
 }
 
 input[type='checkbox']:focus-visible,
@@ -125,18 +207,18 @@ input[type='radio']:disabled {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.12);
+  background: rgb(var(--c-scrollbar) / 0.12);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.22);
+  background: rgb(var(--c-scrollbar) / 0.22);
 }
 
 /* Smooth glass effect */
 .glass-panel {
-  background: rgba(20, 21, 24, 0.94);
+  background: rgb(var(--c-glass) / 0.94);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  border: 1px solid rgb(var(--c-white) / 0.07);
 }

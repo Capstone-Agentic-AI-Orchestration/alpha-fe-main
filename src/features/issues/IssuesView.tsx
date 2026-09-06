@@ -316,7 +316,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     if (agent) {
       if (agent.role === 'Architect') {
         return (
-          <div className="w-6 h-6 rounded-full bg-[#1c1e27] border border-white/10 flex items-center justify-center text-white" title={`Agent: ${agent.name}`}>
+          <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-white" title={`Agent: ${agent.name}`}>
             <Asterisk className="w-3.5 h-3.5 text-white stroke-[2.5]" />
           </div>
         );
@@ -328,14 +328,14 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
       }
       if (agent.role === 'Reviewer') {
         return (
-          <div className="w-6 h-6 rounded-full bg-[#1c1e27] border border-white/10 flex items-center justify-center text-amber-400" title={`Agent: ${agent.name}`}>
+          <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-amber-400" title={`Agent: ${agent.name}`}>
             <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
           </div>
         );
       }
       if (agent.role === 'QA Tester') {
         return (
-          <div className="w-6 h-6 rounded-full bg-[#1c1e27] border border-white/10 flex items-center justify-center text-orange-400" title={`Agent: ${agent.name}`}>
+          <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-orange-400" title={`Agent: ${agent.name}`}>
             <Flame className="w-3.5 h-3.5 fill-orange-400/20 text-orange-400" />
           </div>
         );
@@ -357,9 +357,9 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-[#121315] text-sm text-gray-200">
+    <div className="h-full flex flex-col overflow-hidden bg-shell text-sm text-gray-200">
       {/* Header & Jira-like Control Bar */}
-      <div className="px-6 py-4 border-b border-white/[0.06] bg-[#121315] space-y-3">
+      <div className="px-6 py-4 border-b border-white/[0.06] bg-shell space-y-3">
         {/* Top Row: Title, Filters & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           {/* Left: Issues title & category pills */}
@@ -520,7 +520,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             {/* New Issue Button */}
             <button
               onClick={onOpenNewIssue}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>New Issue</span>
@@ -587,7 +587,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
       </div>
 
       {/* Main Issue Canvas */}
-      <div className="flex-1 flex overflow-hidden relative bg-[#16171D]">
+      <div className="flex-1 flex overflow-hidden relative bg-surface">
         {viewMode === 'board' ? (
           /* Kanban Board Mode */
           <div className="flex-1 overflow-x-auto p-4 sm:p-6 flex gap-5">
@@ -722,7 +722,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   {/* Jira Section Header Bar */}
                   <div
                     onClick={() => toggleSection(group.id)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#191a24] hover:bg-[#1e202c] border border-white/[0.04] cursor-pointer select-none transition-colors"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/[0.04] cursor-pointer select-none transition-colors"
                   >
                     {/* Checkbox */}
                     <input
@@ -954,7 +954,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     <button
                       type="submit"
                       disabled={!newCommentContent.trim()}
-                      className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-xs font-semibold text-white transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-xs font-semibold text-on-accent transition-colors flex items-center gap-1.5"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>Post</span>
@@ -970,7 +970,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   <button
                     onClick={() => runAgentOnIssue(selectedIssue.id)}
                     disabled={selectedIssue.status === 'agent_running'}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-bold text-sm shadow-glow-brand transition-all"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-on-accent font-bold text-sm shadow-glow-brand transition-all"
                   >
                     <Play className="w-4 h-4 fill-white" />
                     <span>{selectedIssue.status === 'agent_running' ? 'Agent Running...' : 'Launch Autonomous Agent'}</span>

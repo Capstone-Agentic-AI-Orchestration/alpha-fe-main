@@ -82,7 +82,7 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile }: Readonly<Props>)
    */
   if (failed) {
     return (
-      <div className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-1">
+      <div className="p-3 rounded-xl bg-well border border-white/5 space-y-1">
         <div className="font-mono text-xs text-gray-300">
           {granted.length ? granted.join(', ') : 'None granted'}
         </div>
@@ -96,7 +96,7 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile }: Readonly<Props>)
 
   if (!servers.length) {
     return (
-      <div className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-1">
+      <div className="p-3 rounded-xl bg-well border border-white/5 space-y-1">
         <div className="text-xs text-gray-400">No MCP servers in the catalog.</div>
         <div className="text-[10px] text-gray-600 leading-snug">
           Add one under Settings &rarr; Connected Accounts to make it grantable here.
@@ -160,7 +160,7 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile }: Readonly<Props>)
               }`}
             >
               <span
-                className={`absolute top-0.5 w-3 h-3 rounded-full bg-white transition-all ${
+                className={`absolute top-0.5 w-3 h-3 rounded-full bg-on-accent transition-all ${
                   isGranted ? 'left-4' : 'left-0.5'
                 }`}
               />

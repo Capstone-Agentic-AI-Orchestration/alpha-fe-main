@@ -26,7 +26,7 @@ export const ToastRegion: React.FC = () => {
         return (
           <div
             key={toast.id}
-            className="pointer-events-auto flex items-start gap-3 border border-white/[0.09] bg-[#191A1D] px-4 py-3 shadow-2xl"
+            className="pointer-events-auto flex items-start gap-3 border border-white/[0.09] bg-surface px-4 py-3 shadow-2xl"
             role="status"
           >
             <Icon className={`mt-0.5 h-4 w-4 flex-shrink-0 ${iconColor}`} />

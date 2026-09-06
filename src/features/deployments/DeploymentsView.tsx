@@ -164,7 +164,7 @@ export const DeploymentsView: React.FC = () => {
       case 'queued':
       default:
         return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-[#1B1C23] text-gray-400 text-[11px] font-medium border border-white/5">
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-surface-raised text-gray-400 text-[11px] font-medium border border-white/5">
             <span className="w-1.5 h-1.5 rounded-full bg-gray-500" />
             <span>{status}</span>
           </span>
@@ -182,7 +182,7 @@ export const DeploymentsView: React.FC = () => {
         );
       case 'Staging':
         return (
-          <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#1B1C23] text-gray-300 text-[11px] font-medium">
+          <span className="inline-block px-2.5 py-0.5 rounded-md bg-surface-raised text-gray-300 text-[11px] font-medium">
             Staging
           </span>
         );
@@ -194,7 +194,7 @@ export const DeploymentsView: React.FC = () => {
         );
       default:
         return (
-          <span className="inline-block px-2.5 py-0.5 rounded-md bg-[#1B1C23] text-gray-400 text-[11px]">
+          <span className="inline-block px-2.5 py-0.5 rounded-md bg-surface-raised text-gray-400 text-[11px]">
             {env}
           </span>
         );
@@ -227,7 +227,7 @@ export const DeploymentsView: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-[#0E0E12] text-gray-300 p-6 space-y-6 select-none font-sans">
+    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
@@ -249,7 +249,7 @@ export const DeploymentsView: React.FC = () => {
           <button
             onClick={loadGitHubRuns}
             disabled={isRefreshing}
-            className="p-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-gray-400 hover:text-white transition-colors"
+            className="p-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-gray-400 hover:text-white transition-colors"
             title="Refresh GitHub Actions Runs"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
@@ -258,7 +258,7 @@ export const DeploymentsView: React.FC = () => {
           {/* Trigger run button */}
           <button
             onClick={() => setTriggerModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
           >
             <Play className="w-3 h-3 fill-white" />
             <span>Trigger run</span>
@@ -311,7 +311,7 @@ export const DeploymentsView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={viewMode === 'actions' ? 'Search workflow, branch, sha...' : 'Search runs, commits, branches...'}
-            className="w-full bg-[#14151B] border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-surface border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
 
@@ -328,7 +328,7 @@ export const DeploymentsView: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 envFilter !== 'all' || statusFilter !== 'all'
                   ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
-                  : 'bg-[#14151B] hover:bg-[#1C1D24] text-gray-400 hover:text-white border-white/5'
+                  : 'bg-surface hover:bg-surface-raised text-gray-400 hover:text-white border-white/5'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -336,7 +336,7 @@ export const DeploymentsView: React.FC = () => {
             </button>
 
             {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
+              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
                 {viewMode === 'deployments' && (
                   <>
                     <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Environment</div>
@@ -385,14 +385,14 @@ export const DeploymentsView: React.FC = () => {
                 setSortDropdownOpen(prev => !prev);
                 setFilterDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] hover:bg-[#1C1D24] border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
             >
               {sortOrder === 'desc' ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />}
               <span>Time</span>
             </button>
 
             {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
+              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
                 <button
                   onClick={() => {
                     setSortOrder(prev => (prev === 'desc' ? 'asc' : 'desc'));
@@ -409,7 +409,7 @@ export const DeploymentsView: React.FC = () => {
 
           {/* Table View Button */}
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
           >
             <TableIcon className="w-3.5 h-3.5" />
             <span>Table</span>
@@ -619,7 +619,7 @@ export const DeploymentsView: React.FC = () => {
               <button
                 onClick={() => triggerSelfHealing(selectedRunId)}
                 disabled={isSelfHealing}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-semibold shadow-glow-brand transition-all disabled:opacity-50"
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-semibold shadow-glow-brand transition-all disabled:opacity-50"
               >
                 <Bot className="w-3.5 h-3.5" />
                 <span>{isSelfHealing ? 'Agent Triaging...' : 'Autonomous Agent Self-Healing'}</span>
@@ -631,7 +631,7 @@ export const DeploymentsView: React.FC = () => {
                 Pulling failed workflow step logs from GitHub...
               </div>
             ) : (
-              <pre className="max-h-96 overflow-y-auto p-4 rounded-xl bg-[#090A0C] border border-white/[0.06] text-rose-200/90 font-mono text-xs leading-relaxed whitespace-pre-wrap">
+              <pre className="max-h-96 overflow-y-auto p-4 rounded-xl bg-well border border-white/[0.06] text-rose-200/90 font-mono text-xs leading-relaxed whitespace-pre-wrap">
                 {failedLogs}
               </pre>
             )}
@@ -677,7 +677,7 @@ export const DeploymentsView: React.FC = () => {
                 </span>
                 <span>Triggered by {selectedDeployment.triggeredBy.name}</span>
               </div>
-              <p className="rounded-md border border-white/[0.06] bg-[#0D0E10] p-3 font-mono text-xs text-gray-200">
+              <p className="rounded-md border border-white/[0.06] bg-canvas p-3 font-mono text-xs text-gray-200">
                 {selectedDeployment.commitMessage}
               </p>
               {selectedDeployment.previewUrl && (
@@ -740,7 +740,7 @@ export const DeploymentsView: React.FC = () => {
                     <span>{copiedLogId ? 'Copied' : 'Copy logs'}</span>
                   </button>
                 </div>
-                <div className="max-h-72 min-h-52 space-y-1.5 overflow-y-auto rounded-md border border-white/[0.06] bg-[#090A0C] p-3.5 font-mono text-[11px] text-gray-300">
+                <div className="max-h-72 min-h-52 space-y-1.5 overflow-y-auto rounded-md border border-white/[0.06] bg-well p-3.5 font-mono text-[11px] text-gray-300">
                   {selectedDeployment.stages.flatMap((stage, stageIndex) =>
                     stage.logs.map((log, logIndex) => (
                       <div key={`${stageIndex}-${logIndex}`} className="flex items-start gap-2 leading-relaxed">
@@ -770,7 +770,7 @@ export const DeploymentsView: React.FC = () => {
               <select
                 value={targetProjectId}
                 onChange={(e) => setTargetProjectId(e.target.value)}
-                className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
               >
                 {projects.map(p => (
                   <option key={p.id} value={p.id}>{p.name} ({p.key})</option>
@@ -783,7 +783,7 @@ export const DeploymentsView: React.FC = () => {
               <select
                 value={targetEnv}
                 onChange={(e) => setTargetEnv(e.target.value as any)}
-                className="w-full bg-[#181920] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
               >
                 <option value="Staging">Staging (Integration Cluster)</option>
                 <option value="Preview">Preview (Ephemeral PR Branch)</option>
@@ -801,7 +801,7 @@ export const DeploymentsView: React.FC = () => {
               </button>
               <button
                 type="submit"
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium shadow-glow-brand"
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-medium shadow-glow-brand"
               >
                 <Play className="w-3 h-3 fill-white" />
                 <span>Start Pipeline</span>

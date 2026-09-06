@@ -95,7 +95,7 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
 
       {/* PR and Branch Link */}
       {run.prUrl && (
-        <div className="flex items-center justify-between p-2.5 rounded-lg bg-[#0D0E10] border border-white/5 text-[11px]">
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-canvas border border-white/5 text-[11px]">
           <div className="flex items-center gap-1.5 text-gray-400 font-mono">
             <GitBranch className="h-3.5 w-3.5 text-indigo-400" />
             <span className="truncate">{run.branchName || 'feature-branch'}</span>
@@ -124,7 +124,7 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
             Run details
           </button>
           {logsOpen && (
-            <div className="mt-2 space-y-1 bg-[#0D0E10] p-3 font-mono text-[10px] leading-relaxed text-gray-500">
+            <div className="mt-2 space-y-1 bg-canvas p-3 font-mono text-[10px] leading-relaxed text-gray-500">
               {currentStage?.logs.map(log => <p key={log}>{log}</p>)}
               {run.testSummary && <p className="text-gray-300">{run.testSummary}</p>}
               {run.changedFiles ? <p>+{run.insertions || 0} / -{run.deletions || 0} across {run.changedFiles} files</p> : null}

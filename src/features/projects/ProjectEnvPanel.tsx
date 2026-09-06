@@ -64,7 +64,7 @@ export const ProjectEnvPanel: React.FC<Props> = ({ envVars, onChange }) => {
       </div>
 
       {envVars.length === 0 ? (
-        <p className="rounded-xl border border-white/5 bg-[#0A0B0E] p-2.5 text-[11px] leading-snug text-gray-500">
+        <p className="rounded-xl border border-white/5 bg-well p-2.5 text-[11px] leading-snug text-gray-500">
           None. MCP servers written with <code className="text-gray-400">{'${VAR}'}</code> resolve
           from the daemon&apos;s environment. Set one here to point this project at its own
           Supabase, database or workspace.
@@ -74,7 +74,7 @@ export const ProjectEnvPanel: React.FC<Props> = ({ envVars, onChange }) => {
           {envVars.map(entry => (
             <div
               key={entry.key}
-              className="flex items-center gap-2 rounded-xl border border-white/5 bg-[#0A0B0E] px-2.5 py-1.5"
+              className="flex items-center gap-2 rounded-xl border border-white/5 bg-well px-2.5 py-1.5"
             >
               <span className="flex-1 truncate font-mono text-[11px] text-white">{entry.key}</span>
               {/*
@@ -98,14 +98,14 @@ export const ProjectEnvPanel: React.FC<Props> = ({ envVars, onChange }) => {
         </div>
       )}
 
-      <div className="space-y-1.5 rounded-xl border border-white/5 bg-[#0A0B0E] p-2.5">
+      <div className="space-y-1.5 rounded-xl border border-white/5 bg-well p-2.5">
         <div className="flex gap-1.5">
           <input
             value={key}
             onChange={e => setKey(e.target.value)}
             placeholder="SUPABASE_PROJECT_REF"
             spellCheck={false}
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#14151B] px-2 py-1.5 font-mono text-[11px] text-white placeholder:text-gray-600 focus:border-brand-500 focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface px-2 py-1.5 font-mono text-[11px] text-white placeholder:text-gray-600 focus:border-brand-500 focus:outline-none"
           />
           <input
             value={value}
@@ -114,7 +114,7 @@ export const ProjectEnvPanel: React.FC<Props> = ({ envVars, onChange }) => {
             placeholder="value"
             spellCheck={false}
             type={isSecret ? 'password' : 'text'}
-            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-[#14151B] px-2 py-1.5 font-mono text-[11px] text-white placeholder:text-gray-600 focus:border-brand-500 focus:outline-none"
+            className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface px-2 py-1.5 font-mono text-[11px] text-white placeholder:text-gray-600 focus:border-brand-500 focus:outline-none"
           />
           <button
             type="button"

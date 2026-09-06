@@ -211,7 +211,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
     <div className="space-y-3 text-xs">
       {/* Create a GitHub repository for this project */}
       {isFull && (
-        <div className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-2.5">
+        <div className="p-3 rounded-xl bg-well border border-white/5 space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-gray-300 flex items-center gap-1.5">
               <GitBranch className="w-3.5 h-3.5 text-brand-400" />
@@ -242,7 +242,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   // value is a label, so it reads as one.
                   <span
                     title="Every repository in this project belongs to this organization"
-                    className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-gray-300 max-w-[11rem] truncate"
+                    className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-gray-300 max-w-[11rem] truncate"
                   >
                     {githubOrg}
                   </span>
@@ -252,7 +252,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                     onChange={(e) => setGhOwner(e.target.value)}
                     disabled={ghBusy || ghOrgs.length === 0}
                     title="Owning organization"
-                    className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-brand-500 disabled:opacity-50 max-w-[11rem]"
+                    className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-brand-500 disabled:opacity-50 max-w-[11rem]"
                   >
                     <option value="" disabled>Organization…</option>
                     {ghOrgs.map(o => (
@@ -267,13 +267,13 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   onChange={(e) => setGhRepoName(e.target.value)}
                   placeholder="repository-name"
                   disabled={ghBusy}
-                  className="flex-1 min-w-0 bg-[#14151B] border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                  className="flex-1 min-w-0 bg-surface border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={handleCreateRepo}
                   disabled={ghBusy || !ghRepoName.trim() || !effectiveOrg}
-                  className="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-medium text-white disabled:opacity-40 transition-colors flex-shrink-0"
+                  className="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-medium text-on-accent disabled:opacity-40 transition-colors flex-shrink-0"
                 >
                   {ghBusy ? 'Creating…' : 'Create'}
                 </button>
@@ -290,7 +290,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   value={ghStack}
                   onChange={(e) => setGhStack(e.target.value as ScaffoldStack)}
                   disabled={ghBusy}
-                  className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                  className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
                 >
                   <option value="nodejs">Node.js</option>
                   <option value="nestjs">NestJS</option>
@@ -306,7 +306,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   value={ghVisibility}
                   onChange={(e) => setGhVisibility(e.target.value as 'private' | 'public')}
                   disabled={ghBusy}
-                  className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                  className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
                 >
                   <option value="private">Private</option>
                   <option value="public">Public</option>
@@ -363,7 +363,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       {/* Attached resources */}
       <div className="space-y-2 max-h-48 overflow-y-auto">
         {resources.length === 0 ? (
-          <p className="p-3 text-gray-500 italic bg-[#0A0B0E] rounded-xl border border-white/5">
+          <p className="p-3 text-gray-500 italic bg-well rounded-xl border border-white/5">
             Nothing attached yet. Agents need a working copy before they can run —
             attach a folder above.
           </p>
@@ -371,7 +371,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
           resources.map((res) => (
             <div
               key={res.id}
-              className="flex items-center justify-between p-2.5 rounded-xl bg-[#14151B] border border-white/5 font-mono text-xs"
+              className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-white/5 font-mono text-xs"
             >
               <div className="flex items-center gap-2.5 min-w-0">
                 {res.type === 'github_repo' ? (
@@ -432,7 +432,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
           />
 
           {/* Attach an existing repository or directory */}
-          <div className="p-3.5 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-2.5">
+          <div className="p-3.5 rounded-xl bg-well border border-white/5 space-y-2.5">
             <span className="text-[11px] font-medium text-gray-300">Attach Resource</span>
             <div className="flex items-center gap-2">
               <select
@@ -441,7 +441,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   setNewResType(e.target.value as 'github_repo' | 'local_dir');
                   setNewResPath('');
                 }}
-                className="bg-[#14151B] border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 w-32 flex-shrink-0"
+                className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 w-32 flex-shrink-0"
               >
                 <option value="local_dir">Local Folder</option>
                 <option value="github_repo">GitHub Repo</option>
@@ -458,7 +458,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   }
                 }}
                 placeholder={newResType === 'local_dir' ? 'C:/path/to/local/project or Browse...' : 'github.com/owner/repo'}
-                className="flex-1 min-w-0 bg-[#14151B] border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                className="flex-1 min-w-0 bg-surface border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
               />
 
               {newResType === 'local_dir' && (
@@ -476,7 +476,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
               <button
                 type="button"
                 onClick={handleAddResource}
-                className="px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-semibold text-white transition-colors flex-shrink-0 flex items-center gap-1 shadow-sm"
+                className="px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-semibold text-on-accent transition-colors flex-shrink-0 flex items-center gap-1 shadow-sm"
                 title="Add resource"
               >
                 <Plus className="w-3.5 h-3.5" />

@@ -118,9 +118,9 @@ export const App: React.FC = () => {
       />
 
       {/* Main Workspace Frame */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#121315] overflow-hidden">
+      <div className="flex-1 flex flex-col min-w-0 bg-shell overflow-hidden">
         {/* Tab bar */}
-        <div className="h-10 bg-[#101113] border-b border-white/[0.06] flex items-center px-3 z-20 relative">
+        <div className="h-10 bg-shell border-b border-white/[0.06] flex items-center px-3 z-20 relative">
           {/* Scrollable Open Tabs List */}
           <div className="flex items-center gap-1 overflow-x-auto max-w-[calc(100%-60px)] no-scrollbar py-1">
             {tabs.map((tab) => {
@@ -178,7 +178,7 @@ export const App: React.FC = () => {
 
             {/* New Tab Dropdown Menu */}
             {newTabMenuOpen && (
-              <div className="absolute left-0 top-full mt-1.5 w-72 bg-[#191A1D] border border-white/[0.08] rounded-lg shadow-2xl p-2 z-50 animate-slide-up space-y-1">
+              <div className="absolute left-0 top-full mt-1.5 w-72 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 z-50 animate-slide-up space-y-1">
                 <div className="text-xs font-medium text-gray-500 px-2.5 py-1">
                   Open New Tab
                 </div>
@@ -214,7 +214,7 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-2 ml-auto flex-shrink-0">
             <button
               onClick={() => setDownloadModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-all shadow-glow-brand cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-brand-500 hover:bg-brand-600 text-on-accent text-xs font-semibold transition-all shadow-glow-brand cursor-pointer"
               title="Download Desktop App Mode (.exe)"
             >
               <Download className="w-3.5 h-3.5" />

@@ -204,7 +204,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
               onClick={() => setCreationMode('blank')}
               className="p-5 rounded-2xl bg-surface-200 border border-white/10 hover:border-brand-500/50 hover:bg-brand-500/5 transition-all text-left space-y-3 group"
             >
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-white group-hover:bg-brand-500 transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-on-accent group-hover:bg-brand-500 transition-colors">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
@@ -225,7 +225,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
               onClick={startBuilder}
               className="p-5 rounded-2xl bg-surface-200 border border-brand-500/30 hover:border-brand-500/70 hover:bg-brand-500/10 transition-all text-left space-y-3 group shadow-glow-brand"
             >
-              <div className="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center group-hover:bg-brand-500 group-hover:text-white transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center group-hover:bg-brand-500 group-hover:text-on-accent transition-colors">
                 <Wand2 className="w-5 h-5" />
               </div>
               <div>
@@ -492,7 +492,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
               <button
                 type="submit"
                 disabled={!!validationError}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-white shadow-glow-brand transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-on-accent shadow-glow-brand transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Deploy Agent</span>
