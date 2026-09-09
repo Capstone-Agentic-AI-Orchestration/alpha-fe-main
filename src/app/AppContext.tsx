@@ -2045,6 +2045,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Chat & Threads
+  /**
+   * Open a conversation, and tell the daemon it exists.
+   *
+   * This used to be `setChatThreads` and nothing else, so a new thread lived in
+   * this tab and nowhere else until its first message — `chatService` creates
+   * one lazily when a message arrives for a thread it does not know. Everything
+   * addressed to a thread by id therefore failed on a conversation that had not
+   * been spoken in yet:
+   *
+   *   - setting its project answered 404 "Thread not found", surfaced as
+   *     "Project not set" — the two halves of that toast are the daemon's
+   *     complaint and the picker's guess at what it meant
+   *   - deleting it answered 404 too, and `deleteThread` rolls a failure back by
+   *     restoring the row, so the conversation reappeared and could not be
+   *     removed
+   *   - reloading dropped it, because hydration replaces this list with the
+   *     server's
+   *
+   * One cause, three symptoms: the sidebar and the daemon disagreed about which
+   * threads existed. Creating it up front is what removes the disagreement,
+   * rather than teaching each of those call sites to tolerate it.
+   *
+   * Still synchronous, and still returns the id: `sendMessage` below calls this
+   * and then posts to the id it gets back. `persist` writes optimistically and
+   * reconciles, which is why the POST has to be idempotent — see the route.
+   */
   const createNewThread = (title = 'New Conversation') => {
     const newThreadId = `th-${Date.now()}`;
     const isClientThread = role === 'client';
@@ -2065,6 +2091,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     setChatThreads(prev => [newThread, ...prev]);
     setActiveThreadId(newThreadId);
+
+    persist(
+      () => apiService.createChatThread(newThread),
+      /*
+       * Keep the local copy rather than adopting the server's.
+       *
+       * The row that comes back is the same thread, but `ChatThread` carries
+       * fields SQLite has no column for — `messages`, `pinned`, `audience`,
+       * `iconType` — so replacing wholesale would blank them. The id is what
+       * both sides agree on, and it was ours to begin with.
+       */
+      () => {},
+      msg => {
+        /*
+         * Drop it, the way a failed delete restores.
+         *
+         * The rule both directions follow is the same: leave this list saying
+         * what the daemon actually holds. A thread kept after the write failed
+         * is the phantom this change exists to remove — it would take a project
+         * that will not save and refuse to be deleted.
+         */
+        setChatThreads(prev => prev.filter(t => t.id !== newThreadId));
+        setActiveThreadId(prev => (prev === newThreadId ? null : prev));
+        showToast('Conversation not created', msg, 'error');
+      }
+    );
+
     return newThreadId;
   };
 
