@@ -44,7 +44,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
       case 'skills': return 'MCP & Tool Registry';
       case 'deployments': return 'CI/CD Deployments';
       case 'settings': return 'Settings';
-      default: return 'Multica';
+      default: return 'Alpha';
     }
   };
 
@@ -72,7 +72,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
         </div>
       )}
 
-      {/* Multica Breadcrumb */}
+      {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs">
         <span className="text-gray-400 font-medium hover:text-white cursor-pointer" onClick={() => setActiveTab('issues')}>
           {settings.workspaceName}
@@ -161,7 +161,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
         {/* New Issue Button */}
         <button
           onClick={onOpenNewIssue}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-glow-brand transition-all"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs shadow-glow-brand transition-all"
         >
           <Plus className="w-3.5 h-3.5" />
           <span className="hidden sm:inline">New Issue</span>

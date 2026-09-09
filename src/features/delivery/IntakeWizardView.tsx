@@ -42,7 +42,7 @@ const CONCERN_OPTIONS = [
 ];
 
 const field =
-  'w-full bg-[#14151B] border border-white/[0.08] rounded-lg px-3.5 py-2.5 text-sm text-white ' +
+  'w-full bg-surface border border-white/[0.08] rounded-lg px-3.5 py-2.5 text-sm text-white ' +
   'placeholder-gray-600 focus:outline-none focus:border-brand-500 transition-colors';
 
 export const IntakeWizardView: React.FC = () => {
@@ -94,7 +94,7 @@ export const IntakeWizardView: React.FC = () => {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-[#16171D]">
+    <div className="h-full overflow-y-auto bg-surface">
       <div className="max-w-3xl mx-auto px-8 py-10 space-y-8">
 
         {/* Header + step rail */}
@@ -454,7 +454,7 @@ export const IntakeWizardView: React.FC = () => {
             <button
               onClick={() => setStep(step + 1)}
               disabled={!canAdvance()}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-30 disabled:cursor-not-allowed text-white text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-30 disabled:cursor-not-allowed text-on-accent text-sm font-medium transition-colors"
             >
               Continue
               <ArrowRight className="w-4 h-4" />
@@ -463,7 +463,7 @@ export const IntakeWizardView: React.FC = () => {
             <button
               onClick={handleSubmit}
               disabled={!canAdvance() || submitting}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-white text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-on-accent text-sm font-medium transition-colors"
             >
               {submitting ? (
                 <>

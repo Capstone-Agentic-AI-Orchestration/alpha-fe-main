@@ -21,7 +21,7 @@ export const ClientPortalView: React.FC = () => {
   const firstName = currentUser.name.split(' ')[0];
 
   return (
-    <div className="h-full overflow-y-auto bg-[#16171D]">
+    <div className="h-full overflow-y-auto bg-surface">
       <div className="max-w-4xl mx-auto px-8 py-10 space-y-10">
 
         {/* Greeting + primary action */}
@@ -34,7 +34,7 @@ export const ClientPortalView: React.FC = () => {
           </div>
           <button
             onClick={() => setActiveTab('intake')}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors flex-shrink-0"
+            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent text-sm font-medium transition-colors flex-shrink-0"
           >
             <Plus className="w-4 h-4" />
             New request
@@ -51,7 +51,7 @@ export const ClientPortalView: React.FC = () => {
                 <button
                   key={d.id}
                   onClick={() => setActiveTab('billing')}
-                  className="w-full text-left p-5 rounded-xl bg-[#14151B] border border-brand-500/30 hover:border-brand-500/60 transition-colors group"
+                  className="w-full text-left p-5 rounded-xl bg-surface border border-brand-500/30 hover:border-brand-500/60 transition-colors group"
                 >
                   <div className="flex items-start justify-between gap-5">
                     <div className="space-y-2 min-w-0">

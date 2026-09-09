@@ -1,4 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { NAV_ITEMS, navIcon, navLabel } from '@/config/navigation';
+import { NoTeamAccess } from '@/features/onboarding/NoTeamAccess';
+import { GitHubSetup } from '@/features/onboarding/GitHubSetup';
 import { useApp } from '@/app/AppContext';
 import { Sidebar } from '@/shared/layout/Sidebar';
 import { CommandPalette } from '@/shared/components/CommandPalette';
@@ -23,51 +26,23 @@ import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
 import { DocumentsView } from '@/features/delivery/DocumentsView';
 import { BillingView } from '@/features/delivery/BillingView';
 import { NavigationTab } from '@/shared/types';
-import {
-  Inbox,
-  MessageSquare,
-  User,
-  CheckSquare,
-  FolderKanban,
-  Bot,
-  Users,
-  BarChart3,
-  Monitor,
-  BookOpen,
-  Settings,
-  Rocket,
-  Plus,
-  X,
-  FileText,
-  CreditCard,
-  LayoutDashboard,
-  PenLine,
-  Download
-} from 'lucide-react';
+import { Plus, X, Download } from 'lucide-react';
 
-const ALL_TABS: { id: NavigationTab; title: string; subtitle: string; icon: React.ReactNode }[] = [
-  { id: 'portal', title: 'Overview', subtitle: 'Your requests, progress, and budget', icon: <LayoutDashboard className="w-4 h-4" /> },
-  { id: 'intake', title: 'New Request', subtitle: 'Describe what you need in plain language', icon: <PenLine className="w-4 h-4" /> },
-  { id: 'documents', title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', icon: <FileText className="w-4 h-4" /> },
-  { id: 'billing', title: 'Billing & Usage', subtitle: 'Committed client value and agent compute', icon: <CreditCard className="w-4 h-4" /> },
-  { id: 'inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', icon: <Inbox className="w-4 h-4" /> },
-  { id: 'chat', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', icon: <MessageSquare className="w-4 h-4" /> },
-  { id: 'my_issues', title: 'My Issues', subtitle: 'Tasks assigned to you across projects', icon: <User className="w-4 h-4" /> },
-  { id: 'issues', title: 'Issues & Tasks', subtitle: 'Kanban board & issue tracking', icon: <CheckSquare className="w-4 h-4" /> },
-  { id: 'projects', title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', icon: <FolderKanban className="w-4 h-4" /> },
-  { id: 'deployments', title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', icon: <Rocket className="w-4 h-4" /> },
-  { id: 'agents', title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', icon: <Bot className="w-4 h-4" /> },
-  { id: 'squads', title: 'Agent Squads', subtitle: 'Configure multi-agent topologies', icon: <Users className="w-4 h-4" /> },
-  { id: 'analytics', title: 'Token & Cost Analytics', subtitle: 'Token consumption & model latency', icon: <BarChart3 className="w-4 h-4" /> },
-  { id: 'runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', icon: <Monitor className="w-4 h-4" /> },
-  { id: 'skills', title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', icon: <BookOpen className="w-4 h-4" /> },
-  { id: 'settings', title: 'Workspace Settings', subtitle: 'Preferences, keys, and autonomy governance', icon: <Settings className="w-4 h-4" /> },
-];
+/**
+ * The new-tab picker's list, derived rather than declared.
+ *
+ * This was a hand-maintained array that had already lost `portal` and
+ * `intake` — the two views a client lands on — while the sidebar's own table
+ * still had them. One table now, in config/navigation.
+ */
+const ALL_TABS = NAV_ITEMS;
 
 export const App: React.FC = () => {
-  const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role } = useApp();
-  const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
-  const isClient = role === 'client';
+  const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role,
+    identity,
+    refreshIdentity
+  } = useApp();
+  const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
 
   // A tab persisted under a different role must not keep its old label in the
   // strip; resolve it the same way the context resolves the rendered view.
@@ -101,53 +76,41 @@ export const App: React.FC = () => {
     };
   }, [newTabMenuOpen]);
 
-  const getTabIcon = (tab: NavigationTab) => {
-    switch (tab) {
-      case 'portal': return <LayoutDashboard className="w-3.5 h-3.5" />;
-      case 'intake': return <PenLine className="w-3.5 h-3.5" />;
-      case 'documents': return <FileText className="w-3.5 h-3.5" />;
-      case 'billing': return <CreditCard className="w-3.5 h-3.5" />;
-      case 'inbox': return <Inbox className="w-3.5 h-3.5" />;
-      case 'chat': return <MessageSquare className="w-3.5 h-3.5" />;
-      case 'my_issues': return <User className="w-3.5 h-3.5" />;
-      case 'issues': return <CheckSquare className="w-3.5 h-3.5" />;
-      case 'projects': return <FolderKanban className="w-3.5 h-3.5" />;
-      case 'deployments': return <Rocket className="w-3.5 h-3.5" />;
-      case 'agents': return <Bot className="w-3.5 h-3.5" />;
-      case 'squads': return <Users className="w-3.5 h-3.5" />;
-      case 'analytics': return <BarChart3 className="w-3.5 h-3.5" />;
-      case 'runtimes': return <Monitor className="w-3.5 h-3.5" />;
-      case 'skills': return <BookOpen className="w-3.5 h-3.5" />;
-      case 'settings': return <Settings className="w-3.5 h-3.5" />;
-      default: return <Inbox className="w-3.5 h-3.5" />;
-    }
-  };
+  // Rendered smaller here than in the sidebar; the table serves both.
+  const getTabIcon = (tab: NavigationTab) => navIcon(tab, 'w-3.5 h-3.5');
 
-  const getTabTitle = (tab: NavigationTab) => {
-    switch (tab) {
-      case 'portal': return 'Overview';
-      case 'intake': return 'New Request';
-      case 'documents': return isClient ? 'My Requests' : 'Specifications';
-      case 'billing': return 'Billing';
-      case 'chat': return isClient ? 'Messages' : 'Chat';
-      case 'inbox': return 'Inbox';
-      case 'my_issues': return 'My Issues';
-      case 'issues': return 'Issues';
-      case 'projects': return 'Projects';
-      case 'deployments': return 'CI/CD Platform';
-      case 'agents': return 'Agents';
-      case 'squads': return 'Squads';
-      case 'analytics': return 'Analytics';
-      case 'runtimes': return 'Runtimes';
-      case 'skills': return 'Skills';
-      case 'settings': return 'Settings';
-      default: return 'Inbox';
-    }
-  };
+
+  // Client label overrides live with the destination, not in a ternary here.
+  const getTabTitle = (tab: NavigationTab) => navLabel(tab, role);
+
+
+  /**
+   * No role from GitHub means no workspace, not an empty one.
+   *
+   * Checked here rather than inside the shell because `ROLE_TABS[role]` drives
+   * navigation and its first entry is the default tab — a role with no tabs
+   * renders nothing and reads as a broken build. Only `no_team` blocks; the
+   * daemon has already excluded the cases where a missing role means "not yet
+   * known" rather than "nobody".
+   */
+  /**
+   * Setup comes before the role check.
+   *
+   * Without `gh` there is no identity, so there is no role either — showing
+   * "you have no team" to someone who has not installed the CLI would send
+   * them to an org owner for a problem they can fix themselves in a minute.
+   */
+  if (identity && identity.github && identity.github !== 'ok') {
+    return <GitHubSetup identity={identity} onRetry={refreshIdentity} />;
+  }
+
+  if (identity?.access === 'no_team') {
+    return <NoTeamAccess identity={identity} onRetry={refreshIdentity} />;
+  }
 
   return (
     <div className="flex h-screen w-screen bg-background text-gray-100 font-sans overflow-hidden text-sm">
-      {/* Multica Sidebar */}
+      {/* Sidebar */}
       <Sidebar 
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
@@ -155,9 +118,9 @@ export const App: React.FC = () => {
       />
 
       {/* Main Workspace Frame */}
-      <div className="flex-1 flex flex-col min-w-0 bg-[#121315] overflow-hidden">
-        {/* Multica Top Window Tab Bar */}
-        <div className="h-10 bg-[#101113] border-b border-white/[0.06] flex items-center px-3 z-20 relative">
+      <div className="flex-1 flex flex-col min-w-0 bg-shell overflow-hidden">
+        {/* Tab bar */}
+        <div className="h-10 bg-shell border-b border-white/[0.06] flex items-center px-3 z-20 relative">
           {/* Scrollable Open Tabs List */}
           <div className="flex items-center gap-1 overflow-x-auto max-w-[calc(100%-60px)] no-scrollbar py-1">
             {tabs.map((tab) => {
@@ -215,7 +178,7 @@ export const App: React.FC = () => {
 
             {/* New Tab Dropdown Menu */}
             {newTabMenuOpen && (
-              <div className="absolute left-0 top-full mt-1.5 w-72 bg-[#191A1D] border border-white/[0.08] rounded-lg shadow-2xl p-2 z-50 animate-slide-up space-y-1">
+              <div className="absolute left-0 top-full mt-1.5 w-72 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 z-50 animate-slide-up space-y-1">
                 <div className="text-xs font-medium text-gray-500 px-2.5 py-1">
                   Open New Tab
                 </div>
@@ -232,7 +195,7 @@ export const App: React.FC = () => {
                       >
                         <div className="flex items-center gap-2.5 min-w-0">
                           <div className="p-1 flex-shrink-0 text-gray-500">
-                            {item.icon}
+                            {navIcon(item.id)}
                           </div>
                           <div className="min-w-0">
                             <div className="text-xs font-medium truncate">{item.title}</div>
@@ -251,7 +214,7 @@ export const App: React.FC = () => {
           <div className="flex items-center gap-2 ml-auto flex-shrink-0">
             <button
               onClick={() => setDownloadModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-brand-500 hover:bg-brand-600 text-white text-xs font-semibold transition-all shadow-glow-brand cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1 rounded-md bg-brand-500 hover:bg-brand-600 text-on-accent text-xs font-semibold transition-all shadow-glow-brand cursor-pointer"
               title="Download Desktop App Mode (.exe)"
             >
               <Download className="w-3.5 h-3.5" />
@@ -270,7 +233,7 @@ export const App: React.FC = () => {
           {activeTab === 'chat' && <ChatView />}
           {activeTab === 'my_issues' && <IssuesView onlyMyIssues={true} onOpenNewIssue={() => setCreateIssueOpen(true)} />}
           {activeTab === 'issues' && <IssuesView onOpenNewIssue={() => setCreateIssueOpen(true)} />}
-          {activeTab === 'projects' && <ProjectsView />}
+          {activeTab === 'projects' && <ProjectsView onOpenNewIssue={() => setCreateIssueOpen(true)} />}
           {activeTab === 'agents' && <AgentsView />}
           {activeTab === 'squads' && <SquadsView />}
           {activeTab === 'analytics' && <AnalyticsView />}
@@ -284,7 +247,7 @@ export const App: React.FC = () => {
       {/* Global ⌘K Command Palette */}
       <CommandPalette />
 
-      {/* Multica Create Issue Modal */}
+      {/* Create issue */}
       <CreateIssueModal
         isOpen={createIssueOpen}
         onClose={() => setCreateIssueOpen(false)}

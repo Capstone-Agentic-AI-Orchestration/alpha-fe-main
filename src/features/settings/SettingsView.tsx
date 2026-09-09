@@ -79,7 +79,7 @@ export const SettingsView: React.FC = () => {
             onClick={() => setActiveTab(tab.id as any)}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
               activeTab === tab.id
-                ? 'bg-brand-500 text-white shadow-glow-brand font-semibold'
+                ? 'bg-brand-500 text-on-accent shadow-glow-brand font-semibold'
                 : 'text-gray-400 hover:text-white hover:bg-white/5'
             }`}
           >
@@ -97,7 +97,7 @@ export const SettingsView: React.FC = () => {
               {tabs.find(t => t.id === activeTab)?.label}
             </h2>
             <p className="text-xs text-gray-400 mt-0.5">
-              Configure system parameters and preferences for your Multica workspace.
+              Configure system parameters and preferences for your Alpha workspace.
             </p>
           </div>
 
@@ -148,7 +148,7 @@ export const SettingsView: React.FC = () => {
 
                 {/* System Updates & Launcher Card */}
                 <div className="pt-4 border-t border-white/10">
-                  <div className="p-4 rounded-xl bg-[#0A0B0E] border border-white/10 space-y-3">
+                  <div className="p-4 rounded-xl bg-well border border-white/10 space-y-3">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="text-xs font-semibold text-white flex items-center gap-2">
@@ -259,7 +259,7 @@ export const SettingsView: React.FC = () => {
                   <Server className="w-4 h-4" /> Local Engine Probe
                 </div>
                 <p className="text-[11px] text-gray-400">
-                  When enabled, Multica polls `http://localhost:11434/api/tags` and `http://localhost:1234/v1/models` every 30s to discover newly downloaded models.
+                  When enabled, Alpha polls `http://localhost:11434/api/tags` and `http://localhost:1234/v1/models` every 30s to discover newly downloaded models.
                 </p>
               </div>
             </div>
@@ -315,9 +315,9 @@ export const SettingsView: React.FC = () => {
               <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">Theme Palette</label>
               <div className="grid grid-cols-3 gap-3">
                 {[
-                  { id: 'dark', name: 'Obsidian Dark', border: 'border-brand-500', color: 'bg-[#0B0D13]' },
-                  { id: 'midnight', name: 'Midnight Navy', border: 'border-blue-500', color: 'bg-[#0a0f1d]' },
-                  { id: 'cyber', name: 'Cyber Violet', border: 'border-purple-500', color: 'bg-[#120824]' },
+                  { id: 'dark', name: 'Obsidian Dark', border: 'border-brand-500', color: 'bg-well' },
+                  { id: 'midnight', name: 'Midnight Navy', border: 'border-blue-500', color: 'bg-well' },
+                  { id: 'cyber', name: 'Cyber Violet', border: 'border-purple-500', color: 'bg-surface-high' },
                 ].map(th => (
                   <div
                     key={th.id}
@@ -340,7 +340,7 @@ export const SettingsView: React.FC = () => {
           <div className="flex justify-end pt-2">
             <button
               type="submit"
-              className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-glow-brand transition-all"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs shadow-glow-brand transition-all"
             >
               <Save className="w-4 h-4" />
               <span>Save Preferences</span>

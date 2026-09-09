@@ -205,7 +205,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
             type="button"
             onClick={() => void send(composer)}
             disabled={busy || !composer.trim() || !draft.runtimeId}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-white shadow-glow-brand transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-on-accent shadow-glow-brand transition-all disabled:opacity-50"
           >
             {busy ? (
               <>
@@ -277,7 +277,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
             type="button"
             onClick={() => void send(composer)}
             disabled={busy || !composer.trim()}
-            className="p-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white transition-colors disabled:opacity-40"
+            className="p-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent transition-colors disabled:opacity-40"
             title="Send"
           >
             <Send className="w-4 h-4" />
@@ -286,7 +286,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
       </div>
 
       {/* Live draft */}
-      <div className="flex flex-col min-h-0 lg:w-1/2 rounded-xl border border-white/10 bg-[#0A0B0E]">
+      <div className="flex flex-col min-h-0 lg:w-1/2 rounded-xl border border-white/10 bg-well">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
           <span className="text-[11px] font-medium text-gray-400">Configuration</span>
           {runtimeLabel && <span className="text-[10px] text-gray-500">{runtimeLabel}</span>}
@@ -332,7 +332,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
             type="button"
             onClick={onReview}
             disabled={!draft.name.trim()}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-white transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-on-accent transition-colors disabled:opacity-40"
           >
             <span>Review &amp; deploy</span>
             <ArrowRight className="w-3.5 h-3.5" />

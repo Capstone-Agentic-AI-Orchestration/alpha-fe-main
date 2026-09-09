@@ -196,7 +196,7 @@ export function McpServersPanel() {
             return (
               <div
                 key={server.name}
-                className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5"
+                className="p-3 rounded-xl bg-well border border-white/5"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
@@ -280,7 +280,7 @@ export function McpServersPanel() {
       )}
 
       {draft && (
-        <div className="p-3 rounded-xl bg-[#0A0B0E] border border-white/10 space-y-3">
+        <div className="p-3 rounded-xl bg-well border border-white/10 space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-gray-300">
               {draft.editing ? `Edit ${draft.editing}` : 'New MCP server'}
@@ -304,7 +304,7 @@ export function McpServersPanel() {
               disabled={!!draft.editing}
               onChange={e => setDraft({ ...draft, name: e.target.value })}
               placeholder="my-postgres"
-              className="w-full bg-[#14151B] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs disabled:opacity-50 focus:outline-none focus:border-white/30"
+              className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs disabled:opacity-50 focus:outline-none focus:border-white/30"
             />
           </div>
 
@@ -344,7 +344,7 @@ export function McpServersPanel() {
                   value={draft.command}
                   onChange={e => setDraft({ ...draft, command: e.target.value })}
                   placeholder="npx"
-                  className="w-full bg-[#14151B] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                  className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
                 />
               </div>
 
@@ -357,7 +357,7 @@ export function McpServersPanel() {
                   onChange={e => setDraft({ ...draft, argsText: e.target.value })}
                   rows={3}
                   placeholder={'-y\n@modelcontextprotocol/server-memory'}
-                  className="w-full bg-[#14151B] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs resize-y focus:outline-none focus:border-white/30"
+                  className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs resize-y focus:outline-none focus:border-white/30"
                 />
               </div>
             </>
@@ -370,7 +370,7 @@ export function McpServersPanel() {
                 value={draft.url}
                 onChange={e => setDraft({ ...draft, url: e.target.value })}
                 placeholder="https://mcp.context7.com/mcp"
-                className="w-full bg-[#14151B] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
               />
             </div>
           )}
@@ -388,7 +388,7 @@ export function McpServersPanel() {
                   ? 'DATABASE_URL=postgres://...'
                   : 'Authorization=Bearer ...'
               }
-              className="w-full bg-[#14151B] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs resize-y focus:outline-none focus:border-white/30"
+              className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs resize-y focus:outline-none focus:border-white/30"
             />
             <p className="text-[10px] text-gray-600 leading-snug">
               {draft.editing
@@ -422,7 +422,7 @@ export function McpServersPanel() {
                 !draft.name.trim() ||
                 (draft.transport === 'stdio' ? !draft.command.trim() : !draft.url.trim())
               }
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-black text-xs font-medium disabled:opacity-40 transition-opacity"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-canvas text-xs font-medium disabled:opacity-40 transition-opacity"
             >
               {busy
                 ? <Loader2 className="w-3.5 h-3.5 animate-spin" />

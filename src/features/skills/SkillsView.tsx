@@ -111,7 +111,7 @@ export const SkillsView: React.FC = () => {
   const enabledCount = skills.filter(s => s.enabled).length;
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-[#0E0E12] text-gray-300 p-6 space-y-6 select-none font-sans relative">
+    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans relative">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
@@ -133,7 +133,7 @@ export const SkillsView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search skills..."
-            className="w-full bg-[#14151B] border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-surface border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
 
@@ -150,7 +150,7 @@ export const SkillsView: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 selectedCategory !== 'all' || statusFilter !== 'all'
                   ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
-                  : 'bg-[#14151B] hover:bg-[#1C1D24] text-gray-400 hover:text-white border-white/5'
+                  : 'bg-surface hover:bg-surface-raised text-gray-400 hover:text-white border-white/5'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -158,7 +158,7 @@ export const SkillsView: React.FC = () => {
             </button>
 
             {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
+              <div className="absolute right-0 mt-1.5 w-52 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
                 <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Category</div>
                 {['all', ...categories].map((cat) => (
                   <button
@@ -203,14 +203,14 @@ export const SkillsView: React.FC = () => {
                 setSortDropdownOpen(prev => !prev);
                 setFilterDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] hover:bg-[#1C1D24] border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
             >
               {sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
               <span>{sortBy === 'name' ? 'Name' : sortBy === 'category' ? 'Category' : 'Agents'}</span>
             </button>
 
             {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
+              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
                 {(['name', 'category', 'agents'] as const).map((field) => (
                   <button
                     key={field}
@@ -244,7 +244,7 @@ export const SkillsView: React.FC = () => {
 
           {/* Table View Button */}
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
           >
             <TableIcon className="w-3.5 h-3.5" />
             <span>Table</span>
@@ -279,7 +279,7 @@ export const SkillsView: React.FC = () => {
               >
                 {/* 1. Tool Name & Command Schema with 1-Click Copy */}
                 <div className="col-span-4 flex items-start gap-3 min-w-0">
-                  <div className="p-2 rounded-xl bg-[#14151B] border border-white/5 flex-shrink-0 mt-0.5">
+                  <div className="p-2 rounded-xl bg-surface border border-white/5 flex-shrink-0 mt-0.5">
                     {getCategoryIcon(skill.category)}
                   </div>
 
@@ -323,7 +323,7 @@ export const SkillsView: React.FC = () => {
                             src={agent.avatar}
                             alt={agent.name}
                             title={agent.name}
-                            className="inline-block h-5 w-5 rounded-full ring-1 ring-[#0E0E12] object-cover"
+                            className="inline-block h-5 w-5 rounded-full ring-1 ring-canvas object-cover"
                           />
                         ))}
                       </div>
@@ -375,12 +375,12 @@ export const SkillsView: React.FC = () => {
           />
 
           {/* Centered Modal Container */}
-          <div className="relative w-full max-w-2xl bg-[#121318] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
+          <div className="relative w-full max-w-2xl bg-shell border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
             
             {/* Modal Header */}
-            <div className="p-5 border-b border-white/5 flex items-start justify-between bg-[#15161D]">
+            <div className="p-5 border-b border-white/5 flex items-start justify-between bg-surface">
               <div className="flex items-start gap-3.5 min-w-0">
-                <div className="p-2.5 rounded-xl bg-[#0A0B0E] border border-white/10 flex-shrink-0">
+                <div className="p-2.5 rounded-xl bg-well border border-white/10 flex-shrink-0">
                   {getCategoryIcon(selectedSkill.category)}
                 </div>
 
@@ -426,7 +426,7 @@ export const SkillsView: React.FC = () => {
               {/* Description */}
               <div className="space-y-1.5">
                 <label className="text-[11px] font-medium text-gray-400">Tool Purpose & Capability</label>
-                <p className="text-white leading-relaxed bg-[#0A0B0E] p-3 rounded-xl border border-white/5">
+                <p className="text-white leading-relaxed bg-well p-3 rounded-xl border border-white/5">
                   {selectedSkill.description}
                 </p>
               </div>
@@ -444,7 +444,7 @@ export const SkillsView: React.FC = () => {
                       <span>{copiedSkillId === selectedSkill.id ? 'Copied' : 'Copy'}</span>
                     </button>
                   </div>
-                  <div className="font-mono text-cyan-300 bg-[#0A0B0E] p-3 rounded-xl border border-white/5 overflow-x-auto leading-relaxed">
+                  <div className="font-mono text-cyan-300 bg-well p-3 rounded-xl border border-white/5 overflow-x-auto leading-relaxed">
                     {selectedSkill.commandExample}
                   </div>
                 </div>
@@ -460,7 +460,7 @@ export const SkillsView: React.FC = () => {
                     <p className="text-gray-500 italic">No agents are currently using this skill.</p>
                   ) : (
                     agents.filter(a => (a.skills || []).includes(selectedSkill.id)).map(agent => (
-                      <div key={agent.id} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-[#0A0B0E] border border-white/5 text-xs text-white">
+                      <div key={agent.id} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-well border border-white/5 text-xs text-white">
                         <img src={agent.avatar} alt="" className="w-4 h-4 rounded-full object-cover" />
                         <span>{agent.name}</span>
                         <span className="text-[10px] text-gray-500 font-mono">• {agent.role}</span>
@@ -473,7 +473,7 @@ export const SkillsView: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-white/5 bg-[#15161D] flex items-center justify-between text-xs font-mono text-gray-500">
+            <div className="p-4 border-t border-white/5 bg-surface flex items-center justify-between text-xs font-mono text-gray-500">
               <span>{selectedSkill.category}</span>
               <button
                 onClick={() => setSelectedSkillId(null)}

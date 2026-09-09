@@ -1,28 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { navItem, navIcon, navLabel } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
-import {
-  Inbox,
-  MessageSquare,
-  User,
-  CheckSquare,
-  FolderKanban,
-  Bot,
-  Users,
-  BarChart3,
-  Monitor,
-  BookOpen,
-  Settings,
-  Search,
-  Edit3,
-  ChevronDown,
-  HelpCircle,
-  Rocket,
-  FileText,
-  CreditCard,
-  LayoutDashboard,
-  PenLine
-} from 'lucide-react';
+import { Search, Edit3, ChevronDown, HelpCircle, Sun, Moon } from 'lucide-react';
+import { useTheme } from '@/shared/hooks/useTheme';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -30,29 +11,13 @@ interface SidebarProps {
   onOpenNewIssue: () => void;
 }
 
-/** Labels differ per persona: same record, named the way the reader recognises it. */
-const NAV_META: Record<
-  NavigationTab,
-  { label: string; clientLabel?: string; icon: React.ReactNode; group: 'primary' | 'workspace' | 'configure' }
-> = {
-  portal:      { label: 'Overview', icon: <LayoutDashboard className="w-4 h-4" />, group: 'primary' },
-  intake:      { label: 'New request', icon: <PenLine className="w-4 h-4" />, group: 'primary' },
-  inbox:       { label: 'Inbox', icon: <Inbox className="w-4 h-4" />, group: 'primary' },
-  chat:        { label: 'Chat', clientLabel: 'Messages', icon: <MessageSquare className="w-4 h-4" />, group: 'primary' },
-  my_issues:   { label: 'My Issues', icon: <User className="w-4 h-4" />, group: 'primary' },
-  documents:   { label: 'Specifications', clientLabel: 'My requests', icon: <FileText className="w-4 h-4" />, group: 'workspace' },
-  issues:      { label: 'Issues', icon: <CheckSquare className="w-4 h-4" />, group: 'workspace' },
-  projects:    { label: 'Projects', icon: <FolderKanban className="w-4 h-4" />, group: 'workspace' },
-  deployments: { label: 'CI/CD Platform', icon: <Rocket className="w-4 h-4" />, group: 'workspace' },
-  agents:      { label: 'Agents', icon: <Bot className="w-4 h-4" />, group: 'workspace' },
-  squads:      { label: 'Squads', icon: <Users className="w-4 h-4" />, group: 'workspace' },
-  analytics:   { label: 'Analytics', icon: <BarChart3 className="w-4 h-4" />, group: 'workspace' },
-  billing:     { label: 'Billing & Usage', icon: <CreditCard className="w-4 h-4" />, group: 'workspace' },
-  runtimes:    { label: 'Runtimes', icon: <Monitor className="w-4 h-4" />, group: 'configure' },
-  skills:      { label: 'Skills', icon: <BookOpen className="w-4 h-4" />, group: 'configure' },
-  settings:    { label: 'Settings', icon: <Settings className="w-4 h-4" />, group: 'configure' }
-};
-
+/**
+ * The navigation table used to be duplicated here.
+ *
+ * Labels, icons and grouping lived in a `NAV_META` record that App.tsx
+ * mirrored in three more places, and they had already drifted — App.tsx knew
+ * nothing about `portal` or `intake`. All four now read config/navigation.
+ */
 const ROLE_LABEL: Record<UserRole, string> = {
   client: 'Client',
   dev: 'Developer',
@@ -70,8 +35,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
     visibleTabs,
     role,
     switchRole,
-    currentUser
+    currentUser,
+    identity,
+    roleIsOverridden
   } = useApp();
+
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
@@ -92,12 +61,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
     };
   }, [roleMenuOpen]);
 
+  /**
+   * What this workspace is actually called.
+   *
+   * Defaulted to "Multica Alpha Workspace" — a product this is not — seeded
+   * from mockData and shown to everyone who never opened Settings. The
+   * organisation the daemon derived from the attached repositories is a true
+   * answer and needs no configuring.
+   */
+  const workspaceName =
+    settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
+
   const isClient = role === 'client';
-  const labelFor = (tab: NavigationTab) =>
-    (isClient && NAV_META[tab].clientLabel) || NAV_META[tab].label;
+  const labelFor = (tab: NavigationTab) => navLabel(tab, role);
 
   const group = (name: 'primary' | 'workspace' | 'configure') =>
-    visibleTabs.filter(t => NAV_META[t].group === name);
+    visibleTabs.filter(t => navItem(t).group === name);
 
   const navButton = (tab: NavigationTab) => (
     <button
@@ -110,7 +89,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
       }`}
     >
       <div className="flex items-center gap-3">
-        {NAV_META[tab].icon}
+        {navIcon(tab)}
         <span>{labelFor(tab)}</span>
       </div>
       {tab === 'inbox' && unreadInboxCount > 0 && (
@@ -120,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
   );
 
   return (
-    <aside className="w-60 bg-[#101113] border-r border-white/[0.06] flex flex-col flex-shrink-0 select-none z-20 text-gray-300 font-sans text-sm">
+    <aside className="w-60 bg-shell border-r border-white/[0.06] flex flex-col flex-shrink-0 select-none z-20 text-gray-300 font-sans text-sm">
 
       {/* Workspace */}
       <div className="pt-3 px-3 pb-3 space-y-3">
@@ -134,19 +113,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
                 {isClient ? (currentUser.company?.[0] ?? 'C') : 'A'}
               </div>
               <span className="text-sm font-semibold text-white truncate">
-                {isClient ? currentUser.company : settings.workspaceName || 'Alpha work'}
+                {isClient ? currentUser.company : workspaceName}
               </span>
             </div>
             <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
           </button>
 
           {workspaceMenuOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-[#191A1D] border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-1 animate-slide-up text-sm">
+            <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-1 animate-slide-up text-sm">
               <div className="text-xs font-medium text-gray-500 px-2 py-1">Workspaces</div>
               <div className="flex items-center gap-2.5 px-3 py-2 rounded-md bg-white/[0.04] text-white font-medium">
                 <span className="w-2 h-2 rounded-full bg-emerald-400" />
                 <span className="truncate">
-                  {isClient ? currentUser.company : settings.workspaceName || 'Alpha work'}
+                  {isClient ? currentUser.company : workspaceName}
                 </span>
               </div>
               <button
@@ -223,18 +202,34 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
           onClick={() => setRoleMenuOpen(!roleMenuOpen)}
           className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-white/[0.035] transition-colors text-left"
         >
+          {/*
+            Who you actually are.
+            
+            This read `currentUser`, which is picked from a mock array by
+            whichever role the switcher is on — so the footer showed a person
+            who does not exist while the daemon knew perfectly well it was
+            talking to a GitHub account. `identity` is that account; the mock
+            remains only as the fallback for a machine with no gh at all.
+          */}
           <div className="w-7 h-7 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center text-xs font-semibold text-gray-200 flex-shrink-0">
-            {currentUser.name[0]}
+            {(identity?.login ?? currentUser.name)[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-white truncate">{currentUser.name}</p>
-            <p className="text-[11px] text-gray-500">{ROLE_LABEL[role]}</p>
+            <p className="text-xs text-white truncate">{identity?.login ?? currentUser.name}</p>
+            <p className="text-[11px] text-gray-500 flex items-center gap-1">
+              <span>{ROLE_LABEL[role]}</span>
+              {/*
+                Say when the role is not the one GitHub gave you. Without it the
+                footer asserts a persona you are only borrowing.
+              */}
+              {roleIsOverridden && <span className="text-amber-500/80">· viewing as</span>}
+            </p>
           </div>
           <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
         </button>
 
         {roleMenuOpen && (
-          <div className="absolute bottom-full left-2.5 right-2.5 mb-1.5 z-30 bg-[#191A1D] border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-0.5 animate-slide-up">
+          <div className="absolute bottom-full left-2.5 right-2.5 mb-1.5 z-30 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-0.5 animate-slide-up">
             <div className="text-xs font-medium text-gray-500 px-2.5 py-1.5">
               View as
             </div>
@@ -265,7 +260,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
           <HelpCircle className="w-4 h-4 text-gray-500" />
           <span>Prototype guide</span>
         </button>
-        <span className="font-mono text-[10px] text-brand-400 font-medium">v2.0.0</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={toggleTheme}
+            title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
+            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+            className="p-1 rounded hover:bg-white/[0.06] hover:text-gray-200 transition-colors"
+          >
+            {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+          </button>
+          <span className="font-mono text-[10px] text-brand-400 font-medium">v2.0.0</span>
+        </div>
       </div>
     </aside>
   );

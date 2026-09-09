@@ -165,9 +165,9 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
         }}
       />
 
-      {/* Multica Card Dialog (Spacious & Scaled) */}
+      {/* Card dialog */}
       <div 
-        className={`relative w-full ${isFullscreen ? 'max-w-5xl h-[88vh]' : 'max-w-3xl min-h-[440px]'} bg-[#16171D] border border-white/15 rounded-2xl shadow-2xl overflow-visible z-10 animate-slide-up flex flex-col justify-between text-[15px]`}
+        className={`relative w-full ${isFullscreen ? 'max-w-5xl h-[88vh]' : 'max-w-3xl min-h-[440px]'} bg-surface border border-white/15 rounded-2xl shadow-2xl overflow-visible z-10 animate-slide-up flex flex-col justify-between text-[15px]`}
         onClick={() => openMenu && setOpenMenu(null)}
       >
         {/* Top Header Bar */}
@@ -554,7 +554,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
                       : 'border-white/10 bg-white/10 hover:border-white/20'
                   }`}
                 >
-                  <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${
+                  <span className={`h-4 w-4 rounded-full bg-on-accent shadow-sm transition-transform ${
                     createAnother ? 'translate-x-4' : 'translate-x-0'
                   }`} />
                 </button>

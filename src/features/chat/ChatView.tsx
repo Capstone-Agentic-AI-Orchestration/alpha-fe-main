@@ -197,9 +197,9 @@ export const ChatView: React.FC = () => {
       ];
 
   return (
-    <div className="h-full flex overflow-hidden bg-[#121315] text-sm text-gray-200">
+    <div className="h-full flex overflow-hidden bg-shell text-sm text-gray-200">
       {/* Left Column: Chat Conversations List (Matching Exact Screenshot Design) */}
-      <div className="w-80 sm:w-96 border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-[#101113]">
+      <div className="w-80 sm:w-96 border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-shell">
         {/* Chat Threads Header */}
         <div className="h-14 px-4 border-b border-white/[0.08] flex items-center justify-between">
           <h2 className="text-base font-semibold text-white">
@@ -265,11 +265,11 @@ export const ChatView: React.FC = () => {
       </div>
 
       {/* Right Column: Active Conversation Canvas or Empty State */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-[#121315]">
+      <div className="flex-1 flex flex-col h-full overflow-hidden bg-shell">
         {activeThread ? (
           <>
             {/* Active Thread Header */}
-            <div className="h-14 px-6 border-b border-white/[0.06] bg-[#121315] flex items-center justify-between">
+            <div className="h-14 px-6 border-b border-white/[0.06] bg-shell flex items-center justify-between">
               <div className="flex items-center gap-3 min-w-0">
                 <div className="w-6 h-8 flex items-center justify-center flex-shrink-0">
                   {activeThread.iconType === 'flame' ? (
@@ -381,7 +381,7 @@ export const ChatView: React.FC = () => {
                     >
                       {/* Avatar */}
                       {isUser ? (
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-white flex-shrink-0">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-on-accent flex-shrink-0">
                           U
                         </div>
                       ) : msg.senderAvatar || activeAgent?.avatar ? (
@@ -452,7 +452,7 @@ export const ChatView: React.FC = () => {
                         <div
                           className={`p-4 rounded-2xl text-sm sm:text-base leading-relaxed ${
                             isUser
-                              ? 'bg-brand-500 text-white rounded-tr-none shadow-glow-brand'
+                              ? 'bg-brand-500 text-on-accent rounded-tr-none shadow-glow-brand'
                               : 'bg-surface-100 border border-white/10 text-gray-100 rounded-tl-none'
                           }`}
                         >
@@ -477,7 +477,7 @@ export const ChatView: React.FC = () => {
             </div>
 
             {/* Quick Prompt Starters */}
-            <div className="px-5 py-2.5 bg-[#14151B]/80 border-t border-white/5 flex items-center gap-2.5 overflow-x-auto">
+            <div className="px-5 py-2.5 bg-surface/80 border-t border-white/5 flex items-center gap-2.5 overflow-x-auto">
               <span className="text-xs font-mono uppercase text-gray-500 whitespace-nowrap font-semibold">Prompts:</span>
               {quickStarters.map((qs, i) => (
                 <button
@@ -492,7 +492,7 @@ export const ChatView: React.FC = () => {
             </div>
 
             {/* Input Composer Bar */}
-            <div className="p-4 sm:p-5 border-t border-white/[0.08] bg-[#14151B] space-y-3">
+            <div className="p-4 sm:p-5 border-t border-white/[0.08] bg-surface space-y-3">
               {/* Shown above the composer rather than after a failed send: the
                   agent cannot answer, and finding that out by waiting for an
                   error is the experience this replaces. */}
@@ -505,7 +505,7 @@ export const ChatView: React.FC = () => {
               <form onSubmit={handleSend} className="relative flex items-center gap-2">
                 {/* @mention picker — only while an @token is being typed */}
                 {mentionMatches.length > 0 && (
-                  <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-[#1A1B22] shadow-2xl z-30 py-1">
+                  <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-surface-raised shadow-2xl z-30 py-1">
                     <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-gray-500 border-b border-white/5">
                       Mention an agent or squad
                     </div>
@@ -571,7 +571,7 @@ export const ChatView: React.FC = () => {
                 <button
                   type="submit"
                   disabled={!input.trim() || isAgentTyping}
-                  className="absolute right-2.5 p-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-30 text-white transition-all shadow-glow-brand"
+                  className="absolute right-2.5 p-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-30 text-on-accent transition-all shadow-glow-brand"
                 >
                   <Send className="w-4.5 h-4.5" />
                 </button>
@@ -600,7 +600,7 @@ export const ChatView: React.FC = () => {
 
       {/* Right Column: Agent Inspector Drawer */}
       {showInspector && activeAgent && activeThread && (
-        <div className="w-88 bg-[#14151B] border-l border-white/[0.08] p-6 overflow-y-auto space-y-6 flex-shrink-0 hidden lg:block text-sm">
+        <div className="w-88 bg-surface border-l border-white/[0.08] p-6 overflow-y-auto space-y-6 flex-shrink-0 hidden lg:block text-sm">
           <div className="flex items-center gap-3.5">
             <img src={activeAgent.avatar} alt="" className="w-14 h-14 rounded-2xl object-cover ring-2 ring-brand-500/40" />
             <div>

@@ -110,7 +110,7 @@ export const RuntimesView: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-[#0E0E12] text-gray-300 p-6 space-y-6 select-none font-sans">
+    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
@@ -124,7 +124,7 @@ export const RuntimesView: React.FC = () => {
         <button
           onClick={scanLocalRuntimes}
           disabled={isScanningRuntimes}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-xs font-medium text-white transition-colors shadow-sm disabled:opacity-50"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm disabled:opacity-50"
         >
           <RefreshCw className={`w-3.5 h-3.5 ${isScanningRuntimes ? 'animate-spin' : ''}`} />
           <span>{isScanningRuntimes ? 'Scanning ports...' : 'Scan host engines'}</span>
@@ -141,7 +141,7 @@ export const RuntimesView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search runtimes, models, ports..."
-            className="w-full bg-[#14151B] border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-surface border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
 
@@ -158,7 +158,7 @@ export const RuntimesView: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 typeFilter !== 'all' || statusFilter !== 'all'
                   ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
-                  : 'bg-[#14151B] hover:bg-[#1C1D24] text-gray-400 hover:text-white border-white/5'
+                  : 'bg-surface hover:bg-surface-raised text-gray-400 hover:text-white border-white/5'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -166,7 +166,7 @@ export const RuntimesView: React.FC = () => {
             </button>
 
             {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
+              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
                 <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Engine Type</div>
                 {['all', 'local', 'cloud'].map((tp) => (
                   <button
@@ -211,14 +211,14 @@ export const RuntimesView: React.FC = () => {
                 setSortDropdownOpen(prev => !prev);
                 setFilterDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] hover:bg-[#1C1D24] border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
             >
               {sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
               <span>{sortBy === 'latency' ? 'Latency' : sortBy === 'name' ? 'Name' : 'Models'}</span>
             </button>
 
             {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
+              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
                 {(['latency', 'name', 'models'] as const).map((field) => (
                   <button
                     key={field}
@@ -252,7 +252,7 @@ export const RuntimesView: React.FC = () => {
 
           {/* Table View Button */}
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
           >
             <TableIcon className="w-3.5 h-3.5" />
             <span>Table</span>
@@ -303,7 +303,7 @@ export const RuntimesView: React.FC = () => {
                   <span className={`inline-block px-2.5 py-0.5 rounded-md text-[11px] font-medium ${
                     rt.type === 'local' 
                       ? 'bg-teal-500/10 text-teal-300 border border-teal-500/20' 
-                      : 'bg-[#1B1C23] text-gray-400'
+                      : 'bg-surface-raised text-gray-400'
                   }`}>
                     {rt.type === 'local' ? 'Local Host' : 'Cloud Gateway'}
                   </span>
@@ -356,10 +356,10 @@ export const RuntimesView: React.FC = () => {
 
       {/* ================= RUNTIME INSPECTOR DRAWER ================= */}
       {selectedRuntime && (
-        <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-[#111218] border-l border-white/10 shadow-2xl z-50 flex flex-col animate-slide-left font-sans">
+        <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-shell border-l border-white/10 shadow-2xl z-50 flex flex-col animate-slide-left font-sans">
           
           {/* Drawer Header */}
-          <div className="p-5 border-b border-white/5 flex items-start justify-between bg-[#14151B]">
+          <div className="p-5 border-b border-white/5 flex items-start justify-between bg-surface">
             <div className="flex items-start gap-3 min-w-0">
               <div className="w-10 h-10 rounded-xl bg-surface-100 border border-white/10 flex items-center justify-center text-xl shadow-md flex-shrink-0">
                 {selectedRuntime.type === 'local' ? <Server className="w-5 h-5 text-teal-400" /> : <Globe className="w-5 h-5 text-indigo-400" />}
@@ -396,7 +396,7 @@ export const RuntimesView: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-5 space-y-6 text-xs text-gray-300">
             
             {/* Endpoint Connection Block */}
-            <div className="p-3.5 rounded-xl bg-[#15161D] border border-white/5 space-y-2">
+            <div className="p-3.5 rounded-xl bg-surface border border-white/5 space-y-2">
               <div className="flex items-center justify-between text-[11px] text-gray-400">
                 <span>Inference API Endpoint</span>
                 <button
@@ -414,7 +414,7 @@ export const RuntimesView: React.FC = () => {
 
             {/* Local Host Hardware Telemetry (if local) */}
             {selectedRuntime.type === 'local' && (
-              <div className="p-3.5 rounded-xl bg-[#15161D] border border-white/5 space-y-3">
+              <div className="p-3.5 rounded-xl bg-surface border border-white/5 space-y-3">
                 <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                   Host Hardware & VRAM Telemetry
                 </div>
@@ -449,7 +449,7 @@ export const RuntimesView: React.FC = () => {
                 {(selectedRuntime.modelsLoaded || selectedRuntime.models || []).map((model) => (
                   <div
                     key={model}
-                    className="p-3 rounded-xl bg-[#15161D] border border-white/5 flex items-center justify-between"
+                    className="p-3 rounded-xl bg-surface border border-white/5 flex items-center justify-between"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
@@ -468,7 +468,7 @@ export const RuntimesView: React.FC = () => {
               <div className="pt-2 border-t border-white/5">
                 <button
                   onClick={() => setDefaultRuntime(selectedRuntime.id)}
-                  className="w-full py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs shadow-glow-brand transition-all"
+                  className="w-full py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs shadow-glow-brand transition-all"
                 >
                   Set as Default LLM Engine
                 </button>

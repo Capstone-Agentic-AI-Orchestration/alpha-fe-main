@@ -17,7 +17,7 @@ export const AnalyticsView: React.FC = () => {
   const maxTokens = Math.max(...analytics.tokenTimeline.map(t => t.promptTokens + t.completionTokens), 1);
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-[#0E0E12] text-gray-300 p-6 space-y-6 select-none font-sans">
+    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
@@ -28,7 +28,7 @@ export const AnalyticsView: React.FC = () => {
         </div>
 
         {/* Time range selector */}
-        <div className="flex items-center bg-[#14151B] border border-white/5 rounded-xl p-1 text-xs">
+        <div className="flex items-center bg-surface border border-white/5 rounded-xl p-1 text-xs">
           {(['24h', '7d', '30d'] as const).map((range) => (
             <button
               key={range}
@@ -48,7 +48,7 @@ export const AnalyticsView: React.FC = () => {
       {/* ================= 4 CLEAN KEY METRICS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {/* 1. Token Volume */}
-        <div className="p-4 rounded-xl bg-[#14151B] border border-white/5 space-y-1.5">
+        <div className="p-4 rounded-xl bg-surface border border-white/5 space-y-1.5">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span>Tokens (24h)</span>
             <Cpu className="w-3.5 h-3.5 text-gray-500" />
@@ -63,7 +63,7 @@ export const AnalyticsView: React.FC = () => {
         </div>
 
         {/* 2. Cloud Cost */}
-        <div className="p-4 rounded-xl bg-[#14151B] border border-white/5 space-y-1.5">
+        <div className="p-4 rounded-xl bg-surface border border-white/5 space-y-1.5">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span>Cloud API Cost</span>
             <DollarSign className="w-3.5 h-3.5 text-gray-500" />
@@ -77,7 +77,7 @@ export const AnalyticsView: React.FC = () => {
         </div>
 
         {/* 3. Latency */}
-        <div className="p-4 rounded-xl bg-[#14151B] border border-white/5 space-y-1.5">
+        <div className="p-4 rounded-xl bg-surface border border-white/5 space-y-1.5">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span>Avg Agent Latency</span>
             <Zap className="w-3.5 h-3.5 text-gray-500" />
@@ -91,7 +91,7 @@ export const AnalyticsView: React.FC = () => {
         </div>
 
         {/* 4. Success Rate */}
-        <div className="p-4 rounded-xl bg-[#14151B] border border-white/5 space-y-1.5">
+        <div className="p-4 rounded-xl bg-surface border border-white/5 space-y-1.5">
           <div className="flex items-center justify-between text-xs text-gray-400">
             <span>Swarm Success Rate</span>
             <ShieldCheck className="w-3.5 h-3.5 text-gray-500" />
@@ -106,7 +106,7 @@ export const AnalyticsView: React.FC = () => {
       </div>
 
       {/* ================= TOKEN INGESTION TIMELINE ================= */}
-      <div className="p-5 rounded-xl bg-[#14151B] border border-white/5 space-y-3">
+      <div className="p-5 rounded-xl bg-surface border border-white/5 space-y-3">
         <div className="flex items-center justify-between">
           <div className="space-y-0.5">
             <h2 className="text-xs font-semibold text-white tracking-wide">Token Ingestion & Generation Velocity</h2>
@@ -198,7 +198,7 @@ export const AnalyticsView: React.FC = () => {
         </div>
 
         {/* Right: Model Invocations Share (4 cols) */}
-        <div className="lg:col-span-4 p-5 rounded-xl bg-[#14151B] border border-white/5 space-y-4">
+        <div className="lg:col-span-4 p-5 rounded-xl bg-surface border border-white/5 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-xs font-semibold text-white flex items-center gap-1.5 tracking-wide">
               <PieChart className="w-3.5 h-3.5 text-gray-400" />
@@ -217,7 +217,7 @@ export const AnalyticsView: React.FC = () => {
                     <span className="text-white font-semibold text-[11px]">{model.percentage}%</span>
                   </div>
                 </div>
-                <div className="w-full h-1.5 bg-[#0E0E12] rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-canvas rounded-full overflow-hidden">
                   <div 
                     className={`h-full rounded-full ${model.cost === 0 ? 'bg-teal-400' : 'bg-brand-500'}`}
                     style={{ width: `${model.percentage}%` }}

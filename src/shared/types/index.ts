@@ -50,6 +50,12 @@ export interface Issue {
   status: IssueStatus;
   priority: IssuePriority;
   projectId: string;
+  /**
+   * Who created it — a GitHub login, or an OS username when GitHub is not
+   * signed in. Absent on issues written before Alpha recorded it, which is why
+   * the "Mine" filter treats absence as "not yours" rather than guessing.
+   */
+  createdBy?: string;
   assignedAgentId?: string;
   assignedSquadId?: string;
   assignedHuman?: string;
@@ -62,7 +68,36 @@ export interface Issue {
   updatedAt: string;
 }
 
+/**
+ * One thing Alpha, an agent, or a person did to a remote repository.
+ *
+ * `actor` is the point: agents reach GitHub through MCP tools and Alpha's
+ * pipeline pushes on their behalf, and until this existed neither left a record
+ * the UI could show. A failed or refused attempt is recorded too — an agent
+ * trying to push to a protected branch is exactly what a reviewer wants to see.
+ */
+export interface RemoteAction {
+  id: string;
+  runId?: string;
+  agentId?: string;
+  issueId?: string;
+  actor: 'agent' | 'alpha' | 'user';
+  action: string;
+  target?: string;
+  detail?: string;
+  succeeded: boolean;
+  createdAt: string;
+}
+
 export type PrototypeRunStatus =
+  /**
+   * Accepted, but not started: another run holds this project's checkout.
+   *
+   * Runs on one project share a working directory, so the daemon serialises
+   * them. A run that is waiting says so rather than showing a progress bar for
+   * work no process has begun.
+   */
+  | 'queued'
   | 'running'
   | 'awaiting_approval'
   | 'validating'
@@ -195,6 +230,14 @@ export interface Milestone {
 }
 
 export interface Project {
+  /**
+   * Values this project resolves `${VAR}` against in MCP server definitions.
+   *
+   * The MCP catalog is global, so one Supabase entry serves every project —
+   * this is what makes it point at a different Supabase project per board.
+   * Overrides the daemon's environment; an agent's own envVars override these.
+   */
+  envVars?: { key: string; value: string; isSecret?: boolean }[];
   id: string;
   name: string;
   key: string;
@@ -648,6 +691,43 @@ export interface WorkspaceSettings {
 /* ---------------------------------------------------------------------------
  * Identity & access
  * ------------------------------------------------------------------------ */
+
+/**
+ * Who Alpha thinks you are, from the daemon.
+ *
+ * The GitHub login the org, the teams and every pull request already use, or
+ * the OS username when GitHub is not signed in. `source` says which, so the UI
+ * never implies a GitHub account that is not there.
+ */
+export interface Identity {
+  login: string;
+  name?: string;
+  source: 'github' | 'local';
+  /** Every team the account belongs to, across organisations. */
+  teams?: { org: string; slug: string }[];
+  /**
+   * The role the workspace's teams imply, or absent when nothing said —
+   * no GitHub, no workspace org, or teams named something unrecognised.
+   */
+  role?: UserRole;
+  /** The organisation this installation's projects belong to. */
+  workspaceOrg?: string;
+  /**
+   * Whether this person may use Alpha at all.
+   *
+   * `no_team` means a GitHub account in a known workspace organisation that
+   * belongs to no team granting a role. Every other reason a role is absent —
+   * still loading, no GitHub, no workspace yet — stays `granted`, because
+   * refusing those would lock out solo use and every fresh install.
+   */
+  access?: 'granted' | 'no_team';
+  /**
+   * Why GitHub is unavailable, when it is. `missing` means the CLI is not
+   * installed — where a teammate who downloaded only the packaged app lands,
+   * since `gh` is not bundled and every GitHub call shells out to it.
+   */
+  github?: 'ok' | 'missing' | 'signed_out';
+}
 
 export type UserRole = 'client' | 'dev' | 'pm' | 'admin';
 

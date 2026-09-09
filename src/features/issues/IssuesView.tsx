@@ -1,9 +1,12 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/app/AppContext';
-import { IssueStatus, IssuePriority, Issue } from '@/shared/types';
+import { IssueStatus, IssuePriority, Issue
+} from '@/shared/types';
 import { StatusBadge, PriorityBadge } from '@/shared/components/Badge';
 import { AgentRunProgress } from '@/features/runs/AgentRunProgress';
+import { SquadRunFlow } from '@/features/runs/SquadRunFlow';
 import { 
+  Users,
   Kanban, 
   List, 
   Plus, 
@@ -27,15 +30,41 @@ import {
   Star,
   Asterisk,
   CheckSquare,
-  User
+  User,
+  RefreshCw
 } from 'lucide-react';
+
+/** "just now", "3m", "2h" — a timestamp is noise in a toolbar. */
+function syncAgo(iso: string): string {
+  const seconds = Math.round((Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 45) return 'Just now';
+  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
+  return `${Math.round(seconds / 3600)}h ago`;
+}
 
 interface IssuesViewProps {
   onOpenNewIssue: () => void;
   onlyMyIssues?: boolean;
+  /**
+   * Show one project only, and hide the project picker.
+   *
+   * The project page used to render its own kanban — four columns to this
+   * one's five, cards that looked clickable and opened nothing, no comments, no
+   * squad assignment, no approval. Two boards over one dataset, drifting.
+   * Embedding this one instead means there is a single board and the project
+   * page stops being a lesser copy of it.
+   */
+  lockedProjectId?: string;
+  /** Drop the page chrome, for rendering inside a page that has its own. */
+  embedded?: boolean;
 }
 
-export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIssues = false }) => {
+export const IssuesView: React.FC<IssuesViewProps> = ({
+  onOpenNewIssue,
+  onlyMyIssues = false,
+  lockedProjectId,
+  embedded = false
+}) => {
   const { 
     issues, 
     updateIssueStatus, 
@@ -45,13 +74,43 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
     prototypeRuns,
     projects, 
     agents, 
-    squads 
+    squads,
+    triggerSquadRun,
+    identity,
+    createIssue,
+    syncBoard,
+    syncing,
+    lastSyncedAt
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'board' | 'list'>('list');
-  const [filterCategory, setFilterCategory] = useState<'all' | 'members' | 'agents'>(onlyMyIssues ? 'members' : 'all');
+  /**
+   * `mine` is issues you created, which is what My Issues always claimed to be.
+   *
+   * It used to preset this to `members` — "has a squad or a human assigned" —
+   * which is neither yours nor created by you, and which one click on the All
+   * chip undid. Issues now record `createdBy`, so the question is answerable.
+   */
+  const [filterCategory, setFilterCategory] = useState<'all' | 'mine' | 'members' | 'agents'>(
+    onlyMyIssues ? 'mine' : 'all'
+  );
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProject, setSelectedProject] = useState<string>('all');
+  const [selectedProject, setSelectedProject] = useState<string>(lockedProjectId ?? 'all');
+
+  /**
+   * Follow the lock when the page switches projects.
+   *
+   * The component stays mounted while `selectedProject` changes underneath it,
+   * so without this the board would keep showing the project you navigated
+   * away from.
+   */
+  useEffect(() => {
+    if (lockedProjectId) setSelectedProject(lockedProjectId);
+  }, [lockedProjectId]);
+
+  /** The column an inline add is open in, or null. */
+  const [quickAddStatus, setQuickAddStatus] = useState<IssueStatus | null>(null);
+  const [quickAddTitle, setQuickAddTitle] = useState('');
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
   const [showFilterBar, setShowFilterBar] = useState(false);
@@ -127,6 +186,9 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
 
   const filteredIssues = useMemo(() => {
     return issues.filter(issue => {
+      // An issue created before Alpha recorded an author has no answer here,
+       // so it is not yours — guessing would put someone else's work in your list.
+      if (filterCategory === 'mine' && (!identity || issue.createdBy !== identity.login)) return false;
       if (filterCategory === 'agents' && !issue.assignedAgentId) return false;
       if (filterCategory === 'members' && !issue.assignedSquadId && !issue.assignedHuman) return false;
       if (selectedProject !== 'all' && issue.projectId !== selectedProject) return false;
@@ -143,7 +205,39 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
       }
       return true;
     });
-  }, [issues, filterCategory, selectedProject, selectedPriority, selectedAgent, searchQuery]);
+  }, [issues, filterCategory, selectedProject, selectedPriority, selectedAgent, searchQuery, identity]);
+
+  /** Only when one project is named, because a create needs one. */
+  const canQuickAdd = selectedProject !== 'all';
+
+  /**
+   * A title and a column is a whole issue.
+   *
+   * The two fields the create modal exists to collect are already answered
+   * here: the project by where you are, the status by which column you typed
+   * into. Asking again in a dialog is the friction that stops people filing
+   * issues at all — so the modal stays for filing something properly, and this
+   * is for noting it down before it is forgotten.
+   *
+   * Everything else the daemon fills in, including the identifier and the
+   * author, so a title-only issue is a complete and correct one.
+   */
+  const submitQuickAdd = (status: IssueStatus) => {
+    const title = quickAddTitle.trim();
+    if (!title || !canQuickAdd) return;
+
+    createIssue({
+      title,
+      description: '',
+      status,
+      priority: 'medium',
+      projectId: selectedProject,
+      labels: []
+    });
+
+    // Left open on the same column: adding one usually means adding three.
+    setQuickAddTitle('');
+  };
 
   const runningAgentsCount = useMemo(() => {
     return issues.filter(i => i.status === 'agent_running').length;
@@ -222,7 +316,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
     if (agent) {
       if (agent.role === 'Architect') {
         return (
-          <div className="w-6 h-6 rounded-full bg-[#1c1e27] border border-white/10 flex items-center justify-center text-white" title={`Agent: ${agent.name}`}>
+          <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-white" title={`Agent: ${agent.name}`}>
             <Asterisk className="w-3.5 h-3.5 text-white stroke-[2.5]" />
           </div>
         );
@@ -234,14 +328,14 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
       }
       if (agent.role === 'Reviewer') {
         return (
-          <div className="w-6 h-6 rounded-full bg-[#1c1e27] border border-white/10 flex items-center justify-center text-amber-400" title={`Agent: ${agent.name}`}>
+          <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-amber-400" title={`Agent: ${agent.name}`}>
             <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
           </div>
         );
       }
       if (agent.role === 'QA Tester') {
         return (
-          <div className="w-6 h-6 rounded-full bg-[#1c1e27] border border-white/10 flex items-center justify-center text-orange-400" title={`Agent: ${agent.name}`}>
+          <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-orange-400" title={`Agent: ${agent.name}`}>
             <Flame className="w-3.5 h-3.5 fill-orange-400/20 text-orange-400" />
           </div>
         );
@@ -263,23 +357,31 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-[#121315] text-sm text-gray-200">
+    <div className="h-full flex flex-col overflow-hidden bg-shell text-sm text-gray-200">
       {/* Header & Jira-like Control Bar */}
-      <div className="px-6 py-4 border-b border-white/[0.06] bg-[#121315] space-y-3">
+      <div className="px-6 py-4 border-b border-white/[0.06] bg-shell space-y-3">
         {/* Top Row: Title, Filters & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           {/* Left: Issues title & category pills */}
           <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
-              {onlyMyIssues ? (
-                <User className="w-4 h-4 text-emerald-400" />
-              ) : (
-                <CheckSquare className="w-4 h-4 text-gray-400" />
-              )}
-              <h1 className="text-base font-semibold text-white">
-                {onlyMyIssues ? 'My Issues' : 'Issues'}
-              </h1>
-            </div>
+            {/*
+              The project page has its own title, and two headings stacked with
+              the project name above "Issues" reads as a mistake. Only the
+              heading goes — the filters and the view switcher are as useful
+              inside a project as outside one.
+            */}
+            {!embedded && (
+              <div className="flex items-center gap-2">
+                {onlyMyIssues ? (
+                  <User className="w-4 h-4 text-emerald-400" />
+                ) : (
+                  <CheckSquare className="w-4 h-4 text-gray-400" />
+                )}
+                <h1 className="text-base font-semibold text-white">
+                  {onlyMyIssues ? 'My Issues' : 'Issues'}
+                </h1>
+              </div>
+            )}
 
             {/* Scope is a compact text control, not a second container inside the header. */}
             <div className="flex items-center gap-1 text-xs">
@@ -292,6 +394,17 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                 }`}
               >
                 All
+              </button>
+              <button
+                onClick={() => setFilterCategory('mine')}
+                title={identity ? `Issues created by ${identity.login}` : 'Waiting for your identity'}
+                className={`px-2 py-1 border-b font-medium transition-colors ${
+                  filterCategory === 'mine'
+                    ? 'border-brand-400 text-white'
+                    : 'border-transparent text-gray-500 hover:text-white'
+                }`}
+              >
+                Mine
               </button>
               <button
                 onClick={() => setFilterCategory('members')}
@@ -383,10 +496,31 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
               </button>
             </div>
 
+            {/*
+              The board is shared through GitHub, so it needs a way to say when
+              it last looked and a way to look now. Polling runs every minute;
+              this is for the moment you know a teammate just did something.
+            */}
+            <button
+              onClick={() => void syncBoard()}
+              disabled={syncing}
+              title={
+                lastSyncedAt
+                  ? `Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
+                  : 'Not synced yet'
+              }
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 font-medium text-xs transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+              <span className="hidden sm:inline">
+                {syncing ? 'Syncing' : lastSyncedAt ? syncAgo(lastSyncedAt) : 'Sync'}
+              </span>
+            </button>
+
             {/* New Issue Button */}
             <button
               onClick={onOpenNewIssue}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-white font-medium text-xs transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>New Issue</span>
@@ -408,16 +542,23 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
               />
             </div>
 
-            <select
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="bg-surface-100 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-brand-500"
-            >
-              <option value="all">All Projects</option>
-              {projects.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
+            {/*
+              Hidden when the page has already chosen. Offering "All Projects"
+              inside one project's page is an invitation to navigate somewhere
+              the surrounding chrome still claims you are not.
+            */}
+            {!lockedProjectId && (
+              <select
+                value={selectedProject}
+                onChange={(e) => setSelectedProject(e.target.value)}
+                className="bg-surface-100 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-brand-500"
+              >
+                <option value="all">All Projects</option>
+                {projects.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            )}
 
             <select
               value={selectedPriority}
@@ -446,7 +587,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
       </div>
 
       {/* Main Issue Canvas */}
-      <div className="flex-1 flex overflow-hidden relative bg-[#16171D]">
+      <div className="flex-1 flex overflow-hidden relative bg-surface">
         {viewMode === 'board' ? (
           /* Kanban Board Mode */
           <div className="flex-1 overflow-x-auto p-4 sm:p-6 flex gap-5">
@@ -463,16 +604,58 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                       <StatusBadge status={column.id} />
                       <span className="text-xs font-mono text-gray-400">({colIssues.length})</span>
                     </div>
+                    {/*
+                      Quick add needs a project to create into, and "All
+                      projects" does not name one. On the project page the lock
+                      always supplies it; on the global board it appears the
+                      moment you filter to a single project.
+                    */}
                     <button
-                      onClick={onOpenNewIssue}
+                      onClick={() =>
+                        canQuickAdd
+                          ? (setQuickAddStatus(column.id), setQuickAddTitle(''))
+                          : onOpenNewIssue()
+                      }
                       className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/5"
-                      title="Add Issue to this column"
+                      title={canQuickAdd ? 'Add an issue to this column' : 'New issue'}
                     >
                       <Plus className="w-4 h-4" />
                     </button>
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                    {quickAddStatus === column.id && (
+                      <div className="rounded-xl border border-brand-500/40 bg-surface-100 p-2">
+                        <input
+                          autoFocus
+                          value={quickAddTitle}
+                          onChange={e => setQuickAddTitle(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') submitQuickAdd(column.id);
+                            if (e.key === 'Escape') setQuickAddStatus(null);
+                          }}
+                          onBlur={() => !quickAddTitle.trim() && setQuickAddStatus(null)}
+                          placeholder="Issue title, then Enter"
+                          className="w-full bg-transparent text-xs text-white placeholder:text-gray-600 focus:outline-none"
+                        />
+                        <div className="mt-1.5 flex items-center justify-between">
+                          {/* The daemon assigns the real identifier; promising
+                              one here is what produced TES-107. */}
+                          <span className="font-mono text-[10px] text-gray-600">
+                            {projects.find(p => p.id === selectedProject)?.key ?? ''}
+                          </span>
+                          <button
+                            type="button"
+                            onMouseDown={e => e.preventDefault()}
+                            onClick={() => submitQuickAdd(column.id)}
+                            disabled={!quickAddTitle.trim()}
+                            className="rounded px-2 py-0.5 text-[10px] font-semibold text-brand-300 hover:bg-white/5 disabled:opacity-30"
+                          >
+                            Add
+                          </button>
+                        </div>
+                      </div>
+                    )}
                     {colIssues.map(issue => {
                       const completedSubtasks = issue.subtasks.filter(s => s.completed).length;
 
@@ -539,7 +722,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                   {/* Jira Section Header Bar */}
                   <div
                     onClick={() => toggleSection(group.id)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-[#191a24] hover:bg-[#1e202c] border border-white/[0.04] cursor-pointer select-none transition-colors"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/[0.04] cursor-pointer select-none transition-colors"
                   >
                     {/* Checkbox */}
                     <input
@@ -771,7 +954,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                     <button
                       type="submit"
                       disabled={!newCommentContent.trim()}
-                      className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-xs font-semibold text-white transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-xs font-semibold text-on-accent transition-colors flex items-center gap-1.5"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>Post</span>
@@ -787,14 +970,45 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                   <button
                     onClick={() => runAgentOnIssue(selectedIssue.id)}
                     disabled={selectedIssue.status === 'agent_running'}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white font-bold text-sm shadow-glow-brand transition-all"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-on-accent font-bold text-sm shadow-glow-brand transition-all"
                   >
                     <Play className="w-4 h-4 fill-white" />
                     <span>{selectedIssue.status === 'agent_running' ? 'Agent Running...' : 'Launch Autonomous Agent'}</span>
                   </button>
                 )}
 
+                {/*
+                  Launching a squad was only possible from the Squads page, so
+                  the multi-agent path could not be started from the board where
+                  the work actually lives. Shown only when a squad is assigned,
+                  and only while a single-agent run is not already underway.
+                */}
+                {selectedIssue.assignedSquadId &&
+                  selectedIssue.status !== 'done' &&
+                  !prototypeRuns.some(run => run.issueId === selectedIssue.id) && (
+                    <button
+                      onClick={() =>
+                        void triggerSquadRun(
+                          selectedIssue.assignedSquadId!,
+                          selectedIssue.id,
+                          [],
+                          selectedIssue.title
+                        )
+                      }
+                      disabled={selectedIssue.status === 'agent_running'}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50 border border-white/10 text-white font-medium text-sm transition-colors"
+                    >
+                      <Users className="w-4 h-4" />
+                      <span>
+                        Launch {squads.find(sq => sq.id === selectedIssue.assignedSquadId)?.name ?? 'Squad'}
+                      </span>
+                    </button>
+                  )}
+
                 <AgentRunProgress issueId={selectedIssue.id} />
+
+                {/* The squad's own shape: who ran, who is running, who is next. */}
+                <SquadRunFlow issueId={selectedIssue.id} />
 
                 {/* Status Picker */}
                 <div className="space-y-1.5">
@@ -840,6 +1054,28 @@ export const IssuesView: React.FC<IssuesViewProps> = ({ onOpenNewIssue, onlyMyIs
                     <option value="">Unassigned</option>
                     {agents.map(a => (
                       <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/*
+                  A squad could be chosen when an issue was created and never
+                  afterwards — and the choice was discarded anyway, because the
+                  column did not exist. Sitting under the agent picker because
+                  they answer the same question: who owns this issue.
+                */}
+                <div className="space-y-1.5">
+                  <label className="text-gray-400 font-medium">Assigned Squad</label>
+                  <select
+                    value={selectedIssue.assignedSquadId || ''}
+                    onChange={(e) => updateIssue(selectedIssue.id, { assignedSquadId: e.target.value || undefined })}
+                    className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500"
+                  >
+                    <option value="">No squad</option>
+                    {squads.map(sq => (
+                      <option key={sq.id} value={sq.id}>
+                        {sq.name} ({sq.memberAgentIds.length})
+                      </option>
                     ))}
                   </select>
                 </div>

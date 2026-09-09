@@ -13,7 +13,9 @@ import {
   ChatMessage,
   ScaffoldStack,
   McpServer,
-  McpServerInput
+  McpServerInput,
+  RemoteAction,
+  Identity
 } from '@/shared/types';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
@@ -46,6 +48,20 @@ export const apiService = {
   checkHealth: () => fetchJson<{ status: string; version: string }>('/health'),
 
   // Projects
+  /**
+   * Pull the shared board down from GitHub.
+   *
+   * Returns what moved, so the UI can say "3 new" rather than only "synced".
+   */
+  syncBoard: () =>
+    fetchJson<{
+      projects: number; created: number; updated: number; unchanged: number;
+      skipped: { project: string; reason: string }[];
+      errors: { project: string; detail: string }[];
+    }>('/board/sync', { method: 'POST' }),
+
+  /** Who the daemon thinks you are — a GitHub login where one is available. */
+  getIdentity: () => fetchJson<Identity>('/me'),
   getProjects: async (): Promise<Project[]> => {
     try {
       return await fetchJson<Project[]>('/projects');
@@ -310,8 +326,17 @@ export const apiService = {
   getRuns: () => fetchJson<PrototypeRun[]>('/runs'),
   startRun: (payload: { issueId: string; agentId: string; plan?: string[]; scenario?: string }) =>
     fetchJson<PrototypeRun>('/runs/start', { method: 'POST', body: JSON.stringify(payload) }),
+  /** Settle a run waiting at the review gate. */
+  approveRun: (id: string, approved: boolean) =>
+    fetchJson<PrototypeRun>(`/runs/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ approved })
+    }),
   cancelRun: (id: string) =>
     fetchJson<{ success: boolean }>(`/runs/${id}/cancel`, { method: 'POST' }),
+  /** What this run did to a remote — Alpha's pushes and the agent's, together. */
+  getRemoteActions: (id: string) =>
+    fetchJson<RemoteAction[]>(`/runs/${id}/remote-actions`),
   retryRun: (id: string) =>
     fetchJson<PrototypeRun>(`/runs/${id}/retry`, { method: 'POST' }),
 

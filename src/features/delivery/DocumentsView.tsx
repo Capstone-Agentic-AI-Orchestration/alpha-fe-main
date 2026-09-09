@@ -13,10 +13,10 @@ export const DocumentsView: React.FC = () => {
   const project = doc?.projectId ? projects.find(p => p.id === doc.projectId) : undefined;
 
   return (
-    <div className="h-full flex overflow-hidden bg-[#16171D] text-sm">
+    <div className="h-full flex overflow-hidden bg-surface text-sm">
 
       {/* Roster */}
-      <div className="w-72 border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-[#14151B]">
+      <div className="w-72 border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-surface">
         <div className="h-14 px-5 flex items-center justify-between border-b border-white/[0.06]">
           <h2 className="text-sm font-semibold text-white">
             {role === 'client' ? 'My requests' : 'Specifications'}
@@ -240,7 +240,7 @@ export const DocumentsView: React.FC = () => {
               {can('author_estimate') && doc.status === 'in_review' && (
                 <button
                   onClick={() => sendDocToClient(doc.id)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent text-sm font-medium transition-colors"
                 >
                   <Send className="w-4 h-4" />
                   Send to client for approval
@@ -249,7 +249,7 @@ export const DocumentsView: React.FC = () => {
               {estimate && doc.status === 'awaiting_client' && role === 'client' && (
                 <button
                   onClick={() => setActiveTab('billing')}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-sm font-medium transition-colors"
+                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent text-sm font-medium transition-colors"
                 >
                   <FileText className="w-4 h-4" />
                   Review the price

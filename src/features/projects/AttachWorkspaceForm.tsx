@@ -95,7 +95,7 @@ export function AttachWorkspaceForm({ project, onAttached }: Readonly<Props>) {
             value={path}
             onChange={e => void check(e.target.value)}
             placeholder="C:\Users\you\Projects\alpha-be-main"
-            className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl pl-8 pr-8 py-2 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+            className="w-full bg-well border border-white/10 rounded-xl pl-8 pr-8 py-2 text-white font-mono text-xs focus:outline-none focus:border-white/30"
           />
           <span className="absolute right-2.5 top-1/2 -translate-y-1/2">
             {checking && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-500" />}
@@ -106,7 +106,7 @@ export function AttachWorkspaceForm({ project, onAttached }: Readonly<Props>) {
         <button
           onClick={() => void attach()}
           disabled={!verified || saving}
-          className="px-3 py-2 rounded-xl bg-white text-black text-xs font-medium disabled:opacity-40 transition-opacity"
+          className="px-3 py-2 rounded-xl bg-white text-canvas text-xs font-medium disabled:opacity-40 transition-opacity"
         >
           {saving ? 'Attaching…' : 'Attach'}
         </button>

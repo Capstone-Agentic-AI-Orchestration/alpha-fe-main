@@ -32,7 +32,7 @@ export const BillingView: React.FC = () => {
     .reduce((s, e) => s + e.buildTotal, 0);
 
   return (
-    <div className="h-full overflow-y-auto bg-[#16171D]">
+    <div className="h-full overflow-y-auto bg-surface">
       <div className="max-w-5xl mx-auto px-8 py-8 space-y-10">
 
         <div className="space-y-1.5">

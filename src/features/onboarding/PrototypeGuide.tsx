@@ -113,7 +113,7 @@ export const PrototypeGuide: React.FC = () => {
             <button
               type="button"
               onClick={() => step === steps.length - 1 ? finish(true) : setStep(value => value + 1)}
-              className="bg-brand-500 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-brand-600"
+              className="bg-brand-500 px-4 py-2 text-xs font-medium text-on-accent transition-colors hover:bg-brand-600"
             >
               {step === steps.length - 1 ? 'Open projects' : 'Continue'}
             </button>

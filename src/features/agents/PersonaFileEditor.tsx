@@ -178,7 +178,7 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
           <button
             onClick={() => void save()}
             disabled={!dirty || saving}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-white text-black hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-white transition-colors"
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-white text-canvas hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-white transition-colors"
           >
             {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
             Save
@@ -220,11 +220,11 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
         placeholder={PLACEHOLDER}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={onKeyDown}
-        className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30 resize-y"
+        className="w-full bg-well border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30 resize-y"
       />
 
       {file && (
-        <div className="space-y-1.5 border border-white/10 rounded-xl p-3 bg-[#0A0B0E]">
+        <div className="space-y-1.5 border border-white/10 rounded-xl p-3 bg-well">
           <div className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
             Effective on next run
           </div>

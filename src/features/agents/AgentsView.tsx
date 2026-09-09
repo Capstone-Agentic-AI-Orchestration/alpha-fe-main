@@ -259,7 +259,7 @@ export const AgentsView: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-[#0E0E12] text-gray-300 p-6 space-y-6 select-none font-sans relative">
+    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans relative">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
@@ -281,7 +281,7 @@ export const AgentsView: React.FC = () => {
           onClick={() => importInputRef.current?.click()}
           disabled={importing}
           title="Import an agent from a persona file a teammate shared"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-xs font-medium text-gray-300 hover:text-white transition-colors shadow-sm disabled:opacity-40"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-gray-300 hover:text-white transition-colors shadow-sm disabled:opacity-40"
         >
           <Upload className="w-3.5 h-3.5" />
           <span>{importing ? 'Importing...' : 'Import'}</span>
@@ -290,7 +290,7 @@ export const AgentsView: React.FC = () => {
         {/* + New agent button */}
         <button
           onClick={() => setCreateModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>New agent</span>
@@ -307,7 +307,7 @@ export const AgentsView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search agents, roles, models..."
-            className="w-full bg-[#14151B] border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-surface border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
 
@@ -324,7 +324,7 @@ export const AgentsView: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 scopeTab !== 'all' || statusFilter !== 'all' || accessFilter !== 'all'
                   ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
-                  : 'bg-[#14151B] hover:bg-[#1C1D24] text-gray-400 hover:text-white border-white/5'
+                  : 'bg-surface hover:bg-surface-raised text-gray-400 hover:text-white border-white/5'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -332,7 +332,7 @@ export const AgentsView: React.FC = () => {
             </button>
 
             {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
+              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
                 <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Scope</div>
                 {(['all', 'mine', 'archived'] as const).map((sc) => (
                   <button
@@ -394,14 +394,14 @@ export const AgentsView: React.FC = () => {
                 setSortDropdownOpen(prev => !prev);
                 setFilterDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] hover:bg-[#1C1D24] border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
             >
               {sortOrder === 'desc' ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />}
               <span>{sortBy === 'lastActive' ? 'Active' : sortBy === 'runs' ? 'Runs' : 'Name'}</span>
             </button>
 
             {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
+              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
                 {(['lastActive', 'runs', 'name'] as const).map((field) => (
                   <button
                     key={field}
@@ -435,7 +435,7 @@ export const AgentsView: React.FC = () => {
 
           {/* Table View Button */}
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
           >
             <TableIcon className="w-3.5 h-3.5" />
             <span>Table</span>
@@ -452,7 +452,7 @@ export const AgentsView: React.FC = () => {
               type="checkbox"
               checked={selectedAgentIds.length > 0 && selectedAgentIds.length === filteredAgents.length}
               onChange={selectAllFiltered}
-              className="rounded bg-[#1B1C23] border-white/10 text-brand-500 focus:ring-0 cursor-pointer"
+              className="rounded bg-surface-raised border-white/10 text-brand-500 focus:ring-0 cursor-pointer"
             />
             <span>Agent</span>
           </div>
@@ -483,7 +483,7 @@ export const AgentsView: React.FC = () => {
                     checked={isSelected}
                     onClick={(e) => toggleSelectAgent(agent.id, e)}
                     onChange={() => {}}
-                    className="rounded bg-[#1B1C23] border-white/10 text-brand-500 focus:ring-0 cursor-pointer flex-shrink-0"
+                    className="rounded bg-surface-raised border-white/10 text-brand-500 focus:ring-0 cursor-pointer flex-shrink-0"
                   />
                   
                   <div className="relative flex-shrink-0">
@@ -493,7 +493,7 @@ export const AgentsView: React.FC = () => {
                       className="w-8 h-8 rounded-full object-cover ring-1 ring-white/10"
                     />
                     <span 
-                      className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-[#0E0E12] ${
+                      className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-canvas ${
                         agent.machineStatus === 'online' ? 'bg-emerald-400' :
                         agent.machineStatus === 'unstable' ? 'bg-amber-400' : 'bg-rose-400'
                       }`}
@@ -573,10 +573,10 @@ export const AgentsView: React.FC = () => {
           />
 
           {/* Centered Modal Container */}
-          <div className="relative w-full max-w-2xl bg-[#121318] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
+          <div className="relative w-full max-w-2xl bg-shell border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
             
             {/* Modal Header */}
-            <div className="p-5 border-b border-white/5 flex items-start justify-between bg-[#15161D]">
+            <div className="p-5 border-b border-white/5 flex items-start justify-between bg-surface">
               <div className="flex items-start gap-3.5 min-w-0">
                 <div className="relative flex-shrink-0">
                   <img
@@ -585,7 +585,7 @@ export const AgentsView: React.FC = () => {
                     className="w-11 h-11 rounded-full object-cover ring-1 ring-white/10"
                   />
                   <span 
-                    className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-[#15161D] ${
+                    className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-surface ${
                       selectedAgent.machineStatus === 'online' ? 'bg-emerald-400' :
                       selectedAgent.machineStatus === 'unstable' ? 'bg-amber-400' : 'bg-rose-400'
                     }`}
@@ -628,7 +628,7 @@ export const AgentsView: React.FC = () => {
             </div>
 
             {/* Sub-tab Navigation */}
-            <div className="flex items-center gap-1 px-5 pt-2 border-b border-white/5 bg-[#15161D] text-xs">
+            <div className="flex items-center gap-1 px-5 pt-2 border-b border-white/5 bg-surface text-xs">
               {[
                 { id: 'instructions', label: 'Instructions' },
                 { id: 'persona', label: 'Persona File' },
@@ -674,7 +674,7 @@ export const AgentsView: React.FC = () => {
                       type="text"
                       value={selectedAgent.description || ''}
                       onChange={(e) => updateAgent(selectedAgent.id, { description: e.target.value })}
-                      className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-white/30 font-mono"
+                      className="w-full bg-well border border-white/10 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-white/30 font-mono"
                     />
                   </div>
 
@@ -692,7 +692,7 @@ export const AgentsView: React.FC = () => {
                       value={selectedAgent.systemPrompt || ''}
                       readOnly={isManagedByFile(selectedAgent, 'systemPrompt')}
                       onChange={(e) => updateAgent(selectedAgent.id, { systemPrompt: e.target.value })}
-                      className={`w-full bg-[#0A0B0E] border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30 ${
+                      className={`w-full bg-well border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30 ${
                         isManagedByFile(selectedAgent, 'systemPrompt') ? MANAGED_INPUT_CLASS : ''
                       }`}
                     />
@@ -726,7 +726,7 @@ export const AgentsView: React.FC = () => {
                             modelName: defaultModelFor(runtimes, prov) || selectedAgent.modelName
                           });
                         }}
-                        className="w-full bg-[#0A0B0E] border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-white/30"
+                        className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-white/30"
                       >
                         {providerOptions(runtimes).map(opt => (
                           <option key={opt.provider} value={opt.provider}>{opt.label}</option>
@@ -753,7 +753,7 @@ export const AgentsView: React.FC = () => {
                               value={selectedAgent.modelName || ''}
                               onChange={(e) => updateAgent(selectedAgent.id, { modelName: e.target.value })}
                               placeholder="no models detected — type an id"
-                              className="w-full bg-[#0A0B0E] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                              className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
                             />
                           );
                         }
@@ -762,7 +762,7 @@ export const AgentsView: React.FC = () => {
                           <select
                             value={current}
                             onChange={(e) => updateAgent(selectedAgent.id, { modelName: e.target.value })}
-                            className="w-full bg-[#0A0B0E] border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                            className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
                           >
                             {/* Keep a stored model that is no longer offered
                                 visible, rather than silently switching it. */}
@@ -787,7 +787,7 @@ export const AgentsView: React.FC = () => {
                       <select
                         value={selectedAgent.autonomyLevel || 'Semi-Autonomous (Requires Approval)'}
                         onChange={(e) => updateAgent(selectedAgent.id, { autonomyLevel: e.target.value as any })}
-                        className="w-full bg-[#0A0B0E] border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-white/30"
+                        className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-white/30"
                       >
                         <option value="Supervised">Supervised</option>
                         <option value="Semi-Autonomous (Requires Approval)">Semi-Autonomous</option>
@@ -835,7 +835,7 @@ export const AgentsView: React.FC = () => {
                             type="checkbox"
                             checked={isEnabled}
                             onChange={() => {}}
-                            className="rounded bg-[#1B1C23] border-white/10 text-brand-500 focus:ring-0 ml-3"
+                            className="rounded bg-surface-raised border-white/10 text-brand-500 focus:ring-0 ml-3"
                           />
                         </div>
                       );
@@ -863,7 +863,7 @@ export const AgentsView: React.FC = () => {
                         return (
                           <div
                             key={ev.key}
-                            className="p-2.5 rounded-xl bg-[#0A0B0E] border border-white/5 flex items-center justify-between font-mono text-xs"
+                            className="p-2.5 rounded-xl bg-well border border-white/5 flex items-center justify-between font-mono text-xs"
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="text-white font-medium">{ev.key}</span>
@@ -904,14 +904,14 @@ export const AgentsView: React.FC = () => {
                         value={newEnvKey}
                         onChange={(e) => setNewEnvKey(e.target.value)}
                         placeholder="KEY_NAME"
-                        className="bg-[#0A0B0E] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white uppercase font-mono focus:outline-none focus:border-white/30"
+                        className="bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white uppercase font-mono focus:outline-none focus:border-white/30"
                       />
                       <input
                         type="text"
                         value={newEnvValue}
                         onChange={(e) => setNewEnvValue(e.target.value)}
                         placeholder="value"
-                        className="bg-[#0A0B0E] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-white/30"
+                        className="bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-white/30"
                       />
                     </div>
                     <div className="flex items-center justify-between pt-1">
@@ -920,7 +920,7 @@ export const AgentsView: React.FC = () => {
                           type="checkbox"
                           checked={newEnvIsSecret}
                           onChange={(e) => setNewEnvIsSecret(e.target.checked)}
-                          className="rounded bg-[#1B1C23] border-white/10 text-brand-500 focus:ring-0"
+                          className="rounded bg-surface-raised border-white/10 text-brand-500 focus:ring-0"
                         />
                         <span>Treat as masked secret</span>
                       </label>
@@ -955,7 +955,7 @@ export const AgentsView: React.FC = () => {
                       value={selectedAgent.customCliArgs || ''}
                       onChange={(e) => updateAgent(selectedAgent.id, { customCliArgs: e.target.value })}
                       placeholder="e.g. --debug --fallback-model haiku"
-                      className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                      className="w-full bg-well border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-white/30"
                     />
                     {/* These flags are now actually passed to the CLI, so say
                         which ones will not be — a refused flag is otherwise
@@ -983,7 +983,7 @@ export const AgentsView: React.FC = () => {
                       {(selectedAgent.runHistory || []).map((run) => (
                         <div
                           key={run.id}
-                          className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-1.5 font-mono text-xs"
+                          className="p-3 rounded-xl bg-well border border-white/5 space-y-1.5 font-mono text-xs"
                         >
                           <div className="flex items-center justify-between text-[11px]">
                             <span className="text-white font-semibold">{run.issueKey}</span>
@@ -1006,7 +1006,7 @@ export const AgentsView: React.FC = () => {
             </div>
 
             {/* Modal Footer: Duplicate / Archive */}
-            <div className="p-4 border-t border-white/5 bg-[#15161D] flex items-center justify-between text-xs">
+            <div className="p-4 border-t border-white/5 bg-surface flex items-center justify-between text-xs">
               <button
                 onClick={() => {
                   duplicateAgent(selectedAgent.id);
@@ -1049,7 +1049,7 @@ export const AgentsView: React.FC = () => {
 
       {/* ================= FLOATING BULK ACTIONS TOOLBAR ================= */}
       {selectedAgentIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-[#181920] border border-white/10 rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-4 z-40 animate-slide-up text-xs">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface-raised border border-white/10 rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-4 z-40 animate-slide-up text-xs">
           <span className="font-mono text-white font-medium">
             {selectedAgentIds.length} agents selected
           </span>
@@ -1066,7 +1066,7 @@ export const AgentsView: React.FC = () => {
             </button>
 
             {bulkAccessMenuOpen && (
-              <div className="absolute bottom-full mb-2 left-0 w-36 bg-[#1A1B22] border border-white/10 rounded-xl shadow-2xl p-1.5 space-y-1">
+              <div className="absolute bottom-full mb-2 left-0 w-36 bg-surface-raised border border-white/10 rounded-xl shadow-2xl p-1.5 space-y-1">
                 {(['team', 'private', 'everyone'] as AgentAccessLevel[]).map(tier => (
                   <button
                     key={tier}

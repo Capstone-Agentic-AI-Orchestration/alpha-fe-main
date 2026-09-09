@@ -16,6 +16,7 @@ import {
   Workflow
 } from 'lucide-react';
 import { CreateSquadModal } from '@/features/squads/CreateSquadModal';
+import { SquadRunFlow } from '@/features/runs/SquadRunFlow';
 
 export const SquadsView: React.FC = () => {
   const { squads, agents, issues, projects, triggerSquadRun } = useApp();
@@ -97,7 +98,7 @@ export const SquadsView: React.FC = () => {
   }, [squads, topologyFilter, searchQuery, sortBy, sortOrder]);
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-[#0E0E12] text-gray-300 p-6 space-y-6 select-none font-sans relative">
+    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans relative">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
@@ -110,7 +111,7 @@ export const SquadsView: React.FC = () => {
         {/* + Form squad button */}
         <button
           onClick={() => setCreateModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#181920] hover:bg-[#22242D] border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Form squad</span>
@@ -127,7 +128,7 @@ export const SquadsView: React.FC = () => {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search squads, missions, agents..."
-            className="w-full bg-[#14151B] border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-surface border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
 
@@ -144,7 +145,7 @@ export const SquadsView: React.FC = () => {
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 topologyFilter !== 'all'
                   ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
-                  : 'bg-[#14151B] hover:bg-[#1C1D24] text-gray-400 hover:text-white border-white/5'
+                  : 'bg-surface hover:bg-surface-raised text-gray-400 hover:text-white border-white/5'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -152,7 +153,7 @@ export const SquadsView: React.FC = () => {
             </button>
 
             {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
+              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
                 <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Topology</div>
                 {['all', 'hierarchical', 'sequential', 'swarm', 'consensus'].map((top) => (
                   <button
@@ -180,14 +181,14 @@ export const SquadsView: React.FC = () => {
                 setSortDropdownOpen(prev => !prev);
                 setFilterDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] hover:bg-[#1C1D24] border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
             >
               {sortOrder === 'desc' ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />}
               <span>{sortBy === 'runs' ? 'Runs' : sortBy === 'members' ? 'Members' : 'Name'}</span>
             </button>
 
             {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-[#1A1B22] border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
+              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
                 {(['runs', 'members', 'name'] as const).map((field) => (
                   <button
                     key={field}
@@ -221,7 +222,7 @@ export const SquadsView: React.FC = () => {
 
           {/* Table View Button */}
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#14151B] border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
           >
             <TableIcon className="w-3.5 h-3.5" />
             <span>Table</span>
@@ -257,7 +258,7 @@ export const SquadsView: React.FC = () => {
               >
                 {/* 1. Avatar, Name, Topology, Mission */}
                 <div className="col-span-4 flex items-center gap-3 min-w-0">
-                  <div className="w-8 h-8 rounded-xl bg-[#14151B] border border-white/5 flex items-center justify-center text-base flex-shrink-0">
+                  <div className="w-8 h-8 rounded-xl bg-surface border border-white/5 flex items-center justify-center text-base flex-shrink-0">
                     {squad.avatar}
                   </div>
 
@@ -318,7 +319,7 @@ export const SquadsView: React.FC = () => {
                           src={member.avatar}
                           alt={member.name}
                           title={member.name}
-                          className="inline-block h-5 w-5 rounded-full ring-1 ring-[#0E0E12] object-cover"
+                          className="inline-block h-5 w-5 rounded-full ring-1 ring-canvas object-cover"
                         />
                       );
                     })}
@@ -362,12 +363,12 @@ export const SquadsView: React.FC = () => {
           />
 
           {/* Centered Modal Container */}
-          <div className="relative w-full max-w-2xl bg-[#121318] border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
+          <div className="relative w-full max-w-2xl bg-shell border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
             
             {/* Modal Header */}
-            <div className="p-5 border-b border-white/5 flex items-start justify-between bg-[#15161D]">
+            <div className="p-5 border-b border-white/5 flex items-start justify-between bg-surface">
               <div className="flex items-start gap-3.5 min-w-0">
-                <div className="w-11 h-11 rounded-xl bg-[#0A0B0E] border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
+                <div className="w-11 h-11 rounded-xl bg-well border border-white/10 flex items-center justify-center text-2xl flex-shrink-0">
                   {selectedSquad.avatar}
                 </div>
 
@@ -414,7 +415,7 @@ export const SquadsView: React.FC = () => {
             </div>
 
             {/* Sub-tab Navigation */}
-            <div className="flex items-center gap-1 px-5 pt-2 border-b border-white/5 bg-[#15161D] text-xs">
+            <div className="flex items-center gap-1 px-5 pt-2 border-b border-white/5 bg-surface text-xs">
               {[
                 { id: 'flow', label: 'Orchestration Flow' },
                 { id: 'members', label: 'Member Agents' },
@@ -446,7 +447,7 @@ export const SquadsView: React.FC = () => {
                     <span><b>{selectedSquad.topology.toUpperCase()} Topology:</b> {getTopologyDescription(selectedSquad.topology)}</span>
                   </div>
 
-                  <div className="p-6 rounded-xl bg-[#0A0B0E] border border-white/5 flex flex-wrap items-center justify-center gap-4 min-h-[160px]">
+                  <div className="p-6 rounded-xl bg-well border border-white/5 flex flex-wrap items-center justify-center gap-4 min-h-[160px]">
                     {selectedSquad.memberAgentIds.map((agentId, index) => {
                       const agent = agents.find(a => a.id === agentId);
                       if (!agent) return null;
@@ -478,6 +479,13 @@ export const SquadsView: React.FC = () => {
                       );
                     })}
                   </div>
+
+                  {/*
+                    The diagram above is the squad as configured. This is the
+                    squad as it actually ran — the same order, with the live
+                    member marked. It renders nothing until there is a run.
+                  */}
+                  <SquadRunFlow squadId={selectedSquad.id} />
                 </div>
               )}
 
@@ -497,7 +505,7 @@ export const SquadsView: React.FC = () => {
                       return (
                         <div
                           key={agent.id}
-                          className="p-3 rounded-xl bg-[#0A0B0E] border border-white/5 flex items-center justify-between"
+                          className="p-3 rounded-xl bg-well border border-white/5 flex items-center justify-between"
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             <img src={agent.avatar} alt="" className="w-8 h-8 rounded-full object-cover ring-1 ring-white/10 flex-shrink-0" />
@@ -528,14 +536,14 @@ export const SquadsView: React.FC = () => {
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-medium text-gray-400">Squad Mission & Ground Rules</label>
-                    <div className="p-3.5 rounded-xl bg-[#0A0B0E] border border-white/5 text-white leading-relaxed font-mono text-xs">
+                    <div className="p-3.5 rounded-xl bg-well border border-white/5 text-white leading-relaxed font-mono text-xs">
                       {selectedSquad.mission || selectedSquad.description}
                     </div>
                   </div>
 
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-medium text-gray-400">Squad Description</label>
-                    <div className="p-3.5 rounded-xl bg-[#0A0B0E] border border-white/5 text-gray-300 leading-relaxed text-xs">
+                    <div className="p-3.5 rounded-xl bg-well border border-white/5 text-gray-300 leading-relaxed text-xs">
                       {selectedSquad.description}
                     </div>
                   </div>
@@ -546,15 +554,15 @@ export const SquadsView: React.FC = () => {
               {modalTab === 'metrics' && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="p-3.5 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-1 font-mono">
+                    <div className="p-3.5 rounded-xl bg-well border border-white/5 space-y-1 font-mono">
                       <div className="text-[10px] text-gray-500 uppercase">Active Concurrent Runs</div>
                       <div className="text-lg font-semibold text-white">{selectedSquad.activeRunsCount}</div>
                     </div>
-                    <div className="p-3.5 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-1 font-mono">
+                    <div className="p-3.5 rounded-xl bg-well border border-white/5 space-y-1 font-mono">
                       <div className="text-[10px] text-gray-500 uppercase">Completed Missions</div>
                       <div className="text-lg font-semibold text-white">{selectedSquad.completedRunsCount}</div>
                     </div>
-                    <div className="p-3.5 rounded-xl bg-[#0A0B0E] border border-white/5 space-y-1 font-mono">
+                    <div className="p-3.5 rounded-xl bg-well border border-white/5 space-y-1 font-mono">
                       <div className="text-[10px] text-gray-500 uppercase">Consensus Tolerance</div>
                       <div className="text-lg font-semibold text-white">99.8%</div>
                     </div>
@@ -565,7 +573,7 @@ export const SquadsView: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-white/5 bg-[#15161D] flex items-center justify-between text-xs">
+            <div className="p-4 border-t border-white/5 bg-surface flex items-center justify-between text-xs">
               <span className="text-gray-500 font-mono text-[11px]">
                 {selectedSquad.memberAgentIds.length} agents coordinated
               </span>
@@ -598,7 +606,7 @@ export const SquadsView: React.FC = () => {
           onClick={() => setLaunchSquadId(null)}
         >
           <div
-            className="w-full max-w-lg rounded-xl border border-white/10 bg-[#15161D] shadow-2xl"
+            className="w-full max-w-lg rounded-xl border border-white/10 bg-surface shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
             <div className="border-b border-white/5 p-4">

@@ -106,7 +106,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               <button
                 type="button"
                 onClick={this.clearLocalState}
-                className="px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-white text-xs font-medium transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent text-xs font-medium transition-colors"
               >
                 Clear cached data and reload
               </button>

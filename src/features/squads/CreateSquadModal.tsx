@@ -123,10 +123,10 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                 <span
                   className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-mono transition-colors ${
                     isActive
-                      ? 'bg-brand-500 text-white'
+                      ? 'bg-brand-500 text-on-accent'
                       : isCompleted
                       ? 'bg-brand-500/20 text-brand-300'
-                      : 'bg-[#181920] text-gray-500 border border-white/5'
+                      : 'bg-surface-raised text-gray-500 border border-white/5'
                   }`}
                 >
                   {isCompleted ? <Check className="w-3 h-3" /> : item.step}
@@ -147,11 +147,11 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                 <label className="block text-[11px] font-medium text-gray-400">Avatar</label>
                 <div className="relative group">
                   <div 
-                    className="w-12 h-10 rounded-xl bg-[#14151B] border border-white/10 flex items-center justify-center text-xl cursor-pointer hover:border-brand-500/50 transition-colors"
+                    className="w-12 h-10 rounded-xl bg-surface border border-white/10 flex items-center justify-center text-xl cursor-pointer hover:border-brand-500/50 transition-colors"
                   >
                     {avatar}
                   </div>
-                  <div className="absolute top-full left-0 mt-1 p-2 bg-[#1A1B22] border border-white/10 rounded-xl shadow-2xl z-30 hidden group-hover:grid grid-cols-4 gap-1.5 w-40">
+                  <div className="absolute top-full left-0 mt-1 p-2 bg-surface-raised border border-white/10 rounded-xl shadow-2xl z-30 hidden group-hover:grid grid-cols-4 gap-1.5 w-40">
                     {SQUAD_ICON_PRESETS.map(emoji => (
                       <button
                         key={emoji}
@@ -177,7 +177,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. SRE Zero-Downtime Swarm"
-                  className="w-full bg-[#14151B] border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface border border-white/10 rounded-xl px-3.5 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
                   autoFocus
                 />
               </div>
@@ -194,7 +194,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                 value={mission}
                 onChange={(e) => setMission(e.target.value)}
                 placeholder="e.g. Ensure 99.99% system availability and autonomous patch verification."
-                className="w-full bg-[#0A0B0E] border border-white/10 rounded-xl p-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 leading-relaxed font-mono"
+                className="w-full bg-well border border-white/10 rounded-xl p-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 leading-relaxed font-mono"
               />
             </div>
 
@@ -208,7 +208,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Specialized multi-agent execution squad for continuous uptime..."
-                className="w-full bg-[#14151B] border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface border border-white/10 rounded-xl px-3.5 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
               />
             </div>
           </div>
@@ -226,7 +226,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
               <select
                 value={topology}
                 onChange={(e) => setTopology(e.target.value as SquadTopology)}
-                className="w-full bg-[#14151B] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
               >
                 {/*
                   Only Sequential is disabled=false: the other three have no
@@ -238,7 +238,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                 <option value="swarm" disabled>Swarm — not implemented yet</option>
                 <option value="consensus" disabled>Consensus — not implemented yet</option>
               </select>
-              <p className="text-[11px] text-gray-400 bg-[#0A0B0E] p-2.5 rounded-lg border border-white/5 font-mono leading-relaxed">
+              <p className="text-[11px] text-gray-400 bg-well p-2.5 rounded-lg border border-white/5 font-mono leading-relaxed">
                 {getTopologyDescription(topology)}
               </p>
             </div>
@@ -256,7 +256,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                     setSelectedAgentIds(prev => [...prev, e.target.value]);
                   }
                 }}
-                className="w-full bg-[#14151B] border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
               >
                 {agents.map((a) => (
                   <option key={a.id} value={a.id}>
@@ -278,7 +278,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
               <span className="text-[10px] text-gray-500 font-mono">Select at least 1 agent</span>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1 bg-[#0A0B0E] rounded-xl border border-white/5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1 bg-well rounded-xl border border-white/5">
               {agents.map((agent) => {
                 const isSelected = selectedAgentIds.includes(agent.id);
                 const isLeader = agent.id === leaderAgentId;
@@ -291,7 +291,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                     className={`flex items-center gap-2.5 p-2.5 rounded-xl text-left text-xs transition-colors border ${
                       isSelected 
                         ? 'bg-white/[0.06] text-white border-white/20 shadow-sm' 
-                        : 'bg-[#14151B] text-gray-400 border-transparent hover:border-white/10'
+                        : 'bg-surface text-gray-400 border-transparent hover:border-white/10'
                     }`}
                   >
                     <img src={agent.avatar} alt="" className="w-7 h-7 rounded-full object-cover flex-shrink-0" />
@@ -310,7 +310,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => {}}
-                      className="rounded bg-[#1B1C23] border-white/10 text-brand-500 focus:ring-0 ml-1 flex-shrink-0"
+                      className="rounded bg-surface-raised border-white/10 text-brand-500 focus:ring-0 ml-1 flex-shrink-0"
                     />
                   </button>
                 );
@@ -323,7 +323,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
         {currentStep === 4 && (
           <div className="space-y-4 animate-fade-in text-xs">
             {/* Overview Card */}
-            <div className="p-4 rounded-xl bg-[#14151B] border border-white/5 space-y-3">
+            <div className="p-4 rounded-xl bg-surface border border-white/5 space-y-3">
               <div className="flex items-center gap-3">
                 <span className="text-2xl">{avatar}</span>
                 <div>
@@ -333,7 +333,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
               </div>
 
               {mission && (
-                <p className="text-white bg-[#0A0B0E] p-2.5 rounded-lg border border-white/5 font-mono text-[11px] leading-relaxed">
+                <p className="text-white bg-well p-2.5 rounded-lg border border-white/5 font-mono text-[11px] leading-relaxed">
                   {mission}
                 </p>
               )}
@@ -394,7 +394,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
           ) : (
             <button
               type="submit"
-              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-white font-semibold shadow-glow-brand transition-all"
+              className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-semibold shadow-glow-brand transition-all"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span>Form Squad</span>

@@ -77,7 +77,7 @@ export const AgentRunModal: React.FC = () => {
                 id="prototype-run-agent"
                 value={selectedAgentId}
                 onChange={event => setSelectedAgentId(event.target.value)}
-                className="w-full appearance-none border border-white/[0.08] bg-[#111214] py-2 pl-9 pr-8 text-sm text-white focus:border-brand-400 focus:outline-none"
+                className="w-full appearance-none border border-white/[0.08] bg-shell py-2 pl-9 pr-8 text-sm text-white focus:border-brand-400 focus:outline-none"
               >
                 <option value="">Select an agent</option>
                 {agents.filter(agent => !agent.isArchived).map(agent => (
@@ -186,7 +186,7 @@ export const AgentRunModal: React.FC = () => {
             type="button"
             disabled={!canStart}
             onClick={() => selectedAgent && startPrototypeRun(issue.id, selectedAgent.id, plan, scenario)}
-            className="flex items-center gap-2 bg-brand-500 px-4 py-2 text-xs font-medium text-white transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-2 bg-brand-500 px-4 py-2 text-xs font-medium text-on-accent transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
             title={!selectedAgent ? 'Select an agent to continue' : undefined}
           >
             <Check className="h-4 w-4" />
