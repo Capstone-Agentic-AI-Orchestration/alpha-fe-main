@@ -250,7 +250,8 @@ export type ModelProvider =
   | 'Ollama'
   | 'LM Studio'
   | 'Google Gemini'
-  | 'Groq';
+  | 'Groq'
+  | 'OpenCode';
 
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'error' | 'offline';
 export type ReachabilityStatus = 'online' | 'unstable' | 'offline';

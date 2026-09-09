@@ -35,7 +35,8 @@ const RUNTIME_TO_PROVIDER: Record<string, ModelProvider> = {
   antigravity: 'Antigravity',
   gemini: 'Google Gemini',
   ollama: 'Ollama',
-  lmstudio: 'LM Studio'
+  lmstudio: 'LM Studio',
+  opencode: 'OpenCode'
 };
 
 export function providerOptions(runtimes: RuntimeEngine[]): ProviderOption[] {
