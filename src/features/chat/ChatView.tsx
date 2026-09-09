@@ -19,6 +19,7 @@ import { RoleBadge } from '@/shared/components/Badge';
 import { ChatMessage, ToolExecutionRecord } from '@/shared/types';
 import { AgentReadinessNotice } from '@/features/agents/AgentReadinessNotice';
 import { ThreadProjectPicker } from '@/features/chat/ThreadProjectPicker';
+import { MessageMarkdown } from './MessageMarkdown';
 
 export const ChatView: React.FC = () => {
   const { 
@@ -463,9 +464,18 @@ export const ChatView: React.FC = () => {
                               <span>Generating response & executing toolhooks...</span>
                             </div>
                           ) : (
-                            <div className="whitespace-pre-wrap font-sans">
-                              {msg.content}
-                            </div>
+                            /*
+                             * A user's own message is what they typed, so it is
+                             * shown as typed. An agent's is markdown, and was
+                             * being displayed as its own source code.
+                             */
+                            isUser ? (
+                              <div className="whitespace-pre-wrap font-sans break-words">
+                                {msg.content}
+                              </div>
+                            ) : (
+                              <MessageMarkdown content={msg.content} />
+                            )
                           )}
                         </div>
                       </div>
