@@ -13,7 +13,8 @@ import {
   SlidersHorizontal,
   Plus,
   Flame,
-  Asterisk, Users} from 'lucide-react';
+  Asterisk, Users,
+  Server} from 'lucide-react';
 import { RoleBadge } from '@/shared/components/Badge';
 import { ChatMessage, ToolExecutionRecord } from '@/shared/types';
 import { AgentReadinessNotice } from '@/features/agents/AgentReadinessNotice';
@@ -656,23 +657,87 @@ export const ChatView: React.FC = () => {
             />
           </div>
 
-          {/* Attached Skills */}
+          {/*
+            Granted Skills.
+
+            This block was headed "Attached MCP Tools" and rendered `skills`,
+            which are not MCP servers and, at the time, granted nothing at all:
+            the runner ran every chat turn on one fixed read-only allowlist. So
+            the panel showed "Filesystem Operations" and "Git & GitHub" on an
+            agent that would then answer it could not edit a file. Both halves
+            were wrong — the label, and the claim implied by showing it.
+
+            The skills are real grants now (see toolPolicy on the daemon), and
+            each one says which tools it hands over. `grantedTools` comes from
+            the daemon so this list cannot drift from the argv it describes.
+          */}
           <div className="space-y-2.5">
             <label className="text-xs font-mono text-gray-500 uppercase block font-semibold">
-              Attached MCP Tools ({activeAgent.skills.length})
+              Granted Skills ({activeAgent.skills.length})
             </label>
             <div className="space-y-1.5">
               {activeAgent.skills.map(skId => {
                 const sk = skills.find(s => s.id === skId);
                 if (!sk) return null;
                 return (
-                  <div key={skId} className="flex items-center gap-2.5 p-2.5 rounded-lg bg-surface-100 border border-white/5 text-gray-300 text-xs">
-                    <Terminal className="w-3.5 h-3.5 text-orange-400" />
-                    <span className="truncate flex-1 font-medium">{sk.name}</span>
+                  <div key={skId} className="p-2.5 rounded-lg bg-surface-100 border border-white/5 text-xs">
+                    <div className="flex items-center gap-2.5 text-gray-300">
+                      <Terminal className="w-3.5 h-3.5 text-orange-400 flex-shrink-0" />
+                      <span className="truncate flex-1 font-medium">{sk.name}</span>
+                    </div>
+                    {sk.grantedTools && sk.grantedTools.length > 0 && (
+                      <div className="mt-1.5 pl-6 font-mono text-[10px] text-gray-500">
+                        {sk.grantedTools.join(', ')}
+                      </div>
+                    )}
                   </div>
                 );
               })}
+              {activeAgent.skills.length === 0 && (
+                <p className="text-[10px] text-gray-600 leading-snug">
+                  None. This agent can read the workspace and nothing else.
+                </p>
+              )}
             </div>
+            <p className="text-[10px] text-gray-600 leading-snug">
+              Edits made in chat go straight to the working tree — no branch, no
+              diff, no approval. Runs are the reviewable path.
+            </p>
+          </div>
+
+          {/*
+            MCP servers — the actual ones, which nothing in this panel showed.
+
+            `alpha-github` was granted to every seeded agent the whole time and
+            was never rendered anywhere, while the heading above claimed to be
+            listing MCP tools. Read or write is not a property of the grant: it
+            is resolved per turn from the agent's autonomy level and whether it
+            holds sk-git, so it is described rather than labelled.
+          */}
+          <div className="space-y-2.5">
+            <label className="text-xs font-mono text-gray-500 uppercase block font-semibold">
+              MCP Servers ({activeAgent.mcpServers?.length ?? 0})
+            </label>
+            <div className="space-y-1.5">
+              {(activeAgent.mcpServers ?? []).map(name => (
+                <div
+                  key={name}
+                  className="flex items-center gap-2.5 p-2.5 rounded-lg bg-surface-100 border border-white/5 text-gray-300 text-xs"
+                >
+                  <Server className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
+                  <span className="truncate flex-1 font-mono">{name}</span>
+                </div>
+              ))}
+              {(activeAgent.mcpServers?.length ?? 0) === 0 && (
+                <p className="text-[10px] text-gray-600 leading-snug">None granted.</p>
+              )}
+            </div>
+            {activeAgent.mcpServers?.includes('alpha-github') && (
+              <p className="text-[10px] text-gray-600 leading-snug">
+                GitHub writes need sk-git and an autonomy level above Supervised.
+                Pushing a branch is the ceiling — never a merge or a force-push.
+              </p>
+            )}
           </div>
         </div>
       )}
