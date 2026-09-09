@@ -537,6 +537,15 @@ export interface Skill {
   enabled: boolean;
   source: 'builtin' | 'system_detected' | 'mcp_server';
   commandExample?: string;
+  /**
+   * CLI tools this skill grants a chat turn.
+   *
+   * Sent by the daemon from its own SKILL_TOOLS map rather than mirrored here —
+   * a second copy is how the agent card came to advertise capability the runner
+   * did not grant. Absent on an older daemon; render it as "unknown", never as
+   * "nothing".
+   */
+  grantedTools?: string[];
 }
 
 export type DeploymentStatus = 'queued' | 'building' | 'agent_evaluating' | 'success' | 'failed';
