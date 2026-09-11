@@ -26,7 +26,17 @@ const AGENT_ROLES: AgentRole[] = [
   'QA Tester',
   'DevOps Engineer',
   'Researcher',
-  'Triager'
+  'Triager',
+  'Research Agent',
+  'Architecture Agent',
+  'Manager Agent',
+  'Database Agent',
+  'Backend Agent',
+  'Frontend Agent',
+  'Mobile Agent',
+  'Security / Code Quality Agent',
+  'Validation / Checking Agent',
+  'GitHub Finalization Agent'
 ];
 
 const ACCESS_LEVELS: AgentAccessLevel[] = ['everyone', 'team', 'admins', 'private'];

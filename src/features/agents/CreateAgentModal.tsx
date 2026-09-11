@@ -12,10 +12,12 @@ import {
   applyDraftRuntimeChange,
   buildCreateAgentRequest,
   clampConcurrency,
+  draftFromOfficialTemplate,
   draftValidationError,
   seedAgentDraft,
   toggleDraftSkill
 } from '@/features/agents/agentDraft';
+import { OFFICIAL_AGENT_TEMPLATES, OfficialAgentTemplate } from '@/features/agents/officialAgentTemplates';
 import { AgentBuilderPanel } from '@/features/agents/AgentBuilderPanel';
 import {
   clearDraftEntry,
@@ -25,7 +27,7 @@ import {
   saveDraftEntry,
   StoredBuilderSession
 } from '@/features/agents/draftStore';
-import { Sparkles, Bot, Wand2, ArrowRight, History, X } from 'lucide-react';
+import { Sparkles, Bot, Wand2, ArrowRight, History, X, Layers } from 'lucide-react';
 
 interface CreateAgentModalProps {
   isOpen: boolean;
@@ -35,8 +37,8 @@ interface CreateAgentModalProps {
 export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose }) => {
   const { createAgent, skills, runtimes } = useApp();
 
-  // Mode: 'choice' (initial screen) | 'blank' | 'ai'
-  const [creationMode, setCreationMode] = useState<'choice' | 'blank' | 'ai'>('choice');
+  // Mode: 'choice' (initial screen) | 'template' | 'blank' | 'ai'
+  const [creationMode, setCreationMode] = useState<'choice' | 'template' | 'blank' | 'ai'>('choice');
 
   // The whole form is one draft, so seeding, validating and submitting it are
   // things the modal calls rather than things it implements.
@@ -117,6 +119,12 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
     setCreationMode('ai');
   };
 
+  const startTemplate = (template: OfficialAgentTemplate) => {
+    setDraft(draftFromOfficialTemplate(template, runtimes, skills));
+    setBuilderSession(null);
+    setCreationMode('blank');
+  };
+
   const resumeDraft = () => {
     if (!saved) return;
     setDraft(saved.entry.draft);
@@ -148,7 +156,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
       maxWidth={creationMode === 'ai' ? 'max-w-5xl' : 'max-w-2xl'}
     >
       {creationMode === 'choice' ? (
-        /* Choice Screen: Start Blank vs Build with AI */
+        /* Choice Screen: official role, blank form, or AI builder */
         <div className="space-y-4 py-2">
           {/* Offer the work left behind, on the one screen that would otherwise
               silently start over on top of it. */}
@@ -197,8 +205,29 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
             How would you like to configure your new agent?
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* Option 1: Start Blank */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Option 1: Official role template */}
+            <button
+              type="button"
+              onClick={() => setCreationMode('template')}
+              className="p-5 rounded-2xl bg-surface-200 border border-brand-500/30 hover:border-brand-500/70 hover:bg-brand-500/10 transition-all text-left space-y-3 group"
+            >
+              <div className="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center group-hover:bg-brand-500 group-hover:text-on-accent transition-colors">
+                <Layers className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-white group-hover:text-brand-300">Use a Role Template</h4>
+                <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                  Start from one of the ten delivery roles, then tailor its runtime and instructions.
+                </p>
+              </div>
+              <div className="text-xs text-brand-400 font-semibold flex items-center gap-1">
+                <span>Choose a role</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </div>
+            </button>
+
+            {/* Option 2: Start Blank */}
             <button
               type="button"
               onClick={() => setCreationMode('blank')}
@@ -219,7 +248,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
               </div>
             </button>
 
-            {/* Option 2: Build with AI */}
+            {/* Option 3: Build with AI */}
             <button
               type="button"
               onClick={startBuilder}
@@ -242,6 +271,44 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                 <span>Open Builder</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </div>
+            </button>
+          </div>
+        </div>
+      ) : creationMode === 'template' ? (
+        <div className="space-y-4 py-2">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Choose a delivery role</h3>
+            <p className="mt-1 text-xs leading-relaxed text-gray-400">
+              Templates are editable starting points. Alpha uses the runtime installed on this machine rather than assuming a provider is available.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-[56vh] overflow-y-auto pr-1">
+            {OFFICIAL_AGENT_TEMPLATES.map((template) => (
+              <button
+                key={template.key}
+                type="button"
+                onClick={() => startTemplate(template)}
+                className="rounded-xl border border-white/10 bg-surface-200 p-4 text-left transition-colors hover:border-brand-500/60 hover:bg-brand-500/5"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="text-sm font-semibold text-white">{template.name}</div>
+                    <div className="mt-1 text-xs leading-relaxed text-gray-400">{template.description}</div>
+                  </div>
+                  <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-brand-400" />
+                </div>
+                <div className="mt-3 flex items-center gap-2 text-[11px]">
+                  <span className="rounded bg-white/5 px-2 py-1 font-medium text-gray-300">{template.phase}</span>
+                  <span className="truncate text-gray-500">{template.expectedOutput}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+
+          <div className="border-t border-white/10 pt-4">
+            <button type="button" onClick={goToChoice} className="text-xs text-gray-400 hover:text-white">
+              Back to options
             </button>
           </div>
         </div>
@@ -326,7 +393,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
           </div>
 
           {/* Role & Model. Provider is not asked for — it follows the runtime. */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
                 Role
@@ -343,6 +410,16 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                 <option value="DevOps Engineer">DevOps Engineer</option>
                 <option value="Researcher">Researcher</option>
                 <option value="Triager">Triager</option>
+                <option value="Research Agent">Research Agent</option>
+                <option value="Architecture Agent">Architecture Agent</option>
+                <option value="Manager Agent">Manager Agent</option>
+                <option value="Database Agent">Database Agent</option>
+                <option value="Backend Agent">Backend Agent</option>
+                <option value="Frontend Agent">Frontend Agent</option>
+                <option value="Mobile Agent">Mobile Agent</option>
+                <option value="Security / Code Quality Agent">Security / Code Quality Agent</option>
+                <option value="Validation / Checking Agent">Validation / Checking Agent</option>
+                <option value="GitHub Finalization Agent">GitHub Finalization Agent</option>
               </select>
             </div>
 
@@ -374,6 +451,21 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                   ))}
                 </select>
               )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Autonomy
+              </label>
+              <select
+                value={draft.autonomyLevel}
+                onChange={(e) => setDraft({ ...draft, autonomyLevel: e.target.value as AgentDraft['autonomyLevel'] })}
+                className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+              >
+                <option value="Supervised">Supervised</option>
+                <option value="Semi-Autonomous (Requires Approval)">Semi-Autonomous</option>
+                <option value="Full Autonomy">Full Autonomy</option>
+              </select>
             </div>
           </div>
 

@@ -1,4 +1,5 @@
-import { Agent, AgentAccessLevel, AgentRole, RuntimeEngine, Skill } from '@/shared/types';
+import { Agent, AgentAccessLevel, AgentAutonomyLevel, AgentRole, RuntimeEngine, Skill } from '@/shared/types';
+import { OfficialAgentTemplate } from '@/features/agents/officialAgentTemplates';
 import {
   defaultModelForRuntime,
   modelsForRuntime,
@@ -26,6 +27,7 @@ export interface AgentDraft {
   runtimeId: string;
   modelName: string;
   systemPrompt: string;
+  autonomyLevel: AgentAutonomyLevel;
   allowedUsers: AgentAccessLevel;
   concurrencyLimit: number;
   skillIds: string[];
@@ -53,6 +55,7 @@ export const EMPTY_AGENT_DRAFT: AgentDraft = {
   runtimeId: '',
   modelName: '',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
+  autonomyLevel: 'Semi-Autonomous (Requires Approval)',
   allowedUsers: 'team',
   concurrencyLimit: 2,
   skillIds: []
@@ -79,6 +82,35 @@ export function seedAgentDraft(runtimes: RuntimeEngine[], skills: Skill[]): Agen
     runtimeId,
     modelName: defaultModelForRuntime(runtimes, runtimeId),
     skillIds: keepKnownSkills(PREFERRED_DEFAULT_SKILLS, skills)
+  };
+}
+
+/**
+ * Converts an official role into a normal, fully editable creation draft.
+ * Runtime and model are intentionally taken from the machine scan rather than
+ * hard-coding a provider: a Codex-shaped role remains useful on a machine
+ * where only another installed runtime is currently available.
+ */
+export function draftFromOfficialTemplate(
+  template: OfficialAgentTemplate,
+  runtimes: RuntimeEngine[],
+  skills: Skill[]
+): AgentDraft {
+  // The official roles are authored for the local Codex workflow. Prefer it
+  // when it is actually online, but never bind a template to a missing or
+  // signed-out CLI: the normal runtime preference remains the safe fallback.
+  const codexRuntime = runtimeOption(runtimes, 'codex');
+  const runtimeId = codexRuntime?.available ? 'codex' : preferredRuntimeId(runtimes);
+  return {
+    ...EMPTY_AGENT_DRAFT,
+    name: template.name,
+    description: template.description,
+    role: template.role,
+    runtimeId,
+    modelName: defaultModelForRuntime(runtimes, runtimeId),
+    systemPrompt: template.systemPrompt,
+    autonomyLevel: template.autonomyLevel,
+    skillIds: keepKnownSkills(template.preferredSkillIds, skills)
   };
 }
 
@@ -169,7 +201,7 @@ export function buildCreateAgentRequest(
     modelName: draft.modelName.trim(),
     runtimeId: draft.runtimeId,
     systemPrompt: draft.systemPrompt.trim(),
-    autonomyLevel: 'Semi-Autonomous (Requires Approval)',
+    autonomyLevel: draft.autonomyLevel,
     temperature: 0.2,
     skills: draft.skillIds,
     envVars: [],

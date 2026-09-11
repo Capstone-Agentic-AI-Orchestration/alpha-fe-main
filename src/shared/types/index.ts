@@ -273,7 +273,19 @@ export type AgentRole =
   | 'QA Tester' 
   | 'DevOps Engineer' 
   | 'Researcher' 
-  | 'Triager';
+  | 'Triager'
+  | 'Research Agent'
+  | 'Architecture Agent'
+  | 'Manager Agent'
+  | 'Database Agent'
+  | 'Backend Agent'
+  | 'Frontend Agent'
+  | 'Mobile Agent'
+  | 'Security / Code Quality Agent'
+  | 'Validation / Checking Agent'
+  | 'GitHub Finalization Agent';
+
+export type AgentPhase = 'Planning' | 'Development' | 'Validation' | 'Finalization';
 
 export type AgentAutonomyLevel = 
   | 'Supervised' 
@@ -341,6 +353,14 @@ export interface Agent {
   owner?: string;
   isMine?: boolean;
   allowedUsers?: AgentAccessLevel;
+  /** Stable key for an official agent template seeded by the local daemon. */
+  templateKey?: string;
+  /** Template revision used when the local agent record was created. */
+  templateVersion?: number;
+  /** Paper-aligned delivery phase for official agent roles. */
+  phase?: AgentPhase;
+  /** True for Alpha's built-in, idempotently seeded role instances. */
+  isSeeded?: boolean;
   machineStatus?: ReachabilityStatus;
   workStatus?: WorkStatus;
   machineName?: string;

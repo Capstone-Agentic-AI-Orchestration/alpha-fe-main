@@ -1216,22 +1216,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const retryPrototypeRun = (runId: string) => {
     const run = prototypeRuns.find(item => item.id === runId);
-    if (!run || !['failed', 'changes_requested', 'cancelled'].includes(run.status)) return;
+    if (!run || !['failed', 'changes_requested', 'cancelled'].includes(run.status)) {
+      showToast('Retry unavailable', 'The failed run is no longer available. Refresh the issue and try again.', 'error');
+      return;
+    }
     const now = new Date().toISOString();
 
-    apiService.retryRun(runId).catch(() => {});
+    // The daemon creates a new run when retrying. Keep the failed run in
+    // history and adopt the daemon-assigned id so websocket updates reach the
+    // row the user is watching. Previously the old id was marked running while
+    // the new backend run was discarded, making Retry appear to do nothing.
+    apiService.retryRun(runId).then(newRun => {
+      setPrototypeRuns(prev => [newRun, ...prev.filter(item => item.id !== newRun.id)]);
+      showToast('Run restarted', 'The failed stage will be attempted again.', 'success');
+    }).catch(err => {
+      const detail = err instanceof Error ? err.message : String(err);
+      showToast('Retry failed', detail, 'error');
+    });
 
-    setPrototypeRuns(prev => prev.map(item => item.id === runId ? {
-      ...item,
-      status: 'running',
-      scenario: 'success',
-      stages: buildRunStages(now),
-      currentStageIndex: 0,
-      updatedAt: now,
-      branchName: undefined,
-      prUrl: undefined,
-      testSummary: undefined
-    } : item));
     setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
       ...issue,
       status: 'agent_running',
@@ -1249,7 +1251,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'executing',
       workStatus: 'working'
     } : agent));
-    showToast('Run restarted', 'The failed stage will be attempted again.', 'success');
   };
 
   /**
