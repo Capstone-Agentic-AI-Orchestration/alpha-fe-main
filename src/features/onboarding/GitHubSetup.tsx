@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Github, Terminal, RefreshCw, ExternalLink, Copy, Check } from 'lucide-react';
+import { Github, Terminal, RefreshCw, ExternalLink, Copy, Check, Laptop } from 'lucide-react';
 
 import { Identity } from '@/shared/types';
 
@@ -19,12 +19,13 @@ import { Identity } from '@/shared/types';
 interface Props {
   identity: Identity;
   onRetry: () => Promise<void> | void;
+  onContinueLocally: () => void;
 }
 
 const INSTALL_COMMAND = 'winget install --id GitHub.cli';
 const LOGIN_COMMAND = 'gh auth login';
 
-export const GitHubSetup: React.FC<Props> = ({ identity, onRetry }) => {
+export const GitHubSetup: React.FC<Props> = ({ identity, onRetry, onContinueLocally }) => {
   const [checking, setChecking] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
 
@@ -118,16 +119,25 @@ export const GitHubSetup: React.FC<Props> = ({ identity, onRetry }) => {
           reach GitHub. Saying so stops the screen reading as a hard blocker.
         */}
         <p className="text-[12px] leading-relaxed text-gray-500">
-          You can use Alpha without this, but the board will stay on this machine: no shared issues,
-          no role from your team, and nothing your teammates do will appear.
+          GitHub is optional for solo work. Continue in local mode now; you can connect later from
+          Settings. The board will stay on this machine: no shared issues, no role from your team,
+          and nothing your teammates do will appear.
         </p>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onContinueLocally}
+            className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-semibold text-on-accent transition-colors hover:bg-brand-600"
+          >
+            <Laptop className="h-3.5 w-3.5" />
+            Continue in local mode
+          </button>
           <button
             type="button"
             onClick={retry}
             disabled={checking}
-            className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-semibold text-on-accent transition-colors hover:bg-brand-600 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg border border-white/10 px-3.5 py-2 text-xs font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />
             {checking ? 'Checking…' : "I've done this"}

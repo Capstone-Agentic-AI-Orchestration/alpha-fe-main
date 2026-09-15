@@ -15,11 +15,108 @@ import {
   McpServer,
   McpServerInput,
   RemoteAction,
-  Identity
+  Identity,
+  AnalyticsData
 } from '@/shared/types';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+const SKILL_CATEGORIES: Skill['category'][] = [
+  'File Operations',
+  'Browser & Web',
+  'Code Execution',
+  'Terminal & Shell',
+  'Git & GitHub',
+  'MCP Servers',
+  'Cloud & API',
+  'Agent Skills'
+];
+
+const SKILL_CATEGORY_ALIASES: Record<string, Skill['category']> = {
+  browser: 'Browser & Web',
+  web: 'Browser & Web',
+  terminal: 'Terminal & Shell',
+  shell: 'Terminal & Shell',
+  git: 'Git & GitHub',
+  github: 'Git & GitHub',
+  code: 'Code Execution',
+  execution: 'Code Execution',
+  file: 'File Operations',
+  files: 'File Operations',
+  mcp: 'MCP Servers',
+  cloud: 'Cloud & API',
+  api: 'Cloud & API'
+};
+
+const SKILL_SOURCES = new Set<Skill['source']>([
+  'builtin',
+  'system_detected',
+  'mcp_server',
+  'user',
+  'project',
+  'plugin'
+]);
+
+/**
+ * Convert the daemon's wire shape into the frontend's stable Skill shape.
+ *
+ * The backend deliberately calls the persisted flag `isEnabled`; the client
+ * uses `enabled` because that is what the cards and toggle state expose. Keep
+ * this translation at the boundary so a fresh daemon snapshot cannot silently
+ * make every skill look disabled or crash on missing presentation fields.
+ */
+export function normalizeSkill(raw: unknown): Skill {
+  const value = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const rawCategory = String(value.category ?? '').trim();
+  const category = SKILL_CATEGORIES.includes(rawCategory as Skill['category'])
+    ? rawCategory as Skill['category']
+    : SKILL_CATEGORY_ALIASES[rawCategory.toLowerCase()] ?? 'MCP Servers';
+  const rawPermission = String(value.permissions ?? 'read_only');
+  const permissions: Skill['permissions'] =
+    rawPermission === 'write' || rawPermission === 'full_execution' ? rawPermission : 'read_only';
+  const rawEnabled = value.enabled ?? value.isEnabled;
+  const enabled = typeof rawEnabled === 'string'
+    ? rawEnabled.toLowerCase() === 'true'
+    : Boolean(rawEnabled);
+  const parametersCount = Number(value.parametersCount);
+
+  return {
+    id: String(value.id ?? ''),
+    name: String(value.name ?? value.id ?? 'Unnamed skill'),
+    description: String(value.description ?? ''),
+    icon: String(value.icon ?? '✦'),
+    category,
+    permissions,
+    parametersCount: Number.isFinite(parametersCount) && parametersCount >= 0 ? parametersCount : 0,
+    enabled,
+    source: SKILL_SOURCES.has(value.source as Skill['source'])
+      ? value.source as Skill['source']
+      : 'builtin',
+    installed: value.installed === true || value.installed === 1,
+    path: typeof value.path === 'string' ? value.path : undefined,
+    commandExample: typeof value.commandExample === 'string' ? value.commandExample : undefined,
+    grantedTools: Array.isArray(value.grantedTools)
+      ? value.grantedTools.filter((tool): tool is string => typeof tool === 'string')
+      : undefined
+  };
+}
+
+/**
+ * Convert the repository forms accepted by project resources into the
+ * owner/name form used by GitHub's API and CLI. A project can store a browser
+ * URL, an SSH remote, or an already-normalized owner/name value.
+ */
+export function normalizeGitHubRepo(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(trimmed)) return trimmed;
+
+  const match = trimmed.match(
+    /github\.com[/:]([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+?)(?:\.git)?\/?$/i
+  );
+  return match?.[1];
+}
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
@@ -154,6 +251,7 @@ export const apiService = {
             isMine: a.is_mine,
             modelProvider: a.model_provider,
             modelName: a.model_name,
+            reasoningEffort: a.reasoning_effort ?? undefined,
             runtimeId: a.runtime_id || 'claude-3-7-sonnet',
             systemPrompt: a.system_prompt,
             autonomyLevel: a.autonomy_level,
@@ -314,7 +412,14 @@ export const apiService = {
     fetchJson<{ success: boolean }>(`/squads/${id}`, { method: 'DELETE' }),
 
   // Skills
-  getSkills: () => fetchJson<Skill[]>('/skills'),
+  getSkills: async (): Promise<Skill[]> => {
+    const skills = await fetchJson<unknown[]>('/skills');
+    return Array.isArray(skills) ? skills.map(normalizeSkill) : [];
+  },
+  scanSkills: async (): Promise<Skill[]> => {
+    const skills = await fetchJson<unknown[]>('/skills/scan', { method: 'POST' });
+    return Array.isArray(skills) ? skills.map(normalizeSkill) : [];
+  },
   setSkillEnabled: (id: string, isEnabled: boolean) =>
     fetchJson<{ success: boolean }>(`/skills/${id}`, { method: 'PUT', body: JSON.stringify({ isEnabled }) }),
 
@@ -324,6 +429,7 @@ export const apiService = {
 
   // Runs
   getRuns: () => fetchJson<PrototypeRun[]>('/runs'),
+  getAnalytics: () => fetchJson<AnalyticsData>('/analytics'),
   startRun: (payload: { issueId: string; agentId: string; plan?: string[]; scenario?: string }) =>
     fetchJson<PrototypeRun>('/runs/start', { method: 'POST', body: JSON.stringify(payload) }),
   /** Settle a run waiting at the review gate. */
@@ -409,6 +515,11 @@ export const apiService = {
     }>('/github/auth'),
   getGitHubRepos: () => fetchJson<any[]>('/github/repos'),
   getGitHubRuns: (cwd?: string) => fetchJson<any[]>(`/github/runs${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
+  dispatchWorkflow: (payload: { cwd: string; workflow?: string; ref?: string; inputs?: Record<string, string> }) =>
+    fetchJson<{ workflow: string; ref: string; ownerRepo?: string }>('/github/dispatch', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
   getGitHubRunLogs: (runId: string | number, cwd?: string) =>
     fetchJson<{ logs: string }>(`/github/runs/${runId}/logs${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
   createGitHubPR: (payload: { cwd?: string; title: string; body: string; base?: string; headBranch?: string }) =>

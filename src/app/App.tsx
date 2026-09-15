@@ -40,7 +40,9 @@ const ALL_TABS = NAV_ITEMS;
 export const App: React.FC = () => {
   const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role,
     identity,
-    refreshIdentity
+    refreshIdentity,
+    localMode,
+    continueInLocalMode
   } = useApp();
   const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
 
@@ -100,8 +102,14 @@ export const App: React.FC = () => {
    * "you have no team" to someone who has not installed the CLI would send
    * them to an org owner for a problem they can fix themselves in a minute.
    */
-  if (identity && identity.github && identity.github !== 'ok') {
-    return <GitHubSetup identity={identity} onRetry={refreshIdentity} />;
+  if (!localMode && identity && identity.github && identity.github !== 'ok') {
+    return (
+      <GitHubSetup
+        identity={identity}
+        onRetry={refreshIdentity}
+        onContinueLocally={continueInLocalMode}
+      />
+    );
   }
 
   if (identity?.access === 'no_team') {

@@ -230,6 +230,7 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 text-[11px]">
             <Field label="Model" value={`${file.effective.modelProvider} / ${file.effective.modelName}`} />
+            <Field label="Reasoning" value={file.effective.reasoningEffort || 'Auto (runtime default)'} />
             <Field label="Role" value={file.effective.role} />
             <Field label="Autonomy" value={file.effective.autonomyLevel} />
             <Field label="Prompt source" value={file.effective.promptSource} />

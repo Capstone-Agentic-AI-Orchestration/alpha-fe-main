@@ -5,6 +5,14 @@ on:
     branches: [main]
   pull_request:
 
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Deployment environment requested by Alpha
+        required: false
+        default: development
+        type: string
+
 jobs:
   verify:
     runs-on: ubuntu-latest

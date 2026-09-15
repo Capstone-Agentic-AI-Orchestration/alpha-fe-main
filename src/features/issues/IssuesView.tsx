@@ -77,6 +77,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     squads,
     triggerSquadRun,
     identity,
+    localMode,
     createIssue,
     syncBoard,
     syncing,
@@ -501,21 +502,31 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               it last looked and a way to look now. Polling runs every minute;
               this is for the moment you know a teammate just did something.
             */}
-            <button
-              onClick={() => void syncBoard()}
-              disabled={syncing}
-              title={
-                lastSyncedAt
-                  ? `Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
-                  : 'Not synced yet'
-              }
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 font-medium text-xs transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
-              <span className="hidden sm:inline">
-                {syncing ? 'Syncing' : lastSyncedAt ? syncAgo(lastSyncedAt) : 'Sync'}
+            {localMode ? (
+              <span
+                title="GitHub sync is off while Alpha is in local mode"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-white/10 text-gray-500 font-medium text-xs"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                <span className="hidden sm:inline">Local board</span>
               </span>
-            </button>
+            ) : (
+              <button
+                onClick={() => void syncBoard()}
+                disabled={syncing}
+                title={
+                  lastSyncedAt
+                    ? `Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
+                    : 'Not synced yet'
+                }
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 font-medium text-xs transition-colors disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">
+                  {syncing ? 'Syncing' : lastSyncedAt ? syncAgo(lastSyncedAt) : 'Sync'}
+                </span>
+              </button>
+            )}
 
             {/* New Issue Button */}
             <button

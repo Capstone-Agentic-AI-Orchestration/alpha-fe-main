@@ -32,14 +32,14 @@ import {
 import {
   initialIssues,
   initialAgents,
-  initialDeployments,
   initialAnalytics,
+  emptyAnalytics,
   initialSettings,
   initialUsers,
   initialRequirementDocs,
 } from '@/data/mockData';
 import { buildEstimate, DEFAULT_RATE_CARD } from '@/features/delivery/estimator';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, normalizeGitHubRepo, normalizeSkill } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
@@ -121,6 +121,8 @@ interface AppContextType {
   // Skills
   skills: Skill[];
   toggleSkill: (id: string) => void;
+  isScanningSkills: boolean;
+  scanInstalledSkills: () => Promise<void>;
   
   // Deployments
   deployments: Deployment[];
@@ -171,6 +173,10 @@ interface AppContextType {
    * distinguishes a GitHub login from a bare OS username.
    */
   identity?: Identity;
+  /** True when the user chose to keep using Alpha without GitHub. */
+  localMode: boolean;
+  /** Leave the GitHub setup gate and use the local board. */
+  continueInLocalMode: () => void;
   /** Re-resolve identity, for after someone is added to a team. */
   refreshIdentity: () => Promise<void>;
   /** Pull the board from GitHub now. */
@@ -261,8 +267,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * Not persisted: signing in or out on the machine changes the answer, and a
    * stale login attributing issues to the wrong person is worse than a moment
    * without one.
-   */
+  */
   const [identity, setIdentity] = useState<Identity | undefined>(undefined);
+  /**
+   * GitHub is optional for solo use. Persist the choice so a reload does not
+   * put a user back in the setup gate before they can reach Settings.
+   */
+  const [localMode, setLocalMode] = useState<boolean>(() =>
+    loadFromStorage<boolean>('local_mode', false)
+  );
 
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
@@ -274,10 +287,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    *
    * One at a time: the poll and the button share this, and two overlapping
    * pulls race to write the same cards — the second to finish leaves the board
-   * holding the older answer.
-   */
+  * holding the older answer.
+  */
   const syncBoard = useCallback(async () => {
-    if (syncingRef.current) return;
+    // Local mode deliberately keeps the board on this machine. Avoid calling
+    // the GitHub-backed sync endpoint (and surfacing an avoidable ENOENT toast)
+    // until the user connects an account.
+    if (localMode || syncingRef.current) return;
     syncingRef.current = true;
     setSyncing(true);
     try {
@@ -303,7 +319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       syncingRef.current = false;
       setSyncing(false);
     }
-  }, []);
+  }, [localMode]);
 
   /**
     * The role you chose, which is an override rather than the answer.
@@ -417,8 +433,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [agents, setAgents] = useState<Agent[]>(() => loadFromStorage<Agent[]>('agents', []));
   const [squads, setSquads] = useState<Squad[]>(() => loadFromStorage<Squad[]>('squads', []));
   const [runtimes, setRuntimes] = useState<RuntimeEngine[]>(() => loadFromStorage<RuntimeEngine[]>('runtimes', []));
-  const [skills, setSkills] = useState<Skill[]>(() => loadFromStorage<Skill[]>('skills', []));
-  const [deployments, setDeployments] = useState<Deployment[]>(() => loadFromStorage('deployments', initialDeployments));
+  const [skills, setSkills] = useState<Skill[]>(() => {
+    const saved = loadFromStorage<unknown[]>('skills', []);
+    return Array.isArray(saved) ? saved.map(normalizeSkill) : [];
+  });
+  const [deployments] = useState<Deployment[]>(() => loadFromStorage('deployments_v2', []));
   /**
    * Starts empty, not seeded.
    *
@@ -429,7 +448,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * ones that matter.
    */
   const [inbox, setInbox] = useState<InboxNotification[]>(() => loadFromStorage<InboxNotification[]>('inbox', []));
-  const [analytics, setAnalytics] = useState<AnalyticsData>(() => loadFromStorage('analytics', initialAnalytics));
+  const [analytics, setAnalytics] = useState<AnalyticsData>(() => loadFromStorage('analytics_v2', emptyAnalytics));
   const [settings, setSettings] = useState<WorkspaceSettings>(() => loadFromStorage('settings', initialSettings));
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => loadFromStorage<ChatThread[]>('chat_threads', []));
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -487,6 +506,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   });
 
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
+  const [isScanningSkills, setIsScanningSkills] = useState(false);
   const [isAgentTyping, setIsAgentTyping] = useState(false);
   const [activeChatAgentId, setActiveChatAgentId] = useState<string | null>(null);
   const [activeChatSquadId, setActiveChatSquadId] = useState<string | null>(null);
@@ -550,6 +570,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
+      if (snapshot.analytics && typeof snapshot.analytics === 'object') {
+        setAnalytics(snapshot.analytics as AnalyticsData);
+      }
 
       setServerStatus('online');
     };
@@ -582,6 +605,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       } catch {
         // Daemon down; the offline badge already says so.
+      }
+    };
+
+    const id = window.setInterval(refresh, REFRESH_MS);
+    return () => { cancelled = true; window.clearInterval(id); };
+  }, []);
+
+  /** Keep the analytics cards tied to persisted daemon runs, not demo counters. */
+  useEffect(() => {
+    const REFRESH_MS = 30_000;
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        const latest = await apiService.getAnalytics();
+        if (!cancelled && latest && typeof latest === 'object') {
+          setAnalytics(latest);
+        }
+      } catch {
+        // Daemon down; retain the last known snapshot until it reconnects.
       }
     };
 
@@ -635,15 +678,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('squads', squads); }, [squads]);
   useEffect(() => { saveToStorage('runtimes', runtimes); }, [runtimes]);
   useEffect(() => { saveToStorage('skills', skills); }, [skills]);
-  useEffect(() => { saveToStorage('deployments', deployments); }, [deployments]);
+  useEffect(() => { saveToStorage('deployments_v2', deployments); }, [deployments]);
   useEffect(() => { saveToStorage('inbox', inbox); }, [inbox]);
-  useEffect(() => { saveToStorage('analytics', analytics); }, [analytics]);
+  useEffect(() => { saveToStorage('analytics_v2', analytics); }, [analytics]);
   useEffect(() => { saveToStorage('settings', settings); }, [settings]);
   useEffect(() => { saveToStorage('chat_threads', chatThreads); }, [chatThreads]);
   useEffect(() => { saveToStorage('chat_messages', chatMessages); }, [chatMessages]);
   useEffect(() => { saveToStorage('prototype_runs', prototypeRuns); }, [prototypeRuns]);
   useEffect(() => { saveToStorage('squad_runs', squadRuns); }, [squadRuns]);
   useEffect(() => { saveToStorage('role_override', roleOverride); }, [roleOverride]);
+  useEffect(() => { saveToStorage('local_mode', localMode); }, [localMode]);
 
   /**
    * Pull the board every minute, and once on load.
@@ -854,7 +898,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (dbSkills?.length) setSkills(dbSkills as any);
         if (dbRuns?.length) setPrototypeRuns(dbRuns as any);
         if (dbSquadRuns?.length) setSquadRuns(dbSquadRuns as any);
-        apiService.getIdentity().then(setIdentity).catch(() => {
+        apiService.getIdentity().then(next => {
+          setIdentity(next);
+          // A successful connection supersedes the temporary local-mode
+          // choice, so future disconnects can show the setup screen again.
+          if (next.github === 'ok') setLocalMode(false);
+        }).catch(() => {
           // An older daemon has no /me. The board still works; "Mine" does not.
         });
       } catch (err) {
@@ -1216,22 +1265,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const retryPrototypeRun = (runId: string) => {
     const run = prototypeRuns.find(item => item.id === runId);
-    if (!run || !['failed', 'changes_requested', 'cancelled'].includes(run.status)) return;
+    if (!run || !['failed', 'changes_requested', 'cancelled'].includes(run.status)) {
+      showToast('Retry unavailable', 'The failed run is no longer available. Refresh the issue and try again.', 'error');
+      return;
+    }
     const now = new Date().toISOString();
 
-    apiService.retryRun(runId).catch(() => {});
+    // The daemon creates a new run when retrying. Keep the failed run in
+    // history and adopt the daemon-assigned id so websocket updates reach the
+    // row the user is watching. Previously the old id was marked running while
+    // the new backend run was discarded, making Retry appear to do nothing.
+    apiService.retryRun(runId).then(newRun => {
+      setPrototypeRuns(prev => [newRun, ...prev.filter(item => item.id !== newRun.id)]);
+      showToast('Run restarted', 'The failed stage will be attempted again.', 'success');
+    }).catch(err => {
+      const detail = err instanceof Error ? err.message : String(err);
+      showToast('Retry failed', detail, 'error');
+    });
 
-    setPrototypeRuns(prev => prev.map(item => item.id === runId ? {
-      ...item,
-      status: 'running',
-      scenario: 'success',
-      stages: buildRunStages(now),
-      currentStageIndex: 0,
-      updatedAt: now,
-      branchName: undefined,
-      prUrl: undefined,
-      testSummary: undefined
-    } : item));
     setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
       ...issue,
       status: 'agent_running',
@@ -1249,7 +1300,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'executing',
       workStatus: 'working'
     } : agent));
-    showToast('Run restarted', 'The failed stage will be attempted again.', 'success');
   };
 
   /**
@@ -1801,6 +1851,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Skills
+  const scanInstalledSkills = async () => {
+    setIsScanningSkills(true);
+    try {
+      const detectedSkills = await apiService.scanSkills();
+      setSkills(detectedSkills);
+      const installedCount = detectedSkills.filter(skill => skill.installed).length;
+      showToast(
+        'Skill scan completed',
+        installedCount > 0
+          ? `Found ${installedCount} installed SKILL.md definitions.`
+          : 'No filesystem skill definitions were found.',
+        'success'
+      );
+    } catch (err) {
+      showToast(
+        'Skill scan failed',
+        err instanceof Error ? err.message : 'The local daemon could not scan the skill folders.',
+        'error'
+      );
+    } finally {
+      setIsScanningSkills(false);
+    }
+  };
+
   const toggleSkill = (id: string) => {
     const next = !skills.find(sk => sk.id === id)?.enabled;
     setSkills(prev => prev.map(sk => sk.id === id ? { ...sk, enabled: next } : sk));
@@ -1828,118 +1902,57 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     env: 'Production' | 'Staging' | 'Preview' = 'Staging',
     source?: { issueId?: string; runId?: string }
   ) => {
+    void source;
     const proj = projects.find(p => p.id === projectId) || projects[0];
     if (!proj) {
-      // No projects loaded yet — deploying has nothing to point at.
       showToast('Cannot deploy', 'No project is available yet.', 'error');
       return;
     }
 
-    const newDep: Deployment = {
-      id: `dep-${Date.now()}`,
-      projectId: proj.id,
-      projectName: proj.name,
-      name: `Automated Pipeline Trigger (${env})`,
-      environment: env,
-      status: 'queued',
-      branch: 'main',
-      commitSha: Math.random().toString(16).substring(2, 9),
-      commitMessage: 'Automated CI/CD release triggered by Agent Orchestrator',
-      triggeredBy: {
-        type: 'agent',
-        name: 'Cipher Drake (DevOps)'
-      },
-      durationSec: 0,
-      startedAt: new Date().toISOString(),
-      sourceIssueId: source?.issueId,
-      sourceRunId: source?.runId,
-      stages: [
-        { name: 'Lint & Strict Typecheck', status: 'running', logs: ['Starting TypeScript compiler...'] },
-        { name: 'Autonomous Agent QA Tests', status: 'pending', logs: [] },
-        { name: 'Container Artifact Build', status: 'pending', logs: [] },
-        { name: 'Deploy to Cloud Cluster', status: 'pending', logs: [] },
-      ]
-    };
+    const localResource = (proj.resources || []).find(resource =>
+      (resource.type === 'local_path' || resource.type === 'local_dir') &&
+      Boolean(resource.localPath || resource.pathOrUrl)
+    );
+    const githubResource = (proj.resources || []).find(resource =>
+      resource.type === 'github_repo' && Boolean(resource.pathOrUrl)
+    );
+    // A managed clone is the best target. If the saved local path is only a
+    // parent folder (as it is for the bundled workspace), use the configured
+    // GitHub repository rather than asking the daemon to dispatch from a
+    // directory that is not itself a Git checkout.
+    const cwd = localResource?.localPath ||
+      normalizeGitHubRepo(githubResource?.pathOrUrl) ||
+      localResource?.pathOrUrl;
+    if (!cwd) {
+      showToast(
+        'Cannot deploy',
+        'Attach a local repository to this project before dispatching its workflow.',
+        'error'
+      );
+      return;
+    }
 
-    setDeployments(prev => [newDep, ...prev]);
-
-    // Simulate stage progress
-    setTimeout(() => {
-      setDeployments(prev => prev.map(d => {
-        if (d.id !== newDep.id) return d;
-        return {
-          ...d,
-          status: 'building',
-          durationSec: 20,
-          stages: [
-            { name: 'Lint & Strict Typecheck', status: 'success', durationSec: 10, logs: ['0 errors found. Strict type rules valid.'] },
-            { name: 'Autonomous Agent QA Tests', status: 'running', durationSec: 10, logs: ['Executing 42 test suites...'] },
-            { name: 'Container Artifact Build', status: 'pending', logs: [] },
-            { name: 'Deploy to Cloud Cluster', status: 'pending', logs: [] },
-          ]
-        };
-      }));
-    }, 2000);
-
-    setTimeout(() => {
-      setDeployments(prev => prev.map(d => {
-        if (d.id !== newDep.id) return d;
-        return {
-          ...d,
-          status: 'success',
-          durationSec: 48,
-          // Was `https://<env>-alpha.multica.internal`, an internal hostname of
-          // an organisation unrelated to this install that resolves nowhere.
-          previewUrl: undefined,
-          stages: [
-            { name: 'Lint & Strict Typecheck', status: 'success', durationSec: 10, logs: ['0 errors found.'] },
-            { name: 'Autonomous Agent QA Tests', status: 'success', durationSec: 18, logs: ['All 42 tests passed.'] },
-            { name: 'Container Artifact Build', status: 'success', durationSec: 12, logs: ['Docker image sha256:7f4a... generated.'] },
-            { name: 'Deploy to Cloud Cluster', status: 'success', durationSec: 8, logs: ['Kubernetes pods healthy. Traffic switched.'] },
-          ]
-        };
-      }));
-
-      // Notify in inbox
-      setInbox(prev => [{
-        id: `notif-${Date.now()}`,
-        type: 'deployment_status',
-        title: `${env} Deployment Succeeded`,
-        message: `${proj.name} successfully deployed to ${env}.`,
-        read: false,
-        audience: 'internal',
-        timestamp: new Date().toISOString(),
-        entityType: 'deployment',
-        entityId: newDep.id
-      }, ...prev]);
-
-      if (source?.issueId) {
-        const completedAt = new Date().toISOString();
-        setIssues(prev => prev.map(issue => issue.id === source.issueId ? {
-          ...issue,
-          status: 'done',
-          comments: issue.comments.some(comment => comment.id === `comm-${source.runId}-validated`)
-            ? issue.comments
-            : [...issue.comments, {
-                id: `comm-${source.runId}-validated`,
-                authorType: 'system' as const,
-                authorName: 'Prototype CI',
-                content: `Preview validation completed successfully. The issue is ready for delivery.`,
-                createdAt: completedAt
-              }],
-          updatedAt: completedAt
-        } : issue));
-      }
-
-      if (source?.runId) {
-        setPrototypeRuns(prev => prev.map(run => run.id === source.runId ? {
-          ...run,
-          status: 'completed',
-          updatedAt: new Date().toISOString()
-        } : run));
-        showToast('Prototype delivery complete', `${proj.name} passed the Preview pipeline.`, 'success');
-      }
-    }, 4500);
+    try {
+      const result = await apiService.dispatchWorkflow({
+        cwd,
+        ref: localResource?.branchOrMachine || githubResource?.branchOrMachine || undefined,
+        // Workflows that want environment-specific behavior can declare this
+        // standard input; the daemon will report a clear GitHub validation
+        // error when the selected workflow does not accept it.
+        inputs: { environment: env.toLowerCase() }
+      });
+      showToast(
+        'Workflow dispatched',
+        `${result.workflow} was requested for ${proj.name} on ${result.ref}. Refresh Live GitHub Actions to follow it.`,
+        'success'
+      );
+    } catch (err) {
+      showToast(
+        'Workflow dispatch failed',
+        err instanceof Error ? err.message : String(err),
+        'error'
+      );
+    }
   };
 
   // Inbox
@@ -2351,12 +2364,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setIsAgentTyping(false);
     }
 
-    // Update analytics
-    setAnalytics(prev => ({
-      ...prev,
-      totalTokens24h: prev.totalTokens24h + 480,
-      totalCost24h: prev.totalCost24h + 0.004
-    }));
   };
 
   const clearChat = () => {
@@ -2888,12 +2895,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteSquad,
       squadRuns,
       identity,
+      localMode,
+      continueInLocalMode: () => setLocalMode(true),
       lastSyncedAt,
       syncing,
       syncBoard,
       refreshIdentity: async () => {
         try {
-          setIdentity(await apiService.getIdentity());
+          const next = await apiService.getIdentity();
+          setIdentity(next);
+          if (next.github === 'ok') setLocalMode(false);
         } catch {
           // An unreachable daemon leaves the last answer standing.
         }
@@ -2907,6 +2918,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setDefaultRuntime,
       skills,
       toggleSkill,
+      isScanningSkills,
+      scanInstalledSkills,
       deployments: scopedDeployments,
       triggerDeployment,
       inbox: scopedInbox,

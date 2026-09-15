@@ -273,7 +273,19 @@ export type AgentRole =
   | 'QA Tester' 
   | 'DevOps Engineer' 
   | 'Researcher' 
-  | 'Triager';
+  | 'Triager'
+  | 'Research Agent'
+  | 'Architecture Agent'
+  | 'Manager Agent'
+  | 'Database Agent'
+  | 'Backend Agent'
+  | 'Frontend Agent'
+  | 'Mobile Agent'
+  | 'Security / Code Quality Agent'
+  | 'Validation / Checking Agent'
+  | 'GitHub Finalization Agent';
+
+export type AgentPhase = 'Planning' | 'Development' | 'Validation' | 'Finalization';
 
 export type AgentAutonomyLevel = 
   | 'Supervised' 
@@ -295,6 +307,17 @@ export type ModelProvider =
   | 'Google Gemini'
   | 'Groq'
   | 'OpenCode';
+
+/** Effort values shared by the local CLI runtimes. Empty means Auto. */
+export type ReasoningEffort =
+  | 'none'
+  | 'minimal'
+  | 'low'
+  | 'medium'
+  | 'high'
+  | 'xhigh'
+  | 'max'
+  | 'ultra';
 
 export type AgentStatus = 'idle' | 'thinking' | 'executing' | 'error' | 'offline';
 export type ReachabilityStatus = 'online' | 'unstable' | 'offline';
@@ -341,6 +364,14 @@ export interface Agent {
   owner?: string;
   isMine?: boolean;
   allowedUsers?: AgentAccessLevel;
+  /** Stable key for an official agent template seeded by the local daemon. */
+  templateKey?: string;
+  /** Template revision used when the local agent record was created. */
+  templateVersion?: number;
+  /** Paper-aligned delivery phase for official agent roles. */
+  phase?: AgentPhase;
+  /** True for Alpha's built-in, idempotently seeded role instances. */
+  isSeeded?: boolean;
   machineStatus?: ReachabilityStatus;
   workStatus?: WorkStatus;
   machineName?: string;
@@ -354,6 +385,8 @@ export interface Agent {
   activity30d?: number[];
   modelProvider: ModelProvider;
   modelName: string;
+  /** Optional; when absent the selected runtime uses its model default. */
+  reasoningEffort?: ReasoningEffort | null;
   runtimeId: string;
   systemPrompt: string;
   autonomyLevel: AgentAutonomyLevel;
@@ -463,6 +496,7 @@ export interface AgentPersonaFile {
     role: AgentRole;
     modelProvider: ModelProvider;
     modelName: string;
+    reasoningEffort?: ReasoningEffort;
     autonomyLevel: AgentAutonomyLevel;
     skills: string[];
     mcpServers: string[];
@@ -523,9 +557,11 @@ export type SkillCategory =
   | 'Terminal & Shell' 
   | 'Git & GitHub' 
   | 'MCP Servers' 
-  | 'Cloud & API';
+  | 'Cloud & API'
+  | 'Agent Skills';
 
 export type SkillPermission = 'read_only' | 'write' | 'full_execution';
+export type SkillSource = 'builtin' | 'system_detected' | 'mcp_server' | 'user' | 'project' | 'plugin';
 
 export interface Skill {
   id: string;
@@ -536,7 +572,11 @@ export interface Skill {
   permissions: SkillPermission;
   parametersCount: number;
   enabled: boolean;
-  source: 'builtin' | 'system_detected' | 'mcp_server';
+  source: SkillSource;
+  /** True when the skill came from an installed SKILL.md on this machine. */
+  installed?: boolean;
+  /** Absolute local path for a filesystem-detected skill. */
+  path?: string;
   commandExample?: string;
   /**
    * CLI tools this skill grants a chat turn.
