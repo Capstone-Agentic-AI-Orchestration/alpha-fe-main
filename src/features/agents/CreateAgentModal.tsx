@@ -1,8 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useApp } from '@/app/AppContext';
 import { Modal } from '@/shared/components/Modal';
-import { AgentRole, AgentAccessLevel } from '@/shared/types';
-import { providerOptions, modelsForRuntime } from '@/shared/lib/providers';
+import { AgentRole, AgentAccessLevel, ReasoningEffort } from '@/shared/types';
+import {
+  providerOptions,
+  modelsForRuntime,
+  reasoningEffortsForRuntime,
+  REASONING_EFFORT_HINTS,
+  REASONING_EFFORT_LABELS
+} from '@/shared/lib/providers';
 import {
   AGENT_CONCURRENCY_MAX,
   AGENT_CONCURRENCY_MIN,
@@ -66,6 +72,10 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
   const detectedModels = useMemo(
     () => modelsForRuntime(runtimes, draft.runtimeId),
     [runtimes, draft.runtimeId]
+  );
+  const reasoningEfforts = useMemo(
+    () => reasoningEffortsForRuntime(runtimes, draft.runtimeId, draft.modelName),
+    [runtimes, draft.runtimeId, draft.modelName]
   );
   const validationError = draftValidationError(draft, runtimes);
   const descriptionLength = [...draft.description].length;
@@ -392,8 +402,8 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
             />
           </div>
 
-          {/* Role & Model. Provider is not asked for — it follows the runtime. */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          {/* Role, model and effort. Provider is not asked for — it follows the runtime. */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
                 Role
@@ -440,7 +450,16 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                 <select
                   required
                   value={draft.modelName}
-                  onChange={(e) => setDraft(applyDraftModelChange(draft, e.target.value))}
+                  onChange={(e) => {
+                    const modelName = e.target.value;
+                    setDraft(
+                      applyDraftModelChange(
+                        draft,
+                        modelName,
+                        reasoningEffortsForRuntime(runtimes, draft.runtimeId, modelName)
+                      )
+                    );
+                  }}
                   className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
                 >
                   {draft.modelName && !detectedModels.includes(draft.modelName) && (
@@ -450,6 +469,39 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                     <option key={m} value={m}>{m}</option>
                   ))}
                 </select>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+                Reasoning Effort
+              </label>
+              <select
+                value={draft.reasoningEffort}
+                onChange={(e) =>
+                  setDraft({
+                    ...draft,
+                    reasoningEffort: e.target.value as ReasoningEffort | ''
+                  })
+                }
+                className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+              >
+                <option value="">Auto (runtime default)</option>
+                {reasoningEfforts.map(effort => (
+                  <option key={effort} value={effort}>
+                    {REASONING_EFFORT_LABELS[effort]}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[10px] leading-snug text-gray-500">
+                {reasoningEfforts.length
+                  ? 'Higher effort can improve difficult tasks, with more latency or usage.'
+                  : 'This runtime does not expose a separate effort flag; Auto keeps its native default.'}
+              </p>
+              {draft.reasoningEffort && (
+                <p className="mt-1 text-[10px] text-gray-600">
+                  {REASONING_EFFORT_HINTS[draft.reasoningEffort]}
+                </p>
               )}
             </div>
 

@@ -821,6 +821,18 @@ export const initialAnalytics: AnalyticsData = {
   ]
 };
 
+/** Empty, honest baseline used until the daemon returns real run telemetry. */
+export const emptyAnalytics: AnalyticsData = {
+  totalTokens24h: 0,
+  totalCost24h: 0,
+  avgLatencyMs: 0,
+  totalAgentRuns: 0,
+  successRate: 0,
+  tokenTimeline: [],
+  agentBreakdown: [],
+  modelBreakdown: []
+};
+
 export const initialSettings: WorkspaceSettings = {
   workspaceName: '',
   workspaceSlug: 'alpha-multica-hq',

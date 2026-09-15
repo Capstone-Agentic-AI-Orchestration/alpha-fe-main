@@ -24,6 +24,8 @@ export interface ServerSnapshot {
   chatThreads: unknown[];
   runs: unknown[];
   squadRuns: unknown[];
+  /** Aggregated run telemetry is an object rather than a collection. */
+  analytics: unknown;
 }
 
 /**
@@ -44,6 +46,7 @@ export async function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>> {
     runtimes: apiService.getRuntimes(),
     chatThreads: apiService.getChatThreads(),
     runs: apiService.getRuns(),
+    analytics: apiService.getAnalytics(),
     // Squad run history was read from localStorage only, so it was invisible
     // after a restart and never matched what the daemon actually recorded.
     squadRuns: apiService.getSquadRuns()
@@ -54,8 +57,11 @@ export async function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>> {
 
   const snapshot: Partial<ServerSnapshot> = {};
   settled.forEach((result, i) => {
-    if (result.status === 'fulfilled' && Array.isArray(result.value)) {
-      snapshot[keys[i]] = result.value;
+    if (
+      result.status === 'fulfilled' &&
+      (Array.isArray(result.value) || keys[i] === 'analytics')
+    ) {
+      snapshot[keys[i]] = result.value as never;
     } else if (result.status === 'rejected') {
       console.warn(`[sync] ${keys[i]} failed to load:`, result.reason?.message ?? result.reason);
     }

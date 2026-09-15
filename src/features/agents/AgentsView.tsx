@@ -33,8 +33,14 @@ import {
   AgentReadinessNotice
 } from '@/features/agents/AgentReadinessNotice';
 
-import { Agent, AgentAccessLevel, ModelProvider } from '@/shared/types';
-import { providerOptions, modelsForProvider, defaultModelFor } from '@/shared/lib/providers';
+import { Agent, AgentAccessLevel, ModelProvider, ReasoningEffort } from '@/shared/types';
+import {
+  providerOptions,
+  modelsForProvider,
+  defaultModelFor,
+  reasoningEffortsForProviderModel,
+  REASONING_EFFORT_LABELS
+} from '@/shared/lib/providers';
 
 export const AgentsView: React.FC = () => {
   const { 
@@ -467,6 +473,8 @@ export const AgentsView: React.FC = () => {
         <div className="divide-y divide-white/[0.02]">
           {filteredAgents.map((agent) => {
             const isSelected = selectedAgentIds.includes(agent.id);
+            const detectedModels = modelsForProvider(runtimes, agent.modelProvider);
+            const detectedModelLabel = detectedModels.join(', ');
 
             return (
               <div
@@ -527,9 +535,20 @@ export const AgentsView: React.FC = () => {
                     <Server className="w-3 h-3 text-gray-500 flex-shrink-0" />
                     <span className="truncate">{agent.machineName || 'Host Node'}</span>
                   </div>
-                  <div className="text-[10px] text-gray-500 truncate">
+                  <div
+                    className="text-[10px] text-gray-500 truncate"
+                    title={detectedModelLabel || agent.modelName}
+                  >
                     {agent.modelName} ({agent.modelProvider})
                   </div>
+                  <div className="text-[9px] text-gray-600 truncate">
+                    Reasoning: {agent.reasoningEffort ? REASONING_EFFORT_LABELS[agent.reasoningEffort] : 'Auto'}
+                  </div>
+                  {detectedModels.length > 1 && (
+                    <div className="text-[9px] text-teal-300/70 truncate">
+                      {detectedModels.length} models available on this runtime
+                    </div>
+                  )}
                 </div>
 
                 {/* 4. Runs & Last Active */}
@@ -707,7 +726,7 @@ export const AgentsView: React.FC = () => {
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs pt-1">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
                     <div>
                       <div className="flex items-center justify-between mb-1">
                         <label className="text-[10px] text-gray-500 font-mono uppercase">Provider</label>
@@ -719,11 +738,17 @@ export const AgentsView: React.FC = () => {
                         value={selectedAgent.modelProvider || 'Anthropic'}
                         onChange={(e) => {
                           const prov = e.target.value as ModelProvider;
+                          const modelName = defaultModelFor(runtimes, prov) || selectedAgent.modelName;
+                          const availableEfforts = reasoningEffortsForProviderModel(prov, modelName);
                           updateAgent(selectedAgent.id, {
                             modelProvider: prov,
                             // Pick a model the runtime actually reports rather
                             // than a hardcoded guess that goes stale.
-                            modelName: defaultModelFor(runtimes, prov) || selectedAgent.modelName
+                            modelName,
+                            reasoningEffort:
+                              selectedAgent.reasoningEffort && availableEfforts.includes(selectedAgent.reasoningEffort)
+                                ? selectedAgent.reasoningEffort
+                                : null
                           });
                         }}
                         className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-white/30"
@@ -761,7 +786,20 @@ export const AgentsView: React.FC = () => {
                         return (
                           <select
                             value={current}
-                            onChange={(e) => updateAgent(selectedAgent.id, { modelName: e.target.value })}
+                            onChange={(e) => {
+                              const modelName = e.target.value;
+                              const availableEfforts = reasoningEffortsForProviderModel(
+                                selectedAgent.modelProvider,
+                                modelName
+                              );
+                              updateAgent(selectedAgent.id, {
+                                modelName,
+                                reasoningEffort:
+                                  selectedAgent.reasoningEffort && availableEfforts.includes(selectedAgent.reasoningEffort)
+                                    ? selectedAgent.reasoningEffort
+                                    : null
+                              });
+                            }}
                             className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
                           >
                             {/* Keep a stored model that is no longer offered
@@ -775,6 +813,50 @@ export const AgentsView: React.FC = () => {
                           </select>
                         );
                       })()}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-[10px] text-gray-500 font-mono uppercase">Reasoning Effort</label>
+                        {isManagedByFile(selectedAgent, 'reasoningEffort') && (
+                          <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
+                        )}
+                      </div>
+                      {(() => {
+                        const available = reasoningEffortsForProviderModel(
+                          selectedAgent.modelProvider,
+                          selectedAgent.modelName
+                        );
+                        const current = selectedAgent.reasoningEffort || '';
+                        return (
+                          <select
+                            value={current}
+                            disabled={isManagedByFile(selectedAgent, 'reasoningEffort')}
+                            onChange={(e) =>
+                              updateAgent(selectedAgent.id, {
+                                // `null` is intentional: JSON.stringify drops
+                                // undefined, while null tells SQLite to clear a
+                                // previously saved override and return to Auto.
+                                reasoningEffort: (e.target.value || null) as ReasoningEffort | null
+                              })
+                            }
+                            className={`w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-white/30 ${
+                              isManagedByFile(selectedAgent, 'reasoningEffort') ? MANAGED_INPUT_CLASS : ''
+                            }`}
+                          >
+                            <option value="">Auto (runtime default)</option>
+                            {current && !available.includes(current) && (
+                              <option value={current}>{REASONING_EFFORT_LABELS[current]} (not detected)</option>
+                            )}
+                            {available.map(effort => (
+                              <option key={effort} value={effort}>{REASONING_EFFORT_LABELS[effort]}</option>
+                            ))}
+                          </select>
+                        );
+                      })()}
+                      <p className="mt-1 text-[10px] text-gray-600">
+                        Auto uses the selected model&apos;s native default.
+                      </p>
                     </div>
 
                     <div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useApp } from '@/app/AppContext';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, normalizeGitHubRepo } from '@/shared/services/apiService';
 
 export interface LiveWorkflowRun {
   databaseId: number;
@@ -15,7 +15,7 @@ export interface LiveWorkflowRun {
 }
 
 export function useDeploymentsViewModel() {
-  const { deployments, agents, issues, showToast } = useApp();
+  const { deployments, agents, issues, projects, showToast } = useApp();
   const [liveRuns, setLiveRuns] = useState<LiveWorkflowRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [failedLogs, setFailedLogs] = useState<string | null>(null);
@@ -23,10 +23,25 @@ export function useDeploymentsViewModel() {
   const [isSelfHealing, setIsSelfHealing] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  const project = projects.find(candidate => (candidate.resources || []).some(resource =>
+    (resource.type === 'local_path' || resource.type === 'local_dir' || resource.type === 'github_repo') &&
+    Boolean(resource.localPath || resource.pathOrUrl)
+  )) || projects[0];
+  const localResource = project?.resources?.find(resource =>
+    (resource.type === 'local_path' || resource.type === 'local_dir') &&
+    Boolean(resource.localPath || resource.pathOrUrl)
+  );
+  const githubResource = project?.resources?.find(resource =>
+    resource.type === 'github_repo' && Boolean(resource.pathOrUrl)
+  );
+  const workspace = localResource?.localPath ||
+    normalizeGitHubRepo(githubResource?.pathOrUrl) ||
+    localResource?.pathOrUrl;
+
   const loadGitHubRuns = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const runs = await apiService.getGitHubRuns();
+      const runs = await apiService.getGitHubRuns(workspace);
       if (runs && Array.isArray(runs)) {
         setLiveRuns(runs);
       }
@@ -35,7 +50,7 @@ export function useDeploymentsViewModel() {
     } finally {
       setIsRefreshing(false);
     }
-  }, []);
+  }, [workspace]);
 
   useEffect(() => {
     loadGitHubRuns();
@@ -47,7 +62,7 @@ export function useDeploymentsViewModel() {
     setSelectedRunId(runId);
     setIsLoadingLogs(true);
     try {
-      const data = await apiService.getGitHubRunLogs(runId);
+      const data = await apiService.getGitHubRunLogs(runId, workspace);
       setFailedLogs(data.logs || 'No logs available for this workflow run.');
     } catch (err: any) {
       setFailedLogs(err.message || 'Failed to fetch workflow logs.');

@@ -1,8 +1,7 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '@/app/AppContext';
 import { 
   BarChart3, 
-  TrendingUp, 
   Cpu, 
   DollarSign, 
   Zap, 
@@ -12,7 +11,6 @@ import {
 
 export const AnalyticsView: React.FC = () => {
   const { analytics } = useApp();
-  const [timeRange, setTimeRange] = useState<'24h' | '7d' | '30d'>('24h');
 
   const maxTokens = Math.max(...analytics.tokenTimeline.map(t => t.promptTokens + t.completionTokens), 1);
 
@@ -27,22 +25,7 @@ export const AnalyticsView: React.FC = () => {
           <span className="text-xs text-gray-500 font-mono">24h telemetry</span>
         </div>
 
-        {/* Time range selector */}
-        <div className="flex items-center bg-surface border border-white/5 rounded-xl p-1 text-xs">
-          {(['24h', '7d', '30d'] as const).map((range) => (
-            <button
-              key={range}
-              onClick={() => setTimeRange(range)}
-              className={`px-3 py-1 rounded-lg font-medium transition-colors ${
-                timeRange === range
-                  ? 'bg-white/10 text-white font-semibold shadow-sm'
-                  : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {range}
-            </button>
-          ))}
-        </div>
+        <span className="text-[11px] text-gray-500">Values reported by the Alpha daemon</span>
       </div>
 
       {/* ================= 4 CLEAN KEY METRICS ================= */}
@@ -56,9 +39,8 @@ export const AnalyticsView: React.FC = () => {
           <div className="text-2xl font-bold text-white tracking-tight">
             {(analytics.totalTokens24h / 1_000_000).toFixed(2)}M
           </div>
-          <div className="text-[11px] text-emerald-400 flex items-center gap-1 font-medium">
-            <TrendingUp className="w-3 h-3" />
-            <span>+14.2% vs previous cycle</span>
+          <div className="text-[11px] text-gray-400">
+            Sum of reported input, output, cache, and thinking tokens
           </div>
         </div>
 
@@ -72,7 +54,7 @@ export const AnalyticsView: React.FC = () => {
             ${analytics.totalCost24h.toFixed(2)}
           </div>
           <div className="text-[11px] text-gray-400">
-            Saved ~$42.80 via Local Ollama
+            Sum of runtime-reported API-equivalent costs
           </div>
         </div>
 
@@ -86,7 +68,7 @@ export const AnalyticsView: React.FC = () => {
             {analytics.avgLatencyMs}ms
           </div>
           <div className="text-[11px] text-cyan-400">
-            Local engine p50: 18ms
+            Mean run duration from persisted run timestamps
           </div>
         </div>
 
@@ -100,7 +82,7 @@ export const AnalyticsView: React.FC = () => {
             {analytics.successRate}%
           </div>
           <div className="text-[11px] text-gray-400">
-            {analytics.totalAgentRuns} total agent runs
+            {analytics.totalAgentRuns} runs recorded in the last 24 hours
           </div>
         </div>
       </div>
@@ -124,7 +106,11 @@ export const AnalyticsView: React.FC = () => {
 
         {/* Visual Graph Bars */}
         <div className="pt-5 pb-1 grid grid-cols-8 gap-3 sm:gap-6 items-end h-40 border-b border-white/5">
-          {analytics.tokenTimeline.map((item, idx) => {
+          {analytics.tokenTimeline.length === 0 ? (
+            <div className="col-span-8 flex h-full items-center justify-center text-xs text-gray-500">
+              No run telemetry has been recorded yet.
+            </div>
+          ) : analytics.tokenTimeline.map((item, idx) => {
             const promptHeight = (item.promptTokens / maxTokens) * 100;
             const compHeight = (item.completionTokens / maxTokens) * 100;
 
@@ -173,7 +159,9 @@ export const AnalyticsView: React.FC = () => {
 
             {/* Table Rows */}
             <div className="divide-y divide-white/[0.02]">
-              {analytics.agentBreakdown.map((item) => (
+              {analytics.agentBreakdown.length === 0 ? (
+                <div className="px-3 py-6 text-xs text-gray-500">No agent run telemetry has been recorded yet.</div>
+              ) : analytics.agentBreakdown.map((item) => (
                 <div 
                   key={item.agentId} 
                   className="grid grid-cols-12 gap-4 px-3 py-3.5 items-center text-xs hover:bg-white/[0.02] transition-colors"
@@ -208,7 +196,9 @@ export const AnalyticsView: React.FC = () => {
           </div>
 
           <div className="space-y-3 pt-1">
-            {analytics.modelBreakdown.map((model) => (
+            {analytics.modelBreakdown.length === 0 ? (
+              <div className="py-6 text-xs text-gray-500">No model invocations have been recorded yet.</div>
+            ) : analytics.modelBreakdown.map((model) => (
               <div key={model.modelName} className="space-y-1 text-xs">
                 <div className="flex items-center justify-between">
                   <span className="text-gray-300 truncate max-w-[140px] text-[11px]">{model.modelName}</span>
@@ -229,10 +219,10 @@ export const AnalyticsView: React.FC = () => {
 
           <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[11px] text-gray-400">
             <span className="flex items-center gap-1.5 text-teal-300">
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" /> Local (Free)
+              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" /> Cost reported as $0
             </span>
             <span className="flex items-center gap-1.5 text-brand-300">
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-500" /> Cloud API
+              <span className="w-1.5 h-1.5 rounded-full bg-brand-500" /> Cost reported above $0
             </span>
           </div>
         </div>

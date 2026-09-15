@@ -1,10 +1,19 @@
-import { Agent, AgentAccessLevel, AgentAutonomyLevel, AgentRole, RuntimeEngine, Skill } from '@/shared/types';
+import {
+  Agent,
+  AgentAccessLevel,
+  AgentAutonomyLevel,
+  AgentRole,
+  ReasoningEffort,
+  RuntimeEngine,
+  Skill
+} from '@/shared/types';
 import { OfficialAgentTemplate } from '@/features/agents/officialAgentTemplates';
 import {
   defaultModelForRuntime,
   modelsForRuntime,
   preferredRuntimeId,
   providerForRuntime,
+  reasoningEffortsForRuntime,
   runtimeOption
 } from '@/shared/lib/providers';
 import { agentAvatarDataUri, agentColor } from '@/shared/lib/avatar';
@@ -26,6 +35,8 @@ export interface AgentDraft {
   /** What the daemon dispatches on. `modelProvider` is derived from it. */
   runtimeId: string;
   modelName: string;
+  /** Empty means Auto — use the selected runtime/model default. */
+  reasoningEffort: ReasoningEffort | '';
   systemPrompt: string;
   autonomyLevel: AgentAutonomyLevel;
   allowedUsers: AgentAccessLevel;
@@ -54,6 +65,7 @@ export const EMPTY_AGENT_DRAFT: AgentDraft = {
   role: 'Coder',
   runtimeId: '',
   modelName: '',
+  reasoningEffort: '',
   systemPrompt: DEFAULT_SYSTEM_PROMPT,
   autonomyLevel: 'Semi-Autonomous (Requires Approval)',
   allowedUsers: 'team',
@@ -126,12 +138,35 @@ export function applyDraftRuntimeChange(
   runtimeId: string
 ): AgentDraft {
   if (runtimeId === draft.runtimeId) return draft;
-  return { ...draft, runtimeId, modelName: defaultModelForRuntime(runtimes, runtimeId) };
+  return {
+    ...draft,
+    runtimeId,
+    modelName: defaultModelForRuntime(runtimes, runtimeId),
+    // Effort flags are runtime-specific; do not carry a Claude-only value into
+    // a local runtime that has no equivalent control.
+    reasoningEffort: ''
+  };
 }
 
-export function applyDraftModelChange(draft: AgentDraft, modelName: string): AgentDraft {
+export function applyDraftModelChange(
+  draft: AgentDraft,
+  modelName: string,
+  supportedEfforts?: ReasoningEffort[]
+): AgentDraft {
   if (modelName === draft.modelName) return draft;
-  return { ...draft, modelName };
+  const reasoningEffort =
+    supportedEfforts && draft.reasoningEffort && !supportedEfforts.includes(draft.reasoningEffort)
+      ? ''
+      : draft.reasoningEffort;
+  return { ...draft, modelName, reasoningEffort };
+}
+
+export function applyDraftReasoningEffortChange(
+  draft: AgentDraft,
+  reasoningEffort: ReasoningEffort | ''
+): AgentDraft {
+  if (reasoningEffort === draft.reasoningEffort) return draft;
+  return { ...draft, reasoningEffort };
 }
 
 export function toggleDraftSkill(draft: AgentDraft, skillId: string): AgentDraft {
@@ -168,6 +203,12 @@ export function draftValidationError(draft: AgentDraft, runtimes: RuntimeEngine[
   if (detected.length > 0 && !detected.includes(draft.modelName)) {
     return `${draft.modelName} is not one of the models detected for this runtime.`;
   }
+  if (draft.reasoningEffort) {
+    const efforts = reasoningEffortsForRuntime(runtimes, draft.runtimeId, draft.modelName);
+    if (!efforts.includes(draft.reasoningEffort)) {
+      return `${draft.reasoningEffort} reasoning is not supported by this runtime/model.`;
+    }
+  }
   return null;
 }
 
@@ -199,6 +240,7 @@ export function buildCreateAgentRequest(
     color,
     modelProvider: providerForRuntime(runtimes, draft.runtimeId) ?? 'Anthropic',
     modelName: draft.modelName.trim(),
+    reasoningEffort: draft.reasoningEffort || undefined,
     runtimeId: draft.runtimeId,
     systemPrompt: draft.systemPrompt.trim(),
     autonomyLevel: draft.autonomyLevel,

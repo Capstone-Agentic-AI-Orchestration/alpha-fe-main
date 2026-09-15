@@ -1,4 +1,4 @@
-import { ModelProvider, RuntimeEngine } from '@/shared/types';
+import { ModelProvider, ReasoningEffort, RuntimeEngine } from '@/shared/types';
 
 /**
  * Provider and model choices, derived from what the daemon actually detected
@@ -46,8 +46,10 @@ export function providerOptions(runtimes: RuntimeEngine[]): ProviderOption[] {
     const provider = RUNTIME_TO_PROVIDER[runtime.id];
     if (!provider) continue;
 
-    // The daemon sends `models`; older cached rows used `modelsLoaded`.
-    const models = runtime.models ?? runtime.modelsLoaded ?? [];
+    // The daemon sends `models`; older cached rows used `modelsLoaded`. Prefer
+    // a non-empty current list so an empty placeholder from an older row does
+    // not hide a freshly discovered catalog.
+    const models = runtime.models?.length ? runtime.models : runtime.modelsLoaded ?? [];
 
     options.push({
       runtimeId: runtime.id,
@@ -107,6 +109,90 @@ export function providerForRuntime(
 export function modelsForRuntime(runtimes: RuntimeEngine[], runtimeId: string): string[] {
   return runtimeOption(runtimes, runtimeId)?.models ?? [];
 }
+
+/**
+ * Reasoning levels the local CLI can accept for each provider/model family.
+ *
+ * "Auto" is represented by an empty value in the form and is deliberately
+ * not included here. Keeping this mapping next to the runtime catalog means a
+ * model change can immediately narrow the effort picker instead of offering a
+ * flag that the selected CLI will reject.
+ */
+export function reasoningEffortsForProviderModel(
+  provider: ModelProvider | string | undefined,
+  modelName: string | undefined
+): ReasoningEffort[] {
+  const model = (modelName ?? '').trim().toLowerCase();
+
+  if (provider === 'Anthropic') {
+    // Claude Code 2.x advertises these exact values through --effort.
+    return ['low', 'medium', 'high', 'xhigh', 'max'];
+  }
+
+  if (provider === 'Antigravity' || provider === 'Google Gemini') {
+    // agy exposes a smaller --effort surface than Claude Code.
+    return ['low', 'medium', 'high'];
+  }
+
+  if (provider !== 'OpenAI') return [];
+
+  // OpenAI-compatible local gateways can expose arbitrary ids. Offer the
+  // portable core levels for an unknown id; the gateway remains the authority.
+  if (!model) return ['low', 'medium', 'high'];
+
+  // GPT-4.x and embedding/moderation models do not expose a reasoning knob.
+  if (/^(gpt-?4|gpt-?3|text-|embedding-|omni-moderation)/.test(model)) return [];
+
+  // Current Codex/GPT-5.6 and GPT-6 families expose the extended scale. The
+  // Codex CLI applies the selected value through model_reasoning_effort.
+  if (model.includes('gpt-6') || model.includes('gpt-5.6') || model.includes('codex')) {
+    return ['none', 'low', 'medium', 'high', 'xhigh', 'max'];
+  }
+
+  // GPT-5 (the original family) uses minimal instead of none and stops at high.
+  if (/^gpt-?5(?:$|[^.])/.test(model) || /^gpt-?5(?:\.0)?(?:$|-)/.test(model)) {
+    return ['minimal', 'low', 'medium', 'high'];
+  }
+
+  // GPT-5.1–5.5 and the o-series use the standard reasoning scale.
+  if (/^gpt-?5\.|^o[134](?:$|[-.])/.test(model)) {
+    return ['none', 'low', 'medium', 'high', 'xhigh'];
+  }
+
+  return ['low', 'medium', 'high'];
+}
+
+/** Reasoning levels offered for the runtime currently selected in a form. */
+export function reasoningEffortsForRuntime(
+  runtimes: RuntimeEngine[],
+  runtimeId: string,
+  modelName: string | undefined
+): ReasoningEffort[] {
+  const runtime = runtimeOption(runtimes, runtimeId);
+  return reasoningEffortsForProviderModel(runtime?.provider, modelName);
+}
+
+export const REASONING_EFFORT_LABELS: Record<ReasoningEffort, string> = {
+  none: 'None',
+  minimal: 'Minimal',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'Extra high',
+  max: 'Max',
+  ultra: 'Ultra'
+};
+
+export const REASONING_EFFORT_HINTS: Record<ReasoningEffort, string> = {
+  none: 'Fastest response with no deliberate reasoning.',
+  minimal: 'Light reasoning for quick tasks.',
+  low: 'Faster responses with some planning.',
+  medium: 'Balanced quality, speed, and cost.',
+  high: 'Deeper reasoning for complex tasks.',
+  xhigh: 'Extra depth for difficult agentic work.',
+  max: 'Maximum supported reasoning depth.',
+  ultra: 'Highest available reasoning depth.'
+};
 
 /** First detected model for a runtime — used when switching runtime. */
 export function defaultModelForRuntime(runtimes: RuntimeEngine[], runtimeId: string): string {

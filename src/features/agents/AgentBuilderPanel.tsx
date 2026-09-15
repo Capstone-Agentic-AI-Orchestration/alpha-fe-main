@@ -1,8 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { apiService } from '@/shared/services/apiService';
 import { RuntimeEngine, Skill } from '@/shared/types';
-import { providerOptions, modelsForRuntime } from '@/shared/lib/providers';
-import { AgentDraft } from '@/features/agents/agentDraft';
+import {
+  providerOptions,
+  modelsForRuntime,
+  reasoningEffortsForRuntime,
+  REASONING_EFFORT_LABELS
+} from '@/shared/lib/providers';
+import { AgentDraft, applyDraftRuntimeChange } from '@/features/agents/agentDraft';
 import { BuilderMessage, StoredBuilderSession } from '@/features/agents/draftStore';
 import {
   encodeBuilderInput,
@@ -66,6 +71,10 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
     () => modelsForRuntime(runtimes, draft.runtimeId),
     [runtimes, draft.runtimeId]
   );
+  const reasoningEfforts = useMemo(
+    () => reasoningEffortsForRuntime(runtimes, draft.runtimeId, draft.modelName),
+    [runtimes, draft.runtimeId, draft.modelName]
+  );
   const runtimeLabel = runtimeChoices.find(c => c.runtimeId === draft.runtimeId)?.label;
   const started = messages.length > 0;
 
@@ -96,13 +105,19 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
         runtimeId: draft.runtimeId,
         // Every turn re-states the whole draft and the catalogs of legal ids,
         // so the builder is never guessing at what it is editing.
-        message: encodeBuilderInput(request, draft, skills, models)
+        message: encodeBuilderInput(request, draft, skills, models, reasoningEfforts)
       });
 
       const payload = parseBuilderDraft(content);
       if (payload) {
         onDraftChange(
-          mergeBuilderDraft(draft, payload, new Set(skills.map(s => s.id)), new Set(models))
+          mergeBuilderDraft(
+            draft,
+            payload,
+            new Set(skills.map(s => s.id)),
+            new Set(models),
+            new Set(reasoningEfforts)
+          )
         );
       }
 
@@ -142,7 +157,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
             <>
               <select
                 value={draft.runtimeId}
-                onChange={(e) => onDraftChange({ ...draft, runtimeId: e.target.value })}
+                onChange={(e) => onDraftChange(applyDraftRuntimeChange(draft, runtimes, e.target.value))}
                 className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
               >
                 {runtimeChoices.map(choice => (
@@ -296,6 +311,10 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
           <DraftRow label="Name" value={draft.name} />
           <DraftRow label="Role" value={draft.role} />
           <DraftRow label="Model" value={draft.modelName} mono />
+          <DraftRow
+            label="Reasoning"
+            value={draft.reasoningEffort ? REASONING_EFFORT_LABELS[draft.reasoningEffort] : 'Auto'}
+          />
           <DraftRow label="Access" value={draft.allowedUsers} />
 
           <DraftBlock label="Specialization" value={draft.description} />

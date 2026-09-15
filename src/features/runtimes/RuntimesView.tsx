@@ -15,7 +15,11 @@ import {
   Copy, 
   Layers
 } from 'lucide-react';
-import { RuntimeStatus } from '@/shared/types';
+import { RuntimeEngine, RuntimeStatus } from '@/shared/types';
+
+/** Prefer the current daemon field, while still reading older cached rows. */
+const runtimeModels = (runtime: RuntimeEngine): string[] =>
+  runtime.models?.length ? runtime.models : runtime.modelsLoaded ?? [];
 
 export const RuntimesView: React.FC = () => {
   const { runtimes, scanLocalRuntimes, isScanningRuntimes, setDefaultRuntime } = useApp();
@@ -55,7 +59,7 @@ export const RuntimesView: React.FC = () => {
         const matchesName = r.name.toLowerCase().includes(q);
         const matchesProvider = r.provider.toLowerCase().includes(q);
         const matchesEndpoint = (r.endpoint || '').toLowerCase().includes(q);
-        const models = r.modelsLoaded || r.models || [];
+        const models = runtimeModels(r);
         const matchesModels = models.some(m => m.toLowerCase().includes(q));
         if (!matchesName && !matchesProvider && !matchesEndpoint && !matchesModels) return false;
       }
@@ -65,7 +69,7 @@ export const RuntimesView: React.FC = () => {
     list = [...list].sort((a, b) => {
       let cmp = 0;
       if (sortBy === 'name') cmp = a.name.localeCompare(b.name);
-      else if (sortBy === 'models') cmp = ((a.modelsLoaded || a.models || []).length) - ((b.modelsLoaded || b.models || []).length);
+      else if (sortBy === 'models') cmp = runtimeModels(a).length - runtimeModels(b).length;
       else cmp = (a.latencyMs || 0) - (b.latencyMs || 0); // default latency
       return sortOrder === 'desc' ? -cmp : cmp;
     });
@@ -275,6 +279,8 @@ export const RuntimesView: React.FC = () => {
         {/* Table Rows */}
         <div className="divide-y divide-white/[0.02]">
           {filteredRuntimes.map((rt) => {
+            const models = runtimeModels(rt);
+            const modelLabel = models.length ? models.join(', ') : 'none detected';
             return (
               <div
                 key={rt.id}
@@ -315,11 +321,13 @@ export const RuntimesView: React.FC = () => {
                 </div>
 
                 {/* 4. Loaded Models */}
-                <div className="col-span-2 truncate flex items-center gap-1.5">
-                  <span className="font-mono text-white text-[11px]">{(rt.modelsLoaded || rt.models || []).length} models</span>
-                  <span className="text-gray-500 font-mono text-[10px] truncate">
-                    ({(rt.modelsLoaded || rt.models || [])[0]?.split(':')[0] || 'none'})
-                  </span>
+                <div className="col-span-2 min-w-0" title={modelLabel}>
+                  <div className="font-mono text-white text-[11px]">
+                    {models.length} {models.length === 1 ? 'model' : 'models'}
+                  </div>
+                  <div className="text-gray-500 font-mono text-[10px] leading-4 line-clamp-2 break-words">
+                    {modelLabel}
+                  </div>
                 </div>
 
                 {/* 5. Latency */}
@@ -440,13 +448,15 @@ export const RuntimesView: React.FC = () => {
               <div className="flex items-center justify-between text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                 <span className="flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-teal-400" />
-                  <span>Available Model Weights ({(selectedRuntime.modelsLoaded || selectedRuntime.models || []).length})</span>
+                  <span>Available Models ({runtimeModels(selectedRuntime).length})</span>
                 </span>
-                <span className="text-gray-500 font-mono">Ready for dispatch</span>
+                <span className="text-gray-500 font-mono">
+                  {selectedRuntime.status === 'online' ? 'Ready for dispatch' : 'Catalog snapshot'}
+                </span>
               </div>
 
               <div className="space-y-2">
-                {(selectedRuntime.modelsLoaded || selectedRuntime.models || []).map((model) => (
+                {runtimeModels(selectedRuntime).map((model) => (
                   <div
                     key={model}
                     className="p-3 rounded-xl bg-surface border border-white/5 flex items-center justify-between"
@@ -456,7 +466,7 @@ export const RuntimesView: React.FC = () => {
                       <span className="font-mono text-white font-medium truncate">{model}</span>
                     </div>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-gray-400">
-                      Active
+                      {selectedRuntime.status === 'online' ? 'Active' : 'Unavailable'}
                     </span>
                   </div>
                 ))}

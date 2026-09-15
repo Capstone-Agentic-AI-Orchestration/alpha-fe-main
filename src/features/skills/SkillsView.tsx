@@ -17,12 +17,13 @@ import {
   ArrowDown, 
   ArrowUp, 
   Table as TableIcon, 
-  X
+  X,
+  RefreshCw
 } from 'lucide-react';
 import { SkillCategory } from '@/shared/types';
 
 export const SkillsView: React.FC = () => {
-  const { skills, toggleSkill, agents } = useApp();
+  const { skills, toggleSkill, agents, scanInstalledSkills, isScanningSkills } = useApp();
   
   // Selected skill for centered popup modal
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
@@ -53,7 +54,9 @@ export const SkillsView: React.FC = () => {
     'Browser & Web',
     'Terminal & Shell',
     'Git & GitHub',
-    'Cloud & API'
+    'Cloud & API',
+    'MCP Servers',
+    'Agent Skills'
   ];
 
   const getCategoryIcon = (cat: SkillCategory) => {
@@ -109,6 +112,15 @@ export const SkillsView: React.FC = () => {
   }, [skills, selectedCategory, statusFilter, searchQuery, sortBy, sortOrder, agents]);
 
   const enabledCount = skills.filter(s => s.enabled).length;
+  const installedCount = skills.filter(s => s.installed).length;
+  const sourceLabel = (skill: typeof skills[number]) => {
+    if (!skill.installed) return 'Alpha catalog';
+    return skill.source.replace(/_/g, ' ');
+  };
+  const statusLabel = (skill: typeof skills[number]) => {
+    if (!skill.enabled) return 'Disabled';
+    return skill.installed ? 'Detected' : 'Active';
+  };
 
   return (
     <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans relative">
@@ -118,9 +130,27 @@ export const SkillsView: React.FC = () => {
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-gray-400" />
           <h1 className="text-sm font-semibold text-white tracking-wide">Skills & Tools</h1>
-          <span className="text-xs text-gray-500 font-mono">{enabledCount}/{skills.length} active</span>
+          <span className="text-xs text-gray-500 font-mono">{enabledCount}/{skills.length} enabled</span>
         </div>
 
+        <button
+          onClick={() => void scanInstalledSkills()}
+          disabled={isScanningSkills}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-surface hover:bg-surface-raised text-xs font-medium text-gray-300 hover:text-white disabled:opacity-60 disabled:cursor-wait transition-colors"
+          title="Scan the installed SKILL.md folders on this machine"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${isScanningSkills ? 'animate-spin' : ''}`} />
+          <span>{isScanningSkills ? 'Scanning skill folders…' : 'Scan installed skills'}</span>
+        </button>
+
+      </div>
+
+      <div className="-mt-4 flex items-center gap-2 text-[11px] text-gray-500 font-mono">
+        <span>{installedCount} installed on this machine</span>
+        <span className="text-gray-700">•</span>
+        <span>Codex, agent, project, and plugin folders</span>
+        <span className="text-gray-700">•</span>
+        <span>Detection is read-only; toggles control Alpha access</span>
       </div>
 
       {/* ================= SEARCH & ACTION ROW ================= */}
@@ -290,6 +320,10 @@ export const SkillsView: React.FC = () => {
                       </span>
                     </div>
 
+                    <div className="text-[10px] font-mono text-gray-500 capitalize truncate" title={skill.path || undefined}>
+                      {sourceLabel(skill)}
+                    </div>
+
                     {skill.commandExample && (
                       <div className="flex items-center gap-1.5 text-[11px] font-mono text-gray-400 group/cmd max-w-sm">
                         <span className="truncate text-gray-400 hover:text-gray-200">{skill.commandExample}</span>
@@ -341,7 +375,7 @@ export const SkillsView: React.FC = () => {
                   <div className="flex items-center gap-1.5 text-[11px] font-mono">
                     <span className={`w-1.5 h-1.5 rounded-full ${skill.enabled ? 'bg-emerald-400' : 'bg-gray-600'}`} />
                     <span className={skill.enabled ? 'text-gray-300' : 'text-gray-500'}>
-                      {skill.enabled ? 'Active' : 'Disabled'}
+                      {statusLabel(skill)}
                     </span>
                   </div>
 
@@ -392,11 +426,18 @@ export const SkillsView: React.FC = () => {
                   <div className="flex items-center gap-2 text-xs font-mono">
                     <span className={`w-1.5 h-1.5 rounded-full ${selectedSkill.enabled ? 'bg-emerald-400' : 'bg-gray-600'}`} />
                     <span className={selectedSkill.enabled ? 'text-gray-300' : 'text-gray-500'}>
-                      {selectedSkill.enabled ? 'Active for Agents' : 'Disabled'}
+                      {selectedSkill.enabled
+                        ? selectedSkill.installed ? 'Detected in installed folders' : 'Active for Agents'
+                        : 'Disabled'}
                     </span>
                     <span className="text-gray-600">•</span>
-                    <span className="text-gray-400 capitalize">{selectedSkill.source.replace('_', ' ')}</span>
+                    <span className="text-gray-400 capitalize">{sourceLabel(selectedSkill)}</span>
                   </div>
+                  {selectedSkill.path && (
+                    <div className="mt-1 max-w-xl truncate text-[10px] text-gray-500 font-mono" title={selectedSkill.path}>
+                      {selectedSkill.path}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -1,4 +1,4 @@
-import { AgentAccessLevel, AgentRole, Skill } from '@/shared/types';
+import { AgentAccessLevel, AgentRole, ReasoningEffort, Skill } from '@/shared/types';
 import { AgentDraft, AGENT_DESCRIPTION_MAX_LENGTH } from '@/features/agents/agentDraft';
 
 /**
@@ -47,6 +47,7 @@ export interface BuilderDraftPayload {
   instructions?: unknown;
   role?: unknown;
   model?: unknown;
+  reasoning?: unknown;
   skill_ids?: unknown;
   access?: unknown;
 }
@@ -55,7 +56,8 @@ export function encodeBuilderInput(
   request: string,
   draft: AgentDraft,
   skills: Skill[],
-  models: string[]
+  models: string[],
+  reasoningEfforts: ReasoningEffort[] = []
 ): string {
   return (
     BUILDER_INPUT_PREFIX +
@@ -68,10 +70,12 @@ export function encodeBuilderInput(
           instructions: draft.systemPrompt,
           role: draft.role,
           model: draft.modelName,
+          reasoning: draft.reasoningEffort || undefined,
           skill_ids: [...draft.skillIds],
           access: draft.allowedUsers
         },
         available_models: models,
+        available_reasoning_efforts: reasoningEfforts,
         available_skills: skills.map(s => ({
           id: s.id,
           name: s.name,
@@ -196,7 +200,8 @@ export function mergeBuilderDraft(
   current: AgentDraft,
   payload: BuilderDraftPayload,
   validSkillIds: Set<string>,
-  validModelIds: Set<string>
+  validModelIds: Set<string>,
+  validReasoningEfforts?: Set<string>
 ): AgentDraft {
   const role = AGENT_ROLES.includes(payload.role as AgentRole)
     ? (payload.role as AgentRole)
@@ -223,6 +228,13 @@ export function mergeBuilderDraft(
       ? payload.model
       : current.modelName;
 
+  const reasoningEffort =
+    typeof payload.reasoning === 'string' &&
+    validReasoningEfforts &&
+    validReasoningEfforts.has(payload.reasoning)
+      ? (payload.reasoning as ReasoningEffort)
+      : current.reasoningEffort;
+
   return {
     ...current,
     name: typeof payload.name === 'string' ? payload.name : current.name,
@@ -236,6 +248,7 @@ export function mergeBuilderDraft(
       typeof payload.instructions === 'string' ? payload.instructions : current.systemPrompt,
     role,
     modelName,
+    reasoningEffort,
     skillIds,
     allowedUsers
   };

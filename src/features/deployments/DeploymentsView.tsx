@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import { useApp } from '@/app/AppContext';
 import { 
   Rocket, 
@@ -54,9 +54,21 @@ export const DeploymentsView: React.FC = () => {
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
 
   // Trigger form state
-  const [targetProjectId, setTargetProjectId] = useState<string>(projects[0]?.id || 'proj-1');
+  const deployableProject = projects.find(project =>
+    (project.resources || []).some(resource =>
+      (resource.type === 'local_path' || resource.type === 'local_dir' || resource.type === 'github_repo') &&
+      Boolean(resource.localPath || resource.pathOrUrl)
+    )
+  ) || projects[0];
+  const [targetProjectId, setTargetProjectId] = useState<string>(deployableProject?.id || '');
   const [targetEnv, setTargetEnv] = useState<'Production' | 'Staging' | 'Preview'>('Staging');
   const [copiedLogId, setCopiedLogId] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (!projects.some(project => project.id === targetProjectId)) {
+      setTargetProjectId(deployableProject?.id || '');
+    }
+  }, [projects, targetProjectId, deployableProject?.id]);
 
   // Selected Deployment Memo
   const selectedDeployment = useMemo(() => {
@@ -220,9 +232,9 @@ export const DeploymentsView: React.FC = () => {
     );
   };
 
-  const handleTriggerSubmit = (e: React.FormEvent) => {
+  const handleTriggerSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    triggerDeployment(targetProjectId, targetEnv);
+    await triggerDeployment(targetProjectId, targetEnv);
     setTriggerModalOpen(false);
   };
 
@@ -258,6 +270,7 @@ export const DeploymentsView: React.FC = () => {
           {/* Trigger run button */}
           <button
             onClick={() => setTriggerModalOpen(true)}
+            disabled={projects.length === 0}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
           >
             <Play className="w-3 h-3 fill-white" />
@@ -532,7 +545,11 @@ export const DeploymentsView: React.FC = () => {
           </div>
 
           <div className="divide-y divide-white/[0.02]">
-            {filteredDeployments.map((dep) => {
+            {filteredDeployments.length === 0 ? (
+              <div className="px-4 py-12 text-center text-xs text-gray-500">
+                No environment deployments have been acknowledged. Trigger a configured GitHub Actions workflow to create a real run.
+              </div>
+            ) : filteredDeployments.map((dep) => {
               return (
                 <div
                   key={dep.id}
@@ -762,7 +779,7 @@ export const DeploymentsView: React.FC = () => {
           isOpen={true}
           onClose={() => setTriggerModalOpen(false)}
           title="Trigger Pipeline Run"
-          subtitle="Dispatch an agent-supervised build and canary verification workflow."
+          subtitle="Dispatch the selected project’s configured GitHub Actions workflow."
         >
           <form onSubmit={handleTriggerSubmit} className="space-y-4 text-xs">
             <div>
@@ -801,6 +818,7 @@ export const DeploymentsView: React.FC = () => {
               </button>
               <button
                 type="submit"
+                disabled={!targetProjectId || projects.length === 0}
                 className="flex items-center gap-1.5 px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-medium shadow-glow-brand"
               >
                 <Play className="w-3 h-3 fill-white" />
