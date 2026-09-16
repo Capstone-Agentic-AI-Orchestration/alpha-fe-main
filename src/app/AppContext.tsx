@@ -991,11 +991,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateIssueStatus = (id: string, status: IssueStatus) => {
+    const previousIssue = issues.find(iss => iss.id === id);
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, status, updatedAt: new Date().toISOString() } : iss));
     persist(
-      () => apiService.updateIssue(id, { status }),
-      () => {},
-      msg => showToast('Status not saved', msg, 'error')
+      () => status === 'done'
+        ? apiService.completeIssue(id)
+        : apiService.updateIssue(id, { status }),
+      saved => setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...saved } : iss)),
+      msg => {
+        if (previousIssue) {
+          setIssues(prev => prev.map(iss => iss.id === id ? previousIssue : iss));
+        }
+        showToast('Status not saved', msg, 'error');
+      }
     );
   };
 
