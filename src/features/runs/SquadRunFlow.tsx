@@ -189,11 +189,13 @@ export function SquadRunFlow({ issueId, squadId }: Readonly<Props>) {
                               ? 'bg-amber-400'
                               : stage.status === 'failed'
                                 ? 'bg-rose-400'
+                                : stage.status === 'skipped'
+                                  ? 'bg-amber-400/60'
                                 : 'bg-gray-700'
                         }`}
                       />
                       <span className={stage.status === 'pending' ? 'text-gray-600' : 'text-gray-400'}>
-                        {stage.label}
+                        {stage.label}{stage.status === 'skipped' ? ' · not verified' : ''}
                       </span>
                     </div>
                   ))}

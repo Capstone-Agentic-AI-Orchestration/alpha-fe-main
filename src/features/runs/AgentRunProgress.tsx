@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, GitBranch, Loader2, RotateCcw, Square } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, GitBranch, Loader2, MinusCircle, RotateCcw, Square } from 'lucide-react';
 import { describeRunUsage } from '@/shared/lib/runUsage';
 import { useApp } from '@/app/AppContext';
 import { RemoteActivity } from '@/features/runs/RemoteActivity';
@@ -85,9 +85,12 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
             {stage.status === 'running' && <Loader2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 animate-spin text-cyan-400" />}
             {stage.status === 'failed' && <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-rose-400" />}
             {stage.status === 'cancelled' && <Square className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-500" />}
+            {stage.status === 'skipped' && <MinusCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-400" />}
             {stage.status === 'pending' && <Circle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-700" />}
             <div className="min-w-0">
-              <p className={stage.status === 'pending' ? 'text-gray-600' : 'text-gray-300'}>{stage.label}</p>
+              <p className={stage.status === 'pending' ? 'text-gray-600' : stage.status === 'skipped' ? 'text-amber-200/80' : 'text-gray-300'}>
+                {stage.label}{stage.status === 'skipped' ? ' · not verified' : ''}
+              </p>
               {stage.status === 'running' && <p className="mt-0.5 leading-relaxed text-gray-500">{stage.description}</p>}
             </div>
           </li>

@@ -106,7 +106,7 @@ export type PrototypeRunStatus =
   | 'cancelled'
   | 'completed';
 
-export type PrototypeRunStageStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled';
+export type PrototypeRunStageStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled' | 'skipped';
 
 export interface PrototypeRunStage {
   id: string;
@@ -136,6 +136,8 @@ export interface RunActivity {
   stageId?: string;
   streamKey?: string;
   isStreaming?: boolean;
+  /** True when this entry received at least one incremental provider fragment. */
+  streamed?: boolean;
   detail?: string;
 }
 

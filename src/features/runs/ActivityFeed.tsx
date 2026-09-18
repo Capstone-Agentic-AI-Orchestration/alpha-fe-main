@@ -52,14 +52,35 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities, live = f
     [activities]
   );
 
+  const hasAssistantActivity = ordered.some(activity => activity.kind === 'assistant');
+  const hasTokenStream = ordered.some(activity => activity.isStreaming || activity.streamed);
+  const hasCompletedOnlyOutput = hasAssistantActivity && !hasTokenStream;
+
+  const deliveryLabel = live
+    ? hasTokenStream
+      ? 'Live tokens'
+      : hasCompletedOnlyOutput
+        ? 'Live updates'
+        : 'Live'
+    : hasTokenStream
+      ? 'Token stream'
+      : hasCompletedOnlyOutput
+        ? 'Completed updates'
+        : undefined;
+
   if (!ordered.length) return null;
 
   return (
     <div className="rounded-lg border border-white/[0.07] bg-canvas/70" aria-live="polite" aria-label="Agent activity feed">
       <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
         <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-gray-500">Agent activity</p>
-        {live && <span className="flex items-center gap-1.5 text-[10px] text-cyan-300"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-300" />Live</span>}
+        {deliveryLabel && <span className="flex items-center gap-1.5 text-[10px] text-cyan-300"><span className={`h-1.5 w-1.5 rounded-full bg-cyan-300 ${live ? 'animate-pulse' : ''}`} />{deliveryLabel}</span>}
       </div>
+      {hasCompletedOnlyOutput && (
+        <p className="border-b border-white/[0.06] px-3 py-2 text-[10px] leading-relaxed text-gray-500">
+          No token deltas were received for this run; assistant messages are shown as completed updates.
+        </p>
+      )}
       <ol className="max-h-96 space-y-3 overflow-y-auto px-3 py-3">
         {ordered.map(activity => {
           const Icon = iconFor(activity.kind, activity.isStreaming);

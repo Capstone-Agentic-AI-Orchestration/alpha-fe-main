@@ -46,6 +46,12 @@ import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
 import { runTokenTotal } from '@/shared/lib/runUsage';
 
+export interface RunPlanDraft {
+  agentId: string;
+  plan: string[];
+  updatedAt: string;
+}
+
 interface AppContextType {
   /** Reachability of the local Alpha daemon. Agents cannot run while 'offline'. */
   serverStatus: ServerStatus;
@@ -70,6 +76,9 @@ interface AppContextType {
   prototypeRuns: PrototypeRun[];
   runSetupIssueId: string | null;
   runSetupAgentId: string | null;
+  runPlanDrafts: Record<string, RunPlanDraft>;
+  saveRunPlanDraft: (issueId: string, agentId: string, plan: string[]) => void;
+  clearRunPlanDraft: (issueId: string) => void;
   closeRunSetup: () => void;
   startPrototypeRun: (issueId: string, agentId: string, plan: string[], scenario: PrototypeRun['scenario']) => PrototypeRun | null;
   cancelPrototypeRun: (runId: string) => void;
@@ -467,6 +476,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [runSetupIssueId, setRunSetupIssueId] = useState<string | null>(null);
   const [runSetupAgentId, setRunSetupAgentId] = useState<string | null>(null);
+  const [runPlanDrafts, setRunPlanDrafts] = useState<Record<string, RunPlanDraft>>(() =>
+    loadFromStorage<Record<string, RunPlanDraft>>('run_plan_drafts_v1', {})
+  );
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const handledRunEventsRef = useRef<Set<string>>(new Set());
   /**
@@ -694,6 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('chat_messages', chatMessages); }, [chatMessages]);
   useEffect(() => { saveToStorage('prototype_runs', prototypeRuns); }, [prototypeRuns]);
   useEffect(() => { saveToStorage('squad_runs', squadRuns); }, [squadRuns]);
+  useEffect(() => { saveToStorage('run_plan_drafts_v1', runPlanDrafts); }, [runPlanDrafts]);
   useEffect(() => { saveToStorage('role_override', roleOverride); }, [roleOverride]);
   useEffect(() => { saveToStorage('local_mode', localMode); }, [localMode]);
 
@@ -761,7 +774,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (run.id !== runId) return run;
         const updatedStages = run.stages.map((s, idx) => {
           if (idx < stageIndex && s.status === 'running') return { ...s, status: 'success' as const, completedAt: new Date().toISOString() };
-          if (idx === stageIndex) return { ...s, status, startedAt: s.startedAt || new Date().toISOString(), completedAt: status === 'success' || status === 'failed' ? new Date().toISOString() : undefined };
+          if (idx === stageIndex) return { ...s, status, startedAt: s.startedAt || new Date().toISOString(), completedAt: status === 'success' || status === 'failed' || status === 'skipped' ? new Date().toISOString() : undefined };
           return s;
         });
         return {
@@ -1116,7 +1129,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     setRunSetupIssueId(issueId);
-    setRunSetupAgentId(agentId || targetIssue.assignedAgentId || agents[0]?.id || null);
+    setRunSetupAgentId(
+      agentId || runPlanDrafts[issueId]?.agentId || targetIssue.assignedAgentId || agents[0]?.id || null
+    );
+  };
+
+  const saveRunPlanDraft = (issueId: string, agentId: string, plan: string[]) => {
+    setRunPlanDrafts(prev => ({
+      ...prev,
+      [issueId]: { agentId, plan, updatedAt: new Date().toISOString() }
+    }));
+  };
+
+  const clearRunPlanDraft = (issueId: string) => {
+    setRunPlanDrafts(prev => {
+      if (!prev[issueId]) return prev;
+      const next = { ...prev };
+      delete next[issueId];
+      return next;
+    });
   };
 
   const closeRunSetup = () => {
@@ -1145,26 +1176,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     {
       id: 'implementation',
       label: 'Implementing changes',
-      description: 'Applying the approved plan to the simulated workspace.',
+      description: 'Applying the approved plan to the project workspace.',
       status: 'pending',
       durationMs: 1700,
-      logs: ['Implementation patch generated.', 'Changed files formatted.']
+      logs: ['Implementation work will be reported by the live activity feed.']
     },
     {
       id: 'tests',
-      label: 'Running tests',
-      description: 'Checking types, unit tests, and expected behavior.',
+      label: 'Verification',
+      description: 'Alpha runs the repository checks that are configured in its package manifest and records their result.',
       status: 'pending',
       durationMs: 1450,
-      logs: ['Type checking passed.', 'Test suite completed.']
+      logs: ['Configured verification commands will run after implementation finishes.']
     },
     {
       id: 'review',
       label: 'Preparing review',
-      description: 'Summarizing changes and preparing a mock pull request.',
+      description: 'Summarizing changes and preparing review artifacts.',
       status: 'pending',
       durationMs: 1050,
-      logs: ['Change summary generated.', 'Review artifacts prepared.']
+      logs: ['Change summary will be generated from the real workspace diff.']
     }
   ];
 
@@ -1301,6 +1332,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...realRun,
           scenario: (realRun.scenario || scenario || 'success') as any
         } : r));
+        clearRunPlanDraft(issueId);
       }
     }).catch(err => {
       const pending = pendingRunStartsRef.current.get(run.id);
@@ -1492,7 +1524,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           id: `notif-${run.id}-failed`,
           type: 'agent_failed',
           title: `Run needs attention: ${targetIssue.identifier}`,
-          message: `${assignedAgent.name} stopped after the simulated test stage failed.`,
+          message: `${assignedAgent.name} stopped because the run failed. Open the run details for the provider error and next action.`,
           read: false,
           timestamp: now,
           entityType: 'issue',
@@ -1542,9 +1574,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                * This read `${run.changedFiles || 4} files changed and
                * ${run.testSummary || 'all tests passed'}` — so a run that
                * changed nothing announced four files and passing tests, in the
-               * agent's own voice, on the issue. Alpha does not run the tests
-               * and cannot claim they passed; the daemon's testSummary already
-               * says so honestly, and is used verbatim when present.
+               * agent's own voice, on the issue. The backend verifier now
+               * records the repository checks and their exit status; the
+               * daemon's testSummary is used verbatim when present.
                */
               content: run.changedFiles
                 ? `Implementation is ready for review: ${run.changedFiles} file(s) changed.` +
@@ -2992,6 +3024,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       prototypeRuns,
       runSetupIssueId,
       runSetupAgentId,
+      runPlanDrafts,
+      saveRunPlanDraft,
+      clearRunPlanDraft,
       closeRunSetup,
       startPrototypeRun,
       cancelPrototypeRun,
