@@ -70,6 +70,9 @@ class RunnerSocketClient {
         .on('broadcast', { event: 'log_chunk' }, ({ payload }) => {
           this.emit('log_chunk', payload);
         })
+        .on('broadcast', { event: 'run_activity' }, ({ payload }) => {
+          this.emit('run_activity', payload);
+        })
         .on('broadcast', { event: 'run_completed' }, ({ payload }) => {
           this.emit('run_completed', payload);
         })

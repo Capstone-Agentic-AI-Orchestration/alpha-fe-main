@@ -119,6 +119,26 @@ export interface PrototypeRunStage {
   completedAt?: string;
 }
 
+export type RunActivityKind =
+  | 'assistant'
+  | 'tool'
+  | 'tool_result'
+  | 'status'
+  | 'error'
+  | 'summary';
+
+export interface RunActivity {
+  id: string;
+  sequence: number;
+  kind: RunActivityKind;
+  message: string;
+  createdAt: string;
+  stageId?: string;
+  streamKey?: string;
+  isStreaming?: boolean;
+  detail?: string;
+}
+
 export interface PrototypeRun {
   id: string;
   issueId: string;
@@ -128,6 +148,7 @@ export interface PrototypeRun {
   scenario?: 'success' | 'test_failure' | 'review_required';
   plan: string[];
   stages: PrototypeRunStage[];
+  activities?: RunActivity[];
   currentStageIndex: number;
   createdAt: string;
   updatedAt: string;

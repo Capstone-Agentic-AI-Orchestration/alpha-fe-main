@@ -3,6 +3,7 @@ import { AlertCircle, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, Gi
 import { describeRunUsage } from '@/shared/lib/runUsage';
 import { useApp } from '@/app/AppContext';
 import { RemoteActivity } from '@/features/runs/RemoteActivity';
+import { ActivityFeed } from '@/features/runs/ActivityFeed';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 
 interface AgentRunProgressProps {
@@ -36,7 +37,7 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
   );
 
   useEffect(() => {
-    if (run?.id && run.status === 'running') {
+    if (run?.id && ['queued', 'running'].includes(run.status)) {
       runnerSocket.subscribeToRunStream(run.id);
       return () => {
         runnerSocket.unsubscribeFromRunStream(run.id);
@@ -92,6 +93,8 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
           </li>
         ))}
       </ol>
+
+      <ActivityFeed activities={run.activities} live={run.status === 'running'} />
 
       {/* PR and Branch Link */}
       {run.prUrl && (

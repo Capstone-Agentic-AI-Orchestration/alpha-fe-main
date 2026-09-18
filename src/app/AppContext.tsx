@@ -18,6 +18,7 @@ import {
   ChatMessage,
   ChatThread,
   PrototypeRun,
+  RunActivity,
   ToastMessage,
   User,
   UserRole,
@@ -783,6 +784,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }));
     });
 
+    const unsubActivity = runnerSocket.on('run_activity', ({ runId, activity }: { runId: string; activity: RunActivity }) => {
+      if (!runId || !activity) return;
+      setPrototypeRuns(prev => prev.map(run => {
+        if (run.id !== runId) return run;
+        const activities = [...(run.activities ?? [])];
+        const existingIndex = activities.findIndex(item => item.id === activity.id);
+        if (existingIndex >= 0) activities[existingIndex] = activity;
+        else activities.push(activity);
+        activities.sort((a, b) => a.sequence - b.sequence);
+        return { ...run, activities, updatedAt: new Date().toISOString() };
+      }));
+    });
+
     /**
      * A queued run reaching the front of its workspace queue.
      *
@@ -935,6 +949,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => {
       unsubStage();
       unsubLog();
+      unsubActivity();
       unsubStarted();
       unsubComplete();
       unsubFailed();
