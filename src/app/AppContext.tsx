@@ -468,6 +468,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [runSetupAgentId, setRunSetupAgentId] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const handledRunEventsRef = useRef<Set<string>>(new Set());
+  /**
+   * Backend run IDs do not exist until POST /runs/start returns. Keeping this
+   * small pending map lets a user cancel during that window without sending a
+   * request for the optimistic ID and without allowing the response to revive
+   * the cancelled row.
+   */
+  const pendingRunStartsRef = useRef(new Map<string, { issueId: string; agentId: string; cancelled: boolean }>());
 
   const [users] = useState<User[]>(initialUsers);
   const [requirementDocs, setRequirementDocs] = useState<RequirementDoc[]>(() =>
@@ -828,6 +835,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Run failed', failedRun.testSummary || 'Agent encountered an error.', 'error');
     });
 
+    const unsubCancelled = runnerSocket.on('run_cancelled', (cancelledRun) => {
+      setPrototypeRuns(prev => prev.map(r => r.id === cancelledRun.id ? cancelledRun : r));
+      setIssues(prev => prev.map(issue => issue.id === cancelledRun.issueId
+        ? { ...issue, status: 'in_progress', updatedAt: new Date().toISOString() }
+        : issue
+      ));
+      setAgents(prev => prev.map(agent => agent.id === cancelledRun.agentId
+        ? { ...agent, status: 'idle', workStatus: 'idle', currentTask: undefined }
+        : agent
+      ));
+    });
+
     /**
      * Who is working now.
      *
@@ -919,6 +938,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubStarted();
       unsubComplete();
       unsubFailed();
+      unsubCancelled();
       unsubSquadMember();
       unsubSquadDone();
       unsubSquadFailed();
@@ -1133,6 +1153,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   ];
 
+  const reconcileRunAfterCancelFailure = (localRunId: string, serverRunId: string) => {
+    apiService.getRuns().then(serverRuns => {
+      const latest = serverRuns.find(item => item.id === serverRunId);
+      if (!latest) return;
+
+      setPrototypeRuns(prev => prev.map(item =>
+        item.id === localRunId || item.id === serverRunId ? latest : item
+      ));
+
+      const active = latest.status === 'queued' || latest.status === 'running';
+      const issueStatus = active
+        ? 'agent_running'
+        : latest.status === 'awaiting_approval'
+          ? 'review'
+          : latest.status === 'completed'
+            ? 'done'
+            : 'in_progress';
+      setIssues(prev => prev.map(issue => issue.id === latest.issueId
+        ? { ...issue, status: issueStatus, updatedAt: new Date().toISOString() }
+        : issue
+      ));
+      setAgents(prev => prev.map(agent => agent.id === latest.agentId
+        ? {
+            ...agent,
+            status: active ? 'executing' : 'idle',
+            workStatus: active ? 'working' : 'idle',
+            currentTask: active ? latest.issueId : undefined
+          }
+        : agent
+      ));
+    }).catch(() => {
+      showToast('Run state uncertain', 'Refresh the board to confirm whether cancellation succeeded.', 'error');
+    });
+  };
+
   const startPrototypeRun = (
     issueId: string,
     agentId: string,
@@ -1184,6 +1239,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     closeRunSetup();
     showToast('Agent run started', `${assignedAgent.name} is working on ${targetIssue.identifier}.`, 'success');
 
+    pendingRunStartsRef.current.set(run.id, { issueId, agentId, cancelled: false });
+
     /**
      * Trigger the real backend run, and adopt the id it assigns.
      *
@@ -1200,7 +1257,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
      * the process either.
      */
     apiService.startRun({ issueId, agentId, plan, scenario }).then((realRun) => {
+      const pending = pendingRunStartsRef.current.get(run.id);
+      pendingRunStartsRef.current.delete(run.id);
       if (realRun && realRun.id) {
+        if (pending?.cancelled) {
+          const cancelledAt = new Date().toISOString();
+          setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
+            ...realRun,
+            status: 'cancelled',
+            updatedAt: cancelledAt,
+            stages: realRun.stages.map((stage, index) => index === realRun.currentStageIndex
+              ? { ...stage, status: 'cancelled' as const, completedAt: cancelledAt }
+              : stage)
+          } : item));
+
+          // The daemon has now given us the real ID. Finish the cancellation
+          // that was requested while the start call was still in flight.
+          apiService.cancelRun(realRun.id).catch((err: unknown) => {
+            const detail = err instanceof Error ? err.message : String(err);
+            showToast('Run cancellation failed', detail, 'error');
+            reconcileRunAfterCancelFailure(run.id, realRun.id);
+          });
+          return;
+        }
+
         setPrototypeRuns(prev => prev.map(r => r.id === run.id ? {
           ...r,
           ...realRun,
@@ -1208,6 +1288,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } : r));
       }
     }).catch(err => {
+      const pending = pendingRunStartsRef.current.get(run.id);
+      pendingRunStartsRef.current.delete(run.id);
+      // The user already cancelled this optimistic row. Do not turn that
+      // intentional terminal state into a failed run when the start request
+      // later rejects.
+      if (pending?.cancelled) return;
+
       /**
        * Say the run did not start, rather than leaving it "running" forever.
        *
@@ -1229,6 +1316,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         workStatus: 'idle',
         currentTask: undefined
       } : agent));
+      setIssues(prev => prev.map(issue => issue.id === issueId
+        ? { ...issue, status: 'in_progress', updatedAt: new Date().toISOString() }
+        : issue
+      ));
       showToast('Run could not start', detail, 'error');
     });
 
@@ -1237,10 +1328,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const cancelPrototypeRun = (runId: string) => {
     const run = prototypeRuns.find(item => item.id === runId);
-    if (!run || run.status !== 'running') return;
+    if (!run || !['queued', 'running'].includes(run.status)) return;
     const now = new Date().toISOString();
 
-    apiService.cancelRun(runId).catch(() => {});
+    const pending = pendingRunStartsRef.current.get(runId);
+    if (pending) {
+      pending.cancelled = true;
+    } else {
+      apiService.cancelRun(runId).catch((err: unknown) => {
+        const detail = err instanceof Error ? err.message : String(err);
+        showToast('Run cancellation failed', detail, 'error');
+        reconcileRunAfterCancelFailure(runId, runId);
+      });
+    }
 
     setPrototypeRuns(prev => prev.map(item => item.id === runId ? {
       ...item,
@@ -1277,37 +1377,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Retry unavailable', 'The failed run is no longer available. Refresh the issue and try again.', 'error');
       return;
     }
-    const now = new Date().toISOString();
-
     // The daemon creates a new run when retrying. Keep the failed run in
     // history and adopt the daemon-assigned id so websocket updates reach the
     // row the user is watching. Previously the old id was marked running while
     // the new backend run was discarded, making Retry appear to do nothing.
     apiService.retryRun(runId).then(newRun => {
+      const now = new Date().toISOString();
       setPrototypeRuns(prev => [newRun, ...prev.filter(item => item.id !== newRun.id)]);
+      setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
+        ...issue,
+        status: 'agent_running',
+        comments: [...issue.comments, {
+          id: `comm-${newRun.id}-retry`,
+          authorType: 'system' as const,
+          authorName: 'Prototype runner',
+          content: 'Run restarted with a clean workspace.',
+          createdAt: now
+        }],
+        updatedAt: now
+      } : issue));
+      setAgents(prev => prev.map(agent => agent.id === run.agentId ? {
+        ...agent,
+        status: 'executing',
+        workStatus: 'working',
+        currentTask: run.issueId
+      } : agent));
       showToast('Run restarted', 'The failed stage will be attempted again.', 'success');
     }).catch(err => {
       const detail = err instanceof Error ? err.message : String(err);
       showToast('Retry failed', detail, 'error');
     });
-
-    setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
-      ...issue,
-      status: 'agent_running',
-      comments: [...issue.comments, {
-        id: `comm-${run.id}-retry-${Date.now()}`,
-        authorType: 'system' as const,
-        authorName: 'Prototype runner',
-        content: 'Run restarted with a clean workspace.',
-        createdAt: now
-      }],
-      updatedAt: now
-    } : issue));
-    setAgents(prev => prev.map(agent => agent.id === run.agentId ? {
-      ...agent,
-      status: 'executing',
-      workStatus: 'working'
-    } : agent));
   };
 
   /**
@@ -1369,7 +1468,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 authorName: assignedAgent.name,
                 authorAvatar: assignedAgent.avatar,
                 agentId: assignedAgent.id,
-                content: 'The simulated test stage found two regressions. Review the run and retry when ready.',
+                content: run.testSummary || 'The agent run failed. Review the run details and retry when ready.',
                 createdAt: now
               }],
           updatedAt: now
@@ -1389,7 +1488,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             issueIdentifier: targetIssue.identifier
           }
         }, ...prev]);
-        showToast('Run needs attention', 'The simulated tests failed. Open the issue to retry.', 'error');
+        showToast('Run needs attention', run.testSummary || 'The agent run failed. Open the issue to retry.', 'error');
         return;
       }
 

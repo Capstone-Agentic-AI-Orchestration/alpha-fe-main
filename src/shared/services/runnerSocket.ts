@@ -76,6 +76,9 @@ class RunnerSocketClient {
         .on('broadcast', { event: 'run_failed' }, ({ payload }) => {
           this.emit('run_failed', payload);
         })
+        .on('broadcast', { event: 'run_cancelled' }, ({ payload }) => {
+          this.emit('run_cancelled', payload);
+        })
         .subscribe();
 
       this.activeSupabaseChannels.set(runId, channel);

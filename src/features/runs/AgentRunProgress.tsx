@@ -141,7 +141,7 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
         </div>
       )}
 
-      {run.status === 'running' && (
+      {['queued', 'running'].includes(run.status) && (
         confirmCancel ? (
           <div className="space-y-2 text-[11px] text-gray-400">
             <p>Cancel this run?</p>
