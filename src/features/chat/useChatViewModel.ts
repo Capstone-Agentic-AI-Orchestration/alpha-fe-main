@@ -70,7 +70,9 @@ export function useChatViewModel() {
       title: title || 'New Conversation',
       lastMessageSnippet: '',
       lastMessageAt: new Date().toISOString(),
-      agentIds: ['agent-ada'],
+      // Participant history is empty until an agent actually answers; the
+      // Chats view chooses a responder through the thread target fields.
+      agentIds: [],
       pinned: false,
       createdAt: new Date().toISOString()
     };

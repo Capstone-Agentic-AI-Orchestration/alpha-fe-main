@@ -34,6 +34,10 @@ export const ChatView: React.FC = () => {
     agents, 
     skills,
     activeChatAgentId,
+    setActiveChatAgentId,
+    activeChatSquadId,
+    setActiveChatSquadId,
+    setChatThreadTarget,
     updateAgent,
     setActiveTab,
     role,
@@ -56,6 +60,14 @@ export const ChatView: React.FC = () => {
     if (!activeThread) return [];
     return activeThread.messages || [];
   }, [activeThread]);
+
+  // Keep the legacy context pointers in sync for other surfaces, while the
+  // thread itself remains the durable source of truth when conversations are
+  // switched or reloaded.
+  useEffect(() => {
+    setActiveChatAgentId(activeThread?.targetAgentId ?? null);
+    setActiveChatSquadId(activeThread?.targetSquadId ?? null);
+  }, [activeThread?.id, activeThread?.targetAgentId, activeThread?.targetSquadId, setActiveChatAgentId, setActiveChatSquadId]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -161,12 +173,32 @@ export const ChatView: React.FC = () => {
     }
   };
 
+  const handleChatTargetChange = (value: string) => {
+    const separator = value.indexOf(':');
+    const kind = separator >= 0 ? value.slice(0, separator) : '';
+    const id = separator >= 0 ? value.slice(separator + 1) : '';
+    const targetAgentId = kind === 'agent' && id ? id : null;
+    const targetSquadId = kind === 'squad' && id ? id : null;
+
+    setActiveChatAgentId(targetAgentId);
+    setActiveChatSquadId(targetSquadId);
+    if (activeThread) {
+      setChatThreadTarget(activeThread.id, {
+        agentId: targetAgentId,
+        squadId: targetSquadId
+      });
+    }
+  };
+
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isAgentTyping) return;
     const msg = input.trim();
     setInput('');
-    await sendChatMessage(msg);
+    await sendChatMessage(msg, {
+      agentId: selectedAgentId ?? null,
+      squadId: selectedSquadId ?? null
+    });
   };
 
   const formatThreadDate = (timestamp: string) => {
@@ -178,7 +210,24 @@ export const ChatView: React.FC = () => {
     }
   };
 
-  const activeAgent = agents.find(a => a.id === activeChatAgentId) || agents[0];
+  const selectedAgentId = activeThread ? activeThread.targetAgentId : activeChatAgentId;
+  const selectedSquadId = activeThread ? activeThread.targetSquadId : activeChatSquadId;
+  const activeAgent = selectedAgentId
+    ? agents.find(agent => agent.id === selectedAgentId)
+    : undefined;
+  const activeSquad = selectedSquadId
+    ? squads.find(squad => squad.id === selectedSquadId)
+    : undefined;
+  const chatTargetValue = activeAgent
+    ? `agent:${activeAgent.id}`
+    : activeSquad
+      ? `squad:${activeSquad.id}`
+      : '';
+  const chatTargetLabel = activeAgent
+    ? `${activeAgent.name} · ${activeAgent.role}`
+    : activeSquad
+      ? `${activeSquad.name} · ${activeSquad.memberAgentIds.length} agents`
+      : 'Automatic · Alpha';
   const isClient = role === 'client';
   const pmName = users.find(u => u.role === 'pm')?.name ?? 'your project manager';
 
@@ -287,7 +336,7 @@ export const ChatView: React.FC = () => {
                   </h2>
                   <div className="flex items-center gap-2 text-[11px] text-gray-500">
                     <span className="text-brand-400">
-                      {isClient ? `${pmName} · Project Manager` : 'Multi-Agent Swarm'}
+                      {isClient ? `${pmName} · Project Manager` : chatTargetLabel}
                     </span>
                     <span>•</span>
                     <span>{currentMessages.length} messages</span>
@@ -296,6 +345,41 @@ export const ChatView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
+                {/* Choose the default responder for this thread. Explicit
+                    @mentions still override this choice for one message. */}
+                {!isClient && (
+                  <div className="flex items-center gap-1.5">
+                    <Users className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                    <select
+                      value={chatTargetValue}
+                      disabled={isAgentTyping}
+                      onChange={e => handleChatTargetChange(e.target.value)}
+                      title="Choose who answers messages without an @mention"
+                      className="bg-transparent border border-white/10 rounded-lg px-2 py-1 text-[11px] text-gray-300 hover:border-white/20 focus:outline-none focus:border-brand-500 disabled:opacity-50 max-w-[190px] truncate"
+                    >
+                      <option value="">Automatic · Alpha</option>
+                      <optgroup label="Agents">
+                        {agents
+                          .filter(agent => !agent.isArchived)
+                          .map(agent => (
+                            <option key={agent.id} value={`agent:${agent.id}`}>
+                              {agent.name} · {agent.role}
+                            </option>
+                          ))}
+                      </optgroup>
+                      {squads.length > 0 && (
+                        <optgroup label="Squads">
+                          {squads.map(squad => (
+                            <option key={squad.id} value={`squad:${squad.id}`}>
+                              {squad.name} · {squad.memberAgentIds.length} agents
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
+                )}
+
                 {/* Which repository the agents in this thread can read. Hidden
                     for client threads, which never address an agent. */}
                 {!isClient && (
@@ -308,7 +392,7 @@ export const ChatView: React.FC = () => {
 
                 {/* The inspector configures an agent's model and prompt. There
                     is no agent behind a client conversation. */}
-                {!isClient && (
+                {!isClient && activeAgent && (
                   <button
                     onClick={() => setShowInspector(!showInspector)}
                     className={`p-2 rounded-md text-xs flex items-center gap-1.5 transition-colors ${
@@ -355,7 +439,11 @@ export const ChatView: React.FC = () => {
                     <p className="text-xs text-gray-400 max-w-sm">
                       {isClient
                         ? `${pmName} manages your project and usually replies within a few hours. Ask about scope, price, or timing.`
-                        : 'Summon any agent by typing @Ada, @Kaelen, @Vesper, @Nyx, @Cipher, or start asking questions below.'}
+                        : activeAgent
+                          ? `Messages without an @mention go directly to ${activeAgent.name}. You can still mention another agent for a one-off reply.`
+                          : activeSquad
+                            ? `${activeSquad.name} will answer in sequence. Mention a specific agent to get a one-off reply.`
+                            : 'Choose an agent or squad above, or leave it on Automatic to chat with Alpha. You can also use @mentions for one-off routing.'}
                     </p>
                   </div>
                 </div>
@@ -364,6 +452,9 @@ export const ChatView: React.FC = () => {
                   const isUser = msg.senderType === 'user';
                   const isSystem = msg.senderType === 'system';
                   const thinkingOpen = expandedThinking[msg.id] ?? false;
+                  const messageAgent = msg.agentId
+                    ? agents.find(agent => agent.id === msg.agentId)
+                    : undefined;
 
                   if (isSystem) {
                     return (
@@ -386,9 +477,9 @@ export const ChatView: React.FC = () => {
                         <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-on-accent flex-shrink-0">
                           U
                         </div>
-                      ) : msg.senderAvatar || activeAgent?.avatar ? (
+                      ) : msg.senderAvatar || messageAgent?.avatar ? (
                         <img
-                          src={msg.senderAvatar || activeAgent?.avatar}
+                          src={msg.senderAvatar || messageAgent?.avatar}
                           alt=""
                           className="w-9 h-9 rounded-full object-cover ring-1 ring-white/10 flex-shrink-0"
                         />
@@ -574,7 +665,11 @@ export const ChatView: React.FC = () => {
                   placeholder={
                     isClient
                       ? `Write a message to ${pmName}...`
-                      : 'Ask an agent, summon a squad (@Ada, @Kaelen), or execute code...'
+                      : activeAgent
+                        ? `Message ${activeAgent.name}...`
+                        : activeSquad
+                          ? `Message ${activeSquad.name}...`
+                          : 'Ask Alpha, choose an agent above, or use @mentions...'
                   }
                   disabled={isAgentTyping}
                   className="w-full bg-surface-100 border border-white/10 rounded-2xl px-5 py-3.5 text-sm sm:text-base text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-medium pr-14 disabled:opacity-50"

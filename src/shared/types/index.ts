@@ -547,6 +547,8 @@ export interface Squad {
 
 export type RuntimeType = 'local' | 'cloud' | 'remote';
 export type RuntimeStatus = 'online' | 'offline' | 'degraded' | 'scanning';
+export type RuntimeCatalogSource = 'cli' | 'local_api' | 'remote_api' | 'cache' | 'none';
+export type RuntimeUpdateSource = 'provider_cli' | 'npm' | 'remote_api' | 'none';
 
 export interface RuntimeEngine {
   id: string;
@@ -571,6 +573,16 @@ export interface RuntimeEngine {
   gpuName?: string;
   isDefault?: boolean;
   detectedAt?: string;
+  catalogSource?: RuntimeCatalogSource;
+  catalogCheckedAt?: string;
+  catalogFetchedAt?: string;
+  catalogStale?: boolean;
+  catalogError?: string;
+  updateAvailable?: boolean;
+  latestVersion?: string;
+  updateCheckedAt?: string;
+  updateError?: string;
+  updateSource?: RuntimeUpdateSource;
 }
 
 export type SkillCategory = 
@@ -706,6 +718,10 @@ export interface ChatThread {
   id: string;
   title: string;
   agentIds: string[];
+  /** The responder selected for this conversation, when it is not automatic Alpha. */
+  targetAgentId?: string;
+  /** The squad selected for this conversation, when several agents should answer. */
+  targetSquadId?: string;
   /**
    * Which project this conversation is about, when it is about one.
    *

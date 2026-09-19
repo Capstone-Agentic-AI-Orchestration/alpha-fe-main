@@ -52,6 +52,13 @@ export interface RunPlanDraft {
   updatedAt: string;
 }
 
+export interface ChatTarget {
+  /** A configured agent, or null when the target is being cleared. */
+  agentId?: string | null;
+  /** A configured squad, or null when the target is being cleared. */
+  squadId?: string | null;
+}
+
 interface AppContextType {
   /** Reachability of the local Alpha daemon. Agents cannot run while 'offline'. */
   serverStatus: ServerStatus;
@@ -126,6 +133,7 @@ interface AppContextType {
   runtimes: RuntimeEngine[];
   isScanningRuntimes: boolean;
   scanLocalRuntimes: () => Promise<void>;
+  refreshRuntime: (id: string) => Promise<RuntimeEngine | null>;
   setDefaultRuntime: (id: string) => void;
   
   // Skills
@@ -165,7 +173,8 @@ interface AppContextType {
   setActiveChatAgentId: (id: string | null) => void;
   activeChatSquadId: string | null;
   setActiveChatSquadId: (id: string | null) => void;
-  sendChatMessage: (content: string) => Promise<void>;
+  setChatThreadTarget: (threadId: string, target: ChatTarget) => void;
+  sendChatMessage: (content: string, target?: ChatTarget) => Promise<void>;
   clearChat: () => void;
   
   // Settings
@@ -1997,6 +2006,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const refreshRuntime = async (id: string): Promise<RuntimeEngine | null> => {
+    try {
+      const refreshed = await apiService.refreshRuntime(id);
+      setRuntimes(prev => prev.some(runtime => runtime.id === id)
+        ? prev.map(runtime => runtime.id === id ? refreshed : runtime)
+        : [...prev, refreshed]);
+      return refreshed;
+    } catch (err) {
+      showToast('Runtime refresh failed', err instanceof Error ? err.message : String(err), 'error');
+      return null;
+    }
+  };
+
   const setDefaultRuntime = (id: string) => {
     setRuntimes(prev => prev.map(rt => ({
       ...rt,
@@ -2253,7 +2275,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       iconType: isClientThread ? 'sparkle' : 'asterisk',
       audience: isClientThread ? 'client' : 'internal',
       clientId: isClientThread ? currentUser.id : undefined,
-      agentIds: isClientThread ? [] : [agents[0]?.id || 'agent-1'],
+      // This is the participant history, not the default responder. A new
+      // conversation starts in automatic Alpha mode until the user chooses an
+      // agent or squad in the Chats header.
+      agentIds: [],
       messages: []
     };
     setChatThreads(prev => [newThread, ...prev]);
@@ -2313,11 +2338,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const sendChatMessage = async (content: string) => {
+  /** Persist the responder selected in the Chats header for this thread. */
+  const setChatThreadTarget = (threadId: string, target: ChatTarget) => {
+    const previous = chatThreads.find(t => t.id === threadId);
+    const targetAgentId = target.agentId ?? null;
+    const targetSquadId = target.squadId ?? null;
+    const targetFields = {
+      targetAgentId: targetAgentId ?? undefined,
+      targetSquadId: targetSquadId ?? undefined
+    };
+
+    setChatThreads(prev => prev.map(t => (
+      t.id === threadId ? { ...t, ...targetFields } : t
+    )));
+    setActiveChatAgentId(targetAgentId);
+    setActiveChatSquadId(targetSquadId);
+
+    persist(
+      () => apiService.setThreadTarget(threadId, targetAgentId, targetSquadId),
+      serverThread => {
+        setChatThreads(prev => prev.map(t => t.id === threadId
+          ? {
+              ...t,
+              targetAgentId: serverThread.targetAgentId,
+              targetSquadId: serverThread.targetSquadId
+            }
+          : t
+        ));
+      },
+      msg => {
+        if (!previous) return;
+        setChatThreads(prev => prev.map(t => t.id === threadId
+          ? {
+              ...t,
+              targetAgentId: previous.targetAgentId,
+              targetSquadId: previous.targetSquadId
+            }
+          : t
+        ));
+        setActiveChatAgentId(previous.targetAgentId ?? null);
+        setActiveChatSquadId(previous.targetSquadId ?? null);
+        showToast('Chat target not saved', msg, 'error');
+      }
+    );
+  };
+
+  const sendChatMessage = async (content: string, target?: ChatTarget) => {
     let targetThreadId = activeThreadId;
     if (!targetThreadId) {
       targetThreadId = createNewThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
     }
+
+    const targetThread = chatThreads.find(t => t.id === targetThreadId);
+    const hasExplicitTarget = target !== undefined;
+    const targetAgentId = hasExplicitTarget
+      ? target?.agentId ?? null
+      : targetThread?.targetAgentId;
+    const targetSquadId = hasExplicitTarget
+      ? target?.squadId ?? null
+      : targetThread?.targetSquadId;
 
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -2368,8 +2447,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsAgentTyping(true);
 
     /**
-     * Who will answer is decided by the daemon, from the @mentions in this
-     * message. The client does not guess.
+     * Who will answer is decided by the daemon, from an explicit @mention or
+     * the thread target selected in the Chats header. The client only uses the
+     * target for the temporary placeholder while the daemon remains the source
+     * of truth for the final reply.
      *
      * It used to. This defaulted to `agents[0]` and then reassigned on
      * keywords — the bare word "code", "bug", "test", "review" or "deploy"
@@ -2385,25 +2466,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
      */
     const mentionedAgent = agents.find(a => {
       const first = a.name.split(' ')[0].toLowerCase();
-      return new RegExp(`@${first}\b`, 'i').test(content);
+      return new RegExp(`@${first}\\b`, 'i').test(content);
     });
+
+    const selectedAgent = targetAgentId
+      ? agents.find(agent => agent.id === targetAgentId)
+      : undefined;
+    const selectedSquad = targetSquadId
+      ? squads.find(squad => squad.id === targetSquadId)
+      : undefined;
+    const placeholderAgent = mentionedAgent ?? selectedAgent;
 
     // Streaming placeholder
     const streamingMsgId = `msg-${Date.now() + 1}`;
     const streamingMsg: ChatMessage = {
       id: streamingMsgId,
       senderType: 'agent',
-      agentId: mentionedAgent?.id,
+      agentId: placeholderAgent?.id,
       // Alpha answers anything that names no agent, so that is what the
       // placeholder says rather than borrowing an agent's name.
-      senderName: mentionedAgent?.name ?? 'Alpha',
-      senderAvatar: mentionedAgent?.avatar,
+      senderName: placeholderAgent?.name ?? selectedSquad?.name ?? 'Alpha',
+      senderAvatar: placeholderAgent?.avatar,
       content: 'Thinking...',
       timestamp: new Date().toISOString(),
       isStreaming: true,
-      thinkingProcess: mentionedAgent
-        ? `Analyzing prompt intent using ${mentionedAgent.modelName} on ${mentionedAgent.modelProvider}...`
-        : 'Answering directly on the default runtime...'
+      thinkingProcess: placeholderAgent
+        ? `Analyzing prompt intent using ${placeholderAgent.modelName} on ${placeholderAgent.modelProvider}...`
+        : selectedSquad
+          ? `Coordinating ${selectedSquad.memberAgentIds.length} squad members...`
+          : 'Answering directly on the default runtime...'
     };
 
     setChatThreads(prev => prev.map(t => {
@@ -2421,7 +2512,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const res = await apiService.sendChatMessage({
         threadId: targetThreadId,
         content,
-        senderName: currentUser.name
+        senderName: currentUser.name,
+        // Send the picker state with the turn as well as persisting it. This
+        // closes the small race where a user selects an agent and immediately
+        // presses Send before the target PUT has completed.
+        targetAgentId: hasExplicitTarget ? targetAgentId : undefined,
+        targetSquadId: hasExplicitTarget ? targetSquadId : undefined
       });
 
       /**
@@ -3072,6 +3168,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       runtimes,
       isScanningRuntimes,
       scanLocalRuntimes,
+      refreshRuntime,
       setDefaultRuntime,
       skills,
       toggleSkill,
@@ -3097,6 +3194,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveChatAgentId,
       activeChatSquadId,
       setActiveChatSquadId,
+      setChatThreadTarget,
       sendChatMessage,
       clearChat,
       settings: scopedSettings,

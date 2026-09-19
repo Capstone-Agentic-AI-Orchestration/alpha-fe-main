@@ -431,6 +431,7 @@ export const apiService = {
   // Runtimes
   getRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes'),
   scanRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes/scan', { method: 'POST' }),
+  refreshRuntime: (id: string) => fetchJson<RuntimeEngine>(`/runtimes/${encodeURIComponent(id)}/refresh`, { method: 'POST' }),
 
   // Runs
   getRuns: () => fetchJson<PrototypeRun[]>('/runs'),
@@ -472,6 +473,11 @@ export const apiService = {
       `/chat/threads/${id}`,
       { method: 'PUT', body: JSON.stringify({ projectId }) }
     ),
+  setThreadTarget: (id: string, targetAgentId: string | null, targetSquadId: string | null) =>
+    fetchJson<ChatThread>(`/chat/threads/${id}/target`, {
+      method: 'PUT',
+      body: JSON.stringify({ targetAgentId, targetSquadId })
+    }),
   createChatThread: (thread: Partial<ChatThread>) =>
     fetchJson<ChatThread>('/chat/threads', { method: 'POST', body: JSON.stringify(thread) }),
   /** Delete a conversation. Its messages cascade; its CLI session rows go too. */
@@ -483,7 +489,13 @@ export const apiService = {
       method: 'DELETE'
     }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
-  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string }) =>
+  sendChatMessage: (payload: {
+    threadId: string;
+    content: string;
+    senderName?: string;
+    targetAgentId?: string | null;
+    targetSquadId?: string | null;
+  }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;
