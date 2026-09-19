@@ -106,7 +106,7 @@ export type PrototypeRunStatus =
   | 'cancelled'
   | 'completed';
 
-export type PrototypeRunStageStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled';
+export type PrototypeRunStageStatus = 'pending' | 'running' | 'success' | 'failed' | 'cancelled' | 'skipped';
 
 export interface PrototypeRunStage {
   id: string;
@@ -119,6 +119,28 @@ export interface PrototypeRunStage {
   completedAt?: string;
 }
 
+export type RunActivityKind =
+  | 'assistant'
+  | 'tool'
+  | 'tool_result'
+  | 'status'
+  | 'error'
+  | 'summary';
+
+export interface RunActivity {
+  id: string;
+  sequence: number;
+  kind: RunActivityKind;
+  message: string;
+  createdAt: string;
+  stageId?: string;
+  streamKey?: string;
+  isStreaming?: boolean;
+  /** True when this entry received at least one incremental provider fragment. */
+  streamed?: boolean;
+  detail?: string;
+}
+
 export interface PrototypeRun {
   id: string;
   issueId: string;
@@ -128,6 +150,7 @@ export interface PrototypeRun {
   scenario?: 'success' | 'test_failure' | 'review_required';
   plan: string[];
   stages: PrototypeRunStage[];
+  activities?: RunActivity[];
   currentStageIndex: number;
   createdAt: string;
   updatedAt: string;

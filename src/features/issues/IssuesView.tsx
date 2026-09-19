@@ -115,6 +115,9 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const [selectedPriority, setSelectedPriority] = useState<string>('all');
   const [selectedAgent, setSelectedAgent] = useState<string>('all');
   const [showFilterBar, setShowFilterBar] = useState(false);
+  const [draggedIssueId, setDraggedIssueId] = useState<string | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<IssueStatus | null>(null);
+  const [pendingDoneIssueId, setPendingDoneIssueId] = useState<string | null>(null);
   
   // Collapsed status sections state (Jira style)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
@@ -243,6 +246,58 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const runningAgentsCount = useMemo(() => {
     return issues.filter(i => i.status === 'agent_running').length;
   }, [issues]);
+
+  const clearDragState = () => {
+    setDraggedIssueId(null);
+    setDragOverColumn(null);
+  };
+
+  const handleIssueDragStart = (event: React.DragEvent<HTMLDivElement>, issueId: string) => {
+    event.dataTransfer.effectAllowed = 'move';
+    event.dataTransfer.setData('text/plain', issueId);
+    setDraggedIssueId(issueId);
+  };
+
+  /**
+   * Keep board movement aligned with the execution lifecycle. Agent Running
+   * is a real run, not a label, so it must go through the same preparation
+   * dialog as the Run button. Done is a human checkpoint, so direct moves ask
+   * for confirmation instead of silently bypassing review.
+   */
+  const requestIssueStatusChange = (issue: Issue, nextStatus: IssueStatus) => {
+    if (issue.status === nextStatus) return;
+
+    if (nextStatus === 'agent_running') {
+      runAgentOnIssue(issue.id);
+      return;
+    }
+
+    if (nextStatus === 'done') {
+      setPendingDoneIssueId(issue.id);
+      return;
+    }
+
+    updateIssueStatus(issue.id, nextStatus);
+  };
+
+  const handleIssueDrop = (event: React.DragEvent<HTMLDivElement>, columnId: IssueStatus) => {
+    event.preventDefault();
+    const issueId = event.dataTransfer.getData('text/plain') || draggedIssueId;
+    const issue = issueId ? issues.find(item => item.id === issueId) : undefined;
+
+    if (issue) requestIssueStatusChange(issue, columnId);
+
+    clearDragState();
+  };
+
+  const pendingDoneIssue = pendingDoneIssueId
+    ? issues.find(issue => issue.id === pendingDoneIssueId)
+    : undefined;
+
+  const confirmDoneStatusChange = () => {
+    if (pendingDoneIssue) updateIssueStatus(pendingDoneIssue.id, 'done');
+    setPendingDoneIssueId(null);
+  };
 
   const selectedIssue = issues.find(i => i.id === selectedIssueId);
 
@@ -608,7 +663,24 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               return (
                 <div
                   key={column.id}
-                  className="w-80 flex-shrink-0 flex flex-col bg-surface-200/40 rounded-2xl border border-white/5 overflow-hidden"
+                  onDragOver={event => {
+                    event.preventDefault();
+                    event.dataTransfer.dropEffect = 'move';
+                    setDragOverColumn(column.id);
+                  }}
+                  onDrop={event => handleIssueDrop(event, column.id)}
+                  className={`w-80 flex-shrink-0 flex flex-col rounded-2xl border overflow-hidden transition-colors ${
+                    dragOverColumn === column.id
+                      ? 'border-brand-500/60 bg-brand-500/[0.05] ring-1 ring-brand-500/30'
+                      : 'border-white/5 bg-surface-200/40'
+                  }`}
+                  aria-label={
+                    column.id === 'agent_running'
+                      ? 'Drop issues here to prepare an agent run'
+                      : column.id === 'done'
+                        ? 'Drop issues here to request confirmation before marking done'
+                        : `Drop issues here to move them to ${column.title}`
+                  }
                 >
                   <div className={`p-3.5 border-b border-white/5 flex items-center justify-between bg-surface-100/60 ${column.color}`}>
                     <div className="flex items-center gap-2">
@@ -674,7 +746,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                         <div
                           key={issue.id}
                           onClick={() => setSelectedIssueId(issue.id)}
-                          className={`p-4 rounded-xl bg-surface-100 border transition-all cursor-pointer space-y-3 group shadow-sm hover:shadow-glow-brand ${
+                          draggable
+                          onDragStart={event => handleIssueDragStart(event, issue.id)}
+                          onDragEnd={clearDragState}
+                          aria-label={`Drag ${issue.identifier} to move its status`}
+                          className={`p-4 rounded-xl bg-surface-100 border transition-all cursor-grab active:cursor-grabbing space-y-3 group shadow-sm hover:shadow-glow-brand ${
+                            draggedIssueId === issue.id ? 'opacity-50' : ''
+                          } ${
                             selectedIssueId === issue.id 
                               ? 'border-brand-500 shadow-glow-brand bg-brand-500/10' 
                               : 'border-white/10 hover:border-brand-500/40'
@@ -1026,7 +1104,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   <label className="text-gray-400 font-medium">Status</label>
                   <select
                     value={selectedIssue.status}
-                    onChange={(e) => updateIssueStatus(selectedIssue.id, e.target.value as IssueStatus)}
+                    onChange={(e) => requestIssueStatusChange(selectedIssue, e.target.value as IssueStatus)}
                     className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500 font-medium"
                   >
                     <option value="backlog">Backlog</option>
@@ -1131,6 +1209,51 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
           </div>
         )}
       </div>
+
+      {pendingDoneIssue && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+            onClick={() => setPendingDoneIssueId(null)}
+          />
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-done-title"
+            className="relative w-full max-w-md rounded-2xl border border-white/10 bg-surface-100 p-6 shadow-2xl"
+          >
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 id="confirm-done-title" className="text-base font-semibold text-white">
+                  Mark issue as done?
+                </h2>
+                <p className="text-sm leading-relaxed text-gray-400">
+                  This skips the normal review checkpoint for <span className="font-semibold text-gray-200">{pendingDoneIssue.identifier}</span>. Continue only if the work has already been reviewed.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDoneIssueId(null)}
+                className="rounded-lg border border-white/10 px-3.5 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+              >
+                Keep in {pendingDoneIssue.status === 'review' ? 'Review' : 'current status'}
+              </button>
+              <button
+                type="button"
+                onClick={confirmDoneStatusChange}
+                className="rounded-lg bg-emerald-500 px-3.5 py-2 text-sm font-semibold text-gray-950 transition-colors hover:bg-emerald-400"
+              >
+                Mark done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

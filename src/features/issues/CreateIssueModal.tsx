@@ -29,7 +29,7 @@ interface CreateIssueModalProps {
 }
 
 export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onClose }) => {
-  const { createIssue, runAgentOnIssue, projects, agents, squads } = useApp();
+  const { createIssue, projects, agents, squads } = useApp();
 
   // Mode: 'agent' (Create with agent) vs 'manual' (Create manually)
   const [mode, setMode] = useState<'agent' | 'manual'>('agent');
@@ -46,6 +46,28 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
   const [status, setStatus] = useState<IssueStatus>('todo');
   const [priority, setPriority] = useState<IssuePriority>('none');
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
+
+  // The modal is mounted before the daemon hydrates its collections. If the
+  // hydrated rows use different ids than the local fallback values, move the
+  // selection to a real row before submit so creation cannot hit a foreign-key
+  // error while still preserving an explicit user selection.
+  useEffect(() => {
+    if (projects.length > 0 && !projects.some(project => project.id === selectedProjectId)) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects, selectedProjectId]);
+
+  useEffect(() => {
+    if (squads.length > 0 && !squads.some(squad => squad.id === selectedSquadId)) {
+      setSelectedSquadId(squads[0].id);
+    }
+  }, [squads, selectedSquadId]);
+
+  useEffect(() => {
+    if (agents.length > 0 && !agents.some(agent => agent.id === selectedAgentId)) {
+      setSelectedAgentId(agents[0].id);
+    }
+  }, [agents, selectedAgentId]);
 
   // Popover menus
   const [openMenu, setOpenMenu] = useState<'project' | 'status' | 'priority' | 'assignee' | 'label' | 'more' | null>(null);
@@ -93,12 +115,15 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
       }
       generatedTitle = generatedTitle.charAt(0).toUpperCase() + generatedTitle.slice(1);
 
-      const created = createIssue({
+      createIssue({
         title: generatedTitle,
         description: promptText.trim(),
         projectId: selectedProjectId,
         priority: priority === 'none' ? 'medium' : priority,
-        status: 'agent_running',
+        // Agent assignment is intentionally separate from execution. Keep the
+        // new card in Todo so the author can finish planning before starting a
+        // run from the issue card or inspector.
+        status: 'todo',
         assignedSquadId: selectedSquadId || undefined,
         assignedAgentId: selectedAgentId || undefined,
         labels: selectedLabels.length > 0 ? selectedLabels : ['agent-task'],
@@ -108,8 +133,6 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
           'Submit patch & prepare PR diff'
         ]
       });
-
-      runAgentOnIssue(created.id, selectedAgentId);
 
       if (createAnother) {
         setPromptText('');

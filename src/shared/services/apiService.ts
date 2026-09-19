@@ -397,6 +397,11 @@ export const apiService = {
 
   updateIssue: (id: string, updates: Partial<Issue>) =>
     fetchJson<Issue>(`/issues/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
+  completeIssue: (id: string) =>
+    fetchJson<Issue>('/issues/' + id + '/complete', {
+      method: 'POST',
+      body: JSON.stringify({ reviewed: true })
+    }),
   deleteIssue: (id: string) =>
     fetchJson<{ success: boolean }>(`/issues/${id}`, { method: 'DELETE' }),
   addIssueComment: (issueId: string, comment: Partial<IssueComment>) =>
