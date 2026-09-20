@@ -2,7 +2,7 @@ import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, PenLine, FileText, CreditCard, Inbox, MessageSquare, User,
-  CheckSquare, FolderKanban, Rocket, Bot, Users, BarChart3, Monitor, BookOpen, Settings
+  CheckSquare, FolderKanban, Rocket, Bot, Users, BarChart3, Monitor, BookOpen, Settings, Workflow
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
@@ -101,6 +101,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'skills', label: 'Skills', title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'ai_ops', icon: BookOpen },
 
   { id: 'deployments', label: 'CI/CD Platform', title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'delivery', icon: Rocket },
+  { id: 'build_room', label: 'Build Room', title: 'Live Build Room', subtitle: 'Project execution, handoffs, and validation', group: 'workspace', section: 'delivery', icon: Workflow },
 
   { id: 'analytics', label: 'Analytics', title: 'Token & Cost Analytics', subtitle: 'Token consumption & model latency', group: 'workspace', section: 'insights', icon: BarChart3 },
   { id: 'billing', label: 'Billing & Usage', title: 'Billing & Usage', subtitle: 'Committed client value and agent compute', group: 'workspace', section: 'insights', icon: CreditCard },
@@ -145,14 +146,14 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  */
 export const ROLE_NAV: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
-  dev: ['my_issues', 'issues', 'documents', 'inbox', 'chat', 'agents', 'deployments', 'runtimes', 'skills', 'settings'],
+  dev: ['my_issues', 'issues', 'documents', 'inbox', 'chat', 'agents', 'deployments', 'build_room', 'runtimes', 'skills', 'settings'],
   pm: [
     'inbox', 'chat', 'my_issues', 'issues', 'projects', 'documents',
-    'deployments', 'agents', 'squads', 'analytics', 'runtimes', 'skills', 'settings'
+    'deployments', 'build_room', 'agents', 'squads', 'analytics', 'runtimes', 'skills', 'settings'
   ],
   admin: [
     'inbox', 'chat', 'my_issues', 'issues', 'projects', 'documents', 'billing',
-    'deployments', 'agents', 'squads', 'analytics', 'runtimes', 'skills', 'settings'
+    'deployments', 'build_room', 'agents', 'squads', 'analytics', 'runtimes', 'skills', 'settings'
   ]
 };
 

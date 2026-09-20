@@ -14,11 +14,16 @@ export type NavigationTab =
   | 'runtimes'
   | 'skills'
   | 'deployments'
+  | 'build_room'
   | 'settings';
 
 export interface TabItem {
   id: string;
   view: NavigationTab;
+  /** Optional project context for project-scoped tabs such as the Build Room. */
+  projectId?: string;
+  /** Optional run context when a tab was opened from a specific execution. */
+  buildRunId?: string;
 }
 
 export type IssueStatus = 'backlog' | 'todo' | 'in_progress' | 'agent_running' | 'review' | 'done';
@@ -287,6 +292,32 @@ export interface Project {
   completedIssues?: number;
   milestones?: Milestone[];
   createdAt?: string;
+}
+
+export type BuildStepPhase =
+  | 'requirements'
+  | 'architecture'
+  | 'implementation'
+  | 'database'
+  | 'validation'
+  | 'review'
+  | 'delivery';
+
+/** A project's explicit, ordered build-room pipeline. */
+export interface ProjectBuildStep {
+  id: string;
+  projectId: string;
+  label: string;
+  phase: BuildStepPhase;
+  agentId?: string;
+  squadId?: string;
+  position: number;
+  enabled: boolean;
+  required: boolean;
+  approvalGate?: boolean;
+  dependsOn?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type AgentRole = 
@@ -775,6 +806,19 @@ export interface WorkspaceSettings {
   notificationsEnabled: boolean;
   telemetryEnabled: boolean;
   maxParallelAgentRuns: number;
+}
+
+export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
+
+/** A top-level collaboration boundary; projects hold the actual checkouts. */
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  organization?: string;
+  role: WorkspaceRole;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /* ---------------------------------------------------------------------------

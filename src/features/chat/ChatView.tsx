@@ -14,12 +14,178 @@ import {
   Plus,
   Flame,
   Asterisk, Users,
-  Server} from 'lucide-react';
+  Server,
+  Check} from 'lucide-react';
 import { RoleBadge } from '@/shared/components/Badge';
-import { ChatMessage, ToolExecutionRecord } from '@/shared/types';
+import { Agent, ChatMessage, Squad, ToolExecutionRecord } from '@/shared/types';
 import { AgentReadinessNotice } from '@/features/agents/AgentReadinessNotice';
 import { ThreadProjectPicker } from '@/features/chat/ThreadProjectPicker';
 import { MessageMarkdown } from './MessageMarkdown';
+
+interface ChatTargetMenuProps {
+  value: string;
+  label: string;
+  agents: Agent[];
+  squads: Squad[];
+  disabled: boolean;
+  onChange: (value: string) => void;
+}
+
+/** The responder picker uses the same dark popover language as mentions and navigation. */
+const ChatTargetMenu: React.FC<ChatTargetMenuProps> = ({
+  value,
+  label,
+  agents,
+  squads,
+  disabled,
+  onChange
+}) => {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('mousedown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('mousedown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  const choose = (next: string) => {
+    onChange(next);
+    setOpen(false);
+  };
+
+  const rowClass = (selected: boolean) => `w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ${
+    selected ? 'bg-brand-500/12 text-white' : 'text-gray-300 hover:bg-white/[0.05] hover:text-white'
+  }`;
+
+  return (
+    <div className="relative" ref={menuRef}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setOpen(current => !current)}
+        title="Choose who answers messages without an @mention"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="h-8 min-w-[174px] max-w-[220px] flex items-center gap-2 rounded-md border border-white/[0.10] bg-surface-100/80 px-2.5 text-left text-[11px] text-gray-300 transition-colors hover:border-white/[0.20] hover:bg-surface-100 focus:outline-none focus:border-brand-500/70 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {value.startsWith('agent:') ? (
+          <span
+            className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-[9px] font-semibold text-white"
+            style={{ backgroundColor: agents.find(agent => `agent:${agent.id}` === value)?.color || '#6366f1' }}
+          >
+            {agents.find(agent => `agent:${agent.id}` === value)?.name.charAt(0) || 'A'}
+          </span>
+        ) : value.startsWith('squad:') ? (
+          <span className="w-4 h-4 rounded-md shrink-0 flex items-center justify-center bg-brand-500/15 text-brand-300">
+            <Users className="w-3 h-3" />
+          </span>
+        ) : (
+          <Sparkles className="w-3.5 h-3.5 shrink-0 text-brand-300" />
+        )}
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+        <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && (
+        <div
+          role="menu"
+          aria-label="Chat responder"
+          className="absolute right-0 top-full z-40 mt-2 w-80 max-h-96 overflow-y-auto rounded-lg border border-white/[0.10] bg-surface-raised p-1.5 shadow-2xl shadow-black/40 animate-slide-up"
+        >
+          <div className="px-2.5 pb-1.5 pt-1">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600">Default responder</p>
+            <p className="mt-0.5 text-[11px] text-gray-500">@mentions still override this for one message.</p>
+          </div>
+
+          <button
+            type="button"
+            role="menuitemradio"
+            aria-checked={value === ''}
+            onClick={() => choose('')}
+            className={rowClass(value === '')}
+          >
+            <span className="w-7 h-7 rounded-md flex items-center justify-center bg-brand-500/15 text-brand-300">
+              <Sparkles className="w-3.5 h-3.5" />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs font-medium">Automatic · Alpha</span>
+              <span className="mt-0.5 block truncate text-[10px] text-gray-500">Let Alpha route the conversation</span>
+            </span>
+            {value === '' && <Check className="w-3.5 h-3.5 shrink-0 text-brand-300" />}
+          </button>
+
+          <div className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600">Agents</div>
+          {agents.filter(agent => !agent.isArchived).map(agent => {
+            const agentValue = `agent:${agent.id}`;
+            const selected = value === agentValue;
+            return (
+              <button
+                key={agent.id}
+                type="button"
+                role="menuitemradio"
+                aria-checked={selected}
+                onClick={() => choose(agentValue)}
+                className={rowClass(selected)}
+              >
+                <span
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
+                  style={{ backgroundColor: agent.color || '#6366f1' }}
+                >
+                  {agent.name.charAt(0)}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium">{agent.name}</span>
+                  <span className="mt-0.5 block truncate text-[10px] text-gray-500">{agent.role}</span>
+                </span>
+                {selected && <Check className="w-3.5 h-3.5 shrink-0 text-brand-300" />}
+              </button>
+            );
+          })}
+
+          {squads.length > 0 && (
+            <>
+              <div className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600">Squads</div>
+              {squads.map(squad => {
+                const squadValue = `squad:${squad.id}`;
+                const selected = value === squadValue;
+                return (
+                  <button
+                    key={squad.id}
+                    type="button"
+                    role="menuitemradio"
+                    aria-checked={selected}
+                    onClick={() => choose(squadValue)}
+                    className={rowClass(selected)}
+                  >
+                    <span className="w-7 h-7 rounded-md flex items-center justify-center bg-brand-500/15 text-brand-300 shrink-0">
+                      <Users className="w-3.5 h-3.5" />
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium">{squad.name}</span>
+                      <span className="mt-0.5 block truncate text-[10px] text-gray-500">{squad.memberAgentIds.length} agents · sequential</span>
+                    </span>
+                    {selected && <Check className="w-3.5 h-3.5 shrink-0 text-brand-300" />}
+                  </button>
+                );
+              })}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const ChatView: React.FC = () => {
   const { 
@@ -349,13 +515,23 @@ export const ChatView: React.FC = () => {
                     @mentions still override this choice for one message. */}
                 {!isClient && (
                   <div className="flex items-center gap-1.5">
-                    <Users className="w-3.5 h-3.5 text-gray-500 shrink-0" />
+                    <ChatTargetMenu
+                      value={chatTargetValue}
+                      label={chatTargetLabel}
+                      agents={agents}
+                      squads={squads}
+                      disabled={isAgentTyping}
+                      onChange={handleChatTargetChange}
+                    />
                     <select
+                      aria-hidden="true"
+                      tabIndex={-1}
+                      style={{ display: 'none' }}
                       value={chatTargetValue}
                       disabled={isAgentTyping}
                       onChange={e => handleChatTargetChange(e.target.value)}
                       title="Choose who answers messages without an @mention"
-                      className="bg-transparent border border-white/10 rounded-lg px-2 py-1 text-[11px] text-gray-300 hover:border-white/20 focus:outline-none focus:border-brand-500 disabled:opacity-50 max-w-[190px] truncate"
+                      className="bg-surface-100 border border-white/10 rounded-md px-2 py-1 text-[11px] text-gray-200 hover:border-white/20 focus:outline-none focus:border-brand-500 disabled:opacity-50 max-w-[190px] truncate"
                     >
                       <option value="">Automatic · Alpha</option>
                       <optgroup label="Agents">

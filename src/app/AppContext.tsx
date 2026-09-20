@@ -28,7 +28,8 @@ import {
   Estimate,
   RateCard,
   Milestone,
-  Identity
+  Identity,
+  Workspace
 } from '@/shared/types';
 import {
   initialIssues,
@@ -42,7 +43,7 @@ import {
 import { buildEstimate, DEFAULT_RATE_CARD } from '@/features/delivery/estimator';
 import { apiService, normalizeGitHubRepo, normalizeSkill } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
-import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
+import { fetchServerSnapshot, persist, describeWriteError, ServerStatus, ServerSnapshot } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
 import { runTokenTotal } from '@/shared/lib/runUsage';
 
@@ -67,10 +68,19 @@ interface AppContextType {
   tabs: TabItem[];
   activeTabId: string;
   setActiveTabId: (id: string) => void;
-  openNewTab: (view?: NavigationTab) => void;
+  openNewTab: (view?: NavigationTab, projectId?: string) => void;
+  openBuildRoom: (projectId?: string, buildRunId?: string) => void;
   closeTab: (tabId: string) => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
+
+  // Workspaces
+  workspaces: Workspace[];
+  activeWorkspaceId: string | null;
+  activeWorkspace?: Workspace;
+  workspaceSwitching: boolean;
+  switchWorkspace: (id: string) => Promise<void>;
+  createWorkspace: (name: string) => Promise<Workspace>;
   
   // Issues
   issues: Issue[];
@@ -200,6 +210,8 @@ interface AppContextType {
   refreshIdentity: () => Promise<void>;
   /** Pull the board from GitHub now. */
   syncBoard: () => Promise<void>;
+  /** Refresh issue and runner state for execution-focused views. */
+  refreshExecution: () => Promise<void>;
   /** When the last successful sync finished, or null if none has. */
   lastSyncedAt: string | null;
   syncing: boolean;
@@ -417,9 +429,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Only when user presses + (and selects a destination):
   // Creates a brand new tab and activates it!
-  const openNewTab = (view: NavigationTab = roleTabs[0]) => {
+  const openNewTab = (view: NavigationTab = roleTabs[0], projectId?: string) => {
     const newTabId = `tab-${Date.now()}`;
-    const newTab: TabItem = { id: newTabId, view };
+    const newTab: TabItem = { id: newTabId, view, projectId };
+    setTabs(prev => [...prev, newTab]);
+    setActiveTabId(newTabId);
+  };
+
+  const openBuildRoom = (projectId?: string, buildRunId?: string) => {
+    const newTabId = `tab-build-room-${Date.now()}`;
+    const newTab: TabItem = {
+      id: newTabId,
+      view: 'build_room',
+      projectId,
+      buildRunId
+    };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTabId);
   };
@@ -443,6 +467,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+
+  const [workspaces, setWorkspaces] = useState<Workspace[]>(() =>
+    loadFromStorage<Workspace[]>('workspaces', [])
+  );
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() =>
+    apiService.getWorkspaceId() || loadFromStorage<Workspace[]>('workspaces', [])[0]?.id || null
+  );
+  const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
+
+  useEffect(() => {
+    if (activeWorkspaceId) apiService.setWorkspaceId(activeWorkspaceId);
+  }, [activeWorkspaceId]);
 
   // Raw collections. These are never handed to a view directly — the scoped
   // derivations further down are what the provider exposes, so a view cannot
@@ -553,6 +589,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * ------------------------------------------------------------------------ */
   const [serverStatus, setServerStatus] = useState<ServerStatus>('connecting');
 
+  const applyServerSnapshot = useCallback((snapshot: Partial<ServerSnapshot>) => {
+    if (snapshot.workspaces) {
+      const available = snapshot.workspaces as Workspace[];
+      setWorkspaces(available);
+      const selected = apiService.getWorkspaceId();
+      const next = selected && available.some(workspace => workspace.id === selected)
+        ? selected
+        : available[0]?.id ?? null;
+      if (next && next !== selected) apiService.setWorkspaceId(next);
+      setActiveWorkspaceId(next);
+    }
+
+    if (snapshot.projects) setProjects(snapshot.projects as Project[]);
+    if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
+    if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
+    if (snapshot.squads) setSquads(snapshot.squads as Squad[]);
+    if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
+    if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
+    if (snapshot.chatThreads) {
+      setChatThreads(prev => {
+        const loaded = new Map(prev.map(t => [t.id, t.messages]));
+        return (snapshot.chatThreads as ChatThread[]).map(t => ({
+          ...t,
+          messages: t.messages ?? loaded.get(t.id)
+        }));
+      });
+    }
+    if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
+    if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
+    if (snapshot.analytics && typeof snapshot.analytics === 'object') {
+      setAnalytics(snapshot.analytics as AnalyticsData);
+    }
+  }, []);
+
+  /**
+   * Execution views need a deliberate re-read after a reconnect or when an
+   * operator presses Refresh.  Hydration is intentionally one-shot, while
+   * runs and issues can change without a full page reload.
+   */
+  const refreshExecution = useCallback(async () => {
+    const results = await Promise.allSettled([
+      apiService.getIssues(),
+      apiService.getRuns(),
+      apiService.getSquadRuns()
+    ]);
+    let loaded = 0;
+
+    const [issuesResult, runsResult, squadRunsResult] = results;
+    if (issuesResult.status === 'fulfilled' && Array.isArray(issuesResult.value)) {
+      setIssues(issuesResult.value);
+      loaded += 1;
+    }
+    if (runsResult.status === 'fulfilled' && Array.isArray(runsResult.value)) {
+      setPrototypeRuns(runsResult.value);
+      loaded += 1;
+    }
+    if (squadRunsResult.status === 'fulfilled' && Array.isArray(squadRunsResult.value)) {
+      setSquadRuns(squadRunsResult.value);
+      loaded += 1;
+    }
+
+    if (loaded === 0) {
+      throw new Error('The execution state could not be refreshed.');
+    }
+    setServerStatus('online');
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -568,12 +671,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Only overwrite what actually came back; a partially-implemented backend
       // must not blank the entities it does not serve yet.
-      if (snapshot.projects) setProjects(snapshot.projects as Project[]);
-      if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
-      if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
-      if (snapshot.squads) setSquads(snapshot.squads as Squad[]);
-      if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
-      if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
+      applyServerSnapshot(snapshot);
       /**
        * Keep whatever messages are already loaded.
        *
@@ -588,27 +686,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
        * ask for it back. Merging keeps what is in hand; `loadThreadMessages`
        * fetches the rest when a thread is opened.
        */
-      if (snapshot.chatThreads) {
-        setChatThreads(prev => {
-          const loaded = new Map(prev.map(t => [t.id, t.messages]));
-          return (snapshot.chatThreads as ChatThread[]).map(t => ({
-            ...t,
-            messages: t.messages ?? loaded.get(t.id)
-          }));
-        });
-      }
-      if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
-      if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
-      if (snapshot.analytics && typeof snapshot.analytics === 'object') {
-        setAnalytics(snapshot.analytics as AnalyticsData);
-      }
-
       setServerStatus('online');
     };
 
     void hydrate();
     return () => { cancelled = true; };
-  }, []);
+  }, [applyServerSnapshot]);
+
+  const switchWorkspace = useCallback(async (id: string) => {
+    if (!id || workspaceSwitching) return;
+
+    apiService.setWorkspaceId(id);
+    setActiveWorkspaceId(id);
+    setWorkspaceSwitching(true);
+    setServerStatus('connecting');
+    setActiveThreadId(null);
+    loadedThreadsRef.current.clear();
+    setChatMessages([]);
+    // Do not leave the previous workspace visible while the new scope loads.
+    setProjects([]);
+    setAgents([]);
+    setIssues([]);
+    setSquads([]);
+    setPrototypeRuns([]);
+    setSquadRuns([]);
+    setAnalytics(emptyAnalytics);
+
+    try {
+      const snapshot = await fetchServerSnapshot();
+      applyServerSnapshot(snapshot);
+      setServerStatus('online');
+    } catch {
+      setServerStatus('offline');
+    } finally {
+      setWorkspaceSwitching(false);
+    }
+  }, [applyServerSnapshot, workspaceSwitching]);
+
+  const createWorkspace = useCallback(async (name: string): Promise<Workspace> => {
+    const created = await apiService.createWorkspace({ name });
+    setWorkspaces(prev => [...prev, created]);
+    await switchWorkspace(created.id);
+    return created;
+  }, [switchWorkspace]);
 
   /**
    * Keep detected runtimes fresh.
@@ -701,6 +821,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Sync to local storage
   useEffect(() => { saveToStorage('workspace_tabs_v2', tabs); }, [tabs]);
   useEffect(() => { saveToStorage('active_tab_id_v2', activeTabId); }, [activeTabId]);
+  useEffect(() => { saveToStorage('workspaces', workspaces); }, [workspaces]);
   useEffect(() => { saveToStorage('issues', issues); }, [issues]);
   useEffect(() => { saveToStorage('projects', projects); }, [projects]);
   useEffect(() => { saveToStorage('agents', agents); }, [agents]);
@@ -929,43 +1050,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Squad run stopped', squadRun.stoppedReason ?? 'A member did not finish.', 'error');
     });
 
-    // Fetch initial persistent real state from backend
-    apiService.checkHealth().then(async () => {
-      try {
-        const [dbProjects, dbAgents, dbIssues, dbSquads, dbRuntimes, dbSkills, dbRuns, dbSquadRuns] = await Promise.all([
-          apiService.getProjects(),
-          apiService.getAgents(),
-          apiService.getIssues(),
-          apiService.getSquads(),
-          apiService.getRuntimes(),
-          apiService.getSkills(),
-          apiService.getRuns(),
-          // Squad runs came from localStorage and nowhere else, so a reload
-          // mid-run left the flow view with nothing to show for a squad that
-          // was still working.
-          apiService.getSquadRuns()
-        ]);
-        if (dbProjects?.length) setProjects(dbProjects as any);
-        if (dbAgents?.length) setAgents(dbAgents as any);
-        if (dbIssues?.length) setIssues(dbIssues as any);
-        if (dbSquads?.length) setSquads(dbSquads as any);
-        if (dbRuntimes?.length) setRuntimes(dbRuntimes as any);
-        if (dbSkills?.length) setSkills(dbSkills as any);
-        if (dbRuns?.length) setPrototypeRuns(dbRuns as any);
-        if (dbSquadRuns?.length) setSquadRuns(dbSquadRuns as any);
-        apiService.getIdentity().then(next => {
-          setIdentity(next);
-          // A successful connection supersedes the temporary local-mode
-          // choice, so future disconnects can show the setup screen again.
-          if (next.github === 'ok') setLocalMode(false);
-        }).catch(() => {
-          // An older daemon has no /me. The board still works; "Mine" does not.
-        });
-      } catch (err) {
-        console.warn('Backend sync error:', err);
-      }
+    // Identity is separate from workspace hydration. The snapshot above owns
+    // all workspace-scoped collections, so this effect only resolves who is
+    // signed in and keeps the live runner event subscriptions together.
+    apiService.getIdentity().then(next => {
+      setIdentity(next);
+      if (next.github === 'ok') setLocalMode(false);
     }).catch(() => {
-      // Backend not running yet; gracefully use local storage cache
+      // The board still works from cache when the daemon is unavailable.
     });
 
     return () => {
@@ -2643,6 +2735,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Settings
   const updateSettings = (updates: Partial<WorkspaceSettings>) => {
     setSettings(prev => ({ ...prev, ...updates }));
+
+    // Keep the legacy Settings form and the real workspace record aligned.
+    // Other settings remain local machine preferences until they have a
+    // server-owned workspace settings table.
+    if (updates.workspaceName !== undefined && activeWorkspaceId) {
+      const name = updates.workspaceName.trim();
+      if (name) {
+        persist(
+          () => apiService.updateWorkspace(activeWorkspaceId, { name }),
+          saved => setWorkspaces(prev => prev.map(workspace =>
+            workspace.id === saved.id ? saved : workspace
+          )),
+          message => showToast('Workspace not renamed', message, 'error')
+        );
+      }
+    }
   };
 
   /* ---------------------------------------------------------------------
@@ -3102,12 +3210,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       serverStatus,
+      workspaces,
+      activeWorkspaceId,
+      activeWorkspace: workspaces.find(workspace => workspace.id === activeWorkspaceId),
+      workspaceSwitching,
+      switchWorkspace,
+      createWorkspace,
       activeTab,
       setActiveTab,
       tabs,
       activeTabId,
       setActiveTabId,
       openNewTab,
+      openBuildRoom,
       closeTab,
       commandPaletteOpen,
       setCommandPaletteOpen,
@@ -3153,6 +3268,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lastSyncedAt,
       syncing,
       syncBoard,
+      refreshExecution,
       refreshIdentity: async () => {
         try {
           const next = await apiService.getIdentity();

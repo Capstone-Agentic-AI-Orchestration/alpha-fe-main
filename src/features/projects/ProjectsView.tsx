@@ -17,7 +17,8 @@ import {
   Bot,
   Kanban as KanbanIcon,
   List as ListIcon,
-  ChevronLeft,
+  ChevronLeft,
+  Workflow,
 } from 'lucide-react';
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
@@ -39,7 +40,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     updateProject, 
     deleteProject, 
 
-    agents 
+    agents,
+    openBuildRoom
   } = useApp();
   
   // Selected Project for dedicated Workspace Kanban View
@@ -261,6 +263,15 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               title="Edit Project Details"
             >
               <Edit3 className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => openBuildRoom(selectedProject.id)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface-raised hover:bg-surface-high border border-white/5 text-gray-300 hover:text-white transition-colors"
+              title="Open Live Build Room"
+            >
+              <Workflow className="w-3.5 h-3.5 text-brand-300" />
+              <span className="hidden xl:inline">Build room</span>
             </button>
 
             {/* New Issue Button */}

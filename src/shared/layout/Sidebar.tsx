@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { navItem, navIcon, navLabel } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
-import { Search, Edit3, ChevronDown, HelpCircle, Sun, Moon } from 'lucide-react';
+import { Search, Edit3, ChevronDown, HelpCircle, Sun, Moon, Plus, Loader2 } from 'lucide-react';
 import { useTheme } from '@/shared/hooks/useTheme';
 
 interface SidebarProps {
@@ -37,12 +37,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
     switchRole,
     currentUser,
     identity,
-    roleIsOverridden
+    roleIsOverridden,
+    workspaces,
+    activeWorkspace,
+    switchWorkspace,
+    createWorkspace,
+    workspaceSwitching,
+    showToast
   } = useApp();
 
   const { theme, toggle: toggleTheme } = useTheme();
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [newWorkspaceName, setNewWorkspaceName] = useState('');
+  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
 
@@ -70,7 +78,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
    * answer and needs no configuring.
    */
   const workspaceName =
-    settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
+    activeWorkspace?.name || settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
+
+  const handleCreateWorkspace = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = newWorkspaceName.trim();
+    if (!name || creatingWorkspace) return;
+    setCreatingWorkspace(true);
+    try {
+      await createWorkspace(name);
+      setNewWorkspaceName('');
+      setWorkspaceMenuOpen(false);
+    } catch (error) {
+      showToast('Workspace not created', error instanceof Error ? error.message : String(error), 'error');
+    } finally {
+      setCreatingWorkspace(false);
+    }
+  };
 
   const isClient = role === 'client';
   const labelFor = (tab: NavigationTab) => navLabel(tab, role);
@@ -110,10 +134,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
           >
             <div className="flex items-center gap-2.5 truncate">
               <div className="w-6 h-6 rounded-md bg-white/[0.07] text-gray-300 flex items-center justify-center text-xs font-semibold">
-                {isClient ? (currentUser.company?.[0] ?? 'C') : 'A'}
+                {(workspaceName[0] ?? 'A').toUpperCase()}
               </div>
               <span className="text-sm font-semibold text-white truncate">
-                {isClient ? currentUser.company : workspaceName}
+                {workspaceName}
               </span>
             </div>
             <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
@@ -122,12 +146,46 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
           {workspaceMenuOpen && (
             <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-1 animate-slide-up text-sm">
               <div className="text-xs font-medium text-gray-500 px-2 py-1">Workspaces</div>
-              <div className="flex items-center gap-2.5 px-3 py-2 rounded-md bg-white/[0.04] text-white font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                <span className="truncate">
-                  {isClient ? currentUser.company : workspaceName}
-                </span>
+              <div className="max-h-48 overflow-y-auto space-y-0.5">
+                {workspaces.map(workspace => (
+                  <button
+                    key={workspace.id}
+                    onClick={() => {
+                      void switchWorkspace(workspace.id);
+                      setWorkspaceMenuOpen(false);
+                    }}
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left transition-colors ${
+                      workspace.id === activeWorkspace?.id
+                        ? 'bg-white/[0.06] text-white font-medium'
+                        : 'text-gray-400 hover:text-white hover:bg-white/[0.035]'
+                    }`}
+                  >
+                    <span className={`w-2 h-2 rounded-full ${workspace.id === activeWorkspace?.id ? 'bg-emerald-400' : 'bg-gray-600'}`} />
+                    <span className="truncate">{workspace.name}</span>
+                    {workspace.id === activeWorkspace?.id && workspaceSwitching && (
+                      <Loader2 className="w-3 h-3 ml-auto animate-spin text-gray-500" />
+                    )}
+                  </button>
+                ))}
               </div>
+              <form onSubmit={handleCreateWorkspace} className="pt-1 mt-1 border-t border-white/[0.06]">
+                <div className="flex items-center gap-1.5">
+                  <input
+                    value={newWorkspaceName}
+                    onChange={event => setNewWorkspaceName(event.target.value)}
+                    placeholder="New workspace"
+                    className="min-w-0 flex-1 bg-white/[0.04] border border-white/[0.08] rounded-md px-2 py-1.5 text-xs text-white placeholder:text-gray-600 outline-none focus:border-brand-400/50"
+                  />
+                  <button
+                    type="submit"
+                    disabled={!newWorkspaceName.trim() || creatingWorkspace}
+                    className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-40"
+                    title="Create workspace"
+                  >
+                    {creatingWorkspace ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </form>
               <button
                 onClick={() => {
                   setActiveTab('settings');

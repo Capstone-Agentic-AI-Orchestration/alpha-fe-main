@@ -16,11 +16,23 @@ import {
   McpServerInput,
   RemoteAction,
   Identity,
-  AnalyticsData
+  AnalyticsData,
+  Workspace,
+  ProjectBuildStep
 } from '@/shared/types';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+let activeWorkspaceId: string | null = (() => {
+  try {
+    return typeof window !== 'undefined'
+      ? window.localStorage.getItem('alpha.active_workspace_id')
+      : null;
+  } catch {
+    return null;
+  }
+})();
 
 const SKILL_CATEGORIES: Skill['category'][] = [
   'File Operations',
@@ -119,9 +131,18 @@ export function normalizeGitHubRepo(value: unknown): string | undefined {
 }
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(options?.headers);
+  headers.set('Content-Type', 'application/json');
+  if (
+    activeWorkspaceId &&
+    url !== '/health' &&
+    !url.startsWith('/workspaces')
+  ) {
+    headers.set('X-Workspace-Id', activeWorkspaceId);
+  }
   const res = await fetch(`${API_BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json' },
-    ...options
+    ...options,
+    headers
   });
   if (!res.ok) {
     const errorText = await res.text().catch(() => res.statusText);
@@ -141,6 +162,23 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const apiService = {
+  // Workspaces
+  getWorkspaceId: () => activeWorkspaceId,
+  setWorkspaceId: (id: string | null) => {
+    activeWorkspaceId = id;
+    try {
+      if (id) window.localStorage.setItem('alpha.active_workspace_id', id);
+      else window.localStorage.removeItem('alpha.active_workspace_id');
+    } catch {
+      // Storage is optional; the in-memory selection still scopes this tab.
+    }
+  },
+  getWorkspaces: () => fetchJson<Workspace[]>('/workspaces'),
+  createWorkspace: (workspace: Pick<Workspace, 'name'> & Partial<Workspace>) =>
+    fetchJson<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(workspace) }),
+  updateWorkspace: (id: string, updates: Partial<Workspace>) =>
+    fetchJson<Workspace>(`/workspaces/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
+
   // Health
   checkHealth: () => fetchJson<{ status: string; version: string }>('/health'),
 
@@ -231,6 +269,13 @@ export const apiService = {
     fetchJson<Project>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteProject: (id: string) =>
     fetchJson<{ success: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
+  getProjectBuildSteps: (projectId: string) =>
+    fetchJson<ProjectBuildStep[]>(`/projects/${projectId}/build-steps`),
+  updateProjectBuildSteps: (projectId: string, steps: Array<Partial<ProjectBuildStep>>) =>
+    fetchJson<ProjectBuildStep[]>(`/projects/${projectId}/build-steps`, {
+      method: 'PUT',
+      body: JSON.stringify({ steps })
+    }),
 
   // Agents
   getAgents: async (): Promise<Agent[]> => {

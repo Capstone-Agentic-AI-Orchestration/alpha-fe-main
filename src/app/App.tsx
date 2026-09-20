@@ -20,6 +20,7 @@ import { AnalyticsView } from '@/features/analytics/AnalyticsView';
 import { RuntimesView } from '@/features/runtimes/RuntimesView';
 import { SkillsView } from '@/features/skills/SkillsView';
 import { DeploymentsView } from '@/features/deployments/DeploymentsView';
+import { BuildRoomView } from '@/features/build-room/BuildRoomView';
 import { SettingsView } from '@/features/settings/SettingsView';
 import { ClientPortalView } from '@/features/delivery/ClientPortalView';
 import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
@@ -44,17 +45,29 @@ export const App: React.FC = () => {
     localMode,
     continueInLocalMode
   } = useApp();
-  const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
+  const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
+  const activeTabItem = tabs.find(tab => tab.id === activeTabId) ?? tabs[0];
 
   // A tab persisted under a different role must not keep its old label in the
   // strip; resolve it the same way the context resolves the rendered view.
   const resolveView = (view: NavigationTab): NavigationTab =>
     visibleTabs.includes(view) ? view : visibleTabs[0];
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
+  const [createIssueProjectId, setCreateIssueProjectId] = useState<string | undefined>(undefined);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
   const newTabMenuRef = useRef<HTMLDivElement>(null);
+
+  const openCreateIssue = (projectId?: string) => {
+    setCreateIssueProjectId(projectId);
+    setCreateIssueOpen(true);
+  };
+
+  const closeCreateIssue = () => {
+    setCreateIssueOpen(false);
+    setCreateIssueProjectId(undefined);
+  };
 
   // Close new tab dropdown on click outside or Escape
   useEffect(() => {
@@ -122,7 +135,7 @@ export const App: React.FC = () => {
       <Sidebar 
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
-        onOpenNewIssue={() => setCreateIssueOpen(true)}
+        onOpenNewIssue={() => openCreateIssue()}
       />
 
       {/* Main Workspace Frame */}
@@ -239,15 +252,21 @@ export const App: React.FC = () => {
           {activeTab === 'billing' && <BillingView />}
           {activeTab === 'inbox' && <InboxView />}
           {activeTab === 'chat' && <ChatView />}
-          {activeTab === 'my_issues' && <IssuesView onlyMyIssues={true} onOpenNewIssue={() => setCreateIssueOpen(true)} />}
-          {activeTab === 'issues' && <IssuesView onOpenNewIssue={() => setCreateIssueOpen(true)} />}
-          {activeTab === 'projects' && <ProjectsView onOpenNewIssue={() => setCreateIssueOpen(true)} />}
+          {activeTab === 'my_issues' && <IssuesView onlyMyIssues={true} onOpenNewIssue={() => openCreateIssue()} />}
+          {activeTab === 'issues' && <IssuesView lockedProjectId={activeTabItem?.projectId} onOpenNewIssue={() => openCreateIssue(activeTabItem?.projectId)} />}
+          {activeTab === 'projects' && <ProjectsView onOpenNewIssue={() => openCreateIssue()} />}
           {activeTab === 'agents' && <AgentsView />}
           {activeTab === 'squads' && <SquadsView />}
           {activeTab === 'analytics' && <AnalyticsView />}
           {activeTab === 'runtimes' && <RuntimesView />}
           {activeTab === 'skills' && <SkillsView />}
           {activeTab === 'deployments' && <DeploymentsView />}
+          {activeTab === 'build_room' && (
+            <BuildRoomView
+              projectId={activeTabItem?.projectId}
+              buildRunId={activeTabItem?.buildRunId}
+            />
+          )}
           {activeTab === 'settings' && <SettingsView />}
         </main>
       </div>
@@ -258,7 +277,8 @@ export const App: React.FC = () => {
       {/* Create issue */}
       <CreateIssueModal
         isOpen={createIssueOpen}
-        onClose={() => setCreateIssueOpen(false)}
+        onClose={closeCreateIssue}
+        initialProjectId={createIssueProjectId}
       />
 
       <DownloadDesktopModal
