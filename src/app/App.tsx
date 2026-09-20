@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { NAV_ITEMS, navIcon, navLabel } from '@/config/navigation';
 import { NoTeamAccess } from '@/features/onboarding/NoTeamAccess';
 import { GitHubSetup } from '@/features/onboarding/GitHubSetup';
+import { SignIn, SignInError } from '@/features/onboarding/SignIn';
+import { DeveloperGateway } from '@/features/onboarding/DeveloperGateway';
+import { apiService } from '@/shared/services/apiService';
 import { useApp } from '@/app/AppContext';
 import { Sidebar } from '@/shared/layout/Sidebar';
 import { CommandPalette } from '@/shared/components/CommandPalette';
@@ -37,6 +40,38 @@ import { Plus, X, Download } from 'lucide-react';
  */
 const ALL_TABS = NAV_ITEMS;
 
+/**
+ * Whether this is the packaged desktop app rather than a browser tab.
+ *
+ * Set by the Electron preload bridge, which exposes nothing else the renderer
+ * needs — the renderer reaches the backend over HTTP on 127.0.0.1 exactly as
+ * it does in the browser. Absent in the web build, so this is false there.
+ */
+const isDesktop = Boolean(
+  (window as unknown as { alphaDesktop?: { isDesktop?: boolean } }).alphaDesktop?.isDesktop
+);
+
+/**
+ * Why a sign-in attempt bounced back, from the fragment the daemon redirects
+ * with.
+ *
+ * A fragment rather than a query string because it never reaches the server,
+ * and never lands in an access log or a Referer header. Read once on load and
+ * cleared, so a refresh does not re-show an error the person already resolved.
+ */
+function consumeSignInError(): SignInError | undefined {
+  const match = /[#&]alpha_error=([a-z_]+)/.exec(window.location.hash);
+  if (!match) return undefined;
+
+  history.replaceState(null, '', window.location.pathname + window.location.search);
+  return match[1] === 'no_team' || match[1] === 'oauth_failed'
+    ? (match[1] as SignInError)
+    : undefined;
+}
+
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const desktopDownloadUrl = `${API_BASE}/download/desktop`;
+
 export const App: React.FC = () => {
   const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role,
     identity,
@@ -44,12 +79,26 @@ export const App: React.FC = () => {
     localMode,
     continueInLocalMode
   } = useApp();
-  const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
+  const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
+
 
   // A tab persisted under a different role must not keep its old label in the
   // strip; resolve it the same way the context resolves the rendered view.
   const resolveView = (view: NavigationTab): NavigationTab =>
     visibleTabs.includes(view) ? view : visibleTabs[0];
+  // Read once on mount: the fragment is cleared as it is read, so deriving
+  // this during render would lose it on the first re-render.
+  const [signInError] = useState<SignInError | undefined>(consumeSignInError);
+  const signOut = async () => {
+    try {
+      await apiService.signOut();
+    } finally {
+      // Reload rather than mutate state: signing out invalidates every cached
+      // collection in the provider, and a fresh boot is simpler than unwinding
+      // them one at a time.
+      window.location.reload();
+    }
+  };
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
   const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -102,6 +151,36 @@ export const App: React.FC = () => {
    * "you have no team" to someone who has not installed the CLI would send
    * them to an org owner for a problem they can fix themselves in a minute.
    */
+  /**
+   * Hosted sign-in, before anything else.
+   *
+   * `authenticated` is only ever false in the web build; the desktop resolves
+   * identity from `gh` before the window opens. Checked ahead of the GitHub
+   * CLI gate below because that one diagnoses a *local* install problem, which
+   * is not a thing a browser can have.
+   */
+  if (identity?.authenticated === false) {
+    return <SignIn identity={identity} error={signInError} />;
+  }
+
+  /**
+   * A developer who signed in to the web app.
+   *
+   * Their tools need a checkout and the AI CLIs on their own machine, so the
+   * web build has nothing to show them. Sending them to the installer is the
+   * whole of it -- their session stays valid and the desktop app finds the
+   * same account.
+   */
+  if (identity?.authenticated && role === 'dev' && !isDesktop) {
+    return (
+      <DeveloperGateway
+        identity={identity}
+        downloadUrl={desktopDownloadUrl}
+        onSignOut={signOut}
+      />
+    );
+  }
+
   if (!localMode && identity && identity.github && identity.github !== 'ok') {
     return (
       <GitHubSetup

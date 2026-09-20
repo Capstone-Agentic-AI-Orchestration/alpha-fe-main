@@ -136,6 +136,20 @@ export function normalizeGitHubRepo(value: unknown): string | undefined {
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
+    /**
+     * Send the session cookie.
+     *
+     * Without this the browser never attaches it, because the API is a
+     * different origin from the app — Vercel to Render. `fetch` omits
+     * credentials cross-origin unless asked, so every request arrived
+     * anonymous and the hosted app could not have signed anyone in.
+     *
+     * Safe against CSRF because the cookie is `SameSite=Lax` (a cross-site
+     * POST carries nothing) and the API's CORS allowlist is exact — a wildcard
+     * over a shared hosting apex is refused at parse time, precisely so this
+     * line cannot be turned against us.
+     */
+    credentials: 'include',
     headers: {
       'Content-Type': 'application/json',
       ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
@@ -179,6 +193,8 @@ export const apiService = {
 
   /** Who the daemon thinks you are — a GitHub login where one is available. */
   getIdentity: () => fetchJson<Identity>('/me'),
+  /** End the hosted session server-side, then clear the cookie. */
+  signOut: () => fetchJson<{ success: boolean }>('/github/session/logout', { method: 'POST' }),
   getWorkspaces: () => fetchJson<WorkspaceSummary[]>('/workspaces'),
   createWorkspace: (payload: { name: string; slug?: string }) =>
     fetchJson<WorkspaceSummary>('/workspaces', {

@@ -993,6 +993,17 @@ export interface Workspace {
  * never implies a GitHub account that is not there.
  */
 export interface Identity {
+  /**
+   * Whether this caller is signed in.
+   *
+   * Only ever false in the hosted deployment, which authenticates with a
+   * session cookie. The desktop has no sign-in: identity there is the
+   * machine's `gh` login, so it is always true and the app never renders a
+   * sign-in surface.
+   */
+  authenticated?: boolean;
+  /** Where to send the browser to sign in. Absent when OAuth is unconfigured. */
+  signInUrl?: string;
   login: string;
   name?: string;
   source: 'github' | 'local';
