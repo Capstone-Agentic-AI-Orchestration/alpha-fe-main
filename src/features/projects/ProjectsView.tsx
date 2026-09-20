@@ -39,7 +39,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     issues, 
     updateProject, 
     deleteProject, 
-
+
+
     agents,
     openBuildRoom
   } = useApp();
@@ -196,7 +197,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       <div className="h-full flex flex-col overflow-hidden bg-shell text-gray-300 select-none font-sans">
         
         {/* ================= WORKSPACE TOP BREADCRUMB & ACTION BAR ================= */}
-        <div className="px-6 py-3.5 border-b border-white/[0.06] bg-shell flex items-center justify-between gap-4 flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] bg-shell px-5 py-3">
           
           {/* Left: Breadcrumbs navigation */}
           <div className="flex items-center gap-3 min-w-0">
@@ -212,7 +213,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-base flex-shrink-0">{selectedProject.icon || '⚡'}</span>
-              <h1 className="text-sm font-semibold text-white tracking-wide truncate">
+              <h1 className="truncate text-base font-semibold tracking-tight text-white">
                 {selectedProject.name}
               </h1>
               <span className="text-xs text-gray-500 font-mono">#{selectedProject.key}</span>
@@ -304,7 +305,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             <IssuesView
               embedded
               lockedProjectId={selectedProject.id}
-              onOpenNewIssue={() => onOpenNewIssue?.()}
+              onOpenNewIssue={canManageIssues ? () => onOpenNewIssue?.() : () => {}}
             />
           </div>
 
@@ -379,14 +380,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Connected Repositories</span>
                 </span>
-                <button
-                  onClick={() => setResourcesModalOpen(true)}
-                  className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white transition-colors"
-                  title="Attach or create a repository"
-                >
-                  <Plus className="w-3 h-3" />
-                  <span>Attach</span>
-                </button>
+                {canManageProjects && (
+                  <button
+                    onClick={() => setResourcesModalOpen(true)}
+                    className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white transition-colors"
+                    title="Attach or create a repository"
+                  >
+                    <Plus className="w-3 h-3" />
+                    <span>Attach</span>
+                  </button>
+                )}
               </div>
 
               <ProjectResourcesPanel
@@ -394,6 +397,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 projectId={selectedProject.id}
                 resources={selectedProject.resources || []}
                 onChange={(next) => updateProject(selectedProject.id, { resources: next })}
+                readOnly={!canManageProjects}
               />
             </div>
 
@@ -402,6 +406,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               <ProjectEnvPanel
                 envVars={selectedProject.envVars || []}
                 onChange={(next) => updateProject(selectedProject.id, { envVars: next })}
+                readOnly={!canManageProjects}
               />
             </div>
 
@@ -451,6 +456,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               onChange={(next) => updateProject(selectedProject.id, { resources: next })}
               githubOrg={selectedProject.githubOrg}
               onOrgChange={(org) => updateProject(selectedProject.id, { githubOrg: org })}
+              readOnly={!canManageProjects}
             />
           </Modal>
         )}
@@ -652,7 +658,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   // VIEW 2: MAIN PROJECTS TABLE LIST
   // =========================================================================
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-shell text-gray-300 p-6 space-y-6 select-none font-sans relative">
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-shell p-5 text-gray-300 select-none font-sans lg:p-6">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
@@ -666,16 +672,19 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
         </div>
 
         {/* + New project button */}
-        <button
-          onClick={() => setCreateModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-xs font-medium text-on-accent transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New project</span>
-        </button>
+        {canManageProjects && (
+          <button
+            onClick={() => setCreateModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-xs font-medium text-on-accent transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>New project</span>
+          </button>
+        )}
       </div>
 
       {/* ================= SEARCH & ACTION ROW ================= */}
+      {projects.length > 0 && (
       <div className="flex items-center justify-between gap-4">
         {/* Left: Search input */}
         <div className="relative flex-1 max-w-xs">
@@ -802,37 +811,75 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
         </div>
       </div>
+      )}
 
       {/* ================= MINIMALIST PROJECTS TABLE ================= */}
-      <div className="w-full">
-        {/* Table Column Headers */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-gray-500 border-b border-white/[0.04]">
-          <div className="col-span-4">Name</div>
-          <div className="col-span-2">Status</div>
-          <div className="col-span-2">Priority</div>
-          <div className="col-span-1 text-left">Progress</div>
-          <div className="col-span-2 pl-4">Lead</div>
-          <div className="col-span-1 text-right flex items-center justify-end gap-1">
-            <span>Created</span>
-            <ArrowDown className="w-3 h-3 text-gray-500" />
-          </div>
+      {filteredProjects.length === 0 ? (
+        <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-surface/30 px-6 py-12 text-center">
+          <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-300 ring-1 ring-inset ring-brand-400/20">
+            <Folder className="h-5 w-5" />
+          </span>
+          <h2 className="text-sm font-semibold text-white">
+            {projects.length === 0 ? 'Start with a project' : 'No projects match your filters'}
+          </h2>
+          <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-gray-500">
+            {projects.length === 0
+              ? 'Projects keep issues, agents, and connected resources organized in one place.'
+              : 'Try a different search or clear the active filters to see more projects.'}
+          </p>
+          {projects.length === 0 ? (
+            canManageProjects ? (
+              <button
+                onClick={() => setCreateModalOpen(true)}
+                className="mt-5 flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors hover:bg-brand-600"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                <span>Create project</span>
+              </button>
+            ) : null
+          ) : (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                setStatusFilter('all');
+                setPriorityFilter('all');
+              }}
+              className="mt-5 rounded-lg border border-white/[0.1] px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
+      ) : (
+        <div className="w-full">
+          {/* Table Column Headers */}
+          <div className="grid grid-cols-12 gap-4 border-b border-white/[0.04] px-4 py-2 text-xs font-normal text-gray-500">
+            <div className="col-span-4">Name</div>
+            <div className="col-span-2">Status</div>
+            <div className="col-span-2">Priority</div>
+            <div className="col-span-1 text-left">Progress</div>
+            <div className="col-span-2 pl-4">Lead</div>
+            <div className="col-span-1 flex items-center justify-end gap-1 text-right">
+              <span>Created</span>
+              <ArrowDown className="h-3 w-3 text-gray-500" />
+            </div>
+          </div>
 
-        {/* Table Rows */}
-        <div className="divide-y divide-white/[0.02]">
-          {filteredProjects.map((project) => {
+          {/* Table Rows */}
+          <div className="divide-y divide-white/[0.02]">
+            {filteredProjects.map((project) => {
             const prIssues = issues.filter(i => i.projectId === project.id);
             const totalIssues = prIssues.length || project.totalIssues || 0;
-            const doneIssues = prIssues.length > 0 
+            const doneIssues = prIssues.length > 0
               ? prIssues.filter(i => i.status === 'done').length 
               : (project.completedIssues || 0);
 
-            return (
-              <div
-                key={project.id}
-                onClick={() => setSelectedProjectId(project.id)}
-                className="grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-xs hover:bg-white/[0.02] cursor-pointer transition-colors group"
-              >
+              return (
+                <div
+                  key={project.id}
+                  onClick={() => setSelectedProjectId(project.id)}
+                  className="group grid grid-cols-12 items-center gap-4 px-4 py-3.5 text-xs transition-colors hover:bg-white/[0.02]"
+                >
                 {/* 1. Name with Emoji / Icon */}
                 <div className="col-span-4 flex items-center gap-3 min-w-0">
                   <span className="text-base flex-shrink-0">{project.icon || '⚡'}</span>
@@ -901,15 +948,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 <div className="col-span-1 text-right text-xs text-gray-500 font-mono">
                   {project.createdAt || '4d ago'}
                 </div>
-              </div>
-            );
-          })}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ================= CREATE PROJECT MODAL ================= */}
       <CreateProjectModal
-        isOpen={createModalOpen}
+        isOpen={createModalOpen && canManageProjects}
         onClose={() => setCreateModalOpen(false)}
         // Land inside the new project rather than back on the list.
         onCreated={(project) => setSelectedProjectId(project.id)}

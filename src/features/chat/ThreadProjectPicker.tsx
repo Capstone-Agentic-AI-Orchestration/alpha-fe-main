@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, FolderGit2, Loader2 } from 'lucide-react';
 
-import { apiService } from '@/shared/services/apiService';
 import { useApp } from '@/app/AppContext';
 
 /**
@@ -24,10 +23,12 @@ interface Props {
 }
 
 export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
-  const { projects, showToast } = useApp();
+  const { projects, showToast, can, setThreadProject } = useApp();
+  const canManageChat = can('manage_chat');
 
   const [selected, setSelected] = useState<string>(projectId ?? '');
   const [workspaceDir, setWorkspaceDir] = useState<string | null>(null);
+  const [workspaceManaged, setWorkspaceManaged] = useState<boolean | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -52,6 +53,10 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
     };
   }, [open]);
 
+  useEffect(() => {
+    setSelected(projectId ?? '');
+  }, [projectId]);
+
   const choose = async (next: string) => {
     setOpen(false);
     const previous = selected;
@@ -59,16 +64,14 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
     setBusy(true);
 
     try {
-      const updated = await apiService.setThreadProject(threadId, next || null);
+      const updated = await setThreadProject(threadId, next || null);
       setWorkspaceDir(updated.workspaceDir ?? null);
+      setWorkspaceManaged(updated.workspaceManaged ?? null);
 
       if (next && !updated.workspaceDir) {
-        // Picking a project with nothing checked out is not an error — the
-        // thread simply falls back to the managed root — but silently doing so
-        // would look like it worked.
         showToast(
           'No working copy',
-          'That project has no checked-out folder, so agents will read the managed workspace root.',
+          'This project has no local working copy. General chat is available, but code review and revisions need a connected repository.',
           'info'
         );
       }
@@ -181,16 +184,16 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
       <select
         style={{ display: 'none' }}
         value={selected}
-        disabled={busy}
+        disabled={busy || !canManageChat}
         onChange={e => void choose(e.target.value)}
         title={
           workspaceDir
-            ? `Agents in this thread read ${workspaceDir}`
-            : 'Agents in this thread read the managed workspace root'
+            ? `Project working copy: ${workspaceDir}`
+            : 'Choose a project with a connected working copy for code-aware agent calls.'
         }
         className="bg-transparent border border-white/10 rounded-lg px-2 py-1 text-[11px] text-gray-300 hover:border-white/20 focus:outline-none focus:border-white/30 disabled:opacity-50 max-w-[180px] truncate"
       >
-        <option value="">No project</option>
+        {!selected && <option value="" disabled>Select project</option>}
         {projects.map(p => (
           <option key={p.id} value={p.id}>
             {p.key} — {p.name}
@@ -209,6 +212,11 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
           className="font-mono text-[10px] text-gray-600 truncate max-w-[200px] hidden lg:inline"
         >
           {workspaceDir}
+        </span>
+      )}
+      {workspaceDir && !busy && (
+        <span className="hidden xl:inline text-[10px] text-gray-500">
+          {workspaceManaged ? 'managed copy' : 'attached folder'}
         </span>
       )}
     </div>

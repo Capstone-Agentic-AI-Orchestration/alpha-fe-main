@@ -24,9 +24,10 @@ interface Props {
   onChange: (mcpServers: string[]) => void;
   /** Takes the user to the persona file, where a file-managed grant is edited. */
   onOpenFile: () => void;
+  readOnly?: boolean;
 }
 
-export function AgentMcpGrants({ agent, onChange, onOpenFile }: Readonly<Props>) {
+export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }: Readonly<Props>) {
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
@@ -63,6 +64,7 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile }: Readonly<Props>)
   const alsoInFile = isManagedByFile(agent, 'mcpServers');
 
   const toggle = (name: string) => {
+    if (readOnly) return;
     onChange(granted.includes(name) ? granted.filter(n => n !== name) : [...granted, name]);
   };
 
@@ -124,8 +126,11 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile }: Readonly<Props>)
             type="button"
             role="switch"
             aria-checked={isGranted}
+            disabled={readOnly}
             onClick={() => toggle(server.name)}
-            className={`w-full text-left p-3 rounded-xl border flex items-start justify-between gap-3 cursor-pointer transition-colors ${
+            className={`w-full text-left p-3 rounded-xl border flex items-start justify-between gap-3 transition-colors ${
+              readOnly ? 'cursor-default opacity-80' : 'cursor-pointer'
+            } ${
               isGranted
                 ? 'bg-white/[0.04] border-white/15 text-white'
                 : 'bg-transparent border-white/5 text-gray-500 hover:text-gray-300'

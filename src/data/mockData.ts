@@ -422,18 +422,18 @@ export const initialIssues: Issue[] = [
   {
     id: 'iss-6',
     identifier: 'NEU-209',
-    title: 'Token Usage & Cost Optimization Advisor Widget',
-    description: 'Provide proactive tips in the analytics dashboard when an agent can be downgraded from Claude 3.7 to DeepSeek-R1 for trivial parsing tasks.',
+    title: 'Run Reliability Advisor Widget',
+    description: 'Provide proactive tips in the analytics dashboard when an agent needs a stronger validation or retry strategy.',
     status: 'review',
     priority: 'low',
     projectId: 'proj-2',
     assignedAgentId: 'agent-3',
     assignedSquadId: 'sq-2',
-    labels: ['analytics', 'cost', 'optimization'],
+    labels: ['analytics', 'reliability', 'optimization'],
     createdAt: '2026-08-11T12:00:00Z',
     updatedAt: '2026-08-15T09:15:00Z',
     subtasks: [
-      { id: 'sub-11', title: 'Cost variance algorithm', completed: true, assignedAgentId: 'agent-3' },
+      { id: 'sub-11', title: 'Run reliability rules', completed: true, assignedAgentId: 'agent-3' },
       { id: 'sub-12', title: 'Advisor UI banner component', completed: true, assignedAgentId: 'agent-3' }
     ],
     comments: [
@@ -708,9 +708,9 @@ export const initialInbox: InboxNotification[] = [
   {
     id: 'notif-client-1',
     type: 'agent_approval',
-    title: 'Scope and budget ready for your approval',
+    title: 'Specification ready for your review',
     message:
-      'SPEC-1042 — "Appointment booking and reminders" is priced and ready for review. Nothing is built until you approve.',
+      'SPEC-1042 — "Appointment booking and reminders" is ready for review. Nothing is built until you approve.',
     read: false,
     audience: 'client',
     clientId: 'usr-client',
@@ -725,7 +725,7 @@ export const initialInbox: InboxNotification[] = [
     type: 'agent_completed',
     title: 'Patient intake form digitisation is underway',
     message:
-      '4 of 10 items are complete. Your budget is tracking $650 above the approved baseline — your project manager will call before anything changes.',
+      '4 of 10 items are complete. Your project manager will share the next progress update before anything changes.',
     read: true,
     audience: 'client',
     clientId: 'usr-client',
@@ -784,51 +784,48 @@ export const initialInbox: InboxNotification[] = [
       proposedChanges: `+ export const InboxView: React.FC = () => {
 +   return <div className="h-full flex bg-surface">{/* 2-pane split inbox */}</div>;
 + };`,
-      costTokens: 3820
     }
   }
 ];
 
 export const initialAnalytics: AnalyticsData = {
-  totalTokens24h: 3840250,
-  totalCost24h: 18.42,
+  totalRuns24h: 34,
   avgLatencyMs: 380,
   totalAgentRuns: 89,
   successRate: 98.4,
-  tokenTimeline: [
-    { hour: '00:00', promptTokens: 42000, completionTokens: 18000, cost: 0.28 },
-    { hour: '03:00', promptTokens: 28000, completionTokens: 12000, cost: 0.19 },
-    { hour: '06:00', promptTokens: 64000, completionTokens: 31000, cost: 0.44 },
-    { hour: '09:00', promptTokens: 280000, completionTokens: 140000, cost: 1.95 },
-    { hour: '12:00', promptTokens: 520000, completionTokens: 260000, cost: 3.65 },
-    { hour: '15:00', promptTokens: 710000, completionTokens: 340000, cost: 4.88 },
-    { hour: '18:00', promptTokens: 480000, completionTokens: 230000, cost: 3.20 },
-    { hour: '21:00', promptTokens: 390000, completionTokens: 185000, cost: 2.65 },
+  runTimeline: [
+    { hour: '00:00', runs: 2, completed: 2, failed: 0 },
+    { hour: '03:00', runs: 1, completed: 1, failed: 0 },
+    { hour: '06:00', runs: 3, completed: 3, failed: 0 },
+    { hour: '09:00', runs: 6, completed: 6, failed: 0 },
+    { hour: '12:00', runs: 5, completed: 4, failed: 1 },
+    { hour: '15:00', runs: 7, completed: 7, failed: 0 },
+    { hour: '18:00', runs: 5, completed: 4, failed: 1 },
+    { hour: '21:00', runs: 5, completed: 5, failed: 0 },
   ],
   agentBreakdown: [
-    { agentId: 'agent-2', agentName: 'Kaelen Vance (Coder)', tokens: 1420000, cost: 6.80, runs: 34, efficiency: 94 },
-    { agentId: 'agent-1', agentName: 'Ada Lovelace (Architect)', tokens: 980000, cost: 5.10, runs: 22, efficiency: 99 },
-    { agentId: 'agent-3', agentName: 'Vesper Nyx (Reviewer)', tokens: 690000, cost: 1.85, runs: 16, efficiency: 98 },
-    { agentId: 'agent-5', agentName: 'Cipher Drake (DevOps)', tokens: 450000, cost: 2.45, runs: 11, efficiency: 96 },
-    { agentId: 'agent-4', agentName: 'Nyx Orion (QA)', tokens: 300250, cost: 0.72, runs: 6, efficiency: 95 }
+    { agentId: 'agent-2', agentName: 'Kaelen Vance (Coder)', runs: 34, efficiency: 94 },
+    { agentId: 'agent-1', agentName: 'Ada Lovelace (Architect)', runs: 22, efficiency: 99 },
+    { agentId: 'agent-3', agentName: 'Vesper Nyx (Reviewer)', runs: 16, efficiency: 98 },
+    { agentId: 'agent-5', agentName: 'Cipher Drake (DevOps)', runs: 11, efficiency: 96 },
+    { agentId: 'agent-4', agentName: 'Nyx Orion (QA)', runs: 6, efficiency: 95 }
   ],
   modelBreakdown: [
-    { modelName: 'claude-3-7-sonnet', percentage: 48, cost: 8.84, totalCalls: 45 },
-    { modelName: 'gpt-4o', percentage: 28, cost: 5.15, totalCalls: 28 },
-    { modelName: 'deepseek-r1 (Local 70B)', percentage: 14, cost: 0.00, totalCalls: 32 },
-    { modelName: 'llama3.3-70b (Local)', percentage: 7, cost: 0.00, totalCalls: 18 },
-    { modelName: 'gemini-2.0-flash', percentage: 3, cost: 0.43, totalCalls: 12 }
+    { modelName: 'claude-3-7-sonnet', percentage: 48, totalCalls: 45 },
+    { modelName: 'gpt-4o', percentage: 28, totalCalls: 28 },
+    { modelName: 'deepseek-r1 (Local 70B)', percentage: 14, totalCalls: 32 },
+    { modelName: 'llama3.3-70b (Local)', percentage: 7, totalCalls: 18 },
+    { modelName: 'gemini-2.0-flash', percentage: 3, totalCalls: 12 }
   ]
 };
 
 /** Empty, honest baseline used until the daemon returns real run telemetry. */
 export const emptyAnalytics: AnalyticsData = {
-  totalTokens24h: 0,
-  totalCost24h: 0,
+  totalRuns24h: 0,
   avgLatencyMs: 0,
   totalAgentRuns: 0,
   successRate: 0,
-  tokenTimeline: [],
+  runTimeline: [],
   agentBreakdown: [],
   modelBreakdown: []
 };
@@ -921,7 +918,6 @@ export const initialRequirementDocs: RequirementDoc[] = [
       outOfScope: 'Insurance claims, clinical records, and anything touching treatment notes',
       concerns: ['Patient data privacy', 'Must work on older phones', 'Tagalog and English'],
       targetDate: '2026-11-30',
-      budgetCeiling: 25000,
       expectedUsers: 4000,
       integrations: 'We use Xero for accounting. Nothing else that matters.',
       attachments: [
@@ -1061,7 +1057,6 @@ export const initialRequirementDocs: RequirementDoc[] = [
     ],
     constraints: [
       'Target launch 30 November 2026',
-      'Client budget ceiling stated as $25,000 for the build',
       'Xero is the only existing system requiring integration'
     ],
     outOfScope: [
@@ -1069,7 +1064,6 @@ export const initialRequirementDocs: RequirementDoc[] = [
       'Clinical records and treatment notes',
       'Practitioner payroll'
     ],
-    estimateId: 'est-1042',
     createdAt: '2026-08-14T09:12:00Z',
     updatedAt: '2026-08-16T15:40:00Z'
   },
@@ -1137,7 +1131,6 @@ export const initialRequirementDocs: RequirementDoc[] = [
     nonFunctionalRequirements: ['Data Privacy Act compliance', 'Usable on Android 8'],
     constraints: ['Launch before the booking system'],
     outOfScope: ['Clinical assessment forms'],
-    estimateId: 'est-1041',
     projectId: 'proj-4',
     approvedBy: 'Marisol Reyes',
     approvedAt: '2026-08-12T10:30:00Z',
@@ -1145,5 +1138,3 @@ export const initialRequirementDocs: RequirementDoc[] = [
     updatedAt: '2026-08-12T10:30:00Z'
   }
 ];
-
-

@@ -55,8 +55,11 @@ export const AgentsView: React.FC = () => {
     bulkArchiveAgents, 
     setActiveTab, 
     importAgent,
-    setActiveChatAgentId 
+    setActiveChatAgentId,
+    can
   } = useApp();
+
+  const canManageAgents = can('manage_agents');
 
   // Selected agent for centered pop-up modal
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
@@ -89,6 +92,7 @@ export const AgentsView: React.FC = () => {
   const [importing, setImporting] = useState(false);
 
   const handleImportFile = async (fileList: FileList | null) => {
+    if (!canManageAgents) return;
     const file = fileList?.[0];
     if (!file) return;
 
@@ -265,42 +269,46 @@ export const AgentsView: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans relative">
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-gray-300 select-none font-sans lg:p-6">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Bot className="w-4 h-4 text-gray-400" />
-          <h1 className="text-sm font-semibold text-white tracking-wide">Agents</h1>
+          <h1 className="text-base font-semibold tracking-tight text-white">Agents</h1>
           <span className="text-xs text-gray-500 font-mono">{agents.length}</span>
         </div>
 
-        {/* Import from a shared persona file */}
-        <input
-          ref={importInputRef}
-          type="file"
-          accept=".md,text/markdown"
-          className="hidden"
-          onChange={(e) => void handleImportFile(e.target.files)}
-        />
-        <button
-          onClick={() => importInputRef.current?.click()}
-          disabled={importing}
-          title="Import an agent from a persona file a teammate shared"
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-gray-300 hover:text-white transition-colors shadow-sm disabled:opacity-40"
-        >
-          <Upload className="w-3.5 h-3.5" />
-          <span>{importing ? 'Importing...' : 'Import'}</span>
-        </button>
+        {canManageAgents && (
+          <>
+            {/* Import from a shared persona file */}
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".md,text/markdown"
+              className="hidden"
+              onChange={(e) => void handleImportFile(e.target.files)}
+            />
+            <button
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              title="Import an agent from a persona file a teammate shared"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-gray-300 hover:text-white transition-colors shadow-sm disabled:opacity-40"
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span>{importing ? 'Importing...' : 'Import'}</span>
+            </button>
 
-        {/* + New agent button */}
-        <button
-          onClick={() => setCreateModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>New agent</span>
-        </button>
+            {/* + New agent button */}
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New agent</span>
+            </button>
+          </>
+        )}
       </div>
 
       {/* ================= SEARCH & ACTION ROW ================= */}
@@ -881,7 +889,7 @@ export const AgentsView: React.FC = () => {
               )}
 
               {/* Tab 2: The persona file itself — overrides the fields above */}
-              {profileTab === 'persona' && <PersonaFileEditor agentId={selectedAgent.id} />}
+              {profileTab === 'persona' && <PersonaFileEditor agentId={selectedAgent.id} readOnly={!canManageAgents} />}
 
               {/* Tab 3: Skills & MCP Tools */}
               {profileTab === 'skills' && (
@@ -1027,6 +1035,7 @@ export const AgentsView: React.FC = () => {
                       agent={selectedAgent}
                       onChange={next => updateAgent(selectedAgent.id, { mcpServers: next })}
                       onOpenFile={() => setProfileTab('persona')}
+                      readOnly={!canManageAgents}
                     />
                   </div>
 
@@ -1088,42 +1097,44 @@ export const AgentsView: React.FC = () => {
             </div>
 
             {/* Modal Footer: Duplicate / Archive */}
-            <div className="p-4 border-t border-white/5 bg-surface flex items-center justify-between text-xs">
-              <button
-                onClick={() => {
-                  duplicateAgent(selectedAgent.id);
-                  setSelectedAgentId(null);
-                }}
-                className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"
-              >
-                <Copy className="w-3.5 h-3.5" />
-                <span>Duplicate Agent</span>
-              </button>
+            {canManageAgents && (
+              <div className="p-4 border-t border-white/5 bg-surface flex items-center justify-between text-xs">
+                <button
+                  onClick={() => {
+                    duplicateAgent(selectedAgent.id);
+                    setSelectedAgentId(null);
+                  }}
+                  className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Duplicate Agent</span>
+                </button>
 
-              {selectedAgent.isArchived ? (
-                <button
-                  onClick={() => {
-                    restoreAgent(selectedAgent.id);
-                    setSelectedAgentId(null);
-                  }}
-                  className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition-colors"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Restore Agent</span>
-                </button>
-              ) : (
-                <button
-                  onClick={() => {
-                    archiveAgent(selectedAgent.id);
-                    setSelectedAgentId(null);
-                  }}
-                  className="flex items-center gap-1.5 text-rose-400 hover:text-rose-300 transition-colors"
-                >
-                  <Archive className="w-3.5 h-3.5" />
-                  <span>Archive Agent</span>
-                </button>
-              )}
-            </div>
+                {selectedAgent.isArchived ? (
+                  <button
+                    onClick={() => {
+                      restoreAgent(selectedAgent.id);
+                      setSelectedAgentId(null);
+                    }}
+                    className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition-colors"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Restore Agent</span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      archiveAgent(selectedAgent.id);
+                      setSelectedAgentId(null);
+                    }}
+                    className="flex items-center gap-1.5 text-rose-400 hover:text-rose-300 transition-colors"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    <span>Archive Agent</span>
+                  </button>
+                )}
+              </div>
+            )}
 
           </div>
         </div>
@@ -1186,7 +1197,7 @@ export const AgentsView: React.FC = () => {
 
       {/* ================= CREATE AGENT MODAL ================= */}
       <CreateAgentModal
-        isOpen={createModalOpen}
+        isOpen={createModalOpen && canManageAgents}
         onClose={() => setCreateModalOpen(false)}
       />
 

@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_API_URL: string;
   /** Local Alpha daemon WebSocket, e.g. ws://localhost:3001 */
   readonly VITE_WS_URL: string;
+  /** Optional shared token when the local daemon enables ALPHA_LOCAL_TOKEN. */
+  readonly VITE_ALPHA_LOCAL_TOKEN?: string;
 
   /** Team mode only. Blank in solo mode. */
   readonly VITE_SUPABASE_URL?: string;

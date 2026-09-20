@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, GitBranch, Loader2, MinusCircle, RotateCcw, Square } from 'lucide-react';
-import { describeRunUsage } from '@/shared/lib/runUsage';
 import { useApp } from '@/app/AppContext';
 import { RemoteActivity } from '@/features/runs/RemoteActivity';
 import { ActivityFeed } from '@/features/runs/ActivityFeed';
@@ -47,7 +46,6 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
 
   // Null when the CLI reported no token figures, which is how the panel tells
   // an unmeasured run apart from a free one.
-  const usageLine = run ? describeRunUsage(run) : null;
 
   if (!run) return null;
 
@@ -134,14 +132,6 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
               {currentStage?.logs.map(log => <p key={log}>{log}</p>)}
               {run.testSummary && <p className="text-gray-300">{run.testSummary}</p>}
               {run.changedFiles ? <p>+{run.insertions || 0} / -{run.deletions || 0} across {run.changedFiles} files</p> : null}
-              {/*
-                * What the run cost, when the CLI said.
-                *
-                * Absent for a run whose CLI reported nothing — every run from
-                * before token counts were stored. Showing "0 tokens" there
-                * would claim it was free rather than unmeasured.
-                */}
-              {usageLine && <p className="text-gray-400">{usageLine}</p>}
             </div>
           )}
         </div>

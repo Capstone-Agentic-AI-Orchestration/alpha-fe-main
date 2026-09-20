@@ -30,7 +30,6 @@ import {
   Star,
   Asterisk,
   CheckSquare,
-  User,
   RefreshCw
 } from 'lucide-react';
 
@@ -81,8 +80,14 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     createIssue,
     syncBoard,
     syncing,
-    lastSyncedAt
+    lastSyncedAt,
+    can,
+    role
   } = useApp();
+
+  const canManageIssues = can('manage_issues');
+  const canRunAgents = can('run_agents');
+  const canRunSquads = can('run_squads');
 
   const [viewMode, setViewMode] = useState<'board' | 'list'>('list');
   /**
@@ -192,7 +197,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     return issues.filter(issue => {
       // An issue created before Alpha recorded an author has no answer here,
        // so it is not yours — guessing would put someone else's work in your list.
-      if (filterCategory === 'mine' && (!identity || issue.createdBy !== identity.login)) return false;
+      if (filterCategory === 'mine' && (!identity || (
+        issue.assignedHuman !== identity.login &&
+        issue.assignedHuman !== identity.name
+      ))) return false;
       if (filterCategory === 'agents' && !issue.assignedAgentId) return false;
       if (filterCategory === 'members' && !issue.assignedSquadId && !issue.assignedHuman) return false;
       if (selectedProject !== 'all' && issue.projectId !== selectedProject) return false;
@@ -212,7 +220,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   }, [issues, filterCategory, selectedProject, selectedPriority, selectedAgent, searchQuery, identity]);
 
   /** Only when one project is named, because a create needs one. */
-  const canQuickAdd = selectedProject !== 'all';
+  const canQuickAdd = selectedProject !== 'all' && canManageIssues;
 
   /**
    * A title and a column is a whole issue.
@@ -415,7 +423,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   return (
     <div className="h-full flex flex-col overflow-hidden bg-shell text-sm text-gray-200">
       {/* Header & Jira-like Control Bar */}
-      <div className="px-6 py-4 border-b border-white/[0.06] bg-shell space-y-3">
+      <div className="space-y-2 border-b border-white/[0.06] bg-shell px-5 py-3">
         {/* Top Row: Title, Filters & Controls */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           {/* Left: Issues title & category pills */}
@@ -428,60 +436,62 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             */}
             {!embedded && (
               <div className="flex items-center gap-2">
-                {onlyMyIssues ? (
-                  <User className="w-4 h-4 text-emerald-400" />
-                ) : (
-                  <CheckSquare className="w-4 h-4 text-gray-400" />
-                )}
+                <CheckSquare className="w-4 h-4 text-gray-400" />
                 <h1 className="text-base font-semibold text-white">
-                  {onlyMyIssues ? 'My Issues' : 'Issues'}
+                  Issues
                 </h1>
               </div>
             )}
 
             {/* Scope is a compact text control, not a second container inside the header. */}
-            <div className="flex items-center gap-1 text-xs">
+            <div className={`flex items-center gap-1 text-xs ${role === 'dev' ? 'rounded-lg border border-white/[0.08] bg-white/[0.025] p-1' : ''}`} role={role === 'dev' ? 'tablist' : undefined} aria-label={role === 'dev' ? 'Issue scope' : undefined}>
               <button
                 onClick={() => setFilterCategory('all')}
-                className={`px-2 py-1 border-b font-medium transition-colors ${
+                role={role === 'dev' ? 'tab' : undefined}
+                aria-selected={role === 'dev' ? filterCategory === 'all' : undefined}
+                className={`${role === 'dev' ? 'rounded-md px-3 py-1.5' : 'px-2 py-1 border-b'} font-medium transition-colors ${
                   filterCategory === 'all'
-                    ? 'border-brand-400 text-white'
+                    ? 'border-brand-400 bg-brand-500/15 text-white'
                     : 'border-transparent text-gray-500 hover:text-white'
                 }`}
               >
-                All
+                {role === 'dev' ? 'Assigned project issues' : 'All'}
               </button>
               <button
                 onClick={() => setFilterCategory('mine')}
-                title={identity ? `Issues created by ${identity.login}` : 'Waiting for your identity'}
-                className={`px-2 py-1 border-b font-medium transition-colors ${
+                title={identity ? `Issues assigned to ${identity.login}` : 'Waiting for your identity'}
+                role={role === 'dev' ? 'tab' : undefined}
+                aria-selected={role === 'dev' ? filterCategory === 'mine' : undefined}
+                className={`${role === 'dev' ? 'rounded-md px-3 py-1.5' : 'px-2 py-1 border-b'} font-medium transition-colors ${
                   filterCategory === 'mine'
-                    ? 'border-brand-400 text-white'
+                    ? 'border-brand-400 bg-brand-500/15 text-white'
                     : 'border-transparent text-gray-500 hover:text-white'
                 }`}
               >
-                Mine
+                {role === 'dev' ? 'Assigned to me' : 'Mine'}
               </button>
-              <button
-                onClick={() => setFilterCategory('members')}
-                className={`px-2 py-1 border-b font-medium transition-colors ${
-                  filterCategory === 'members'
-                    ? 'border-brand-400 text-white'
-                    : 'border-transparent text-gray-500 hover:text-white'
-                }`}
-              >
-                Members
-              </button>
-              <button
-                onClick={() => setFilterCategory('agents')}
-                className={`px-2 py-1 border-b font-medium transition-colors ${
-                  filterCategory === 'agents'
-                    ? 'border-brand-400 text-white'
-                    : 'border-transparent text-gray-500 hover:text-white'
-                }`}
-              >
-                Agents
-              </button>
+              {role !== 'dev' && <>
+                <button
+                  onClick={() => setFilterCategory('members')}
+                  className={`px-2 py-1 border-b font-medium transition-colors ${
+                    filterCategory === 'members'
+                      ? 'border-brand-400 text-white'
+                      : 'border-transparent text-gray-500 hover:text-white'
+                  }`}
+                >
+                  Members
+                </button>
+                <button
+                  onClick={() => setFilterCategory('agents')}
+                  className={`px-2 py-1 border-b font-medium transition-colors ${
+                    filterCategory === 'agents'
+                      ? 'border-brand-400 text-white'
+                      : 'border-transparent text-gray-500 hover:text-white'
+                  }`}
+                >
+                  Agents
+                </button>
+              </>}
               <button
                 onClick={() => setFilterCategory('all')}
                 className="p-1 text-gray-500 hover:text-white transition-colors"
@@ -693,17 +703,19 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       always supplies it; on the global board it appears the
                       moment you filter to a single project.
                     */}
-                    <button
-                      onClick={() =>
-                        canQuickAdd
-                          ? (setQuickAddStatus(column.id), setQuickAddTitle(''))
-                          : onOpenNewIssue()
-                      }
-                      className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/5"
-                      title={canQuickAdd ? 'Add an issue to this column' : 'New issue'}
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
+                    {canManageIssues && (
+                      <button
+                        onClick={() =>
+                          canQuickAdd
+                            ? (setQuickAddStatus(column.id), setQuickAddTitle(''))
+                            : onOpenNewIssue()
+                        }
+                        className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/5"
+                        title={canQuickAdd ? 'Add an issue to this column' : 'New issue'}
+                      >
+                        <Plus className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-3 space-y-3">
@@ -778,7 +790,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
                           <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs text-gray-400">
                             <div>{getAssigneeVisual(issue)}</div>
-                            {issue.status !== 'done' && issue.status !== 'agent_running' && (
+                            {canRunAgents && issue.status !== 'done' && issue.status !== 'agent_running' && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
@@ -801,7 +813,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
           </div>
         ) : (
           /* Jira-like Grouped Status List View (Matching Exact Screenshot) */
-          <div className="flex-1 overflow-y-auto p-4 sm:px-6 sm:py-5 space-y-4">
+          <div className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:px-5 sm:py-4">
             {statusGroups.map(group => {
               const groupIssues = filteredIssues.filter(i => group.statusMatch(i.status));
               const isCollapsed = collapsedSections[group.id] ?? false;
@@ -844,7 +856,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     <div className="space-y-0.5 pl-2">
                       {groupIssues.length === 0 ? (
                         /* Empty state placeholder for section */
-                        <div className="py-4 text-center text-xs text-gray-500 font-mono">
+                        <div className="py-2.5 text-center font-mono text-xs text-gray-500">
                           No issues
                         </div>
                       ) : (
@@ -1055,7 +1067,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               {/* Right Sidebar Metadata */}
               <div className="w-full md:w-80 bg-surface-200/40 p-6 space-y-6 flex-shrink-0 text-xs">
                 {/* Trigger Action */}
-                {selectedIssue.status !== 'done' && !prototypeRuns.some(run => run.issueId === selectedIssue.id) && (
+                {canRunAgents && selectedIssue.status !== 'done' && !prototypeRuns.some(run => run.issueId === selectedIssue.id) && (
                   <button
                     onClick={() => runAgentOnIssue(selectedIssue.id)}
                     disabled={selectedIssue.status === 'agent_running'}
@@ -1072,7 +1084,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   the work actually lives. Shown only when a squad is assigned,
                   and only while a single-agent run is not already underway.
                 */}
-                {selectedIssue.assignedSquadId &&
+                {canRunSquads && selectedIssue.assignedSquadId &&
                   selectedIssue.status !== 'done' &&
                   !prototypeRuns.some(run => run.issueId === selectedIssue.id) && (
                     <button

@@ -1,21 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '@/app/AppContext';
-import { 
-  Search, 
-  Bot, 
-  Users, 
-  FolderKanban, 
-  CheckSquare, 
-  Cpu, 
-  Terminal, 
-  Rocket, 
-  Settings, 
-  Inbox, 
-  MessageSquare, 
-  BarChart3, 
-  ArrowRight,
-  Sparkles
-} from 'lucide-react';
+import { NAV_ITEMS, navIcon } from '@/config/navigation';
+import { Search, Bot, Users, FolderKanban, CheckSquare, Cpu, Rocket, ArrowRight, Sparkles } from 'lucide-react';
 import { NavigationTab } from '@/shared/types';
 
 export const CommandPalette: React.FC = () => {
@@ -43,21 +29,17 @@ export const CommandPalette: React.FC = () => {
     }
   }, [commandPaletteOpen]);
 
-  // The palette is a navigation surface like any other: it must not offer a
-  // destination the current role is not permitted to open.
-  const allNavigationItems: { id: string; title: string; subtitle: string; icon: React.ReactNode; tab: NavigationTab }[] = [
-    { id: 'nav-inbox', title: 'Inbox & Approvals', subtitle: 'View issue updates & agent approvals', icon: <Inbox className="w-4 h-4 text-amber-400" />, tab: 'inbox' },
-    { id: 'nav-chat', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', icon: <MessageSquare className="w-4 h-4 text-cyan-400" />, tab: 'chat' },
-    { id: 'nav-issues', title: 'Issues & Tasks', subtitle: 'Kanban board & issue tracking', icon: <CheckSquare className="w-4 h-4 text-indigo-400" />, tab: 'issues' },
-    { id: 'nav-projects', title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', icon: <FolderKanban className="w-4 h-4 text-blue-400" />, tab: 'projects' },
-    { id: 'nav-agents', title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', icon: <Bot className="w-4 h-4 text-purple-400" />, tab: 'agents' },
-    { id: 'nav-squads', title: 'Agent Squads & Swarms', subtitle: 'Configure multi-agent topologies', icon: <Users className="w-4 h-4 text-emerald-400" />, tab: 'squads' },
-    { id: 'nav-analytics', title: 'Token & Cost Analytics', subtitle: 'Token consumption & model latency', icon: <BarChart3 className="w-4 h-4 text-rose-400" />, tab: 'analytics' },
-    { id: 'nav-runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', icon: <Cpu className="w-4 h-4 text-teal-400" />, tab: 'runtimes' },
-    { id: 'nav-skills', title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', icon: <Terminal className="w-4 h-4 text-orange-400" />, tab: 'skills' },
-    { id: 'nav-deployments', title: 'Deployments & CI/CD', subtitle: 'Release pipelines & preview builds', icon: <Rocket className="w-4 h-4 text-pink-400" />, tab: 'deployments' },
-    { id: 'nav-settings', title: 'Settings', subtitle: 'Workspace preferences & API keys', icon: <Settings className="w-4 h-4 text-gray-400" />, tab: 'settings' },
-  ];
+  // The palette is a navigation surface like any other: derive it from the
+  // canonical table so client-only destinations such as Overview and New
+  // Request cannot disappear from search when a new tab is added.
+  const allNavigationItems: { id: string; title: string; subtitle: string; icon: React.ReactNode; tab: NavigationTab }[] =
+    NAV_ITEMS.map(item => ({
+      id: `nav-${item.id}`,
+      title: item.title,
+      subtitle: item.subtitle,
+      icon: navIcon(item.id, 'w-4 h-4 text-gray-400'),
+      tab: item.id
+    }));
 
   const navigationItems = allNavigationItems.filter(item => visibleTabs.includes(item.tab));
 
@@ -190,7 +172,7 @@ export const CommandPalette: React.FC = () => {
     }
 
     return results;
-  }, [query, navigationItems, issues, agents, squads, projects, setActiveTab, setCommandPaletteOpen, scanLocalRuntimes, triggerDeployment]);
+  }, [query, navigationItems, visibleTabs, issues, agents, squads, projects, setActiveTab, setCommandPaletteOpen, scanLocalRuntimes, triggerDeployment, can]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {

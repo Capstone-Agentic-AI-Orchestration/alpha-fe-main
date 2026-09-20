@@ -24,7 +24,9 @@ import { Modal } from '@/shared/components/Modal';
 import { useDeploymentsViewModel, LiveWorkflowRun } from './useDeploymentsViewModel';
 
 export const DeploymentsView: React.FC = () => {
-  const { deployments, projects, triggerDeployment } = useApp();
+  const { deployments, projects, triggerDeployment, can } = useApp();
+  const canManageDeployments = can('manage_deployments');
+  const canRunAgents = can('run_agents');
   const {
     liveRuns,
     selectedRunId,
@@ -239,14 +241,14 @@ export const DeploymentsView: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans">
+    <div className="flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-gray-300 select-none font-sans lg:p-6">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
             <Rocket className="w-4 h-4 text-gray-400" />
-            <h1 className="text-sm font-semibold text-white tracking-wide">CI/CD & GitHub Actions</h1>
+            <h1 className="text-base font-semibold tracking-tight text-white">CI/CD & GitHub Actions</h1>
             <span className="text-xs text-gray-500 font-mono">
               {viewMode === 'actions' ? liveRuns.length : deployments.length}
             </span>
@@ -268,14 +270,16 @@ export const DeploymentsView: React.FC = () => {
           </button>
 
           {/* Trigger run button */}
-          <button
-            onClick={() => setTriggerModalOpen(true)}
-            disabled={projects.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
-          >
-            <Play className="w-3 h-3 fill-white" />
-            <span>Trigger run</span>
-          </button>
+          {canManageDeployments && (
+            <button
+              onClick={() => setTriggerModalOpen(true)}
+              disabled={projects.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
+            >
+              <Play className="w-3 h-3 fill-white" />
+              <span>Trigger run</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -633,14 +637,16 @@ export const DeploymentsView: React.FC = () => {
               </div>
 
               {/* Trigger Autonomous Agent Self Healing */}
-              <button
-                onClick={() => triggerSelfHealing(selectedRunId)}
-                disabled={isSelfHealing}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-semibold shadow-glow-brand transition-all disabled:opacity-50"
-              >
-                <Bot className="w-3.5 h-3.5" />
-                <span>{isSelfHealing ? 'Agent Triaging...' : 'Autonomous Agent Self-Healing'}</span>
-              </button>
+              {canRunAgents && (
+                <button
+                  onClick={() => triggerSelfHealing(selectedRunId)}
+                  disabled={isSelfHealing}
+                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-semibold shadow-glow-brand transition-all disabled:opacity-50"
+                >
+                  <Bot className="w-3.5 h-3.5" />
+                  <span>{isSelfHealing ? 'Agent Triaging...' : 'Autonomous Agent Self-Healing'}</span>
+                </button>
+              )}
             </div>
 
             {isLoadingLogs ? (

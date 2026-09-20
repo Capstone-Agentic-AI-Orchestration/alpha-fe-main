@@ -3,6 +3,7 @@ import { Folder, Check, Loader2, AlertTriangle } from 'lucide-react';
 
 import { apiService } from '@/shared/services/apiService';
 import { Project, ProjectResource } from '@/shared/types';
+import { useApp } from '@/app/AppContext';
 
 /**
  * Point a project at a checkout that already exists on this machine.
@@ -25,6 +26,8 @@ interface Props {
 }
 
 export function AttachWorkspaceForm({ project, onAttached }: Readonly<Props>) {
+  const { can } = useApp();
+  const canManageProjects = can('manage_projects');
   const [path, setPath] = useState('');
   const [checking, setChecking] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -52,6 +55,7 @@ export function AttachWorkspaceForm({ project, onAttached }: Readonly<Props>) {
   };
 
   const attach = async () => {
+    if (!canManageProjects) return;
     setSaving(true);
     setProblem(null);
     try {
@@ -93,6 +97,7 @@ export function AttachWorkspaceForm({ project, onAttached }: Readonly<Props>) {
           <Folder className="w-3.5 h-3.5 text-gray-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
           <input
             value={path}
+            disabled={!canManageProjects}
             onChange={e => void check(e.target.value)}
             placeholder="C:\Users\you\Projects\alpha-be-main"
             className="w-full bg-well border border-white/10 rounded-xl pl-8 pr-8 py-2 text-white font-mono text-xs focus:outline-none focus:border-white/30"
@@ -105,7 +110,7 @@ export function AttachWorkspaceForm({ project, onAttached }: Readonly<Props>) {
 
         <button
           onClick={() => void attach()}
-          disabled={!verified || saving}
+          disabled={!canManageProjects || !verified || saving}
           className="px-3 py-2 rounded-xl bg-white text-canvas text-xs font-medium disabled:opacity-40 transition-opacity"
         >
           {saving ? 'Attaching…' : 'Attach'}

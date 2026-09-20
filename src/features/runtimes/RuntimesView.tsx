@@ -124,25 +124,27 @@ export const RuntimesView: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans">
+    <div className="flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-gray-300 select-none font-sans lg:p-6">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Cpu className="w-4 h-4 text-gray-400" />
-          <h1 className="text-sm font-semibold text-white tracking-wide">Runtimes</h1>
+          <h1 className="text-base font-semibold tracking-tight text-white">Runtimes</h1>
           <span className="text-xs text-gray-500 font-mono">{runtimes.length}</span>
         </div>
 
         {/* Scan host engines button */}
-        <button
-          onClick={scanLocalRuntimes}
-          disabled={isScanningRuntimes}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isScanningRuntimes ? 'animate-spin' : ''}`} />
-          <span>{isScanningRuntimes ? 'Scanning ports...' : 'Scan host engines'}</span>
-        </button>
+        {canManageRuntimes && (
+          <button
+            onClick={scanLocalRuntimes}
+            disabled={isScanningRuntimes}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isScanningRuntimes ? 'animate-spin' : ''}`} />
+            <span>{isScanningRuntimes ? 'Scanning ports...' : 'Scan host engines'}</span>
+          </button>
+        )}
       </div>
 
       {/* ================= SEARCH & ACTION ROW ================= */}

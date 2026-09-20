@@ -95,7 +95,7 @@ export const IntakeWizardView: React.FC = () => {
 
   return (
     <div className="h-full overflow-y-auto bg-surface">
-      <div className="max-w-3xl mx-auto px-8 py-10 space-y-8">
+      <div className="mx-auto max-w-4xl space-y-7 px-6 py-8 lg:px-8">
 
         {/* Header + step rail */}
         <div className="space-y-5">
@@ -224,7 +224,7 @@ export const IntakeWizardView: React.FC = () => {
             <div className="space-y-3">
               <label className="text-sm text-gray-300 block">What should it do?</label>
               <p className="text-xs text-gray-500">
-                One thing per line. Each becomes a priced item you can keep or drop before approving.
+                One thing per line. Each becomes a clear, testable requirement the team can review with you.
               </p>
               <div className="space-y-2">
                 {a.capabilities.map((c, i) => (
@@ -309,21 +309,16 @@ export const IntakeWizardView: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm text-gray-300 block">Budget ceiling, if you have one</label>
-                <input
-                  type="number"
-                  className={field}
-                  value={a.budgetCeiling ?? ''}
-                  onChange={e => set('budgetCeiling', e.target.value ? Number(e.target.value) : undefined)}
-                  placeholder="Optional"
-                />
+                <label className="text-sm text-gray-300 block">What should we protect first?</label>
+                <p className="text-xs leading-relaxed text-gray-500">Share the most important quality, deadline, or user experience constraint.</p>
+                <input className={field} value={a.concerns[0] ?? ''} onChange={e => set('concerns', e.target.value ? [e.target.value, ...a.concerns.slice(1)] : a.concerns.slice(1))} placeholder="For example: mobile usability" />
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-sm text-gray-300 block">Roughly how many people will use this each month?</label>
               <p className="text-xs text-gray-500">
-                This sets the hosting tier in your estimate. A rough number is fine.
+                This helps the team plan performance and rollout requirements. A rough number is fine.
               </p>
               <input
                 type="number"
@@ -426,7 +421,7 @@ export const IntakeWizardView: React.FC = () => {
                 </li>
                 <li className="flex gap-3">
                   <span className="font-mono text-[11px] text-gray-600 pt-0.5">02</span>
-                  <span>You get a price for each item, with what it rests on and how confident we are.</span>
+                  <span>The team will turn each item into acceptance criteria and a delivery plan.</span>
                 </li>
                 <li className="flex gap-3">
                   <span className="font-mono text-[11px] text-gray-600 pt-0.5">03</span>

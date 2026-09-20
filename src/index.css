@@ -3,83 +3,39 @@
 @tailwind utilities;
 
 /*
- * The two palettes.
+ * Dark-only design tokens.
  *
- * Light is the default and dark is opt-in under `.dark`, because a variable
- * that is only defined inside a class stops existing the moment the class is
- * absent — a thumbnail, a print stylesheet or a failed hydration would render
- * an unstyled page. Defining light on bare `:root` means the app always has a
- * complete palette and `.dark` only overrides it.
- *
- * `--c-white` is a role, not a colour: "whatever contrasts with the page". Some
- * 1,150 utilities are white-alpha overlays (`border-white/[0.06]`,
- * `bg-white/[0.04]`) used for hairlines and hover states, and they invert with
- * this one value. Where a literal white is meant — text on a saturated button —
- * the token is `--c-on-accent`, which never changes.
+ * `--c-white` is a role, not a colour: it powers the white-alpha hairlines and
+ * hover states used throughout the interface. The app intentionally keeps one
+ * palette so the canvas, navigation, tabs, and content always share the same
+ * visual hierarchy.
  */
 @layer base {
   :root {
-    color-scheme: light;
-    font-size: 15px;
-
-    --c-white: 17 24 39;
-    --c-on-accent: 255 255 255;
-
-    /* Elevation reads by getting lighter in the dark theme and by separating
-       from a near-white page in the light one, so the ramp is not a simple
-       inversion of the other. */
-    --c-canvas: 246 247 249;
-    --c-well: 236 238 242;
-    --c-shell: 255 255 255;
-    --c-surface: 255 255 255;
-    --c-raised: 243 244 246;
-    --c-raised-2: 229 231 235;
-
-    /* The gray ramp runs dark-to-light here, the reverse of Tailwind's own, so
-       that `text-gray-100` stays "the most prominent text" in both themes
-       rather than becoming invisible in one. */
-    --c-gray-50: 3 7 18;
-    --c-gray-100: 17 24 39;
-    --c-gray-200: 31 41 55;
-    --c-gray-300: 55 65 81;
-    --c-gray-400: 75 85 99;
-    --c-gray-500: 107 114 128;
-    --c-gray-600: 130 138 152;
-    --c-gray-700: 156 163 175;
-    --c-gray-800: 209 213 219;
-    --c-gray-900: 229 231 235;
-    --c-gray-950: 243 244 246;
-
-    --c-scrollbar: 17 24 39;
-    --c-glass: 255 255 255;
-  }
-
-  .dark {
     color-scheme: dark;
+    font-size: 15px;
 
     --c-white: 255 255 255;
     --c-on-accent: 255 255 255;
 
-    /* The values the app shipped with. Twenty-six near-identical hex literals
-       had accumulated across 36 files — #14151b, #15161d, #16171d and #17181b
-       among them, differences no eye resolves — so they collapse to one step
-       each here rather than being preserved individually. */
-    --c-canvas: 13 14 16;
-    --c-well: 10 11 14;
-    --c-shell: 18 19 21;
-    --c-surface: 20 21 27;
-    --c-raised: 26 27 34;
-    --c-raised-2: 34 36 45;
+    /* Near-black canvas with stepped surfaces for clear depth. */
+    --c-canvas: 9 9 11;
+    --c-well: 6 6 8;
+    --c-shell: 13 13 17;
+    --c-surface: 17 17 23;
+    --c-raised: 24 24 32;
+    --c-raised-2: 32 32 42;
 
-    /* Tailwind's own gray, unchanged, so nothing in the dark theme moves. */
+    /* Lift secondary values enough for comfortable reading without flattening
+       the hierarchy against the near-black canvas. */
     --c-gray-50: 249 250 251;
     --c-gray-100: 243 244 246;
     --c-gray-200: 229 231 235;
     --c-gray-300: 209 213 219;
     --c-gray-400: 156 163 175;
-    --c-gray-500: 107 114 128;
-    --c-gray-600: 75 85 99;
-    --c-gray-700: 55 65 81;
+    --c-gray-500: 124 134 150;
+    --c-gray-600: 93 103 118;
+    --c-gray-700: 63 70 84;
     --c-gray-800: 31 41 55;
     --c-gray-900: 17 24 39;
     --c-gray-950: 3 7 18;
@@ -90,6 +46,7 @@
 
   html {
     font-size: 15px;
+    background-color: rgb(var(--c-canvas));
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
@@ -102,6 +59,10 @@
     font-size: 14px;
     line-height: 1.55;
     letter-spacing: -0.006em;
+  }
+
+  #root {
+    min-height: 100vh;
   }
 
   h1,
@@ -132,7 +93,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid rgba(129, 140, 248, 0.72);
+    outline: 2px solid rgba(167, 139, 250, 0.78);
     outline-offset: 2px;
   }
 }
@@ -161,12 +122,12 @@ input[type='checkbox'] {
 
 input[type='checkbox']:hover,
 input[type='radio']:hover {
-  border-color: rgba(129, 140, 248, 0.68);
+  border-color: rgba(167, 139, 250, 0.72);
 }
 
 input[type='checkbox']:checked {
-  border-color: #6366f1;
-  background-color: #6366f1;
+  border-color: #8b5cf6;
+  background-color: #8b5cf6;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 5.2 4.1 7.2 8 2.9' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-size: 10px 10px;
 }
@@ -176,8 +137,8 @@ input[type='radio'] {
 }
 
 input[type='radio']:checked {
-  border-color: #818cf8;
-  background-color: #818cf8;
+  border-color: #a78bfa;
+  background-color: #a78bfa;
   /* The dot is punched out of the control with the surface behind it, so it has
      to follow the theme rather than stay a fixed near-black. */
   box-shadow: inset 0 0 0 3px rgb(var(--c-surface));
@@ -186,8 +147,8 @@ input[type='radio']:checked {
 input[type='checkbox']:focus-visible,
 input[type='radio']:focus-visible {
   outline: none;
-  border-color: #818cf8;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.24);
+  border-color: #a78bfa;
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.28);
 }
 
 input[type='checkbox']:disabled,
@@ -221,4 +182,19 @@ input[type='radio']:disabled {
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   border: 1px solid rgb(var(--c-white) / 0.07);
+}
+
+/* Keep the tab strip intrinsically sized so the add-tab affordance stays next
+   to the open tabs instead of drifting to the far edge of the toolbar. */
+.workspace-tab-strip {
+  flex: 0 1 auto;
+  max-width: calc(100% - 8.5rem);
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }

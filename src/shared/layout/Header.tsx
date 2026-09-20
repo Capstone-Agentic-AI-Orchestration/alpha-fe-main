@@ -39,7 +39,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
       case 'projects': return 'Strategic Projects';
       case 'agents': return 'Agent Studio';
       case 'squads': return 'Squads & Swarms';
-      case 'analytics': return 'Token & Cost Telemetry';
+      case 'analytics': return 'Operational Analytics';
       case 'runtimes': return 'Inference Runtimes';
       case 'skills': return 'MCP & Tool Registry';
       case 'deployments': return 'CI/CD Deployments';

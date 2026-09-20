@@ -1,16 +1,41 @@
 import React, { useState } from 'react';
 import { useApp } from '@/app/AppContext';
-import { formatMoney } from '@/features/delivery/estimator';
 import { DocStatus, Band, SectionLabel } from '@/features/delivery/Ledger';
-import { FileText, Send, ArrowUpRight, Paperclip } from 'lucide-react';
+import { Send, Paperclip, Check, MessageSquare } from 'lucide-react';
 
 export const DocumentsView: React.FC = () => {
-  const { requirementDocs, estimateForDoc, sendDocToClient, can, setActiveTab, role, projects } = useApp();
+  const {
+    requirementDocs,
+    sendDocToClient,
+    approveScope,
+    requestScopeChanges,
+    can,
+    setActiveTab,
+    role,
+    projects
+  } = useApp();
 
-  const [selectedId, setSelectedId] = useState<string | null>(requirementDocs[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    requirementDocs.find(d => d.status === 'awaiting_client')?.id ?? requirementDocs[0]?.id ?? null
+  );
+  const [showChangeRequest, setShowChangeRequest] = useState(false);
+  const [changeRequest, setChangeRequest] = useState('');
   const doc = requirementDocs.find(d => d.id === selectedId);
-  const estimate = doc ? estimateForDoc(doc.id) : undefined;
   const project = doc?.projectId ? projects.find(p => p.id === doc.projectId) : undefined;
+  const canApprove = role === 'client' && can('approve_scope');
+
+  const handleApprove = () => {
+    if (!doc || !canApprove) return;
+    const created = approveScope(doc.id);
+    if (created) setActiveTab('portal');
+  };
+
+  const handleRequestChanges = () => {
+    if (!doc || !changeRequest.trim() || !canApprove) return;
+    requestScopeChanges(doc.id, changeRequest.trim());
+    setChangeRequest('');
+    setShowChangeRequest(false);
+  };
 
   return (
     <div className="h-full flex overflow-hidden bg-surface text-sm">
@@ -53,7 +78,7 @@ export const DocumentsView: React.FC = () => {
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-3xl mx-auto px-8 py-8 space-y-8">
+          <div className="mx-auto max-w-4xl space-y-7 px-6 py-7 lg:px-8">
 
             {/* Head */}
             <div className="space-y-3 pb-6 border-b border-white/[0.06]">
@@ -72,15 +97,6 @@ export const DocumentsView: React.FC = () => {
               </div>
               <div className="flex items-start justify-between gap-6">
                 <h1 className="text-lg font-semibold text-white tracking-tight">{doc.title}</h1>
-                {estimate && (
-                  <button
-                    onClick={() => setActiveTab('billing')}
-                    className="flex items-center gap-1.5 font-mono text-sm text-white tabular-nums hover:text-brand-300 transition-colors flex-shrink-0"
-                  >
-                    {formatMoney(estimate.buildTotal, { cents: false })}
-                    <ArrowUpRight className="w-3.5 h-3.5 text-gray-500" />
-                  </button>
-                )}
               </div>
               <div className="flex flex-wrap items-center gap-4">
                 <DocStatus status={doc.status} />
@@ -168,7 +184,7 @@ export const DocumentsView: React.FC = () => {
                         </ul>
                       </div>
 
-                      {/* Complexity bands are a pricing and planning device. */}
+                      {/* Complexity bands help the team plan delivery sequencing. */}
                       {role !== 'client' && <Band band={r.band} />}
                     </div>
                   </div>
@@ -229,30 +245,88 @@ export const DocumentsView: React.FC = () => {
               <div className="flex items-center gap-2.5 py-4 border-t border-white/[0.06] text-xs text-emerald-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
                 <span>
-                  Scope and budget approved by {doc.approvedBy} on{' '}
+                  Specification approved by {doc.approvedBy} on{' '}
                   {new Date(doc.approvedAt).toLocaleDateString()}. Acceptance criteria above are fixed.
                 </span>
               </div>
             )}
 
+            {/* Client checkpoint: approve the exact specification in context. */}
+            {doc.status === 'awaiting_client' && canApprove && (
+              <section className="rounded-xl border border-brand-500/25 bg-brand-500/[0.06] p-5 space-y-4">
+                <div className="space-y-1.5">
+                  <SectionLabel>Your approval is needed</SectionLabel>
+                  <p className="text-sm leading-relaxed text-gray-300">
+                    Confirm that these requirements reflect what you need. Nothing is built until you approve the specification.
+                  </p>
+                </div>
+
+                {showChangeRequest && (
+                  <div className="space-y-2">
+                    <label htmlFor="scope-change-request" className="text-xs text-gray-400">
+                      What should the team change?
+                    </label>
+                    <textarea
+                      id="scope-change-request"
+                      value={changeRequest}
+                      onChange={event => setChangeRequest(event.target.value)}
+                      rows={3}
+                      autoFocus
+                      placeholder="For example: remove the reporting dashboard from this phase."
+                      className="w-full resize-none rounded-lg border border-white/[0.10] bg-surface px-3 py-2.5 text-sm text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+                    />
+                  </div>
+                )}
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={handleApprove}
+                    className="flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-on-accent transition-colors hover:bg-brand-600"
+                  >
+                    <Check className="h-4 w-4" />
+                    Approve specification
+                  </button>
+                  {showChangeRequest ? (
+                    <>
+                      <button
+                        onClick={handleRequestChanges}
+                        disabled={!changeRequest.trim()}
+                        className="flex items-center gap-2 rounded-lg border border-white/[0.12] px-4 py-2 text-sm font-medium text-gray-200 transition-colors hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        Send request
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowChangeRequest(false);
+                          setChangeRequest('');
+                        }}
+                        className="px-3 py-2 text-sm text-gray-500 transition-colors hover:text-white"
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => setShowChangeRequest(true)}
+                      className="px-3 py-2 text-sm text-gray-400 transition-colors hover:text-white"
+                    >
+                      Request changes
+                    </button>
+                  )}
+                </div>
+              </section>
+            )}
+
             {/* Actions */}
             <div className="flex items-center justify-end gap-3 pb-8">
-              {can('author_estimate') && doc.status === 'in_review' && (
+              {can('manage_documents') && doc.status === 'in_review' && (
                 <button
                   onClick={() => sendDocToClient(doc.id)}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent text-sm font-medium transition-colors"
                 >
                   <Send className="w-4 h-4" />
                   Send to client for approval
-                </button>
-              )}
-              {estimate && doc.status === 'awaiting_client' && role === 'client' && (
-                <button
-                  onClick={() => setActiveTab('billing')}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent text-sm font-medium transition-colors"
-                >
-                  <FileText className="w-4 h-4" />
-                  Review the price
                 </button>
               )}
             </div>

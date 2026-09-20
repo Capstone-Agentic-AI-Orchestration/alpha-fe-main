@@ -25,12 +25,13 @@ export interface EnvVar {
 interface Props {
   envVars: EnvVar[];
   onChange: (next: EnvVar[]) => void;
+  readOnly?: boolean;
 }
 
 /** Same rule the daemon applies, so the form refuses what the run would drop. */
 const VALID_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
-export const ProjectEnvPanel: React.FC<Props> = ({ envVars, onChange }) => {
+export const ProjectEnvPanel: React.FC<Props> = ({ envVars, onChange, readOnly = false }) => {
   const [key, setKey] = useState('');
   const [value, setValue] = useState('');
   const [isSecret, setIsSecret] = useState(true);
@@ -85,20 +86,22 @@ export const ProjectEnvPanel: React.FC<Props> = ({ envVars, onChange }) => {
               <span className="shrink-0 font-mono text-[10px] text-gray-500">
                 {entry.isSecret ? '••••••••' : entry.value}
               </span>
-              <button
-                type="button"
-                onClick={() => onChange(envVars.filter(e => e.key !== entry.key))}
-                title={`Remove ${entry.key}`}
-                className="shrink-0 rounded-lg p-1 text-gray-500 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
-              >
-                <Trash2 className="w-3 h-3" />
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  onClick={() => onChange(envVars.filter(e => e.key !== entry.key))}
+                  title={`Remove ${entry.key}`}
+                  className="shrink-0 rounded-lg p-1 text-gray-500 transition-colors hover:bg-rose-500/10 hover:text-rose-400"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              )}
             </div>
           ))}
         </div>
       )}
 
-      <div className="space-y-1.5 rounded-xl border border-white/5 bg-well p-2.5">
+      {!readOnly && <div className="space-y-1.5 rounded-xl border border-white/5 bg-well p-2.5">
         <div className="flex gap-1.5">
           <input
             value={key}
@@ -140,7 +143,7 @@ export const ProjectEnvPanel: React.FC<Props> = ({ envVars, onChange }) => {
             Hide this value after saving
           </label>
         )}
-      </div>
+      </div>}
     </div>
   );
 };

@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { navItem, navIcon, navLabel } from '@/config/navigation';
+import React, { useEffect, useRef, useState } from 'react';
+import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
 import { Search, Edit3, ChevronDown, HelpCircle, Sun, Moon, Plus, Loader2 } from 'lucide-react';
@@ -11,30 +11,27 @@ interface SidebarProps {
   onOpenNewIssue: () => void;
 }
 
-/**
- * The navigation table used to be duplicated here.
- *
- * Labels, icons and grouping lived in a `NAV_META` record that App.tsx
- * mirrored in three more places, and they had already drifted — App.tsx knew
- * nothing about `portal` or `intake`. All four now read config/navigation.
- */
 const ROLE_LABEL: Record<UserRole, string> = {
   client: 'Client',
   dev: 'Developer',
   pm: 'Project Manager',
-  admin: 'Admin'
+  admin: 'Admin',
 };
 
-export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+  collapsed,
+  setCollapsed,
+  onOpenNewIssue,
+}) => {
   const {
     activeTab,
     setActiveTab,
     unreadInboxCount,
     settings,
     setCommandPaletteOpen,
-    visibleTabs,
     role,
     switchRole,
+    can,
     currentUser,
     identity,
     roleIsOverridden,
@@ -46,8 +43,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
     showToast
   } = useApp();
 
-  const { theme, toggle: toggleTheme } = useTheme();
-
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
   const [creatingWorkspace, setCreatingWorkspace] = useState(false);
@@ -55,10 +50,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
   const roleMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const onClick = (e: MouseEvent) => {
-      if (roleMenuRef.current && !roleMenuRef.current.contains(e.target as Node)) setRoleMenuOpen(false);
+    const onClick = (event: MouseEvent) => {
+      if (roleMenuRef.current && !roleMenuRef.current.contains(event.target as Node)) {
+        setRoleMenuOpen(false);
+      }
     };
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setRoleMenuOpen(false);
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setRoleMenuOpen(false);
+    };
+
     if (roleMenuOpen) {
       document.addEventListener('mousedown', onClick);
       document.addEventListener('keydown', onKey);
@@ -98,35 +98,64 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
 
   const isClient = role === 'client';
   const labelFor = (tab: NavigationTab) => navLabel(tab, role);
+  // Navigation and RBAC share one source of truth. A newly added tab cannot
+  // become an orphaned page because the sidebar is now derived from the role's
+  // section map instead of a second hand-maintained list.
+  const visibleTabSet = new Set(visibleTabs);
+  const groups = sectionsFor(role)
+    .map(group => ({ ...group, items: group.items.filter(item => visibleTabSet.has(item.id)) }))
+    .filter(group => group.items.length > 0);
 
-  const group = (name: 'primary' | 'workspace' | 'configure') =>
-    visibleTabs.filter(t => navItem(t).group === name);
+  const navButton = (tab: NavigationTab) => {
+    const active = activeTab === tab;
+    const label = labelFor(tab);
 
-  const navButton = (tab: NavigationTab) => (
-    <button
-      key={tab}
-      onClick={() => setActiveTab(tab)}
-      className={`w-full flex items-center justify-between px-3 py-2 rounded-md border-l-2 transition-colors ${
-        activeTab === tab
-          ? 'border-brand-400 bg-white/[0.035] text-white font-medium'
-          : 'border-transparent text-gray-400 hover:text-gray-200 hover:bg-white/[0.025]'
-      }`}
-    >
-      <div className="flex items-center gap-3">
-        {navIcon(tab)}
-        <span>{labelFor(tab)}</span>
-      </div>
-      {tab === 'inbox' && unreadInboxCount > 0 && (
-        <span className="text-xs tabular-nums text-amber-300 font-medium">{unreadInboxCount}</span>
-      )}
-    </button>
-  );
+    return (
+      <button
+        key={tab}
+        onClick={() => setActiveTab(tab)}
+        title={collapsed ? label : undefined}
+        aria-label={label}
+        className={`group relative flex w-full items-center rounded-lg transition-colors ${
+          collapsed ? 'justify-center px-0 py-2.5' : 'justify-between px-3 py-2'
+        } ${
+          active
+            ? 'bg-brand-500/15 font-semibold text-gray-100 ring-1 ring-inset ring-white/[0.06]'
+            : 'text-gray-400 hover:bg-white/[0.05] hover:text-gray-100'
+        }`}
+      >
+        <span
+          className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${
+            active ? 'text-brand-300' : 'text-gray-500 group-hover:text-gray-300'
+          }`}
+        >
+          {navIcon(tab)}
+          <span className={collapsed ? 'sr-only' : undefined}>{label}</span>
+        </span>
+        {tab === 'inbox' && unreadInboxCount > 0 && (
+          collapsed ? (
+            <span
+              className="absolute ml-6 mt-[-18px] h-1.5 w-1.5 rounded-full bg-amber-300"
+              title={`${unreadInboxCount} unread`}
+            />
+          ) : (
+            <span className="text-xs font-medium tabular-nums text-amber-300">
+              {unreadInboxCount}
+            </span>
+          )
+        )}
+      </button>
+    );
+  };
 
   return (
-    <aside className="w-60 bg-shell border-r border-white/[0.06] flex flex-col flex-shrink-0 select-none z-20 text-gray-300 font-sans text-sm">
-
-      {/* Workspace */}
-      <div className="pt-3 px-3 pb-3 space-y-3">
+    <aside
+      className={`z-20 flex h-full flex-shrink-0 select-none flex-col border-r border-white/[0.08] bg-shell/95 font-sans text-sm text-gray-300 backdrop-blur-xl transition-[width] duration-200 ease-out ${
+        collapsed ? 'w-16' : 'w-60'
+      }`}
+    >
+      {/* Workspace and primary actions */}
+      <div className={`space-y-3 pb-3 pt-3 ${collapsed ? 'px-2' : 'px-3'}`}>
         <div className="relative">
           <button
             onClick={() => setWorkspaceMenuOpen(!workspaceMenuOpen)}
@@ -139,9 +168,19 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
               <span className="text-sm font-semibold text-white truncate">
                 {workspaceName}
               </span>
-            </div>
-            <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
-          </button>
+              {!collapsed && <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-500" />}
+            </button>
+
+            <button
+              onClick={() => setCollapsed(!collapsed)}
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
+              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-pressed={collapsed}
+            >
+              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
+          </div>
 
           {workspaceMenuOpen && (
             <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-1 animate-slide-up text-sm">
@@ -191,7 +230,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
                   setActiveTab('settings');
                   setWorkspaceMenuOpen(false);
                 }}
-                className="w-full text-left px-3 py-2 text-sm text-gray-300 hover:text-white hover:bg-white/[0.035] rounded-md"
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/[0.04] hover:text-white"
               >
                 Settings
               </button>
@@ -199,135 +238,128 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenNewIssue }) => {
           )}
         </div>
 
-        {/* Quick actions — clients get a request button, staff get search + new issue */}
-        <div className="space-y-1.5 pt-1">
+        <div className={`space-y-1.5 pt-1 ${collapsed ? 'flex flex-col items-center' : ''}`}>
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-white/[0.035] text-gray-400 hover:text-gray-200 transition-colors text-sm"
+            className={`flex rounded-lg text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
+              collapsed ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
+            }`}
+            title={collapsed ? 'Search (⌘ K)' : undefined}
+            aria-label="Search"
           >
-            <div className="flex items-center gap-3">
-              <Search className="w-4 h-4 text-gray-500" />
-              <span>Search...</span>
-            </div>
-            <kbd className="text-[11px] text-gray-500 px-1.5 py-0.5">
-              ⌘ K
-            </kbd>
+            <span className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+              <Search className="h-4 w-4 text-gray-500" />
+              <span className={collapsed ? 'sr-only' : undefined}>Search...</span>
+            </span>
+            {!collapsed && <kbd className="px-1.5 py-0.5 text-[11px] text-gray-500">⌘ K</kbd>}
           </button>
 
-          {!isClient && (
+          {canManageIssues && (
             <button
               onClick={onOpenNewIssue}
-              className="w-full flex items-center justify-between px-3 py-2 rounded-md hover:bg-white/[0.035] text-gray-400 hover:text-gray-200 transition-colors text-sm"
+              className={`flex rounded-lg text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
+                collapsed ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
+              }`}
+              title={collapsed ? 'New issue' : undefined}
+              aria-label="New issue"
             >
-              <div className="flex items-center gap-3">
-                <Edit3 className="w-4 h-4 text-gray-500" />
-                <span>New Issue</span>
-              </div>
-              <kbd className="text-[11px] text-gray-500 px-2 py-0.5">
-                C
-              </kbd>
+              <span className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+                <Edit3 className="h-4 w-4 text-gray-500" />
+                <span className={collapsed ? 'sr-only' : undefined}>New Issue</span>
+              </span>
+              {!collapsed && <kbd className="px-2 py-0.5 text-[11px] text-gray-500">C</kbd>}
             </button>
           )}
         </div>
       </div>
 
-      {/* Main Navigation List */}
-      <div className="flex-1 overflow-y-auto px-2 space-y-5 py-2">
-        <div className="space-y-1">{group('primary').map(navButton)}</div>
-
-        {group('workspace').length > 0 && (
-          <div className="space-y-1">
-            <div className="px-3 text-[11px] font-medium text-gray-600 mb-1.5">
-              {isClient ? 'Your project' : 'Workspace'}
+      {/* Main navigation */}
+      <div className={`flex-1 space-y-4 overflow-y-auto py-2 ${collapsed ? 'px-1.5' : 'px-2'}`}>
+        {groups.map(({ section, items }) => (
+          <div key={section.id} className="space-y-0.5 border-t border-white/[0.05] pt-3 first:border-t-0 first:pt-0">
+            <div className={collapsed ? 'sr-only' : 'mb-1 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500'}>
+              <span>{section.label}</span>
+              <span className="h-px flex-1 bg-white/[0.05]" aria-hidden="true" />
             </div>
-            {group('workspace').map(navButton)}
+            {items.map(item => navButton(item.id))}
           </div>
-        )}
-
-        {group('configure').length > 0 && (
-          <div className="space-y-1">
-            <div className="px-3 text-[11px] font-medium text-gray-600 mb-1.5">
-              Configure
-            </div>
-            {group('configure').map(navButton)}
-          </div>
-        )}
+        ))}
       </div>
 
-      {/* Identity + role switcher (demo affordance) */}
-      <div className="border-t border-white/[0.06] px-2.5 py-2.5 relative" ref={roleMenuRef}>
+      {/* Identity + role switcher */}
+      <div
+        className={`relative border-t border-white/[0.06] py-2.5 ${collapsed ? 'px-1.5' : 'px-2.5'}`}
+        ref={roleMenuRef}
+      >
         <button
-          onClick={() => setRoleMenuOpen(!roleMenuOpen)}
-          className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md hover:bg-white/[0.035] transition-colors text-left"
+          onClick={() => setRoleMenuOpen(open => !open)}
+          className={`flex w-full items-center rounded-lg py-2 transition-colors hover:bg-white/[0.04] ${
+            collapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5 text-left'
+          }`}
+          title={collapsed ? `${identity?.login ?? currentUser.name} · ${ROLE_LABEL[role]}` : undefined}
+          aria-label="Open role switcher"
+          aria-expanded={roleMenuOpen}
         >
-          {/*
-            Who you actually are.
-            
-            This read `currentUser`, which is picked from a mock array by
-            whichever role the switcher is on — so the footer showed a person
-            who does not exist while the daemon knew perfectly well it was
-            talking to a GitHub account. `identity` is that account; the mock
-            remains only as the fallback for a machine with no gh at all.
-          */}
-          <div className="w-7 h-7 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center text-xs font-semibold text-gray-200 flex-shrink-0">
+          <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-xs font-semibold text-gray-200">
             {(identity?.login ?? currentUser.name)[0].toUpperCase()}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-white truncate">{identity?.login ?? currentUser.name}</p>
-            <p className="text-[11px] text-gray-500 flex items-center gap-1">
-              <span>{ROLE_LABEL[role]}</span>
-              {/*
-                Say when the role is not the one GitHub gave you. Without it the
-                footer asserts a persona you are only borrowing.
-              */}
-              {roleIsOverridden && <span className="text-amber-500/80">· viewing as</span>}
-            </p>
-          </div>
-          <ChevronDown className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
+          </span>
+          {!collapsed && (
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-xs text-white">{identity?.login ?? currentUser.name}</span>
+              <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                <span>{ROLE_LABEL[role]}</span>
+                {roleIsOverridden && <span className="text-amber-500/80">· viewing as</span>}
+              </span>
+            </span>
+          )}
+          {!collapsed && <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" />}
         </button>
 
-        {roleMenuOpen && (
-          <div className="absolute bottom-full left-2.5 right-2.5 mb-1.5 z-30 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-0.5 animate-slide-up">
-            <div className="text-xs font-medium text-gray-500 px-2.5 py-1.5">
-              View as
-            </div>
-            {(['client', 'dev', 'pm', 'admin'] as UserRole[]).map(r => (
+          {import.meta.env.DEV && roleMenuOpen && (
+          <div
+            className={`absolute bottom-full z-30 mb-1.5 space-y-0.5 rounded-xl border border-white/[0.08] bg-surface p-2 shadow-2xl animate-slide-up ${
+              collapsed ? 'left-1.5 w-56' : 'left-2.5 right-2.5'
+            }`}
+          >
+            <div className="px-2.5 py-1.5 text-xs font-medium text-gray-500">View as</div>
+            {(['client', 'dev', 'pm', 'admin'] as UserRole[]).map(option => (
               <button
-                key={r}
-                onClick={() => { switchRole(r); setRoleMenuOpen(false); }}
-                className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md text-left text-xs transition-colors ${
-                  role === r ? 'bg-white/[0.08] text-white' : 'text-gray-400 hover:text-white hover:bg-white/[0.04]'
+                key={option}
+                onClick={() => {
+                  switchRole(option);
+                  setRoleMenuOpen(false);
+                }}
+                className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ${
+                  role === option
+                    ? 'bg-white/[0.08] text-white'
+                    : 'text-gray-400 hover:bg-white/[0.04] hover:text-white'
                 }`}
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${role === r ? 'bg-emerald-400' : 'bg-gray-700'}`} />
-                {ROLE_LABEL[r]}
+                <span className={`h-1.5 w-1.5 rounded-full ${role === option ? 'bg-emerald-400' : 'bg-gray-700'}`} />
+                {ROLE_LABEL[option]}
               </button>
             ))}
-            <p className="text-[11px] text-gray-600 px-2.5 pt-2 pb-1 leading-relaxed border-t border-white/[0.06] mt-1">
+            <p className="mt-1 border-t border-white/[0.06] px-2.5 pb-1 pt-2 text-[11px] leading-relaxed text-gray-600">
               Prototype affordance. Real sessions resolve the role from sign-in.
             </p>
           </div>
         )}
       </div>
 
-      <div className="px-4 py-2.5 border-t border-white/[0.06] flex items-center justify-between text-gray-400 text-xs">
-        <button
-          onClick={() => window.dispatchEvent(new Event('alpha:open-prototype-guide'))}
-          className="flex items-center gap-2 hover:text-gray-200 transition-colors font-medium"
-        >
-          <HelpCircle className="w-4 h-4 text-gray-500" />
-          <span>Prototype guide</span>
-        </button>
-        <div className="flex items-center gap-2">
+      <div className={`border-t border-white/[0.06] py-2.5 text-xs text-gray-400 ${collapsed ? 'px-1.5' : 'px-4'}`}>
+        <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'justify-between'}`}>
           <button
-            onClick={toggleTheme}
-            title={theme === 'dark' ? 'Switch to light' : 'Switch to dark'}
-            aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
-            className="p-1 rounded hover:bg-white/[0.06] hover:text-gray-200 transition-colors"
+            onClick={() => window.dispatchEvent(new Event('alpha:open-prototype-guide'))}
+            className={`flex items-center rounded-lg font-medium transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
+              collapsed ? 'h-9 w-9 justify-center' : 'gap-2'
+            }`}
+            title={collapsed ? 'Prototype guide' : undefined}
+            aria-label="Open prototype guide"
           >
-            {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+            <HelpCircle className="h-4 w-4 text-gray-500" />
+            <span className={collapsed ? 'sr-only' : undefined}>Prototype guide</span>
           </button>
-          <span className="font-mono text-[10px] text-brand-400 font-medium">v2.0.0</span>
+          <span className="font-mono text-[10px] font-medium text-brand-400">{collapsed ? '2.0' : 'v2.0.0'}</span>
         </div>
       </div>
     </aside>
