@@ -13,11 +13,16 @@ export type NavigationTab =
   | 'runtimes'
   | 'skills'
   | 'deployments'
+  | 'build_room'
   | 'settings';
 
 export interface TabItem {
   id: string;
   view: NavigationTab;
+  /** Optional project context for project-scoped tabs such as the Build Room. */
+  projectId?: string;
+  /** Optional run context when a tab was opened from a specific execution. */
+  buildRunId?: string;
 }
 
 export type IssueStatus = 'backlog' | 'todo' | 'in_progress' | 'agent_running' | 'review' | 'done';
@@ -286,6 +291,32 @@ export interface Project {
   completedIssues?: number;
   milestones?: Milestone[];
   createdAt?: string;
+}
+
+export type BuildStepPhase =
+  | 'requirements'
+  | 'architecture'
+  | 'implementation'
+  | 'database'
+  | 'validation'
+  | 'review'
+  | 'delivery';
+
+/** A project's explicit, ordered build-room pipeline. */
+export interface ProjectBuildStep {
+  id: string;
+  projectId: string;
+  label: string;
+  phase: BuildStepPhase;
+  agentId?: string;
+  squadId?: string;
+  position: number;
+  enabled: boolean;
+  required: boolean;
+  approvalGate?: boolean;
+  dependsOn?: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export type AgentRole = 
@@ -611,6 +642,8 @@ export interface LiveBuildRoomSnapshot {
 
 export type RuntimeType = 'local' | 'cloud' | 'remote';
 export type RuntimeStatus = 'online' | 'offline' | 'degraded' | 'scanning';
+export type RuntimeCatalogSource = 'cli' | 'local_api' | 'remote_api' | 'cache' | 'none';
+export type RuntimeUpdateSource = 'provider_cli' | 'npm' | 'remote_api' | 'none';
 
 export interface RuntimeEngine {
   id: string;
@@ -635,6 +668,16 @@ export interface RuntimeEngine {
   gpuName?: string;
   isDefault?: boolean;
   detectedAt?: string;
+  catalogSource?: RuntimeCatalogSource;
+  catalogCheckedAt?: string;
+  catalogFetchedAt?: string;
+  catalogStale?: boolean;
+  catalogError?: string;
+  updateAvailable?: boolean;
+  latestVersion?: string;
+  updateCheckedAt?: string;
+  updateError?: string;
+  updateSource?: RuntimeUpdateSource;
 }
 
 export type SkillCategory = 
@@ -774,6 +817,10 @@ export interface ChatThread {
   id: string;
   title: string;
   agentIds: string[];
+  /** The responder selected for this conversation, when it is not automatic Alpha. */
+  targetAgentId?: string;
+  /** The squad selected for this conversation, when several agents should answer. */
+  targetSquadId?: string;
   /**
    * Which project this conversation is about, when it is about one.
    *
@@ -919,6 +966,19 @@ export interface WorkspaceSettings {
   notificationsEnabled: boolean;
   telemetryEnabled: boolean;
   maxParallelAgentRuns: number;
+}
+
+export type WorkspaceRole = 'owner' | 'admin' | 'member' | 'viewer';
+
+/** A top-level collaboration boundary; projects hold the actual checkouts. */
+export interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+  organization?: string;
+  role: WorkspaceRole;
+  createdAt: string;
+  updatedAt: string;
 }
 
 /* ---------------------------------------------------------------------------

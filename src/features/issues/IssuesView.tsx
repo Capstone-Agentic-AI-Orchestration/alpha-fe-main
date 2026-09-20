@@ -1149,7 +1149,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   <label className="text-gray-400 font-medium">Assigned Agent</label>
                   <select
                     value={selectedIssue.assignedAgentId || ''}
-                    onChange={(e) => updateIssue(selectedIssue.id, { assignedAgentId: e.target.value || undefined })}
+                    onChange={(e) => {
+                      const assignedAgentId = e.target.value || undefined;
+                      updateIssue(selectedIssue.id, {
+                        assignedAgentId,
+                        assignedSquadId: assignedAgentId ? undefined : selectedIssue.assignedSquadId
+                      });
+                    }}
                     className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500"
                   >
                     <option value="">Unassigned</option>
@@ -1169,7 +1175,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   <label className="text-gray-400 font-medium">Assigned Squad</label>
                   <select
                     value={selectedIssue.assignedSquadId || ''}
-                    onChange={(e) => updateIssue(selectedIssue.id, { assignedSquadId: e.target.value || undefined })}
+                    onChange={(e) => {
+                      const assignedSquadId = e.target.value || undefined;
+                      updateIssue(selectedIssue.id, {
+                        assignedSquadId,
+                        assignedAgentId: assignedSquadId ? undefined : selectedIssue.assignedAgentId
+                      });
+                    }}
                     className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500"
                   >
                     <option value="">No squad</option>
@@ -1179,6 +1191,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       </option>
                     ))}
                   </select>
+                  <p className="text-[10px] leading-relaxed text-gray-500">An issue has one execution owner. Selecting a squad clears the assigned agent, and vice versa.</p>
                 </div>
 
                 {/* Project */}

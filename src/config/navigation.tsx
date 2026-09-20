@@ -1,9 +1,8 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, PenLine, FileText, Inbox, MessageSquare,
-  CheckSquare, FolderKanban, Rocket, Bot, Users, BarChart3, Monitor, BookOpen, Settings,
-  RadioTower
+  LayoutDashboard, PenLine, FileText, CreditCard, Inbox, MessageSquare, User,
+  CheckSquare, FolderKanban, Rocket, Bot, Users, BarChart3, Monitor, BookOpen, Settings, Workflow
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
@@ -140,7 +139,8 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'runtimes', label: 'Runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Monitor },
   { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
 
-  { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket },
+  { id: 'deployments', label: 'CI/CD Platform', title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'delivery', icon: Rocket },
+  { id: 'build_room', label: 'Build Room', title: 'Live Build Room', subtitle: 'Project execution, handoffs, and validation', group: 'workspace', section: 'delivery', icon: Workflow },
 
   { id: 'analytics', label: 'Analytics', labels: { pm: 'Delivery Health', admin: 'Delivery Health' }, title: 'Operational Analytics', subtitle: 'Run health, delivery activity, and performance', group: 'workspace', section: 'insights', icon: BarChart3 },
 
@@ -184,14 +184,14 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  */
 export const ROLE_NAV: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
+  dev: ['my_issues', 'issues', 'documents', 'inbox', 'chat', 'agents', 'deployments', 'build_room', 'runtimes', 'skills', 'settings'],
   pm: [
-    'portal', 'projects', 'issues', 'documents', 'inbox', 'chat',
-    'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
+    'inbox', 'chat', 'my_issues', 'issues', 'projects', 'documents',
+    'deployments', 'build_room', 'agents', 'squads', 'analytics', 'runtimes', 'skills', 'settings'
   ],
   admin: [
-    'portal', 'projects', 'issues', 'documents', 'inbox', 'chat',
-    'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
+    'inbox', 'chat', 'my_issues', 'issues', 'projects', 'documents', 'billing',
+    'deployments', 'build_room', 'agents', 'squads', 'analytics', 'runtimes', 'skills', 'settings'
   ]
 };
 

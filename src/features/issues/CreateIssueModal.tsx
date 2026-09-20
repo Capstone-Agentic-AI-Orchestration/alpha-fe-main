@@ -26,9 +26,25 @@ import {
 interface CreateIssueModalProps {
   isOpen: boolean;
   onClose: () => void;
+  /** Optional context supplied by a project execution view. */
+  initialProjectId?: string;
+  initialPrompt?: string;
+  initialTitle?: string;
+  initialDescription?: string;
+  initialAssignedAgentId?: string;
+  initialAssignedSquadId?: string;
 }
 
-export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onClose }) => {
+export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
+  isOpen,
+  onClose,
+  initialProjectId,
+  initialPrompt,
+  initialTitle,
+  initialDescription,
+  initialAssignedAgentId,
+  initialAssignedSquadId
+}) => {
   const { createIssue, projects, agents, squads } = useApp();
 
   // Mode: 'agent' (Create with agent) vs 'manual' (Create manually)
@@ -37,12 +53,12 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Common fields
-  const [promptText, setPromptText] = useState('');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState(projects[0]?.id || 'proj-1');
-  const [selectedSquadId, setSelectedSquadId] = useState(squads[0]?.id || 'sq-1');
-  const [selectedAgentId, setSelectedAgentId] = useState(agents[1]?.id || 'agent-2');
+  const [promptText, setPromptText] = useState(initialPrompt ?? '');
+  const [title, setTitle] = useState(initialTitle ?? '');
+  const [description, setDescription] = useState(initialDescription ?? '');
+  const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId || projects[0]?.id || 'proj-1');
+  const [selectedSquadId, setSelectedSquadId] = useState(initialAssignedSquadId || '');
+  const [selectedAgentId, setSelectedAgentId] = useState(initialAssignedSquadId ? '' : (initialAssignedAgentId || agents[1]?.id || agents[0]?.id || ''));
   const [status, setStatus] = useState<IssueStatus>('todo');
   const [priority, setPriority] = useState<IssuePriority>('none');
   const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
@@ -58,16 +74,42 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
   }, [projects, selectedProjectId]);
 
   useEffect(() => {
-    if (squads.length > 0 && !squads.some(squad => squad.id === selectedSquadId)) {
+    if (selectedSquadId && squads.length > 0 && !squads.some(squad => squad.id === selectedSquadId)) {
       setSelectedSquadId(squads[0].id);
     }
   }, [squads, selectedSquadId]);
 
   useEffect(() => {
-    if (agents.length > 0 && !agents.some(agent => agent.id === selectedAgentId)) {
+    if (selectedAgentId && agents.length > 0 && !agents.some(agent => agent.id === selectedAgentId)) {
       setSelectedAgentId(agents[0].id);
     }
   }, [agents, selectedAgentId]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialProjectId) setSelectedProjectId(initialProjectId);
+    if (initialPrompt !== undefined) {
+      setMode('agent');
+      setPromptText(initialPrompt);
+    }
+    if (initialTitle !== undefined) setTitle(initialTitle);
+    if (initialDescription !== undefined) setDescription(initialDescription);
+    if (initialAssignedSquadId !== undefined) {
+      setSelectedSquadId(initialAssignedSquadId);
+      setSelectedAgentId('');
+    } else if (initialAssignedAgentId !== undefined) {
+      setSelectedAgentId(initialAssignedAgentId);
+      setSelectedSquadId('');
+    }
+  }, [
+    initialAssignedAgentId,
+    initialAssignedSquadId,
+    initialDescription,
+    initialProjectId,
+    initialPrompt,
+    initialTitle,
+    isOpen
+  ]);
 
   // Popover menus
   const [openMenu, setOpenMenu] = useState<'project' | 'status' | 'priority' | 'assignee' | 'label' | 'more' | null>(null);
@@ -85,6 +127,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
   const activeProject = projects.find(p => p.id === selectedProjectId) || projects[0];
   const activeSquad = squads.find(s => s.id === selectedSquadId);
   const activeAgent = agents.find(a => a.id === selectedAgentId);
+  const activeOwner = activeSquad?.name || activeAgent?.name || 'Unassigned';
 
   // Keyboard shortcut for Cmd+Enter
   useEffect(() => {
@@ -125,7 +168,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
         // run from the issue card or inspector.
         status: 'todo',
         assignedSquadId: selectedSquadId || undefined,
-        assignedAgentId: selectedAgentId || undefined,
+        assignedAgentId: selectedSquadId ? undefined : (selectedAgentId || undefined),
         labels: selectedLabels.length > 0 ? selectedLabels : ['agent-task'],
         subtasks: [
           'Deconstruct user prompt & analyze files',
@@ -153,7 +196,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
         priority,
         status,
         assignedSquadId: selectedSquadId || undefined,
-        assignedAgentId: selectedAgentId || undefined,
+        assignedAgentId: selectedSquadId ? undefined : (selectedAgentId || undefined),
         labels: selectedLabels,
         subtasks: []
       });
@@ -227,7 +270,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
           {/* Subheader / Created By (in Agent mode) */}
           {mode === 'agent' && (
             <div className="px-6 pt-4 flex items-center gap-2.5 text-sm text-gray-400">
-              <span>Created by</span>
+              <span>Owner</span>
               <button
                 type="button"
                 onClick={(e) => {
@@ -237,7 +280,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
                 className="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-200 border border-white/5 transition-colors font-medium text-xs"
               >
                 <Users className="w-4 h-4 text-indigo-400" />
-                <span>{activeSquad?.name || 'Product & Planning'}</span>
+                <span>{activeOwner}</span>
               </button>
             </div>
           )}
@@ -406,11 +449,24 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
                 <div className="absolute bottom-full mb-1.5 left-0 z-40 w-72 bg-surface-100 border border-white/15 rounded-xl shadow-2xl p-2.5 space-y-2.5 animate-slide-up max-h-72 overflow-y-auto text-xs">
                   <div>
                     <div className="text-[11px] font-mono uppercase text-gray-500 px-2 py-0.5 font-semibold">Squads</div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSquadId('');
+                        setSelectedAgentId('');
+                        setOpenMenu(null);
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left ${!selectedSquadId && !selectedAgentId ? 'bg-brand-500/20 text-white font-semibold' : 'text-gray-300 hover:bg-white/5'}`}
+                    >
+                      <Users className="h-4 w-4 text-gray-500" />
+                      <span>Unassigned</span>
+                    </button>
                     {squads.map(sq => (
                       <button
                         key={sq.id}
                         onClick={() => {
                           setSelectedSquadId(sq.id);
+                          setSelectedAgentId('');
                           setOpenMenu(null);
                         }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left ${
@@ -430,6 +486,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({ isOpen, onCl
                         key={ag.id}
                         onClick={() => {
                           setSelectedAgentId(ag.id);
+                          setSelectedSquadId('');
                           setOpenMenu(null);
                         }}
                         className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left ${

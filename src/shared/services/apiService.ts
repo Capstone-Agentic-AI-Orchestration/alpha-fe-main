@@ -17,16 +17,8 @@ import {
   RemoteAction,
   Identity,
   AnalyticsData,
-  WorkspaceSummary,
-  WorkspaceProjectAssignment,
-  WorkspaceSquadProjectAssignment,
-  LiveBuildRoomSnapshot,
-  UserRole,
-  AgentCall,
-  ProjectChatSnapshot,
-  AgentCallMode,
-  AgentCallTarget,
-  ChatMessage as ProjectChatMessage
+  Workspace,
+  ProjectBuildStep
 } from '@/shared/types';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
@@ -38,6 +30,16 @@ let activeWorkspaceId: string | null = null;
 export function setActiveWorkspaceId(workspaceId: string | null): void {
   activeWorkspaceId = workspaceId;
 }
+
+let activeWorkspaceId: string | null = (() => {
+  try {
+    return typeof window !== 'undefined'
+      ? window.localStorage.getItem('alpha.active_workspace_id')
+      : null;
+  } catch {
+    return null;
+  }
+})();
 
 const SKILL_CATEGORIES: Skill['category'][] = [
   'File Operations',
@@ -136,13 +138,18 @@ export function normalizeGitHubRepo(value: unknown): string | undefined {
 }
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers(options?.headers);
+  headers.set('Content-Type', 'application/json');
+  if (
+    activeWorkspaceId &&
+    url !== '/health' &&
+    !url.startsWith('/workspaces')
+  ) {
+    headers.set('X-Workspace-Id', activeWorkspaceId);
+  }
   const res = await fetch(`${API_BASE}${url}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
-      ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {})
-    },
-    ...options
+    ...options,
+    headers
   });
   if (!res.ok) {
     const errorText = await res.text().catch(() => res.statusText);
@@ -162,6 +169,23 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const apiService = {
+  // Workspaces
+  getWorkspaceId: () => activeWorkspaceId,
+  setWorkspaceId: (id: string | null) => {
+    activeWorkspaceId = id;
+    try {
+      if (id) window.localStorage.setItem('alpha.active_workspace_id', id);
+      else window.localStorage.removeItem('alpha.active_workspace_id');
+    } catch {
+      // Storage is optional; the in-memory selection still scopes this tab.
+    }
+  },
+  getWorkspaces: () => fetchJson<Workspace[]>('/workspaces'),
+  createWorkspace: (workspace: Pick<Workspace, 'name'> & Partial<Workspace>) =>
+    fetchJson<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(workspace) }),
+  updateWorkspace: (id: string, updates: Partial<Workspace>) =>
+    fetchJson<Workspace>(`/workspaces/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
+
   // Health
   checkHealth: () => fetchJson<{ status: string; version: string }>('/health'),
 
@@ -286,6 +310,13 @@ export const apiService = {
     fetchJson<Project>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteProject: (id: string) =>
     fetchJson<{ success: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
+  getProjectBuildSteps: (projectId: string) =>
+    fetchJson<ProjectBuildStep[]>(`/projects/${projectId}/build-steps`),
+  updateProjectBuildSteps: (projectId: string, steps: Array<Partial<ProjectBuildStep>>) =>
+    fetchJson<ProjectBuildStep[]>(`/projects/${projectId}/build-steps`, {
+      method: 'PUT',
+      body: JSON.stringify({ steps })
+    }),
 
   // Agents
   getAgents: async (): Promise<Agent[]> => {
@@ -502,6 +533,7 @@ export const apiService = {
   // Runtimes
   getRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes'),
   scanRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes/scan', { method: 'POST' }),
+  refreshRuntime: (id: string) => fetchJson<RuntimeEngine>(`/runtimes/${encodeURIComponent(id)}/refresh`, { method: 'POST' }),
 
   // Runs
   getRuns: () => fetchJson<PrototypeRun[]>('/runs'),
@@ -543,6 +575,11 @@ export const apiService = {
       `/chat/threads/${id}`,
       { method: 'PUT', body: JSON.stringify({ projectId }) }
     ),
+  setThreadTarget: (id: string, targetAgentId: string | null, targetSquadId: string | null) =>
+    fetchJson<ChatThread>(`/chat/threads/${id}/target`, {
+      method: 'PUT',
+      body: JSON.stringify({ targetAgentId, targetSquadId })
+    }),
   createChatThread: (thread: Partial<ChatThread>) =>
     fetchJson<ChatThread>('/chat/threads', { method: 'POST', body: JSON.stringify(thread) }),
   /** Delete a conversation. Its messages cascade; its CLI session rows go too. */
@@ -554,7 +591,13 @@ export const apiService = {
       method: 'DELETE'
     }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
-  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string }) =>
+  sendChatMessage: (payload: {
+    threadId: string;
+    content: string;
+    senderName?: string;
+    targetAgentId?: string | null;
+    targetSquadId?: string | null;
+  }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;

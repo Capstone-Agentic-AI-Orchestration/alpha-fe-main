@@ -22,8 +22,7 @@ const runtimeModels = (runtime: RuntimeEngine): string[] =>
   runtime.models?.length ? runtime.models : runtime.modelsLoaded ?? [];
 
 export const RuntimesView: React.FC = () => {
-  const { runtimes, scanLocalRuntimes, isScanningRuntimes, setDefaultRuntime, can } = useApp();
-  const canManageRuntimes = can('manage_runtimes');
+  const { runtimes, scanLocalRuntimes, isScanningRuntimes, refreshRuntime, setDefaultRuntime } = useApp();
   
   // States
   const [selectedRuntimeId, setSelectedRuntimeId] = useState<string | null>(null);
@@ -37,6 +36,7 @@ export const RuntimesView: React.FC = () => {
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
   const [sortBy, setSortBy] = useState<'latency' | 'name' | 'models'>('latency');
   const [copiedEndpointId, setCopiedEndpointId] = useState<string | null>(null);
+  const [refreshingRuntimeId, setRefreshingRuntimeId] = useState<string | null>(null);
 
   // Selected Runtime Memo
   const selectedRuntime = useMemo(() => {
@@ -49,6 +49,15 @@ export const RuntimesView: React.FC = () => {
     setCopiedEndpointId(id);
     setTimeout(() => setCopiedEndpointId(null), 2000);
   }, []);
+
+  const handleRefreshRuntime = useCallback(async (id: string) => {
+    setRefreshingRuntimeId(id);
+    try {
+      await refreshRuntime(id);
+    } finally {
+      setRefreshingRuntimeId(current => current === id ? null : current);
+    }
+  }, [refreshRuntime]);
 
   // Filter and Sort Runtimes
   const filteredRuntimes = useMemo(() => {
@@ -393,7 +402,22 @@ export const RuntimesView: React.FC = () => {
               </div>
             </div>
 
+            {selectedRuntime.updateAvailable && (
+              <div className="absolute top-16 left-5 text-[10px] font-mono text-amber-300">
+                Update {selectedRuntime.latestVersion} available
+              </div>
+            )}
+
             <div className="flex items-center gap-2">
+              <button
+                onClick={() => void handleRefreshRuntime(selectedRuntime.id)}
+                disabled={refreshingRuntimeId === selectedRuntime.id}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-[11px] text-gray-300 hover:text-white disabled:opacity-50"
+                title="Refresh this runtime's model catalog"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${refreshingRuntimeId === selectedRuntime.id ? 'animate-spin' : ''}`} />
+                <span>{refreshingRuntimeId === selectedRuntime.id ? 'Refreshing' : 'Refresh'}</span>
+              </button>
               <button
                 onClick={() => setSelectedRuntimeId(null)}
                 className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
@@ -422,6 +446,27 @@ export const RuntimesView: React.FC = () => {
                 {selectedRuntime.endpoint || selectedRuntime.account?.email || 'Local Ambient Process'}
               </div>
             </div>
+
+            {selectedRuntime.updateCheckedAt && (
+              <div className="p-3.5 rounded-xl bg-surface border border-white/5 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] text-gray-400">
+                  <span>Runtime update check</span>
+                  <span className="font-mono text-gray-500">{selectedRuntime.updateSource || 'none'}</span>
+                </div>
+                <div className="text-xs text-white">
+                  {selectedRuntime.updateAvailable
+                    ? `Update ${selectedRuntime.latestVersion || 'available'} is available`
+                    : selectedRuntime.updateSource === 'provider_cli'
+                      ? 'Updates are managed by the provider CLI'
+                      : selectedRuntime.latestVersion
+                        ? `Up to date (${selectedRuntime.latestVersion})`
+                        : selectedRuntime.updateError || 'No comparable update source available'}
+                </div>
+                <div className="text-[10px] text-gray-500 font-mono">
+                  Checked {new Date(selectedRuntime.updateCheckedAt).toLocaleString()}
+                </div>
+              </div>
+            )}
 
             {/* Local Host Hardware Telemetry (if local) */}
             {selectedRuntime.type === 'local' && (
@@ -454,8 +499,25 @@ export const RuntimesView: React.FC = () => {
                   <span>Available Models ({runtimeModels(selectedRuntime).length})</span>
                 </span>
                 <span className="text-gray-500 font-mono">
-                  {selectedRuntime.status === 'online' ? 'Ready for dispatch' : 'Catalog snapshot'}
+                  {selectedRuntime.catalogStale
+                    ? 'Catalog stale'
+                    : selectedRuntime.catalogSource && selectedRuntime.catalogSource !== 'none'
+                      ? `Source: ${selectedRuntime.catalogSource}`
+                      : 'Catalog unavailable'}
                 </span>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] text-gray-500 font-mono">
+                <span>
+                  {selectedRuntime.catalogCheckedAt
+                    ? `Checked ${new Date(selectedRuntime.catalogCheckedAt).toLocaleString()}`
+                    : 'Not checked yet'}
+                </span>
+                {selectedRuntime.catalogError && (
+                  <span className="text-amber-300 truncate max-w-[55%]" title={selectedRuntime.catalogError}>
+                    {selectedRuntime.catalogError}
+                  </span>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -473,6 +535,11 @@ export const RuntimesView: React.FC = () => {
                     </span>
                   </div>
                 ))}
+                {!runtimeModels(selectedRuntime).length && (
+                  <div className="p-3 rounded-xl bg-surface border border-white/5 text-gray-500">
+                    No models were returned by this runtime.
+                  </div>
+                )}
               </div>
             </div>
 

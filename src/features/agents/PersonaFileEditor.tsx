@@ -37,7 +37,7 @@ const PLACEHOLDER = `---
 name: Ada Lovelace
 role: Architect
 provider: Anthropic
-model: claude-opus-5
+  model:
 ---
 
 You are Ada. Lead with the interface, then the implementation.`;
