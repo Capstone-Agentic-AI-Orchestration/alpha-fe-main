@@ -18,180 +18,101 @@ import {
   PencilLine,
   Play,
   Plus,
-  Flame,
-  Asterisk, Users,
-  Server,
-  Check} from 'lucide-react';
-import { RoleBadge } from '@/shared/components/Badge';
-import { Agent, ChatMessage, Squad, ToolExecutionRecord } from '@/shared/types';
-import { AgentReadinessNotice } from '@/features/agents/AgentReadinessNotice';
+  RefreshCw,
+  Send,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  Users,
+  X
+} from 'lucide-react';
+
+import { useApp } from '@/app/AppContext';
+import { apiService } from '@/shared/services/apiService';
+import { runnerSocket } from '@/shared/services/runnerSocket';
+import {
+  AgentCall,
+  AgentCallMode,
+  AgentCallTarget,
+  ChatMessage,
+  ProjectChatAgent,
+  ProjectChatSnapshot
+} from '@/shared/types';
 import { ThreadProjectPicker } from '@/features/chat/ThreadProjectPicker';
 import { MessageMarkdown } from './MessageMarkdown';
 
-interface ChatTargetMenuProps {
-  value: string;
+const MODE_META: Record<AgentCallMode, {
   label: string;
-  agents: Agent[];
-  squads: Squad[];
-  disabled: boolean;
-  onChange: (value: string) => void;
+  description: string;
+  icon: React.ReactNode;
+}> = {
+  ask: {
+    label: 'Ask',
+    description: 'Get a focused answer from the selected agent.',
+    icon: <MessageSquare className="h-3.5 w-3.5" />
+  },
+  review: {
+    label: 'Review',
+    description: 'Inspect a target and return findings without changing files.',
+    icon: <ShieldCheck className="h-3.5 w-3.5" />
+  },
+  revise: {
+    label: 'Revise',
+    description: 'Propose a patch for review. Nothing is applied automatically.',
+    icon: <PencilLine className="h-3.5 w-3.5" />
+  },
+  implement: {
+    label: 'Implement',
+    description: 'Prepare a patch after a separate confirmation step.',
+    icon: <Play className="h-3.5 w-3.5" />
+  }
+};
+
+const TARGET_LABELS: Record<string, string> = {
+  message: 'Message',
+  agent_response: 'Agent response',
+  issue: 'Issue',
+  specification: 'Specification',
+  file: 'File',
+  code: 'Code selection',
+  branch: 'Branch',
+  commit: 'Commit',
+  pull_request: 'Pull request',
+  diff: 'Diff'
+};
+
+function formatDate(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-/** The responder picker uses the same dark popover language as mentions and navigation. */
-const ChatTargetMenu: React.FC<ChatTargetMenuProps> = ({
-  value,
-  label,
-  agents,
-  squads,
-  disabled,
-  onChange
-}) => {
-  const [open, setOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
+function statusLabel(status: AgentCall['status']): string {
+  switch (status) {
+    case 'awaiting_confirmation': return 'Ready for confirmation';
+    case 'queued': return 'Queued';
+    case 'running': return 'Responding';
+    case 'completed': return 'Completed';
+    case 'failed': return 'Needs attention';
+    case 'cancelled': return 'Cancelled';
+    default: return status;
+  }
+}
 
-  useEffect(() => {
-    if (!open) return;
-    const closeOnOutsideClick = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) setOpen(false);
-    };
-    const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', closeOnOutsideClick);
-    document.addEventListener('keydown', closeOnEscape);
-    return () => {
-      document.removeEventListener('mousedown', closeOnOutsideClick);
-      document.removeEventListener('keydown', closeOnEscape);
-    };
-  }, [open]);
+function statusTone(status: AgentCall['status']): string {
+  switch (status) {
+    case 'running': return 'text-violet-300 bg-violet-500/15 border-violet-400/30';
+    case 'queued': return 'text-sky-300 bg-sky-500/15 border-sky-400/30';
+    case 'awaiting_confirmation': return 'text-amber-300 bg-amber-500/15 border-amber-400/30';
+    case 'completed': return 'text-emerald-300 bg-emerald-500/15 border-emerald-400/25';
+    case 'failed': return 'text-rose-300 bg-rose-500/15 border-rose-400/25';
+    default: return 'text-gray-300 bg-white/[0.06] border-white/10';
+  }
+}
 
-  const choose = (next: string) => {
-    onChange(next);
-    setOpen(false);
-  };
-
-  const rowClass = (selected: boolean) => `w-full flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left transition-colors ${
-    selected ? 'bg-brand-500/12 text-white' : 'text-gray-300 hover:bg-white/[0.05] hover:text-white'
-  }`;
-
-  return (
-    <div className="relative" ref={menuRef}>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => setOpen(current => !current)}
-        title="Choose who answers messages without an @mention"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        className="h-8 min-w-[174px] max-w-[220px] flex items-center gap-2 rounded-md border border-white/[0.10] bg-surface-100/80 px-2.5 text-left text-[11px] text-gray-300 transition-colors hover:border-white/[0.20] hover:bg-surface-100 focus:outline-none focus:border-brand-500/70 disabled:cursor-not-allowed disabled:opacity-50"
-      >
-        {value.startsWith('agent:') ? (
-          <span
-            className="w-4 h-4 rounded-full shrink-0 flex items-center justify-center text-[9px] font-semibold text-white"
-            style={{ backgroundColor: agents.find(agent => `agent:${agent.id}` === value)?.color || '#6366f1' }}
-          >
-            {agents.find(agent => `agent:${agent.id}` === value)?.name.charAt(0) || 'A'}
-          </span>
-        ) : value.startsWith('squad:') ? (
-          <span className="w-4 h-4 rounded-md shrink-0 flex items-center justify-center bg-brand-500/15 text-brand-300">
-            <Users className="w-3 h-3" />
-          </span>
-        ) : (
-          <Sparkles className="w-3.5 h-3.5 shrink-0 text-brand-300" />
-        )}
-        <span className="min-w-0 flex-1 truncate">{label}</span>
-        <ChevronDown className={`w-3.5 h-3.5 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-
-      {open && (
-        <div
-          role="menu"
-          aria-label="Chat responder"
-          className="absolute right-0 top-full z-40 mt-2 w-80 max-h-96 overflow-y-auto rounded-lg border border-white/[0.10] bg-surface-raised p-1.5 shadow-2xl shadow-black/40 animate-slide-up"
-        >
-          <div className="px-2.5 pb-1.5 pt-1">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600">Default responder</p>
-            <p className="mt-0.5 text-[11px] text-gray-500">@mentions still override this for one message.</p>
-          </div>
-
-          <button
-            type="button"
-            role="menuitemradio"
-            aria-checked={value === ''}
-            onClick={() => choose('')}
-            className={rowClass(value === '')}
-          >
-            <span className="w-7 h-7 rounded-md flex items-center justify-center bg-brand-500/15 text-brand-300">
-              <Sparkles className="w-3.5 h-3.5" />
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-xs font-medium">Automatic · Alpha</span>
-              <span className="mt-0.5 block truncate text-[10px] text-gray-500">Let Alpha route the conversation</span>
-            </span>
-            {value === '' && <Check className="w-3.5 h-3.5 shrink-0 text-brand-300" />}
-          </button>
-
-          <div className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600">Agents</div>
-          {agents.filter(agent => !agent.isArchived).map(agent => {
-            const agentValue = `agent:${agent.id}`;
-            const selected = value === agentValue;
-            return (
-              <button
-                key={agent.id}
-                type="button"
-                role="menuitemradio"
-                aria-checked={selected}
-                onClick={() => choose(agentValue)}
-                className={rowClass(selected)}
-              >
-                <span
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-semibold text-white shrink-0"
-                  style={{ backgroundColor: agent.color || '#6366f1' }}
-                >
-                  {agent.name.charAt(0)}
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium">{agent.name}</span>
-                  <span className="mt-0.5 block truncate text-[10px] text-gray-500">{agent.role}</span>
-                </span>
-                {selected && <Check className="w-3.5 h-3.5 shrink-0 text-brand-300" />}
-              </button>
-            );
-          })}
-
-          {squads.length > 0 && (
-            <>
-              <div className="px-2.5 pb-1 pt-3 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-600">Squads</div>
-              {squads.map(squad => {
-                const squadValue = `squad:${squad.id}`;
-                const selected = value === squadValue;
-                return (
-                  <button
-                    key={squad.id}
-                    type="button"
-                    role="menuitemradio"
-                    aria-checked={selected}
-                    onClick={() => choose(squadValue)}
-                    className={rowClass(selected)}
-                  >
-                    <span className="w-7 h-7 rounded-md flex items-center justify-center bg-brand-500/15 text-brand-300 shrink-0">
-                      <Users className="w-3.5 h-3.5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-xs font-medium">{squad.name}</span>
-                      <span className="mt-0.5 block truncate text-[10px] text-gray-500">{squad.memberAgentIds.length} agents · sequential</span>
-                    </span>
-                    {selected && <Check className="w-3.5 h-3.5 shrink-0 text-brand-300" />}
-                  </button>
-                );
-              })}
-            </>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
+function isDirectMention(value: string): boolean {
+  return /(?:^|\s)@[a-zA-Z0-9_-]+/.test(value);
+}
 
 export const ChatView: React.FC = () => {
   const {
@@ -200,18 +121,13 @@ export const ChatView: React.FC = () => {
     setActiveThreadId,
     createNewThread,
     deleteThread,
-    sendChatMessage, 
-    clearChat, 
-    isAgentTyping, 
-    agents, 
-    skills,
-    activeChatAgentId,
-    setActiveChatAgentId,
-    activeChatSquadId,
-    setActiveChatSquadId,
-    setChatThreadTarget,
-    updateAgent,
-    setActiveTab,
+    clearChat,
+    sendChatMessage,
+    refreshChatThread,
+    isAgentTyping,
+    projects,
+    issues,
+    activeWorkspace,
     role,
     users,
     can,
@@ -260,15 +176,7 @@ export const ChatView: React.FC = () => {
     callsRef.current = calls;
   }, [calls]);
 
-  // Keep the legacy context pointers in sync for other surfaces, while the
-  // thread itself remains the durable source of truth when conversations are
-  // switched or reloaded.
   useEffect(() => {
-    setActiveChatAgentId(activeThread?.targetAgentId ?? null);
-    setActiveChatSquadId(activeThread?.targetSquadId ?? null);
-  }, [activeThread?.id, activeThread?.targetAgentId, activeThread?.targetSquadId, setActiveChatAgentId, setActiveChatSquadId]);
-
-  const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [currentMessages, isAgentTyping, highlightedCall?.status]);
 
@@ -416,32 +324,42 @@ export const ChatView: React.FC = () => {
     setShowCallPanel(true);
   };
 
-  const handleChatTargetChange = (value: string) => {
-    const separator = value.indexOf(':');
-    const kind = separator >= 0 ? value.slice(0, separator) : '';
-    const id = separator >= 0 ? value.slice(separator + 1) : '';
-    const targetAgentId = kind === 'agent' && id ? id : null;
-    const targetSquadId = kind === 'squad' && id ? id : null;
-
-    setActiveChatAgentId(targetAgentId);
-    setActiveChatSquadId(targetSquadId);
-    if (activeThread) {
-      setChatThreadTarget(activeThread.id, {
-        agentId: targetAgentId,
-        squadId: targetSquadId
-      });
+  const callAgent = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!activeThread?.projectId || !selectedAgentId || !selectedSquadId) return;
+    const instruction = callInstruction.trim() || input.trim();
+    if (!instruction) {
+      showToast('Add an instruction', 'Tell the selected agent what you want it to do.', 'info');
+      return;
     }
-  };
+    const target = makeTarget();
+    if (mode !== 'ask' && !target) {
+      showToast('Select a target', 'Review, revise, and implement calls need a message, issue, file, or other target.', 'info');
+      return;
+    }
 
-  const handleSend = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim() || isAgentTyping) return;
-    const msg = input.trim();
-    setInput('');
-    await sendChatMessage(msg, {
-      agentId: selectedAgentId ?? null,
-      squadId: selectedSquadId ?? null
-    });
+    setBusyCallId('new');
+    try {
+      const result = await apiService.createAgentCall(activeThread.projectId, activeThread.id, {
+        squadId: selectedSquadId,
+        agentId: selectedAgentId,
+        mode,
+        target,
+        instruction,
+        senderName: users.find(user => user.role === role)?.name
+      });
+      setCalls(prev => ({ ...prev, [result.call.id]: result.call }));
+      await refreshChatThread(activeThread.id);
+      setCallInstruction('');
+      setInput('');
+      if (result.call.status === 'awaiting_confirmation') {
+        showToast('Implementation ready for confirmation', 'No files changed. Confirm the call to generate a proposed patch.', 'info');
+      }
+    } catch (error: any) {
+      showToast('Agent call not started', error?.message ?? 'The request could not be sent.', 'error');
+    } finally {
+      setBusyCallId(null);
+    }
   };
 
   const confirmCall = async (call: AgentCall) => {
@@ -457,42 +375,21 @@ export const ChatView: React.FC = () => {
     }
   };
 
-  const selectedAgentId = activeThread ? activeThread.targetAgentId : activeChatAgentId;
-  const selectedSquadId = activeThread ? activeThread.targetSquadId : activeChatSquadId;
-  const activeAgent = selectedAgentId
-    ? agents.find(agent => agent.id === selectedAgentId)
-    : undefined;
-  const activeSquad = selectedSquadId
-    ? squads.find(squad => squad.id === selectedSquadId)
-    : undefined;
-  const chatTargetValue = activeAgent
-    ? `agent:${activeAgent.id}`
-    : activeSquad
-      ? `squad:${activeSquad.id}`
-      : '';
-  const chatTargetLabel = activeAgent
-    ? `${activeAgent.name} · ${activeAgent.role}`
-    : activeSquad
-      ? `${activeSquad.name} · ${activeSquad.memberAgentIds.length} agents`
-      : 'Automatic · Alpha';
-  const isClient = role === 'client';
-  const pmName = users.find(u => u.role === 'pm')?.name ?? 'your project manager';
-
-  // A client is talking to a person about scope and money, not to an agent
-  // about models and test suites.
-  const quickStarters = isClient
-    ? [
-        { label: 'Ask about the price', prompt: 'Can you explain what is driving the engineering oversight figure?' },
-        { label: 'Change something', prompt: 'I would like to drop a feature from the first version — what happens to the timeline?' },
-        { label: 'Ask about timing', prompt: 'When would we realistically be able to launch this?' },
-        { label: 'Request a call', prompt: 'Could we talk this through on a call before I approve?' }
-      ]
-    : [
-        { label: 'Switch Squad Model', prompt: 'Switch Frontend Squad to DeepSeek V4 reasonix model.' },
-        { label: 'Audit Socket Backoff', prompt: '@Ada @Kaelen please audit our WebSocket reconnect strategy on ALF-104 with jitter.' },
-        { label: 'Generate Playwright Tests', prompt: '@Nyx generate end-to-end regression tests for the Agent Canvas.' },
-        { label: 'Security & Static Analysis', prompt: '@Vesper run static analysis on recent PR diffs for injection hazards.' }
-      ];
+  const applyPatch = async (call: AgentCall) => {
+    const patch = call.artifacts.find(artifact => artifact.artifactType === 'patch')?.content;
+    if (!patch || !window.confirm('Apply this proposed patch to the project working copy? Review the diff first.')) return;
+    setBusyCallId(call.id);
+    try {
+      const result = await apiService.applyAgentCallPatch(call.id);
+      setCalls(prev => ({ ...prev, [call.id]: result.call }));
+      if (activeThread) await refreshChatThread(activeThread.id);
+      showToast('Patch applied', 'The working copy changed. Review the diff before committing.', 'success');
+    } catch (error: any) {
+      showToast('Patch not applied', error?.message ?? 'The patch was rejected by the working copy.', 'error');
+    } finally {
+      setBusyCallId(null);
+    }
+  };
 
   const retryCall = async (call: AgentCall) => {
     setBusyCallId(call.id);
@@ -522,386 +419,47 @@ export const ChatView: React.FC = () => {
     }
   };
 
-      {/* Right Column: Active Conversation Canvas or Empty State */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-shell">
-        {activeThread ? (
-          <>
-            {/* Active Thread Header */}
-            <div className="h-14 px-6 border-b border-white/[0.06] bg-shell flex items-center justify-between">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-6 h-8 flex items-center justify-center flex-shrink-0">
-                  {activeThread.iconType === 'flame' ? (
-                    <Flame className="w-4 h-4 text-orange-400 fill-orange-400/20" />
-                  ) : (
-                    <Asterisk className="w-4 h-4 text-white stroke-[2.5]" />
-                  )}
-                </div>
+  const copyResponse = async (call: AgentCall, message: ChatMessage) => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopiedCallId(call.id);
+      window.setTimeout(() => setCopiedCallId(null), 1500);
+    } catch {
+      showToast('Copy unavailable', 'Your browser did not allow clipboard access.', 'info');
+    }
+  };
 
-                <div className="min-w-0">
-                  <h2 className="text-sm font-semibold text-white truncate">
-                    {activeThread.title}
-                  </h2>
-                  <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                    <span className="text-brand-400">
-                      {isClient ? `${pmName} · Project Manager` : chatTargetLabel}
-                    </span>
-                    <span>•</span>
-                    <span>{currentMessages.length} messages</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {/* Choose the default responder for this thread. Explicit
-                    @mentions still override this choice for one message. */}
-                {!isClient && (
-                  <div className="flex items-center gap-1.5">
-                    <ChatTargetMenu
-                      value={chatTargetValue}
-                      label={chatTargetLabel}
-                      agents={agents}
-                      squads={squads}
-                      disabled={isAgentTyping}
-                      onChange={handleChatTargetChange}
-                    />
-                    <select
-                      aria-hidden="true"
-                      tabIndex={-1}
-                      style={{ display: 'none' }}
-                      value={chatTargetValue}
-                      disabled={isAgentTyping}
-                      onChange={e => handleChatTargetChange(e.target.value)}
-                      title="Choose who answers messages without an @mention"
-                      className="bg-surface-100 border border-white/10 rounded-md px-2 py-1 text-[11px] text-gray-200 hover:border-white/20 focus:outline-none focus:border-brand-500 disabled:opacity-50 max-w-[190px] truncate"
-                    >
-                      <option value="">Automatic · Alpha</option>
-                      <optgroup label="Agents">
-                        {agents
-                          .filter(agent => !agent.isArchived)
-                          .map(agent => (
-                            <option key={agent.id} value={`agent:${agent.id}`}>
-                              {agent.name} · {agent.role}
-                            </option>
-                          ))}
-                      </optgroup>
-                      {squads.length > 0 && (
-                        <optgroup label="Squads">
-                          {squads.map(squad => (
-                            <option key={squad.id} value={`squad:${squad.id}`}>
-                              {squad.name} · {squad.memberAgentIds.length} agents
-                            </option>
-                          ))}
-                        </optgroup>
-                      )}
-                    </select>
-                  </div>
-                )}
-
-                {/* Which repository the agents in this thread can read. Hidden
-                    for client threads, which never address an agent. */}
-                {!isClient && (
-                  <ThreadProjectPicker
-                    key={activeThread.id}
-                    threadId={activeThread.id}
-                    projectId={activeThread.projectId}
-                  />
-                )}
-
-                {/* The inspector configures an agent's model and prompt. There
-                    is no agent behind a client conversation. */}
-                {!isClient && activeAgent && (
-                  <button
-                    onClick={() => setShowInspector(!showInspector)}
-                    className={`p-2 rounded-md text-xs flex items-center gap-1.5 transition-colors ${
-                      showInspector
-                        ? 'bg-white/[0.05] text-white'
-                        : 'text-gray-400 hover:text-white hover:bg-white/[0.03]'
-                    }`}
-                    title="Toggle Agent Inspector"
-                  >
-                    <SlidersHorizontal className="w-4 h-4" />
-                    <span className="hidden sm:inline font-sans">Inspector</span>
-                  </button>
-                )}
-
-                <button
-                  onClick={() => clearChat()}
-                  className="p-2 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-white/5 transition-colors"
-                  title="Clear conversation messages"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-
-                <button
-                  onClick={() => deleteThread(activeThread.id)}
-                  className="p-2 rounded-lg text-gray-400 hover:text-rose-400 hover:bg-white/5 transition-colors text-xs"
-                  title="Delete this chat thread"
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-
-            {/* Message Thread Body */}
-            <div className="flex-1 overflow-y-auto p-5 sm:p-7 space-y-5">
-              {currentMessages.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
-                  <div className="w-10 h-10 flex items-center justify-center text-brand-400">
-                    <Sparkles className="w-6 h-6" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="text-base font-semibold text-white">
-                      {isClient ? `Message ${pmName}` : 'Start a new agent session'}
-                    </h3>
-                    <p className="text-xs text-gray-400 max-w-sm">
-                      {isClient
-                        ? `${pmName} manages your project and usually replies within a few hours. Ask about scope, price, or timing.`
-                        : activeAgent
-                          ? `Messages without an @mention go directly to ${activeAgent.name}. You can still mention another agent for a one-off reply.`
-                          : activeSquad
-                            ? `${activeSquad.name} will answer in sequence. Mention a specific agent to get a one-off reply.`
-                            : 'Choose an agent or squad above, or leave it on Automatic to chat with Alpha. You can also use @mentions for one-off routing.'}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                currentMessages.map((msg: ChatMessage) => {
-                  const isUser = msg.senderType === 'user';
-                  const isSystem = msg.senderType === 'system';
-                  const thinkingOpen = expandedThinking[msg.id] ?? false;
-                  const messageAgent = msg.agentId
-                    ? agents.find(agent => agent.id === msg.agentId)
-                    : undefined;
-
-                  if (isSystem) {
-                    return (
-                      <div key={msg.id} className="flex justify-center my-3">
-                        <div className="px-4 py-1.5 rounded-full bg-surface-100 border border-white/5 text-xs text-gray-400 font-mono flex items-center gap-2">
-                          <Sparkles className="w-3.5 h-3.5 text-brand-400" />
-                          <span>{msg.content}</span>
-                        </div>
-                      </div>
-                    );
-                  }
-
-                  return (
-                    <div
-                      key={msg.id}
-                      className={`flex gap-3.5 max-w-4xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}
-                    >
-                      {/* Avatar */}
-                      {isUser ? (
-                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500 to-purple-600 flex items-center justify-center text-xs font-bold text-on-accent flex-shrink-0">
-                          U
-                        </div>
-                      ) : msg.senderAvatar || messageAgent?.avatar ? (
-                        <img
-                          src={msg.senderAvatar || messageAgent?.avatar}
-                          alt=""
-                          className="w-9 h-9 rounded-full object-cover ring-1 ring-white/10 flex-shrink-0"
-                        />
-                      ) : (
-                        // Client threads have no agent behind them — the other
-                        // party is a person, shown by initial.
-                        <div className="w-9 h-9 rounded-full bg-white/[0.08] border border-white/10 flex items-center justify-center text-xs font-semibold text-gray-200 flex-shrink-0">
-                          {msg.senderName?.[0] ?? '·'}
-                        </div>
-                      )}
-
-                      {/* Message Body */}
-                      <div className={`space-y-2.5 flex-1 ${isUser ? 'items-end' : 'items-start'}`}>
-                        <div className={`flex items-center gap-2.5 ${isUser ? 'justify-end' : 'justify-start'}`}>
-                          <span className="text-xs font-bold text-gray-300">{msg.senderName}</span>
-                          <span className="text-xs font-mono text-gray-500">
-                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-
-                        {/* Thinking Accordion */}
-                        {msg.thinkingProcess && (
-                          <div className="border border-indigo-500/20 bg-indigo-950/20 rounded-xl overflow-hidden text-xs">
-                            <button
-                              onClick={() => toggleThinking(msg.id)}
-                              className="w-full flex items-center justify-between px-4 py-2 text-indigo-300 hover:bg-indigo-500/10 transition-colors font-mono text-xs"
-                            >
-                              <span className="flex items-center gap-2">
-                                <Cpu className="w-4 h-4 text-indigo-400" />
-                                <span className="font-semibold">Agent Chain-of-Thought & Reasoning</span>
-                              </span>
-                              {thinkingOpen ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
-                            </button>
-
-                            {thinkingOpen && (
-                              <div className="p-4 border-t border-indigo-500/20 text-indigo-200/90 font-mono text-xs leading-relaxed bg-black/30">
-                                {msg.thinkingProcess}
-                              </div>
-                            )}
-                          </div>
-                        )}
-
-                        {/* Tool Executions Chips */}
-                        {msg.toolsExecuted && msg.toolsExecuted.length > 0 && (
-                          <div className="space-y-1.5">
-                            {msg.toolsExecuted.map((tool: ToolExecutionRecord, idx: number) => (
-                              <div
-                                key={idx}
-                                className="flex items-center justify-between px-3 py-2 rounded-lg bg-surface-300/80 border border-white/5 text-xs font-mono"
-                              >
-                                <div className="flex items-center gap-2.5 truncate text-cyan-300">
-                                  <Terminal className="w-3.5 h-3.5 text-cyan-400" />
-                                  <span className="font-semibold">{tool.name}</span>
-                                  <span className="text-gray-400 truncate max-w-xs">{tool.input}</span>
-                                </div>
-                                <span className="text-gray-500 text-xs ml-2 flex-shrink-0">{tool.durationMs}ms</span>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Content Bubble */}
-                        <div
-                          className={`p-4 rounded-2xl text-sm sm:text-base leading-relaxed ${
-                            isUser
-                              ? 'bg-brand-500 text-on-accent rounded-tr-none shadow-glow-brand'
-                              : 'bg-surface-100 border border-white/10 text-gray-100 rounded-tl-none'
-                          }`}
-                        >
-                          {msg.isStreaming ? (
-                            <div className="flex items-center gap-2 text-cyan-300 font-mono text-xs">
-                              <span className="w-2.5 h-2.5 rounded-full bg-cyan-400 animate-ping" />
-                              <span>Generating response & executing toolhooks...</span>
-                            </div>
-                          ) : (
-                            /*
-                             * A user's own message is what they typed, so it is
-                             * shown as typed. An agent's is markdown, and was
-                             * being displayed as its own source code.
-                             */
-                            isUser ? (
-                              <div className="whitespace-pre-wrap font-sans break-words">
-                                {msg.content}
-                              </div>
-                            ) : (
-                              <MessageMarkdown content={msg.content} />
-                            )
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-
-              <div ref={messagesEndRef} />
-            </div>
+  const handleSend = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const message = input.trim();
+    if (!message || isAgentTyping) return;
+    if (!isClient && isDirectMention(message)) {
+      showToast('Use Call Agent', 'Choose an authorized project agent from the explicit Call Agent control.', 'info');
+      return;
+    }
+    setInput('');
+    await sendChatMessage(message);
+  };
 
   const startNewThread = () => {
     const projectId = !isClient ? activeThread?.projectId ?? projects[0]?.id : undefined;
     createNewThread('New project conversation', projectId);
   };
 
-            {/* Input Composer Bar */}
-            <div className="p-4 sm:p-5 border-t border-white/[0.08] bg-surface space-y-3">
-              {/* Shown above the composer rather than after a failed send: the
-                  agent cannot answer, and finding that out by waiting for an
-                  error is the experience this replaces. */}
-              {activeAgent && (
-                <AgentReadinessNotice
-                  agent={activeAgent}
-                  onOpenRuntimes={() => setActiveTab('runtimes')}
-                />
-              )}
-              <form onSubmit={handleSend} className="relative flex items-center gap-2">
-                {/* @mention picker — only while an @token is being typed */}
-                {mentionMatches.length > 0 && (
-                  <div className="absolute bottom-full left-0 mb-2 w-72 max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-surface-raised shadow-2xl z-30 py-1">
-                    <div className="px-3 py-1.5 text-[10px] font-mono uppercase tracking-wider text-gray-500 border-b border-white/5">
-                      Mention an agent or squad
-                    </div>
-                    {mentionMatches.map((option, i) => (
-                      <button
-                        key={option.id}
-                        type="button"
-                        onMouseEnter={() => setMentionIndex(i)}
-                        onClick={() => applyMention(option.token)}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors ${
-                          i === mentionIndex ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'
-                        }`}
-                      >
-                        <span
-                          className={`w-6 h-6 flex items-center justify-center text-[10px] font-semibold text-white shrink-0 ${
-                            option.kind === 'squad' ? 'rounded-md bg-white/10' : 'rounded-full'
-                          }`}
-                          style={
-                            option.kind === 'agent'
-                              ? { backgroundColor: option.agent.color || '#6366f1' }
-                              : undefined
-                          }
-                        >
-                          {option.kind === 'squad' ? <Users className="w-3 h-3" /> : option.label.charAt(0)}
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block text-xs text-white truncate">{option.label}</span>
-                          <span className="block text-[10px] text-gray-500 truncate">{option.detail}</span>
-                        </span>
-                        {option.kind === 'agent' ? (
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                              option.agent.machineStatus === 'offline' ? 'bg-rose-400' : 'bg-emerald-400'
-                            }`}
-                          />
-                        ) : (
-                          <span className="font-mono text-[9px] uppercase tracking-wider text-gray-600 shrink-0">
-                            squad
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                    <div className="px-3 py-1.5 text-[10px] text-gray-600 border-t border-white/5">
-                      ↑↓ to choose · Enter or Tab to insert
-                    </div>
-                  </div>
-                )}
+  const agentForCall = (call: AgentCall): ProjectChatAgent | undefined =>
+    snapshot?.agents.find(agent => agent.id === call.agentId);
 
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={handleComposerKeyDown}
-                  placeholder={
-                    isClient
-                      ? `Write a message to ${pmName}...`
-                      : activeAgent
-                        ? `Message ${activeAgent.name}...`
-                        : activeSquad
-                          ? `Message ${activeSquad.name}...`
-                          : 'Ask Alpha, choose an agent above, or use @mentions...'
-                  }
-                  disabled={isAgentTyping}
-                  className="w-full bg-surface-100 border border-white/10 rounded-2xl px-5 py-3.5 text-sm sm:text-base text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 font-medium pr-14 disabled:opacity-50"
-                />
-                <button
-                  type="submit"
-                  disabled={!input.trim() || isAgentTyping}
-                  className="absolute right-2.5 p-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-30 text-on-accent transition-all shadow-glow-brand"
-                >
-                  <Send className="w-4.5 h-4.5" />
-                </button>
-              </form>
-            </div>
-          </>
-        ) : (
-          /* Empty State (Pixel-Perfect to Screenshot: "Pick a conversation, or start a new one with +") */
-          <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4">
-            {/* Outlined Speech Bubble Icon */}
-            <div className="text-gray-500/80">
-              <svg 
-                className="w-16 h-16 stroke-current stroke-[1.25] fill-none" 
-                viewBox="0 0 24 24"
-              >
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-              </svg>
+  const renderCallCard = (call: AgentCall, message: ChatMessage) => {
+    const agent = agentForCall(call);
+    const patch = call.artifacts.find(artifact => artifact.artifactType === 'patch')?.content;
+    const expanded = expandedCallPanel[call.id] ?? false;
+    const canImplement = can('run_agents');
+    return (
+      <div className={`rounded-2xl border p-4 space-y-3 ${call.status === 'running' ? 'border-violet-400/40 bg-violet-500/[0.08] shadow-[0_0_28px_rgba(139,92,246,0.13)]' : 'border-white/10 bg-surface-100/90'}`}>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-9 w-9 rounded-xl flex items-center justify-center text-white shrink-0" style={{ backgroundColor: agent?.color || '#6d28d9' }}>
+              {agent?.avatar ? <img src={agent.avatar} alt="" className="h-9 w-9 rounded-xl object-cover" /> : <Bot className="h-4 w-4" />}
             </div>
             <div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><span className="text-xs font-semibold text-white">{agent?.name ?? call.agentId}</span><span className="text-[10px] text-gray-500">{agent?.role ?? 'Project agent'}</span><span className="text-[10px] text-gray-600">·</span><span className="text-[10px] text-gray-500">{formatDate(call.createdAt)}</span></div><div className="flex items-center gap-1.5 text-[10px] text-gray-500 mt-0.5"><Users className="h-3 w-3" /><span>{agent?.squadName ?? call.squadId}</span><span>·</span><span>{project?.key ?? call.projectId}</span></div></div>
           </div>

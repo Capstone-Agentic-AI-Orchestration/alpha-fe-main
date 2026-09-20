@@ -27,7 +27,7 @@ import {
   IntakeAnswers,
   Milestone,
   Identity,
-  Workspace
+  WorkspaceSummary
 } from '@/shared/types';
 import {
   emptyAnalytics,
@@ -37,7 +37,7 @@ import {
 } from '@/data/mockData';
 import { apiService, normalizeGitHubRepo, normalizeSkill, setActiveWorkspaceId } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
-import { fetchServerSnapshot, persist, describeWriteError, ServerStatus, ServerSnapshot } from '@/shared/services/serverSync';
+import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
 
 function normalizeAnalytics(value: unknown, fallback: AnalyticsData = emptyAnalytics): AnalyticsData {
@@ -101,13 +101,6 @@ export interface RunPlanDraft {
   updatedAt: string;
 }
 
-export interface ChatTarget {
-  /** A configured agent, or null when the target is being cleared. */
-  agentId?: string | null;
-  /** A configured squad, or null when the target is being cleared. */
-  squadId?: string | null;
-}
-
 interface AppContextType {
   /** Reachability of the local Alpha daemon. Agents cannot run while 'offline'. */
   serverStatus: ServerStatus;
@@ -116,19 +109,10 @@ interface AppContextType {
   tabs: TabItem[];
   activeTabId: string;
   setActiveTabId: (id: string) => void;
-  openNewTab: (view?: NavigationTab, projectId?: string) => void;
-  openBuildRoom: (projectId?: string, buildRunId?: string) => void;
+  openNewTab: (view?: NavigationTab) => void;
   closeTab: (tabId: string) => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
-
-  // Workspaces
-  workspaces: Workspace[];
-  activeWorkspaceId: string | null;
-  activeWorkspace?: Workspace;
-  workspaceSwitching: boolean;
-  switchWorkspace: (id: string) => Promise<void>;
-  createWorkspace: (name: string) => Promise<Workspace>;
   
   // Issues
   issues: Issue[];
@@ -191,7 +175,6 @@ interface AppContextType {
   runtimes: RuntimeEngine[];
   isScanningRuntimes: boolean;
   scanLocalRuntimes: () => Promise<void>;
-  refreshRuntime: (id: string) => Promise<RuntimeEngine | null>;
   setDefaultRuntime: (id: string) => void;
   
   // Skills
@@ -236,8 +219,7 @@ interface AppContextType {
   setActiveChatAgentId: (id: string | null) => void;
   activeChatSquadId: string | null;
   setActiveChatSquadId: (id: string | null) => void;
-  setChatThreadTarget: (threadId: string, target: ChatTarget) => void;
-  sendChatMessage: (content: string, target?: ChatTarget) => Promise<void>;
+  sendChatMessage: (content: string) => Promise<void>;
   clearChat: () => void;
   
   // Settings
@@ -263,8 +245,6 @@ interface AppContextType {
   refreshIdentity: () => Promise<void>;
   /** Pull the board from GitHub now. */
   syncBoard: () => Promise<void>;
-  /** Refresh issue and runner state for execution-focused views. */
-  refreshExecution: () => Promise<void>;
   /** When the last successful sync finished, or null if none has. */
   lastSyncedAt: string | null;
   syncing: boolean;
@@ -336,6 +316,8 @@ export type Capability =
   | 'submit_intake'
   | 'view_members'
   | 'manage_members';
+
+const KNOWN_ROLES: UserRole[] = ['client', 'dev', 'pm', 'admin'];
 
 const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
   client: ['view_identity', 'view_projects', 'manage_chat', 'approve_scope', 'submit_intake'],
@@ -466,7 +448,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     import.meta.env.DEV ? loadFromStorage<UserRole | null>('role_override', null) : null
   );
   const activeWorkspace = workspaces.find(workspace => workspace.id === activeWorkspaceId) ?? null;
-  const role: UserRole = roleOverride ?? activeWorkspace?.role ?? identity?.role ?? 'pm';
+  /**
+   * Normalised here, not at each lookup.
+   *
+   * The daemon has its own role vocabulary and has served 'owner', which is no
+   * key in ROLE_TABS, ROLE_CAPABILITIES or ROLE_SECTION_ORDER. Reading an
+   * unknown key straight through returned undefined and crashed the first
+   * component to index one, so an unrecognised role is funnelled into the same
+   * 'pm' fallback an absent one already used.
+   */
+  const rawRole = roleOverride ?? activeWorkspace?.role ?? identity?.role;
+  const role: UserRole = KNOWN_ROLES.includes(rawRole as UserRole) ? (rawRole as UserRole) : 'pm';
   const roleTabs = ROLE_TABS[role];
 
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
@@ -583,21 +575,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Only when user presses + (and selects a destination):
   // Creates a brand new tab and activates it!
-  const openNewTab = (view: NavigationTab = roleTabs[0], projectId?: string) => {
+  const openNewTab = (view: NavigationTab = roleTabs[0]) => {
     const newTabId = `tab-${Date.now()}`;
-    const newTab: TabItem = { id: newTabId, view, projectId };
-    setTabs(prev => [...prev, newTab]);
-    setActiveTabId(newTabId);
-  };
-
-  const openBuildRoom = (projectId?: string, buildRunId?: string) => {
-    const newTabId = `tab-build-room-${Date.now()}`;
-    const newTab: TabItem = {
-      id: newTabId,
-      view: 'build_room',
-      projectId,
-      buildRunId
-    };
+    const newTab: TabItem = { id: newTabId, view };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTabId);
   };
@@ -621,18 +601,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(() =>
-    loadFromStorage<Workspace[]>('workspaces', [])
-  );
-  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(() =>
-    apiService.getWorkspaceId() || loadFromStorage<Workspace[]>('workspaces', [])[0]?.id || null
-  );
-  const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
-
-  useEffect(() => {
-    if (activeWorkspaceId) apiService.setWorkspaceId(activeWorkspaceId);
-  }, [activeWorkspaceId]);
 
   // Raw collections. These are never handed to a view directly — the scoped
   // derivations further down are what the provider exposes, so a view cannot
@@ -711,73 +679,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * ------------------------------------------------------------------------ */
   const [serverStatus, setServerStatus] = useState<ServerStatus>('connecting');
 
-  const applyServerSnapshot = useCallback((snapshot: Partial<ServerSnapshot>) => {
-    if (snapshot.workspaces) {
-      const available = snapshot.workspaces as Workspace[];
-      setWorkspaces(available);
-      const selected = apiService.getWorkspaceId();
-      const next = selected && available.some(workspace => workspace.id === selected)
-        ? selected
-        : available[0]?.id ?? null;
-      if (next && next !== selected) apiService.setWorkspaceId(next);
-      setActiveWorkspaceId(next);
-    }
-
-    if (snapshot.projects) setProjects(snapshot.projects as Project[]);
-    if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
-    if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
-    if (snapshot.squads) setSquads(snapshot.squads as Squad[]);
-    if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
-    if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
-    if (snapshot.chatThreads) {
-      setChatThreads(prev => {
-        const loaded = new Map(prev.map(t => [t.id, t.messages]));
-        return (snapshot.chatThreads as ChatThread[]).map(t => ({
-          ...t,
-          messages: t.messages ?? loaded.get(t.id)
-        }));
-      });
-    }
-    if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
-    if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
-    if (snapshot.analytics && typeof snapshot.analytics === 'object') {
-      setAnalytics(snapshot.analytics as AnalyticsData);
-    }
-  }, []);
-
-  /**
-   * Execution views need a deliberate re-read after a reconnect or when an
-   * operator presses Refresh.  Hydration is intentionally one-shot, while
-   * runs and issues can change without a full page reload.
-   */
-  const refreshExecution = useCallback(async () => {
-    const results = await Promise.allSettled([
-      apiService.getIssues(),
-      apiService.getRuns(),
-      apiService.getSquadRuns()
-    ]);
-    let loaded = 0;
-
-    const [issuesResult, runsResult, squadRunsResult] = results;
-    if (issuesResult.status === 'fulfilled' && Array.isArray(issuesResult.value)) {
-      setIssues(issuesResult.value);
-      loaded += 1;
-    }
-    if (runsResult.status === 'fulfilled' && Array.isArray(runsResult.value)) {
-      setPrototypeRuns(runsResult.value);
-      loaded += 1;
-    }
-    if (squadRunsResult.status === 'fulfilled' && Array.isArray(squadRunsResult.value)) {
-      setSquadRuns(squadRunsResult.value);
-      loaded += 1;
-    }
-
-    if (loaded === 0) {
-      throw new Error('The execution state could not be refreshed.');
-    }
-    setServerStatus('online');
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
 
@@ -815,7 +716,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Only overwrite what actually came back; a partially-implemented backend
       // must not blank the entities it does not serve yet.
-      applyServerSnapshot(snapshot);
+      if (snapshot.projects) setProjects(snapshot.projects as Project[]);
+      if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
+      if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
+      if (snapshot.squads) setSquads(snapshot.squads as Squad[]);
+      if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
+      if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       /**
        * Keep whatever messages are already loaded.
        *
@@ -830,6 +736,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
        * ask for it back. Merging keeps what is in hand; `loadThreadMessages`
        * fetches the rest when a thread is opened.
        */
+      if (snapshot.chatThreads) {
+        setChatThreads(prev => {
+          const loaded = new Map(prev.map(t => [t.id, t.messages]));
+          return (snapshot.chatThreads as ChatThread[]).map(t => ({
+            ...t,
+            messages: t.messages ?? loaded.get(t.id)
+          }));
+        });
+      }
+      if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
+      if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
+      if (snapshot.analytics && typeof snapshot.analytics === 'object') {
+        setAnalytics(normalizeAnalytics(snapshot.analytics));
+      }
+
       setServerStatus('online');
       setWorkspaceLoading(false);
 
@@ -837,44 +758,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     void hydrate();
     return () => { cancelled = true; };
-  }, [applyServerSnapshot]);
-
-  const switchWorkspace = useCallback(async (id: string) => {
-    if (!id || workspaceSwitching) return;
-
-    apiService.setWorkspaceId(id);
-    setActiveWorkspaceId(id);
-    setWorkspaceSwitching(true);
-    setServerStatus('connecting');
-    setActiveThreadId(null);
-    loadedThreadsRef.current.clear();
-    setChatMessages([]);
-    // Do not leave the previous workspace visible while the new scope loads.
-    setProjects([]);
-    setAgents([]);
-    setIssues([]);
-    setSquads([]);
-    setPrototypeRuns([]);
-    setSquadRuns([]);
-    setAnalytics(emptyAnalytics);
-
-    try {
-      const snapshot = await fetchServerSnapshot();
-      applyServerSnapshot(snapshot);
-      setServerStatus('online');
-    } catch {
-      setServerStatus('offline');
-    } finally {
-      setWorkspaceSwitching(false);
-    }
-  }, [applyServerSnapshot, workspaceSwitching]);
-
-  const createWorkspace = useCallback(async (name: string): Promise<Workspace> => {
-    const created = await apiService.createWorkspace({ name });
-    setWorkspaces(prev => [...prev, created]);
-    await switchWorkspace(created.id);
-    return created;
-  }, [switchWorkspace]);
+  }, []);
 
   /**
    * Resolve access independently of collection hydration.
@@ -993,11 +877,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage('active_workspace_id', activeWorkspaceId); }, [activeWorkspaceId]);
   useEffect(() => { saveToStorage('workspace_tabs_v2', tabs); }, [tabs]);
   useEffect(() => { saveToStorage('active_tab_id_v2', activeTabId); }, [activeTabId]);
-  useEffect(() => { saveToStorage('workspaces', workspaces); }, [workspaces]);
-  useEffect(() => { saveToStorage('issues', issues); }, [issues]);
-  useEffect(() => { saveToStorage('projects', projects); }, [projects]);
-  useEffect(() => { saveToStorage('agents', agents); }, [agents]);
-  useEffect(() => { saveToStorage('squads', squads); }, [squads]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('issues'), issues); }, [issues, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('projects'), projects); }, [projects, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('agents'), agents); }, [agents, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('squads'), squads); }, [squads, activeWorkspaceId]);
   useEffect(() => { saveToStorage('runtimes', runtimes); }, [runtimes]);
   useEffect(() => { saveToStorage('skills', skills); }, [skills]);
   useEffect(() => { saveToStorage(workspaceStorageKey('deployments_v2'), deployments); }, [deployments, activeWorkspaceId]);
@@ -1328,16 +1211,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // The daemon's reason names the member and the position. It is better
       // than anything this side could reconstruct.
       showToast('Squad run stopped', squadRun.stoppedReason ?? 'A member did not finish.', 'error');
-    });
-
-    // Identity is separate from workspace hydration. The snapshot above owns
-    // all workspace-scoped collections, so this effect only resolves who is
-    // signed in and keeps the live runner event subscriptions together.
-    apiService.getIdentity().then(next => {
-      setIdentity(next);
-      if (next.github === 'ok') setLocalMode(false);
-    }).catch(() => {
-      // The board still works from cache when the daemon is unavailable.
     });
 
     return () => {
@@ -2397,19 +2270,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const refreshRuntime = async (id: string): Promise<RuntimeEngine | null> => {
-    try {
-      const refreshed = await apiService.refreshRuntime(id);
-      setRuntimes(prev => prev.some(runtime => runtime.id === id)
-        ? prev.map(runtime => runtime.id === id ? refreshed : runtime)
-        : [...prev, refreshed]);
-      return refreshed;
-    } catch (err) {
-      showToast('Runtime refresh failed', err instanceof Error ? err.message : String(err), 'error');
-      return null;
-    }
-  };
-
   const setDefaultRuntime = (id: string) => {
     if (!requireCapability('manage_runtimes')) return;
     setRuntimes(prev => prev.map(rt => ({
@@ -2673,10 +2533,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       iconType: isClientThread ? 'sparkle' : 'asterisk',
       audience: isClientThread ? 'client' : 'internal',
       clientId: isClientThread ? currentUser.id : undefined,
-      // This is the participant history, not the default responder. A new
-      // conversation starts in automatic Alpha mode until the user chooses an
-      // agent or squad in the Chats header.
+      // A project-scoped agent is selected explicitly from the Call Agent
+      // control. Never seed a hidden agent roster on a new thread.
       agentIds: [],
+      projectId: isClientThread ? undefined : projectId,
       messages: []
     };
     setChatThreads(prev => [newThread, ...prev]);
@@ -2763,65 +2623,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  /** Persist the responder selected in the Chats header for this thread. */
-  const setChatThreadTarget = (threadId: string, target: ChatTarget) => {
-    const previous = chatThreads.find(t => t.id === threadId);
-    const targetAgentId = target.agentId ?? null;
-    const targetSquadId = target.squadId ?? null;
-    const targetFields = {
-      targetAgentId: targetAgentId ?? undefined,
-      targetSquadId: targetSquadId ?? undefined
-    };
-
-    setChatThreads(prev => prev.map(t => (
-      t.id === threadId ? { ...t, ...targetFields } : t
-    )));
-    setActiveChatAgentId(targetAgentId);
-    setActiveChatSquadId(targetSquadId);
-
-    persist(
-      () => apiService.setThreadTarget(threadId, targetAgentId, targetSquadId),
-      serverThread => {
-        setChatThreads(prev => prev.map(t => t.id === threadId
-          ? {
-              ...t,
-              targetAgentId: serverThread.targetAgentId,
-              targetSquadId: serverThread.targetSquadId
-            }
-          : t
-        ));
-      },
-      msg => {
-        if (!previous) return;
-        setChatThreads(prev => prev.map(t => t.id === threadId
-          ? {
-              ...t,
-              targetAgentId: previous.targetAgentId,
-              targetSquadId: previous.targetSquadId
-            }
-          : t
-        ));
-        setActiveChatAgentId(previous.targetAgentId ?? null);
-        setActiveChatSquadId(previous.targetSquadId ?? null);
-        showToast('Chat target not saved', msg, 'error');
-      }
-    );
-  };
-
-  const sendChatMessage = async (content: string, target?: ChatTarget) => {
+  const sendChatMessage = async (content: string) => {
+    if (!requireCapability('manage_chat')) return;
     let targetThreadId = activeThreadId;
     if (!targetThreadId) {
       targetThreadId = createNewThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
     }
-
-    const targetThread = chatThreads.find(t => t.id === targetThreadId);
-    const hasExplicitTarget = target !== undefined;
-    const targetAgentId = hasExplicitTarget
-      ? target?.agentId ?? null
-      : targetThread?.targetAgentId;
-    const targetSquadId = hasExplicitTarget
-      ? target?.squadId ?? null
-      : targetThread?.targetSquadId;
 
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -2872,10 +2679,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setIsAgentTyping(true);
 
     /**
-     * Who will answer is decided by the daemon, from an explicit @mention or
-     * the thread target selected in the Chats header. The client only uses the
-     * target for the temporary placeholder while the daemon remains the source
-     * of truth for the final reply.
+     * Who will answer is decided by the daemon, from the @mentions in this
+     * message. The client does not guess.
      *
      * It used to. This defaulted to `agents[0]` and then reassigned on
      * keywords — the bare word "code", "bug", "test", "review" or "deploy"
@@ -2891,35 +2696,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
      */
     const mentionedAgent = agents.find(a => {
       const first = a.name.split(' ')[0].toLowerCase();
-      return new RegExp(`@${first}\\b`, 'i').test(content);
+      return new RegExp(`@${first}\b`, 'i').test(content);
     });
-
-    const selectedAgent = targetAgentId
-      ? agents.find(agent => agent.id === targetAgentId)
-      : undefined;
-    const selectedSquad = targetSquadId
-      ? squads.find(squad => squad.id === targetSquadId)
-      : undefined;
-    const placeholderAgent = mentionedAgent ?? selectedAgent;
 
     // Streaming placeholder
     const streamingMsgId = `msg-${Date.now() + 1}`;
     const streamingMsg: ChatMessage = {
       id: streamingMsgId,
       senderType: 'agent',
-      agentId: placeholderAgent?.id,
+      agentId: mentionedAgent?.id,
       // Alpha answers anything that names no agent, so that is what the
       // placeholder says rather than borrowing an agent's name.
-      senderName: placeholderAgent?.name ?? selectedSquad?.name ?? 'Alpha',
-      senderAvatar: placeholderAgent?.avatar,
+      senderName: mentionedAgent?.name ?? 'Alpha',
+      senderAvatar: mentionedAgent?.avatar,
       content: 'Thinking...',
       timestamp: new Date().toISOString(),
       isStreaming: true,
-      thinkingProcess: placeholderAgent
-        ? `Analyzing prompt intent using ${placeholderAgent.modelName} on ${placeholderAgent.modelProvider}...`
-        : selectedSquad
-          ? `Coordinating ${selectedSquad.memberAgentIds.length} squad members...`
-          : 'Answering directly on the default runtime...'
+      thinkingProcess: mentionedAgent
+        ? `Analyzing prompt intent using ${mentionedAgent.modelName} on ${mentionedAgent.modelProvider}...`
+        : 'Answering directly on the default runtime...'
     };
 
     setChatThreads(prev => prev.map(t => {
@@ -2937,12 +2732,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const res = await apiService.sendChatMessage({
         threadId: targetThreadId,
         content,
-        senderName: currentUser.name,
-        // Send the picker state with the turn as well as persisting it. This
-        // closes the small race where a user selects an agent and immediately
-        // presses Send before the target PUT has completed.
-        targetAgentId: hasExplicitTarget ? targetAgentId : undefined,
-        targetSquadId: hasExplicitTarget ? targetSquadId : undefined
+        senderName: currentUser.name
       });
 
       /**
@@ -3070,22 +2860,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const updateSettings = (updates: Partial<WorkspaceSettings>) => {
     if (!requireCapability('manage_settings')) return;
     setSettings(prev => ({ ...prev, ...updates }));
-
-    // Keep the legacy Settings form and the real workspace record aligned.
-    // Other settings remain local machine preferences until they have a
-    // server-owned workspace settings table.
-    if (updates.workspaceName !== undefined && activeWorkspaceId) {
-      const name = updates.workspaceName.trim();
-      if (name) {
-        persist(
-          () => apiService.updateWorkspace(activeWorkspaceId, { name }),
-          saved => setWorkspaces(prev => prev.map(workspace =>
-            workspace.id === saved.id ? saved : workspace
-          )),
-          message => showToast('Workspace not renamed', message, 'error')
-        );
-      }
-    }
   };
 
   /* ---------------------------------------------------------------------
@@ -3511,19 +3285,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   return (
     <AppContext.Provider value={{
       serverStatus,
-      workspaces,
-      activeWorkspaceId,
-      activeWorkspace: workspaces.find(workspace => workspace.id === activeWorkspaceId),
-      workspaceSwitching,
-      switchWorkspace,
-      createWorkspace,
       activeTab,
       setActiveTab,
       tabs,
       activeTabId,
       setActiveTabId,
       openNewTab,
-      openBuildRoom,
       closeTab,
       commandPaletteOpen,
       setCommandPaletteOpen,
@@ -3569,7 +3336,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lastSyncedAt,
       syncing,
       syncBoard,
-      refreshExecution,
       refreshIdentity: async () => {
         try {
           const next = await apiService.getIdentity();
@@ -3585,7 +3351,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       runtimes,
       isScanningRuntimes,
       scanLocalRuntimes,
-      refreshRuntime,
       setDefaultRuntime,
       skills,
       toggleSkill,
@@ -3613,7 +3378,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setActiveChatAgentId,
       activeChatSquadId,
       setActiveChatSquadId,
-      setChatThreadTarget,
       sendChatMessage,
       clearChat,
       settings: scopedSettings,
