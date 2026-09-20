@@ -85,7 +85,8 @@ function parseKeyValues(text: string): Record<string, string> {
 }
 
 export function McpServersPanel() {
-  const { agents, showToast } = useApp();
+  const { agents, showToast, can } = useApp();
+  const canManageMcp = can('manage_mcp');
 
   const [servers, setServers] = useState<McpServer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,6 +112,7 @@ export function McpServersPanel() {
     server.grantedTo.map(id => agents.find(a => a.id === id)?.name ?? id);
 
   const save = async () => {
+    if (!canManageMcp) return;
     if (!draft) return;
     const name = draft.name.trim();
     const secrets = parseKeyValues(draft.secretsText);
@@ -145,6 +147,7 @@ export function McpServersPanel() {
   };
 
   const remove = async (server: McpServer) => {
+    if (!canManageMcp) return;
     setBusy(true);
     try {
       setServers(await apiService.deleteMcpServer(server.name));
@@ -174,7 +177,7 @@ export function McpServersPanel() {
 
         <button
           onClick={() => setDraft(EMPTY_DRAFT)}
-          disabled={busy || !!draft}
+          disabled={!canManageMcp || busy || !!draft}
           className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-40 border border-white/10 text-xs font-medium text-white transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />

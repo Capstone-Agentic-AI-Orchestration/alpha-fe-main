@@ -22,6 +22,8 @@ interface ProjectResourcesPanelProps {
    * list of what is already attached, for places too narrow to hold a form.
    */
   variant?: 'full' | 'inline';
+  /** Render the resource list without exposing write controls. */
+  readOnly?: boolean;
 }
 
 /**
@@ -38,7 +40,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   onChange,
   githubOrg,
   onOrgChange,
-  variant = 'full'
+  variant = 'full',
+  readOnly = false
 }) => {
   const isFull = variant === 'full';
 
@@ -74,7 +77,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   useEffect(() => {
     // The inline variant has no create form, so it also skips the two auth
     // round-trips — those used to fire on every project you opened.
-    if (!isFull) return;
+    if (!isFull || readOnly) return;
     apiService.checkGitHubAuth().then(setGhAuth).catch(() => setGhAuth({ authenticated: false }));
     // Orgs are a separate call so a missing read:org scope degrades to
     // "personal only" instead of breaking the whole panel.
@@ -82,6 +85,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   }, [isFull]);
 
   const handleCreateRepo = async () => {
+    if (readOnly) return;
     const repoName = ghRepoName.trim();
     if (!repoName) return;
 
@@ -135,6 +139,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   const handleOpenFolderPicker = async () => {
+    if (readOnly) return;
     if ((window as any).alphaAPI?.selectFolder) {
       const picked = await (window as any).alphaAPI.selectFolder();
       if (picked) {
@@ -157,6 +162,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   };
 
   const handleFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (readOnly) return;
     const files = e.target.files;
     if (files && files.length > 0) {
       const firstFile = files[0] as any;
@@ -179,6 +185,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   };
 
   const handleAddResource = () => {
+    if (readOnly) return;
     if (!newResPath.trim()) {
       if (newResType === 'local_dir') {
         handleOpenFolderPicker();
@@ -202,6 +209,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   };
 
   const handleRemoveResource = (id: string) => {
+    if (readOnly) return;
     onChange(resources.filter(r => r.id !== id));
   };
 
@@ -210,7 +218,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   return (
     <div className="space-y-3 text-xs">
       {/* Create a GitHub repository for this project */}
-      {isFull && (
+      {isFull && !readOnly && (
         <div className="p-3 rounded-xl bg-well border border-white/5 space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-gray-300 flex items-center gap-1.5">
@@ -353,7 +361,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         the team's. Placed above the list because on a fresh project the list
         is empty and this is the only useful control on the screen.
       */}
-      {variant === 'full' && (
+      {variant === 'full' && !readOnly && (
         <AttachWorkspaceForm
           project={{ id: projectId, resources }}
           onAttached={onChange}
@@ -396,14 +404,16 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                 >
                   Copy
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveResource(res.id)}
-                  className="p-1 text-gray-500 hover:text-rose-400 transition-colors"
-                  title="Detach"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                {!readOnly && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveResource(res.id)}
+                    className="p-1 text-gray-500 hover:text-rose-400 transition-colors"
+                    title="Detach"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </div>
           ))
@@ -420,7 +430,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         </p>
       )}
 
-      {isFull && (
+      {isFull && !readOnly && (
         <>
           {/* Hidden native OS folder picker input */}
           <input

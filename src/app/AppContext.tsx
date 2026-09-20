@@ -25,26 +25,75 @@ import {
   SquadRun,
   RequirementDoc,
   IntakeAnswers,
-  Estimate,
-  RateCard,
   Milestone,
-  Identity
+  Identity,
+  WorkspaceSummary
 } from '@/shared/types';
 import {
-  initialIssues,
-  initialAgents,
-  initialAnalytics,
   emptyAnalytics,
   initialSettings,
   initialUsers,
   initialRequirementDocs,
 } from '@/data/mockData';
-import { buildEstimate, DEFAULT_RATE_CARD } from '@/features/delivery/estimator';
-import { apiService, normalizeGitHubRepo, normalizeSkill } from '@/shared/services/apiService';
+import { apiService, normalizeGitHubRepo, normalizeSkill, setActiveWorkspaceId } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
-import { runTokenTotal } from '@/shared/lib/runUsage';
+
+function normalizeAnalytics(value: unknown, fallback: AnalyticsData = emptyAnalytics): AnalyticsData {
+  const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
+  const legacyTimeline = Array.isArray(raw.tokenTimeline) ? raw.tokenTimeline : [];
+  const timeline = Array.isArray(raw.runTimeline)
+    ? raw.runTimeline.map(item => {
+        const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+        return {
+          hour: String(row.hour ?? '—'),
+          runs: Number(row.runs ?? 0),
+          completed: Number(row.completed ?? row.runs ?? 0),
+          failed: Number(row.failed ?? 0)
+        };
+      })
+    : legacyTimeline.map(item => {
+        const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+        return { hour: String(row.hour ?? '—'), runs: 0, completed: 0, failed: 0 };
+      });
+  const agentBreakdown = Array.isArray(raw.agentBreakdown)
+    ? raw.agentBreakdown.map(item => {
+        const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+        return {
+          agentId: String(row.agentId ?? ''),
+          agentName: String(row.agentName ?? row.agentId ?? 'Unknown agent'),
+          runs: Number(row.runs ?? 0),
+          efficiency: Number(row.efficiency ?? 0)
+        };
+      })
+    : fallback.agentBreakdown;
+  const modelBreakdown = Array.isArray(raw.modelBreakdown)
+    ? raw.modelBreakdown.map(item => {
+        const row = item && typeof item === 'object' ? item as Record<string, unknown> : {};
+        return {
+          modelName: String(row.modelName ?? 'Unknown model'),
+          percentage: Number(row.percentage ?? 0),
+          totalCalls: Number(row.totalCalls ?? 0)
+        };
+      })
+    : fallback.modelBreakdown;
+  return {
+    totalRuns24h: Number(raw.totalRuns24h ?? raw.totalAgentRuns ?? fallback.totalRuns24h),
+    avgLatencyMs: Number(raw.avgLatencyMs ?? fallback.avgLatencyMs),
+    totalAgentRuns: Number(raw.totalAgentRuns ?? fallback.totalAgentRuns),
+    successRate: Number(raw.successRate ?? fallback.successRate),
+    runTimeline: timeline,
+    agentBreakdown,
+    modelBreakdown
+  };
+}
+
+function cleanInbox(items: InboxNotification[]): InboxNotification[] {
+  return items.filter(notification =>
+    !/\b(budget|estimate|billing|price|cost)\b/i.test(`${notification.title} ${notification.message}`)
+  );
+}
 
 export interface RunPlanDraft {
   agentId: string;
@@ -67,7 +116,7 @@ interface AppContextType {
   
   // Issues
   issues: Issue[];
-  createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }) => Issue;
+  createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }) => Issue | null;
   updateIssueStatus: (id: string, status: IssueStatus) => void;
   updateIssue: (id: string, updates: Partial<Issue>) => void;
   addIssueComment: (issueId: string, comment: IssueComment) => void;
@@ -92,7 +141,7 @@ interface AppContextType {
   
   // Agents
   agents: Agent[];
-  createAgent: (agent: Omit<Agent, 'id' | 'stats' | 'status'>) => Agent;
+  createAgent: (agent: Omit<Agent, 'id' | 'stats' | 'status'>) => Agent | null;
   /**
    * Create an agent from a persona file someone shared.
    *
@@ -112,7 +161,7 @@ interface AppContextType {
   
   // Squads
   squads: Squad[];
-  createSquad: (squad: Omit<Squad, 'id' | 'activeRunsCount' | 'completedRunsCount'>) => Squad;
+  createSquad: (squad: Omit<Squad, 'id' | 'activeRunsCount' | 'completedRunsCount'>) => Squad | null;
   updateSquad: (id: string, updates: Partial<Squad>) => void;
   deleteSquad: (id: string) => void;
   squadRuns: SquadRun[];
@@ -157,7 +206,12 @@ interface AppContextType {
   chatThreads: ChatThread[];
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
-  createNewThread: (title?: string) => string;
+  createNewThread: (title?: string, projectId?: string) => string;
+  setThreadProject: (threadId: string, projectId: string | null) => Promise<ChatThread & {
+    workspaceDir: string | null;
+    workspaceManaged: boolean | null;
+  }>;
+  refreshChatThread: (threadId: string) => Promise<ChatMessage[]>;
   deleteThread: (id: string) => void;
   chatMessages: ChatMessage[];
   isAgentTyping: boolean;
@@ -204,56 +258,143 @@ interface AppContextType {
   can: (capability: Capability) => boolean;
   visibleTabs: NavigationTab[];
 
+  // Product workspace context
+  workspaces: WorkspaceSummary[];
+  activeWorkspaceId: string | null;
+  activeWorkspace: WorkspaceSummary | null;
+  workspaceLoading: boolean;
+  workspaceSwitching: boolean;
+  switchWorkspace: (workspaceId: string) => Promise<void>;
+  createWorkspace: (name: string) => Promise<WorkspaceSummary | null>;
+  joinWorkspace: (code: string) => Promise<WorkspaceSummary | null>;
+  refreshWorkspaces: () => Promise<void>;
+  refreshLiveBuildRoomProjects: () => Promise<void>;
+
   // Requirement documents
   requirementDocs: RequirementDoc[];
-  submitIntake: (answers: IntakeAnswers) => RequirementDoc;
+  submitIntake: (answers: IntakeAnswers) => RequirementDoc | null;
   updateRequirementDoc: (id: string, updates: Partial<RequirementDoc>) => void;
   toggleRequirementIncluded: (docId: string, reqId: string) => void;
   sendDocToClient: (docId: string) => void;
-
-  // Estimates
-  estimates: Estimate[];
-  estimateForDoc: (docId: string) => Estimate | undefined;
-  regenerateEstimate: (docId: string, rateCard?: RateCard) => Estimate | undefined;
-  approveScopeAndBudget: (docId: string) => Project | undefined;
-  rejectEstimate: (docId: string, reason: string) => void;
+  approveScope: (docId: string) => Project | undefined;
+  requestScopeChanges: (docId: string, reason: string) => void;
 
 }
 
 /* Capability names are behavioural, not tab names, so a surface can be shared
  * by two roles while the actions on it differ. */
 export type Capability =
-  | 'create_project'
-  | 'author_estimate'
-  | 'approve_budget'
-  | 'approve_production'
+  | 'view_identity'
+  | 'view_projects'
+  | 'manage_projects'
+  | 'view_issues'
+  | 'manage_issues'
+  | 'view_agents'
   | 'manage_agents'
+  | 'view_squads'
+  | 'manage_squads'
+  | 'run_squads'
+  | 'view_skills'
+  | 'manage_skills'
+  | 'view_runtimes'
+  | 'manage_runtimes'
+  | 'view_runs'
+  | 'approve_runs'
+  | 'manage_chat'
+  | 'view_integrations'
+  | 'manage_integrations'
+  | 'manage_mcp'
+  | 'sync_board'
+  | 'manage_settings'
+  | 'manage_deployments'
+  | 'create_project'
+  | 'manage_documents'
+  | 'approve_scope'
+  | 'approve_production'
   | 'run_agents'
   | 'contact_client'
-  | 'view_margin'
-  | 'manage_billing'
-  | 'submit_intake';
+  | 'submit_intake'
+  | 'view_members'
+  | 'manage_members';
 
 const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
-  client: ['approve_budget', 'submit_intake'],
-  dev: ['run_agents'],
-  pm: [
-    'create_project',
-    'author_estimate',
-    'approve_production',
-    'manage_agents',
+  client: ['view_identity', 'view_projects', 'manage_chat', 'approve_scope', 'submit_intake'],
+  dev: [
+    'view_identity',
+    'view_projects',
+    'view_issues',
+    'manage_issues',
+    'view_agents',
     'run_agents',
-    'contact_client'
+    'view_squads',
+    'run_squads',
+    'view_skills',
+    'view_runtimes',
+    'manage_runtimes',
+    'view_runs',
+    'manage_chat',
+    'view_integrations',
+    'sync_board'
+  ],
+  pm: [
+    'view_identity',
+    'view_projects',
+    'manage_projects',
+    'view_issues',
+    'manage_issues',
+    'view_agents',
+    'view_squads',
+    'view_skills',
+    'manage_skills',
+    'view_runtimes',
+    'manage_runtimes',
+    'view_runs',
+    'approve_runs',
+    'manage_chat',
+    'manage_documents',
+    'view_integrations',
+    'manage_integrations',
+    'manage_deployments',
+    'manage_mcp',
+    'sync_board',
+    'manage_settings',
+    'create_project',
+    'approve_production',
+    'contact_client',
+    'view_members'
   ],
   admin: [
-    'create_project',
-    'author_estimate',
-    'approve_production',
+    'view_identity',
+    'view_projects',
+    'manage_projects',
+    'view_issues',
+    'manage_issues',
+    'view_agents',
     'manage_agents',
+    'view_squads',
+    'manage_squads',
+    'run_squads',
+    'view_skills',
+    'manage_skills',
+    'view_runtimes',
+    'manage_runtimes',
+    'view_runs',
+    'approve_runs',
+    'manage_chat',
+    'manage_documents',
+    'approve_scope',
+    'view_integrations',
+    'manage_integrations',
+    'manage_mcp',
+    'sync_board',
+    'manage_settings',
+    'manage_deployments',
+    'create_project',
+    'approve_production',
     'run_agents',
     'contact_client',
-    'view_margin',
-    'manage_billing'
+    'view_members',
+    'manage_members'
   ]
 };
 
@@ -287,6 +428,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadFromStorage<boolean>('local_mode', false)
   );
 
+  const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
+  const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(() =>
+    loadFromStorage<string | null>('active_workspace_id', null)
+  );
+  const [workspaceLoading, setWorkspaceLoading] = useState(true);
+  const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
+  /** Project ids for which the current role has an owned/assigned squad room. */
+  const [liveBuildRoomProjectIds, setLiveBuildRoomProjectIds] = useState<string[]>([]);
+
+  /**
+   * The role can be overridden locally in development so the four persona
+   * surfaces remain demonstrable from one machine. A workspace-provided role
+   * still wins everywhere else.
+   */
+  const [roleOverride, setRoleOverride] = useState<UserRole | null>(() =>
+    import.meta.env.DEV ? loadFromStorage<UserRole | null>('role_override', null) : null
+  );
+  const activeWorkspace = workspaces.find(workspace => workspace.id === activeWorkspaceId) ?? null;
+  const role: UserRole = roleOverride ?? activeWorkspace?.role ?? identity?.role ?? 'pm';
+  const roleTabs = ROLE_TABS[role];
+
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   /** Guards against overlapping syncs without waiting for a re-render. */
@@ -303,7 +465,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Local mode deliberately keeps the board on this machine. Avoid calling
     // the GitHub-backed sync endpoint (and surfacing an avoidable ENOENT toast)
     // until the user connects an account.
-    if (localMode || syncingRef.current) return;
+    if (localMode || syncingRef.current || !ROLE_CAPABILITIES[role].includes('sync_board')) return;
     syncingRef.current = true;
     setSyncing(true);
     try {
@@ -329,7 +491,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       syncingRef.current = false;
       setSyncing(false);
     }
-  }, [localMode]);
+  }, [localMode, role]);
 
   /**
     * The role you chose, which is an override rather than the answer.
@@ -339,10 +501,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     * capstone has to demonstrate four personas from one laptop, and the person
     * demonstrating them is in exactly one team.
     */
-  const [roleOverride, setRoleOverride] = useState<UserRole | null>(() =>
-    loadFromStorage<UserRole | null>('role_override', null)
-  );
-
   /**
    * What you actually are: GitHub first, your override only if you set one.
    *
@@ -362,9 +520,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * an explanation instead of a workspace. Falling through to `pm` there gave
    * an unrecognised member the most powerful role in the product.
    */
-  const role: UserRole = roleOverride ?? identity?.role ?? 'pm';
-  const roleTabs = ROLE_TABS[role];
-
   const initialDefaultTabs: TabItem[] = [{ id: 'tab-default', view: roleTabs[0] }];
 
   const [tabs, setTabs] = useState<TabItem[]>(() => {
@@ -457,8 +612,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * glance. An inbox that invents its own contents cannot be trusted for the
    * ones that matter.
    */
-  const [inbox, setInbox] = useState<InboxNotification[]>(() => loadFromStorage<InboxNotification[]>('inbox', []));
-  const [analytics, setAnalytics] = useState<AnalyticsData>(() => loadFromStorage('analytics_v2', emptyAnalytics));
+  const [inbox, setInbox] = useState<InboxNotification[]>(() => cleanInbox(loadFromStorage<InboxNotification[]>('inbox', [])));
+  const [analytics, setAnalytics] = useState<AnalyticsData>(() => normalizeAnalytics(loadFromStorage('analytics_v2', emptyAnalytics)));
   const [settings, setSettings] = useState<WorkspaceSettings>(() => loadFromStorage('settings', initialSettings));
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => loadFromStorage<ChatThread[]>('chat_threads', []));
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
@@ -493,38 +648,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [requirementDocs, setRequirementDocs] = useState<RequirementDoc[]>(() =>
     loadFromStorage('requirement_docs', initialRequirementDocs)
   );
-  const [estimates, setEstimates] = useState<Estimate[]>(() => {
-    const saved = loadFromStorage<Estimate[]>('estimates', []);
-    if (saved.length > 0) return saved;
-
-    // Price the seeded specifications with the real engine rather than
-    // hardcoding figures, so the demo numbers move when the rate card,
-    // agent telemetry, or scope changes.
-    return initialRequirementDocs.map(doc => {
-      const est = buildEstimate(
-        doc,
-        initialAgents,
-        initialAnalytics,
-        DEFAULT_RATE_CARD,
-        undefined,
-        initialIssues
-      );
-      return {
-        ...est,
-        id: doc.estimateId ?? est.id,
-        revision: doc.version,
-        status:
-          doc.status === 'approved'
-            ? 'approved'
-            : doc.status === 'awaiting_client'
-              ? 'awaiting_client'
-              : 'draft',
-        approvedBy: doc.approvedBy,
-        approvedAt: doc.approvedAt
-      } as Estimate;
-    });
-  });
-
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
   const [isScanningSkills, setIsScanningSkills] = useState(false);
   const [isAgentTyping, setIsAgentTyping] = useState(false);
@@ -548,12 +671,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let cancelled = false;
 
     const hydrate = async () => {
+      let selectedWorkspaceId = activeWorkspaceId;
+      try {
+        const available = await apiService.getWorkspaces();
+        if (!cancelled && Array.isArray(available)) {
+          setWorkspaces(available);
+          const selected = available.find(workspace => workspace.id === selectedWorkspaceId) ?? available[0];
+          selectedWorkspaceId = selected?.id ?? null;
+          setActiveWorkspaceIdState(selectedWorkspaceId);
+          setActiveWorkspaceId(selectedWorkspaceId);
+          try {
+            const roomProjects = await apiService.getLiveBuildRoomProjects();
+            if (!cancelled) setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
+          } catch {
+            if (!cancelled) setLiveBuildRoomProjectIds([]);
+          }
+        }
+      } catch {
+        // Keep the local cache usable when the daemon is offline or still on an
+        // older build that does not expose workspaces yet.
+      }
+
       const snapshot = await fetchServerSnapshot();
       if (cancelled) return;
 
       // Empty object = nothing succeeded, i.e. the daemon is not answering.
       if (Object.keys(snapshot).length === 0) {
         setServerStatus('offline');
+        setWorkspaceLoading(false);
         return;
       }
 
@@ -591,13 +736,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
       if (snapshot.analytics && typeof snapshot.analytics === 'object') {
-        setAnalytics(snapshot.analytics as AnalyticsData);
+        setAnalytics(normalizeAnalytics(snapshot.analytics));
       }
 
       setServerStatus('online');
+      setWorkspaceLoading(false);
+
     };
 
     void hydrate();
+    return () => { cancelled = true; };
+  }, []);
+
+  /**
+   * Resolve access independently of collection hydration.
+   *
+   * A denied collection is normal for a restricted role, and a no-team
+   * identity can make every protected collection return 403. `/me` is the
+   * authoritative answer in both cases, so it cannot be nested inside an
+   * all-or-nothing board load.
+   */
+  useEffect(() => {
+    let cancelled = false;
+
+    apiService.getIdentity()
+      .then(next => {
+        if (cancelled) return;
+        setIdentity(next);
+        if (next.github === 'ok') setLocalMode(false);
+      })
+      .catch(() => {
+        // Keep the cached/local shell available when an older or offline
+        // daemon does not expose /me; protected writes still fail closed.
+      });
+
     return () => { cancelled = true; };
   }, []);
 
@@ -641,7 +813,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       try {
         const latest = await apiService.getAnalytics();
         if (!cancelled && latest && typeof latest === 'object') {
-          setAnalytics(latest);
+          setAnalytics(normalizeAnalytics(latest));
         }
       } catch {
         // Daemon down; retain the last known snapshot until it reconnects.
@@ -690,24 +862,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [activeThreadId]);
 
   // Sync to local storage
+  useEffect(() => { saveToStorage('active_workspace_id', activeWorkspaceId); }, [activeWorkspaceId]);
   useEffect(() => { saveToStorage('workspace_tabs_v2', tabs); }, [tabs]);
   useEffect(() => { saveToStorage('active_tab_id_v2', activeTabId); }, [activeTabId]);
-  useEffect(() => { saveToStorage('issues', issues); }, [issues]);
-  useEffect(() => { saveToStorage('projects', projects); }, [projects]);
-  useEffect(() => { saveToStorage('agents', agents); }, [agents]);
-  useEffect(() => { saveToStorage('squads', squads); }, [squads]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('issues'), issues); }, [issues, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('projects'), projects); }, [projects, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('agents'), agents); }, [agents, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('squads'), squads); }, [squads, activeWorkspaceId]);
   useEffect(() => { saveToStorage('runtimes', runtimes); }, [runtimes]);
   useEffect(() => { saveToStorage('skills', skills); }, [skills]);
-  useEffect(() => { saveToStorage('deployments_v2', deployments); }, [deployments]);
-  useEffect(() => { saveToStorage('inbox', inbox); }, [inbox]);
-  useEffect(() => { saveToStorage('analytics_v2', analytics); }, [analytics]);
-  useEffect(() => { saveToStorage('settings', settings); }, [settings]);
-  useEffect(() => { saveToStorage('chat_threads', chatThreads); }, [chatThreads]);
-  useEffect(() => { saveToStorage('chat_messages', chatMessages); }, [chatMessages]);
-  useEffect(() => { saveToStorage('prototype_runs', prototypeRuns); }, [prototypeRuns]);
-  useEffect(() => { saveToStorage('squad_runs', squadRuns); }, [squadRuns]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('deployments_v2'), deployments); }, [deployments, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('inbox'), inbox); }, [inbox, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('analytics_v2'), analytics); }, [analytics, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('settings'), settings); }, [settings, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('chat_threads'), chatThreads); }, [chatThreads, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('chat_messages'), chatMessages); }, [chatMessages, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('prototype_runs'), prototypeRuns); }, [prototypeRuns, activeWorkspaceId]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('squad_runs'), squadRuns); }, [squadRuns, activeWorkspaceId]);
   useEffect(() => { saveToStorage('run_plan_drafts_v1', runPlanDrafts); }, [runPlanDrafts]);
-  useEffect(() => { saveToStorage('role_override', roleOverride); }, [roleOverride]);
+  useEffect(() => {
+    if (import.meta.env.DEV) saveToStorage('role_override', roleOverride);
+  }, [roleOverride]);
   useEffect(() => { saveToStorage('local_mode', localMode); }, [localMode]);
 
   /**
@@ -737,8 +912,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       document.removeEventListener('visibilitychange', tick);
     };
   }, [syncBoard]);
-  useEffect(() => { saveToStorage('requirement_docs', requirementDocs); }, [requirementDocs]);
-  useEffect(() => { saveToStorage('estimates', estimates); }, [estimates]);
+  useEffect(() => { saveToStorage(workspaceStorageKey('requirement_docs'), requirementDocs); }, [requirementDocs, activeWorkspaceId]);
 
   const dismissToast = (id: string) => {
     setToasts(prev => prev.filter(toast => toast.id !== id));
@@ -751,6 +925,113 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return [...prev.slice(-3), { id, title, description, tone }];
     });
     window.setTimeout(() => dismissToast(id), 4200);
+  };
+
+  const workspaceStorageKey = (key: string) =>
+    activeWorkspaceId ? `${key}:${activeWorkspaceId}` : key;
+
+  const refreshWorkspaces = async () => {
+    try {
+      const available = await apiService.getWorkspaces();
+      setWorkspaces(available);
+      const selected = available.find(workspace => workspace.id === activeWorkspaceId) ?? available[0];
+      if (selected && selected.id !== activeWorkspaceId) {
+        setActiveWorkspaceIdState(selected.id);
+        setActiveWorkspaceId(selected.id);
+      }
+    } catch (error) {
+      showToast('Workspaces unavailable', error instanceof Error ? error.message : String(error), 'error');
+    }
+  };
+
+  const refreshLiveBuildRoomProjects = async () => {
+    try {
+      const roomProjects = await apiService.getLiveBuildRoomProjects();
+      setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
+    } catch {
+      // Fail closed: an unavailable room index must never expose a stale room.
+      setLiveBuildRoomProjectIds([]);
+    }
+  };
+
+  const switchWorkspace = async (workspaceId: string, knownTarget?: WorkspaceSummary) => {
+    const target = knownTarget ?? workspaces.find(workspace => workspace.id === workspaceId);
+    if (!target || workspaceId === activeWorkspaceId) return;
+
+    setWorkspaceSwitching(true);
+    setRoleOverride(null);
+    setActiveWorkspaceIdState(workspaceId);
+    setActiveWorkspaceId(workspaceId);
+    setLiveBuildRoomProjectIds([]);
+    setActiveThreadId(null);
+    setRunSetupIssueId(null);
+    setRunSetupAgentId(null);
+    setProjects(loadFromStorage<Project[]>(`projects:${workspaceId}`, []));
+    setIssues(loadFromStorage<Issue[]>(`issues:${workspaceId}`, []));
+    setAgents(loadFromStorage<Agent[]>(`agents:${workspaceId}`, []));
+    setSquads(loadFromStorage<Squad[]>(`squads:${workspaceId}`, []));
+    setChatThreads(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
+    setChatMessages(loadFromStorage<ChatMessage[]>(`chat_messages:${workspaceId}`, []));
+    setPrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, []));
+    setSquadRuns(loadFromStorage<SquadRun[]>(`squad_runs:${workspaceId}`, []));
+    setInbox(cleanInbox(loadFromStorage<InboxNotification[]>(`inbox:${workspaceId}`, [])));
+    setRequirementDocs(loadFromStorage<RequirementDoc[]>(`requirement_docs:${workspaceId}`, []));
+    setAnalytics(normalizeAnalytics(loadFromStorage<AnalyticsData>(`analytics_v2:${workspaceId}`, emptyAnalytics)));
+
+    try {
+      const snapshot = await fetchServerSnapshot();
+      try {
+        const roomProjects = await apiService.getLiveBuildRoomProjects();
+        setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
+      } catch {
+        setLiveBuildRoomProjectIds([]);
+      }
+      if (snapshot.projects) setProjects(snapshot.projects as Project[]);
+      if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
+      if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
+      if (snapshot.squads) setSquads(snapshot.squads as Squad[]);
+      if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
+      if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
+      if (snapshot.chatThreads) setChatThreads(snapshot.chatThreads as ChatThread[]);
+      if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
+      if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
+      if (snapshot.analytics && typeof snapshot.analytics === 'object') {
+        setAnalytics(normalizeAnalytics(snapshot.analytics));
+      }
+      setServerStatus('online');
+      const nextTabId = `tab-${Date.now()}`;
+      setTabs([{ id: nextTabId, view: ROLE_TABS[target.role][0] }]);
+      setActiveTabId(nextTabId);
+      showToast('Workspace switched', `Now viewing ${target.name}.`, 'success');
+    } catch (error) {
+      showToast('Workspace switch failed', error instanceof Error ? error.message : String(error), 'error');
+    } finally {
+      setWorkspaceSwitching(false);
+    }
+  };
+
+  const createWorkspace = async (name: string): Promise<WorkspaceSummary | null> => {
+    try {
+      const created = await apiService.createWorkspace({ name });
+      setWorkspaces(prev => [...prev, created]);
+      await switchWorkspace(created.id, created);
+      return created;
+    } catch (error) {
+      showToast('Workspace not created', error instanceof Error ? error.message : String(error), 'error');
+      return null;
+    }
+  };
+
+  const joinWorkspace = async (code: string): Promise<WorkspaceSummary | null> => {
+    try {
+      const joined = await apiService.joinWorkspace(code);
+      setWorkspaces(prev => prev.some(workspace => workspace.id === joined.id) ? prev : [...prev, joined]);
+      await switchWorkspace(joined.id, joined);
+      return joined;
+    } catch (error) {
+      showToast('Workspace not joined', error instanceof Error ? error.message : String(error), 'error');
+      return null;
+    }
   };
 
   // Global Keyboard shortcuts (Cmd+K for command palette)
@@ -920,45 +1201,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       showToast('Squad run stopped', squadRun.stoppedReason ?? 'A member did not finish.', 'error');
     });
 
-    // Fetch initial persistent real state from backend
-    apiService.checkHealth().then(async () => {
-      try {
-        const [dbProjects, dbAgents, dbIssues, dbSquads, dbRuntimes, dbSkills, dbRuns, dbSquadRuns] = await Promise.all([
-          apiService.getProjects(),
-          apiService.getAgents(),
-          apiService.getIssues(),
-          apiService.getSquads(),
-          apiService.getRuntimes(),
-          apiService.getSkills(),
-          apiService.getRuns(),
-          // Squad runs came from localStorage and nowhere else, so a reload
-          // mid-run left the flow view with nothing to show for a squad that
-          // was still working.
-          apiService.getSquadRuns()
-        ]);
-        if (dbProjects?.length) setProjects(dbProjects as any);
-        if (dbAgents?.length) setAgents(dbAgents as any);
-        if (dbIssues?.length) setIssues(dbIssues as any);
-        if (dbSquads?.length) setSquads(dbSquads as any);
-        if (dbRuntimes?.length) setRuntimes(dbRuntimes as any);
-        if (dbSkills?.length) setSkills(dbSkills as any);
-        if (dbRuns?.length) setPrototypeRuns(dbRuns as any);
-        if (dbSquadRuns?.length) setSquadRuns(dbSquadRuns as any);
-        apiService.getIdentity().then(next => {
-          setIdentity(next);
-          // A successful connection supersedes the temporary local-mode
-          // choice, so future disconnects can show the setup screen again.
-          if (next.github === 'ok') setLocalMode(false);
-        }).catch(() => {
-          // An older daemon has no /me. The board still works; "Mine" does not.
-        });
-      } catch (err) {
-        console.warn('Backend sync error:', err);
-      }
-    }).catch(() => {
-      // Backend not running yet; gracefully use local storage cache
-    });
-
     return () => {
       unsubStage();
       unsubLog();
@@ -977,7 +1219,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // raw list — a client must not be given a badge for internal traffic.
 
   // Issue CRUD
-  const createIssue = (input: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }): Issue => {
+  const createIssue = (input: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }): Issue | null => {
+    if (!requireCapability('manage_issues')) return null;
     const project = projects.find(p => p.id === input.projectId) || projects[0];
 
     /**
@@ -1039,6 +1282,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateIssueStatus = (id: string, status: IssueStatus) => {
+    if (!requireCapability('manage_issues')) return;
     const previousIssue = issues.find(iss => iss.id === id);
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, status, updatedAt: new Date().toISOString() } : iss));
     persist(
@@ -1056,6 +1300,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateIssue = (id: string, updates: Partial<Issue>) => {
+    if (!requireCapability('manage_issues')) return;
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...updates, updatedAt: new Date().toISOString() } : iss));
     persist(
       () => apiService.updateIssue(id, updates),
@@ -1074,6 +1319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * the next reload.
    */
   const addIssueComment = (issueId: string, comment: IssueComment) => {
+    if (!requireCapability('manage_issues')) return;
     setIssues(prev =>
       prev.map(iss =>
         iss.id === issueId ? { ...iss, comments: [...(iss.comments ?? []), comment] } : iss
@@ -1103,6 +1349,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteIssue = (id: string) => {
+    if (!requireCapability('manage_issues')) return;
     const removed = issues.find(iss => iss.id === id);
     setIssues(prev => prev.filter(iss => iss.id !== id));
     persist(
@@ -1117,6 +1364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Prototype agent-run setup and lifecycle
   const runAgentOnIssue = (issueId: string, agentId?: string) => {
+    if (!requireCapability('run_agents')) return;
     const targetIssue = issues.find(issue => issue.id === issueId);
     if (!targetIssue) return;
 
@@ -1240,6 +1488,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     plan: string[],
     scenario: PrototypeRun['scenario']
   ): PrototypeRun | null => {
+    if (!requireCapability('run_agents')) return null;
     const targetIssue = issues.find(issue => issue.id === issueId);
     const assignedAgent = agents.find(agent => agent.id === agentId);
     if (!targetIssue || !assignedAgent) return null;
@@ -1374,6 +1623,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const cancelPrototypeRun = (runId: string) => {
+    if (!requireCapability('run_agents')) return;
     const run = prototypeRuns.find(item => item.id === runId);
     if (!run || !['queued', 'running'].includes(run.status)) return;
     const now = new Date().toISOString();
@@ -1419,6 +1669,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const retryPrototypeRun = (runId: string) => {
+    if (!requireCapability('run_agents')) return;
     const run = prototypeRuns.find(item => item.id === runId);
     if (!run || !['failed', 'changes_requested', 'cancelled'].includes(run.status)) {
       showToast('Retry unavailable', 'The failed run is no longer available. Refresh the issue and try again.', 'error');
@@ -1617,17 +1868,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           issueIdentifier: targetIssue.identifier,
           proposedChanges: run.changedFiles
             ? `${run.insertions ?? 0} insertions, ${run.deletions ?? 0} deletions in ${run.changedFiles} files.`
-            : 'No files were changed.',
-          /**
-           * Real tokens, reported by the CLI, or nothing.
-           *
-           * This was the constant 3850 on every approval. The count now comes
-           * from the run's stored usage, cache reads included — they are the
-           * bulk of a turn and cheaper per token, not free. Left undefined for
-           * a run whose CLI reported no figures, so the Inbox omits the line
-           * rather than showing an invented one.
-           */
-          costTokens: runTokenTotal(run)
+            : 'No files were changed.'
         }
       }, ...prev]);
       showToast('Review ready', `${targetIssue.identifier} is waiting in Inbox.`, 'success');
@@ -1646,6 +1887,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const createProject = async (
     input: Omit<Project, 'id' | 'totalIssues' | 'completedIssues' | 'progressPercentage' | 'milestones'>
   ): Promise<Project> => {
+    if (!requireCapability('manage_projects')) {
+      throw new Error('Your role cannot create projects.');
+    }
     const draft: Project = {
       ...input,
       id: `proj-${Date.now()}`,
@@ -1680,6 +1924,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateProject = (id: string, updates: Partial<Project>) => {
+    if (!requireCapability('manage_projects')) return;
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
     persist(
       () => apiService.updateProject(id, updates),
@@ -1689,6 +1934,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteProject = (id: string) => {
+    if (!requireCapability('manage_projects')) return;
     const removed = projects.find(p => p.id === id);
     setProjects(prev => prev.filter(p => p.id !== id));
     persist(
@@ -1703,7 +1949,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Agents
-  const createAgent = (input: Omit<Agent, 'id' | 'stats' | 'status'>): Agent => {
+  const createAgent = (input: Omit<Agent, 'id' | 'stats' | 'status'>): Agent | null => {
+    if (!requireCapability('manage_agents')) return null;
     const newAgent: Agent = {
       ...input,
       id: `agent-${Date.now()}`,
@@ -1741,6 +1988,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const importAgent = async (content: string) => {
+    if (!requireCapability('manage_agents')) {
+      throw new Error('Your role cannot import agents.');
+    }
     // No optimistic insert: the id and the validated fields are decided by the
     // daemon, so there is nothing meaningful to show until it answers.
     const result = await apiService.importAgent(content);
@@ -1749,6 +1999,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateAgent = (id: string, updates: Partial<Agent>) => {
+    if (!requireCapability('manage_agents')) return;
     setAgents(prev => prev.map(a => a.id === id ? { ...a, ...updates } : a));
     persist(
       () => apiService.updateAgent(id, updates),
@@ -1774,6 +2025,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const duplicateAgent = (id: string): Agent | null => {
+    if (!requireCapability('manage_agents')) return null;
     const existing = agents.find(a => a.id === id);
     if (!existing) return null;
 
@@ -1826,6 +2078,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * the reconcile is not fighting the local guess.
    */
   const setAgentArchived = (id: string, isArchived: boolean) => {
+    if (!requireCapability('manage_agents')) return;
     setAgents(prev =>
       prev.map(a =>
         a.id === id
@@ -1847,6 +2100,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const restoreAgent = (id: string) => setAgentArchived(id, false);
 
   const deleteAgent = (id: string) => {
+    if (!requireCapability('manage_agents')) return;
     const removed = agents.find(a => a.id === id);
     setAgents(prev => prev.filter(a => a.id !== id));
     persist(
@@ -1868,6 +2122,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * toast names the agent rather than the count, so the retry is targeted.
    */
   const bulkUpdateAgents = (ids: string[], updates: Partial<Agent>) => {
+    if (!requireCapability('manage_agents')) return;
     setAgents(prev => prev.map(a => ids.includes(a.id) ? { ...a, ...updates } : a));
     for (const id of ids) {
       persist(
@@ -1879,11 +2134,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const bulkArchiveAgents = (ids: string[]) => {
+    if (!requireCapability('manage_agents')) return;
     for (const id of ids) setAgentArchived(id, true);
   };
 
   // Squads
-  const createSquad = (input: Omit<Squad, 'id' | 'activeRunsCount' | 'completedRunsCount'>): Squad => {
+  const createSquad = (input: Omit<Squad, 'id' | 'activeRunsCount' | 'completedRunsCount'>): Squad | null => {
+    if (!requireCapability('manage_squads')) return null;
     const newSquad: Squad = {
       ...input,
       id: `sq-${Date.now()}`,
@@ -1906,6 +2163,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const updateSquad = (id: string, updates: Partial<Squad>) => {
+    if (!requireCapability('manage_squads')) return;
     setSquads(prev => prev.map(s => (s.id === id ? { ...s, ...updates } : s)));
     persist(
       () => apiService.updateSquad(id, updates),
@@ -1915,6 +2173,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteSquad = (id: string) => {
+    if (!requireCapability('manage_squads')) return;
     const removed = squads.find(s => s.id === id);
     setSquads(prev => prev.filter(s => s.id !== id));
     persist(
@@ -1943,6 +2202,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * way to "run a squad" against nothing.
    */
   const triggerSquadRun = async (squadId: string, issueId: string, plan?: string[], missionGoal?: string) => {
+    if (!requireCapability('run_squads')) return;
     const squad = squads.find(s => s.id === squadId);
     if (!squad) return;
 
@@ -1983,6 +2243,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Runtimes
   const scanLocalRuntimes = async () => {
+    if (!requireCapability('manage_runtimes')) return;
     setIsScanningRuntimes(true);
     try {
       const realRuntimes = await apiService.scanRuntimes();
@@ -1998,6 +2259,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const setDefaultRuntime = (id: string) => {
+    if (!requireCapability('manage_runtimes')) return;
     setRuntimes(prev => prev.map(rt => ({
       ...rt,
       isDefault: rt.id === id
@@ -2006,6 +2268,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Skills
   const scanInstalledSkills = async () => {
+    if (!requireCapability('manage_skills')) return;
     setIsScanningSkills(true);
     try {
       const detectedSkills = await apiService.scanSkills();
@@ -2030,6 +2293,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const toggleSkill = (id: string) => {
+    if (!requireCapability('manage_skills')) return;
     const next = !skills.find(sk => sk.id === id)?.enabled;
     setSkills(prev => prev.map(sk => sk.id === id ? { ...sk, enabled: next } : sk));
     /**
@@ -2056,6 +2320,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     env: 'Production' | 'Staging' | 'Preview' = 'Staging',
     source?: { issueId?: string; runId?: string }
   ) => {
+    if (!requireCapability('manage_deployments')) return;
     void source;
     const proj = projects.find(p => p.id === projectId) || projects[0];
     if (!proj) {
@@ -2088,6 +2353,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     try {
       const result = await apiService.dispatchWorkflow({
+        projectId: proj.id,
         cwd,
         ref: localResource?.branchOrMachine || githubResource?.branchOrMachine || undefined,
         // Workflows that want environment-specific behavior can declare this
@@ -2123,6 +2389,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const handleApproval = (notificationId: string, action: 'approved' | 'rejected') => {
+    if (!requireCapability('approve_runs')) return;
     const notif = inbox.find(n => n.id === notificationId);
     if (!notif) return;
 
@@ -2237,8 +2504,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * Still synchronous, and still returns the id: `sendMessage` below calls this
    * and then posts to the id it gets back. `persist` writes optimistically and
    * reconciles, which is why the POST has to be idempotent — see the route.
-   */
-  const createNewThread = (title = 'New Conversation') => {
+  */
+  const createNewThread = (title = 'New Conversation', projectId?: string) => {
+    if (!requireCapability('manage_chat')) return '';
     const newThreadId = `th-${Date.now()}`;
     const isClientThread = role === 'client';
 
@@ -2253,7 +2521,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       iconType: isClientThread ? 'sparkle' : 'asterisk',
       audience: isClientThread ? 'client' : 'internal',
       clientId: isClientThread ? currentUser.id : undefined,
-      agentIds: isClientThread ? [] : [agents[0]?.id || 'agent-1'],
+      // A project-scoped agent is selected explicitly from the Call Agent
+      // control. Never seed a hidden agent roster on a new thread.
+      agentIds: [],
+      projectId: isClientThread ? undefined : projectId,
       messages: []
     };
     setChatThreads(prev => [newThread, ...prev]);
@@ -2288,7 +2559,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newThreadId;
   };
 
+  const setThreadProject = async (threadId: string, projectId: string | null): Promise<ChatThread & {
+    workspaceDir: string | null;
+    workspaceManaged: boolean | null;
+  }> => {
+    if (!requireCapability('manage_chat')) throw new Error('Your role cannot manage chat.');
+    const previous = chatThreads.find(thread => thread.id === threadId);
+    const updated = await apiService.setThreadProject(threadId, projectId);
+    loadedThreadsRef.current.add(threadId);
+    setChatThreads(prev => prev.map(thread => thread.id === threadId
+      ? { ...thread, ...updated, messages: previous?.projectId === projectId ? thread.messages : [] }
+      : thread
+    ));
+    if (activeThreadId === threadId && previous?.projectId !== projectId) {
+      setChatMessages([]);
+    }
+    return updated;
+  };
+
+  const refreshChatThread = async (threadId: string): Promise<ChatMessage[]> => {
+    const messages = await apiService.getChatMessages(threadId);
+    loadedThreadsRef.current.add(threadId);
+    setChatThreads(prev => prev.map(thread => thread.id === threadId ? { ...thread, messages } : thread));
+    if (activeThreadId === threadId) setChatMessages(messages);
+    return messages;
+  };
+
   const deleteThread = (id: string) => {
+    if (!requireCapability('manage_chat')) return;
     const removed = chatThreads.find(t => t.id === id);
     const wasActive = activeThreadId === id;
 
@@ -2314,6 +2612,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const sendChatMessage = async (content: string) => {
+    if (!requireCapability('manage_chat')) return;
     let targetThreadId = activeThreadId;
     if (!targetThreadId) {
       targetThreadId = createNewThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
@@ -2521,6 +2820,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const clearChat = () => {
+    if (!requireCapability('manage_chat')) return;
     const id = activeThreadId;
     if (!id) return;
 
@@ -2546,6 +2846,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Settings
   const updateSettings = (updates: Partial<WorkspaceSettings>) => {
+    if (!requireCapability('manage_settings')) return;
     setSettings(prev => ({ ...prev, ...updates }));
   };
 
@@ -2554,8 +2855,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * ------------------------------------------------------------------ */
 
   const currentUser = users.find(u => u.role === role) || users[0];
-  const visibleTabs = roleTabs;
+  const roomVisible = role !== 'client' && liveBuildRoomProjectIds.some(projectId => projects.some(project => project.id === projectId));
+  const visibleTabs = roleTabs.filter(tab => tab !== 'live_build_room' || roomVisible);
   const can = (capability: Capability) => ROLE_CAPABILITIES[role].includes(capability);
+  const requireCapability = (capability: Capability): boolean => {
+    if (can(capability)) return true;
+    showToast(
+      'Permission required',
+      `Your ${role} role cannot perform this action.`,
+      'error'
+    );
+    return false;
+  };
+
+  useEffect(() => {
+    if (activeTab === 'live_build_room' && !visibleTabs.includes('live_build_room')) {
+      setActiveTab(roleTabs[0]);
+    }
+  }, [activeTab, roleTabs, visibleTabs]);
 
   const switchRole = (next: UserRole) => {
     setRoleOverride(next);
@@ -2596,7 +2913,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return criteria;
   };
 
-  const submitIntake = (answers: IntakeAnswers): RequirementDoc => {
+  const submitIntake = (answers: IntakeAnswers): RequirementDoc | null => {
+    if (!requireCapability('submit_intake')) return null;
     const seq = 1043 + requirementDocs.filter(d => d.track === 'project').length - 2;
     const identifier = `SPEC-${seq}`;
 
@@ -2626,7 +2944,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       nonFunctionalRequirements: answers.concerns.filter(Boolean),
       constraints: [
         answers.targetDate ? `Target launch ${answers.targetDate}` : '',
-        answers.budgetCeiling ? `Client budget ceiling stated as $${answers.budgetCeiling.toLocaleString()}` : '',
         answers.integrations ? `Integrations: ${answers.integrations}` : ''
       ].filter(Boolean),
       outOfScope: answers.outOfScope ? [answers.outOfScope] : [],
@@ -2636,17 +2953,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     setRequirementDocs(prev => [doc, ...prev]);
 
-    // The estimate is generated immediately so the PM has something to adjust.
-    const estimate = buildEstimate(doc, agents, analytics, DEFAULT_RATE_CARD, undefined, issues);
-    setEstimates(prev => [estimate, ...prev]);
-    setRequirementDocs(prev => prev.map(d => (d.id === doc.id ? { ...d, estimateId: estimate.id } : d)));
-
     setInbox(prev => [
       {
         id: `notif-${Date.now()}`,
         type: 'issue_assigned',
         title: `New request from ${doc.company || doc.clientName}`,
-        message: `${identifier} — "${doc.title}". ${doc.functionalRequirements.length} requirements compiled and priced. Awaiting PM review.`,
+        message: `${identifier} — "${doc.title}". ${doc.functionalRequirements.length} requirements compiled. Awaiting PM review.`,
         read: false,
         audience: 'internal',
         timestamp: new Date().toISOString(),
@@ -2657,40 +2969,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...prev
     ]);
 
-    return { ...doc, estimateId: estimate.id };
+    return doc;
   };
 
   const updateRequirementDoc = (id: string, updates: Partial<RequirementDoc>) => {
+    if (!requireCapability('manage_documents')) return;
     setRequirementDocs(prev =>
       prev.map(d => (d.id === id ? { ...d, ...updates, updatedAt: new Date().toISOString() } : d))
     );
   };
 
-  // Reads the scoped list, so a role that may not see pricing gets nothing here.
-  const estimateForDoc = (docId: string) =>
-    scopedEstimates.find(e => e.docId === docId && e.status !== 'superseded');
-
-  const regenerateEstimate = (docId: string, rateCard?: RateCard): Estimate | undefined => {
-    const doc = requirementDocs.find(d => d.id === docId);
-    if (!doc) return undefined;
-
-    const previous = estimates.find(e => e.docId === docId && e.status !== 'superseded');
-    const next = buildEstimate(
-      doc,
-      agents,
-      analytics,
-      rateCard ?? previous?.rateCard ?? DEFAULT_RATE_CARD,
-      previous,
-      issues
-    );
-
-    setEstimates(prev => [next, ...prev.filter(e => e.id !== next.id)]);
-    updateRequirementDoc(docId, { estimateId: next.id });
-    return next;
-  };
-
-  /** Dropping a requirement at the gate re-prices the whole estimate. */
+  /** Include or exclude a requirement before the scope is approved. */
   const toggleRequirementIncluded = (docId: string, reqId: string) => {
+    if (!requireCapability('manage_documents')) return;
     const doc = requirementDocs.find(d => d.id === docId);
     if (!doc) return;
 
@@ -2703,29 +2994,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     setRequirementDocs(prev => prev.map(d => (d.id === docId ? nextDoc : d)));
-
-    const previous = estimates.find(e => e.docId === docId && e.status !== 'superseded');
-    const next = buildEstimate(
-      nextDoc,
-      agents,
-      analytics,
-      previous?.rateCard ?? DEFAULT_RATE_CARD,
-      previous,
-      issues
-    );
-    setEstimates(prev => [next, ...prev.filter(e => e.id !== next.id)]);
   };
 
   const sendDocToClient = (docId: string) => {
+    if (!requireCapability('manage_documents')) return;
     updateRequirementDoc(docId, { status: 'awaiting_client' });
-    setEstimates(prev => prev.map(e => (e.docId === docId ? { ...e, status: 'awaiting_client' } : e)));
 
     const doc = requirementDocs.find(d => d.id === docId);
     setInbox(prev => [
       {
         id: `notif-${Date.now()}`,
         type: 'agent_approval',
-        title: `Scope and budget ready for your approval`,
+        title: `Specification ready for your review`,
         message: `${doc?.identifier} — "${doc?.title}" is ready for review. Nothing is built until you approve.`,
         read: false,
         audience: 'client',
@@ -2741,13 +3021,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   /* ---------------------------------------------------------------------
-   * The gate: approving scope and budget converts the spec into a project
+   * The gate: approving the specification converts it into a project.
    * ------------------------------------------------------------------ */
 
-  const approveScopeAndBudget = (docId: string): Project | undefined => {
+  const approveScope = (docId: string): Project | undefined => {
+    if (!requireCapability('approve_scope')) return undefined;
     const doc = requirementDocs.find(d => d.id === docId);
-    const estimate = estimates.find(e => e.docId === docId && e.status !== 'superseded');
-    if (!doc || !estimate) return undefined;
+    if (!doc) return undefined;
 
     const included = doc.functionalRequirements.filter(r => r.included);
     const now = new Date().toISOString();
@@ -2792,7 +3072,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: `iss-${Date.now()}-${i}`,
       identifier: `${key}-${101 + i}`,
       title: req.clientWording,
-      description: `${req.requirement}\n\nFrom ${doc.identifier} (approved rev ${estimate.revision}). Complexity band ${req.band}.`,
+      description: `${req.requirement}\n\nFrom ${doc.identifier} (approved rev ${doc.version}). Complexity band ${req.band}.`,
       status: 'backlog',
       priority: doc.answers.urgency === 'none' ? 'medium' : doc.answers.urgency,
       projectId: project.id,
@@ -2825,18 +3105,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : d
       )
     );
-    setEstimates(prev =>
-      prev.map(e =>
-        e.id === estimate.id ? { ...e, status: 'approved', approvedBy: currentUser.name, approvedAt: now } : e
-      )
-    );
-
     setInbox(prev => [
       {
         id: `notif-${Date.now()}`,
         type: 'agent_completed',
         title: `${doc.identifier} approved — project created`,
-        message: `${doc.clientName} approved scope and budget. ${newIssues.length} issues created in ${project.name} against a $${estimate.buildTotal.toLocaleString()} baseline.`,
+        message: `${doc.clientName} approved the specification. ${newIssues.length} issues created in ${project.name}.`,
         read: false,
         audience: 'internal',
         timestamp: now,
@@ -2850,9 +3124,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return project;
   };
 
-  const rejectEstimate = (docId: string, reason: string) => {
-    updateRequirementDoc(docId, { status: 'in_review' });
-    setEstimates(prev => prev.map(e => (e.docId === docId ? { ...e, status: 'rejected' } : e)));
+  const requestScopeChanges = (docId: string, reason: string) => {
+    if (!requireCapability('approve_scope')) {
+      return;
+    }
+    setRequirementDocs(prev =>
+      prev.map(d => d.id === docId ? { ...d, status: 'in_review', updatedAt: new Date().toISOString() } : d)
+    );
 
     const doc = requirementDocs.find(d => d.id === docId);
     setInbox(prev => [
@@ -2860,7 +3138,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         id: `notif-${Date.now()}`,
         type: 'agent_failed',
         title: `Changes requested on ${doc?.identifier}`,
-        message: reason || 'The client requested changes before approving.',
+        message: reason || 'The client requested changes before approving the specification.',
         read: false,
         audience: 'internal',
         timestamp: new Date().toISOString(),
@@ -2890,30 +3168,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         .map(d => d.projectId);
       return projects.filter(p => mine.includes(p.id));
     }
-    // PM and dev are scoped to their assignment list.
-    //
-    // That list lives in mock user data (`proj-1`…`proj-4`), so once projects
-    // come from the daemon their real ids match nothing and the board renders
-    // empty even though the API returned rows. Until membership is a real
-    // table, an empty assignment list means "not scoped" rather than "nothing".
+    if (role === 'pm') return projects;
+    // Developers fail closed. An empty assignment list means that no project
+    // is currently authorized; it must never silently expand to the whole
+    // workspace because a project URL, search result, or cached board could
+    // expose another team's work.
     const assigned = currentUser.projectIds ?? [];
-    if (assigned.length === 0) return projects;
-
-    const scoped = projects.filter(p => assigned.includes(p.id));
-    return scoped.length > 0 ? scoped : projects;
+    return projects.filter(p => assigned.includes(p.id));
   }, [projects, requirementDocs, role, currentUser]);
 
   const scopedProjectIds = useMemo(() => scopedProjects.map(p => p.id), [scopedProjects]);
 
-  /** A client never sees issues at all; a dev sees only what is theirs. */
+  /** Clients never see internal issues; developers see issues in assigned projects. */
   const scopedIssues = useMemo(() => {
     if (role === 'admin') return issues;
     if (role === 'client') return [];
     const inScope = issues.filter(i => scopedProjectIds.includes(i.projectId));
     if (role === 'pm') return inScope;
-    return inScope.filter(
-      i => i.assignedHuman === currentUser.name || !i.assignedHuman
-    );
+    return inScope;
   }, [issues, scopedProjectIds, role, currentUser]);
 
   /** Specifications: a client sees only their own; staff see their projects'. */
@@ -2923,23 +3195,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return requirementDocs.filter(d => !d.projectId || scopedProjectIds.includes(d.projectId));
   }, [requirementDocs, scopedProjectIds, role, currentUser]);
 
-  const scopedDocIds = useMemo(() => scopedDocs.map(d => d.id), [scopedDocs]);
-
-  /** Pricing follows the specification it belongs to. Devs see no pricing. */
-  const scopedEstimates = useMemo(() => {
-    if (role === 'admin') return estimates;
-    if (role === 'dev') return [];
-    return estimates.filter(e => scopedDocIds.includes(e.docId));
-  }, [estimates, scopedDocIds, role]);
-
-  /** Agents are invisible to clients and narrowed to ownership for devs. */
+  /** Agents are catalog entries: clients cannot see them; developers can browse them. */
   const scopedAgents = useMemo(() => {
     if (role === 'client') return [];
-    if (role === 'dev') return agents.filter(a => a.isMine || a.allowedUsers === 'everyone');
     return agents;
   }, [agents, role]);
 
-  const scopedSquads = useMemo(() => (role === 'client' ? [] : squads), [squads, role]);
+  const scopedSquads = useMemo(() => {
+    if (role === 'client') return [];
+    if (role === 'dev') {
+      // Developer squad visibility is fail-closed. The daemon decorates squad
+      // rows with the workspace owner; legacy/local rows without that field
+      // must not silently become visible to every developer.
+      return identity?.login ? squads.filter(squad => squad.ownerId === identity.login) : [];
+    }
+    return squads;
+  }, [squads, role, identity]);
 
   const scopedDeployments = useMemo(() => {
     if (role === 'admin') return deployments;
@@ -2973,20 +3244,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return chatThreads.filter(t => t.audience !== 'client');
   }, [chatThreads, role, currentUser]);
 
-  /**
-   * Analytics is the same telemetry rendered at three altitudes. A client is
-   * given no token or latency figures at all.
-   */
+  /** Analytics is operational only; clients do not receive internal run data. */
   const scopedAnalytics = useMemo<AnalyticsData>(() => {
     if (role === 'admin' || role === 'pm') return analytics;
     if (role === 'client') {
-      return { ...analytics, agentBreakdown: [], modelBreakdown: [], tokenTimeline: [] };
+      return { ...analytics, agentBreakdown: [], modelBreakdown: [], runTimeline: [] };
     }
-    // A dev sees their own agents' consumption, not the workspace's spend.
+    // A dev sees the activity of their own agents, not the whole workspace.
     const mine = scopedAgents.map(a => a.id);
     return {
       ...analytics,
-      totalCost24h: 0,
       agentBreakdown: analytics.agentBreakdown.filter(b => mine.includes(b.agentId)),
       modelBreakdown: []
     };
@@ -3090,6 +3357,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activeThreadId,
       setActiveThreadId,
       createNewThread,
+      setThreadProject,
+      refreshChatThread,
       deleteThread,
       chatMessages,
       isAgentTyping,
@@ -3110,16 +3379,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       switchRole,
       can,
       visibleTabs,
+      workspaces,
+      activeWorkspaceId,
+      activeWorkspace,
+      workspaceLoading,
+      workspaceSwitching,
+      switchWorkspace,
+      createWorkspace,
+      joinWorkspace,
+      refreshWorkspaces,
+      refreshLiveBuildRoomProjects,
       requirementDocs: scopedDocs,
       submitIntake,
       updateRequirementDoc,
       toggleRequirementIncluded,
       sendDocToClient,
-      estimates: scopedEstimates,
-      estimateForDoc,
-      regenerateEstimate,
-      approveScopeAndBudget,
-      rejectEstimate,
+      approveScope,
+      requestScopeChanges,
     }}>
       {children}
     </AppContext.Provider>

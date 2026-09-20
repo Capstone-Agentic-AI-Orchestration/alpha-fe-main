@@ -23,7 +23,8 @@ import {
 import { SkillCategory } from '@/shared/types';
 
 export const SkillsView: React.FC = () => {
-  const { skills, toggleSkill, agents, scanInstalledSkills, isScanningSkills } = useApp();
+  const { skills, toggleSkill, agents, scanInstalledSkills, isScanningSkills, can } = useApp();
+  const canManageSkills = can('manage_skills');
   
   // Selected skill for centered popup modal
   const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
@@ -123,25 +124,27 @@ export const SkillsView: React.FC = () => {
   };
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans relative">
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-gray-300 select-none font-sans lg:p-6">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Terminal className="w-4 h-4 text-gray-400" />
-          <h1 className="text-sm font-semibold text-white tracking-wide">Skills & Tools</h1>
+          <h1 className="text-base font-semibold tracking-tight text-white">Skills & Tools</h1>
           <span className="text-xs text-gray-500 font-mono">{enabledCount}/{skills.length} enabled</span>
         </div>
 
-        <button
-          onClick={() => void scanInstalledSkills()}
-          disabled={isScanningSkills}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-surface hover:bg-surface-raised text-xs font-medium text-gray-300 hover:text-white disabled:opacity-60 disabled:cursor-wait transition-colors"
-          title="Scan the installed SKILL.md folders on this machine"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isScanningSkills ? 'animate-spin' : ''}`} />
-          <span>{isScanningSkills ? 'Scanning skill folders…' : 'Scan installed skills'}</span>
-        </button>
+        {canManageSkills && (
+          <button
+            onClick={() => void scanInstalledSkills()}
+            disabled={isScanningSkills}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-surface hover:bg-surface-raised text-xs font-medium text-gray-300 hover:text-white disabled:opacity-60 disabled:cursor-wait transition-colors"
+            title="Scan the installed SKILL.md folders on this machine"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isScanningSkills ? 'animate-spin' : ''}`} />
+            <span>{isScanningSkills ? 'Scanning skill folders…' : 'Scan installed skills'}</span>
+          </button>
+        )}
 
       </div>
 

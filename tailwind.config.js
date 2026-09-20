@@ -1,16 +1,16 @@
 /** @type {import('tailwindcss').Config} */
 
 /*
- * Colours resolve through CSS variables so the theme can be swapped at runtime.
+ * Colours resolve through CSS variables so the dark canvas stays consistent
+ * across every surface and component.
  *
  * The app was written dark-only, and not merely in its palette: `text-white`,
  * `border-white/[0.06]` and `bg-white/[0.04]` are white-alpha idioms that only
  * read as elevation on a dark ground. There were ~2,400 such utilities, so
  * rewriting them into semantic names was never going to happen by hand.
  *
- * Redefining `white` and `gray` themselves is what makes a light theme
- * tractable: every one of those utilities keeps its class and changes meaning
- * with the variable. `white` is therefore a role — "the colour that contrasts
+ * Redefining `white` and `gray` keeps the existing utility vocabulary legible
+ * on the dark ground. `white` is therefore a role — "the colour that contrasts
  * with the page" — not a literal. Where a literal white is genuinely wanted, on
  * a brand-coloured button, use `on-accent`.
  *
@@ -67,12 +67,13 @@ export default {
         },
 
         brand: {
-          50: '#eef2ff',
-          100: '#e0e7ff',
-          400: '#818cf8',
-          500: '#6366f1',
-          600: '#4f46e5',
-          DEFAULT: '#6366f1',
+          50: '#faf5ff',
+          100: '#f3e8ff',
+          400: '#a78bfa',
+          500: '#8b5cf6',
+          600: '#7c3aed',
+          700: '#6d28d9',
+          DEFAULT: '#8b5cf6',
         },
         agent: {
           coder: '#38bdf8',

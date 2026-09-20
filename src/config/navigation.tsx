@@ -1,8 +1,9 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, PenLine, FileText, CreditCard, Inbox, MessageSquare, User,
-  CheckSquare, FolderKanban, Rocket, Bot, Users, BarChart3, Monitor, BookOpen, Settings
+  LayoutDashboard, PenLine, FileText, Inbox, MessageSquare,
+  CheckSquare, FolderKanban, Rocket, Bot, Users, BarChart3, Monitor, BookOpen, Settings,
+  RadioTower
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
@@ -30,23 +31,58 @@ import { NavigationTab, UserRole } from '@/shared/types';
  * someone thinks about the work rather than how the code was organised.
  */
 
-export type SectionId = 'workspace' | 'requests' | 'work' | 'ai_ops' | 'delivery' | 'insights' | 'config';
+export type SectionId =
+  | 'portal'
+  | 'my_work'
+  | 'requests'
+  | 'projects'
+  | 'delivery'
+  | 'communication'
+  | 'collaboration'
+  | 'documents'
+  | 'automation'
+  | 'resources'
+  | 'operations'
+  | 'insights'
+  | 'workspace'
+  | 'administration'
+  | 'settings';
 
 export interface NavSection {
   id: SectionId;
   label: string;
+  labels?: Partial<Record<UserRole, string>>;
 }
 
-/** Order is the order they appear in the sidebar. */
+/**
+ * The complete hierarchy is intentionally role-aware. A client should not see
+ * an empty internal section, while a developer needs a clear split between
+ * assigned work, automation, resources, and communication.
+ */
 export const NAV_SECTIONS: NavSection[] = [
-  { id: 'workspace', label: 'Workspace' },
+  { id: 'portal', label: 'Portal', labels: { pm: 'Overview', admin: 'Overview' } },
+  { id: 'my_work', label: 'My Work' },
   { id: 'requests', label: 'Requests' },
-  { id: 'work', label: 'Work' },
-  { id: 'ai_ops', label: 'AI Operations' },
+  { id: 'projects', label: 'Projects' },
   { id: 'delivery', label: 'Delivery' },
+  { id: 'communication', label: 'Communication' },
+  { id: 'collaboration', label: 'Collaboration' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'automation', label: 'Automation' },
+  { id: 'resources', label: 'Resources' },
+  { id: 'operations', label: 'Operations' },
   { id: 'insights', label: 'Insights' },
-  { id: 'config', label: 'Configuration' }
+  { id: 'workspace', label: 'Workspace' },
+  { id: 'administration', label: 'Administration' },
+  { id: 'settings', label: 'Settings' }
 ];
+
+const ROLE_SECTION_ORDER: Record<UserRole, SectionId[]> = {
+  client: ['portal', 'requests', 'communication', 'documents', 'settings'],
+  dev: ['my_work', 'automation', 'resources', 'communication', 'settings'],
+  pm: ['portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'workspace'],
+  admin: ['portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'administration']
+};
 
 export interface NavItem {
   id: NavigationTab;
@@ -65,6 +101,10 @@ export interface NavItem {
   /** One line under the title in the tab bar. */
   subtitle: string;
   section: SectionId;
+  /** Override the hierarchy for a persona without duplicating the item. */
+  sectionByRole?: Partial<Record<UserRole, SectionId>>;
+  /** Reader-friendly labels for the same destination. */
+  labels?: Partial<Record<UserRole, string>>;
   /**
    * The sidebar's current three-way grouping.
    *
@@ -84,28 +124,27 @@ export interface NavItem {
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: 'portal', label: 'Overview', title: 'Overview', subtitle: 'Your requests, progress, and budget', group: 'primary', section: 'workspace', icon: LayoutDashboard },
-  { id: 'inbox', label: 'Inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', group: 'primary', section: 'workspace', icon: Inbox },
-  { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', group: 'primary', section: 'workspace', icon: MessageSquare },
+  { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
+  { id: 'inbox', label: 'Inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: Inbox },
+  { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: MessageSquare },
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
-  { id: 'documents', label: 'Specifications', clientLabel: 'My requests', title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'requests', icon: FileText },
+  { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
 
-  { id: 'my_issues', label: 'My Issues', title: 'My Issues', subtitle: 'Tasks assigned to you across projects', group: 'primary', section: 'work', icon: User },
-  { id: 'issues', label: 'Issues', title: 'Issues & Tasks', subtitle: 'Kanban board & issue tracking', group: 'workspace', section: 'work', icon: CheckSquare },
-  { id: 'projects', label: 'Projects', title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'work', icon: FolderKanban },
+  { id: 'issues', label: 'Issues', labels: { pm: 'All Issues', admin: 'All Issues' }, title: 'Issues', subtitle: 'Assigned work and project issues', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'delivery', admin: 'delivery' }, icon: CheckSquare },
+  { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
 
-  { id: 'agents', label: 'Agents', title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'workspace', section: 'ai_ops', icon: Bot },
-  { id: 'squads', label: 'Squads', title: 'Agent Squads', subtitle: 'Configure multi-agent topologies', group: 'workspace', section: 'ai_ops', icon: Users },
-  { id: 'runtimes', label: 'Runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', group: 'configure', section: 'ai_ops', icon: Monitor },
-  { id: 'skills', label: 'Skills', title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'ai_ops', icon: BookOpen },
+  { id: 'agents', label: 'Agents', labels: { dev: 'Agent Directory' }, title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'workspace', section: 'automation', icon: Bot },
+  { id: 'squads', label: 'Squads', labels: { dev: 'My Squads', pm: 'Project Squads', admin: 'All Squads' }, title: 'Agent Squads', subtitle: 'Configure multi-agent topologies', group: 'workspace', section: 'automation', icon: Users },
+  { id: 'live_build_room', label: 'Live Build Room', labels: { pm: 'Build Rooms', admin: 'Build Rooms' }, title: 'Live Build Room', subtitle: 'Observe project squad execution in real time', group: 'workspace', section: 'automation', icon: RadioTower },
+  { id: 'runtimes', label: 'Runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Monitor },
+  { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
 
-  { id: 'deployments', label: 'CI/CD Platform', title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'delivery', icon: Rocket },
+  { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket },
 
-  { id: 'analytics', label: 'Analytics', title: 'Token & Cost Analytics', subtitle: 'Token consumption & model latency', group: 'workspace', section: 'insights', icon: BarChart3 },
-  { id: 'billing', label: 'Billing & Usage', title: 'Billing & Usage', subtitle: 'Committed client value and agent compute', group: 'workspace', section: 'insights', icon: CreditCard },
+  { id: 'analytics', label: 'Analytics', labels: { pm: 'Delivery Health', admin: 'Delivery Health' }, title: 'Operational Analytics', subtitle: 'Run health, delivery activity, and performance', group: 'workspace', section: 'insights', icon: BarChart3 },
 
-  { id: 'settings', label: 'Settings', title: 'Workspace Settings', subtitle: 'Preferences, keys, and autonomy governance', group: 'configure', section: 'config', icon: Settings }
+  { id: 'settings', label: 'Settings', labels: { admin: 'Workspace Settings' }, title: 'Workspace Settings', subtitle: 'Preferences, keys, and autonomy governance', group: 'configure', section: 'settings', sectionByRole: { pm: 'workspace', admin: 'administration' }, icon: Settings }
 ];
 
 const BY_ID = new Map(NAV_ITEMS.map(item => [item.id, item]));
@@ -121,7 +160,7 @@ export function navItem(id: NavigationTab): NavItem {
 export const navLabel = (id: NavigationTab, role: UserRole): string => {
   const item = BY_ID.get(id);
   if (!item) return id;
-  return role === 'client' && item.clientLabel ? item.clientLabel : item.label;
+  return item.labels?.[role] ?? (role === 'client' && item.clientLabel ? item.clientLabel : item.label);
 };
 
 export const navTitle = (id: NavigationTab): string => BY_ID.get(id)?.title ?? id;
@@ -140,19 +179,19 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  *
  * This is *navigation* only. What someone may **do** once they arrive is the
  * `Capability` union in AppContext, which is deliberately separate: hiding a
- * tab is not a permission, and a role that can open Billing is not necessarily
- * one that can change it.
+ * tab is not a permission, and a role that can open Analytics is not
+ * necessarily one that can change workspace settings.
  */
 export const ROLE_NAV: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
-  dev: ['my_issues', 'issues', 'documents', 'inbox', 'chat', 'agents', 'deployments', 'runtimes', 'skills', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
   pm: [
-    'inbox', 'chat', 'my_issues', 'issues', 'projects', 'documents',
-    'deployments', 'agents', 'squads', 'analytics', 'runtimes', 'skills', 'settings'
+    'portal', 'projects', 'issues', 'documents', 'inbox', 'chat',
+    'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
   ],
   admin: [
-    'inbox', 'chat', 'my_issues', 'issues', 'projects', 'documents', 'billing',
-    'deployments', 'agents', 'squads', 'analytics', 'runtimes', 'skills', 'settings'
+    'portal', 'projects', 'issues', 'documents', 'inbox', 'chat',
+    'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
   ]
 };
 
@@ -162,11 +201,19 @@ export const landingTab = (role: UserRole): NavigationTab => ROLE_NAV[role][0];
 /** A role's destinations, grouped for the sidebar, empty sections dropped. */
 export function sectionsFor(role: UserRole): Array<{ section: NavSection; items: NavItem[] }> {
   const allowed = new Set(ROLE_NAV[role]);
-  return NAV_SECTIONS
-    .map(section => ({
-      section,
-      items: NAV_ITEMS.filter(item => item.section === section.id && allowed.has(item.id))
-    }))
+  const byId = new Map(NAV_SECTIONS.map(section => [section.id, section]));
+  return ROLE_SECTION_ORDER[role]
+    .map(sectionId => {
+      const section = byId.get(sectionId);
+      if (!section) return null;
+      return {
+        section: { ...section, label: section.labels?.[role] ?? section.label },
+        items: NAV_ITEMS.filter(item =>
+          allowed.has(item.id) && (item.sectionByRole?.[role] ?? item.section) === sectionId
+        )
+      };
+    })
+    .filter((group): group is { section: NavSection; items: NavItem[] } => Boolean(group))
     .filter(group => group.items.length > 0);
 }
 

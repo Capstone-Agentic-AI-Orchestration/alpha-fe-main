@@ -2,14 +2,13 @@ export type NavigationTab =
   | 'portal'
   | 'intake'
   | 'documents'
-  | 'billing'
   | 'inbox'
   | 'chat'
-  | 'my_issues'
   | 'issues'
   | 'projects'
   | 'agents'
   | 'squads'
+  | 'live_build_room'
   | 'analytics'
   | 'runtimes'
   | 'skills'
@@ -543,6 +542,71 @@ export interface Squad {
   mission: string;
   activeRunsCount: number;
   completedRunsCount: number;
+  /** Workspace-level owner used to scope developer-owned reusable squads. */
+  ownerId?: string;
+}
+
+export type LiveBuildRoomCardStatus = 'completed' | 'running' | 'waiting' | 'review' | 'failed' | 'idle';
+
+export interface LiveBuildRoomPhase {
+  id: string;
+  label: string;
+  description: string;
+  status: 'completed' | 'running' | 'waiting' | 'failed';
+  progress: number;
+}
+
+export interface LiveBuildRoomAgentCard {
+  agentId: string;
+  agentName: string;
+  agentRole: string;
+  avatar?: string;
+  color?: string;
+  status: LiveBuildRoomCardStatus;
+  progress: number;
+  currentTask: string;
+  currentStage?: string;
+  runId?: string;
+  activity: RunActivity[];
+  updatedAt?: string | null;
+  output?: { kind: string; label: string; value: string };
+}
+
+export interface LiveBuildRoomSnapshot {
+  project: Pick<Project, 'id' | 'name' | 'key' | 'description' | 'color' | 'status'>;
+  squad: Squad & { projectIds: string[]; memberCount: number };
+  squads: Array<Squad & { assignment?: WorkspaceSquadProjectAssignment }>;
+  eligible: boolean;
+  canRun: boolean;
+  canManage: boolean;
+  status: SquadRun['status'] | 'idle';
+  summary: {
+    totalAgents: number;
+    completed: number;
+    running: number;
+    waiting: number;
+    progress: number;
+  };
+  phases: LiveBuildRoomPhase[];
+  issue?: Issue;
+  activeRun: (SquadRun & { memberRuns: PrototypeRun[]; activities: RunActivity[] }) | null;
+  agentCards: LiveBuildRoomAgentCard[];
+  activity: RunActivity[];
+  handoff: {
+    from: string;
+    to: string;
+    current?: string;
+    next?: string;
+  };
+  artifacts: Array<{
+    id: string;
+    name: string;
+    kind: string;
+    detail: string;
+    status: string;
+    runId: string;
+  }>;
+  lastUpdated: string;
 }
 
 export type RuntimeType = 'local' | 'cloud' | 'remote';
@@ -677,7 +741,6 @@ export interface InboxNotification {
     agentRole?: string;
     issueIdentifier?: string;
     proposedChanges?: string;
-    costTokens?: number;
   };
 }
 
@@ -700,6 +763,11 @@ export interface ChatMessage {
   thinkingProcess?: string;
   toolsExecuted?: ToolExecutionRecord[];
   isStreaming?: boolean;
+  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call';
+  agentCallId?: string;
+  operationMode?: AgentCallMode;
+  agentCallStatus?: AgentCallStatus;
+  revisionTarget?: AgentCallTarget;
 }
 
 export interface ChatThread {
@@ -731,15 +799,107 @@ export interface ChatThread {
   createdAt?: string;
 }
 
+export type AgentCallMode = 'ask' | 'review' | 'revise' | 'implement';
+export type AgentCallStatus =
+  | 'draft'
+  | 'queued'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'awaiting_confirmation';
+
+export type AgentCallTargetType =
+  | 'message'
+  | 'agent_response'
+  | 'issue'
+  | 'specification'
+  | 'file'
+  | 'code'
+  | 'branch'
+  | 'commit'
+  | 'pull_request'
+  | 'diff';
+
+export interface AgentCallTarget {
+  type: AgentCallTargetType;
+  id: string;
+  label?: string;
+}
+
+export interface AgentCallArtifact {
+  id: string;
+  agentCallId: string;
+  artifactType: 'summary' | 'finding' | 'diff' | 'patch' | 'test_result' | 'file_reference' | 'log';
+  path?: string;
+  contentReference?: string;
+  content?: string;
+  createdAt: string;
+}
+
+export interface AgentCall {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  threadId: string;
+  messageId?: string;
+  squadId: string;
+  agentId: string;
+  requestedBy: string;
+  operationMode: AgentCallMode;
+  status: AgentCallStatus;
+  revisionTarget?: AgentCallTarget;
+  instruction: string;
+  workingCopyId?: string;
+  resultMessageId?: string;
+  error?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  artifacts: AgentCallArtifact[];
+}
+
+export interface ProjectChatAgent {
+  id: string;
+  name: string;
+  role: string;
+  description?: string;
+  avatar?: string;
+  color?: string;
+  squadId: string;
+  squadName: string;
+  availability: 'ready';
+  supportedModes: AgentCallMode[];
+}
+
+export interface ProjectChatSnapshot {
+  project: {
+    id: string;
+    name: string;
+    key: string;
+    branch?: string;
+    workingCopy: {
+      status: 'connected' | 'not_connected';
+      managed: boolean;
+    };
+    assignedSquadNames: string[];
+  };
+  squads: Array<{
+    id: string;
+    name: string;
+    agents: ProjectChatAgent[];
+  }>;
+  agents: ProjectChatAgent[];
+}
+
 export interface AnalyticsData {
-  totalTokens24h: number;
-  totalCost24h: number;
+  totalRuns24h: number;
   avgLatencyMs: number;
   totalAgentRuns: number;
   successRate: number;
-  tokenTimeline: { hour: string; promptTokens: number; completionTokens: number; cost: number }[];
-  agentBreakdown: { agentId: string; agentName: string; tokens: number; cost: number; runs: number; efficiency: number }[];
-  modelBreakdown: { modelName: string; percentage: number; cost: number; totalCalls: number }[];
+  runTimeline: { hour: string; runs: number; completed: number; failed: number }[];
+  agentBreakdown: { agentId: string; agentName: string; runs: number; efficiency: number }[];
+  modelBreakdown: { modelName: string; percentage: number; totalCalls: number }[];
 }
 
 export interface WorkspaceSettings {
@@ -804,6 +964,40 @@ export interface Identity {
 
 export type UserRole = 'client' | 'dev' | 'pm' | 'admin';
 
+/** A product workspace membership returned by the daemon. */
+export interface WorkspaceSummary {
+  id: string;
+  name: string;
+  slug: string;
+  status: 'active' | 'archived';
+  role: UserRole;
+  memberCount: number;
+  joinCode?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceProjectAssignment {
+  id: string;
+  workspaceId: string;
+  projectId: string;
+  userId: string;
+  status: 'active' | 'removed';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WorkspaceSquadProjectAssignment {
+  id: string;
+  workspaceId: string;
+  squadId: string;
+  projectId: string;
+  relationship: 'owned' | 'assigned';
+  status: 'active' | 'removed';
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface User {
   id: string;
   name: string;
@@ -820,14 +1014,14 @@ export interface User {
  * Requirement documents (client intake -> specification)
  * ------------------------------------------------------------------------ */
 
-/** Sizing band the architect assigns per requirement. Drives the estimate. */
+/** Sizing band the architect assigns per requirement for delivery planning. */
 export type ComplexityBand = 'S' | 'M' | 'L' | 'XL';
 
 export type RequirementDocStatus =
   | 'draft'          // wizard answers captured, not yet compiled
   | 'in_review'      // compiled, PM refining
-  | 'awaiting_client'// sent to client with an estimate attached
-  | 'approved'       // scope + budget signed off
+  | 'awaiting_client'// sent to client for scope review
+  | 'approved'       // scope signed off
   | 'superseded';
 
 export type RequestTrack = 'quick_task' | 'project';
@@ -840,7 +1034,7 @@ export interface FunctionalRequirement {
   requirement: string;
   band: ComplexityBand;
   acceptanceCriteria: string[];
-  /** Client can drop this at the approval gate; recalculates the estimate. */
+  /** Client can drop this at the approval gate before scope is approved. */
   included: boolean;
 }
 
@@ -860,7 +1054,6 @@ export interface IntakeAnswers {
   concerns: string[];
   // Step 4 - constraints & references
   targetDate: string;
-  budgetCeiling?: number;
   expectedUsers: number;
   integrations: string;
   attachments: { id: string; name: string; sizeKb: number }[];
@@ -887,74 +1080,9 @@ export interface RequirementDoc {
   nonFunctionalRequirements: string[];
   constraints: string[];
   outOfScope: string[];
-  estimateId?: string;
   projectId?: string;        // set once converted
   approvedBy?: string;
   approvedAt?: string;
   createdAt: string;
   updatedAt: string;
 }
-
-/* ---------------------------------------------------------------------------
- * Cost estimation
- * ------------------------------------------------------------------------ */
-
-/** One-time build vs recurring monthly vs usage-priced. Never blended. */
-export type CostClass = 'build' | 'infrastructure' | 'service';
-export type CostCadence = 'one_time' | 'monthly' | 'per_transaction';
-
-export interface EstimateLine {
-  id: string;
-  label: string;
-  costClass: CostClass;
-  cadence: CostCadence;
-  /** What this figure rests on, shown to the client verbatim. */
-  basis: string;
-  amount: number;
-  /** Fractional confidence band, e.g. 0.18 renders as +/-18%. */
-  confidence: number;
-  /** Requirement that forces this cost, for service lines. */
-  forcedBy?: string;
-  /** Free-text override when the figure is not a plain number. */
-  displayOverride?: string;
-}
-
-export interface RateCard {
-  devHourly: number;
-  pmHourly: number;
-  qaHourly: number;
-  /** Blended USD per million tokens, derived from live analytics. */
-  tokenRatePerMillion: number;
-  /** PM-applied contingency on the build total, e.g. 0.1 for 10%. */
-  contingency: number;
-}
-
-export type EstimateStatus = 'draft' | 'awaiting_client' | 'approved' | 'rejected' | 'superseded';
-
-export interface Estimate {
-  id: string;
-  identifier: string;        // EST-1042
-  docId: string;
-  revision: number;
-  status: EstimateStatus;
-  lines: EstimateLine[];
-  rateCard: RateCard;
-  buildTotal: number;
-  buildLow: number;
-  buildHigh: number;
-  monthlyTotal: number;
-  monthlyLow: number;
-  monthlyHigh: number;
-  /**
-   * Count of genuinely comparable finished requirements behind these ranges.
-   * 0 means no history — the figures are seeded defaults, not measurements.
-   */
-  comparableSampleSize: number;
-  /** False while history is too thin to treat the bands as evidenced. */
-  calibrated: boolean;
-  approvedBy?: string;
-  approvedAt?: string;
-  createdAt: string;
-}
-
-/** Actual spend accrued against an approved estimate. */

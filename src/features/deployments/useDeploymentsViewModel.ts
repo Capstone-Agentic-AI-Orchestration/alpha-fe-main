@@ -15,7 +15,7 @@ export interface LiveWorkflowRun {
 }
 
 export function useDeploymentsViewModel() {
-  const { deployments, agents, issues, projects, showToast } = useApp();
+  const { deployments, agents, issues, projects, showToast, can } = useApp();
   const [liveRuns, setLiveRuns] = useState<LiveWorkflowRun[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
   const [failedLogs, setFailedLogs] = useState<string | null>(null);
@@ -72,6 +72,10 @@ export function useDeploymentsViewModel() {
   };
 
   const triggerSelfHealing = async (runId: number) => {
+    if (!can('run_agents')) {
+      showToast('Permission required', 'Your role cannot dispatch self-healing agent runs.', 'error');
+      return;
+    }
     setIsSelfHealing(true);
     try {
       const devopsAgent =

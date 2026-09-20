@@ -16,11 +16,28 @@ import {
   McpServerInput,
   RemoteAction,
   Identity,
-  AnalyticsData
+  AnalyticsData,
+  WorkspaceSummary,
+  WorkspaceProjectAssignment,
+  WorkspaceSquadProjectAssignment,
+  LiveBuildRoomSnapshot,
+  UserRole,
+  AgentCall,
+  ProjectChatSnapshot,
+  AgentCallMode,
+  AgentCallTarget,
+  ChatMessage as ProjectChatMessage
 } from '@/shared/types';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_TOKEN = import.meta.env.VITE_ALPHA_LOCAL_TOKEN;
+let activeWorkspaceId: string | null = null;
+
+/** Bind subsequent daemon calls to the selected product workspace. */
+export function setActiveWorkspaceId(workspaceId: string | null): void {
+  activeWorkspaceId = workspaceId;
+}
 
 const SKILL_CATEGORIES: Skill['category'][] = [
   'File Operations',
@@ -120,7 +137,11 @@ export function normalizeGitHubRepo(value: unknown): string | undefined {
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
+      ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {})
+    },
     ...options
   });
   if (!res.ok) {
@@ -159,6 +180,40 @@ export const apiService = {
 
   /** Who the daemon thinks you are — a GitHub login where one is available. */
   getIdentity: () => fetchJson<Identity>('/me'),
+  getWorkspaces: () => fetchJson<WorkspaceSummary[]>('/workspaces'),
+  createWorkspace: (payload: { name: string; slug?: string }) =>
+    fetchJson<WorkspaceSummary>('/workspaces', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+  joinWorkspace: (code: string) =>
+    fetchJson<WorkspaceSummary>('/workspaces/join', {
+      method: 'POST',
+      body: JSON.stringify({ code })
+    }),
+  getWorkspaceMembers: (workspaceId: string) =>
+    fetchJson<Array<{ id: string; userId: string; role: UserRole; status: string; createdAt: string; updatedAt: string }>>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/members`
+    ),
+  updateWorkspaceMember: (workspaceId: string, memberId: string, updates: { role?: UserRole; status?: string }) =>
+    fetchJson(`/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(memberId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(updates)
+    }),
+  getProjectAssignments: (workspaceId: string, projectId: string) =>
+    fetchJson<WorkspaceProjectAssignment[]>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/assignments`
+    ),
+  assignProjectMember: (workspaceId: string, projectId: string, userId: string) =>
+    fetchJson<WorkspaceProjectAssignment>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/assignments/${encodeURIComponent(userId)}`,
+      { method: 'PUT' }
+    ),
+  removeProjectMember: (workspaceId: string, projectId: string, userId: string) =>
+    fetchJson<{ success: boolean }>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/assignments/${encodeURIComponent(userId)}`,
+      { method: 'DELETE' }
+    ),
   getProjects: async (): Promise<Project[]> => {
     try {
       return await fetchJson<Project[]>('/projects');
@@ -415,6 +470,22 @@ export const apiService = {
     fetchJson<Squad>(`/squads/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteSquad: (id: string) =>
     fetchJson<{ success: boolean }>(`/squads/${id}`, { method: 'DELETE' }),
+  getSquadProjectAssignments: (squadId: string) =>
+    fetchJson<WorkspaceSquadProjectAssignment[]>(`/squads/${encodeURIComponent(squadId)}/projects`),
+  assignSquadToProject: (squadId: string, projectId: string, relationship: 'owned' | 'assigned' = 'assigned') =>
+    fetchJson<WorkspaceSquadProjectAssignment>(
+      `/squads/${encodeURIComponent(squadId)}/projects/${encodeURIComponent(projectId)}`,
+      { method: 'PUT', body: JSON.stringify({ relationship }) }
+    ),
+  removeSquadFromProject: (squadId: string, projectId: string) =>
+    fetchJson<{ success: boolean }>(
+      `/squads/${encodeURIComponent(squadId)}/projects/${encodeURIComponent(projectId)}`,
+      { method: 'DELETE' }
+    ),
+  getLiveBuildRoom: (projectId: string) =>
+    fetchJson<LiveBuildRoomSnapshot>(`/projects/${encodeURIComponent(projectId)}/live-build-room`),
+  getLiveBuildRoomProjects: () =>
+    fetchJson<Array<Pick<Project, 'id' | 'key' | 'name' | 'color'>>>('/live-build-room/projects'),
 
   // Skills
   getSkills: async (): Promise<Skill[]> => {
@@ -496,6 +567,49 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  getProjectChatAgents: (projectId: string) =>
+    fetchJson<ProjectChatSnapshot>(`/projects/${encodeURIComponent(projectId)}/chat/available-agents`),
+  createAgentCall: (
+    projectId: string,
+    threadId: string,
+    payload: {
+      squadId: string;
+      agentId: string;
+      mode: AgentCallMode;
+      target?: AgentCallTarget;
+      instruction: string;
+      senderName?: string;
+    }
+  ) =>
+    fetchJson<{ call: AgentCall; userMessage: ProjectChatMessage; agentMessage?: ProjectChatMessage }>(
+      `/projects/${encodeURIComponent(projectId)}/chat/threads/${encodeURIComponent(threadId)}/agent-calls`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+  getAgentCall: (id: string) =>
+    fetchJson<{ call: AgentCall; agentMessage?: ProjectChatMessage }>(`/agent-calls/${encodeURIComponent(id)}`),
+  getThreadAgentCalls: (projectId: string, threadId: string) =>
+    fetchJson<{ calls: AgentCall[] }>(
+      `/projects/${encodeURIComponent(projectId)}/chat/threads/${encodeURIComponent(threadId)}/agent-calls`
+    ),
+  confirmAgentCall: (id: string) =>
+    fetchJson<{ call: AgentCall; agentMessage?: ProjectChatMessage }>(`/agent-calls/${encodeURIComponent(id)}/confirm`, {
+      method: 'POST', body: JSON.stringify({})
+    }),
+  applyAgentCallPatch: (id: string) =>
+    fetchJson<{ call: AgentCall; message: ProjectChatMessage }>(`/agent-calls/${encodeURIComponent(id)}/apply-patch`, {
+      method: 'POST', body: JSON.stringify({ confirmed: true })
+    }),
+  cancelAgentCall: (id: string) =>
+    fetchJson<{ call: AgentCall }>(`/agent-calls/${encodeURIComponent(id)}/cancel`, { method: 'POST' }),
+  retryAgentCall: (id: string) =>
+    fetchJson<{ call: AgentCall; agentMessage?: ProjectChatMessage }>(`/agent-calls/${encodeURIComponent(id)}/retry`, {
+      method: 'POST', body: JSON.stringify({})
+    }),
+  followUpAgentCall: (id: string, instruction: string) =>
+    fetchJson<{ call: AgentCall; userMessage: ProjectChatMessage; agentMessage?: ProjectChatMessage }>(
+      `/agent-calls/${encodeURIComponent(id)}/follow-up`,
+      { method: 'POST', body: JSON.stringify({ instruction }) }
+    ),
 
   // GitHub Core
   getGitHubAuth: () =>
@@ -520,7 +634,7 @@ export const apiService = {
     }>('/github/auth'),
   getGitHubRepos: () => fetchJson<any[]>('/github/repos'),
   getGitHubRuns: (cwd?: string) => fetchJson<any[]>(`/github/runs${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
-  dispatchWorkflow: (payload: { cwd: string; workflow?: string; ref?: string; inputs?: Record<string, string> }) =>
+  dispatchWorkflow: (payload: { projectId: string; cwd: string; workflow?: string; ref?: string; inputs?: Record<string, string> }) =>
     fetchJson<{ workflow: string; ref: string; ownerRepo?: string }>('/github/dispatch', {
       method: 'POST',
       body: JSON.stringify(payload)

@@ -29,6 +29,8 @@ interface Props {
   agentId: string;
   /** Bumped by the parent when the agent record changes, to force a reload. */
   refreshKey?: number;
+  /** Developers can inspect persona files without changing the daemon. */
+  readOnly?: boolean;
 }
 
 const PLACEHOLDER = `---
@@ -40,7 +42,7 @@ model: claude-opus-5
 
 You are Ada. Lead with the interface, then the implementation.`;
 
-export function PersonaFileEditor({ agentId, refreshKey }: Props) {
+export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Props) {
   const [file, setFile] = useState<AgentPersonaFile | null>(null);
   const [draft, setDraft] = useState('');
   const [loading, setLoading] = useState(true);
@@ -73,6 +75,7 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
   const dirty = draft !== onDisk.current;
 
   const save = async () => {
+    if (readOnly) return;
     setSaving(true);
     setError(null);
     try {
@@ -95,7 +98,7 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
   const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
-      if (dirty && !saving) void save();
+      if (!readOnly && dirty && !saving) void save();
     }
   };
 
@@ -164,7 +167,7 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
             <Download size={11} /> Export
           </button>
 
-          <button
+          {!readOnly && <button
             onClick={() => {
               setDraft(onDisk.current);
               setError(null);
@@ -173,16 +176,16 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border border-white/10 text-gray-400 hover:text-white hover:border-white/30 disabled:opacity-30 disabled:hover:text-gray-400 disabled:hover:border-white/10 transition-colors"
           >
             <RotateCcw size={11} /> Revert
-          </button>
+          </button>}
 
-          <button
+          {!readOnly && <button
             onClick={() => void save()}
             disabled={!dirty || saving}
             className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-white text-canvas hover:bg-gray-200 disabled:opacity-30 disabled:hover:bg-white transition-colors"
           >
             {saving ? <Loader2 size={11} className="animate-spin" /> : <Save size={11} />}
             Save
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -218,6 +221,7 @@ export function PersonaFileEditor({ agentId, refreshKey }: Props) {
         spellCheck={false}
         value={draft}
         placeholder={PLACEHOLDER}
+        readOnly={readOnly}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={onKeyDown}
         className="w-full bg-well border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30 resize-y"

@@ -27,8 +27,12 @@ export const InboxView: React.FC = () => {
     setActiveTab,
     runAgentOnIssue,
     prototypeRuns,
-    retryPrototypeRun
+    retryPrototypeRun,
+    can
   } = useApp();
+
+  const canApprove = can('approve_runs');
+  const canRunAgents = can('run_agents');
 
   const [selectedNotifId, setSelectedNotifId] = useState<string | null>(inbox[0]?.id || null);
   const [showArchived, setShowArchived] = useState(false);
@@ -64,7 +68,7 @@ export const InboxView: React.FC = () => {
   return (
     <div className="h-full flex overflow-hidden bg-shell text-gray-200 text-sm">
       {/* Left Column: Notifications Feed (Spacious & Scaled) */}
-      <div className="w-96 md:w-[420px] border-r border-white/[0.06] flex flex-col flex-shrink-0 bg-shell">
+      <div className="flex w-80 flex-shrink-0 flex-col border-r border-white/[0.06] bg-shell md:w-96">
         {/* Inbox Header */}
         <div className="h-14 px-5 border-b border-white/[0.06] flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -167,7 +171,7 @@ export const InboxView: React.FC = () => {
       {/* Right Column: Notification Inspector / Empty State */}
       <div className="flex-1 flex flex-col h-full overflow-y-auto relative bg-shell">
         {selectedNotif ? (
-          <div className="p-8 md:p-10 max-w-4xl space-y-7 animate-fade-in">
+          <div className="max-w-3xl space-y-6 p-6 animate-fade-in md:p-8">
             {/* Top Row: Title + Author */}
             <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] pb-6">
               <div className="space-y-2.5">
@@ -214,7 +218,7 @@ export const InboxView: React.FC = () => {
                 <p className="text-xs text-rose-200/90 leading-relaxed font-mono">
                   {selectedNotif.message}
                 </p>
-                {selectedNotif.entityType === 'issue' && selectedNotif.entityId && (
+                {canRunAgents && selectedNotif.entityType === 'issue' && selectedNotif.entityId && (
                   <button
                     onClick={() => {
                       const failedRun = prototypeRuns.find(run =>
@@ -240,11 +244,6 @@ export const InboxView: React.FC = () => {
                     <Bot className="w-4.5 h-4.5" />
                     <span>Agent Pull Request & Patch Review</span>
                   </div>
-                  {selectedNotif.meta?.costTokens && (
-                    <span className="font-mono text-cyan-300 text-xs bg-cyan-500/10 px-2.5 py-1 rounded-md border border-cyan-500/20 font-medium">
-                      Tokens: {selectedNotif.meta.costTokens.toLocaleString()}
-                    </span>
-                  )}
                 </div>
 
                 {/* Git branch & PR */}
@@ -270,7 +269,7 @@ export const InboxView: React.FC = () => {
                 )}
 
                 {/* Approve / Reject Actions */}
-                {!selectedNotif.approvalStatus || selectedNotif.approvalStatus === 'pending' ? (
+                {canApprove && (!selectedNotif.approvalStatus || selectedNotif.approvalStatus === 'pending') ? (
                   <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
                     <button
                       onClick={() => handleApproval(selectedNotif.id, 'rejected')}

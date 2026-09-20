@@ -16,6 +16,7 @@ import {
   stripBuilderDraft
 } from '@/features/agents/builderProtocol';
 import { Sparkles, Send, ArrowRight, AlertTriangle } from 'lucide-react';
+import { useApp } from '@/app/AppContext';
 
 interface AgentBuilderPanelProps {
   draft: AgentDraft;
@@ -59,6 +60,8 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
   onBack,
   onReview
 }) => {
+  const { can } = useApp();
+  const canManageAgents = can('manage_agents');
   const [composer, setComposer] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -86,6 +89,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
     onSessionChange({ ...session, messages: [...base, message] });
 
   const send = async (text: string) => {
+    if (!canManageAgents) return;
     const request = text.trim();
     if (!request || busy) return;
 

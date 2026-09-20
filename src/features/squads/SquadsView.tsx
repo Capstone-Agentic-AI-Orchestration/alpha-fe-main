@@ -1,6 +1,8 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/app/AppContext';
 import { SquadTopology } from '@/shared/types';
+import type { WorkspaceSquadProjectAssignment } from '@/shared/types';
+import { apiService } from '@/shared/services/apiService';
 import { 
   Users, 
   Plus, 
@@ -19,7 +21,9 @@ import { CreateSquadModal } from '@/features/squads/CreateSquadModal';
 import { SquadRunFlow } from '@/features/runs/SquadRunFlow';
 
 export const SquadsView: React.FC = () => {
-  const { squads, agents, issues, projects, triggerSquadRun } = useApp();
+  const { squads, agents, issues, projects, triggerSquadRun, can, showToast, refreshLiveBuildRoomProjects } = useApp();
+  const canManageSquads = can('manage_squads');
+  const canRunSquads = can('run_squads');
 
   /**
    * Which squad is waiting to be pointed at an issue.
@@ -54,12 +58,53 @@ export const SquadsView: React.FC = () => {
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
   
   // Active sub-tab inside centered modal
-  const [modalTab, setModalTab] = useState<'flow' | 'members' | 'mission' | 'metrics'>('flow');
+  const [modalTab, setModalTab] = useState<'flow' | 'members' | 'projects' | 'mission' | 'metrics'>('flow');
+  const [projectAssignments, setProjectAssignments] = useState<WorkspaceSquadProjectAssignment[]>([]);
+  const [assignmentBusy, setAssignmentBusy] = useState<string | null>(null);
 
   // Selected squad memo
   const selectedSquad = useMemo(() => {
     return squads.find(s => s.id === selectedSquadId) || null;
   }, [squads, selectedSquadId]);
+
+  useEffect(() => {
+    if (!selectedSquadId) {
+      setProjectAssignments([]);
+      return;
+    }
+    let cancelled = false;
+    apiService.getSquadProjectAssignments(selectedSquadId)
+      .then(assignments => {
+        if (!cancelled) setProjectAssignments(assignments);
+      })
+      .catch(() => {
+        if (!cancelled) setProjectAssignments([]);
+      });
+    return () => { cancelled = true; };
+  }, [selectedSquadId]);
+
+  const toggleProjectAssignment = async (projectId: string) => {
+    if (!selectedSquad || !canManageSquads) return;
+    const existing = projectAssignments.find(assignment => assignment.projectId === projectId && assignment.status === 'active');
+    setAssignmentBusy(projectId);
+    try {
+      if (existing) {
+        await apiService.removeSquadFromProject(selectedSquad.id, projectId);
+        setProjectAssignments(prev => prev.filter(assignment => assignment.projectId !== projectId));
+        await refreshLiveBuildRoomProjects();
+        showToast('Squad unassigned', `${selectedSquad.name} is no longer attached to this project.`, 'success');
+      } else {
+        const assignment = await apiService.assignSquadToProject(selectedSquad.id, projectId, 'assigned');
+        setProjectAssignments(prev => [...prev.filter(item => item.projectId !== projectId), assignment]);
+        await refreshLiveBuildRoomProjects();
+        showToast('Squad assigned', `${selectedSquad.name} can now open this project's Live Build Room.`, 'success');
+      }
+    } catch (error: any) {
+      showToast('Assignment failed', error?.message || 'The squad could not be assigned to this project.', 'error');
+    } finally {
+      setAssignmentBusy(null);
+    }
+  };
 
   // Topology Descriptions
   const getTopologyDescription = (top: SquadTopology) => {
@@ -98,24 +143,26 @@ export const SquadsView: React.FC = () => {
   }, [squads, topologyFilter, searchQuery, sortBy, sortOrder]);
 
   return (
-    <div className="h-full flex flex-col overflow-y-auto bg-canvas text-gray-300 p-6 space-y-6 select-none font-sans relative">
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-gray-300 select-none font-sans lg:p-6">
       
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Users className="w-4 h-4 text-gray-400" />
-          <h1 className="text-sm font-semibold text-white tracking-wide">Squads</h1>
+          <h1 className="text-base font-semibold tracking-tight text-white">Squads</h1>
           <span className="text-xs text-gray-500 font-mono">{squads.length}</span>
         </div>
 
         {/* + Form squad button */}
-        <button
-          onClick={() => setCreateModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Form squad</span>
-        </button>
+        {canManageSquads && (
+          <button
+            onClick={() => setCreateModalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            <span>Form squad</span>
+          </button>
+        )}
       </div>
 
       {/* ================= SEARCH & ACTION ROW ================= */}
@@ -336,16 +383,18 @@ export const SquadsView: React.FC = () => {
 
                 {/* 6. Launch Action */}
                 <div className="col-span-1 text-right">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setLaunchSquadId(squad.id);
-                    }}
-                    className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors"
-                    title="Launch Swarm Run"
-                  >
-                    <Play className="w-3.5 h-3.5 fill-current" />
-                  </button>
+                  {canRunSquads && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setLaunchSquadId(squad.id);
+                      }}
+                      className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors"
+                      title="Launch Swarm Run"
+                    >
+                      <Play className="w-3.5 h-3.5 fill-current" />
+                    </button>
+                  )}
                 </div>
               </div>
             );
@@ -398,13 +447,15 @@ export const SquadsView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setLaunchSquadId(selectedSquad.id)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs transition-colors"
-                >
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Launch Run</span>
-                </button>
+                {canRunSquads && (
+                  <button
+                    onClick={() => setLaunchSquadId(selectedSquad.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs transition-colors"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-white" />
+                    <span>Launch Run</span>
+                  </button>
+                )}
                 <button
                   onClick={() => setSelectedAgentSquadId(null)}
                   className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
@@ -419,6 +470,7 @@ export const SquadsView: React.FC = () => {
               {[
                 { id: 'flow', label: 'Orchestration Flow' },
                 { id: 'members', label: 'Member Agents' },
+                { id: 'projects', label: 'Projects' },
                 { id: 'mission', label: 'Mission & Context' },
                 { id: 'metrics', label: 'Run Telemetry' }
               ].map((tab) => (
@@ -532,6 +584,39 @@ export const SquadsView: React.FC = () => {
               )}
 
               {/* Tab 3: Mission & Context */}
+              {modalTab === 'projects' && (
+                <div className="space-y-4">
+                  <div>
+                    <div className="text-[11px] font-medium uppercase tracking-wider text-gray-400">Project squad access</div>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">Assign this reusable squad to a project to enable that project’s Live Build Room. Developers can attach their own squad only to projects assigned to them.</p>
+                  </div>
+                  <div className="space-y-2">
+                    {projects.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-white/10 p-5 text-center text-xs text-gray-500">No accessible projects are available.</div>
+                    ) : projects.map(project => {
+                      const assigned = projectAssignments.some(assignment => assignment.projectId === project.id && assignment.status === 'active');
+                      return (
+                        <div key={project.id} className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-well p-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium text-white">{project.key} · {project.name}</div>
+                            <div className="mt-1 text-[11px] text-gray-500">{assigned ? 'Live Build Room enabled' : 'No room assignment yet'}</div>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={!canManageSquads || assignmentBusy === project.id}
+                            onClick={() => void toggleProjectAssignment(project.id)}
+                            className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${assigned ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300 hover:bg-rose-400/10 hover:text-rose-200' : 'border-violet-400/25 bg-violet-400/10 text-violet-200 hover:bg-violet-400/20'}`}
+                          >
+                            {assignmentBusy === project.id ? 'Saving…' : assigned ? 'Unassign' : 'Assign squad'}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 4: Mission & Context */}
               {modalTab === 'mission' && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
@@ -577,16 +662,18 @@ export const SquadsView: React.FC = () => {
               <span className="text-gray-500 font-mono text-[11px]">
                 {selectedSquad.memberAgentIds.length} agents coordinated
               </span>
-              <button
-                onClick={() => {
-                  setLaunchSquadId(selectedSquad.id);
-                  setSelectedAgentSquadId(null);
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
-              >
-                <Play className="w-3.5 h-3.5 fill-white" />
-                <span>Launch Swarm Run</span>
-              </button>
+              {canRunSquads && (
+                <button
+                  onClick={() => {
+                    setLaunchSquadId(selectedSquad.id);
+                    setSelectedAgentSquadId(null);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
+                >
+                  <Play className="w-3.5 h-3.5 fill-white" />
+                  <span>Launch Swarm Run</span>
+                </button>
+              )}
             </div>
 
           </div>
@@ -595,7 +682,7 @@ export const SquadsView: React.FC = () => {
 
       {/* ================= FORM SQUAD MODAL ================= */}
       <CreateSquadModal
-        isOpen={createModalOpen}
+        isOpen={createModalOpen && canManageSquads}
         onClose={() => setCreateModalOpen(false)}
       />
 
