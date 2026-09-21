@@ -73,7 +73,9 @@ class RunnerSocketClient {
     if (!runId || this.activeSupabaseChannels.has(runId)) return;
 
     if (isSupabaseConfigured() && supabase) {
-      const channel = supabase.channel(`run:${runId}`)
+      // Private: Realtime checks the session's token against who can see this
+      // run (0006), so the owner and their overseers receive it and nobody else.
+      const channel = supabase.channel(`run:${runId}`, { config: { private: true } })
         .on('broadcast', { event: 'stage_update' }, ({ payload }) => {
           this.emit('stage_update', payload);
         })

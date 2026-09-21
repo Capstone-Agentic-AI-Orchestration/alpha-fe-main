@@ -201,6 +201,11 @@ export const apiService = {
   getIdentity: (refresh = false) => fetchJson<Identity>(refresh ? '/me?refresh=1' : '/me'),
   /** End the hosted session server-side, then clear the cookie. */
   signOut: () => fetchJson<{ success: boolean }>('/github/session/logout', { method: 'POST' }),
+  /**
+   * A ten-minute database token minted from this session, for Supabase
+   * Realtime. Run channels are private, and this is what they check.
+   */
+  getDatabaseToken: () => fetchJson<{ token: string; expiresAt: string }>('/database/token'),
   getWorkspaces: () => fetchJson<WorkspaceSummary[]>('/workspaces'),
   createWorkspace: (payload: { name: string; slug?: string }) =>
     fetchJson<WorkspaceSummary>('/workspaces', {
