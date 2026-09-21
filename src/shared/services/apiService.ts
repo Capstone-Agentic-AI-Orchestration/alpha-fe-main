@@ -29,7 +29,8 @@ import {
   ChatMessage as ProjectChatMessage
 } from '@/shared/types';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import { API_BASE } from '@/shared/config';
+
 const API_TOKEN = import.meta.env.VITE_ALPHA_LOCAL_TOKEN;
 let activeWorkspaceId: string | null = null;
 

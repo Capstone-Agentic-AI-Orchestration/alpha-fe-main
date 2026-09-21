@@ -9,14 +9,15 @@ because developer tools need a checkout and the AI CLIs on a real machine.
 Import `alpha-fe-main`. `vercel.json` pins the build, so nothing needs choosing
 in the UI.
 
-It carries the security headers and one rewrite. There is no SPA fallback
-because this app has no router — navigation is component state on a single
-URL, so there are no deep links to fall back for.
+It carries the security headers. There is no SPA fallback because this app has
+no router — navigation is component state on a single URL, so there are no deep
+links to fall back for.
 
 ### The API is served from this origin
 
-`vercel.json` forwards `/api/*` to the Render service, so the browser only ever
-talks to `<this-app>.vercel.app`. That is what makes sign-in work.
+`middleware.ts` (Vercel Routing Middleware) forwards `/api/*` to the Alpha API,
+so the browser only ever talks to `<this-app>.vercel.app`. That is what makes
+sign-in work.
 
 `vercel.app` and `onrender.com` are both on the Public Suffix List, so the app
 and the API are **different sites** to a browser. The session cookie is
@@ -29,20 +30,28 @@ would also have worked in Chrome, but it drops the CSRF protection Lax gives
 every state-changing route, and Safari, Firefox and private windows block
 third-party cookies anyway.
 
-The Render hostname is written into `vercel.json` because rewrites cannot read
-environment variables. Change it there if the service is renamed.
+It is middleware rather than a `vercel.json` rewrite because a rewrite's
+destination is a literal in the repository — one deployment's hostname. The
+middleware reads the API's address from `API_ORIGIN` instead, and answers 503
+with an explanation when it is unset rather than guessing.
 
 ### Environment variables
 
-| Variable | Value |
-| :--- | :--- |
-| `VITE_API_URL` | `/api` — relative, so requests go through the rewrite |
-| `VITE_SUPABASE_URL` | Supabase → Settings → API |
-| `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API |
+| Variable | Value | Kind |
+| :--- | :--- | :--- |
+| `API_ORIGIN` | the API's origin, e.g. `https://<render-service>.onrender.com` — scheme and host, no path | server-side, read by `middleware.ts` |
+| `VITE_API_URL` | `/api` — relative, so requests go through the middleware | compiled into the bundle |
+| `VITE_SUPABASE_URL` | Supabase → Settings → API | compiled into the bundle |
+| `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API | compiled into the bundle |
 
-Leave all three as plain variables, not **Sensitive**. Vite compiles every
-`VITE_` value into the bundle, so none of them is secret, and a Sensitive
-variable cannot be read back to check it — or converted afterwards.
+Enable each for **Production** and **Preview**, as plain variables, not
+**Sensitive**. None is secret — Vite compiles every `VITE_` value into the
+bundle, and `API_ORIGIN` is a public hostname — and a Sensitive variable cannot
+be read back to check it, or converted afterwards.
+
+Nothing has a default. The build **fails** without `VITE_API_URL`
+(`vite.config.ts`), and the middleware answers 503 without `API_ORIGIN`, so a
+missing setting is loud instead of quietly pointing somewhere else.
 
 The GitHub App's **Callback URL**, and Render's `GITHUB_CALLBACK_URL`, must use
 this origin too, so the cookie is set on it:
