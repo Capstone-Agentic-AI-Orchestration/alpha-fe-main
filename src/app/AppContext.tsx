@@ -256,12 +256,8 @@ interface AppContextType {
   lastSyncedAt: string | null;
   syncing: boolean;
   users: User[];
+  /** The signed-in user's role in the active workspace, as the server says. */
   role: UserRole;
-  switchRole: (role: UserRole) => void;
-  /** True when the role came from the picker rather than from GitHub. */
-  roleIsOverridden: boolean;
-  /** Drop the override and go back to what GitHub says. */
-  clearRoleOverride: () => void;
   can: (capability: Capability) => boolean;
   visibleTabs: NavigationTab[];
 
@@ -447,14 +443,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /** Project ids for which the current role has an owned/assigned squad room. */
   const [liveBuildRoomProjectIds, setLiveBuildRoomProjectIds] = useState<string[]>([]);
 
-  /**
-   * The role can be overridden locally in development so the four persona
-   * surfaces remain demonstrable from one machine. A workspace-provided role
-   * still wins everywhere else.
-   */
-  const [roleOverride, setRoleOverride] = useState<UserRole | null>(() =>
-    import.meta.env.DEV ? loadFromStorage<UserRole | null>('role_override', null) : null
-  );
   const activeWorkspace = workspaces.find(workspace => workspace.id === activeWorkspaceId) ?? null;
   /**
    * Normalised here, not at each lookup.
@@ -465,7 +453,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * component to index one, so an unrecognised role is funnelled into the same
    * 'pm' fallback an absent one already used.
    */
-  const rawRole = roleOverride ?? activeWorkspace?.role ?? identity?.role;
+  const rawRole = activeWorkspace?.role ?? identity?.role;
   const role: UserRole = KNOWN_ROLES.includes(rawRole as UserRole) ? (rawRole as UserRole) : 'pm';
   const roleTabs = ROLE_TABS[role];
 
@@ -903,9 +891,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   useEffect(() => { saveToStorage(workspaceStorageKey('prototype_runs'), prototypeRuns); }, [prototypeRuns, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('squad_runs'), squadRuns); }, [squadRuns, activeWorkspaceId]);
   useEffect(() => { saveToStorage('run_plan_drafts_v1', runPlanDrafts); }, [runPlanDrafts]);
-  useEffect(() => {
-    if (import.meta.env.DEV) saveToStorage('role_override', roleOverride);
-  }, [roleOverride]);
   useEffect(() => { saveToStorage('local_mode', localMode); }, [localMode]);
 
   /**
@@ -982,7 +967,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!target || workspaceId === activeWorkspaceId) return;
 
     setWorkspaceSwitching(true);
-    setRoleOverride(null);
     setActiveWorkspaceIdState(workspaceId);
     setActiveWorkspaceId(workspaceId);
     setLiveBuildRoomProjectIds([]);
@@ -2897,15 +2881,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [activeTab, roleTabs, visibleTabs]);
 
-  const switchRole = (next: UserRole) => {
-    setRoleOverride(next);
-    // Reset the workspace to a landing surface that role is actually allowed on,
-    // so no tab from the previous role survives the switch.
-    const resetTab: TabItem = { id: `tab-${Date.now()}`, view: ROLE_TABS[next][0] };
-    setTabs([resetTab]);
-    setActiveTabId(resetTab.id);
-  };
-
   /* ---------------------------------------------------------------------
    * Requirement documents
    *
@@ -3362,8 +3337,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setIdentityStatus(prev => (prev === 'ready' ? prev : 'unreachable'));
         }
       },
-      roleIsOverridden: roleOverride !== null,
-      clearRoleOverride: () => setRoleOverride(null),
       triggerSquadRun,
       runtimes,
       isScanningRuntimes,
@@ -3405,7 +3378,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       currentUser,
       users,
       role,
-      switchRole,
       can,
       visibleTabs,
       workspaces,
