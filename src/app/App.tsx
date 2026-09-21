@@ -4,6 +4,7 @@ import { NoTeamAccess } from '@/features/onboarding/NoTeamAccess';
 import { GitHubSetup } from '@/features/onboarding/GitHubSetup';
 import { SignIn, SignInError } from '@/features/onboarding/SignIn';
 import { DeveloperGateway } from '@/features/onboarding/DeveloperGateway';
+import { ConnectingScreen } from '@/features/onboarding/ConnectingScreen';
 import { apiService } from '@/shared/services/apiService';
 import { useApp } from '@/app/AppContext';
 import { Sidebar } from '@/shared/layout/Sidebar';
@@ -75,6 +76,7 @@ const desktopDownloadUrl = `${API_BASE}/download/desktop`;
 export const App: React.FC = () => {
   const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role,
     identity,
+    identityStatus,
     refreshIdentity,
     localMode,
     continueInLocalMode
@@ -152,14 +154,31 @@ export const App: React.FC = () => {
    * them to an org owner for a problem they can fix themselves in a minute.
    */
   /**
+   * The web build renders nothing it cannot attribute to someone.
+   *
+   * Until `/me` answers there is no identity, and AppContext turns a missing
+   * role into 'pm' -- so falling through here showed a PM workspace of sample
+   * data to anyone who arrived signed out or while the API was waking. The
+   * desktop keeps falling through: its daemon is local and its offline shell
+   * is a feature.
+   */
+  if (!isDesktop && identityStatus !== 'ready') {
+    return <ConnectingScreen status={identityStatus} onRetry={() => void refreshIdentity()} />;
+  }
+
+  /**
    * Hosted sign-in, before anything else.
    *
    * `authenticated` is only ever false in the web build; the desktop resolves
    * identity from `gh` before the window opens. Checked ahead of the GitHub
    * CLI gate below because that one diagnoses a *local* install problem, which
    * is not a thing a browser can have.
+   *
+   * On the web, anything short of a positive `authenticated: true` counts as
+   * signed out: a server that omits the field is not running in cloud mode and
+   * has no sign-in to offer, and SignIn says so rather than the shell pretending.
    */
-  if (identity?.authenticated === false) {
+  if (identity && (isDesktop ? identity.authenticated === false : identity.authenticated !== true)) {
     return <SignIn identity={identity} error={signInError} />;
   }
 
