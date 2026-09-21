@@ -17,10 +17,17 @@ import {
   RemoteAction,
   Identity,
   AnalyticsData,
-  Workspace,
-  ProjectBuildStep
+  WorkspaceSummary,
+  WorkspaceProjectAssignment,
+  WorkspaceSquadProjectAssignment,
+  LiveBuildRoomSnapshot,
+  UserRole,
+  AgentCall,
+  ProjectChatSnapshot,
+  AgentCallMode,
+  AgentCallTarget,
+  ChatMessage as ProjectChatMessage
 } from '@/shared/types';
-import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const API_TOKEN = import.meta.env.VITE_ALPHA_LOCAL_TOKEN;
@@ -30,16 +37,6 @@ let activeWorkspaceId: string | null = null;
 export function setActiveWorkspaceId(workspaceId: string | null): void {
   activeWorkspaceId = workspaceId;
 }
-
-let activeWorkspaceId: string | null = (() => {
-  try {
-    return typeof window !== 'undefined'
-      ? window.localStorage.getItem('alpha.active_workspace_id')
-      : null;
-  } catch {
-    return null;
-  }
-})();
 
 const SKILL_CATEGORIES: Skill['category'][] = [
   'File Operations',
@@ -138,18 +135,27 @@ export function normalizeGitHubRepo(value: unknown): string | undefined {
 }
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const headers = new Headers(options?.headers);
-  headers.set('Content-Type', 'application/json');
-  if (
-    activeWorkspaceId &&
-    url !== '/health' &&
-    !url.startsWith('/workspaces')
-  ) {
-    headers.set('X-Workspace-Id', activeWorkspaceId);
-  }
   const res = await fetch(`${API_BASE}${url}`, {
-    ...options,
-    headers
+    /**
+     * Send the session cookie.
+     *
+     * Without this the browser never attaches it, because the API is a
+     * different origin from the app — Vercel to Render. `fetch` omits
+     * credentials cross-origin unless asked, so every request arrived
+     * anonymous and the hosted app could not have signed anyone in.
+     *
+     * Safe against CSRF because the cookie is `SameSite=Lax` (a cross-site
+     * POST carries nothing) and the API's CORS allowlist is exact — a wildcard
+     * over a shared hosting apex is refused at parse time, precisely so this
+     * line cannot be turned against us.
+     */
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
+      ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {})
+    },
+    ...options
   });
   if (!res.ok) {
     const errorText = await res.text().catch(() => res.statusText);
@@ -169,23 +175,6 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const apiService = {
-  // Workspaces
-  getWorkspaceId: () => activeWorkspaceId,
-  setWorkspaceId: (id: string | null) => {
-    activeWorkspaceId = id;
-    try {
-      if (id) window.localStorage.setItem('alpha.active_workspace_id', id);
-      else window.localStorage.removeItem('alpha.active_workspace_id');
-    } catch {
-      // Storage is optional; the in-memory selection still scopes this tab.
-    }
-  },
-  getWorkspaces: () => fetchJson<Workspace[]>('/workspaces'),
-  createWorkspace: (workspace: Pick<Workspace, 'name'> & Partial<Workspace>) =>
-    fetchJson<Workspace>('/workspaces', { method: 'POST', body: JSON.stringify(workspace) }),
-  updateWorkspace: (id: string, updates: Partial<Workspace>) =>
-    fetchJson<Workspace>(`/workspaces/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
-
   // Health
   checkHealth: () => fetchJson<{ status: string; version: string }>('/health'),
 
@@ -204,6 +193,8 @@ export const apiService = {
 
   /** Who the daemon thinks you are — a GitHub login where one is available. */
   getIdentity: () => fetchJson<Identity>('/me'),
+  /** End the hosted session server-side, then clear the cookie. */
+  signOut: () => fetchJson<{ success: boolean }>('/github/session/logout', { method: 'POST' }),
   getWorkspaces: () => fetchJson<WorkspaceSummary[]>('/workspaces'),
   createWorkspace: (payload: { name: string; slug?: string }) =>
     fetchJson<WorkspaceSummary>('/workspaces', {
@@ -239,60 +230,11 @@ export const apiService = {
       { method: 'DELETE' }
     ),
   getProjects: async (): Promise<Project[]> => {
-    try {
-      return await fetchJson<Project[]>('/projects');
-    } catch (err) {
-      if (isSupabaseConfigured() && supabase) {
-        const { data, error } = await supabase.from('projects').select('*');
-        if (!error && data) {
-          return data.map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            key: p.key,
-            description: p.description || '',
-            color: p.color || '#6366f1',
-            icon: p.icon || '⚡',
-            status: p.status || 'in_progress',
-            priority: p.priority || 'medium',
-            startDate: p.start_date,
-            targetDate: p.target_date,
-            leadType: p.lead_type || 'agent',
-            leadName: p.lead_name,
-            leadAgentId: p.lead_agent_id,
-            resources: p.resources || [],
-            totalIssues: 0,
-            completedIssues: 0,
-            progressPercentage: 0
-          }));
-        }
-      }
-      throw err;
-    }
+    return fetchJson<Project[]>('/projects');
   },
 
   createProject: async (project: Partial<Project>): Promise<Project> => {
-    try {
-      return await fetchJson<Project>('/projects', { method: 'POST', body: JSON.stringify(project) });
-    } catch (err) {
-      if (isSupabaseConfigured() && supabase) {
-        const payload = {
-          name: project.name,
-          key: project.key,
-          description: project.description,
-          color: project.color,
-          icon: project.icon,
-          status: project.status,
-          priority: project.priority,
-          lead_type: project.leadType,
-          lead_name: project.leadName,
-          lead_agent_id: project.leadAgentId,
-          resources: project.resources || []
-        };
-        const { data, error } = await supabase.from('projects').insert(payload).select().single();
-        if (!error && data) return data as any;
-      }
-      throw err;
-    }
+    return fetchJson<Project>('/projects', { method: 'POST', body: JSON.stringify(project) });
   },
 
   /**
@@ -310,51 +252,10 @@ export const apiService = {
     fetchJson<Project>(`/projects/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
   deleteProject: (id: string) =>
     fetchJson<{ success: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
-  getProjectBuildSteps: (projectId: string) =>
-    fetchJson<ProjectBuildStep[]>(`/projects/${projectId}/build-steps`),
-  updateProjectBuildSteps: (projectId: string, steps: Array<Partial<ProjectBuildStep>>) =>
-    fetchJson<ProjectBuildStep[]>(`/projects/${projectId}/build-steps`, {
-      method: 'PUT',
-      body: JSON.stringify({ steps })
-    }),
 
   // Agents
   getAgents: async (): Promise<Agent[]> => {
-    try {
-      return await fetchJson<Agent[]>('/agents');
-    } catch (err) {
-      if (isSupabaseConfigured() && supabase) {
-        const { data, error } = await supabase.from('agents').select('*');
-        if (!error && data) {
-          return data.map((a: any) => ({
-            id: a.id,
-            name: a.name,
-            role: a.role,
-            avatar: a.avatar,
-            color: a.color,
-            description: a.description,
-            owner: a.owner,
-            isMine: a.is_mine,
-            modelProvider: a.model_provider,
-            modelName: a.model_name,
-            reasoningEffort: a.reasoning_effort ?? undefined,
-            runtimeId: a.runtime_id || 'claude-3-7-sonnet',
-            systemPrompt: a.system_prompt,
-            autonomyLevel: a.autonomy_level,
-            temperature: a.temperature ?? 0.7,
-            skills: a.skills || [],
-            mcpServers: a.mcp_servers || [],
-            customCliArgs: a.custom_cli_args,
-            envVars: a.env_vars || [],
-            isArchived: a.is_archived,
-            createdAt: a.created_at,
-            stats: { totalRuns: 0, successRate: 100, tokensUsed: 0, avgLatencyMs: 0 },
-            status: 'idle'
-          }));
-        }
-      }
-      throw err;
-    }
+    return fetchJson<Agent[]>('/agents');
   },
 
   createAgent: (agent: Partial<Agent>) =>
@@ -425,60 +326,11 @@ export const apiService = {
 
   // Issues
   getIssues: async (): Promise<Issue[]> => {
-    try {
-      return await fetchJson<Issue[]>('/issues');
-    } catch (err) {
-      if (isSupabaseConfigured() && supabase) {
-        const { data, error } = await supabase.from('issues').select('*');
-        if (!error && data) {
-          return data.map((i: any) => ({
-            id: i.id,
-            identifier: i.identifier,
-            title: i.title,
-            description: i.description || '',
-            status: i.status || 'todo',
-            priority: i.priority || 'medium',
-            projectId: i.project_id,
-            assignedAgentId: i.assigned_agent_id,
-            assignedHuman: i.assigned_human,
-            labels: i.labels || [],
-            subtasks: i.subtasks || [],
-            branchName: i.branch_name,
-            prUrl: i.pr_url,
-            createdAt: i.created_at,
-            updatedAt: i.updated_at,
-            comments: []
-          }));
-        }
-      }
-      throw err;
-    }
+    return fetchJson<Issue[]>('/issues');
   },
 
   createIssue: async (issue: Partial<Issue>): Promise<Issue> => {
-    try {
-      return await fetchJson<Issue>('/issues', { method: 'POST', body: JSON.stringify(issue) });
-    } catch (err) {
-      if (isSupabaseConfigured() && supabase) {
-        const payload = {
-          identifier: issue.identifier,
-          title: issue.title,
-          description: issue.description,
-          status: issue.status,
-          priority: issue.priority,
-          project_id: issue.projectId,
-          assigned_agent_id: issue.assignedAgentId,
-          assigned_human: issue.assignedHuman,
-          labels: issue.labels || [],
-          subtasks: issue.subtasks || [],
-          branch_name: issue.branchName,
-          pr_url: issue.prUrl
-        };
-        const { data, error } = await supabase.from('issues').insert(payload).select().single();
-        if (!error && data) return data as any;
-      }
-      throw err;
-    }
+    return fetchJson<Issue>('/issues', { method: 'POST', body: JSON.stringify(issue) });
   },
 
   updateIssue: (id: string, updates: Partial<Issue>) =>
@@ -533,7 +385,6 @@ export const apiService = {
   // Runtimes
   getRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes'),
   scanRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes/scan', { method: 'POST' }),
-  refreshRuntime: (id: string) => fetchJson<RuntimeEngine>(`/runtimes/${encodeURIComponent(id)}/refresh`, { method: 'POST' }),
 
   // Runs
   getRuns: () => fetchJson<PrototypeRun[]>('/runs'),
@@ -575,11 +426,6 @@ export const apiService = {
       `/chat/threads/${id}`,
       { method: 'PUT', body: JSON.stringify({ projectId }) }
     ),
-  setThreadTarget: (id: string, targetAgentId: string | null, targetSquadId: string | null) =>
-    fetchJson<ChatThread>(`/chat/threads/${id}/target`, {
-      method: 'PUT',
-      body: JSON.stringify({ targetAgentId, targetSquadId })
-    }),
   createChatThread: (thread: Partial<ChatThread>) =>
     fetchJson<ChatThread>('/chat/threads', { method: 'POST', body: JSON.stringify(thread) }),
   /** Delete a conversation. Its messages cascade; its CLI session rows go too. */
@@ -591,13 +437,7 @@ export const apiService = {
       method: 'DELETE'
     }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
-  sendChatMessage: (payload: {
-    threadId: string;
-    content: string;
-    senderName?: string;
-    targetAgentId?: string | null;
-    targetSquadId?: string | null;
-  }) =>
+  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;

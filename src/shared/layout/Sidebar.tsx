@@ -2,8 +2,17 @@ import React, { useEffect, useRef, useState } from 'react';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
-import { Search, Edit3, ChevronDown, HelpCircle, Sun, Moon, Plus, Loader2 } from 'lucide-react';
-import { useTheme } from '@/shared/hooks/useTheme';
+import {
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  HelpCircle,
+  Plus,
+  LogIn,
+  Check,
+  Search,
+} from 'lucide-react';
 
 interface SidebarProps {
   collapsed: boolean;
@@ -37,15 +46,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
     roleIsOverridden,
     workspaces,
     activeWorkspace,
+    workspaceLoading,
     switchWorkspace,
     createWorkspace,
-    workspaceSwitching,
-    showToast
+    joinWorkspace,
+    visibleTabs,
   } = useApp();
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [newWorkspaceName, setNewWorkspaceName] = useState('');
-  const [creatingWorkspace, setCreatingWorkspace] = useState(false);
+  const [workspaceAction, setWorkspaceAction] = useState<'create' | 'join' | null>(null);
+  const [workspaceInput, setWorkspaceInput] = useState('');
+  const [workspaceActionBusy, setWorkspaceActionBusy] = useState(false);
   const [roleMenuOpen, setRoleMenuOpen] = useState(false);
   const roleMenuRef = useRef<HTMLDivElement>(null);
 
@@ -69,34 +80,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
   }, [roleMenuOpen]);
 
-  /**
-   * What this workspace is actually called.
-   *
-   * Defaulted to "Multica Alpha Workspace" — a product this is not — seeded
-   * from mockData and shown to everyone who never opened Settings. The
-   * organisation the daemon derived from the attached repositories is a true
-   * answer and needs no configuring.
-   */
-  const workspaceName =
-    activeWorkspace?.name || settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
-
-  const handleCreateWorkspace = async (event: React.FormEvent) => {
-    event.preventDefault();
-    const name = newWorkspaceName.trim();
-    if (!name || creatingWorkspace) return;
-    setCreatingWorkspace(true);
-    try {
-      await createWorkspace(name);
-      setNewWorkspaceName('');
-      setWorkspaceMenuOpen(false);
-    } catch (error) {
-      showToast('Workspace not created', error instanceof Error ? error.message : String(error), 'error');
-    } finally {
-      setCreatingWorkspace(false);
-    }
-  };
-
-  const isClient = role === 'client';
+  const workspaceName = activeWorkspace?.name || settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
+  const canManageIssues = can('manage_issues');
   const labelFor = (tab: NavigationTab) => navLabel(tab, role);
   // Navigation and RBAC share one source of truth. A newly added tab cannot
   // become an orphaned page because the sidebar is now derived from the role's
@@ -157,16 +142,25 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Workspace and primary actions */}
       <div className={`space-y-3 pb-3 pt-3 ${collapsed ? 'px-2' : 'px-3'}`}>
         <div className="relative">
-          <button
-            onClick={() => setWorkspaceMenuOpen(!workspaceMenuOpen)}
-            className="w-full flex items-center justify-between px-2 py-1.5 rounded-md hover:bg-white/[0.035] transition-colors text-left"
-          >
-            <div className="flex items-center gap-2.5 truncate">
-              <div className="w-6 h-6 rounded-md bg-white/[0.07] text-gray-300 flex items-center justify-center text-xs font-semibold">
-                {(workspaceName[0] ?? 'A').toUpperCase()}
-              </div>
-              <span className="text-sm font-semibold text-white truncate">
-                {workspaceName}
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setWorkspaceMenuOpen(open => !open)}
+              className={`flex min-w-0 items-center rounded-lg py-1.5 text-left transition-colors hover:bg-white/[0.04] ${
+                collapsed ? 'w-9 justify-center px-0' : 'flex-1 justify-between px-2'
+              }`}
+              title={collapsed ? `${workspaceName} workspace` : undefined}
+              aria-label={collapsed ? `${workspaceName} workspace menu` : 'Open workspace menu'}
+              aria-expanded={workspaceMenuOpen}
+            >
+              <span className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-white/[0.08] text-xs font-semibold text-gray-200">
+                    {workspaceName.slice(0, 1).toUpperCase()}
+                </span>
+                {!collapsed && (
+                  <span className="truncate text-sm font-semibold text-white">
+                    {workspaceName}
+                  </span>
+                )}
               </span>
               {!collapsed && <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-500" />}
             </button>
@@ -183,48 +177,77 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           {workspaceMenuOpen && (
-            <div className="absolute top-full left-0 right-0 mt-1.5 z-30 bg-surface border border-white/[0.08] rounded-lg shadow-2xl p-2 space-y-1 animate-slide-up text-sm">
-              <div className="text-xs font-medium text-gray-500 px-2 py-1">Workspaces</div>
-              <div className="max-h-48 overflow-y-auto space-y-0.5">
-                {workspaces.map(workspace => (
-                  <button
-                    key={workspace.id}
-                    onClick={() => {
-                      void switchWorkspace(workspace.id);
+            <div
+              className={`absolute top-full z-30 mt-1.5 space-y-1 rounded-xl border border-white/[0.08] bg-surface p-2 text-sm shadow-2xl animate-slide-up ${
+                collapsed ? 'left-0 w-56' : 'left-0 right-0'
+              }`}
+            >
+              <div className="px-2 py-1 text-xs font-medium text-gray-500">Workspaces</div>
+              {workspaceLoading && workspaces.length === 0 ? (
+                <div className="px-3 py-3 text-xs text-gray-500">Loading workspaces…</div>
+              ) : (
+                <div className="space-y-0.5">
+                  {workspaces.map(workspace => (
+                    <button
+                      key={workspace.id}
+                      onClick={() => {
+                        void switchWorkspace(workspace.id);
+                        setWorkspaceMenuOpen(false);
+                        setWorkspaceAction(null);
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
+                    >
+                      <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[10px] font-semibold ${workspace.id === activeWorkspace?.id ? 'bg-brand-500/20 text-brand-300' : 'bg-white/[0.07] text-gray-400'}`}>
+                        {workspace.name.slice(0, 1).toUpperCase()}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
+                      {workspace.id === activeWorkspace?.id && <Check className="h-3.5 w-3.5 text-brand-300" />}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {workspaceAction ? (
+                <form
+                  className="mt-1.5 space-y-2 border-t border-white/[0.06] pt-2"
+                  onSubmit={async event => {
+                    event.preventDefault();
+                    if (!workspaceInput.trim()) return;
+                    setWorkspaceActionBusy(true);
+                    const result = workspaceAction === 'create'
+                      ? await createWorkspace(workspaceInput.trim())
+                      : await joinWorkspace(workspaceInput.trim());
+                    setWorkspaceActionBusy(false);
+                    if (result) {
+                      setWorkspaceInput('');
+                      setWorkspaceAction(null);
                       setWorkspaceMenuOpen(false);
-                    }}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-left transition-colors ${
-                      workspace.id === activeWorkspace?.id
-                        ? 'bg-white/[0.06] text-white font-medium'
-                        : 'text-gray-400 hover:text-white hover:bg-white/[0.035]'
-                    }`}
-                  >
-                    <span className={`w-2 h-2 rounded-full ${workspace.id === activeWorkspace?.id ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-                    <span className="truncate">{workspace.name}</span>
-                    {workspace.id === activeWorkspace?.id && workspaceSwitching && (
-                      <Loader2 className="w-3 h-3 ml-auto animate-spin text-gray-500" />
-                    )}
-                  </button>
-                ))}
-              </div>
-              <form onSubmit={handleCreateWorkspace} className="pt-1 mt-1 border-t border-white/[0.06]">
-                <div className="flex items-center gap-1.5">
+                    }
+                  }}
+                >
                   <input
-                    value={newWorkspaceName}
-                    onChange={event => setNewWorkspaceName(event.target.value)}
-                    placeholder="New workspace"
-                    className="min-w-0 flex-1 bg-white/[0.04] border border-white/[0.08] rounded-md px-2 py-1.5 text-xs text-white placeholder:text-gray-600 outline-none focus:border-brand-400/50"
+                    autoFocus
+                    value={workspaceInput}
+                    onChange={event => setWorkspaceInput(event.target.value)}
+                    placeholder={workspaceAction === 'create' ? 'Workspace name' : 'Invite code or slug'}
+                    className="w-full rounded-lg border border-white/[0.10] bg-black/20 px-2.5 py-2 text-xs text-white outline-none placeholder:text-gray-600 focus:border-brand-400/60"
                   />
-                  <button
-                    type="submit"
-                    disabled={!newWorkspaceName.trim() || creatingWorkspace}
-                    className="p-1.5 rounded-md text-gray-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-40"
-                    title="Create workspace"
-                  >
-                    {creatingWorkspace ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  <div className="flex items-center justify-end gap-1.5">
+                    <button type="button" onClick={() => { setWorkspaceAction(null); setWorkspaceInput(''); }} className="rounded-lg px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-200">Cancel</button>
+                    <button type="submit" disabled={workspaceActionBusy || !workspaceInput.trim()} className="rounded-lg bg-brand-500 px-2.5 py-1.5 text-xs font-medium text-on-accent disabled:opacity-40">
+                      {workspaceActionBusy ? 'Working…' : workspaceAction === 'create' ? 'Create' : 'Join'}
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <div className="mt-1.5 grid grid-cols-2 gap-1 border-t border-white/[0.06] pt-2">
+                  <button onClick={() => setWorkspaceAction('create')} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white">
+                    <Plus className="h-3.5 w-3.5" /> Create
+                  </button>
+                  <button onClick={() => setWorkspaceAction('join')} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white">
+                    <LogIn className="h-3.5 w-3.5" /> Join
                   </button>
                 </div>
-              </form>
+              )}
               <button
                 onClick={() => {
                   setActiveTab('settings');

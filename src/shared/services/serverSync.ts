@@ -15,7 +15,6 @@ export type ServerStatus = 'connecting' | 'online' | 'offline';
 
 /** Entities the daemon is authoritative for. Everything else stays client-side. */
 export interface ServerSnapshot {
-  workspaces: unknown[];
   projects: unknown[];
   agents: unknown[];
   issues: unknown[];
@@ -38,21 +37,6 @@ export interface ServerSnapshot {
  * being offline.
  */
 export async function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>> {
-  // Workspace enumeration is intentionally unscoped. Pick a valid persisted
-  // selection before requesting any workspace-owned collection.
-  let workspaces: unknown[] | undefined;
-  try {
-    workspaces = await apiService.getWorkspaces();
-    const available = workspaces as Array<{ id?: string }>;
-    const selected = apiService.getWorkspaceId();
-    if (!selected || !available.some(workspace => workspace.id === selected)) {
-      const first = available[0]?.id;
-      if (first) apiService.setWorkspaceId(first);
-    }
-  } catch (err) {
-    console.warn('[sync] workspaces failed to load:', err instanceof Error ? err.message : err);
-  }
-
   const calls = {
     projects: apiService.getProjects(),
     agents: apiService.getAgents(),
@@ -72,7 +56,6 @@ export async function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>> {
   const settled = await Promise.allSettled(Object.values(calls));
 
   const snapshot: Partial<ServerSnapshot> = {};
-  if (workspaces) snapshot.workspaces = workspaces;
   settled.forEach((result, i) => {
     if (
       result.status === 'fulfilled' &&
