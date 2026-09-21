@@ -27,6 +27,7 @@ import {
   IntakeAnswers,
   Milestone,
   Identity,
+  IdentityStatus,
   WorkspaceSummary
 } from '@/shared/types';
 import {
@@ -237,6 +238,12 @@ interface AppContextType {
    * distinguishes a GitHub login from a bare OS username.
    */
   identity?: Identity;
+  /**
+   * Whether `/me` has answered. `'unreachable'` means it has not answered at
+   * all, which is different from answering "signed out" -- the web build must
+   * not guess a role from silence. See App.tsx.
+   */
+  identityStatus: IdentityStatus;
   /** True when the user chose to keep using Alpha without GitHub. */
   localMode: boolean;
   /** Leave the GitHub setup gate and use the local board. */
@@ -422,6 +429,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * without one.
   */
   const [identity, setIdentity] = useState<Identity | undefined>(undefined);
+  const [identityStatus, setIdentityStatus] = useState<IdentityStatus>('loading');
   /**
    * GitHub is optional for solo use. Persist the choice so a reload does not
    * put a user back in the setup gate before they can reach Settings.
@@ -775,11 +783,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       .then(next => {
         if (cancelled) return;
         setIdentity(next);
+        setIdentityStatus('ready');
         if (next.github === 'ok') setLocalMode(false);
       })
       .catch(() => {
-        // Keep the cached/local shell available when an older or offline
+        // The desktop keeps its cached/local shell when an older or offline
         // daemon does not expose /me; protected writes still fail closed.
+        // The web build does not -- App.tsx refuses to render on this status.
+        if (!cancelled) setIdentityStatus('unreachable');
       });
 
     return () => { cancelled = true; };
@@ -3331,18 +3342,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       deleteSquad,
       squadRuns,
       identity,
+      identityStatus,
       localMode,
       continueInLocalMode: () => setLocalMode(true),
       lastSyncedAt,
       syncing,
       syncBoard,
       refreshIdentity: async () => {
+        // A retry from the unreachable screen shows progress; a refresh after
+        // a team change must not blank a workspace that is already showing.
+        setIdentityStatus(prev => (prev === 'ready' ? prev : 'loading'));
         try {
           const next = await apiService.getIdentity();
           setIdentity(next);
+          setIdentityStatus('ready');
           if (next.github === 'ok') setLocalMode(false);
         } catch {
           // An unreachable daemon leaves the last answer standing.
+          setIdentityStatus(prev => (prev === 'ready' ? prev : 'unreachable'));
         }
       },
       roleIsOverridden: roleOverride !== null,

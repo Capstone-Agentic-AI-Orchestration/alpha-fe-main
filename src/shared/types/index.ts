@@ -986,6 +986,15 @@ export interface Workspace {
  * ------------------------------------------------------------------------ */
 
 /**
+ * Whether the daemon has answered `/me`: not yet, yes, or not at all.
+ *
+ * `'unreachable'` is kept apart from a signed-out answer on purpose. "The
+ * server said you are nobody" and "the server said nothing" need different
+ * screens, and only the first one is a reason to show sign-in.
+ */
+export type IdentityStatus = 'loading' | 'ready' | 'unreachable';
+
+/**
  * Who Alpha thinks you are, from the daemon.
  *
  * The GitHub login the org, the teams and every pull request already use, or
