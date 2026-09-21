@@ -192,7 +192,12 @@ export const apiService = {
     }>('/board/sync', { method: 'POST' }),
 
   /** Who the daemon thinks you are — a GitHub login where one is available. */
-  getIdentity: () => fetchJson<Identity>('/me'),
+  /**
+   * `refresh` asks the desktop daemon to re-read `gh` rather than answer from
+   * its boot-time cache -- needed right after a sign-in made while the app was
+   * open. The hosted API ignores it: a session is always current.
+   */
+  getIdentity: (refresh = false) => fetchJson<Identity>(refresh ? '/me?refresh=1' : '/me'),
   /** End the hosted session server-side, then clear the cookie. */
   signOut: () => fetchJson<{ success: boolean }>('/github/session/logout', { method: 'POST' }),
   getWorkspaces: () => fetchJson<WorkspaceSummary[]>('/workspaces'),

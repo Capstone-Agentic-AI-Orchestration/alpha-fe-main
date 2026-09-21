@@ -3353,7 +3353,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // a team change must not blank a workspace that is already showing.
         setIdentityStatus(prev => (prev === 'ready' ? prev : 'loading'));
         try {
-          const next = await apiService.getIdentity();
+          // Re-read, not the cache: this runs after someone signs in or joins a team.
+          const next = await apiService.getIdentity(true);
           setIdentity(next);
           setIdentityStatus('ready');
           if (next.github === 'ok') setLocalMode(false);
