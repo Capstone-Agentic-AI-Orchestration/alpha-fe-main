@@ -1,4 +1,5 @@
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
+import { WS_URL } from '@/shared/config';
 
 type SocketEventCallback = (payload: any) => void;
 
@@ -14,13 +15,22 @@ class RunnerSocketClient {
   }
 
   connect() {
+    /**
+     * The local daemon's socket, only where one is configured.
+     *
+     * The web build leaves VITE_WS_URL unset on purpose -- cloud mode never
+     * opens the raw socket -- and used to fall back to `ws://localhost:3001`,
+     * dialling the visitor's own machine every three seconds forever. Run
+     * telemetry reaches the web through Supabase Realtime instead.
+     */
+    if (!WS_URL) return;
+
     // 1. Connect Local WebSocket daemon
     if (!this.ws || (this.ws.readyState !== WebSocket.OPEN && this.ws.readyState !== WebSocket.CONNECTING)) {
       this.isConnecting = true;
-      const wsUrl = import.meta.env.VITE_WS_URL || 'ws://localhost:3001';
 
       try {
-        this.ws = new WebSocket(wsUrl);
+        this.ws = new WebSocket(WS_URL);
 
         this.ws.onopen = () => {
           this.isConnecting = false;

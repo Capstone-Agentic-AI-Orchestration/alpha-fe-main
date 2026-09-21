@@ -3,12 +3,6 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "rewrites": [
-    {
-      "source": "/api/:path*",
-      "destination": "https://alpha-be-main.onrender.com/api/:path*"
-    }
-  ],
   "headers": [
     {
       "source": "/(.*)",

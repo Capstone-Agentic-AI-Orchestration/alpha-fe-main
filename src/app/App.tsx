@@ -6,6 +6,7 @@ import { SignIn, SignInError } from '@/features/onboarding/SignIn';
 import { DeveloperGateway } from '@/features/onboarding/DeveloperGateway';
 import { ConnectingScreen } from '@/features/onboarding/ConnectingScreen';
 import { apiService } from '@/shared/services/apiService';
+import { API_BASE } from '@/shared/config';
 import { useApp } from '@/app/AppContext';
 import { Sidebar } from '@/shared/layout/Sidebar';
 import { CommandPalette } from '@/shared/components/CommandPalette';
@@ -70,7 +71,6 @@ function consumeSignInError(): SignInError | undefined {
     : undefined;
 }
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 const desktopDownloadUrl = `${API_BASE}/download/desktop`;
 
 export const App: React.FC = () => {

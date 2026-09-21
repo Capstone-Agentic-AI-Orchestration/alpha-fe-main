@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Modal } from '@/shared/components/Modal';
+import { API_BASE } from '@/shared/config';
 import { 
   Download, 
   Monitor, 
@@ -19,12 +20,14 @@ interface DownloadDesktopModalProps {
 export const DownloadDesktopModal: React.FC<DownloadDesktopModalProps> = ({ isOpen, onClose }) => {
   const [copied, setCopied] = useState(false);
 
+  // From the configured API, not one machine's port: on the web this was
+  // `http://localhost:3001`, a download link to the visitor's own computer.
   const handleDownloadPackage = () => {
-    window.open('http://localhost:3001/api/download/desktop', '_blank');
+    window.open(`${API_BASE}/download/desktop`, '_blank');
   };
 
   const handleDownloadLauncher = () => {
-    window.open('http://localhost:3001/api/download/exe', '_blank');
+    window.open(`${API_BASE}/download/exe`, '_blank');
   };
 
   /**
