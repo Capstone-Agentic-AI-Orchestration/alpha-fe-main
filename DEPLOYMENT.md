@@ -9,17 +9,50 @@ because developer tools need a checkout and the AI CLIs on a real machine.
 Import `alpha-fe-main`. `vercel.json` pins the build, so nothing needs choosing
 in the UI.
 
-It exists only for the security headers; a Vite SPA deploys fine without one.
-There is no rewrite rule because this app has no router — navigation is
-component state on a single URL, so there are no deep links to fall back for.
+It carries the security headers and one rewrite. There is no SPA fallback
+because this app has no router — navigation is component state on a single
+URL, so there are no deep links to fall back for.
+
+### The API is served from this origin
+
+`vercel.json` forwards `/api/*` to the Render service, so the browser only ever
+talks to `<this-app>.vercel.app`. That is what makes sign-in work.
+
+`vercel.app` and `onrender.com` are both on the Public Suffix List, so the app
+and the API are **different sites** to a browser. The session cookie is
+`SameSite=Lax`, and a Lax cookie is not sent on a cross-site `fetch` — so when
+the app called Render directly, sign-in set the cookie and every `/api/me`
+after it arrived without one. The result was a loop back to the sign-in screen.
+
+Serving the API from this origin makes the cookie first-party. `SameSite=None`
+would also have worked in Chrome, but it drops the CSRF protection Lax gives
+every state-changing route, and Safari, Firefox and private windows block
+third-party cookies anyway.
+
+The Render hostname is written into `vercel.json` because rewrites cannot read
+environment variables. Change it there if the service is renamed.
 
 ### Environment variables
 
 | Variable | Value |
 | :--- | :--- |
-| `VITE_API_URL` | `https://<render-service>.onrender.com/api` |
+| `VITE_API_URL` | `/api` — relative, so requests go through the rewrite |
 | `VITE_SUPABASE_URL` | Supabase → Settings → API |
 | `VITE_SUPABASE_ANON_KEY` | Supabase → Settings → API |
+
+Leave all three as plain variables, not **Sensitive**. Vite compiles every
+`VITE_` value into the bundle, so none of them is secret, and a Sensitive
+variable cannot be read back to check it — or converted afterwards.
+
+The GitHub App's **Callback URL**, and Render's `GITHUB_CALLBACK_URL`, must use
+this origin too, so the cookie is set on it:
+
+```
+https://<this-app>.vercel.app/api/github/oauth/callback
+```
+
+The webhook URL stays pointed at Render directly; it is server to server and
+carries no cookie.
 
 `VITE_WS_URL` is deliberately unset. The raw WebSocket is not created in cloud
 mode: it broadcasts every run to every client with no token check on upgrade,
@@ -33,7 +66,9 @@ the API mints per session.
 
 ## After the first deploy
 
-The API needs to know this origin, or the browser will block every request:
+The API needs to know this origin. Its first entry is also where the OAuth
+callback sends the browser after sign-in, so a wrong value lands people on the
+wrong site:
 
 ```
 CORS_ORIGIN = https://<this-app>.vercel.app
