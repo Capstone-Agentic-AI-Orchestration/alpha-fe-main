@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '@/app/AppContext';
 import { 
   Key, 
@@ -10,9 +10,11 @@ import {
   Layers,
   Shield,
   Plug,
-  Users
+  Users,
+  RefreshCw
 } from 'lucide-react';
 import { AgentAutonomyLevel } from '@/shared/types';
+import { desktop, isDesktop, type UpdateCheck } from '@/shared/desktop';
 import { GitHubConnectionPanel } from './GitHubConnectionPanel';
 import { McpServersPanel } from './McpServersPanel';
 import { WorkspaceAccessPanel } from './WorkspaceAccessPanel';
@@ -39,6 +41,45 @@ export const SettingsView: React.FC = () => {
 
   const toggleShowKey = (provider: string) => {
     setShowKeys(prev => ({ ...prev, [provider]: !prev[provider] }));
+  };
+
+  /**
+   * Asking for an update, rather than waiting six hours for one.
+   *
+   * The app checks on launch and every six hours, which is a long time to wait
+   * when you know a release exists. The answer is kept here rather than shown
+   * in a dialog: a download that has started ends in the restart prompt anyway,
+   * so this only has to say what happened.
+   */
+  const [updateCheck, setUpdateCheck] = useState<UpdateCheck | null>(null);
+  const [updateChecking, setUpdateChecking] = useState(false);
+  const [appVersion, setAppVersion] = useState('');
+
+  useEffect(() => {
+    // Asked for once, from the main process: the renderer is served over HTTP
+    // in both builds and cannot read package.json out of the asar.
+    void desktop?.appVersion?.().then(setAppVersion).catch(() => undefined);
+  }, []);
+
+  const checkForUpdates = async () => {
+    if (!desktop?.checkForUpdates) return;
+    setUpdateChecking(true);
+    try {
+      setUpdateCheck(await desktop.checkForUpdates());
+    } catch (err) {
+      setUpdateCheck({ status: 'error', message: err instanceof Error ? err.message : String(err) });
+    } finally {
+      setUpdateChecking(false);
+    }
+  };
+
+  const updateMessage = (check: UpdateCheck): string => {
+    switch (check.status) {
+      case 'current': return `Alpha ${check.version ?? ''} is the newest release.`.replace('  ', ' ');
+      case 'downloading': return `Alpha ${check.version} is downloading. You will be asked before it restarts.`;
+      case 'unsupported': return check.reason;
+      case 'error': return `Could not check: ${check.message}`;
+    }
   };
 
   const handleSave = (e: React.FormEvent) => {
@@ -158,41 +199,47 @@ export const SettingsView: React.FC = () => {
                   />
                 </div>
 
-                {/* System Updates & Launcher Card */}
-                <div className="pt-4 border-t border-white/10">
-                  <div className="p-4 rounded-xl bg-well border border-white/10 space-y-3">
-                    <div className="flex items-center justify-between">
+                {/* Updates, on the desktop only. The web app has no version to
+                    update -- Vercel serves whatever main last built -- so a
+                    version number and an update button would both be fiction
+                    in a browser tab. */}
+                {isDesktop && (
+                  <div className="pt-4 border-t border-white/10">
+                    <div className="p-4 rounded-xl bg-well border border-white/10 space-y-3">
                       <div>
                         <div className="text-xs font-semibold text-white flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                          Alpha Core Platform
+                          <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                          Alpha Desktop
                         </div>
-                        <div className="text-[11px] font-mono text-gray-400 mt-0.5">Version 2.0.0 · Local Daemon (Port 3001)</div>
+                        <div className="text-[11px] font-mono text-gray-400 mt-0.5">
+                          {appVersion ? `Version ${appVersion}` : 'Reading version…'} · local daemon
+                        </div>
                       </div>
-                      <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 text-[11px] font-mono font-medium">
-                        Up to date
-                      </span>
-                    </div>
 
-                    <p className="text-[11px] text-gray-400 leading-relaxed">
-                      All agent runs, 5-stage stream updates, and GitHub Actions events are broadcast in real-time over WebSockets.
-                    </p>
+                      <p className="text-[11px] text-gray-400 leading-relaxed">
+                        Alpha looks for a new release when it starts and every six hours, downloads it
+                        in the background, and asks before restarting.
+                      </p>
 
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSavedSuccess(true);
-                          setTimeout(() => setSavedSuccess(false), 2500);
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs text-white font-medium transition-colors"
-                      >
-                        Check for Updates
-                      </button>
-                      <span className="text-[11px] text-gray-500 font-mono">1-Click Launcher: <code>start-alpha.bat</code></span>
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={checkForUpdates}
+                          disabled={updateChecking}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs text-white font-medium transition-colors disabled:opacity-50"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${updateChecking ? 'animate-spin' : ''}`} />
+                          {updateChecking ? 'Checking…' : 'Check for updates'}
+                        </button>
+                        {updateCheck && (
+                          <span className={`text-[11px] ${updateCheck.status === 'error' ? 'text-amber-300' : 'text-gray-400'}`}>
+                            {updateMessage(updateCheck)}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
               </div>
             </div>
           )}

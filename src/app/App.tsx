@@ -31,6 +31,9 @@ import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
 import { DocumentsView } from '@/features/delivery/DocumentsView';
 import { NavigationTab } from '@/shared/types';
 import { Plus, X } from 'lucide-react';
+// Whether this is the packaged desktop app rather than a browser tab, read from
+// the preload bridge. Shared with the settings panel rather than defined twice.
+import { isDesktop } from '@/shared/desktop';
 
 /**
  * The new-tab picker's list, derived rather than declared.
@@ -41,16 +44,6 @@ import { Plus, X } from 'lucide-react';
  */
 const ALL_TABS = NAV_ITEMS;
 
-/**
- * Whether this is the packaged desktop app rather than a browser tab.
- *
- * Set by the Electron preload bridge, which exposes nothing else the renderer
- * needs — the renderer reaches the backend over HTTP on 127.0.0.1 exactly as
- * it does in the browser. Absent in the web build, so this is false there.
- */
-const isDesktop = Boolean(
-  (window as unknown as { alphaDesktop?: { isDesktop?: boolean } }).alphaDesktop?.isDesktop
-);
 
 /**
  * Why a sign-in attempt bounced back, from the fragment the daemon redirects
