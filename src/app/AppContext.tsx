@@ -317,6 +317,7 @@ export type Capability =
   | 'run_agents'
   | 'contact_client'
   | 'submit_intake'
+  | 'bind_workspace'
   | 'view_members'
   | 'manage_members';
 
@@ -339,7 +340,9 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'view_runs',
     'manage_chat',
     'view_integrations',
-    'sync_board'
+    'sync_board',
+    // A developer points Alpha at their own checkout; it is their disk.
+    'bind_workspace'
   ],
   pm: [
     'view_identity',
@@ -366,6 +369,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'create_project',
     'approve_production',
     'contact_client',
+    'bind_workspace',
     'view_members',
     /*
      * A project manager staffs their own workspace. Granting `admin` is still
@@ -404,7 +408,8 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'run_agents',
     'contact_client',
     'view_members',
-    'manage_members'
+    'manage_members',
+    'bind_workspace'
   ]
 };
 

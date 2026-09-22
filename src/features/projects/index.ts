@@ -6,3 +6,4 @@ export * from './ProjectsView';
 export * from './useProjectsViewModel';
 export * from './ProjectEnvPanel';
 export * from './ProjectResourcesPanel';
+export * from './ProjectWorkspaceCard';
