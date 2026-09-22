@@ -52,7 +52,9 @@ export const SettingsView: React.FC = () => {
   // A client's settings are their own profile and how they want to be contacted.
   const allTabs = [
     { id: 'general', label: 'Workspace General', icon: <Layers className="w-4 h-4" />, roles: ['client', 'dev', 'pm', 'admin'] },
-    { id: 'members', label: 'Members & Roles', icon: <Users className="w-4 h-4" />, roles: ['pm', 'admin'] },
+    // Developers see the team too: knowing your colleagues is not privileged,
+    // and the panel shows them the list without the controls.
+    { id: 'members', label: 'Members & Roles', icon: <Users className="w-4 h-4" />, roles: ['dev', 'pm', 'admin'] },
     { id: 'project_access', label: 'Project Access', icon: <Shield className="w-4 h-4" />, roles: ['pm', 'admin'] },
     // Connecting GitHub is per-person and per-machine, so anyone who ships
     // code needs it — not just whoever administers the workspace.

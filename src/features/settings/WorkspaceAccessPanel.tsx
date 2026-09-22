@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, LockKeyhole, Shield, Users, UserRound, FolderKanban } from 'lucide-react';
+import { Check, LockKeyhole, Shield, Users, UserRound, FolderKanban, UserPlus } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
 import { apiService } from '@/shared/services/apiService';
 import { UserRole, WorkspaceProjectAssignment } from '@/shared/types';
@@ -29,6 +29,7 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
     activeWorkspace,
     activeWorkspaceId,
     projects,
+    role,
     can,
     showToast
   } = useApp();
@@ -39,6 +40,11 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
   const [assignments, setAssignments] = useState<WorkspaceProjectAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [candidates, setCandidates] = useState<Array<{ login: string; avatarUrl: string | null }>>([]);
+  const [candidateError, setCandidateError] = useState<string | null>(null);
+  const [invitee, setInvitee] = useState('');
+  const [inviteeRole, setInviteeRole] = useState<UserRole>('dev');
+  const [adding, setAdding] = useState(false);
 
   useEffect(() => {
     if (!activeWorkspaceId || !canViewMembers) return;
@@ -56,6 +62,30 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
       });
     return () => { cancelled = true; };
   }, [activeWorkspaceId, canViewMembers]);
+
+  /**
+   * Who there is to add.
+   *
+   * The organisation's people, so staffing a workspace is picking a name
+   * rather than typing a login exactly right. A deployment with no
+   * organisation configured, or a GitHub that will not answer, falls back to
+   * typing one -- the add itself does not depend on this list.
+   */
+  useEffect(() => {
+    if (mode !== 'members' || !activeWorkspaceId || !canManageMembers) return;
+    let cancelled = false;
+    void apiService.getWorkspaceMemberCandidates(activeWorkspaceId)
+      .then(rows => {
+        if (!cancelled) {
+          setCandidates(rows);
+          setCandidateError(null);
+        }
+      })
+      .catch(error => {
+        if (!cancelled) setCandidateError(error instanceof Error ? error.message : String(error));
+      });
+    return () => { cancelled = true; };
+  }, [activeWorkspaceId, canManageMembers, mode, members.length]);
 
   useEffect(() => {
     if (projects.length > 0 && !projects.some(project => project.id === selectedProjectId)) {
@@ -89,6 +119,23 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
     () => new Set(assignments.filter(assignment => assignment.status === 'active').map(assignment => assignment.userId)),
     [assignments]
   );
+
+  const addMember = async () => {
+    const login = invitee.trim();
+    if (!activeWorkspaceId || !login || adding) return;
+    setAdding(true);
+    try {
+      const added = await apiService.addWorkspaceMember(activeWorkspaceId, login, inviteeRole);
+      setMembers(prev => [...prev.filter(item => item.userId !== added.userId), added as WorkspaceMember]);
+      setCandidates(prev => prev.filter(person => person.login.toLowerCase() !== added.userId.toLowerCase()));
+      setInvitee('');
+      showToast('Added to the workspace', `${added.userId} is now a ${ROLE_LABEL[added.role]} here.`, 'success');
+    } catch (error) {
+      showToast('Not added', error instanceof Error ? error.message : String(error), 'error');
+    } finally {
+      setAdding(false);
+    }
+  };
 
   const updateMemberRole = async (member: WorkspaceMember, role: UserRole) => {
     if (!activeWorkspaceId || !canManageMembers || role === member.role) return;
@@ -149,8 +196,59 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
               <h3 className="text-sm font-semibold text-white">Members & roles</h3>
               <p className="mt-1 text-[11px] text-gray-500">Workspace membership controls what a person can discover and use.</p>
             </div>
-            <span className="rounded-full border border-brand-400/20 bg-brand-500/10 px-2.5 py-1 text-[10px] font-medium text-brand-200">{canManageMembers ? 'Admin controls' : 'PM visibility'}</span>
+            <span className="rounded-full border border-brand-400/20 bg-brand-500/10 px-2.5 py-1 text-[10px] font-medium text-brand-200">{canManageMembers ? 'Can add and change' : 'Read only'}</span>
           </div>
+          {canManageMembers && (
+            <div className="border-b border-white/[0.07] bg-white/[0.02] px-5 py-4">
+              <div className="flex items-center gap-2 text-gray-400">
+                <UserPlus className="h-4 w-4 text-brand-300" />
+                <span className="text-[11px] font-semibold uppercase tracking-[0.14em]">Add someone</span>
+              </div>
+              <p className="mt-1 text-[11px] text-gray-500">
+                They are in the workspace straight away — there is no code to send and nothing for them to accept.
+              </p>
+              <form
+                className="mt-3 flex flex-col gap-2 sm:flex-row"
+                onSubmit={event => {
+                  event.preventDefault();
+                  void addMember();
+                }}
+              >
+                <input
+                  list="workspace-member-candidates"
+                  value={invitee}
+                  onChange={event => setInvitee(event.target.value)}
+                  placeholder={candidates.length ? 'GitHub username' : 'GitHub username (type it in)'}
+                  className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-surface-100 px-3 py-2.5 text-xs text-white outline-none placeholder:text-gray-600 focus:border-brand-400/50"
+                />
+                <datalist id="workspace-member-candidates">
+                  {candidates.map(person => <option key={person.login} value={person.login} />)}
+                </datalist>
+                <select
+                  value={inviteeRole}
+                  onChange={event => setInviteeRole(event.target.value as UserRole)}
+                  className="rounded-xl border border-white/[0.08] bg-surface-100 px-3 py-2.5 text-xs text-white outline-none focus:border-brand-400/50"
+                >
+                  {/* Only an admin may make another admin; the server refuses the rest. */}
+                  {(['dev', 'pm', 'client', ...(role === 'admin' ? ['admin' as UserRole] : [])] as UserRole[]).map(option => (
+                    <option key={option} value={option}>{ROLE_LABEL[option]}</option>
+                  ))}
+                </select>
+                <button
+                  type="submit"
+                  disabled={adding || !invitee.trim()}
+                  className="rounded-xl bg-brand-500 px-4 py-2.5 text-xs font-medium text-on-accent transition-opacity disabled:opacity-40"
+                >
+                  {adding ? 'Adding…' : 'Add'}
+                </button>
+              </form>
+              {candidateError && (
+                <p className="mt-2 text-[11px] text-amber-300/80">
+                  Could not list the organisation’s people ({candidateError}). Type a GitHub username instead.
+                </p>
+              )}
+            </div>
+          )}
           {loading ? (
             <div className="px-5 py-10 text-center text-xs text-gray-500">Loading workspace members…</div>
           ) : members.length === 0 ? (

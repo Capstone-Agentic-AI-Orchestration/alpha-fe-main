@@ -226,6 +226,22 @@ export const apiService = {
     fetchJson<Array<{ id: string; userId: string; role: UserRole; status: string; createdAt: string; updatedAt: string }>>(
       `/workspaces/${encodeURIComponent(workspaceId)}/members`
     ),
+  /**
+   * Put someone in this workspace at once, rather than sending them a code.
+   *
+   * A project manager staffing their workspace already knows who they want;
+   * the person finds it waiting at their next sign-in.
+   */
+  addWorkspaceMember: (workspaceId: string, userId: string, role: UserRole) =>
+    fetchJson<{ id: string; userId: string; role: UserRole; status: string; createdAt: string; updatedAt: string }>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/members`,
+      { method: 'POST', body: JSON.stringify({ userId, role }) }
+    ),
+  /** Who there is to add: the organisation's people, minus this workspace's. */
+  getWorkspaceMemberCandidates: (workspaceId: string) =>
+    fetchJson<Array<{ login: string; avatarUrl: string | null }>>(
+      `/workspaces/${encodeURIComponent(workspaceId)}/members/candidates`
+    ),
   updateWorkspaceMember: (workspaceId: string, memberId: string, updates: { role?: UserRole; status?: string }) =>
     fetchJson(`/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(memberId)}`, {
       method: 'PATCH',

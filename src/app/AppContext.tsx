@@ -366,7 +366,12 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'create_project',
     'approve_production',
     'contact_client',
-    'view_members'
+    'view_members',
+    /*
+     * A project manager staffs their own workspace. Granting `admin` is still
+     * an admin's to do, and the server refuses it for anyone else.
+     */
+    'manage_members'
   ],
   admin: [
     'view_identity',
