@@ -481,10 +481,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Re-read rather than patching from the report: the daemon already
       // assembled the board consistently, and rebuilding it from a summary is
       // how the two versions drift apart.
-      const fresh = await apiService.getIssues();
+      // Projects too when the sync made any: a repository new to the
+      // organisation becomes a project, and its cards would otherwise sit
+      // under a project the sidebar does not know about until a reload.
+      const imported = report.projectsImported ?? 0;
+      const [fresh, freshProjects] = await Promise.all([
+        apiService.getIssues(),
+        imported > 0 ? apiService.getProjects() : Promise.resolve(null)
+      ]);
+      if (freshProjects?.length) setProjects(freshProjects);
       if (fresh?.length) setIssues(fresh as any);
       setLastSyncedAt(new Date().toISOString());
 
+      if (imported > 0) {
+        showToast(
+          'Repositories added',
+          `${imported} ${imported === 1 ? 'repository is' : 'repositories are'} now on the board as projects.`,
+          'success'
+        );
+      }
       if (report.created + report.updated > 0) {
         showToast('Board synced', `${report.created} new, ${report.updated} updated from GitHub.`, 'success');
       }

@@ -187,6 +187,11 @@ export const apiService = {
    */
   syncBoard: () =>
     fetchJson<{
+      /**
+       * Projects made for organisation repositories seen for the first time.
+       * Optional: a backend older than repository import does not send it.
+       */
+      projectsImported?: number;
       projects: number; created: number; updated: number; unchanged: number;
       skipped: { project: string; reason: string }[];
       errors: { project: string; detail: string }[];
