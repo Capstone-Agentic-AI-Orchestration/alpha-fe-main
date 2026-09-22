@@ -9,7 +9,6 @@ import {
   Edit3,
   HelpCircle,
   Plus,
-  LogIn,
   LogOut,
   Check,
   Search,
@@ -50,12 +49,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
     workspaceLoading,
     switchWorkspace,
     createWorkspace,
-    joinWorkspace,
     visibleTabs,
   } = useApp();
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
-  const [workspaceAction, setWorkspaceAction] = useState<'create' | 'join' | null>(null);
+  // Creating is the only way into a workspace from here. Nobody joins one:
+  // a project manager puts people in theirs, so an invite code a developer
+  // could type was a second, unmanaged door into the same room.
+  const [workspaceAction, setWorkspaceAction] = useState<'create' | null>(null);
   const [workspaceInput, setWorkspaceInput] = useState('');
   const [workspaceActionBusy, setWorkspaceActionBusy] = useState(false);
 
@@ -194,9 +195,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     event.preventDefault();
                     if (!workspaceInput.trim()) return;
                     setWorkspaceActionBusy(true);
-                    const result = workspaceAction === 'create'
-                      ? await createWorkspace(workspaceInput.trim())
-                      : await joinWorkspace(workspaceInput.trim());
+                    const result = await createWorkspace(workspaceInput.trim());
                     setWorkspaceActionBusy(false);
                     if (result) {
                       setWorkspaceInput('');
@@ -204,7 +203,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setWorkspaceMenuOpen(false);
                       // A new workspace has nobody in it yet, so go where its
                       // people are added rather than leaving it empty.
-                      if (workspaceAction === 'create') setActiveTab('settings');
+                      setActiveTab('settings');
                     }
                   }}
                 >
@@ -212,30 +211,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     autoFocus
                     value={workspaceInput}
                     onChange={event => setWorkspaceInput(event.target.value)}
-                    placeholder={workspaceAction === 'create' ? 'Workspace name' : 'Invite code'}
+                    placeholder="Workspace name"
                     className="w-full rounded-lg border border-white/[0.10] bg-black/20 px-2.5 py-2 text-xs text-white outline-none placeholder:text-gray-600 focus:border-brand-400/60"
                   />
                   <div className="flex items-center justify-end gap-1.5">
                     <button type="button" onClick={() => { setWorkspaceAction(null); setWorkspaceInput(''); }} className="rounded-lg px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-200">Cancel</button>
                     <button type="submit" disabled={workspaceActionBusy || !workspaceInput.trim()} className="rounded-lg bg-brand-500 px-2.5 py-1.5 text-xs font-medium text-on-accent disabled:opacity-40">
-                      {workspaceActionBusy ? 'Working…' : workspaceAction === 'create' ? 'Create' : 'Join'}
+                      {workspaceActionBusy ? 'Working…' : 'Create'}
                     </button>
                   </div>
                 </form>
               ) : (
-                <div className={`mt-1.5 grid gap-1 border-t border-white/[0.06] pt-2 ${canCreateWorkspace ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                  {/* Creating a workspace makes you its admin, so the API allows
-                      it for admins only. Offering it to everyone else was a
-                      button whose only outcome was a 403. */}
-                  {canCreateWorkspace && (
+                /* Creating a workspace makes you its admin, so the API allows
+                   it for admins only. Offering it to everyone else was a
+                   button whose only outcome was a 403 -- and with nothing
+                   beside it, an admin-only row is the whole section. */
+                canCreateWorkspace && (
+                  <div className="mt-1.5 grid grid-cols-1 gap-1 border-t border-white/[0.06] pt-2">
                     <button onClick={() => setWorkspaceAction('create')} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white">
                       <Plus className="h-3.5 w-3.5" /> Create
                     </button>
-                  )}
-                  <button onClick={() => setWorkspaceAction('join')} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white">
-                    <LogIn className="h-3.5 w-3.5" /> Join
-                  </button>
-                </div>
+                  </div>
+                )
               )}
               <button
                 onClick={() => {
