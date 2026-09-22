@@ -385,6 +385,22 @@ export const LiveBuildRoomView: React.FC = () => {
     };
   }, [eligibleRole, loadRoom, selectedProjectId]);
 
+  /**
+   * Join the channels of the runs on screen.
+   *
+   * The room listened for run events and never asked for any: a channel is
+   * opened per run by whoever is showing that run, and on the web that was
+   * only the run-progress panel. So a project manager watching the room saw
+   * nothing until the ten-second poll came round, which is not what "live"
+   * means. Every member run of the active squad run is subscribed while the
+   * room is open, and released when it is not.
+   */
+  useEffect(() => {
+    const runIds = (snapshot?.activeRun?.memberRuns ?? []).map(run => run.id);
+    runIds.forEach(runId => runnerSocket.subscribeToRunStream(runId));
+    return () => runIds.forEach(runId => runnerSocket.unsubscribeFromRunStream(runId));
+  }, [snapshot?.activeRun?.id, snapshot?.activeRun?.memberRuns?.length]);
+
   const selectedCard = useMemo(() => {
     if (!snapshot) return null;
     return snapshot.agentCards.find(card => card.agentId === selectedAgentId) ?? snapshot.agentCards[0] ?? null;

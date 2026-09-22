@@ -40,6 +40,7 @@ import { apiService, normalizeGitHubRepo, normalizeSkill, setActiveWorkspaceId }
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
+import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
 function normalizeAnalytics(value: unknown, fallback: AnalyticsData = emptyAnalytics): AnalyticsData {
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
@@ -525,6 +526,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setSyncing(false);
     }
   }, [localMode, role]);
+
+  /**
+   * The board, as it moves.
+   *
+   * Everyone used to find out when they next asked: this app re-syncs when it
+   * regains focus, a desktop when someone presses Sync. So a project manager
+   * watching a developer's run saw the card move some time after it moved, and
+   * two people editing the same board spent that interval looking at different
+   * truths.
+   *
+   * The database announces each write on the workspace's own channel (`0012`),
+   * and this re-reads what changed. The message is a nudge, not the board: it
+   * says a write happened and which table, and the answer comes from the API,
+   * which applies the same permissions as everywhere else. Acting on the
+   * payload would be trusting a row this person may not be allowed to see.
+   *
+   * Private, like every channel here: Realtime admits only a token whose
+   * workspace matches the channel's.
+   */
+  useEffect(() => {
+    if (localMode || !activeWorkspaceId || !isSupabaseConfigured() || !supabase) return;
+
+    let cancelled = false;
+    let pending: ReturnType<typeof setTimeout> | null = null;
+    const changed = new Set<string>();
+
+    const reread = () => {
+      pending = null;
+      const tables = new Set(changed);
+      changed.clear();
+      if (tables.has('issues')) {
+        void apiService.getIssues().then(rows => {
+          if (!cancelled && rows) setIssues(rows as any);
+        }).catch(() => {
+          // A failed re-read leaves what is on screen; the next message or the
+          // next focus will try again.
+        });
+      }
+      if (tables.has('projects')) {
+        void apiService.getProjects().then(rows => {
+          if (!cancelled && rows) setProjects(rows);
+        }).catch(() => {});
+      }
+    };
+
+    /** A burst of writes -- a sync, a run finishing -- is one re-read. */
+    const onBoardWrite = ({ payload }: { payload: any }) => {
+      changed.add(String(payload?.table ?? 'issues'));
+      if (pending) clearTimeout(pending);
+      pending = setTimeout(reread, 400);
+    };
+
+    const channel = supabase
+      .channel(`workspace:${activeWorkspaceId}:board`, { config: { private: true } })
+      .on('broadcast', { event: 'INSERT' }, onBoardWrite)
+      .on('broadcast', { event: 'UPDATE' }, onBoardWrite)
+      .on('broadcast', { event: 'DELETE' }, onBoardWrite)
+      .subscribe();
+
+    return () => {
+      cancelled = true;
+      if (pending) clearTimeout(pending);
+      void supabase?.removeChannel(channel);
+    };
+  }, [activeWorkspaceId, localMode]);
 
   /**
     * The role you chose, which is an override rather than the answer.
