@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { apiService } from '@/shared/services/apiService';
 import { ProjectResource, ScaffoldStack } from '@/shared/types';
 import { GitBranch, Folder, FolderOpen, Plus, Trash2 } from 'lucide-react';
-import { AttachWorkspaceForm } from './AttachWorkspaceForm';
+import { ProjectWorkspaceCard } from './ProjectWorkspaceCard';
 
 interface ProjectResourcesPanelProps {
   /** Owning project. Repositories are scaffolded against it, never standalone. */
@@ -355,17 +355,18 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       )}
 
       {/*
-        Attaching a checkout is the first thing a new collaborator does, and
+        Getting a checkout is the first thing a new collaborator does, and
         there was no way to do it — the panel could only scaffold a brand new
-        repository, which is the wrong shape for someone who has just cloned
-        the team's. Placed above the list because on a fresh project the list
-        is empty and this is the only useful control on the screen.
+        repository, which is the wrong shape for someone who has just joined
+        a team that already has one. Placed above the list because on a fresh
+        project the list is empty and this is the only useful control here.
+
+        The folder is not a project resource: the project belongs to the team
+        and the folder to this machine, so the card reads and writes the
+        per-machine binding instead.
       */}
-      {variant === 'full' && !readOnly && (
-        <AttachWorkspaceForm
-          project={{ id: projectId, resources }}
-          onAttached={onChange}
-        />
+      {variant === 'full' && (
+        <ProjectWorkspaceCard project={{ id: projectId, name: 'this project', resources }} />
       )}
 
       {/* Attached resources */}

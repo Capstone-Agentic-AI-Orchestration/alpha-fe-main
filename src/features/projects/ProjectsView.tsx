@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '@/app/AppContext';
 import { 
   Plus, 
@@ -56,6 +56,15 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
   // Search & Filters on main list
   const [searchQuery, setSearchQuery] = useState<string>('');
+  /**
+   * Mine, or the whole workspace.
+   *
+   * Everyone can see every project now -- you have to be able to find the one
+   * you are about to be put on, and set it up before an issue is assigned.
+   * That makes "all of them" the wrong default for getting on with work, so
+   * the list opens on what is actually yours, unless nothing is.
+   */
+  const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [priorityFilter, setPriorityFilter] = useState<string>('all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
@@ -84,6 +93,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   // Filter and Sort Main Projects List
   const filteredProjects = useMemo(() => {
     let list = projects.filter(p => {
+      if (scope === 'mine' && p.assigned === false) return false;
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (priorityFilter !== 'all' && (p.priority || 'none') !== priorityFilter) return false;
       if (searchQuery.trim()) {
@@ -113,7 +123,19 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     });
 
     return list;
-  }, [projects, issues, statusFilter, priorityFilter, searchQuery, sortBy, sortOrder]);
+  }, [projects, issues, scope, statusFilter, priorityFilter, searchQuery, sortBy, sortOrder]);
+
+  /**
+   * How many are the caller's own. A project with no `assigned` field at all
+   * is from a daemon that predates the distinction, and counts as theirs.
+   */
+  const mineCount = useMemo(() => projects.filter(p => p.assigned !== false).length, [projects]);
+
+  // Nothing assigned yet is the common case for a new developer, and an empty
+  // "My projects" with a populated workspace behind it looks like a bug.
+  useEffect(() => {
+    if (mineCount === 0 && projects.length > 0) setScope('all');
+  }, [mineCount, projects.length]);
 
   // Issues belonging to currently selected project
   const projectIssues = useMemo(() => {
@@ -682,6 +704,24 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       {/* ================= SEARCH & ACTION ROW ================= */}
       {projects.length > 0 && (
       <div className="flex items-center justify-between gap-4">
+        {/* Mine / the workspace's */}
+        <div className="flex items-center rounded-md border border-white/[0.07] bg-surface p-0.5 text-xs">
+          {([
+            ['mine', 'My projects', mineCount],
+            ['all', 'All projects', projects.length]
+          ] as const).map(([value, label, count]) => (
+            <button
+              key={value}
+              onClick={() => setScope(value)}
+              className={`rounded px-2.5 py-1 transition-colors ${
+                scope === value ? 'bg-white/10 font-semibold text-white' : 'text-gray-400 hover:text-white'
+              }`}
+            >
+              {label} <span className="tabular-nums text-gray-500">{count}</span>
+            </button>
+          ))}
+        </div>
+
         {/* Left: Search input */}
         <div className="relative flex-1 max-w-xs">
           <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />

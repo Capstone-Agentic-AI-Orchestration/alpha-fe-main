@@ -256,7 +256,35 @@ export interface Milestone {
   completed: boolean;
 }
 
+/** Where a project's code is on this machine, and what state it is in. */
+export interface ProjectBinding {
+  projectId: string;
+  localDir: string;
+  isManaged: boolean;
+  activeBranch?: string;
+  lastSyncedAt?: string;
+  ownerRepo?: string;
+}
+
+export interface CheckoutStatus {
+  exists: boolean;
+  branch?: string;
+  clean: boolean;
+  ahead: number;
+  behind: number;
+  tracking?: string;
+}
+
 export interface Project {
+  /**
+   * Whether this project is the caller's own work.
+   *
+   * Everyone in the workspace can see every project -- you have to be able to
+   * find the one you are about to be put on, and set it up before an issue is
+   * assigned. This says which are yours, which is what the board and the
+   * "My projects" scope are about.
+   */
+  assigned?: boolean;
   /**
    * Values this project resolves `${VAR}` against in MCP server definitions.
    *

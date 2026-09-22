@@ -1,5 +1,7 @@
 import {
   Project,
+  ProjectBinding,
+  CheckoutStatus,
   Agent,
   AgentPersonaFile,
   Issue,
@@ -261,6 +263,23 @@ export const apiService = {
       `/workspaces/${encodeURIComponent(workspaceId)}/projects/${encodeURIComponent(projectId)}/assignments/${encodeURIComponent(userId)}`,
       { method: 'DELETE' }
     ),
+  /** Where this machine keeps a project's code. Null in the cloud, which has no checkout. */
+  getProjectBinding: (projectId: string) =>
+    fetchJson<ProjectBinding | null>(`/projects/${encodeURIComponent(projectId)}/binding`),
+  /** Point this machine at a folder that already holds the project's code. */
+  bindProject: (projectId: string, localDir: string) =>
+    fetchJson<ProjectBinding>(`/projects/${encodeURIComponent(projectId)}/binding`, {
+      method: 'PUT',
+      body: JSON.stringify({ localDir })
+    }),
+  unbindProject: (projectId: string) =>
+    fetchJson<{ success: boolean }>(`/projects/${encodeURIComponent(projectId)}/binding`, { method: 'DELETE' }),
+  /** Clone the repository here and bind it, in one press. Safe to repeat. */
+  cloneProject: (projectId: string) =>
+    fetchJson<ProjectBinding>(`/projects/${encodeURIComponent(projectId)}/clone`, { method: 'POST' }),
+  /** Branch, uncommitted work and unpushed commits, read from git now. */
+  getProjectCheckoutStatus: (projectId: string) =>
+    fetchJson<CheckoutStatus | null>(`/projects/${encodeURIComponent(projectId)}/binding/status`),
   getProjects: async (): Promise<Project[]> => {
     return fetchJson<Project[]>('/projects');
   },
