@@ -270,7 +270,6 @@ interface AppContextType {
   workspaceSwitching: boolean;
   switchWorkspace: (workspaceId: string) => Promise<void>;
   createWorkspace: (name: string) => Promise<WorkspaceSummary | null>;
-  joinWorkspace: (code: string) => Promise<WorkspaceSummary | null>;
   refreshWorkspaces: () => Promise<void>;
   refreshLiveBuildRoomProjects: () => Promise<void>;
 
@@ -1116,18 +1115,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return created;
     } catch (error) {
       showToast('Workspace not created', error instanceof Error ? error.message : String(error), 'error');
-      return null;
-    }
-  };
-
-  const joinWorkspace = async (code: string): Promise<WorkspaceSummary | null> => {
-    try {
-      const joined = await apiService.joinWorkspace(code);
-      setWorkspaces(prev => prev.some(workspace => workspace.id === joined.id) ? prev : [...prev, joined]);
-      await switchWorkspace(joined.id, joined);
-      return joined;
-    } catch (error) {
-      showToast('Workspace not joined', error instanceof Error ? error.message : String(error), 'error');
       return null;
     }
   };
@@ -3479,7 +3466,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       workspaceSwitching,
       switchWorkspace,
       createWorkspace,
-      joinWorkspace,
       refreshWorkspaces,
       refreshLiveBuildRoomProjects,
       requirementDocs: scopedDocs,

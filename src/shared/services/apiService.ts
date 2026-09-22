@@ -219,11 +219,6 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
-  joinWorkspace: (code: string) =>
-    fetchJson<WorkspaceSummary>('/workspaces/join', {
-      method: 'POST',
-      body: JSON.stringify({ code })
-    }),
   getWorkspaceMembers: (workspaceId: string) =>
     fetchJson<Array<{ id: string; userId: string; role: UserRole; status: string; createdAt: string; updatedAt: string }>>(
       `/workspaces/${encodeURIComponent(workspaceId)}/members`
