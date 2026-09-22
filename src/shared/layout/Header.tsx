@@ -1,23 +1,20 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useApp } from '@/app/AppContext';
-import { 
-  Search, 
-  Bot, 
-  Cpu, 
-  Plus, 
+import {
+  Search,
+  Bot,
+  Cpu,
+  Plus,
   Bell,
-  ChevronRight,
-  Download
+  ChevronRight
 } from 'lucide-react';
-import { DownloadDesktopModal } from '@/shared/components/DownloadDesktopModal';
 
 interface HeaderProps {
   onOpenNewIssue: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
-  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
-  const { 
+  const {
     activeTab, 
     setCommandPaletteOpen, 
     unreadInboxCount, 
@@ -148,16 +145,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
           )}
         </button>
 
-        {/* Download Desktop App (.exe) Button */}
-        <button
-          onClick={() => setDownloadModalOpen(true)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 text-indigo-200 hover:text-white hover:bg-indigo-500/25 text-xs font-semibold transition-all shadow-sm"
-          title="Download Desktop App Mode (.exe)"
-        >
-          <Download className="w-3.5 h-3.5 text-indigo-400" />
-          <span className="hidden md:inline">Desktop App (.exe)</span>
-        </button>
-
         {/* New Issue Button */}
         <button
           onClick={onOpenNewIssue}
@@ -168,11 +155,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
         </button>
       </div>
 
-      {/* Desktop App Download Modal */}
-      <DownloadDesktopModal
-        isOpen={downloadModalOpen}
-        onClose={() => setDownloadModalOpen(false)}
-      />
     </header>
   );
 };
