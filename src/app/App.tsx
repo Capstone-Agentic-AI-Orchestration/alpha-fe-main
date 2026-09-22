@@ -14,7 +14,6 @@ import { CreateIssueModal } from '@/features/issues/CreateIssueModal';
 import { AgentRunModal } from '@/features/runs/AgentRunModal';
 import { PrototypeGuide } from '@/features/onboarding/PrototypeGuide';
 import { ToastRegion } from '@/shared/components/ToastRegion';
-import { DownloadDesktopModal } from '@/shared/components/DownloadDesktopModal';
 import { InboxView } from '@/features/inbox/InboxView';
 import { ChatView } from '@/features/chat/ChatView';
 import { IssuesView } from '@/features/issues/IssuesView';
@@ -31,7 +30,7 @@ import { ClientPortalView } from '@/features/delivery/ClientPortalView';
 import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
 import { DocumentsView } from '@/features/delivery/DocumentsView';
 import { NavigationTab } from '@/shared/types';
-import { Plus, X, Download } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 /**
  * The new-tab picker's list, derived rather than declared.
@@ -109,7 +108,6 @@ export const App: React.FC = () => {
     }
   };
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
-  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
   const newTabMenuRef = useRef<HTMLDivElement>(null);
@@ -346,20 +344,6 @@ export const App: React.FC = () => {
                 </div>
               )}
             </div>
-
-            {/* Right Actions */}
-            <div className="ml-auto flex flex-shrink-0 items-center gap-1.5 pl-1">
-              <div className="hidden h-6 w-px bg-white/[0.08] sm:block" aria-hidden="true" />
-              <button
-                onClick={() => setDownloadModalOpen(true)}
-                className="flex h-9 items-center gap-2 rounded-xl border border-brand-400/30 bg-brand-500/15 px-2.5 text-xs font-semibold text-brand-600 transition-all hover:bg-brand-500/25 hover:text-brand-700 dark:text-brand-100 dark:hover:text-white sm:px-3"
-                title="Download desktop app (.exe)"
-                aria-label="Download desktop app (.exe)"
-              >
-                <Download className="h-3.5 w-3.5 text-brand-600 dark:text-brand-400" />
-                <span className="hidden sm:inline">Desktop App (.exe)</span>
-              </button>
-            </div>
           </div>
         </div>
 
@@ -390,11 +374,6 @@ export const App: React.FC = () => {
       <CreateIssueModal
         isOpen={createIssueOpen}
         onClose={() => setCreateIssueOpen(false)}
-      />
-
-      <DownloadDesktopModal
-        isOpen={downloadModalOpen}
-        onClose={() => setDownloadModalOpen(false)}
       />
 
       <AgentRunModal />
