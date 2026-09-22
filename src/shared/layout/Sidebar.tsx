@@ -57,6 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [workspaceActionBusy, setWorkspaceActionBusy] = useState(false);
 
   const userName = identity?.login ?? currentUser.name;
+  const canCreateWorkspace = role === 'admin';
   const workspaceName = activeWorkspace?.name || settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
   const canManageIssues = can('manage_issues');
   const labelFor = (tab: NavigationTab) => navLabel(tab, role);
@@ -205,7 +206,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     autoFocus
                     value={workspaceInput}
                     onChange={event => setWorkspaceInput(event.target.value)}
-                    placeholder={workspaceAction === 'create' ? 'Workspace name' : 'Invite code or slug'}
+                    placeholder={workspaceAction === 'create' ? 'Workspace name' : 'Invite code'}
                     className="w-full rounded-lg border border-white/[0.10] bg-black/20 px-2.5 py-2 text-xs text-white outline-none placeholder:text-gray-600 focus:border-brand-400/60"
                   />
                   <div className="flex items-center justify-end gap-1.5">
@@ -216,10 +217,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </form>
               ) : (
-                <div className="mt-1.5 grid grid-cols-2 gap-1 border-t border-white/[0.06] pt-2">
-                  <button onClick={() => setWorkspaceAction('create')} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white">
-                    <Plus className="h-3.5 w-3.5" /> Create
-                  </button>
+                <div className={`mt-1.5 grid gap-1 border-t border-white/[0.06] pt-2 ${canCreateWorkspace ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                  {/* Creating a workspace makes you its admin, so the API allows
+                      it for admins only. Offering it to everyone else was a
+                      button whose only outcome was a 403. */}
+                  {canCreateWorkspace && (
+                    <button onClick={() => setWorkspaceAction('create')} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white">
+                      <Plus className="h-3.5 w-3.5" /> Create
+                    </button>
+                  )}
                   <button onClick={() => setWorkspaceAction('join')} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white">
                     <LogIn className="h-3.5 w-3.5" /> Join
                   </button>
