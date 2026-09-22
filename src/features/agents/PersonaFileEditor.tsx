@@ -34,13 +34,11 @@ interface Props {
 }
 
 const PLACEHOLDER = `---
-name: Ada Lovelace
-role: Architect
-provider: Anthropic
-  model:
+name: Agent name
+role: Coder
 ---
 
-You are Ada. Lead with the interface, then the implementation.`;
+Describe this agent's role, constraints, and expected handoff.`;
 
 export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Props) {
   const [file, setFile] = useState<AgentPersonaFile | null>(null);

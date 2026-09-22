@@ -565,7 +565,7 @@ export const AgentsView: React.FC = () => {
                     {agent.stats?.totalRuns || 0} tasks done
                   </div>
                   <div className="text-[10px] text-gray-500">
-                    Active {agent.lastActive || 'recently'}
+                    {agent.lastActive ? `Last active ${agent.lastActive}` : 'No recorded activity'}
                   </div>
                 </div>
 

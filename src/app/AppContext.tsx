@@ -31,11 +31,18 @@ import {
   WorkspaceSummary
 } from '@/shared/types';
 import {
+  defaultSettings,
   emptyAnalytics,
-  initialSettings,
-  initialUsers,
-  initialRequirementDocs,
-} from '@/data/mockData';
+  isLegacyDemoAnalytics,
+  migrateLegacyMockStorage,
+  normalizeInboxNotifications,
+  normalizeLegacyAgents,
+  normalizeLegacyDeployments,
+  normalizeLegacyIssues,
+  normalizeLegacyPrototypeRuns,
+  normalizeRequirementDocs,
+  normalizeSettings
+} from '@/data/defaults';
 import { apiService, normalizeGitHubRepo, normalizeSkill, setActiveWorkspaceId } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
@@ -43,6 +50,7 @@ import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 
 function normalizeAnalytics(value: unknown, fallback: AnalyticsData = emptyAnalytics): AnalyticsData {
+  if (isLegacyDemoAnalytics(value)) return fallback;
   const raw = value && typeof value === 'object' ? value as Record<string, unknown> : {};
   const legacyTimeline = Array.isArray(raw.tokenTimeline) ? raw.tokenTimeline : [];
   const timeline = Array.isArray(raw.runTimeline)
@@ -89,12 +97,6 @@ function normalizeAnalytics(value: unknown, fallback: AnalyticsData = emptyAnaly
     agentBreakdown,
     modelBreakdown
   };
-}
-
-function cleanInbox(items: InboxNotification[]): InboxNotification[] {
-  return items.filter(notification =>
-    !/\b(budget|estimate|billing|price|cost)\b/i.test(`${notification.title} ${notification.message}`)
-  );
 }
 
 export interface RunPlanDraft {
@@ -341,6 +343,8 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'manage_chat',
     'view_integrations',
     'sync_board',
+    // Developers may see the real workspace roster, but cannot edit it.
+    'view_members',
     // A developer points Alpha at their own checkout; it is their disk.
     'bind_workspace'
   ],
@@ -424,7 +428,20 @@ const ROLE_TABS = ROLE_NAV;
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+type WorkspaceMemberRecord = {
+  id: string;
+  userId: string;
+  role: UserRole;
+  status: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // This runs before any cache-backed state initializer below. The migration
+  // only recognizes records from Alpha's retired demo dataset.
+  migrateLegacyMockStorage();
+
   // Role is resolved before any tab state, because what a tab is allowed to be
   // depends on it.
   /**
@@ -450,6 +467,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
+  const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberRecord[]>([]);
   /** Project ids for which the current role has an owned/assigned squad room. */
   const [liveBuildRoomProjectIds, setLiveBuildRoomProjectIds] = useState<string[]>([]);
 
@@ -691,16 +709,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Raw collections. These are never handed to a view directly — the scoped
   // derivations further down are what the provider exposes, so a view cannot
   // accidentally render another persona's data.
-  const [issues, setIssues] = useState<Issue[]>(() => loadFromStorage<Issue[]>('issues', []));
+  const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(loadFromStorage<Issue[]>('issues', [])));
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage<Project[]>('projects', []));
-  const [agents, setAgents] = useState<Agent[]>(() => loadFromStorage<Agent[]>('agents', []));
+  const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(loadFromStorage<Agent[]>('agents', [])));
   const [squads, setSquads] = useState<Squad[]>(() => loadFromStorage<Squad[]>('squads', []));
   const [runtimes, setRuntimes] = useState<RuntimeEngine[]>(() => loadFromStorage<RuntimeEngine[]>('runtimes', []));
   const [skills, setSkills] = useState<Skill[]>(() => {
     const saved = loadFromStorage<unknown[]>('skills', []);
     return Array.isArray(saved) ? saved.map(normalizeSkill) : [];
   });
-  const [deployments] = useState<Deployment[]>(() => loadFromStorage('deployments_v2', []));
+  const [deployments] = useState<Deployment[]>(() => normalizeLegacyDeployments(loadFromStorage('deployments_v2', [])));
   /**
    * Starts empty, not seeded.
    *
@@ -710,9 +728,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * glance. An inbox that invents its own contents cannot be trusted for the
    * ones that matter.
    */
-  const [inbox, setInbox] = useState<InboxNotification[]>(() => cleanInbox(loadFromStorage<InboxNotification[]>('inbox', [])));
+  const [inbox, setInbox] = useState<InboxNotification[]>(() => normalizeInboxNotifications(loadFromStorage<InboxNotification[]>('inbox', [])));
   const [analytics, setAnalytics] = useState<AnalyticsData>(() => normalizeAnalytics(loadFromStorage('analytics_v2', emptyAnalytics)));
-  const [settings, setSettings] = useState<WorkspaceSettings>(() => loadFromStorage('settings', initialSettings));
+  const [settings, setSettings] = useState<WorkspaceSettings>(() =>
+    normalizeSettings(loadFromStorage('settings', defaultSettings))
+  );
   const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => loadFromStorage<ChatThread[]>('chat_threads', []));
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   /**
@@ -742,9 +762,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    */
   const pendingRunStartsRef = useRef(new Map<string, { issueId: string; agentId: string; cancelled: boolean }>());
 
-  const [users] = useState<User[]>(initialUsers);
   const [requirementDocs, setRequirementDocs] = useState<RequirementDoc[]>(() =>
-    loadFromStorage('requirement_docs', initialRequirementDocs)
+    normalizeRequirementDocs(loadFromStorage<RequirementDoc[]>('requirement_docs', []))
   );
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
   const [isScanningSkills, setIsScanningSkills] = useState(false);
@@ -831,7 +850,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           }));
         });
       }
-      if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
+      if (snapshot.runs) setPrototypeRuns(normalizeLegacyPrototypeRuns(snapshot.runs));
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
       if (snapshot.analytics && typeof snapshot.analytics === 'object') {
         setAnalytics(normalizeAnalytics(snapshot.analytics));
@@ -845,6 +864,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     void hydrate();
     return () => { cancelled = true; };
   }, []);
+
+  /** Keep the local user directory tied to the selected workspace. */
+  useEffect(() => {
+    setActiveWorkspaceId(activeWorkspaceId);
+    if (!activeWorkspaceId) {
+      setWorkspaceMembers([]);
+      return;
+    }
+
+    let cancelled = false;
+    void apiService.getWorkspaceMembers(activeWorkspaceId)
+      .then(rows => {
+        if (!cancelled) setWorkspaceMembers(rows as WorkspaceMemberRecord[]);
+      })
+      .catch(() => {
+        // The authenticated identity remains usable when the directory is
+        // unavailable; never invent a roster as a fallback.
+        if (!cancelled) setWorkspaceMembers([]);
+      });
+
+    return () => { cancelled = true; };
+  }, [activeWorkspaceId]);
 
   /**
    * Resolve access independently of collection hydration.
@@ -1064,15 +1105,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRunSetupIssueId(null);
     setRunSetupAgentId(null);
     setProjects(loadFromStorage<Project[]>(`projects:${workspaceId}`, []));
-    setIssues(loadFromStorage<Issue[]>(`issues:${workspaceId}`, []));
-    setAgents(loadFromStorage<Agent[]>(`agents:${workspaceId}`, []));
+    setIssues(normalizeLegacyIssues(loadFromStorage<Issue[]>(`issues:${workspaceId}`, [])));
+    setAgents(normalizeLegacyAgents(loadFromStorage<Agent[]>(`agents:${workspaceId}`, [])));
     setSquads(loadFromStorage<Squad[]>(`squads:${workspaceId}`, []));
     setChatThreads(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
     setChatMessages(loadFromStorage<ChatMessage[]>(`chat_messages:${workspaceId}`, []));
-    setPrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, []));
+    setPrototypeRuns(normalizeLegacyPrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, [])));
     setSquadRuns(loadFromStorage<SquadRun[]>(`squad_runs:${workspaceId}`, []));
-    setInbox(cleanInbox(loadFromStorage<InboxNotification[]>(`inbox:${workspaceId}`, [])));
-    setRequirementDocs(loadFromStorage<RequirementDoc[]>(`requirement_docs:${workspaceId}`, []));
+    setInbox(normalizeInboxNotifications(loadFromStorage<InboxNotification[]>(`inbox:${workspaceId}`, [])));
+    setRequirementDocs(normalizeRequirementDocs(loadFromStorage<RequirementDoc[]>(`requirement_docs:${workspaceId}`, [])));
     setAnalytics(normalizeAnalytics(loadFromStorage<AnalyticsData>(`analytics_v2:${workspaceId}`, emptyAnalytics)));
 
     try {
@@ -1090,7 +1131,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       if (snapshot.chatThreads) setChatThreads(snapshot.chatThreads as ChatThread[]);
-      if (snapshot.runs) setPrototypeRuns(snapshot.runs as PrototypeRun[]);
+      if (snapshot.runs) setPrototypeRuns(normalizeLegacyPrototypeRuns(snapshot.runs));
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
       if (snapshot.analytics && typeof snapshot.analytics === 'object') {
         setAnalytics(normalizeAnalytics(snapshot.analytics));
@@ -1488,50 +1529,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setRunSetupAgentId(null);
   };
 
-  const buildRunStages = (startedAt: string): PrototypeRun['stages'] => [
-    {
-      id: 'workspace',
-      label: 'Preparing workspace',
-      description: 'Restoring project context and opening a safe working branch.',
-      status: 'running',
-      durationMs: 1100,
-      logs: ['Workspace context restored.', 'Created isolated prototype branch.'],
-      startedAt
-    },
-    {
-      id: 'analysis',
-      label: 'Analyzing issue',
-      description: 'Reviewing the issue, subtasks, and connected project resources.',
-      status: 'pending',
-      durationMs: 1250,
-      logs: ['Issue requirements indexed.', 'Relevant project files identified.']
-    },
-    {
-      id: 'implementation',
-      label: 'Implementing changes',
-      description: 'Applying the approved plan to the project workspace.',
-      status: 'pending',
-      durationMs: 1700,
-      logs: ['Implementation work will be reported by the live activity feed.']
-    },
-    {
-      id: 'tests',
-      label: 'Verification',
-      description: 'Alpha runs the repository checks that are configured in its package manifest and records their result.',
-      status: 'pending',
-      durationMs: 1450,
-      logs: ['Configured verification commands will run after implementation finishes.']
-    },
-    {
-      id: 'review',
-      label: 'Preparing review',
-      description: 'Summarizing changes and preparing review artifacts.',
-      status: 'pending',
-      durationMs: 1050,
-      logs: ['Change summary will be generated from the real workspace diff.']
-    }
-  ];
-
   const reconcileRunAfterCancelFailure = (localRunId: string, serverRunId: string) => {
     apiService.getRuns().then(serverRuns => {
       const latest = serverRuns.find(item => item.id === serverRunId);
@@ -1584,10 +1581,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       issueId,
       projectId: targetIssue.projectId,
       agentId,
-      status: 'running',
+      // No process exists until the daemon accepts the request. Keeping this
+      // queued avoids showing invented stages, logs, or progress during that
+      // short request window.
+      status: 'queued',
       scenario,
       plan,
-      stages: buildRunStages(now),
+      stages: [],
       currentStageIndex: 0,
       createdAt: now,
       updatedAt: now
@@ -1596,28 +1596,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPrototypeRuns(prev => [run, ...prev]);
     setIssues(prev => prev.map(issue => issue.id === issueId ? {
       ...issue,
-      status: 'agent_running',
-      assignedAgentId: agentId,
       comments: [...issue.comments, {
         id: `comm-${run.id}-started`,
-        authorType: 'agent' as const,
-        authorName: assignedAgent.name,
-        authorAvatar: assignedAgent.avatar,
-        agentId,
-        content: `Started the approved plan for ${targetIssue.identifier}. Live 5-stage progress is active.`,
-        createdAt: now,
-        isThinking: true
+        authorType: 'system' as const,
+        authorName: 'Alpha',
+        content: `Requested a run from ${assignedAgent.name} for ${targetIssue.identifier}. Waiting for the daemon to confirm it started.`,
+        createdAt: now
       }],
       updatedAt: now
     } : issue));
-    setAgents(prev => prev.map(agent => agent.id === agentId ? {
-      ...agent,
-      status: 'executing',
-      workStatus: 'working',
-      currentTask: targetIssue.identifier
-    } : agent));
     closeRunSetup();
-    showToast('Agent run started', `${assignedAgent.name} is working on ${targetIssue.identifier}.`, 'success');
+    showToast('Run requested', `Waiting for Alpha to start ${assignedAgent.name}.`, 'info');
 
     pendingRunStartsRef.current.set(run.id, { issueId, agentId, cancelled: false });
 
@@ -1666,6 +1655,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...realRun,
           scenario: (realRun.scenario || scenario || 'success') as any
         } : r));
+        const active = realRun.status === 'running' || realRun.status === 'validating';
+        const queued = realRun.status === 'queued';
+        setIssues(prev => prev.map(issue => issue.id === issueId ? {
+          ...issue,
+          status: 'agent_running',
+          assignedAgentId: agentId,
+          updatedAt: new Date().toISOString()
+        } : issue));
+        setAgents(prev => prev.map(agent => agent.id === agentId ? {
+          ...agent,
+          status: active ? 'executing' : queued ? 'thinking' : 'idle',
+          workStatus: active ? 'working' : queued ? 'queued' : 'idle',
+          currentTask: active || queued ? targetIssue.identifier : undefined
+        } : agent));
         clearRunPlanDraft(issueId);
       }
     }).catch(err => {
@@ -1698,7 +1701,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentTask: undefined
       } : agent));
       setIssues(prev => prev.map(issue => issue.id === issueId
-        ? { ...issue, status: 'in_progress', updatedAt: new Date().toISOString() }
+        ? {
+            ...issue,
+            status: 'in_progress',
+            comments: [...issue.comments, {
+              id: `comm-${run.id}-failed-to-start`,
+              authorType: 'system' as const,
+              authorName: 'Alpha',
+              content: `Run did not start: ${detail}`,
+              createdAt: new Date().toISOString()
+            }],
+            updatedAt: new Date().toISOString()
+          }
         : issue
       ));
       showToast('Run could not start', detail, 'error');
@@ -1830,13 +1844,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...agent,
         status: 'idle',
         workStatus: 'idle',
-        currentTask: undefined,
-        stats: {
-          totalRuns: ((agent.stats && agent.stats.totalRuns) || 0) + 1,
-          successRate: agent.stats ? agent.stats.successRate : 100,
-          tokensUsed: agent.stats ? agent.stats.tokensUsed : 0,
-          avgLatencyMs: agent.stats ? agent.stats.avgLatencyMs : 250
-        }
+        currentTask: undefined
       } : agent));
 
       if (run.status === 'failed') {
@@ -1886,15 +1894,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
        * A real run sets `prUrl` from what `gh` actually opened. If there is no
        * remote there is no pull request, and the UI should say so.
        */
-      const branchName = `feat/${targetIssue.identifier.toLowerCase()}-prototype`;
-      setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
-        ...item,
-        branchName
-      } : item));
+      // The daemon owns the branch name. A finished run without one must not
+      // be presented as if the browser created a real working branch.
+      const branchName = run.branchName;
       setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
         ...issue,
         status: 'review',
-        branchName,
+        ...(branchName ? { branchName } : {}),
         subtasks: issue.subtasks.map(subtask => ({ ...subtask, completed: true })),
         comments: issue.comments.some(comment => comment.id === `comm-${run.id}-review`)
           ? issue.comments
@@ -1937,10 +1943,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
          * are not interchangeable: a real PR, a commit with no remote to push
          * to, or no change at all.
          */
-        message: run.prUrl && !run.prUrl.includes('mock-')
+        message: run.prUrl
           ? `${assignedAgent.name} opened a pull request: ${run.prUrl}`
           : run.changedFiles
-            ? `${assignedAgent.name} committed ${run.changedFiles} file(s) to ${run.branchName ?? 'the branch'}. No pull request — the repository has no remote configured.`
+            ? `${assignedAgent.name} committed ${run.changedFiles} file(s)${branchName ? ` to ${branchName}` : ''}. No pull request was recorded for this run.`
             : `${assignedAgent.name} finished without changing any files. Check the run log.`,
         read: false,
         timestamp: now,
@@ -2039,13 +2045,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newAgent: Agent = {
       ...input,
       id: `agent-${Date.now()}`,
-      owner: input.owner || 'You',
+      owner: input.owner && input.owner !== 'You'
+        ? input.owner
+        : identity?.name || identity?.login || 'Unassigned',
       isMine: input.isMine ?? true,
       allowedUsers: input.allowedUsers || 'team',
-      machineStatus: input.machineStatus || 'online',
       workStatus: input.workStatus || 'idle',
-      machineName: input.machineName || 'Local Runner',
-      lastActive: 'Just now',
       isArchived: false,
       concurrencyLimit: input.concurrencyLimit || 2,
       envVars: input.envVars || [],
@@ -2055,9 +2060,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       activity30d: new Array(30).fill(0),
       stats: {
         totalRuns: 0,
-        successRate: 100,
+        successRate: 0,
         tokensUsed: 0,
-        avgLatencyMs: 250
+        avgLatencyMs: 0
       },
       status: 'idle'
     };
@@ -2066,7 +2071,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     persist(
       () => apiService.createAgent(newAgent),
       saved => setAgents(prev => prev.map(a => (a.id === newAgent.id ? saved : a))),
-      msg => showToast('Agent not saved', msg, 'error')
+      msg => {
+        // A failed create never existed on the daemon. Do not leave its
+        // optimistic shell in browser storage as if it were a real agent.
+        setAgents(prev => prev.filter(agent => agent.id !== newAgent.id));
+        showToast('Agent not saved', msg, 'error');
+      }
     );
 
     return newAgent;
@@ -2123,15 +2133,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...existing,
       id: `agent-${Date.now()}`,
       name: `${existing.name} (Copy)`,
-      owner: 'You',
+      owner: identity?.name || identity?.login || existing.owner || 'Unassigned',
       isMine: true,
       isArchived: false,
       envVars: safeEnvVars,
       stats: {
         totalRuns: 0,
-        successRate: 100,
+        successRate: 0,
         tokensUsed: 0,
-        avgLatencyMs: existing.stats?.avgLatencyMs || 250
+        avgLatencyMs: 0
       },
       status: 'idle',
       workStatus: 'idle',
@@ -2939,7 +2949,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * Identity & access
    * ------------------------------------------------------------------ */
 
-  const currentUser = users.find(u => u.role === role) || users[0];
+  /**
+   * The member directory is the source for other people in the workspace.
+   * GitHub identity is the source for the current person. There is no static
+   * persona roster to fall back to when either service is empty.
+   */
+  const users = useMemo<User[]>(() => {
+    const members = workspaceMembers
+      .filter(member => member.status === 'active')
+      .map(member => ({
+        id: member.userId,
+        name: member.userId,
+        role: member.role
+      }));
+
+    const login = identity?.login?.trim();
+    if (login && !members.some(member => member.id.toLowerCase() === login.toLowerCase())) {
+      members.unshift({
+        id: login,
+        name: identity?.name?.trim() || login,
+        role
+      });
+    }
+    return members;
+  }, [identity, role, workspaceMembers]);
+
+  const currentUser = useMemo<User>(() => {
+    const login = identity?.login?.trim();
+    const member = login
+      ? users.find(user => user.id.toLowerCase() === login.toLowerCase())
+      : undefined;
+    if (member) {
+      return {
+        ...member,
+        name: identity?.name?.trim() || member.name,
+        role
+      };
+    }
+    return {
+      id: login ?? '',
+      name: identity?.name?.trim() || login || 'Current user',
+      role
+    };
+  }, [identity, role, users]);
   const roomVisible = role !== 'client' && liveBuildRoomProjectIds.some(projectId => projects.some(project => project.id === projectId));
   const visibleTabs = roleTabs.filter(tab => tab !== 'live_build_room' || roomVisible);
   const can = (capability: Capability) => ROLE_CAPABILITIES[role].includes(capability);

@@ -22,6 +22,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
     agents,
     runtimes,
     settings,
+    activeWorkspace,
     serverStatus
   } = useApp();
 
@@ -72,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs">
         <span className="text-gray-400 font-medium hover:text-white cursor-pointer" onClick={() => setActiveTab('issues')}>
-          {settings.workspaceName}
+          {activeWorkspace?.name || settings.workspaceName || 'Workspace'}
         </span>
         <ChevronRight className="w-3.5 h-3.5 text-gray-600" />
         <span className="capitalize text-white font-semibold flex items-center gap-1.5">

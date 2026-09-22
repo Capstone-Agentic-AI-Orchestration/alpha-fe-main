@@ -355,7 +355,7 @@ export const SettingsView: React.FC = () => {
                     className="accent-brand-500 rounded"
                   />
                   <span className="text-xs text-gray-200">
-                    Enable <b>Atlas Prime AI Auto-Triage</b> for newly queued issues
+                    Enable <b>AI Auto-Triage</b> for newly queued issues
                   </span>
                 </label>
 
