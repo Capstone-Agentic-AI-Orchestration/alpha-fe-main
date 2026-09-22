@@ -91,9 +91,16 @@ export const App: React.FC = () => {
   // Read once on mount: the fragment is cleared as it is read, so deriving
   // this during render would lose it on the first re-render.
   const [signInError] = useState<SignInError | undefined>(consumeSignInError);
+  /**
+   * Sign out, which is a different act on each half.
+   *
+   * On the web it ends the session cookie. On the desktop there is no session:
+   * the machine is signed in to GitHub, and signing out means disconnecting
+   * that account -- the same thing the connection panel in Settings does.
+   */
   const signOut = async () => {
     try {
-      await apiService.signOut();
+      await (isDesktop ? apiService.githubLogout() : apiService.signOut());
     } finally {
       // Reload rather than mutate state: signing out invalidates every cached
       // collection in the provider, and a fresh boot is simpler than unwinding
@@ -221,6 +228,7 @@ export const App: React.FC = () => {
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         onOpenNewIssue={() => setCreateIssueOpen(true)}
+        onSignOut={signOut}
       />
 
       {/* Main Workspace Frame */}

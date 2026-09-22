@@ -10,6 +10,7 @@ import {
   HelpCircle,
   Plus,
   LogIn,
+  LogOut,
   Check,
   Search,
 } from 'lucide-react';
@@ -18,6 +19,7 @@ interface SidebarProps {
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
   onOpenNewIssue: () => void;
+  onSignOut: () => Promise<void> | void;
 }
 
 const ROLE_LABEL: Record<UserRole, string> = {
@@ -28,6 +30,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 };
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  onSignOut,
   collapsed,
   setCollapsed,
   onOpenNewIssue,
@@ -199,6 +202,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       setWorkspaceInput('');
                       setWorkspaceAction(null);
                       setWorkspaceMenuOpen(false);
+                      // A new workspace has nobody in it yet, so go where its
+                      // people are added rather than leaving it empty.
+                      if (workspaceAction === 'create') setActiveTab('settings');
                     }
                   }}
                 >
@@ -292,7 +298,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         ))}
       </div>
 
-      {/* Identity. The role is the one the server assigned; it is shown, not chosen. */}
+      {/*
+        Identity, and the way out of it. The role is the one the server
+        assigned; it is shown, not chosen. Signing out was reachable only from
+        the developer download page, so everyone already inside a workspace --
+        every project manager, admin and client -- had no way to leave it.
+      */}
       <div className={`border-t border-white/[0.06] py-2.5 ${collapsed ? 'px-1.5' : 'px-2.5'}`}>
         <div
           className={`flex w-full items-center py-2 ${
@@ -310,7 +321,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <span className="block truncate text-xs text-white">{userName}</span>
             <span className="block text-[11px] text-gray-500">{ROLE_LABEL[role]}</span>
           </span>
+          {!collapsed && (
+            <button
+              onClick={() => void onSignOut()}
+              className="flex-shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200"
+              title="Sign out"
+              aria-label="Sign out"
+            >
+              <LogOut className="h-4 w-4" />
+            </button>
+          )}
         </div>
+        {collapsed && (
+          <button
+            onClick={() => void onSignOut()}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200"
+            title="Sign out"
+            aria-label="Sign out"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       <div className={`border-t border-white/[0.06] py-2.5 text-xs text-gray-400 ${collapsed ? 'px-1.5' : 'px-4'}`}>
