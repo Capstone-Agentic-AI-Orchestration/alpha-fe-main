@@ -2,6 +2,7 @@
 // Import features through this barrel, never by reaching into their files.
 
 export * from './ClientPortalView';
+export * from './WorkspaceOverview';
 export * from './DocumentsView';
 export * from './IntakeWizardView';
 export * from './Ledger';
