@@ -457,11 +457,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [identity, setIdentity] = useState<Identity | undefined>(undefined);
   const [identityStatus, setIdentityStatus] = useState<IdentityStatus>('loading');
   /**
-   * GitHub is optional for solo use. Persist the choice so a reload does not
-   * put a user back in the setup gate before they can reach Settings.
+   * Local mode remains useful while developing the web shell, but the
+   * packaged desktop app now requires an explicit GitHub profile sign-in.
+   * Ignore an older persisted local-mode flag there so a previous install
+   * cannot bypass the profile gate after upgrading.
    */
   const [localMode, setLocalMode] = useState<boolean>(() =>
-    loadFromStorage<boolean>('local_mode', false)
+    isDesktop ? false : loadFromStorage<boolean>('local_mode', false)
   );
 
   const [workspaces, setWorkspaces] = useState<WorkspaceSummary[]>([]);
@@ -1059,7 +1061,9 @@ ${e.detail}`;
   useEffect(() => { saveToStorage(workspaceStorageKey('prototype_runs'), prototypeRuns); }, [prototypeRuns, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('squad_runs'), squadRuns); }, [squadRuns, activeWorkspaceId]);
   useEffect(() => { saveToStorage('run_plan_drafts_v1', runPlanDrafts); }, [runPlanDrafts]);
-  useEffect(() => { saveToStorage('local_mode', localMode); }, [localMode]);
+  useEffect(() => {
+    if (!isDesktop) saveToStorage('local_mode', localMode);
+  }, [localMode]);
 
   /**
    * Pull the board every minute, and once on load.

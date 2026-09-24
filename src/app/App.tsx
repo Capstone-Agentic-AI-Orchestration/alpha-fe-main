@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { NAV_ITEMS, navIcon, navLabel } from '@/config/navigation';
 import { NoTeamAccess } from '@/features/onboarding/NoTeamAccess';
 import { GitHubSetup } from '@/features/onboarding/GitHubSetup';
+import { ProfilePicker } from '@/features/onboarding/ProfilePicker';
 import { SignIn, SignInError } from '@/features/onboarding/SignIn';
 import { DeveloperGateway } from '@/features/onboarding/DeveloperGateway';
 import { ConnectingScreen } from '@/features/onboarding/ConnectingScreen';
@@ -84,6 +85,7 @@ export const App: React.FC = () => {
   // Read once on mount: the fragment is cleared as it is read, so deriving
   // this during render would lose it on the first re-render.
   const [signInError] = useState<SignInError | undefined>(consumeSignInError);
+  const [profilePickerOpen, setProfilePickerOpen] = useState(false);
   /**
    * Sign out, which is a different act on each half.
    *
@@ -227,6 +229,16 @@ export const App: React.FC = () => {
    * desktop keeps falling through: its daemon is local and its offline shell
    * is a feature.
    */
+  if (isDesktop && identityStatus !== 'ready') {
+    return (
+      <ProfilePicker
+        identity={identity}
+        identityStatus={identityStatus}
+        onRetry={refreshIdentity}
+      />
+    );
+  }
+
   if (!isDesktop && identityStatus !== 'ready') {
     return <ConnectingScreen status={identityStatus} onRetry={() => void refreshIdentity()} />;
   }
@@ -265,7 +277,17 @@ export const App: React.FC = () => {
     );
   }
 
-  if (!localMode && identity && identity.github && identity.github !== 'ok') {
+  if (isDesktop && (!identity || identity.github !== 'ok')) {
+    return (
+      <ProfilePicker
+        identity={identity}
+        identityStatus={identityStatus}
+        onRetry={refreshIdentity}
+      />
+    );
+  }
+
+  if (!isDesktop && !localMode && identity && identity.github && identity.github !== 'ok') {
     return (
       <GitHubSetup
         identity={identity}
@@ -287,6 +309,7 @@ export const App: React.FC = () => {
         setCollapsed={setSidebarCollapsed}
         onOpenNewIssue={() => setCreateIssueOpen(true)}
         onSignOut={signOut}
+        onSwitchProfile={isDesktop ? () => setProfilePickerOpen(true) : undefined}
       />
 
       {/* Main Workspace Frame */}
@@ -462,6 +485,14 @@ export const App: React.FC = () => {
       <AgentRunModal />
       <PrototypeGuide />
       <ToastRegion />
+      {isDesktop && profilePickerOpen && (
+        <ProfilePicker
+          identity={identity}
+          identityStatus={identityStatus}
+          onRetry={refreshIdentity}
+          onClose={() => setProfilePickerOpen(false)}
+        />
+      )}
     </div>
   );
 };
