@@ -61,9 +61,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [createOpen, setCreateOpen] = useState(false);
 
   const userName = identity?.login ?? currentUser.name;
-  // The GitHub team, not the open workspace's role: a PM can make someone a
-  // `pm` inside a workspace, and that must not also let them create workspaces.
-  const canCreateWorkspace = identity?.role === 'pm' || identity?.role === 'admin';
+  // Prefer the GitHub team role, but keep the active workspace membership as
+  // the local fallback. A desktop session without GitHub can still be a PM in
+  // its existing workspace and should be able to open the workspace creator;
+  // the API remains the final authority when the form is submitted.
+  const creatorRole = identity?.role ?? role;
+  const canCreateWorkspace = creatorRole === 'pm' || creatorRole === 'admin';
   const workspaceName = activeWorkspace?.name || settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
   const canManageIssues = can('manage_issues');
   const labelFor = (tab: NavigationTab) => navLabel(tab, role);
@@ -379,5 +382,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         onCreated={() => setActiveTab('settings')}
       />
     </aside>
+    </div>
   );
 };
