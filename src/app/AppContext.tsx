@@ -48,6 +48,7 @@ import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
+import { isDesktop } from '@/shared/desktop';
 
 function normalizeAnalytics(value: unknown, fallback: AnalyticsData = emptyAnalytics): AnalyticsData {
   if (isLegacyDemoAnalytics(value)) return fallback;
@@ -489,6 +490,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [syncing, setSyncing] = useState(false);
   /** Guards against overlapping syncs without waiting for a re-render. */
   const syncingRef = useRef(false);
+  /** A sync was asked for while one ran; run it again when that one ends. */
+  const resyncRef = useRef(false);
+  const syncBoardRef = useRef<() => Promise<void>>(async () => {});
 
   /**
    * Pull the board from GitHub.
@@ -501,7 +505,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Local mode deliberately keeps the board on this machine. Avoid calling
     // the GitHub-backed sync endpoint (and surfacing an avoidable ENOENT toast)
     // until the user connects an account.
-    if (localMode || syncingRef.current || !ROLE_CAPABILITIES[role].includes('sync_board')) return;
+    if (localMode || !ROLE_CAPABILITIES[role].includes('sync_board')) return;
+    // A change announced mid-sync is not lost: it runs once more afterwards.
+    if (syncingRef.current) {
+      resyncRef.current = true;
+      return;
+    }
     syncingRef.current = true;
     setSyncing(true);
     try {
@@ -513,9 +522,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // organisation becomes a project, and its cards would otherwise sit
       // under a project the sidebar does not know about until a reload.
       const imported = report.projectsImported ?? 0;
+      // Any project change, not only imports: a project a manager created or
+      // renamed on the team's board reaches a desktop through this pull.
+      const projectsMoved = imported > 0 || (report.projects ?? 0) > 0;
       const [fresh, freshProjects] = await Promise.all([
         apiService.getIssues(),
-        imported > 0 ? apiService.getProjects() : Promise.resolve(null)
+        projectsMoved ? apiService.getProjects() : Promise.resolve(null)
       ]);
       if (freshProjects?.length) setProjects(freshProjects);
       if (fresh?.length) setIssues(fresh as any);
@@ -541,8 +553,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } finally {
       syncingRef.current = false;
       setSyncing(false);
+      if (resyncRef.current) {
+        resyncRef.current = false;
+        void syncBoardRef.current();
+      }
     }
   }, [localMode, role]);
+  syncBoardRef.current = syncBoard;
 
   /**
    * The board, as it moves.
@@ -573,6 +590,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       pending = null;
       const tables = new Set(changed);
       changed.clear();
+      /*
+       * On a desktop the API answers from this machine's copy of the board,
+       * which the write has not reached yet -- re-reading it showed the
+       * project or card that was just created as missing. Pull it from the
+       * team's board first; the sync re-reads issues and projects after.
+       */
+      if (isDesktop) {
+        void syncBoardRef.current();
+        return;
+      }
       if (tables.has('issues')) {
         void apiService.getIssues().then(rows => {
           if (!cancelled && rows) setIssues(rows as any);
