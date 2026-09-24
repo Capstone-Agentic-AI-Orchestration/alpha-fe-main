@@ -214,11 +214,20 @@ export const apiService = {
    */
   getDatabaseToken: () => fetchJson<{ token: string; expiresAt: string }>('/database/token'),
   getWorkspaces: () => fetchJson<WorkspaceSummary[]>('/workspaces'),
-  createWorkspace: (payload: { name: string; slug?: string }) =>
+  /** `members` are in the workspace as it is made: nothing to send them, nothing to accept. */
+  createWorkspace: (payload: { name: string; slug?: string; members?: Array<{ userId: string; role: UserRole }> }) =>
     fetchJson<WorkspaceSummary>('/workspaces', {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  /** The organisation's role-granting teams, for staffing a workspace as it is created. */
+  getOrgTeamRoster: () =>
+    fetchJson<Array<{
+      slug: string;
+      name: string;
+      role: UserRole;
+      members: Array<{ login: string; avatarUrl: string | null }>;
+    }>>('/org/teams'),
   getWorkspaceMembers: (workspaceId: string) =>
     fetchJson<Array<{ id: string; userId: string; role: UserRole; status: string; createdAt: string; updatedAt: string }>>(
       `/workspaces/${encodeURIComponent(workspaceId)}/members`
