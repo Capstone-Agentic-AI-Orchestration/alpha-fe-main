@@ -1,17 +1,18 @@
 import React, { useState } from 'react';
+import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
 import {
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Edit3,
   HelpCircle,
   Plus,
   LogOut,
   Check,
   Search,
+  Pin,
+  PinOff,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -53,6 +54,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   } = useApp();
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const [isPointerInside, setIsPointerInside] = useState(false);
+  const [isFocusWithin, setIsFocusWithin] = useState(false);
   // Creating is the only way into a workspace from here. Nobody joins one:
   // a project manager puts people in theirs, so an invite code a developer
   // could type was a second, unmanaged door into the same room.
@@ -73,6 +76,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     .map(group => ({ ...group, items: group.items.filter(item => visibleTabSet.has(item.id)) }))
     .filter(group => group.items.length > 0);
 
+  // The rail is the stable layout surface. Hover and keyboard focus temporarily
+  // reveal the full panel over the workspace, while an explicit pin keeps it
+  // open for people who prefer a persistent navigation column.
+  const expanded = !collapsed || isPointerInside || isFocusWithin;
+  const compact = !expanded;
+  const sidebarModeLabel = collapsed ? 'Keep sidebar open' : 'Use hover to open sidebar';
+
   const navButton = (tab: NavigationTab) => {
     const active = activeTab === tab;
     const label = labelFor(tab);
@@ -81,10 +91,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <button
         key={tab}
         onClick={() => setActiveTab(tab)}
-        title={collapsed ? label : undefined}
+        title={compact ? label : undefined}
         aria-label={label}
         className={`group relative flex w-full items-center rounded-lg transition-colors ${
-          collapsed ? 'justify-center px-0 py-2.5' : 'justify-between px-3 py-2'
+          compact ? 'justify-center px-0 py-2.5' : 'justify-between px-3 py-2'
         } ${
           active
             ? 'bg-brand-500/15 font-semibold text-gray-100 ring-1 ring-inset ring-white/[0.06]'
@@ -92,15 +102,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }`}
       >
         <span
-          className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'} ${
+          className={`flex items-center ${compact ? 'justify-center' : 'gap-3'} ${
             active ? 'text-brand-300' : 'text-gray-500 group-hover:text-gray-300'
           }`}
         >
           {navIcon(tab)}
-          <span className={collapsed ? 'sr-only' : undefined}>{label}</span>
+          <span
+            className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
+          >
+            {label}
+          </span>
         </span>
         {tab === 'inbox' && unreadInboxCount > 0 && (
-          collapsed ? (
+          compact ? (
             <span
               className="absolute ml-6 mt-[-18px] h-1.5 w-1.5 rounded-full bg-amber-300"
               title={`${unreadInboxCount} unread`}
@@ -116,52 +130,71 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <aside
-      className={`z-20 flex h-full flex-shrink-0 select-none flex-col border-r border-white/[0.08] bg-shell/95 font-sans text-sm text-gray-300 backdrop-blur-xl transition-[width] duration-200 ease-out ${
-        collapsed ? 'w-16' : 'w-60'
-      }`}
-    >
+    <div className="relative z-40 h-full w-[4.5rem] flex-shrink-0 select-none overflow-visible">
+      <aside
+        aria-label="Application sidebar"
+        aria-expanded={expanded}
+        onPointerEnter={() => setIsPointerInside(true)}
+        onPointerLeave={() => setIsPointerInside(false)}
+        onFocusCapture={() => setIsFocusWithin(true)}
+        onBlurCapture={event => {
+          const nextTarget = event.relatedTarget as Node | null;
+          if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
+            setIsFocusWithin(false);
+          }
+        }}
+        className={`sidebar-flyout absolute inset-y-0 left-0 flex h-full flex-col border-r border-white/[0.08] bg-shell/95 font-sans text-sm text-gray-300 backdrop-blur-xl ${
+          expanded
+            ? 'w-64 shadow-[14px_0_36px_-28px_rgba(0,0,0,0.9)]'
+            : 'w-[4.5rem] shadow-none'
+        }`}
+      >
       {/* Workspace and primary actions */}
-      <div className={`space-y-3 pb-3 pt-3 ${collapsed ? 'px-2' : 'px-3'}`}>
+      <div className={`space-y-3 pb-3 pt-3 ${compact ? 'px-2' : 'px-3'}`}>
         <div className="relative">
-          <div className="flex items-center gap-1">
+          <div className={`flex items-center ${compact ? 'flex-col gap-1' : 'gap-1'}`}>
             <button
               onClick={() => setWorkspaceMenuOpen(open => !open)}
               className={`flex min-w-0 items-center rounded-lg py-1.5 text-left transition-colors hover:bg-white/[0.04] ${
-                collapsed ? 'w-9 justify-center px-0' : 'flex-1 justify-between px-2'
+                compact ? 'w-9 justify-center px-0' : 'flex-1 justify-between px-2'
               }`}
-              title={collapsed ? `${workspaceName} workspace` : undefined}
-              aria-label={collapsed ? `${workspaceName} workspace menu` : 'Open workspace menu'}
+              title={compact ? `${workspaceName} workspace` : undefined}
+              aria-label={compact ? `${workspaceName} workspace menu` : 'Open workspace menu'}
               aria-expanded={workspaceMenuOpen}
             >
               <span className="flex min-w-0 items-center gap-2.5">
-                <span className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-white/[0.08] text-xs font-semibold text-gray-200">
-                    {workspaceName.slice(0, 1).toUpperCase()}
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-white/[0.06] ring-1 ring-inset ring-white/[0.08]">
+                  <img
+                    src={alphaMarkUrl}
+                    alt=""
+                    aria-hidden="true"
+                    className="h-7 w-6 object-contain"
+                  />
                 </span>
-                {!collapsed && (
-                  <span className="truncate text-sm font-semibold text-white">
-                    {workspaceName}
-                  </span>
-                )}
+                <span
+                  className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'} truncate text-sm font-semibold text-white`}
+                >
+                  {workspaceName}
+                </span>
               </span>
-              {!collapsed && <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-500" />}
+              {!compact && <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-500" />}
             </button>
 
             <button
               onClick={() => setCollapsed(!collapsed)}
               className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
-              title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-              aria-pressed={collapsed}
+              title={sidebarModeLabel}
+              aria-label={sidebarModeLabel}
+              aria-pressed={!collapsed}
             >
-              {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              {collapsed ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
             </button>
           </div>
 
           {workspaceMenuOpen && (
             <div
               className={`absolute top-full z-30 mt-1.5 space-y-1 rounded-xl border border-white/[0.08] bg-surface p-2 text-sm shadow-2xl animate-slide-up ${
-                collapsed ? 'left-0 w-56' : 'left-0 right-0'
+                compact ? 'left-0 w-56' : 'left-0 right-0'
               }`}
             >
               <div className="px-2 py-1 text-xs font-medium text-gray-500">Workspaces</div>
@@ -247,46 +280,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
 
-        <div className={`space-y-1.5 pt-1 ${collapsed ? 'flex flex-col items-center' : ''}`}>
+        <div className={`space-y-1.5 pt-1 ${compact ? 'flex flex-col items-center' : ''}`}>
           <button
             onClick={() => setCommandPaletteOpen(true)}
             className={`flex rounded-lg text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
-              collapsed ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
+              compact ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
             }`}
-            title={collapsed ? 'Search (⌘ K)' : undefined}
+            title={compact ? 'Search (⌘ K)' : undefined}
             aria-label="Search"
           >
-            <span className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+              <span className={`flex items-center ${compact ? 'justify-center' : 'gap-3'}`}>
               <Search className="h-4 w-4 text-gray-500" />
-              <span className={collapsed ? 'sr-only' : undefined}>Search...</span>
+              <span
+                className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
+              >
+                Search...
+              </span>
             </span>
-            {!collapsed && <kbd className="px-1.5 py-0.5 text-[11px] text-gray-500">⌘ K</kbd>}
+            {!compact && <kbd className="px-1.5 py-0.5 text-[11px] text-gray-500">⌘ K</kbd>}
           </button>
 
           {canManageIssues && (
             <button
               onClick={onOpenNewIssue}
               className={`flex rounded-lg text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
-                collapsed ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
+                compact ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
               }`}
-              title={collapsed ? 'New issue' : undefined}
+              title={compact ? 'New issue' : undefined}
               aria-label="New issue"
             >
-              <span className={`flex items-center ${collapsed ? 'justify-center' : 'gap-3'}`}>
+              <span className={`flex items-center ${compact ? 'justify-center' : 'gap-3'}`}>
                 <Edit3 className="h-4 w-4 text-gray-500" />
-                <span className={collapsed ? 'sr-only' : undefined}>New Issue</span>
+                <span
+                  className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
+                >
+                  New Issue
+                </span>
               </span>
-              {!collapsed && <kbd className="px-2 py-0.5 text-[11px] text-gray-500">C</kbd>}
+              {!compact && <kbd className="px-2 py-0.5 text-[11px] text-gray-500">C</kbd>}
             </button>
           )}
         </div>
       </div>
 
       {/* Main navigation */}
-      <div className={`flex-1 space-y-4 overflow-y-auto py-2 ${collapsed ? 'px-1.5' : 'px-2'}`}>
+      <div className={`no-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto py-2 ${compact ? 'px-1.5' : 'px-2'}`}>
         {groups.map(({ section, items }) => (
           <div key={section.id} className="space-y-0.5 border-t border-white/[0.05] pt-3 first:border-t-0 first:pt-0">
-            <div className={collapsed ? 'sr-only' : 'mb-1 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500'}>
+            <div className={compact ? 'sr-only' : 'mb-1 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500'}>
               <span>{section.label}</span>
               <span className="h-px flex-1 bg-white/[0.05]" aria-hidden="true" />
             </div>
@@ -301,12 +342,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
         the developer download page, so everyone already inside a workspace --
         every project manager, admin and client -- had no way to leave it.
       */}
-      <div className={`border-t border-white/[0.06] py-2.5 ${collapsed ? 'px-1.5' : 'px-2.5'}`}>
+      <div className={`border-t border-white/[0.06] py-2.5 ${compact ? 'px-1.5' : 'px-2.5'}`}>
         <div
           className={`flex w-full items-center py-2 ${
-            collapsed ? 'justify-center px-0' : 'gap-2.5 px-2.5'
+            compact ? 'justify-center px-0' : 'gap-2.5 px-2.5'
           }`}
-          title={collapsed ? `${userName} · ${ROLE_LABEL[role]}` : undefined}
+          title={compact ? `${userName} · ${ROLE_LABEL[role]}` : undefined}
         >
           <span
             className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-xs font-semibold text-gray-200"
@@ -314,11 +355,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             {userName[0].toUpperCase()}
           </span>
-          <span className={collapsed ? 'sr-only' : 'min-w-0 flex-1'}>
+          <span
+            className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible min-w-0 flex-1'}`}
+          >
             <span className="block truncate text-xs text-white">{userName}</span>
             <span className="block text-[11px] text-gray-500">{ROLE_LABEL[role]}</span>
           </span>
-          {!collapsed && (
+          {!compact && (
             <button
               onClick={() => void onSignOut()}
               className="flex-shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200"
@@ -329,7 +372,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
         </div>
-        {collapsed && (
+        {compact && (
           <button
             onClick={() => void onSignOut()}
             className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200"
@@ -341,22 +384,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
         )}
       </div>
 
-      <div className={`border-t border-white/[0.06] py-2.5 text-xs text-gray-400 ${collapsed ? 'px-1.5' : 'px-4'}`}>
-        <div className={`flex items-center ${collapsed ? 'flex-col gap-2' : 'justify-between'}`}>
+      <div className={`border-t border-white/[0.06] py-2.5 text-xs text-gray-400 ${compact ? 'px-1.5' : 'px-4'}`}>
+        <div className={`flex items-center ${compact ? 'flex-col gap-2' : 'justify-between'}`}>
           <button
             onClick={() => window.dispatchEvent(new Event('alpha:open-prototype-guide'))}
             className={`flex items-center rounded-lg font-medium transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
-              collapsed ? 'h-9 w-9 justify-center' : 'gap-2'
+              compact ? 'h-9 w-9 justify-center' : 'gap-2'
             }`}
-            title={collapsed ? 'Prototype guide' : undefined}
+            title={compact ? 'Prototype guide' : undefined}
             aria-label="Open prototype guide"
           >
             <HelpCircle className="h-4 w-4 text-gray-500" />
-            <span className={collapsed ? 'sr-only' : undefined}>Prototype guide</span>
+            <span
+              className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
+            >
+              Prototype guide
+            </span>
           </button>
-          <span className="font-mono text-[10px] font-medium text-brand-400">{collapsed ? '2.0' : 'v2.0.0'}</span>
+          <span className="font-mono text-[10px] font-medium text-brand-400">{compact ? '2.0' : 'v2.0.0'}</span>
         </div>
       </div>
-    </aside>
+      </aside>
+    </div>
   );
 };

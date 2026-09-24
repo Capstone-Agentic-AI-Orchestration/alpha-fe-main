@@ -101,7 +101,9 @@ export const App: React.FC = () => {
     }
   };
   const [createIssueOpen, setCreateIssueOpen] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Start in the compact rail. The sidebar reveals itself on pointer hover or
+  // keyboard focus, and users can pin it open from the rail's control.
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
   const newTabMenuRef = useRef<HTMLDivElement>(null);
 
