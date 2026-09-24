@@ -48,7 +48,7 @@ export const DeveloperGateway: React.FC<Props> = ({ identity, downloadUrl, onSig
         className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-3 font-medium text-gray-900 transition hover:bg-gray-200"
       >
         <Download className="h-4 w-4" />
-        Download Alpha for Desktop
+        Download Alpha desktop app (.exe)
       </a>
 
       <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-4 text-xs leading-relaxed text-gray-400">

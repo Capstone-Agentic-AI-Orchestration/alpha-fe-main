@@ -2,9 +2,12 @@ import React from 'react';
 import { useApp } from '@/app/AppContext';
 import { DocStatus, ProgressRing, SectionLabel } from '@/features/delivery/Ledger';
 import { Plus, ArrowRight, MessageSquare, FileText } from 'lucide-react';
+import { WorkspaceOverview } from '@/features/delivery/WorkspaceOverview';
 
 export const ClientPortalView: React.FC = () => {
-  const { currentUser, requirementDocs, projects, issues, setActiveTab } = useApp();
+  const { currentUser, requirementDocs, projects, issues, setActiveTab, role } = useApp();
+  if (role !== 'client') return <WorkspaceOverview />;
+
   const myDocs = requirementDocs.filter(doc => doc.clientId === currentUser.id);
   const awaitingMe = myDocs.filter(doc => doc.status === 'awaiting_client');
   const inFlight = myDocs.filter(doc => doc.status === 'approved' && doc.projectId);
