@@ -271,7 +271,7 @@ interface AppContextType {
   workspaceLoading: boolean;
   workspaceSwitching: boolean;
   switchWorkspace: (workspaceId: string) => Promise<void>;
-  createWorkspace: (name: string) => Promise<WorkspaceSummary | null>;
+  createWorkspace: (name: string, members?: Array<{ userId: string; role: UserRole }>) => Promise<WorkspaceSummary | null>;
   refreshWorkspaces: () => Promise<void>;
   refreshLiveBuildRoomProjects: () => Promise<void>;
 
@@ -1039,7 +1039,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    */
   useEffect(() => {
     const tick = () => {
-      if (document.visibilityState === 'visible') void syncBoard();
+      if (document.visibilityState !== 'visible') return;
+      void syncBoard();
+      /*
+       * And which workspaces this person is in. A project manager can put a
+       * developer in a workspace at any time, and the developer does nothing
+       * to accept it -- so the app has to notice, not wait for a restart.
+       * Quiet on failure: the board sync already reports an offline daemon.
+       */
+      void apiService.getWorkspaces()
+        .then(available => {
+          if (!Array.isArray(available)) return;
+          setWorkspaces(prev =>
+            prev.length === available.length &&
+            prev.every((workspace, i) => workspace.id === available[i].id && workspace.name === available[i].name && workspace.role === available[i].role)
+              ? prev
+              : available
+          );
+        })
+        .catch(() => {});
     };
     tick();
     const id = window.setInterval(tick, 60_000);
@@ -1148,9 +1166,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const createWorkspace = async (name: string): Promise<WorkspaceSummary | null> => {
+  const createWorkspace = async (
+    name: string,
+    members: Array<{ userId: string; role: UserRole }> = []
+  ): Promise<WorkspaceSummary | null> => {
     try {
-      const created = await apiService.createWorkspace({ name });
+      const created = await apiService.createWorkspace({ name, members });
       setWorkspaces(prev => [...prev, created]);
       await switchWorkspace(created.id, created);
       return created;
