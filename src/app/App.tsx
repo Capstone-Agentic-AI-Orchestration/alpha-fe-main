@@ -30,7 +30,7 @@ import { ClientPortalView } from '@/features/delivery/ClientPortalView';
 import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
 import { DocumentsView } from '@/features/delivery/DocumentsView';
 import { NavigationTab } from '@/shared/types';
-import { Plus, X } from 'lucide-react';
+import { Download, Plus, X } from 'lucide-react';
 // Whether this is the packaged desktop app rather than a browser tab, read from
 // the preload bridge. Shared with the settings panel rather than defined twice.
 import { isDesktop } from '@/shared/desktop';
@@ -339,6 +339,19 @@ export const App: React.FC = () => {
                 </div>
               )}
             </div>
+
+            {!isDesktop && (
+              <a
+                href={desktopDownloadUrl}
+                download
+                className="ml-auto flex h-9 flex-shrink-0 items-center gap-2 rounded-xl border border-brand-400/25 bg-brand-500/10 px-2.5 text-xs font-medium text-brand-200 transition-colors hover:bg-brand-500/20 hover:text-white sm:px-3"
+                title="Download the Alpha desktop installer"
+                aria-label="Download Alpha desktop installer"
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Desktop app (.exe)</span>
+              </a>
+            )}
           </div>
         </div>
 

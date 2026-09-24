@@ -38,6 +38,14 @@ Preview the production build locally:
 npm run preview
 ```
 
+## Desktop installer
+
+The Windows `.exe` is not checked into this frontend repository. It is built
+by the private [`alpha-desktop`](https://github.com/Capstone-Agentic-AI-Orchestration/alpha-desktop)
+repository and published as a GitHub Release. The signed-in web app exposes
+that installer through the **Desktop app (.exe)** action, which streams the
+release asset through the backend without exposing a private release URL.
+
 ## UI direction
 
 The MVP keeps the Multica-style workspace model while aiming for a calmer, client-ready experience:
