@@ -25,17 +25,12 @@ type AuthState = {
 };
 
 /**
- * GitHub connection, per machine.
+ * GitHub connection for the current Alpha profile.
  *
- * Alpha deliberately does NOT store a GitHub token. The user signs in through
- * GitHub's device flow, `gh` writes the token to the OS credential store, and
- * every Alpha call shells out as whoever `gh` is. That is the same ambient-auth
- * model used for the AI CLIs: the credential lives where the user already
- * trusts it, and a stolen Alpha database yields nothing.
- *
- * Consequence worth knowing: this is per machine, not per Alpha account. A
- * teammate opening the same shared board on their own laptop connects there
- * too.
+ * The desktop profile picker remembers public account metadata so a shared
+ * Windows user can choose the right GitHub identity. Every profile selection
+ * still opens GitHub authentication; this panel manages the active profile's
+ * connection and never exposes its credential to the renderer.
  */
 export const GitHubConnectionPanel: React.FC = () => {
   const [auth, setAuth] = useState<AuthState | null>(null);
@@ -126,8 +121,8 @@ export const GitHubConnectionPanel: React.FC = () => {
           <h3 className="text-sm font-semibold text-white">GitHub</h3>
           <p className="text-xs text-gray-400 mt-1 leading-relaxed">
             Required for creating project repositories, cloning, and pull requests.
-            Alpha signs in through the GitHub CLI and never stores your token — it
-            stays in this machine&apos;s credential store.
+            Alpha uses the GitHub account you explicitly confirmed in the profile
+            picker, so the active role and repository access stay aligned.
           </p>
         </div>
 
@@ -246,7 +241,7 @@ export const GitHubConnectionPanel: React.FC = () => {
             className="flex items-center gap-2 text-xs font-semibold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
           >
             <LogOut className="w-3.5 h-3.5" />
-            Disconnect
+            Sign out of this profile
           </button>
         </div>
       )}

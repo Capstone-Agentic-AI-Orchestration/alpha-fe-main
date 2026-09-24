@@ -1040,10 +1040,13 @@ export interface Identity {
    * sign-in surface.
    */
   authenticated?: boolean;
+  /** Stable GitHub account id used by the desktop profile picker. */
+  profileId?: string;
   /** Where to send the browser to sign in. Absent when OAuth is unconfigured. */
   signInUrl?: string;
   login: string;
   name?: string;
+  avatarUrl?: string;
   source: 'github' | 'local';
   /** Every team the account belongs to, across organisations. */
   teams?: { org: string; slug: string }[];
@@ -1069,6 +1072,16 @@ export interface Identity {
    * since `gh` is not bundled and every GitHub call shells out to it.
    */
   github?: 'ok' | 'missing' | 'signed_out';
+}
+
+/** A remembered desktop account. Tokens are never returned to the renderer. */
+export interface GitHubProfile {
+  id: string;
+  login: string;
+  name?: string;
+  avatarUrl?: string;
+  lastUsedAt: string;
+  active: boolean;
 }
 
 export type UserRole = 'client' | 'dev' | 'pm' | 'admin';

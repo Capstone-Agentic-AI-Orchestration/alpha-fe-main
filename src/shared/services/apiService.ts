@@ -18,6 +18,7 @@ import {
   McpServerInput,
   RemoteAction,
   Identity,
+  GitHubProfile,
   AnalyticsData,
   WorkspaceSummary,
   WorkspaceProjectAssignment,
@@ -559,10 +560,20 @@ export const apiService = {
     ),
 
   // GitHub Core
+  listGitHubProfiles: () =>
+    fetchJson<{ profiles: GitHubProfile[] }>('/github/profiles'),
+  removeGitHubProfile: (id: string) =>
+    fetchJson<{ success: boolean }>('/github/profiles/remove', {
+      method: 'POST',
+      body: JSON.stringify({ id })
+    }),
   getGitHubAuth: () =>
     fetchJson<{
       authenticated: boolean;
+      profileId?: string;
       username?: string;
+      name?: string;
+      avatarUrl?: string;
       protocol?: string;
       scopes?: string[];
       tokenSource?: 'keyring' | 'env' | 'oauth' | 'github_app';
@@ -572,7 +583,10 @@ export const apiService = {
   checkGitHubAuth: () =>
     fetchJson<{
       authenticated: boolean;
+      profileId?: string;
       username?: string;
+      name?: string;
+      avatarUrl?: string;
       protocol?: string;
       scopes?: string[];
       tokenSource?: 'keyring' | 'env' | 'oauth' | 'github_app';

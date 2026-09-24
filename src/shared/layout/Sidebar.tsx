@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
@@ -21,6 +21,7 @@ interface SidebarProps {
   setCollapsed: (collapsed: boolean) => void;
   onOpenNewIssue: () => void;
   onSignOut: () => Promise<void> | void;
+  onSwitchProfile?: () => void;
 }
 
 const ROLE_LABEL: Record<UserRole, string> = {
@@ -35,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   collapsed,
   setCollapsed,
   onOpenNewIssue,
+  onSwitchProfile,
 }) => {
   const {
     activeTab,
@@ -54,6 +56,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   } = useApp();
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
+  const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const [isPointerInside, setIsPointerInside] = useState(false);
   const [isFocusWithin, setIsFocusWithin] = useState(false);
   // Creating is the only way into a workspace from here. Nobody joins one:
@@ -84,6 +87,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const expanded = !collapsed || isPointerInside || isFocusWithin;
   const compact = !expanded;
   const sidebarModeLabel = collapsed ? 'Keep sidebar open' : 'Use hover to open sidebar';
+
+  /**
+   * The workspace switcher is a transient surface. Close it when focus moves
+   * away or the user presses Escape, so it cannot remain stranded over the
+   * content after the rail collapses or another role changes the navigation.
+   */
+  useEffect(() => {
+    if (!workspaceMenuOpen) return;
+
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && !workspaceMenuRef.current?.contains(target)) {
+        setWorkspaceMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setWorkspaceMenuOpen(false);
+    };
+
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [workspaceMenuOpen]);
+
+  const closeWorkspaceMenu = (event?: React.SyntheticEvent<HTMLElement>) => {
+    setWorkspaceMenuOpen(false);
+    // When the rail is in hover mode, a focused menu item must not keep the
+    // entire sidebar expanded after the action is complete.
+    if (collapsed) {
+      setIsFocusWithin(false);
+      event?.currentTarget.blur();
+    }
+  };
+
+  const toggleSidebar = (event: React.MouseEvent<HTMLButtonElement>) => {
+    const nextCollapsed = !collapsed;
+    if (nextCollapsed) closeWorkspaceMenu(event);
+    setCollapsed(nextCollapsed);
+    if (nextCollapsed) {
+      // A click on the pin is an explicit request to return to the rail. Move
+      // focus off the control so the focus-within reveal does not immediately
+      // undo that request.
+      setIsFocusWithin(false);
+      event.currentTarget.blur();
+    }
+  };
 
   const navButton = (tab: NavigationTab) => {
     const active = activeTab === tab;
@@ -153,7 +205,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
       {/* Workspace and primary actions */}
       <div className={`space-y-3 pb-3 pt-3 ${compact ? 'px-2' : 'px-3'}`}>
-        <div className="relative">
+        <div ref={workspaceMenuRef} className="relative">
           <div className={`flex items-center ${compact ? 'flex-col gap-1' : 'gap-1'}`}>
             <button
               onClick={() => setWorkspaceMenuOpen(open => !open)}
@@ -183,7 +235,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
-              onClick={() => setCollapsed(!collapsed)}
+              onClick={toggleSidebar}
               className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
               title={sidebarModeLabel}
               aria-label={sidebarModeLabel}
@@ -195,7 +247,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {workspaceMenuOpen && (
             <div
-              className={`absolute top-full z-30 mt-1.5 space-y-1 rounded-xl border border-white/[0.08] bg-surface p-2 text-sm shadow-2xl animate-slide-up ${
+              role="menu"
+              aria-label="Workspaces"
+              className={`absolute top-full z-30 mt-1.5 max-h-[min(28rem,calc(100vh-6rem))] space-y-1 overflow-y-auto rounded-xl border border-white/[0.08] bg-surface p-2 text-sm shadow-2xl animate-slide-up no-scrollbar ${
                 compact ? 'left-0 w-56' : 'left-0 right-0'
               }`}
             >
@@ -209,8 +263,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       key={workspace.id}
                       onClick={() => {
                         void switchWorkspace(workspace.id);
-                        setWorkspaceMenuOpen(false);
+                        closeWorkspaceMenu();
                       }}
+                      role="menuitem"
                       className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
                     >
                       <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[10px] font-semibold ${workspace.id === activeWorkspace?.id ? 'bg-brand-500/20 text-brand-300' : 'bg-white/[0.07] text-gray-400'}`}>
@@ -230,8 +285,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <button
                     onClick={() => {
                       setCreateOpen(true);
-                      setWorkspaceMenuOpen(false);
+                      closeWorkspaceMenu();
                     }}
+                    role="menuitem"
                     className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add workspace
@@ -241,8 +297,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <button
                 onClick={() => {
                   setActiveTab('settings');
-                  setWorkspaceMenuOpen(false);
+                  closeWorkspaceMenu();
                 }}
+                role="menuitem"
                 className="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/[0.04] hover:text-white"
               >
                 Settings
@@ -318,20 +375,56 @@ export const Sidebar: React.FC<SidebarProps> = ({
           className={`flex w-full items-center py-2 ${
             compact ? 'justify-center px-0' : 'gap-2.5 px-2.5'
           }`}
-          title={compact ? `${userName} · ${ROLE_LABEL[role]}` : undefined}
         >
-          <span
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-xs font-semibold text-gray-200"
-            aria-hidden="true"
-          >
-            {userName[0].toUpperCase()}
-          </span>
-          <span
-            className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible min-w-0 flex-1'}`}
-          >
-            <span className="block truncate text-xs text-white">{userName}</span>
-            <span className="block text-[11px] text-gray-500">{ROLE_LABEL[role]}</span>
-          </span>
+          {onSwitchProfile ? (
+            <button
+              type="button"
+              onClick={onSwitchProfile}
+              className={`flex min-w-0 items-center rounded-lg text-left transition hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-brand-300/70 ${compact ? 'justify-center p-1' : 'flex-1 gap-2.5 px-1.5 py-1'}`}
+              title={`Switch GitHub profile · ${userName}`}
+              aria-label={`Switch GitHub profile. Currently ${userName}`}
+            >
+              {identity?.avatarUrl ? (
+                <img src={identity.avatarUrl} alt="" className="h-7 w-7 flex-shrink-0 rounded-full border border-white/10 object-cover" />
+              ) : (
+                <span
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-xs font-semibold text-gray-200"
+                  aria-hidden="true"
+                >
+                  {userName[0].toUpperCase()}
+                </span>
+              )}
+              <span
+                className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible min-w-0 flex-1'}`}
+              >
+                <span className="block truncate text-xs text-white">{userName}</span>
+                <span className="block text-[11px] text-gray-500">{ROLE_LABEL[role]} · Switch profile</span>
+              </span>
+            </button>
+          ) : (
+            <div
+              className={`flex min-w-0 items-center ${compact ? 'justify-center px-0' : 'flex-1 gap-2.5 px-1.5'}`}
+              title={`${userName} · ${ROLE_LABEL[role]}`}
+              aria-label={`${userName}, ${ROLE_LABEL[role]}`}
+            >
+              {identity?.avatarUrl ? (
+                <img src={identity.avatarUrl} alt="" className="h-7 w-7 flex-shrink-0 rounded-full border border-white/10 object-cover" />
+              ) : (
+                <span
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-xs font-semibold text-gray-200"
+                  aria-hidden="true"
+                >
+                  {userName[0].toUpperCase()}
+                </span>
+              )}
+              <span
+                className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible min-w-0 flex-1'}`}
+              >
+                <span className="block truncate text-xs text-white">{userName}</span>
+                <span className="block text-[11px] text-gray-500">{ROLE_LABEL[role]}</span>
+              </span>
+            </div>
+          )}
           {!compact && (
             <button
               onClick={() => void onSignOut()}
