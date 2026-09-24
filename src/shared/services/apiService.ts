@@ -212,11 +212,20 @@ export const apiService = {
    */
   getDatabaseToken: () => fetchJson<{ token: string; expiresAt: string }>('/database/token'),
   getWorkspaces: () => fetchJson<WorkspaceSummary[]>('/workspaces'),
-  createWorkspace: (payload: { name: string; slug?: string }) =>
+  /** `members` are in the workspace as it is made: nothing to send them, nothing to accept. */
+  createWorkspace: (payload: { name: string; slug?: string; members?: Array<{ userId: string; role: UserRole }> }) =>
     fetchJson<WorkspaceSummary>('/workspaces', {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  /** The organisation's role-granting teams, for staffing a workspace as it is created. */
+  getOrgTeamRoster: () =>
+    fetchJson<Array<{
+      slug: string;
+      name: string;
+      role: UserRole;
+      members: Array<{ login: string; avatarUrl: string | null }>;
+    }>>('/org/teams'),
   getWorkspaceMembers: (workspaceId: string) =>
     fetchJson<Array<{ id: string; userId: string; role: UserRole; status: string; createdAt: string; updatedAt: string }>>(
       `/workspaces/${encodeURIComponent(workspaceId)}/members`
@@ -237,6 +246,17 @@ export const apiService = {
     fetchJson<Array<{ login: string; avatarUrl: string | null }>>(
       `/workspaces/${encodeURIComponent(workspaceId)}/members/candidates`
     ),
+  /**
+   * The organisation's role-granting GitHub teams and their people, each
+   * marked with their role in this workspace, or null when they are not in it.
+   */
+  getWorkspaceTeamRoster: (workspaceId: string) =>
+    fetchJson<Array<{
+      slug: string;
+      name: string;
+      role: UserRole;
+      members: Array<{ login: string; avatarUrl: string | null; workspaceRole: UserRole | null }>;
+    }>>(`/workspaces/${encodeURIComponent(workspaceId)}/members/teams`),
   updateWorkspaceMember: (workspaceId: string, memberId: string, updates: { role?: UserRole; status?: string }) =>
     fetchJson(`/workspaces/${encodeURIComponent(workspaceId)}/members/${encodeURIComponent(memberId)}`, {
       method: 'PATCH',

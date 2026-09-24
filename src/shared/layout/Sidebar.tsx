@@ -3,6 +3,7 @@ import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
+import { CreateWorkspaceModal } from '@/features/settings/CreateWorkspaceModal';
 import {
   ChevronDown,
   Edit3,
@@ -49,7 +50,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     activeWorkspace,
     workspaceLoading,
     switchWorkspace,
-    createWorkspace,
     visibleTabs,
   } = useApp();
 
@@ -57,14 +57,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [isPointerInside, setIsPointerInside] = useState(false);
   const [isFocusWithin, setIsFocusWithin] = useState(false);
   // Creating is the only way into a workspace from here. Nobody joins one:
-  // a project manager puts people in theirs, so an invite code a developer
-  // could type was a second, unmanaged door into the same room.
-  const [workspaceAction, setWorkspaceAction] = useState<'create' | null>(null);
-  const [workspaceInput, setWorkspaceInput] = useState('');
-  const [workspaceActionBusy, setWorkspaceActionBusy] = useState(false);
+  // a project manager puts people in theirs, straight away, as they make it.
+  const [createOpen, setCreateOpen] = useState(false);
 
   const userName = identity?.login ?? currentUser.name;
-  const canCreateWorkspace = role === 'admin';
+  // The GitHub team, not the open workspace's role: a PM can make someone a
+  // `pm` inside a workspace, and that must not also let them create workspaces.
+  const canCreateWorkspace = identity?.role === 'pm' || identity?.role === 'admin';
   const workspaceName = activeWorkspace?.name || settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
   const canManageIssues = can('manage_issues');
   const labelFor = (tab: NavigationTab) => navLabel(tab, role);
@@ -208,7 +207,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       onClick={() => {
                         void switchWorkspace(workspace.id);
                         setWorkspaceMenuOpen(false);
-                        setWorkspaceAction(null);
                       }}
                       className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
                     >
@@ -221,51 +219,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   ))}
                 </div>
               )}
-              {workspaceAction ? (
-                <form
-                  className="mt-1.5 space-y-2 border-t border-white/[0.06] pt-2"
-                  onSubmit={async event => {
-                    event.preventDefault();
-                    if (!workspaceInput.trim()) return;
-                    setWorkspaceActionBusy(true);
-                    const result = await createWorkspace(workspaceInput.trim());
-                    setWorkspaceActionBusy(false);
-                    if (result) {
-                      setWorkspaceInput('');
-                      setWorkspaceAction(null);
+              {/* Project managers and admins, by GitHub team; the creator
+                  joins at that role. Offering it to anyone else was a
+                  button whose only outcome was a 403. */}
+              {canCreateWorkspace && (
+                <div className="mt-1.5 grid grid-cols-1 gap-1 border-t border-white/[0.06] pt-2">
+                  <button
+                    onClick={() => {
+                      setCreateOpen(true);
                       setWorkspaceMenuOpen(false);
-                      // A new workspace has nobody in it yet, so go where its
-                      // people are added rather than leaving it empty.
-                      setActiveTab('settings');
-                    }
-                  }}
-                >
-                  <input
-                    autoFocus
-                    value={workspaceInput}
-                    onChange={event => setWorkspaceInput(event.target.value)}
-                    placeholder="Workspace name"
-                    className="w-full rounded-lg border border-white/[0.10] bg-black/20 px-2.5 py-2 text-xs text-white outline-none placeholder:text-gray-600 focus:border-brand-400/60"
-                  />
-                  <div className="flex items-center justify-end gap-1.5">
-                    <button type="button" onClick={() => { setWorkspaceAction(null); setWorkspaceInput(''); }} className="rounded-lg px-2.5 py-1.5 text-xs text-gray-500 hover:text-gray-200">Cancel</button>
-                    <button type="submit" disabled={workspaceActionBusy || !workspaceInput.trim()} className="rounded-lg bg-brand-500 px-2.5 py-1.5 text-xs font-medium text-on-accent disabled:opacity-40">
-                      {workspaceActionBusy ? 'Working…' : 'Create'}
-                    </button>
-                  </div>
-                </form>
-              ) : (
-                /* Creating a workspace makes you its admin, so the API allows
-                   it for admins only. Offering it to everyone else was a
-                   button whose only outcome was a 403 -- and with nothing
-                   beside it, an admin-only row is the whole section. */
-                canCreateWorkspace && (
-                  <div className="mt-1.5 grid grid-cols-1 gap-1 border-t border-white/[0.06] pt-2">
-                    <button onClick={() => setWorkspaceAction('create')} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white">
-                      <Plus className="h-3.5 w-3.5" /> Create
-                    </button>
-                  </div>
-                )
+                    }}
+                    className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Create
+                  </button>
+                </div>
               )}
               <button
                 onClick={() => {
@@ -404,7 +372,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <span className="font-mono text-[10px] font-medium text-brand-400">{compact ? '2.0' : 'v2.0.0'}</span>
         </div>
       </div>
-      </aside>
-    </div>
+      <CreateWorkspaceModal
+        isOpen={createOpen}
+        onClose={() => setCreateOpen(false)}
+        // Staffed already; Settings is where the rest of it is set up.
+        onCreated={() => setActiveTab('settings')}
+      />
+    </aside>
   );
 };
