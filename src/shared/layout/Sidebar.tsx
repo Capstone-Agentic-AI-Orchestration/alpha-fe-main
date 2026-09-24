@@ -234,7 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     }}
                     className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white"
                   >
-                    <Plus className="h-3.5 w-3.5" /> Create
+                    <Plus className="h-3.5 w-3.5" /> Add workspace
                   </button>
                 </div>
               )}
