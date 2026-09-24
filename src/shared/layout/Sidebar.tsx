@@ -61,7 +61,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [workspaceActionBusy, setWorkspaceActionBusy] = useState(false);
 
   const userName = identity?.login ?? currentUser.name;
-  const canCreateWorkspace = role === 'admin';
+  // The GitHub team, not the open workspace's role: a PM can make someone a
+  // `pm` inside a workspace, and that must not also let them create workspaces.
+  const canCreateWorkspace = identity?.role === 'pm' || identity?.role === 'admin';
   const workspaceName = activeWorkspace?.name || settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
   const canManageIssues = can('manage_issues');
   const labelFor = (tab: NavigationTab) => navLabel(tab, role);
@@ -222,10 +224,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                 </form>
               ) : (
-                /* Creating a workspace makes you its admin, so the API allows
-                   it for admins only. Offering it to everyone else was a
-                   button whose only outcome was a 403 -- and with nothing
-                   beside it, an admin-only row is the whole section. */
+                /* Project managers and admins, by GitHub team; the creator
+                   joins at that role. Offering it to anyone else was a
+                   button whose only outcome was a 403. */
                 canCreateWorkspace && (
                   <div className="mt-1.5 grid grid-cols-1 gap-1 border-t border-white/[0.06] pt-2">
                     <button onClick={() => setWorkspaceAction('create')} className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white">

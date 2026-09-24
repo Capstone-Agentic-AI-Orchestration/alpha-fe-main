@@ -24,6 +24,25 @@ const ROLE_LABEL: Record<UserRole, string> = {
   admin: 'Admin'
 };
 
+type TeamRoster = Awaited<ReturnType<typeof apiService.getWorkspaceTeamRoster>>;
+
+/**
+ * The role someone joins this workspace with when added from a GitHub team row.
+ *
+ * `teamRole` is what their team grants org-wide (developers -> dev,
+ * project-managers -> pm, admins -> admin, clients -> client); `callerRole` is
+ * the person doing the adding. The server refuses `admin` from anyone who is
+ * not an admin, so a project manager adding a member of the `admins` team has
+ * to land on something else.
+ */
+export function defaultRoleFor(teamRole: UserRole, callerRole: UserRole): UserRole {
+  // TODO(Lloyd): decide the policy. Joining as `dev` is always accepted, so
+  // this placeholder works, but it adds every project manager as a developer.
+  void teamRole;
+  void callerRole;
+  return 'dev';
+}
+
 export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode }) => {
   const {
     activeWorkspace,
@@ -45,6 +64,9 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
   const [invitee, setInvitee] = useState('');
   const [inviteeRole, setInviteeRole] = useState<UserRole>('dev');
   const [adding, setAdding] = useState(false);
+  const [teams, setTeams] = useState<TeamRoster>([]);
+  const [teamsLoading, setTeamsLoading] = useState(false);
+  const [teamsError, setTeamsError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!activeWorkspaceId || !canViewMembers) return;
@@ -87,6 +109,31 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
     return () => { cancelled = true; };
   }, [activeWorkspaceId, canManageMembers, mode, members.length]);
 
+  /**
+   * The organisation's GitHub teams and who is in them, so a project manager
+   * staffs by team and can see at a glance who from each is still missing.
+   * Loaded once per workspace; an add updates it in place.
+   */
+  useEffect(() => {
+    if (mode !== 'members' || !activeWorkspaceId || !canManageMembers) return;
+    let cancelled = false;
+    setTeamsLoading(true);
+    void apiService.getWorkspaceTeamRoster(activeWorkspaceId)
+      .then(rows => {
+        if (!cancelled) {
+          setTeams(rows);
+          setTeamsError(null);
+        }
+      })
+      .catch(error => {
+        if (!cancelled) setTeamsError(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        if (!cancelled) setTeamsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [activeWorkspaceId, canManageMembers, mode]);
+
   useEffect(() => {
     if (projects.length > 0 && !projects.some(project => project.id === selectedProjectId)) {
       setSelectedProjectId(projects[0].id);
@@ -120,15 +167,21 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
     [assignments]
   );
 
-  const addMember = async () => {
-    const login = invitee.trim();
+  const addMember = async (login = invitee.trim(), memberRole = inviteeRole) => {
     if (!activeWorkspaceId || !login || adding) return;
     setAdding(true);
     try {
-      const added = await apiService.addWorkspaceMember(activeWorkspaceId, login, inviteeRole);
+      const added = await apiService.addWorkspaceMember(activeWorkspaceId, login, memberRole);
+      const addedLogin = added.userId.toLowerCase();
       setMembers(prev => [...prev.filter(item => item.userId !== added.userId), added as WorkspaceMember]);
-      setCandidates(prev => prev.filter(person => person.login.toLowerCase() !== added.userId.toLowerCase()));
-      setInvitee('');
+      setCandidates(prev => prev.filter(person => person.login.toLowerCase() !== addedLogin));
+      setTeams(prev => prev.map(team => ({
+        ...team,
+        members: team.members.map(person =>
+          person.login.toLowerCase() === addedLogin ? { ...person, workspaceRole: added.role } : person
+        )
+      })));
+      if (login === invitee.trim()) setInvitee('');
       showToast('Added to the workspace', `${added.userId} is now a ${ROLE_LABEL[added.role]} here.`, 'success');
     } catch (error) {
       showToast('Not added', error instanceof Error ? error.message : String(error), 'error');
@@ -142,6 +195,12 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
     try {
       const updated = await apiService.updateWorkspaceMember(activeWorkspaceId, member.id, { role }) as WorkspaceMember;
       setMembers(prev => prev.map(item => item.id === member.id ? updated : item));
+      setTeams(prev => prev.map(team => ({
+        ...team,
+        members: team.members.map(person =>
+          person.login.toLowerCase() === member.userId.toLowerCase() ? { ...person, workspaceRole: updated.role } : person
+        )
+      })));
       showToast('Role updated', `${member.userId} is now a ${ROLE_LABEL[role]}.`, 'success');
     } catch (error) {
       showToast('Role not updated', error instanceof Error ? error.message : String(error), 'error');
@@ -247,6 +306,77 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
                   Could not list the organisation’s people ({candidateError}). Type a GitHub username instead.
                 </p>
               )}
+
+              <div className="mt-5">
+                <div className="flex items-center gap-2 text-gray-400">
+                  <Users className="h-4 w-4 text-brand-300" />
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.14em]">GitHub teams</span>
+                </div>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Everyone in the organisation’s teams, and whether they are in this workspace yet.
+                </p>
+                {teamsLoading ? (
+                  <div className="mt-3 text-[11px] text-gray-500">Loading teams…</div>
+                ) : teamsError ? (
+                  <p className="mt-3 text-[11px] text-amber-300/80">Could not read the GitHub teams ({teamsError}).</p>
+                ) : teams.length === 0 ? (
+                  <p className="mt-3 text-[11px] text-gray-500">No teams in the organisation grant an Alpha role.</p>
+                ) : (
+                  <div className="mt-3 space-y-3">
+                    {teams.map(team => {
+                      const joined = team.members.filter(person => person.workspaceRole).length;
+                      return (
+                        <div key={team.slug} className="overflow-hidden rounded-xl border border-white/[0.08] bg-surface-100/60">
+                          <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-3.5 py-2.5">
+                            <div className="min-w-0">
+                              <div className="truncate text-xs font-semibold text-white">{team.name}</div>
+                              <div className="mt-0.5 text-[10px] text-gray-500">@{team.slug} · grants {ROLE_LABEL[team.role]}</div>
+                            </div>
+                            <span className="flex-shrink-0 text-[10px] tabular-nums text-gray-500">
+                              {joined} of {team.members.length} here
+                            </span>
+                          </div>
+                          {team.members.length === 0 ? (
+                            <div className="px-3.5 py-3 text-[11px] text-gray-500">Nobody in this team yet.</div>
+                          ) : (
+                            <div className="divide-y divide-white/[0.05]">
+                              {team.members.map(person => {
+                                const joinAs = defaultRoleFor(team.role, role);
+                                return (
+                                  <div key={person.login} className="flex items-center gap-3 px-3.5 py-2">
+                                    {person.avatarUrl ? (
+                                      <img src={person.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover ring-1 ring-white/10" />
+                                    ) : (
+                                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-[10px] font-semibold text-gray-300">
+                                        {person.login.slice(0, 1).toUpperCase()}
+                                      </span>
+                                    )}
+                                    <span className="min-w-0 flex-1 truncate text-xs text-white">{person.login}</span>
+                                    {person.workspaceRole ? (
+                                      <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300">
+                                        Here · {ROLE_LABEL[person.workspaceRole]}
+                                      </span>
+                                    ) : (
+                                      <button
+                                        type="button"
+                                        disabled={adding}
+                                        onClick={() => void addMember(person.login, joinAs)}
+                                        className="rounded-lg border border-brand-400/25 bg-brand-500/10 px-2.5 py-1 text-[10px] font-medium text-brand-200 transition-colors hover:bg-brand-500/20 disabled:opacity-40"
+                                      >
+                                        Add as {ROLE_LABEL[joinAs]}
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
           {loading ? (
