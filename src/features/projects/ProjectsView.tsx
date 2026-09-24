@@ -39,13 +39,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     issues, 
     updateProject, 
     deleteProject, 
-
+
+
     agents,
     can,
     role
   } = useApp();
 
   const canManageProjects = can('manage_projects');
+  /** Editing is the team's; creating a project, and its repository, a PM's. */
+  const canEditProjects = can('edit_projects');
   const canManageIssues = can('manage_issues');
   
   // Selected Project for dedicated Workspace Kanban View
@@ -281,7 +284,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             </div>
 
             {/* Edit Project */}
-            {canManageProjects && (
+            {canEditProjects && (
               <button
                 onClick={() => setEditingProject(selectedProject)}
                 className="p-1.5 rounded-xl bg-surface-raised hover:bg-surface-high border border-white/5 text-gray-400 hover:text-white transition-colors"
@@ -415,7 +418,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 projectId={selectedProject.id}
                 resources={selectedProject.resources || []}
                 onChange={(next) => updateProject(selectedProject.id, { resources: next })}
-                readOnly={!canManageProjects}
+                readOnly={!canEditProjects}
               />
             </div>
 
@@ -424,7 +427,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               <ProjectEnvPanel
                 envVars={selectedProject.envVars || []}
                 onChange={(next) => updateProject(selectedProject.id, { envVars: next })}
-                readOnly={!canManageProjects}
+                readOnly={!canEditProjects}
               />
             </div>
 
@@ -474,7 +477,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               onChange={(next) => updateProject(selectedProject.id, { resources: next })}
               githubOrg={selectedProject.githubOrg}
               onOrgChange={(org) => updateProject(selectedProject.id, { githubOrg: org })}
-              readOnly={!canManageProjects}
+              readOnly={!canEditProjects}
             />
           </Modal>
         )}

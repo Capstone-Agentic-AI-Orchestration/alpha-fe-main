@@ -292,6 +292,8 @@ interface AppContextType {
 export type Capability =
   | 'view_identity'
   | 'view_projects'
+  /** Edit a project's details, resources and settings. Not create or delete. */
+  | 'edit_projects'
   | 'manage_projects'
   | 'view_issues'
   | 'manage_issues'
@@ -331,6 +333,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
   dev: [
     'view_identity',
     'view_projects',
+    'edit_projects',
     'view_issues',
     'manage_issues',
     'view_agents',
@@ -352,6 +355,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
   pm: [
     'view_identity',
     'view_projects',
+    'edit_projects',
     'manage_projects',
     'view_issues',
     'manage_issues',
@@ -385,6 +389,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
   admin: [
     'view_identity',
     'view_projects',
+    'edit_projects',
     'view_issues',
     'manage_issues',
     'view_agents',
@@ -2072,7 +2077,8 @@ ${e.detail}`;
   };
 
   const updateProject = (id: string, updates: Partial<Project>) => {
-    if (!requireCapability('manage_projects')) return;
+    // Developers run projects too; starting and removing one stays a PM's.
+    if (!requireCapability('edit_projects')) return;
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
     persist(
       () => apiService.updateProject(id, updates),
