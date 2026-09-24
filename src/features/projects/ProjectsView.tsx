@@ -17,7 +17,8 @@ import {
   Bot,
   Kanban as KanbanIcon,
   List as ListIcon,
-  ChevronLeft,
+  ChevronLeft,
+  ShieldCheck,
 } from 'lucide-react';
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
@@ -40,7 +41,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     deleteProject, 
 
     agents,
-    can
+    can,
+    role
   } = useApp();
 
   const canManageProjects = can('manage_projects');
@@ -59,10 +61,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   /**
    * Mine, or the whole workspace.
    *
-   * Everyone can see every project now -- you have to be able to find the one
-   * you are about to be put on, and set it up before an issue is assigned.
-   * That makes "all of them" the wrong default for getting on with work, so
-   * the list opens on what is actually yours, unless nothing is.
+   * The API returns only projects created by active PMs. This switch separates
+   * assigned work from the wider PM-owned workspace catalogue.
    */
   const [scope, setScope] = useState<'mine' | 'all'>('mine');
   const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -701,6 +701,19 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
         )}
       </div>
 
+      <div className="flex items-start gap-3 rounded-xl border border-brand-400/15 bg-brand-500/[0.06] px-4 py-3 text-xs">
+        <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-300" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="font-medium text-brand-100">
+            {role === 'pm' ? 'PM-owned project workspace' : 'PM-owned projects'}
+          </p>
+          <p className="mt-0.5 leading-relaxed text-gray-400">
+            Projects and repositories shown here are created by active project managers in this workspace.
+            {role !== 'pm' && ' Project creation and repository provisioning are reserved for PMs.'}
+          </p>
+        </div>
+      </div>
+
       {/* ================= SEARCH & ACTION ROW ================= */}
       {projects.length > 0 && (
       <div className="flex items-center justify-between gap-4">
@@ -708,7 +721,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
         <div className="flex items-center rounded-md border border-white/[0.07] bg-surface p-0.5 text-xs">
           {([
             ['mine', 'My projects', mineCount],
-            ['all', 'All projects', projects.length]
+            ['all', 'Workspace projects', projects.length]
           ] as const).map(([value, label, count]) => (
             <button
               key={value}
@@ -856,11 +869,15 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             <Folder className="h-5 w-5" />
           </span>
           <h2 className="text-sm font-semibold text-white">
-            {projects.length === 0 ? 'Start with a project' : 'No projects match your filters'}
+            {projects.length === 0
+              ? (canManageProjects ? 'Start with a project' : 'Waiting for a PM to create a project')
+              : 'No projects match your filters'}
           </h2>
           <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-gray-500">
             {projects.length === 0
-              ? 'Projects keep issues, agents, and connected resources organized in one place.'
+              ? (canManageProjects
+                ? 'Projects keep issues, agents, and connected resources organized in one place.'
+                : 'Projects and repositories will appear here when a project manager initiates them for this workspace.')
               : 'Try a different search or clear the active filters to see more projects.'}
           </p>
           {projects.length === 0 ? (

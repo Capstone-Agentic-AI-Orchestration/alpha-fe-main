@@ -185,14 +185,12 @@ export const apiService = {
   /**
    * Pull the shared board down from GitHub.
    *
-   * Returns what moved, so the UI can say "3 new" rather than only "synced".
+   * Returns what moved. The public sync route updates PM-owned projects that
+   * already exist in Alpha; repository-to-project importing is explicit.
    */
   syncBoard: () =>
     fetchJson<{
-      /**
-       * Projects made for organisation repositories seen for the first time.
-       * Optional: a backend older than repository import does not send it.
-       */
+      /** Optional count from an explicit repository importer. */
       projectsImported?: number;
       projects: number; created: number; updated: number; unchanged: number;
       skipped: { project: string; reason: string }[];

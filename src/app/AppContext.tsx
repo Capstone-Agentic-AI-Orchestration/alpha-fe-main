@@ -384,7 +384,6 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
   admin: [
     'view_identity',
     'view_projects',
-    'manage_projects',
     'view_issues',
     'manage_issues',
     'view_agents',
@@ -407,13 +406,11 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'sync_board',
     'manage_settings',
     'manage_deployments',
-    'create_project',
     'approve_production',
     'run_agents',
     'contact_client',
     'view_members',
-    'manage_members',
-    'bind_workspace'
+    'manage_members'
   ]
 };
 
@@ -509,9 +506,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Re-read rather than patching from the report: the daemon already
       // assembled the board consistently, and rebuilding it from a summary is
       // how the two versions drift apart.
-      // Projects too when the sync made any: a repository new to the
-      // organisation becomes a project, and its cards would otherwise sit
-      // under a project the sidebar does not know about until a reload.
+      // Keep the catalogue in sync if an explicitly authorized importer ever
+      // adds a PM-owned project; the normal board sync only updates projects
+      // that already exist in Alpha.
       const imported = report.projectsImported ?? 0;
       const [fresh, freshProjects] = await Promise.all([
         apiService.getIssues(),
@@ -2001,7 +1998,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Take only the id from the server. The daemon echoes the draft back
       // unchanged, but the Supabase fallback returns a snake_case row, and
       // spreading that would put `start_date`-shaped keys into state.
-      const project: Project = { ...draft, id: saved?.id ?? draft.id };
+      const project: Project = {
+        ...draft,
+        id: saved?.id ?? draft.id,
+        createdBy: saved?.createdBy ?? identity?.login
+      };
       setProjects(prev => [project, ...prev]);
       return project;
     } catch (err) {
@@ -3287,41 +3288,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
    * entitled to, and these are the values the provider publishes.
    * ================================================================== */
 
-  /** Projects this role may know exist at all. */
+  /** Projects this role may know exist at all. The API filters this catalogue
+   * server-side; the PM check here also protects a stale/offline cache from
+   * briefly reintroducing unattributed or non-PM-owned rows. */
   const scopedProjects = useMemo(() => {
-    if (role === 'admin') return projects;
     if (role === 'client') {
       const mine = requirementDocs
         .filter(d => d.clientId === currentUser.id && d.projectId)
         .map(d => d.projectId);
       return projects.filter(p => mine.includes(p.id));
     }
-    if (role === 'pm') return projects;
-    // Developers fail closed. An empty assignment list means that no project
-    // is currently authorized; it must never silently expand to the whole
-    // workspace because a project URL, search result, or cached board could
-    // expose another team's work.
-    const assigned = currentUser.projectIds ?? [];
-    return projects.filter(p => assigned.includes(p.id));
-  }, [projects, requirementDocs, role, currentUser]);
+    const activePmLogins = new Set(
+      users
+        .filter(user => user.role === 'pm')
+        .map(user => user.id.trim().toLowerCase())
+        .filter(Boolean)
+    );
+    return projects.filter(project => {
+      const creator = project.createdBy?.trim().toLowerCase();
+      return Boolean(creator && activePmLogins.has(creator));
+    });
+  }, [projects, requirementDocs, role, currentUser, users]);
 
-  const scopedProjectIds = useMemo(() => scopedProjects.map(p => p.id), [scopedProjects]);
+  /** Work access remains assignment-scoped even though project discovery is
+   * workspace-wide for PM-owned projects. */
+  const assignedProjectIds = useMemo(
+    () => new Set(scopedProjects.filter(project => project.assigned !== false).map(project => project.id)),
+    [scopedProjects]
+  );
 
   /** Clients never see internal issues; developers see issues in assigned projects. */
   const scopedIssues = useMemo(() => {
     if (role === 'admin') return issues;
     if (role === 'client') return [];
-    const inScope = issues.filter(i => scopedProjectIds.includes(i.projectId));
-    if (role === 'pm') return inScope;
-    return inScope;
-  }, [issues, scopedProjectIds, role, currentUser]);
+    return issues.filter(issue => assignedProjectIds.has(issue.projectId));
+  }, [issues, assignedProjectIds, role]);
 
   /** Specifications: a client sees only their own; staff see their projects'. */
   const scopedDocs = useMemo(() => {
     if (role === 'admin') return requirementDocs;
     if (role === 'client') return requirementDocs.filter(d => d.clientId === currentUser.id);
-    return requirementDocs.filter(d => !d.projectId || scopedProjectIds.includes(d.projectId));
-  }, [requirementDocs, scopedProjectIds, role, currentUser]);
+    return requirementDocs.filter(d => !d.projectId || assignedProjectIds.has(d.projectId));
+  }, [requirementDocs, assignedProjectIds, role, currentUser]);
 
   /** Agents are catalog entries: clients cannot see them; developers can browse them. */
   const scopedAgents = useMemo(() => {
@@ -3343,8 +3351,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const scopedDeployments = useMemo(() => {
     if (role === 'admin') return deployments;
     if (role === 'client') return [];
-    return deployments.filter(d => scopedProjectIds.includes(d.projectId));
-  }, [deployments, scopedProjectIds, role]);
+    return deployments.filter(d => assignedProjectIds.has(d.projectId));
+  }, [deployments, assignedProjectIds, role]);
 
   /**
    * Notifications carry an explicit audience. Anything unlabelled is treated
