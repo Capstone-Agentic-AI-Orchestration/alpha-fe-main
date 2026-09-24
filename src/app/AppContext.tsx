@@ -492,6 +492,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const syncingRef = useRef(false);
   /** A sync was asked for while one ran; run it again when that one ends. */
   const resyncRef = useRef(false);
+  /** Sync warnings already shown this session. */
+  const reportedSyncErrorsRef = useRef(new Set<string>());
   const syncBoardRef = useRef<() => Promise<void>>(async () => {});
 
   /**
@@ -546,6 +548,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // A workspace where one repository is unreachable still synced the
       // others, so failures are named rather than failing the whole run.
       for (const e of report.errors ?? []) {
+        // Once per session: the board syncs every minute, and a warning that
+        // needs someone to act on it does not get more useful by repeating.
+        const seen = `${e.project}
+${e.detail}`;
+        if (reportedSyncErrorsRef.current.has(seen)) continue;
+        reportedSyncErrorsRef.current.add(seen);
         showToast(`${e.project} did not sync`, e.detail, 'error');
       }
     } catch (err) {
