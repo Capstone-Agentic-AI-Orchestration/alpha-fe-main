@@ -1,4 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { NAV_ITEMS, navIcon, navLabel } from '@/config/navigation';
 import { NoTeamAccess } from '@/features/onboarding/NoTeamAccess';
 import { GitHubSetup } from '@/features/onboarding/GitHubSetup';
@@ -106,11 +107,22 @@ export const App: React.FC = () => {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
   const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
   const newTabMenuRef = useRef<HTMLDivElement>(null);
+  const newTabButtonRef = useRef<HTMLButtonElement>(null);
+  const newTabMenuContentRef = useRef<HTMLDivElement>(null);
+  const workspaceFrameRef = useRef<HTMLDivElement>(null);
+  const [newTabMenuPosition, setNewTabMenuPosition] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
 
   // Close new tab dropdown on click outside or Escape
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (newTabMenuRef.current && !newTabMenuRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const clickedTrigger = newTabMenuRef.current?.contains(target);
+      const clickedMenu = newTabMenuContentRef.current?.contains(target);
+      if (!clickedTrigger && !clickedMenu) {
         setNewTabMenuOpen(false);
       }
     };
@@ -128,6 +140,59 @@ export const App: React.FC = () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [newTabMenuOpen]);
+
+  // The menu is portaled out of the workspace frame so it cannot be clipped
+  // by the frame's overflow boundary. Keep it inside the visible workspace
+  // area even when the plus button is near either edge of the window.
+  useLayoutEffect(() => {
+    if (!newTabMenuOpen) {
+      setNewTabMenuPosition(null);
+      return;
+    }
+
+    const updateMenuPosition = () => {
+      const button = newTabButtonRef.current;
+      if (!button) return;
+
+      const buttonRect = button.getBoundingClientRect();
+      const workspaceRect = workspaceFrameRef.current?.getBoundingClientRect();
+      const viewportPadding = 12;
+      const workspaceLeft = Math.max(viewportPadding, workspaceRect?.left ?? viewportPadding);
+      const workspaceRight = Math.min(
+        window.innerWidth - viewportPadding,
+        workspaceRect?.right ?? window.innerWidth - viewportPadding,
+      );
+      const availableWidth = Math.max(0, workspaceRight - workspaceLeft);
+      const width = Math.min(288, availableWidth);
+      const left = Math.min(
+        Math.max(workspaceLeft, buttonRect.left),
+        workspaceRight - width,
+      );
+
+      setNewTabMenuPosition({
+        top: buttonRect.bottom + 8,
+        left,
+        width,
+      });
+    };
+
+    updateMenuPosition();
+    window.addEventListener('resize', updateMenuPosition);
+    window.addEventListener('scroll', updateMenuPosition, true);
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined'
+      ? new ResizeObserver(updateMenuPosition)
+      : null;
+    if (resizeObserver && workspaceFrameRef.current) {
+      resizeObserver.observe(workspaceFrameRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateMenuPosition);
+      window.removeEventListener('scroll', updateMenuPosition, true);
+      resizeObserver?.disconnect();
+    };
+  }, [newTabMenuOpen, sidebarCollapsed]);
 
   // Rendered smaller here than in the sidebar; the table serves both.
   const getTabIcon = (tab: NavigationTab) => navIcon(tab, 'w-3.5 h-3.5');
@@ -225,7 +290,7 @@ export const App: React.FC = () => {
       />
 
       {/* Main Workspace Frame */}
-      <div className="relative flex-1 min-w-0 bg-shell overflow-hidden">
+      <div ref={workspaceFrameRef} className="relative flex-1 min-w-0 bg-shell overflow-hidden">
         {/* Floating workspace toolbar */}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4">
           <div className="pointer-events-auto mx-auto flex w-full max-w-[1800px] items-center gap-1.5 rounded-2xl border border-white/[0.10] bg-surface-200/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/[0.04]">
@@ -288,6 +353,7 @@ export const App: React.FC = () => {
             {/* New Tab Button & Dropdown Picker */}
             <div className="relative flex-shrink-0" ref={newTabMenuRef}>
               <button
+                ref={newTabButtonRef}
                 onClick={() => setNewTabMenuOpen(prev => !prev)}
                 className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
                   newTabMenuOpen
@@ -302,43 +368,52 @@ export const App: React.FC = () => {
                 <Plus className="w-4 h-4" />
               </button>
 
-              {/* New Tab Dropdown Menu */}
-              {newTabMenuOpen && (
-                <div
-                  role="menu"
-                  className="absolute right-0 top-full z-50 mt-2 w-72 max-w-[calc(100vw-2rem)] space-y-1 rounded-2xl border border-white/[0.10] bg-surface p-2 shadow-2xl animate-slide-up"
-                >
-                  <div className="px-2.5 py-1 text-xs font-medium text-gray-500">
-                    Open new tab
-                  </div>
-                  <div className="max-h-80 space-y-0.5 overflow-y-auto">
-                    {availableTabs.map((item) => {
-                      return (
-                        <button
-                          key={item.id}
-                          role="menuitem"
-                          onClick={() => {
-                            openNewTab(item.id);
-                            setNewTabMenuOpen(false);
-                          }}
-                          className="flex w-full items-center justify-between rounded-xl p-2 text-left text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
-                        >
-                          <div className="flex min-w-0 items-center gap-2.5">
-                            <div className="flex-shrink-0 p-1 text-gray-500">
-                              {navIcon(item.id)}
-                            </div>
-                            <div className="min-w-0">
-                              <div className="truncate text-xs font-medium">{item.title}</div>
-                              <div className="truncate text-[10px] text-gray-500">{item.subtitle}</div>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
             </div>
+
+            {/* The picker is portaled to the document so the workspace frame
+                cannot clip its left edge when the plus button is near the rail. */}
+            {newTabMenuOpen && newTabMenuPosition && createPortal(
+              <div
+                ref={newTabMenuContentRef}
+                role="menu"
+                style={{
+                  top: newTabMenuPosition.top,
+                  left: newTabMenuPosition.left,
+                  width: newTabMenuPosition.width,
+                }}
+                className="fixed z-[60] space-y-1 rounded-2xl border border-white/[0.10] bg-surface p-2 shadow-2xl animate-slide-up"
+              >
+                <div className="px-2.5 py-1 text-xs font-medium text-gray-500">
+                  Open new tab
+                </div>
+                <div className="max-h-80 space-y-0.5 overflow-y-auto">
+                  {availableTabs.map((item) => {
+                    return (
+                      <button
+                        key={item.id}
+                        role="menuitem"
+                        onClick={() => {
+                          openNewTab(item.id);
+                          setNewTabMenuOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between rounded-xl p-2 text-left text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <div className="flex-shrink-0 p-1 text-gray-500">
+                            {navIcon(item.id)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-medium">{item.title}</div>
+                            <div className="truncate text-[10px] text-gray-500">{item.subtitle}</div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>,
+              document.body,
+            )}
 
             {!isDesktop && (
               <a
