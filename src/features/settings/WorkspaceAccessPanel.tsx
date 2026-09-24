@@ -36,11 +36,8 @@ type TeamRoster = Awaited<ReturnType<typeof apiService.getWorkspaceTeamRoster>>;
  * to land on something else.
  */
 export function defaultRoleFor(teamRole: UserRole, callerRole: UserRole): UserRole {
-  // TODO(Lloyd): decide the policy. Joining as `dev` is always accepted, so
-  // this placeholder works, but it adds every project manager as a developer.
-  void teamRole;
-  void callerRole;
-  return 'dev';
+  // The role their team grants, capped at what the caller may hand out.
+  return teamRole === 'admin' && callerRole !== 'admin' ? 'pm' : teamRole;
 }
 
 export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode }) => {
