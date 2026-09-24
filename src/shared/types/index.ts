@@ -279,10 +279,9 @@ export interface Project {
   /**
    * Whether this project is the caller's own work.
    *
-   * Everyone in the workspace can see every project -- you have to be able to
-   * find the one you are about to be put on, and set it up before an issue is
-   * assigned. This says which are yours, which is what the board and the
-   * "My projects" scope are about.
+   * Workspace members can discover the catalogue created by active PMs. This
+   * says which projects are assigned to the caller for work, which is what
+   * the board and the "My projects" scope are about.
    */
   assigned?: boolean;
   /**
@@ -294,6 +293,8 @@ export interface Project {
    */
   envVars?: { key: string; value: string; isSecret?: boolean }[];
   id: string;
+  /** Workspace login of the PM who initiated the project. */
+  createdBy?: string;
   name: string;
   key: string;
   description: string;
