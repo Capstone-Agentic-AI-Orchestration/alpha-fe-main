@@ -48,7 +48,7 @@ export interface IssueComment {
 
 export interface Issue {
   id: string;
-  identifier: string; // e.g. ALF-101
+  identifier: string; // e.g. PROJECT-123
   title: string;
   description: string;
   status: IssueStatus;
@@ -611,7 +611,7 @@ export interface LiveBuildRoomPhase {
   id: string;
   label: string;
   description: string;
-  status: 'completed' | 'running' | 'waiting' | 'failed';
+  status: 'completed' | 'running' | 'waiting' | 'review' | 'failed';
   progress: number;
 }
 
@@ -1109,7 +1109,8 @@ export interface WorkspaceSquadProjectAssignment {
 export interface User {
   id: string;
   name: string;
-  email: string;
+  /** GitHub identity does not always expose an email address. */
+  email?: string;
   role: UserRole;
   avatar?: string;
   /** Organisation the client belongs to. Absent for internal staff. */

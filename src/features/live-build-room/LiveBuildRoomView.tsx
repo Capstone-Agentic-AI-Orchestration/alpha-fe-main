@@ -112,8 +112,17 @@ function activityTone(activity: RunActivity): string {
 function phaseClasses(phase: LiveBuildRoomPhase): string {
   if (phase.status === 'completed') return 'border-emerald-400/30 bg-emerald-400/[0.035]';
   if (phase.status === 'running') return 'border-violet-400/50 bg-violet-400/[0.07] shadow-[0_0_28px_rgba(139,92,246,0.12)]';
+  if (phase.status === 'review') return 'border-amber-400/30 bg-amber-400/[0.035]';
   if (phase.status === 'failed') return 'border-rose-400/30 bg-rose-400/[0.035]';
   return 'border-white/[0.08] bg-white/[0.015]';
+}
+
+function progressLabel(card: LiveBuildRoomAgentCard): string {
+  if (card.status === 'completed') return 'Complete';
+  if (card.status === 'review') return 'Awaiting review';
+  if (card.status === 'failed') return card.progress > 0 ? `${card.progress}% stages complete` : 'Stopped';
+  if (card.status === 'running') return card.progress > 0 ? `${card.progress}% stages complete` : 'In progress';
+  return card.progress > 0 ? `${card.progress}% stages complete` : 'Not started';
 }
 
 const AgentCard: React.FC<{
@@ -122,6 +131,7 @@ const AgentCard: React.FC<{
   onSelect: () => void;
 }> = ({ card, selected, onSelect }) => {
   const meta = statusMeta[card.status];
+  const hasMeasuredProgress = card.progress > 0;
   return (
     <button
       type="button"
@@ -158,14 +168,14 @@ const AgentCard: React.FC<{
 
       <div className="mt-4 flex items-center justify-between gap-3 text-[11px] text-slate-400">
         <span className="truncate">Now doing</span>
-        <span className="shrink-0 font-medium text-slate-300">{card.progress}%</span>
+        <span className="shrink-0 font-medium text-slate-300">{progressLabel(card)}</span>
       </div>
-      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
+      {hasMeasuredProgress && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
         <div
           className={`h-full rounded-full transition-all duration-500 ${card.status === 'completed' ? 'bg-emerald-400' : card.status === 'failed' ? 'bg-rose-400' : card.status === 'review' ? 'bg-amber-400' : 'bg-violet-400'}`}
           style={{ width: `${Math.max(0, Math.min(100, card.progress))}%` }}
         />
-      </div>
+      </div>}
       <div className="mt-2 truncate text-xs font-medium text-slate-200">{card.currentTask}</div>
 
       <div className="mt-4 space-y-2 border-t border-white/[0.07] pt-3">
@@ -189,16 +199,17 @@ const AgentCard: React.FC<{
 };
 
 const PhaseTimeline: React.FC<{ phases: LiveBuildRoomPhase[] }> = ({ phases }) => (
-  <div className="grid gap-2 md:grid-cols-5">
+  <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
     {phases.map((phase, index) => (
-      <React.Fragment key={phase.id}>
-        <div className={`min-w-0 rounded-xl border px-3 py-2.5 ${phaseClasses(phase)}`}>
+      <div key={phase.id} className={`min-w-0 rounded-xl border px-3 py-2.5 ${phaseClasses(phase)}`}>
           <div className="flex items-center gap-2">
             <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] ${
               phase.status === 'completed'
                 ? 'border-emerald-400/50 text-emerald-300'
                 : phase.status === 'running'
                   ? 'border-violet-400/60 text-violet-200'
+                  : phase.status === 'review'
+                    ? 'border-amber-400/50 text-amber-200'
                   : phase.status === 'failed'
                     ? 'border-rose-400/50 text-rose-200'
                     : 'border-white/15 text-slate-500'
@@ -207,13 +218,11 @@ const PhaseTimeline: React.FC<{ phases: LiveBuildRoomPhase[] }> = ({ phases }) =
             </span>
             <div className="min-w-0">
               <div className="truncate text-[11px] font-semibold text-slate-200">{phase.label}</div>
-              <div className="text-[10px] text-slate-500">{phase.status === 'completed' ? 'Completed' : phase.status === 'running' ? 'In progress' : phase.status === 'failed' ? 'Needs attention' : 'Pending'}</div>
+              <div className="text-[10px] text-slate-500">{phase.status === 'completed' ? 'Completed' : phase.status === 'running' ? 'In progress' : phase.status === 'review' ? 'Awaiting approval' : phase.status === 'failed' ? 'Needs attention' : 'Pending'}</div>
             </div>
           </div>
-          {phase.status === 'running' && <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full w-2/3 rounded-full bg-violet-400" /></div>}
-        </div>
-        {index < phases.length - 1 && <div className="hidden items-center justify-center md:flex" aria-hidden="true"><ArrowRight className="h-3.5 w-3.5 text-slate-700" /></div>}
-      </React.Fragment>
+          {phase.progress > 0 && <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${phase.status === 'completed' ? 'bg-emerald-400' : phase.status === 'review' ? 'bg-amber-400' : phase.status === 'failed' ? 'bg-rose-400' : 'bg-violet-400'}`} style={{ width: `${Math.max(0, Math.min(100, phase.progress))}%` }} /></div>}
+      </div>
     ))}
   </div>
 );
@@ -267,7 +276,7 @@ const ActivityPanel: React.FC<{
               <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Now doing</div>
               <div className="mt-1 text-sm font-medium text-white">{card.currentTask}</div>
             </div>
-            <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-violet-400" style={{ width: `${card.progress}%` }} /></div>
+            {card.progress > 0 ? <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-violet-400" style={{ width: `${card.progress}%` }} /></div> : card.status === 'running' ? <div className="text-[11px] text-slate-500">Progress will appear after Alpha confirms a completed stage.</div> : null}
             <div className="space-y-3 border-t border-white/[0.08] pt-4">
               {activities.length ? activities.slice().reverse().map(activity => (
                 <div key={activity.id} className="flex gap-3">
@@ -483,8 +492,8 @@ export const LiveBuildRoomView: React.FC = () => {
     );
   }
 
-  const roomStatus = snapshot.status === 'idle' ? 'Ready for a build' : snapshot.status === 'awaiting_approval' ? 'Review required' : snapshot.status === 'failed' ? 'Build stopped' : snapshot.status === 'cancelled' ? 'Build stopped' : 'All systems nominal';
-  const roomStatusTone = snapshot.status === 'failed' || snapshot.status === 'cancelled' ? 'text-rose-300 bg-rose-400/10 border-rose-400/25' : snapshot.status === 'awaiting_approval' ? 'text-amber-200 bg-amber-400/10 border-amber-400/25' : 'text-emerald-300 bg-emerald-400/10 border-emerald-400/25';
+  const roomStatus = snapshot.status === 'idle' ? 'Ready for a build' : snapshot.status === 'awaiting_approval' ? 'Review required' : snapshot.status === 'failed' || snapshot.status === 'cancelled' ? 'Build stopped' : 'Build in progress';
+  const roomStatusTone = snapshot.status === 'failed' || snapshot.status === 'cancelled' ? 'text-rose-300 bg-rose-400/10 border-rose-400/25' : snapshot.status === 'awaiting_approval' ? 'text-amber-200 bg-amber-400/10 border-amber-400/25' : snapshot.status === 'idle' ? 'text-slate-300 bg-white/[0.04] border-white/10' : 'text-violet-200 bg-violet-400/10 border-violet-400/25';
 
   return (
     <div className="h-full overflow-y-auto bg-shell text-slate-200">

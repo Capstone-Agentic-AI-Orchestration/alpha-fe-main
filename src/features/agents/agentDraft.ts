@@ -225,7 +225,6 @@ export function buildCreateAgentRequest(
     name,
     description: draft.description.trim() || `${draft.role} specialist configured for autonomous task execution.`,
     role: draft.role,
-    owner: 'You',
     isMine: true,
     allowedUsers: draft.allowedUsers,
     machineStatus: runtime?.available ? 'online' : 'offline',
@@ -233,7 +232,6 @@ export function buildCreateAgentRequest(
     // The machine label is the runtime's own name, so the roster cannot claim
     // an agent runs somewhere it was never bound to.
     machineName: runtime?.label ?? 'Unbound runtime',
-    lastActive: 'Just now',
     isArchived: false,
     concurrencyLimit: clampConcurrency(draft.concurrencyLimit),
     avatar: agentAvatarDataUri(name, color),
