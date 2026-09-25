@@ -23,6 +23,10 @@ export type UpdateCheck =
 export interface DesktopBridge {
   isDesktop: true;
   platform: string;
+  /** Runtime loopback address for this app instance's local engine. */
+  apiBase?: string;
+  /** Runtime WebSocket address for this app instance's local engine. */
+  wsUrl?: string;
   versions: { electron: string; node: string; chrome: string };
   checkForUpdates?: () => Promise<UpdateCheck>;
   /** The packaged app's own version. The renderer cannot read package.json. */
