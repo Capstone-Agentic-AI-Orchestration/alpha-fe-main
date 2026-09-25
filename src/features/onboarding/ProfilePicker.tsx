@@ -26,7 +26,15 @@ interface Props {
 type Phase =
   | { kind: 'idle' }
   | { kind: 'starting'; profileId?: string }
-  | { kind: 'waiting'; profileId?: string; code: string; url: string; startedAt: number }
+  | {
+      kind: 'waiting';
+      profileId?: string;
+      targetLogin?: string;
+      flow: 'device' | 'oauth';
+      code?: string;
+      url: string;
+      startedAt: number;
+    }
   | { kind: 'finishing'; profileId?: string };
 
 const POLL_MS = 2500;
@@ -41,8 +49,10 @@ function initials(profile: Pick<GitHubProfile, 'login' | 'name'>): string {
  * Chrome-style account choice for the packaged desktop app.
  *
  * Profiles are remembered as non-secret account metadata. Choosing one always
- * starts a fresh GitHub device authorization, so a remembered card never acts
- * as an unattended sign-in or silently reuses another person's session.
+ * starts a fresh GitHub authorization, so a remembered card never acts as an
+ * unattended sign-in or silently reuses another person's session. Hosted
+ * desktop builds include the selected login in the OAuth handoff; standalone
+ * builds retain the device-flow fallback.
  */
 export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRetry, onClose }) => {
   const [profiles, setProfiles] = useState<GitHubProfile[]>([]);
@@ -85,7 +95,7 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
   };
 
   const copyCode = async () => {
-    if (phase.kind !== 'waiting') return;
+    if (phase.kind !== 'waiting' || !phase.code) return;
     await navigator.clipboard.writeText(phase.code);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
@@ -99,13 +109,15 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
     setPhase({ kind: 'starting', profileId: profile?.id });
 
     try {
-      const started = await apiService.startGitHubLogin();
+      const started = await apiService.startGitHubLogin(profile?.login);
       if (attempt.current !== mine) return;
       const startedAtTime = Date.now();
       setPhase({
         kind: 'waiting',
         profileId: profile?.id,
-        code: started.code,
+        targetLogin: started.targetLogin ?? profile?.login,
+        flow: started.flow ?? 'device',
+        ...(started.code ? { code: started.code } : {}),
         url: started.verificationUrl,
         startedAt: startedAtTime
       });
@@ -122,13 +134,27 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
         }
         try {
           const auth = await apiService.checkGitHubAuth();
-          if (!auth.authenticated || attempt.current !== mine) return;
+          if (attempt.current !== mine) return;
+          if (!auth.authenticated) {
+            if (auth.error) {
+              if (pollRef.current) clearInterval(pollRef.current);
+              pollRef.current = null;
+              setPhase({ kind: 'idle' });
+              setError(auth.error);
+            }
+            return;
+          }
           if (pollRef.current) clearInterval(pollRef.current);
           pollRef.current = null;
 
           // The selected card is a visual promise. Do not silently sign the
           // person into a different account because GitHub was open elsewhere.
-          if (profile && auth.profileId && auth.profileId !== profile.id) {
+          const authenticatedLogin = auth.username?.toLowerCase();
+          const accountMismatch = profile && (
+            (Boolean(auth.profileId) && auth.profileId !== profile.id) ||
+            (Boolean(authenticatedLogin) && authenticatedLogin !== profile.login.toLowerCase())
+          );
+          if (accountMismatch) {
             await apiService.githubLogout();
             await onRetry();
             await refreshProfiles();
@@ -333,26 +359,42 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
               <div className="mt-5 rounded-xl border border-brand-300/25 bg-brand-400/[0.07] p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-4">
                   <div>
-                    <p className="text-sm font-semibold text-white">Finish signing in on GitHub</p>
-                    <p className="mt-1 text-xs leading-5 text-gray-400">A browser window opened. Enter this one-time code to confirm the account.</p>
+                    <p className="text-sm font-semibold text-white">
+                      {phase.flow === 'oauth'
+                        ? `Authorize ${phase.targetLogin ? `@${phase.targetLogin}` : 'your GitHub account'} on GitHub`
+                        : 'Finish signing in on GitHub'}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-gray-400">
+                      {phase.flow === 'oauth'
+                        ? phase.targetLogin
+                          ? `GitHub opened an account chooser for @${phase.targetLogin}. Select that account, then approve Alpha.`
+                          : 'GitHub opened an account chooser. Select the account you want to use, then approve Alpha.'
+                        : 'A browser window opened. Enter this one-time code to confirm the account.'}
+                    </p>
                   </div>
                   <button type="button" onClick={cancel} className="rounded-md p-1.5 text-gray-500 transition hover:bg-white/[0.06] hover:text-gray-200" aria-label="Cancel GitHub sign-in">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <code className="rounded-lg border border-white/10 bg-black/25 px-4 py-2.5 font-mono text-xl font-semibold tracking-[0.18em] text-white">{phase.code}</code>
-                  <button type="button" onClick={() => void copyCode()} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-300 transition hover:bg-white/[0.06] hover:text-white">
-                    {copied ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
-                    {copied ? 'Copied' : 'Copy code'}
-                  </button>
+                  {phase.flow === 'device' && phase.code && (
+                    <>
+                      <code className="rounded-lg border border-white/10 bg-black/25 px-4 py-2.5 font-mono text-xl font-semibold tracking-[0.18em] text-white">{phase.code}</code>
+                      <button type="button" onClick={() => void copyCode()} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-300 transition hover:bg-white/[0.06] hover:text-white">
+                        {copied ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
+                        {copied ? 'Copied' : 'Copy code'}
+                      </button>
+                    </>
+                  )}
                   <a href={phase.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium text-brand-200 transition hover:text-brand-100">
                     Open GitHub <ExternalLink className="h-3.5 w-3.5" />
                   </a>
                 </div>
                 <div className="mt-4 flex items-center gap-2 text-xs text-gray-500" role="status" aria-live="polite">
                   <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" />
-                  Waiting for GitHub approval…
+                  {phase.flow === 'oauth'
+                    ? `Waiting for ${phase.targetLogin ? `@${phase.targetLogin}` : 'GitHub'} authorization…`
+                    : 'Waiting for GitHub approval…'}
                 </div>
               </div>
             )}
@@ -378,7 +420,7 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
 
             <div className="mt-7 flex items-center justify-between gap-4 border-t border-white/[0.07] pt-4 text-[11px] leading-5 text-gray-600">
               <span>Alpha never asks for your GitHub password. Authentication happens on GitHub.</span>
-              <span className="hidden shrink-0 items-center gap-1.5 sm:inline-flex"><Github className="h-3.5 w-3.5" /> GitHub device flow</span>
+              <span className="hidden shrink-0 items-center gap-1.5 sm:inline-flex"><Github className="h-3.5 w-3.5" /> {waiting && phase.kind === 'waiting' && phase.flow === 'oauth' ? 'GitHub OAuth' : 'GitHub device flow'}</span>
             </div>
           </section>
         </main>

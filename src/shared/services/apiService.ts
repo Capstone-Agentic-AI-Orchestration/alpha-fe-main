@@ -581,6 +581,7 @@ export const apiService = {
       tokenSource?: 'keyring' | 'env' | 'oauth' | 'github_app';
       mode?: 'cli' | 'rest' | 'github_app';
       appInstalled?: boolean;
+      error?: string;
     }>('/github/auth'),
   checkGitHubAuth: () =>
     fetchJson<{
@@ -594,6 +595,7 @@ export const apiService = {
       tokenSource?: 'keyring' | 'env' | 'oauth' | 'github_app';
       envVarName?: string;
       mode?: 'cli' | 'rest' | 'github_app';
+      error?: string;
     }>('/github/auth'),
   getGitHubRepos: () => fetchJson<any[]>('/github/repos'),
   getGitHubRuns: (cwd?: string) => fetchJson<any[]>(`/github/runs${cwd ? `?cwd=${encodeURIComponent(cwd)}` : ''}`),
@@ -612,8 +614,16 @@ export const apiService = {
   // GitHub OAuth & App
   getGitHubOAuthUrl: () => fetchJson<{ url: string; state: string }>('/github/oauth/url'),
   getGitHubAppInstallUrl: () => fetchJson<{ url: string }>('/github/app/install-url'),
-  startGitHubLogin: () =>
-    fetchJson<{ code: string; verificationUrl: string }>('/github/auth/login', { method: 'POST' }),
+  startGitHubLogin: (profileLogin?: string) =>
+    fetchJson<{
+      code?: string;
+      verificationUrl: string;
+      flow?: 'device' | 'oauth';
+      targetLogin?: string;
+    }>('/github/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(profileLogin ? { profileLogin } : {})
+    }),
   githubLogout: () => fetchJson<{ success: boolean }>('/github/auth/logout', { method: 'POST' }),
   listGitHubOrgs: () => fetchJson<Array<{ login: string; role: string }>>('/github/orgs'),
 

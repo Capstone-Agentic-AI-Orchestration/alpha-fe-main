@@ -34,7 +34,11 @@ type AuthState = {
  */
 export const GitHubConnectionPanel: React.FC = () => {
   const [auth, setAuth] = useState<AuthState | null>(null);
-  const [pending, setPending] = useState<{ code: string; verificationUrl: string } | null>(null);
+  const [pending, setPending] = useState<{
+    code?: string;
+    verificationUrl: string;
+    flow?: 'device' | 'oauth';
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -67,6 +71,7 @@ export const GitHubConnectionPanel: React.FC = () => {
     try {
       const started = await apiService.startGitHubLogin();
       setPending(started);
+      window.open(started.verificationUrl, '_blank', 'noopener,noreferrer');
 
       // `gh` is now waiting on GitHub. Poll until the user finishes in the
       // browser, then stop — no ambient polling once we have an answer.
@@ -99,7 +104,7 @@ export const GitHubConnectionPanel: React.FC = () => {
   };
 
   const copyCode = () => {
-    if (!pending) return;
+    if (!pending?.code) return;
     void navigator.clipboard.writeText(pending.code);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -246,25 +251,29 @@ export const GitHubConnectionPanel: React.FC = () => {
         </div>
       )}
 
-      {/* --- Device code in flight --- */}
+      {/* --- GitHub authorization in flight --- */}
       {pending && (
         <div className="rounded-lg bg-brand-500/10 border border-brand-500/30 p-4 space-y-3">
           <p className="text-xs text-gray-300">
-            Enter this one-time code on GitHub. This panel updates itself once you&apos;re done.
+            {pending.flow === 'oauth'
+              ? 'Choose the GitHub account you want to use and approve Alpha. This panel updates itself once you&apos;re done.'
+              : 'Enter this one-time code on GitHub. This panel updates itself once you&apos;re done.'}
           </p>
-          <div className="flex items-center gap-2">
-            <code className="text-lg font-mono font-bold tracking-[0.2em] text-white bg-black/40 rounded-lg px-4 py-2 select-all">
-              {pending.code}
-            </code>
-            <button
-              type="button"
-              onClick={copyCode}
-              aria-label="Copy code"
-              className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-colors"
-            >
-              {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-            </button>
-          </div>
+          {pending.flow !== 'oauth' && pending.code && (
+            <div className="flex items-center gap-2">
+              <code className="text-lg font-mono font-bold tracking-[0.2em] text-white bg-black/40 rounded-lg px-4 py-2 select-all">
+                {pending.code}
+              </code>
+              <button
+                type="button"
+                onClick={copyCode}
+                aria-label="Copy code"
+                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-colors"
+              >
+                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+              </button>
+            </div>
+          )}
           <a
             href={pending.verificationUrl}
             target="_blank"

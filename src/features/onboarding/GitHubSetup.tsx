@@ -45,7 +45,7 @@ const CODE_LIFETIME_MS = 15 * 60 * 1000;
 type Phase =
   | { kind: 'idle' }
   | { kind: 'starting' }
-  | { kind: 'waiting'; code: string; url: string; startedAt: number }
+  | { kind: 'waiting'; flow: 'device' | 'oauth'; code?: string; url: string; startedAt: number }
   | { kind: 'finishing' }
   | { kind: 'error'; message: string };
 
@@ -82,11 +82,17 @@ export const GitHubSetup: React.FC<Props> = ({ identity, onRetry, onContinueLoca
     const mine = ++attempt.current;
     setPhase({ kind: 'starting' });
     try {
-      const { code, verificationUrl } = await apiService.startGitHubLogin();
+      const started = await apiService.startGitHubLogin();
       if (attempt.current !== mine) return;
-      setPhase({ kind: 'waiting', code, url: verificationUrl, startedAt: Date.now() });
+      setPhase({
+        kind: 'waiting',
+        flow: started.flow ?? 'device',
+        ...(started.code ? { code: started.code } : {}),
+        url: started.verificationUrl,
+        startedAt: Date.now()
+      });
       // The desktop shell hands web links to the system browser.
-      window.open(verificationUrl, '_blank');
+      window.open(started.verificationUrl, '_blank');
     } catch (err) {
       if (attempt.current !== mine) return;
       setPhase({
@@ -159,19 +165,23 @@ export const GitHubSetup: React.FC<Props> = ({ identity, onRetry, onContinueLoca
         return (
           <div className="space-y-3">
             <p className="text-[12px] leading-relaxed text-gray-400">
-              Your browser has opened GitHub. Enter this code there and approve:
+              {phase.flow === 'oauth'
+                ? 'Your browser has opened GitHub. Choose the account you want to use and approve Alpha.'
+                : 'Your browser has opened GitHub. Enter this code there and approve:'}
             </p>
-            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-well px-4 py-3">
-              <code className="font-mono text-2xl font-semibold tracking-[0.2em] text-white">{phase.code}</code>
-              <button
-                type="button"
-                onClick={() => copy(phase.code)}
-                className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
-              >
-                {copied === phase.code ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-                {copied === phase.code ? 'Copied' : 'Copy'}
-              </button>
-            </div>
+            {phase.flow === 'device' && phase.code && (
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-well px-4 py-3">
+                <code className="font-mono text-2xl font-semibold tracking-[0.2em] text-white">{phase.code}</code>
+                <button
+                  type="button"
+                  onClick={() => copy(phase.code!)}
+                  className="flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  {copied === phase.code ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copied === phase.code ? 'Copied' : 'Copy'}
+                </button>
+              </div>
+            )}
             <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[12px] text-gray-400">
               <span className="flex items-center gap-2">
                 <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
