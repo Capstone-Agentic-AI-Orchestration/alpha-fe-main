@@ -302,7 +302,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen bg-background text-gray-100 font-sans overflow-hidden text-sm">
+    <div className="flex h-dvh w-full bg-background text-gray-100 font-sans overflow-hidden text-sm">
       {/* Sidebar */}
       <Sidebar 
         collapsed={sidebarCollapsed}
