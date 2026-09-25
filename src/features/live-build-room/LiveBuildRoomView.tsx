@@ -12,6 +12,7 @@ import {
   FileCode2,
   FileText,
   GitBranch,
+  MessageSquare,
   Layers3,
   Loader2,
   Play,
@@ -29,6 +30,7 @@ import type {
   LiveBuildRoomAgentCard,
   LiveBuildRoomCardStatus,
   LiveBuildRoomPhase,
+  LiveBuildRoomChatCall,
   LiveBuildRoomSnapshot,
   RunActivity
 } from '@/shared/types';
@@ -334,11 +336,18 @@ export const LiveBuildRoomView: React.FC = () => {
     activeWorkspaceId,
     showToast,
     triggerSquadRun,
-    setActiveTab
+    setActiveTab,
+    setActiveThreadId
   } = useApp();
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedChatCallId, setSelectedChatCallId] = useState<string | null>(null);
+  const [chatFilter, setChatFilter] = useState('all');
+  const [chatAgentFilter, setChatAgentFilter] = useState('all');
+  const [chatStatusFilter, setChatStatusFilter] = useState('all');
+  const [patchPreview, setPatchPreview] = useState<{ callId: string; content: string } | null>(null);
+  const [patchBusyCallId, setPatchBusyCallId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useState<DetailTab>('activity');
   const [detailOpen, setDetailOpen] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -371,6 +380,8 @@ export const LiveBuildRoomView: React.FC = () => {
       setSnapshot(next);
       setError(null);
       setSelectedAgentId(current => current && next.agentCards.some(card => card.agentId === current) ? current : next.agentCards[0]?.agentId ?? null);
+      const calls = next.chatCalls ?? [];
+      setSelectedChatCallId(current => current && calls.some(call => call.id === current) ? current : calls[0]?.id ?? null);
     } catch (err: any) {
       setSnapshot(null);
       setError(err?.message || 'This project does not have an accessible squad room.');
@@ -386,7 +397,7 @@ export const LiveBuildRoomView: React.FC = () => {
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') void loadRoom(true);
     }, 10_000);
-    const eventNames = ['stage_update', 'run_activity', 'run_started', 'run_completed', 'run_failed', 'run_cancelled', 'squad_member_started', 'squad_run_completed', 'squad_run_failed'];
+    const eventNames = ['stage_update', 'run_activity', 'run_started', 'run_completed', 'run_failed', 'run_cancelled', 'squad_member_started', 'squad_run_completed', 'squad_run_failed', 'agent_call.created', 'agent_call.queued', 'agent_call.started', 'agent_call.activity', 'agent_call.completed', 'agent_call.failed', 'agent_call.cancelled'];
     const unsubs = eventNames.map(event => runnerSocket.on(event, () => void loadRoom(true)));
     return () => {
       window.clearInterval(interval);
@@ -415,6 +426,17 @@ export const LiveBuildRoomView: React.FC = () => {
     return snapshot.agentCards.find(card => card.agentId === selectedAgentId) ?? snapshot.agentCards[0] ?? null;
   }, [selectedAgentId, snapshot]);
 
+  const visibleChatCalls = (snapshot?.chatCalls ?? []).filter(call =>
+    (chatFilter === 'all' || (call.threadId ?? 'private') === chatFilter) &&
+    (chatAgentFilter === 'all' || call.agentId === chatAgentFilter) &&
+    (chatStatusFilter === 'all' || call.status === chatStatusFilter)
+  );
+  const selectedChatCall = visibleChatCalls.find(call => call.id === selectedChatCallId) ?? null;
+  const chatOptions = [...new Map((snapshot?.chatCalls ?? []).map(call => [call.threadId ?? 'private', {
+    id: call.threadId ?? 'private',
+    label: call.threadId ? call.chatLabel : 'Private project chats'
+  }] as const)).values()];
+
   const activeProject = projects.find(project => project.id === selectedProjectId);
   const fallbackIssue = issues.find(issue => issue.projectId === selectedProjectId && issue.assignedSquadId === snapshot?.squad.id)
     ?? issues.find(issue => issue.projectId === selectedProjectId);
@@ -432,6 +454,30 @@ export const LiveBuildRoomView: React.FC = () => {
       await loadRoom(true);
     } finally {
       setStarting(false);
+    }
+  };
+
+  const reviewChatPatch = async (call: LiveBuildRoomChatCall) => {
+    try {
+      const result = await apiService.getAgentCallPatch(call.id);
+      setPatchPreview({ callId: call.id, content: result.patch });
+    } catch (error: any) {
+      showToast('Patch unavailable', error?.message ?? 'The proposed patch could not be loaded.', 'error');
+    }
+  };
+
+  const applyChatPatch = async (call: LiveBuildRoomChatCall) => {
+    if (!window.confirm('Apply this proposed patch to the project working copy? Review the diff first.')) return;
+    setPatchBusyCallId(call.id);
+    try {
+      await apiService.applyAgentCallPatch(call.id);
+      showToast('Patch applied', 'The working copy changed. Review the working tree before committing.', 'success');
+      setPatchPreview(null);
+      await loadRoom(true);
+    } catch (error: any) {
+      showToast('Patch not applied', error?.message ?? 'The patch was rejected by the working copy.', 'error');
+    } finally {
+      setPatchBusyCallId(null);
     }
   };
 
@@ -503,7 +549,7 @@ export const LiveBuildRoomView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"><span>Workspace</span><span>/</span><span className="text-slate-300">{activeProject?.name || snapshot.project.name}</span><span>/</span><span>Automation</span></div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-200"><RadioTower className="h-5 w-5" /></div>
-              <div><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">Build and ship with your project squad</p></div>
+              <div><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">Watch project chat agents research, use tools, and prepare changes</p></div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -519,6 +565,44 @@ export const LiveBuildRoomView: React.FC = () => {
             <button type="button" onClick={() => void loadRoom(true)} className="rounded-xl border border-white/[0.10] p-2.5 text-slate-400 hover:bg-white/[0.06] hover:text-white" title="Refresh room" aria-label="Refresh room"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button>
           </div>
         </div>
+
+        <section className="rounded-2xl border border-violet-400/20 bg-surface-100/60 p-4 sm:p-5">
+          <div className="flex flex-col gap-3 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-end lg:justify-between">
+            <div><div className="flex items-center gap-2 text-sm font-semibold text-white"><MessageSquare className="h-4 w-4 text-violet-300" />Project chat agent activity</div><p className="mt-1 text-xs text-slate-500">Live and recent agent calls across this project’s chats. Prompts and private reasoning stay in their chat.</p></div>
+            <div className="flex flex-wrap gap-2">
+              <select aria-label="Filter by chat" value={chatFilter} onChange={event => setChatFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All chats</option>{chatOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
+              <select aria-label="Filter by agent" value={chatAgentFilter} onChange={event => setChatAgentFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All agents</option>{[...new Map((snapshot.chatCalls ?? []).map(call => [call.agentId, call] as const)).values()].map(call => <option key={call.agentId} value={call.agentId}>{call.agentName}</option>)}</select>
+              <select aria-label="Filter by status" value={chatStatusFilter} onChange={event => setChatStatusFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All statuses</option>{['awaiting_confirmation', 'queued', 'running', 'completed', 'failed', 'cancelled'].map(status => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}</select>
+            </div>
+          </div>
+          {(snapshot.chatCalls ?? []).length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-white/10 px-4 py-7 text-center"><div className="text-sm font-medium text-slate-300">No project chat agent activity yet</div><p className="mt-1 text-xs text-slate-500">Message or call a project agent and its live activity will appear here.</p><button type="button" onClick={() => setActiveTab('chat')} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]"><MessageSquare className="h-3.5 w-3.5" />Open project chat</button></div>
+          ) : (
+            <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(260px,0.75fr)_minmax(0,1.5fr)]">
+              <div className="space-y-2">
+                {visibleChatCalls.map(call => {
+                  const active = call.status === 'running' || call.status === 'queued';
+                  const selected = selectedChatCall?.id === call.id;
+                  const tone = call.status === 'completed' ? 'text-emerald-300' : call.status === 'failed' || call.status === 'cancelled' ? 'text-rose-300' : call.status === 'awaiting_confirmation' ? 'text-amber-200' : 'text-violet-200';
+                  return <button key={call.id} type="button" onClick={() => { setSelectedChatCallId(call.id); setPatchPreview(null); }} aria-pressed={selected} className={`w-full rounded-xl border p-3 text-left transition ${selected ? 'border-violet-400/50 bg-violet-400/[0.07]' : 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.045]'}`}>
+                    <div className="flex items-center justify-between gap-3"><span className="truncate text-xs font-semibold text-white">{call.agentName}</span><span className={`flex shrink-0 items-center gap-1.5 text-[10px] font-medium ${tone}`}><span className={`h-1.5 w-1.5 rounded-full bg-current ${active ? 'animate-pulse' : ''}`} />{call.status.replace(/_/g, ' ')}</span></div>
+                    <div className="mt-1 truncate text-[11px] text-slate-400">{call.origin === 'chat_turn' ? 'Chat message' : 'Agent call'} · {call.chatLabel} · {call.operationMode}</div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span className="truncate">{call.target?.label || call.target?.type || 'No target'}</span><span className="shrink-0">{timeAgo(call.startedAt || call.createdAt)}</span></div>
+                  </button>;
+                })}
+                {visibleChatCalls.length === 0 && <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs text-slate-500">No calls match these filters.</div>}
+              </div>
+              {selectedChatCall ? <div className="min-w-0 rounded-xl border border-white/[0.08] bg-black/10 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-semibold text-white">{selectedChatCall.agentName}<span className="font-normal text-slate-400"> · {selectedChatCall.agentRole}</span></div><div className="mt-1 text-xs text-slate-500">{selectedChatCall.origin === 'chat_turn' ? 'Chat message' : 'Agent call'} · {selectedChatCall.chatLabel} · {selectedChatCall.operationMode} · {selectedChatCall.target?.label || selectedChatCall.target?.type || 'Project chat'}</div></div><div className="flex flex-wrap gap-2">{selectedChatCall.canOpenChat && selectedChatCall.threadId && <button type="button" onClick={() => { setActiveThreadId(selectedChatCall.threadId!); setActiveTab('chat'); }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-2 text-[11px] text-slate-200 hover:bg-white/[0.06]"><MessageSquare className="h-3.5 w-3.5" />Open chat</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && <button type="button" onClick={() => void reviewChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 px-2.5 py-2 text-[11px] text-violet-200 hover:bg-violet-400/10"><FileCode2 className="h-3.5 w-3.5" />{patchPreview?.callId === selectedChatCall.id ? 'Refresh diff' : 'Review diff'}</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && selectedChatCall.status === 'completed' && can('run_agents') && !selectedChatCall.patchApplied && <button type="button" disabled={patchBusyCallId === selectedChatCall.id} onClick={() => void applyChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 px-2.5 py-2 text-[11px] text-emerald-200 hover:bg-emerald-400/10 disabled:opacity-50"><Check className="h-3.5 w-3.5" />{patchBusyCallId === selectedChatCall.id ? 'Applying…' : 'Apply patch'}</button>}{selectedChatCall.patchApplied && <span className="self-center text-[10px] text-emerald-300">Patch applied</span>}</div></div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>Working copy: {selectedChatCall.workingCopyId?.split(':').at(-1) || 'project workspace'}</span>{selectedChatCall.workingBranch && <span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" />{selectedChatCall.workingBranch}</span>}{selectedChatCall.target?.type === 'issue' && <span>Issue: {selectedChatCall.target.label || selectedChatCall.target.id}</span>}{selectedChatCall.target?.type === 'pull_request' && selectedChatCall.target.id && <a href={selectedChatCall.target.id} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-violet-300 hover:text-violet-200">{selectedChatCall.target.label || 'Pull request'}<ExternalLink className="h-3 w-3" /></a>}</div>
+                <div className="mt-4 max-h-[360px] space-y-3 overflow-y-auto border-t border-white/[0.07] pt-3">
+                  {selectedChatCall.activities.length ? selectedChatCall.activities.slice().reverse().map(activity => <div key={activity.id} className="flex gap-3"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'tool' || activity.kind === 'tool_result' ? 'bg-sky-400' : 'bg-violet-400'}`} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-slate-200">{activity.message}</span><time className="text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</time></div>{activity.detail && <div className="mt-1 text-[11px] leading-4 text-slate-500">{activity.detail}</div>}{activity.paths?.length ? <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <code key={file} className="rounded bg-white/[0.05] px-1.5 py-1 text-[10px] text-slate-300">{file}</code>)}</div> : null}</div></div>) : <div className="text-xs text-slate-500">Waiting for the first activity event.</div>}
+                </div>
+                {patchPreview?.callId === selectedChatCall.id && <div className="mt-4 border-t border-white/[0.07] pt-3"><div className="mb-2 flex items-center justify-between"><div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Proposed diff</div><button type="button" onClick={() => setPatchPreview(null)} className="text-[10px] text-slate-500 hover:text-slate-200">Close</button></div><pre className="max-h-[420px] overflow-auto rounded-lg border border-white/[0.07] bg-black/30 p-3 text-[10px] leading-5 text-slate-300">{patchPreview.content}</pre></div>}
+              </div> : <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-white/10 text-xs text-slate-500">Select an agent call to inspect its activity.</div>}
+            </div>
+          )}
+        </section>
 
         <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-slate-300"><TerminalSquare className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.issue ? `${snapshot.issue.identifier} · ${snapshot.issue.title}` : 'Ready for the next project issue'}</div><div className="mt-1 text-xs text-slate-500">{snapshot.activeRun?.mission || 'Run a squad against a project issue to start a live build.'}</div></div></div>

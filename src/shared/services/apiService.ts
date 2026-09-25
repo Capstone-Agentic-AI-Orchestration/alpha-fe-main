@@ -535,6 +535,8 @@ export const apiService = {
     ),
   getAgentCall: (id: string) =>
     fetchJson<{ call: AgentCall; agentMessage?: ProjectChatMessage }>(`/agent-calls/${encodeURIComponent(id)}`),
+  getAgentCallPatch: (id: string) =>
+    fetchJson<{ patch: string }>(`/agent-calls/${encodeURIComponent(id)}/patch`),
   getThreadAgentCalls: (projectId: string, threadId: string) =>
     fetchJson<{ calls: AgentCall[] }>(
       `/projects/${encodeURIComponent(projectId)}/chat/threads/${encodeURIComponent(threadId)}/agent-calls`

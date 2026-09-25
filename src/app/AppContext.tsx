@@ -339,6 +339,8 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'view_issues',
     'manage_issues',
     'view_agents',
+    // Developers can create and maintain the local personas they run.
+    'manage_agents',
     'run_agents',
     'view_squads',
     'run_squads',
@@ -359,10 +361,12 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'view_projects',
     'edit_projects',
     'manage_projects',
+    'provision_repositories',
     'view_issues',
     'manage_issues',
-    'provision_repositories',
     'view_agents',
+    // Project managers staff the agents used by their PM-owned projects.
+    'manage_agents',
     'view_squads',
     'view_skills',
     'manage_skills',

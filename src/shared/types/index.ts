@@ -632,6 +632,40 @@ export interface LiveBuildRoomAgentCard {
   output?: { kind: string; label: string; value: string };
 }
 
+export interface AgentCallActivity {
+  id: string;
+  sequence: number;
+  kind: 'status' | 'stage' | 'tool' | 'tool_result' | 'file_change' | 'handoff' | 'error' | 'summary';
+  message: string;
+  detail?: string;
+  paths?: string[];
+  createdAt: string;
+}
+
+export interface LiveBuildRoomChatCall {
+  id: string;
+  threadId?: string;
+  messageId?: string;
+  canOpenChat: boolean;
+  chatLabel: string;
+  agentId: string;
+  agentName: string;
+  agentRole: string;
+  operationMode: AgentCallMode;
+  origin: 'agent_call' | 'chat_turn';
+  status: AgentCallStatus;
+  target?: AgentCallTarget;
+  workingCopyId?: string;
+  workingBranch?: string;
+  createdAt: string;
+  startedAt?: string;
+  completedAt?: string;
+  activities: AgentCallActivity[];
+  artifacts: Array<{ id: string; artifactType: string; path?: string; createdAt: string }>;
+  hasPatch: boolean;
+  patchApplied: boolean;
+}
+
 export interface LiveBuildRoomSnapshot {
   project: Pick<Project, 'id' | 'name' | 'key' | 'description' | 'color' | 'status'>;
   squad: Squad & { projectIds: string[]; memberCount: number };
@@ -666,6 +700,7 @@ export interface LiveBuildRoomSnapshot {
     status: string;
     runId: string;
   }>;
+  chatCalls: LiveBuildRoomChatCall[];
   lastUpdated: string;
 }
 
@@ -913,6 +948,8 @@ export interface AgentCallArtifact {
   createdAt: string;
 }
 
+export type AgentCallActivityKind = AgentCallActivity['kind'];
+
 export interface AgentCall {
   id: string;
   workspaceId: string;
@@ -923,6 +960,7 @@ export interface AgentCall {
   agentId: string;
   requestedBy: string;
   operationMode: AgentCallMode;
+  origin?: 'agent_call' | 'chat_turn';
   status: AgentCallStatus;
   revisionTarget?: AgentCallTarget;
   instruction: string;
@@ -933,6 +971,7 @@ export interface AgentCall {
   startedAt?: string;
   completedAt?: string;
   artifacts: AgentCallArtifact[];
+  activities: AgentCallActivity[];
 }
 
 export interface ProjectChatAgent {

@@ -136,7 +136,7 @@ export const NAV_ITEMS: NavItem[] = [
 
   { id: 'agents', label: 'Agents', labels: { dev: 'Agent Directory' }, title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'workspace', section: 'automation', icon: Bot },
   { id: 'squads', label: 'Squads', labels: { dev: 'My Squads', pm: 'Project Squads', admin: 'All Squads' }, title: 'Agent Squads', subtitle: 'Configure multi-agent topologies', group: 'workspace', section: 'automation', icon: Users },
-  { id: 'live_build_room', label: 'Live Build Room', labels: { pm: 'Build Rooms', admin: 'Build Rooms' }, title: 'Live Build Room', subtitle: 'Observe project squad execution in real time', group: 'workspace', section: 'automation', icon: RadioTower },
+  { id: 'live_build_room', label: 'Live Build Room', labels: { pm: 'Build Rooms', admin: 'Build Rooms' }, title: 'Live Build Room', subtitle: 'Watch project chat agents work in real time', group: 'workspace', section: 'automation', icon: RadioTower },
   { id: 'runtimes', label: 'Runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Monitor },
   { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
 

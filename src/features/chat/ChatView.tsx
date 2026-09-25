@@ -221,9 +221,19 @@ export const ChatView: React.FC = () => {
     const threadId = activeThread?.id;
     if (isClient || !projectId || !threadId) return undefined;
 
-    const updateFromSocket = (payload: Partial<AgentCall> & Pick<AgentCall, 'id'>) => {
+    const updateFromSocket = (payload: Partial<AgentCall> & Pick<AgentCall, 'id'>, eventName: string) => {
       const existing = payload?.id ? callsRef.current[payload.id] : undefined;
       if (!existing) return;
+      if (eventName === 'agent_call.activity') {
+        void apiService.getAgentCall(payload.id).then(result => {
+          callsRef.current[result.call.id] = result.call;
+          setCalls(prev => ({ ...prev, [result.call.id]: result.call }));
+          if (result.call.activities?.some(activity => activity.kind === 'file_change' && activity.message === 'Proposed patch applied to the project working copy')) {
+            void refreshChatThread(threadId);
+          }
+        }).catch(() => undefined);
+        return;
+      }
       const next = {
         ...existing,
         ...payload,
@@ -245,11 +255,12 @@ export const ChatView: React.FC = () => {
       'agent_call.created',
       'agent_call.queued',
       'agent_call.started',
+      'agent_call.activity',
       'agent_call.completed',
       'agent_call.failed',
       'agent_call.cancelled'
     ];
-    const unsubscribers = eventNames.map(eventName => runnerSocket.on(eventName, updateFromSocket));
+    const unsubscribers = eventNames.map(eventName => runnerSocket.on(eventName, payload => updateFromSocket(payload, eventName)));
     return () => unsubscribers.forEach(unsubscribe => unsubscribe());
   }, [activeThread?.id, activeThread?.projectId, isClient, refreshChatThread]);
 
