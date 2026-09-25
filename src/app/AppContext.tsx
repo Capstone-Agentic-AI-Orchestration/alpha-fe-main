@@ -295,6 +295,8 @@ export type Capability =
   /** Edit a project's details, resources and settings. Not create or delete. */
   | 'edit_projects'
   | 'manage_projects'
+  /** Provision a new GitHub repository for a PM-owned project. */
+  | 'provision_repositories'
   | 'view_issues'
   | 'manage_issues'
   | 'view_agents'
@@ -359,6 +361,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'manage_projects',
     'view_issues',
     'manage_issues',
+    'provision_repositories',
     'view_agents',
     'view_squads',
     'view_skills',

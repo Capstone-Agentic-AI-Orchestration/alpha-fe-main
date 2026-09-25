@@ -18,12 +18,19 @@ interface ProjectResourcesPanelProps {
   /** Fires the first time an organization is chosen, so the project can store it. */
   onOrgChange?: (org: string) => void;
   /**
-   * `full` shows the create-repo and attach forms; `inline` renders only the
-   * list of what is already attached, for places too narrow to hold a form.
+   * `full` shows the permitted create-repo and attach forms; `inline` renders
+   * only the list of what is already attached, for places too narrow to hold a
+   * form.
    */
   variant?: 'full' | 'inline';
   /** Render the resource list without exposing write controls. */
   readOnly?: boolean;
+  /**
+   * Allow a new GitHub repository to be provisioned for this project.
+   * Attaching an existing repository or local folder is a separate action and
+   * remains available to callers that can edit project resources.
+   */
+  canCreateRepository?: boolean;
 }
 
 /**
@@ -41,7 +48,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   githubOrg,
   onOrgChange,
   variant = 'full',
-  readOnly = false
+  readOnly = false,
+  canCreateRepository = true
 }) => {
   const isFull = variant === 'full';
 
@@ -77,15 +85,15 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   useEffect(() => {
     // The inline variant has no create form, so it also skips the two auth
     // round-trips — those used to fire on every project you opened.
-    if (!isFull || readOnly) return;
+    if (!isFull || readOnly || !canCreateRepository) return;
     apiService.checkGitHubAuth().then(setGhAuth).catch(() => setGhAuth({ authenticated: false }));
     // Orgs are a separate call so a missing read:org scope degrades to
     // "personal only" instead of breaking the whole panel.
     apiService.listGitHubOrgs().then(setGhOrgs).catch(() => setGhOrgs([]));
-  }, [isFull]);
+  }, [isFull, readOnly, canCreateRepository]);
 
   const handleCreateRepo = async () => {
-    if (readOnly) return;
+    if (readOnly || !canCreateRepository) return;
     const repoName = ghRepoName.trim();
     if (!repoName) return;
 
@@ -218,7 +226,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   return (
     <div className="space-y-3 text-xs">
       {/* Create a GitHub repository for this project */}
-      {isFull && !readOnly && (
+      {isFull && !readOnly && canCreateRepository && (
         <div className="p-3 rounded-xl bg-well border border-white/5 space-y-2.5">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-medium text-gray-300 flex items-center gap-1.5">
@@ -352,6 +360,13 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
             </>
           )}
         </div>
+      )}
+
+      {isFull && !readOnly && !canCreateRepository && (
+        <p className="rounded-xl border border-brand-400/15 bg-brand-500/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-gray-400">
+          You can attach an existing repository or local folder here. New GitHub repositories are created by a
+          project manager.
+        </p>
       )}
 
       {/*

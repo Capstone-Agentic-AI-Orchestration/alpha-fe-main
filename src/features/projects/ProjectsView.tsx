@@ -47,8 +47,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   } = useApp();
 
   const canManageProjects = can('manage_projects');
-  /** Editing is the team's; creating a project, and its repository, a PM's. */
+  /** Editing is the team's; creating a project stays with project managers. */
   const canEditProjects = can('edit_projects');
+  /** Repository provisioning is narrower than general project administration. */
+  const canProvisionRepositories = can('provision_repositories');
   const canManageIssues = can('manage_issues');
   
   // Selected Project for dedicated Workspace Kanban View
@@ -401,14 +403,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
                   <span>Connected Repositories</span>
                 </span>
-                {canManageProjects && (
+                {canEditProjects && (
                   <button
                     onClick={() => setResourcesModalOpen(true)}
                     className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white transition-colors"
-                    title="Attach or create a repository"
+                    title={canProvisionRepositories
+                      ? 'Create or attach a repository'
+                      : 'Attach an existing repository or local folder'}
                   >
                     <Plus className="w-3 h-3" />
-                    <span>Attach</span>
+                    <span>{canProvisionRepositories ? 'Add repository' : 'Attach existing'}</span>
                   </button>
                 )}
               </div>
@@ -419,6 +423,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 resources={selectedProject.resources || []}
                 onChange={(next) => updateProject(selectedProject.id, { resources: next })}
                 readOnly={!canEditProjects}
+                canCreateRepository={canProvisionRepositories}
               />
             </div>
 
@@ -469,7 +474,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             isOpen={true}
             onClose={() => setResourcesModalOpen(false)}
             title="Project Resources"
-            subtitle="Create a repository, or attach an existing repo or local folder."
+            subtitle={canProvisionRepositories
+              ? 'Create a repository, or attach an existing repo or local folder.'
+              : 'Attach an existing repository or local folder. New repositories are created by a project manager.'}
           >
             <ProjectResourcesPanel
               projectId={selectedProject.id}
@@ -478,6 +485,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               githubOrg={selectedProject.githubOrg}
               onOrgChange={(org) => updateProject(selectedProject.id, { githubOrg: org })}
               readOnly={!canEditProjects}
+              canCreateRepository={canProvisionRepositories}
             />
           </Modal>
         )}
