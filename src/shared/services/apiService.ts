@@ -42,6 +42,23 @@ export function setActiveWorkspaceId(workspaceId: string | null): void {
   activeWorkspaceId = workspaceId;
 }
 
+/** What `workspaceContext` answers when the caller is not in the workspace named by `X-Workspace-Id`. */
+const WORKSPACE_REFUSED = 'You do not have access to the requested workspace.';
+
+let workspaceRefusedHandler: ((refusedWorkspaceId: string) => void) | null = null;
+
+/**
+ * Be told when the daemon refuses the selected workspace.
+ *
+ * The id sent on every request can go stale while the app is open -- a PM
+ * removes this account from the workspace, or the cloud stops listing it --
+ * and from then on every call fails the same way. One listener (AppProvider)
+ * recovers instead of letting each caller surface the same 403.
+ */
+export function onWorkspaceRefused(handler: ((refusedWorkspaceId: string) => void) | null): void {
+  workspaceRefusedHandler = handler;
+}
+
 const SKILL_CATEGORIES: Skill['category'][] = [
   'File Operations',
   'Browser & Web',
@@ -172,6 +189,9 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
       if (parsed && typeof parsed.error === 'string') detail = parsed.error;
     } catch {
       /* not JSON — the raw text is the best we have */
+    }
+    if (res.status === 403 && detail === WORKSPACE_REFUSED && activeWorkspaceId) {
+      workspaceRefusedHandler?.(activeWorkspaceId);
     }
     throw new Error(`API Error [${res.status}]: ${detail}`);
   }
