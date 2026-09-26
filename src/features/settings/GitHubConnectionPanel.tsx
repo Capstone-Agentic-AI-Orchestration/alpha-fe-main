@@ -81,6 +81,10 @@ export const GitHubConnectionPanel: React.FC = () => {
           if (pollRef.current) clearInterval(pollRef.current);
           pollRef.current = null;
           setPending(null);
+          // A different account may have just signed in. Reboot the app so no
+          // workspace, board, or permission state from the previous one
+          // survives -- the same rule the profile picker follows.
+          window.location.reload();
         }
       }, 2500);
     } catch (err: any) {
