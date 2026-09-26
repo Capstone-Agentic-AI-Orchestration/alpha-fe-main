@@ -440,8 +440,8 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
                       <p className="mt-1 text-xs leading-5 text-gray-400">
                         {phase.flow === 'oauth'
                           ? phase.targetLogin
-                            ? `GitHub opened an account chooser for @${phase.targetLogin}. Select that account, then approve Alpha.`
-                            : 'GitHub opened an account chooser. Select the account you want to use, then approve Alpha.'
+                            ? `If GitHub shows a different signed-in account, choose “Use a different account” and sign in as @${phase.targetLogin}. Continue only when GitHub shows that account.`
+                            : 'If GitHub shows an account you do not want to use, choose “Use a different account” and sign in to the account you want.'
                           : 'A browser window opened. Enter this one-time code to confirm the account.'}
                       </p>
                     </div>
@@ -496,7 +496,7 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
 
             <div className="mt-7 flex items-center justify-between gap-4 border-t border-white/[0.07] pt-4 text-[11px] leading-5 text-gray-600">
               <span>Alpha never asks for your GitHub password. Authentication happens on GitHub.</span>
-              <span className="hidden shrink-0 items-center gap-1.5 sm:inline-flex"><Github className="h-3.5 w-3.5" /> {waiting && phase.kind === 'waiting' && phase.flow === 'oauth' ? 'GitHub OAuth' : 'GitHub device flow'}</span>
+              <span className="hidden shrink-0 items-center gap-1.5 sm:inline-flex"><Github className="h-3.5 w-3.5" /> {waiting && phase.kind === 'waiting' ? (phase.flow === 'oauth' ? 'GitHub OAuth' : 'GitHub device flow') : 'GitHub sign-in'}</span>
             </div>
           </section>
         </main>
