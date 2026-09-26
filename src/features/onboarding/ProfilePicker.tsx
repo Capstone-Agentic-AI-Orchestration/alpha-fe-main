@@ -175,11 +175,14 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
           setPhase({ kind: 'finishing', profileId: profile?.id });
           await onRetry();
           await refreshProfiles();
-          if (onClose) {
-            // A profile switch must not carry the previous account's cached
-            // workspace, chat, or permission state into the new session.
-            window.location.reload();
-          }
+          // A sign-in must not carry the previous account's cached workspace,
+          // chat, or permission state into the new session -- from the startup
+          // gate as much as from the in-app switcher. AppProvider reconciled
+          // the saved workspace once, on mount, while signed out; skipping the
+          // reload here left the old account's workspace id on every request,
+          // and the daemon refused them all with "You do not have access to
+          // the requested workspace."
+          window.location.reload();
         } catch (err) {
           if (attempt.current === mine) {
             setPhase({ kind: 'idle' });

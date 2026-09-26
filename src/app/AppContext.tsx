@@ -43,7 +43,7 @@ import {
   normalizeRequirementDocs,
   normalizeSettings
 } from '@/data/defaults';
-import { apiService, normalizeGitHubRepo, normalizeSkill, setActiveWorkspaceId } from '@/shared/services/apiService';
+import { apiService, normalizeGitHubRepo, normalizeSkill, onWorkspaceRefused, setActiveWorkspaceId } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
@@ -1213,6 +1213,57 @@ ${e.detail}`;
       setWorkspaceSwitching(false);
     }
   };
+
+  /**
+   * The daemon refused the selected workspace: this account is not (or is no
+   * longer) a member of it. Every request carries that id, so until it
+   * changes every call fails the same way.
+   *
+   * `refusedWorkspaceId` is the id that was sent. `refreshWorkspaces()` and
+   * `switchWorkspace()` above are the tools for moving somewhere valid.
+   */
+  const recoverFromRefusedWorkspace = async (refusedWorkspaceId: string) => {
+    // Already moved on (a switch raced the refusal): nothing to recover.
+    if (refusedWorkspaceId !== activeWorkspaceId) return;
+
+    let available: WorkspaceSummary[];
+    try {
+      available = await apiService.getWorkspaces();
+    } catch {
+      return; // Daemon unreachable; the offline state already says so.
+    }
+    setWorkspaces(available);
+
+    const target = available.find(workspace => workspace.id !== refusedWorkspaceId);
+    if (target) {
+      // A full switch, so no board data from the refused workspace stays on screen.
+      await switchWorkspace(target.id, target);
+      return;
+    }
+    setActiveWorkspaceIdState(null);
+    setActiveWorkspaceId(null);
+    showToast('No workspace access', 'This account is not a member of any workspace. Ask a project manager to add you.', 'error');
+  };
+
+  /**
+   * Many requests are usually in flight when a workspace is refused, and each
+   * one reports it. Recover once per refused id, and always with the latest
+   * render's helpers rather than the ones captured when this was registered.
+   */
+  const recoverRef = useRef(recoverFromRefusedWorkspace);
+  recoverRef.current = recoverFromRefusedWorkspace;
+  const recoveringFromRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    onWorkspaceRefused(refusedWorkspaceId => {
+      if (recoveringFromRef.current === refusedWorkspaceId) return;
+      recoveringFromRef.current = refusedWorkspaceId;
+      void recoverRef.current(refusedWorkspaceId).finally(() => {
+        recoveringFromRef.current = null;
+      });
+    });
+    return () => onWorkspaceRefused(null);
+  }, []);
 
   const createWorkspace = async (
     name: string,
