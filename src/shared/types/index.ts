@@ -1121,7 +1121,15 @@ export interface GitHubProfile {
   avatarUrl?: string;
   lastUsedAt: string;
   active: boolean;
+  /**
+   * Can be switched to without GitHub: this device keeps its sign-in and the
+   * account was used within the last week. Absent from older daemons.
+   */
+  remembered?: boolean;
 }
+
+/** Why a remembered account could not be switched to without GitHub. */
+export type ProfileSwitchRefusal = 'unknown_profile' | 'idle' | 'no_credential' | 'expired' | 'unverified';
 
 export type UserRole = 'client' | 'dev' | 'pm' | 'admin';
 

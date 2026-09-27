@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { apiService } from '@/shared/services/apiService';
-import { GitHubProfile, Identity, IdentityStatus } from '@/shared/types';
+import { GitHubProfile, Identity, IdentityStatus, ProfileSwitchRefusal } from '@/shared/types';
 
 interface Props {
   identity?: Identity;
@@ -37,7 +37,20 @@ type Phase =
       url: string;
       startedAt: number;
     }
+  | { kind: 'switching'; profileId: string }
   | { kind: 'finishing'; profileId?: string };
+
+/** Why the chosen account has to be confirmed on GitHub; drives the popup's wording. */
+type ConfirmReason = ProfileSwitchRefusal | 'not_remembered';
+
+const CONFIRM_COPY: Record<ConfirmReason, (login: string) => string> = {
+  idle: login => `@${login} has not been used on this device for over a week, so GitHub needs to confirm it again.`,
+  expired: login => `The saved GitHub sign-in for @${login} has expired or was revoked.`,
+  no_credential: login => `This device does not have a saved sign-in for @${login} yet.`,
+  not_remembered: login => `This device does not have a current sign-in for @${login}.`,
+  unverified: login => `Alpha could not reach GitHub to check @${login}. Try again, or confirm the account on GitHub.`,
+  unknown_profile: login => `@${login} is no longer remembered on this device.`
+};
 
 const POLL_MS = 2500;
 const CODE_LIFETIME_MS = 15 * 60 * 1000;
@@ -50,11 +63,12 @@ function initials(profile: Pick<GitHubProfile, 'login' | 'name'>): string {
 /**
  * Chrome-style account choice for the packaged desktop app.
  *
- * Profiles are remembered as non-secret account metadata. Choosing one always
- * starts a fresh GitHub authorization, so a remembered card never acts as an
- * unattended sign-in or silently reuses another person's session. Hosted
- * desktop builds include the selected login in the OAuth handoff; standalone
- * builds retain the device-flow fallback.
+ * A remembered account switches instantly: the daemon keeps each account's
+ * sign-in (sealed by the OS) and checks it with GitHub, without an
+ * authorization. An account unused for a week, or whose sign-in lapsed, opens
+ * a small confirmation that sends the person to GitHub -- the only time they
+ * see it. Hosted desktop builds include the selected login in that OAuth
+ * handoff; standalone builds retain the device-flow fallback.
  */
 export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRetry, onClose }) => {
   const [profiles, setProfiles] = useState<GitHubProfile[]>([]);
@@ -64,6 +78,7 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [confirm, setConfirm] = useState<{ profile: GitHubProfile; reason: ConfirmReason } | null>(null);
   const attempt = useRef(0);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const loginStarted = useRef(false);
@@ -197,6 +212,40 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
     }
   };
 
+  /**
+   * Continue as the chosen account: instantly when this device still has its
+   * sign-in, otherwise through the confirmation popup and GitHub.
+   */
+  const continueWith = async (profile: GitHubProfile) => {
+    setError(null);
+    if (profile.remembered === false) {
+      setConfirm({ profile, reason: 'not_remembered' });
+      return;
+    }
+    const mine = ++attempt.current;
+    setPhase({ kind: 'switching', profileId: profile.id });
+    try {
+      const result = await apiService.switchGitHubProfile(profile.id);
+      if (attempt.current !== mine) return;
+      if (!result.switched) {
+        setPhase({ kind: 'idle' });
+        await refreshProfiles();
+        setConfirm({ profile, reason: result.reason ?? 'not_remembered' });
+        return;
+      }
+      setPhase({ kind: 'finishing', profileId: profile.id });
+      await onRetry();
+      // As after a GitHub sign-in: nothing from the previous account's
+      // session may carry into this one.
+      window.location.reload();
+    } catch {
+      // An older daemon without instant switching: go the GitHub way.
+      if (attempt.current !== mine) return;
+      setPhase({ kind: 'idle' });
+      void startLogin(profile);
+    }
+  };
+
   const closePicker = () => {
     if (!onClose || busy || waiting) return;
     // Starting a switch invalidates the desktop session before GitHub grants
@@ -223,7 +272,7 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
   };
 
   const waiting = phase.kind === 'waiting';
-  const busy = phase.kind === 'starting' || phase.kind === 'finishing';
+  const busy = phase.kind === 'starting' || phase.kind === 'switching' || phase.kind === 'finishing';
   const isGate = !onClose;
   const selectedProfile = profiles.find(profile => profile.id === selectedProfileId) ?? null;
   const phaseProfile = phase.kind !== 'idle' && phase.profileId
@@ -234,6 +283,8 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
     : phase.kind !== 'idle'
       ? phaseProfile?.login
       : selectedProfile?.login;
+  /** The selected account can be switched to without GitHub. */
+  const instant = phase.kind === 'idle' && Boolean(selectedProfile) && selectedProfile?.remembered !== false;
   const addingAccount = phase.kind !== 'idle' && !phase.profileId;
   const currentAccount = identity?.login;
   const statusCopy = identityStatus === 'unreachable'
@@ -286,7 +337,7 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
                 {onClose ? 'Switch Alpha profile' : 'Choose your Alpha profile'}
               </h1>
               <p className="mt-2 max-w-[58ch] text-sm leading-6 text-gray-400">
-                {statusCopy} {currentAccount && onClose ? `You are currently using @${currentAccount}. ` : ''}Select a remembered account or add another one. Alpha asks GitHub to confirm the account every time you continue.
+                {statusCopy} {currentAccount && onClose ? `You are currently using @${currentAccount}. ` : ''}Select a remembered account or add another one. Remembered accounts switch instantly; one unused for a week is confirmed on GitHub again.
               </p>
             </div>
 
@@ -339,7 +390,7 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
                           <span className="min-w-0 flex-1">
                             <span className="block truncate text-sm font-semibold text-white">{profile.name || profile.login}</span>
                             <span className="mt-0.5 block truncate font-mono text-xs text-gray-500">@{profile.login}</span>
-                            <span className="mt-1 block text-[11px] text-gray-500">{selected ? 'Ready to authorize on GitHub' : profile.active ? 'Current account' : 'Select this account'}</span>
+                            <span className="mt-1 block text-[11px] text-gray-500">{profile.remembered === false ? 'Confirm on GitHub to use' : selected ? 'Signed in on this device' : profile.active ? 'Current account' : 'Select this account'}</span>
                           </span>
                           {selected ? (
                             <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand-500/15 px-2.5 py-1 text-[11px] font-medium text-brand-200">
@@ -394,14 +445,18 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
               <LockKeyhole className="h-6 w-6 text-brand-400" aria-hidden="true" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-semibold text-white">
-                  {authorizationLogin
+                  {instant && selectedProfile
+                    ? `Switch to @${selectedProfile.login}`
+                    : authorizationLogin
                     ? `Authorize @${authorizationLogin} on GitHub`
                     : addingAccount
                       ? phase.kind === 'waiting' && phase.flow === 'device' ? 'Finish signing in on GitHub' : 'Sign in with another GitHub account'
                       : 'Choose a profile to continue'}
                 </p>
                 <p className="mt-1 text-xs leading-5 text-gray-400">
-                  {authorizationLogin
+                  {instant && selectedProfile
+                    ? `Saved on this device. Alpha switches without asking GitHub again while @${selectedProfile.login} is used at least once a week.`
+                    : authorizationLogin
                     ? `GitHub will confirm @${authorizationLogin} before Alpha switches accounts.`
                     : addingAccount
                       ? 'Alpha will refresh the signed-in account after GitHub confirms it.'
@@ -413,7 +468,7 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
             <div className="mt-5 space-y-2.5">
               <button
                 type="button"
-                onClick={() => selectedProfile && void startLogin(selectedProfile)}
+                onClick={() => selectedProfile && void continueWith(selectedProfile)}
                 disabled={!selectedProfile || busy || waiting || profilesLoading}
                 className="flex min-h-12 w-full items-center justify-center gap-3 rounded-lg border border-brand-400/50 bg-gradient-to-r from-brand-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_34px_-20px_rgba(139,92,246,0.9)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300/80 disabled:cursor-not-allowed disabled:opacity-45"
               >
@@ -481,9 +536,15 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
                 </div>
               )}
 
+              {phase.kind === 'switching' && (
+                <div className="flex items-center gap-2 rounded-xl border border-white/[0.08] bg-well/70 px-4 py-3 text-xs text-gray-400" role="status">
+                  <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" /> Switching to @{phaseProfile?.login ?? 'account'}…
+                </div>
+              )}
+
               {phase.kind === 'finishing' && (
                 <div className="flex items-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-400/[0.07] px-4 py-3 text-xs text-emerald-200" role="status">
-                  <Check className="h-4 w-4" /> GitHub confirmed your account. Loading your workspace…
+                  <Check className="h-4 w-4" /> Account confirmed. Loading your workspace…
                 </div>
               )}
 
@@ -504,6 +565,54 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
           </section>
         </main>
       </div>
+
+      {confirm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/60 p-4" role="presentation" onClick={() => setConfirm(null)}>
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="confirm-account-title"
+            onClick={event => event.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-white/[0.12] bg-surface p-5 shadow-2xl shadow-black/50 sm:p-6"
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-brand-400/25 bg-brand-400/[0.08]">
+                <LockKeyhole className="h-5 w-5 text-brand-300" aria-hidden="true" />
+              </span>
+              <div className="min-w-0">
+                <h2 id="confirm-account-title" className="text-base font-semibold text-white">Confirm @{confirm.profile.login} on GitHub</h2>
+                <p className="mt-1.5 text-sm leading-6 text-gray-400">{CONFIRM_COPY[confirm.reason](confirm.profile.login)}</p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirm(null)}
+                className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:bg-white/[0.05] hover:text-white"
+              >
+                Cancel
+              </button>
+              {confirm.reason === 'unverified' && (
+                <button
+                  type="button"
+                  onClick={() => { const profile = confirm.profile; setConfirm(null); void continueWith(profile); }}
+                  className="rounded-lg border border-white/[0.12] px-3 py-2 text-sm font-medium text-gray-200 transition hover:bg-white/[0.06]"
+                >
+                  Try again
+                </button>
+              )}
+              <button
+                type="button"
+                autoFocus
+                onClick={() => { const profile = confirm.profile; setConfirm(null); void startLogin(profile); }}
+                className="inline-flex items-center gap-2 rounded-lg border border-brand-400/50 bg-gradient-to-r from-brand-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
+              >
+                <Github className="h-4 w-4" aria-hidden="true" /> Authorize on GitHub
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 };
