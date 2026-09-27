@@ -19,6 +19,7 @@ import {
   RemoteAction,
   Identity,
   GitHubProfile,
+  ProfileSwitchRefusal,
   AnalyticsData,
   WorkspaceSummary,
   WorkspaceProjectAssignment,
@@ -586,6 +587,16 @@ export const apiService = {
     fetchJson<{ profiles: GitHubProfile[] }>('/github/profiles'),
   removeGitHubProfile: (id: string) =>
     fetchJson<{ success: boolean }>('/github/profiles/remove', {
+      method: 'POST',
+      body: JSON.stringify({ id })
+    }),
+  /**
+   * Switch to a remembered account without GitHub. `switched: false` is an
+   * answer, not an error: the account needs confirming on GitHub, and `reason`
+   * says why.
+   */
+  switchGitHubProfile: (id: string) =>
+    fetchJson<{ switched: boolean; reason?: ProfileSwitchRefusal; login?: string }>('/github/profiles/switch', {
       method: 'POST',
       body: JSON.stringify({ id })
     }),
