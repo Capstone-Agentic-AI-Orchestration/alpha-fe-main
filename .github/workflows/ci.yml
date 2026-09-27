@@ -31,4 +31,8 @@ jobs:
         run: npm run typecheck
 
       - name: Build
+        # The web build, as Vercel makes it: requests go to /api on the same
+        # origin (middleware.ts). vite.config.ts refuses to build without it.
+        env:
+          VITE_API_URL: /api
         run: npm run build
