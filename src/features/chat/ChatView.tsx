@@ -452,9 +452,27 @@ export const ChatView: React.FC = () => {
     await sendChatMessage(message);
   };
 
+  /**
+   * Where a new conversation goes: the open thread's project, else the first
+   * project this person works in.
+   *
+   * `projects` is everything they can see, and a developer sees every
+   * PM-owned project but works only in the ones they are assigned to. Taking
+   * `projects[0]` picked whichever came first -- usually one they were not on
+   * -- and the daemon refused it: "Conversation not created: Project not found
+   * in the active workspace."
+   */
+  const assignedProjects = projects.filter(project => project.assigned !== false);
+  const newThreadProject =
+    assignedProjects.find(project => project.id === activeThread?.projectId) ?? assignedProjects[0];
+  const canStartThread = isClient || Boolean(newThreadProject);
+
   const startNewThread = () => {
-    const projectId = !isClient ? activeThread?.projectId ?? projects[0]?.id : undefined;
-    createNewThread('New project conversation', projectId);
+    if (!canStartThread) {
+      showToast('No project to chat in', 'You are not assigned to a project yet. Ask a project manager to add you.', 'info');
+      return;
+    }
+    createNewThread('New project conversation', isClient ? undefined : newThreadProject?.id);
   };
 
   const agentForCall = (call: AgentCall): ProjectChatAgent | undefined =>
@@ -496,7 +514,7 @@ export const ChatView: React.FC = () => {
   return (
     <div className="h-full flex overflow-hidden bg-shell text-sm text-gray-200">
       <aside className="flex w-72 shrink-0 flex-col border-r border-white/[0.06] bg-shell sm:w-80">
-        <div className="h-14 px-4 border-b border-white/[0.08] flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">{isClient ? 'Messages' : 'Project chat'}</h2><p className="text-[10px] text-gray-500 mt-0.5">{activeWorkspace?.name ?? 'Workspace'}</p></div><button onClick={startNewThread} className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/[0.06]" title="Start new project chat"><Plus className="w-4 h-4" /></button></div>
+        <div className="h-14 px-4 border-b border-white/[0.08] flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">{isClient ? 'Messages' : 'Project chat'}</h2><p className="text-[10px] text-gray-500 mt-0.5">{activeWorkspace?.name ?? 'Workspace'}</p></div><button onClick={startNewThread} aria-disabled={!canStartThread} className={`p-1.5 rounded-lg hover:bg-white/[0.06] ${canStartThread ? 'text-gray-400 hover:text-white' : 'text-gray-600 cursor-not-allowed'}`} title={canStartThread ? (isClient ? 'Start new project chat' : `Start new chat in ${newThreadProject?.name ?? 'project'}`) : 'You are not assigned to a project yet'}><Plus className="w-4 h-4" /></button></div>
         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.04]">{chatThreads.map(thread => { const selected = activeThreadId === thread.id; const threadProject = projects.find(item => item.id === thread.projectId); return <button key={thread.id} onClick={() => setActiveThreadId(thread.id)} className={`w-full text-left px-4 py-3.5 flex items-start gap-3 transition-colors ${selected ? 'bg-white/[0.08] border-l-2 border-brand-500 pl-3.5' : 'hover:bg-white/[0.04]'}`}><span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${selected ? 'bg-brand-400 shadow-[0_0_10px_rgba(124,58,237,0.8)]' : 'bg-gray-700'}`} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className={`text-xs sm:text-sm font-semibold truncate ${selected ? 'text-white' : 'text-gray-200'}`}>{thread.title}</span><span className="text-[10px] text-gray-600 shrink-0">{formatDate(thread.lastMessageAt)}</span></span><span className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-500 truncate">{threadProject ? <><FolderGit2 className="h-3 w-3 shrink-0" /> {threadProject.key}</> : 'General Alpha chat'}{thread.lastMessageSnippet && <><span>·</span><span className="truncate">{thread.lastMessageSnippet}</span></>}</span></span></button>; })}{chatThreads.length === 0 && <div className="p-6 text-xs text-gray-500">No conversations yet. Start one with +.</div>}</div>
       </aside>
 
