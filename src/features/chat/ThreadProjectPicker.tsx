@@ -83,6 +83,17 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
     }
   };
 
+  /**
+   * The projects this person works in -- "My projects" on the Projects page,
+   * by the same rule -- not the workspace's whole catalogue.
+   *
+   * A developer can see every PM-owned project but reach only the ones they
+   * are assigned to, so offering the rest listed the whole organisation's
+   * repositories and every pick outside their own was refused by the daemon.
+   * PMs and admins are assigned to everything they can see, so their list is
+   * unchanged. The current selection is still labelled from the full list.
+   */
+  const pickable = projects.filter(project => project.assigned !== false);
   const selectedProject = projects.find(project => project.id === selected);
   const selectedLabel = selectedProject
     ? `${selectedProject.key} · ${selectedProject.name}`
@@ -144,13 +155,13 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
                 {!selected && <Check className="h-3.5 w-3.5 shrink-0 text-brand-400" />}
               </button>
 
-              {projects.length > 0 && (
+              {pickable.length > 0 && (
                 <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
-                  Projects
+                  My projects
                 </div>
               )}
 
-              {projects.map(project => {
+              {pickable.map(project => {
                 const isSelected = selected === project.id;
                 return (
                   <button
@@ -173,8 +184,12 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
                 );
               })}
 
-              {projects.length === 0 && (
-                <div className="px-3 py-3 text-[11px] text-gray-600">No projects available.</div>
+              {pickable.length === 0 && (
+                <div className="px-3 py-3 text-[11px] text-gray-600">
+                  {projects.length === 0
+                    ? 'No projects available.'
+                    : 'You are not assigned to a project yet. Ask a project manager to add you.'}
+                </div>
               )}
             </div>
           </div>
@@ -194,7 +209,7 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
         className="bg-transparent border border-white/10 rounded-lg px-2 py-1 text-[11px] text-gray-300 hover:border-white/20 focus:outline-none focus:border-white/30 disabled:opacity-50 max-w-[180px] truncate"
       >
         {!selected && <option value="" disabled>Select project</option>}
-        {projects.map(p => (
+        {pickable.map(p => (
           <option key={p.id} value={p.id}>
             {p.key} — {p.name}
           </option>
