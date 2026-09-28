@@ -38,7 +38,8 @@ import {
   RepoCompare,
   RepoPullRequest,
   RepoRun,
-  PromoteResult
+  PromoteResult,
+  HostingStatus
 } from '@/shared/types';
 
 import { API_BASE } from '@/shared/config';
@@ -747,6 +748,11 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify(step)
     }),
+  getRepoHosting: (projectId: string, repo: string) =>
+    fetchJson<HostingStatus>(`${projectRepoPath(projectId, repo)}/hosting`),
+  /** Sets up hosting the first time, or retries a failed/partial one. PM and admin only; can take 10-40s. */
+  setUpRepoHosting: (projectId: string, repo: string) =>
+    fetchJson<HostingStatus>(`${projectRepoPath(projectId, repo)}/hosting`, { method: 'POST' }),
 
   cloneGitHubRepo: (payload: { repo: string; intoDir: string }) =>
     fetchJson<{ path: string }>('/github/repos/clone', {

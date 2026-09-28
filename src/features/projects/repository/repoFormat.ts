@@ -98,7 +98,7 @@ export const RUN_TONE_CLASS: Record<RunTone, { dot: string; text: string }> = {
   neutral: { dot: 'bg-gray-500', text: 'text-gray-400' }
 };
 
-function humanize(value: string): string {
+export function humanize(value: string): string {
   const spaced = value.replace(/_/g, ' ');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }

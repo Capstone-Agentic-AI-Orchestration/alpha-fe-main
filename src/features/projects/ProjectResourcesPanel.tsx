@@ -467,8 +467,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                     Set up deploys
                   </label>
                   <p id={`gh-deploy-help-${projectId}`} className="text-[11px] leading-relaxed text-gray-500">
-                    Backends deploy to Render, frontends to Vercel. Deploys stay off until the repository has its
-                    secrets and <code className="font-mono text-gray-400">ALPHAORCH_DEPLOY=true</code>.
+                    Alpha sets up hosting on Render (backends) or Vercel (frontends) and connects a paired frontend
+                    and backend, so each calls the other automatically.
                   </p>
                 </div>
               </div>
