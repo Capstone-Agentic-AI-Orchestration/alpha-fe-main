@@ -19,11 +19,14 @@ import {
   List as ListIcon,
   ChevronLeft,
   ShieldCheck,
+  Workflow,
 } from 'lucide-react';
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectEnvPanel } from '@/features/projects/ProjectEnvPanel';
+import { ProjectRepositoryView } from '@/features/projects/repository/ProjectRepositoryView';
+import { useProjectRepos } from '@/features/projects/repository/useProjectRepos';
 import { deriveProjectKey } from '@/features/projects/useProjectsViewModel';
 import { Project, ProjectStatus, ProjectPriority } from '@/shared/types';
 import { Modal } from '@/shared/components/Modal';
@@ -78,13 +81,23 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const [sortBy, setSortBy] = useState<'createdAt' | 'name' | 'progress' | 'targetDate'>('createdAt');
 
   // Workspace board view state
-  const [boardViewMode, setBoardViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [boardViewMode, setBoardViewMode] = useState<'kanban' | 'list' | 'repository'>('kanban');
   const [boardSearchQuery, setBoardSearchQuery] = useState<string>('');
 
   // Selected project memo
   const selectedProject = useMemo(() => {
     return projects.find(p => p.id === selectedProjectId) || null;
   }, [projects, selectedProjectId]);
+
+  // GitHub repositories the API can read for this project. Keyed on the
+  // attached repositories so one created a moment ago shows up at once.
+  const attachedRepoKey = (selectedProject?.resources ?? [])
+    .filter(r => r.type === 'github_repo')
+    .map(r => r.pathOrUrl)
+    .join('|');
+  const { repos: projectRepos } = useProjectRepos(selectedProject?.id ?? null, attachedRepoKey);
+  /** The repository view replaces the board, and only exists while there is a repository to show. */
+  const showRepository = boardViewMode === 'repository' && projectRepos.length > 0;
 
   // `key` is UNIQUE in the daemon's schema and a duplicate makes the write fail
   // with nothing on screen to explain it. Flag it while the dialog is still open.
@@ -251,7 +264,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
           {/* Right: Board Search, View Toggle, Edit & New Task Actions */}
           <div className="flex items-center gap-2">
             
-            {/* Search Input */}
+            {/* Search Input — issues only, so it goes with the board. */}
+            {!showRepository && (
             <div className="relative w-48">
               <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -262,15 +276,18 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 className="w-full bg-surface-raised border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
               />
             </div>
+            )}
 
             {/* View Mode Toggle (Kanban vs List) */}
             <div className="flex items-center bg-surface-raised border border-white/5 rounded-xl p-0.5 text-xs">
               <button
                 onClick={() => setBoardViewMode('kanban')}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  boardViewMode === 'kanban' ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                  boardViewMode === 'kanban' || (boardViewMode === 'repository' && !showRepository) ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
                 }`}
                 title="Kanban Board"
+                aria-label="Kanban board"
+                aria-pressed={boardViewMode === 'kanban' || (boardViewMode === 'repository' && !showRepository)}
               >
                 <KanbanIcon className="w-3.5 h-3.5" />
               </button>
@@ -280,9 +297,24 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   boardViewMode === 'list' ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
                 }`}
                 title="List View"
+                aria-label="List view"
+                aria-pressed={boardViewMode === 'list'}
               >
                 <ListIcon className="w-3.5 h-3.5" />
               </button>
+              {projectRepos.length > 0 && (
+                <button
+                  onClick={() => setBoardViewMode('repository')}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    showRepository ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                  }`}
+                  title="Repository & pipeline"
+                  aria-label="Repository and pipeline"
+                  aria-pressed={showRepository}
+                >
+                  <Workflow className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Edit Project */}
@@ -324,13 +356,21 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             IssuesView locked to this project is the same board everywhere, so
             the two cannot drift apart again.
           */}
-          <div className="flex-1 overflow-hidden">
-            <IssuesView
-              embedded
-              lockedProjectId={selectedProject.id}
-              onOpenNewIssue={canManageIssues ? () => onOpenNewIssue?.() : () => {}}
-            />
-          </div>
+          {showRepository ? (
+            // The repository needs the room a file viewer needs; the rail is
+            // 320px, so the entry point lives there and the view lives here.
+            <div className="flex-1 min-w-0 overflow-y-auto p-5 select-text">
+              <ProjectRepositoryView projectId={selectedProject.id} repositories={projectRepos} />
+            </div>
+          ) : (
+            <div className="flex-1 overflow-hidden">
+              <IssuesView
+                embedded
+                lockedProjectId={selectedProject.id}
+                onOpenNewIssue={canManageIssues ? () => onOpenNewIssue?.() : () => {}}
+              />
+            </div>
+          )}
 
           {/* ================= RIGHT SIDE PANEL: PROPERTIES, STATUS, RESOURCES ================= */}
           <div className="w-80 border-l border-white/5 bg-shell p-5 overflow-y-auto flex-shrink-0 space-y-6 text-xs font-sans">
@@ -426,6 +466,34 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 canCreateRepository={canProvisionRepositories}
               />
             </div>
+
+            {/* Repository & pipeline. Only for a project the API can read a
+                GitHub repository for; opens the full view in the main pane. */}
+            {projectRepos.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-white/5">
+                <span className="text-[11px] font-medium text-gray-400 flex items-center gap-1.5">
+                  <Workflow className="w-3.5 h-3.5 text-brand-400" />
+                  <span>Repository &amp; pipeline</span>
+                </span>
+                <p className="text-[11px] leading-relaxed text-gray-500">
+                  Branches, files, CI runs and dev → uat → main promotion for{' '}
+                  {projectRepos.length === 1 ? (
+                    <span className="font-mono text-gray-400">{projectRepos[0]}</span>
+                  ) : (
+                    `${projectRepos.length} repositories`
+                  )}
+                  .
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setBoardViewMode(showRepository ? 'kanban' : 'repository')}
+                  aria-pressed={showRepository}
+                  className="w-full rounded-xl border border-white/10 px-3 py-1.5 text-[11px] font-medium text-gray-200 transition-colors hover:bg-white/5 hover:text-white"
+                >
+                  {showRepository ? 'Back to the board' : 'Open repository & pipeline'}
+                </button>
+              </div>
+            )}
 
             {/* Values this project's agents resolve MCP servers against. */}
             <div className="space-y-2 pt-2 border-t border-white/5">
