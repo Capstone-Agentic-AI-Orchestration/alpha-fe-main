@@ -757,6 +757,34 @@ export const apiService = {
     fetchJson<HostingStatus>(`${projectRepoPath(projectId, repo)}/hosting`, { method: 'POST' }),
   getRepoHostingPreviews: (projectId: string, repo: string) =>
     fetchJson<HostingPreviews>(`${projectRepoPath(projectId, repo)}/hosting/previews`),
+  /**
+   * One page of a hosted branch's logs. Answered as raw JSON: the log view
+   * normalises it, so an older server's shape still reads. List filters are
+   * comma-joined, as the server parses them.
+   */
+  getRepoHostingLogs: (
+    projectId: string,
+    repo: string,
+    branch: string,
+    query: {
+      startTime?: string;
+      endTime?: string | null;
+      direction?: 'backward' | 'forward';
+      limit?: number;
+      type?: readonly string[];
+      level?: readonly string[];
+      text?: string;
+      instance?: readonly string[];
+    }
+  ) => {
+    const params = new URLSearchParams({ branch });
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null || value === '') continue;
+      const text = Array.isArray(value) ? value.join(',') : String(value);
+      if (text) params.set(key, text);
+    }
+    return fetchJson<Record<string, unknown>>(`${projectRepoPath(projectId, repo)}/hosting/logs?${params.toString()}`);
+  },
   /** Checks a backend branch's `/health`. On request only: it can wake a sleeping service (up to a minute). */
   checkRepoHealth: (projectId: string, repo: string, branch: string) =>
     fetchJson<HealthResult>(`${projectRepoPath(projectId, repo)}/hosting/health?branch=${encodeURIComponent(branch)}`),

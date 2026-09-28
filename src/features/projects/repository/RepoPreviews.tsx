@@ -9,6 +9,7 @@ import { canFramePreview, previewFrameSandbox, previewUnavailableReason } from '
 import { describeRepoError, humanize } from './repoFormat';
 import { RefreshButton, RepoSection, SectionEmpty, SectionError, SectionLoading } from './SectionState';
 import { useRepoResource } from './useRepoResource';
+import { RepoLogs } from './deploymentLogs/RepoLogs';
 
 /** The width a thumbnail is laid out at before it is scaled into its card. */
 const THUMB_LAYOUT_WIDTH = 1280;
@@ -34,36 +35,39 @@ export const RepoPreviews: React.FC<{ projectId: string; repo: string }> = ({ pr
     : [];
 
   return (
-    <RepoSection
-      id={`repo-previews-${repo}`}
-      title="Previews"
-      icon={<MonitorPlay className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
-      actions={<RefreshButton onClick={previews.reload} loading={previews.loading} label="Refresh previews" />}
-    >
-      <div aria-busy={previews.loading}>
-        {previews.loading && !data ? (
-          <SectionLoading label="Loading previews…" />
-        ) : previews.error ? (
-          <SectionError message={previews.error} onRetry={previews.reload} />
-        ) : !data || sorted.length === 0 ? (
-          <SectionEmpty>
-            {data?.state === 'unavailable'
-              ? data.error ?? 'Hosting is not available here.'
-              : 'Nothing is hosted yet. Set up hosting to get a preview of each branch.'}
-          </SectionEmpty>
-        ) : (
-          <div className="grid gap-3 p-3 md:grid-cols-2">
-            {sorted.map(preview =>
-              preview.surface === 'health' ? (
-                <HealthCard key={preview.branch} projectId={projectId} repo={repo} preview={preview} />
-              ) : (
-                <PageCard key={preview.branch} preview={preview} />
-              )
-            )}
-          </div>
-        )}
-      </div>
-    </RepoSection>
+    <>
+      <RepoSection
+        id={`repo-previews-${repo}`}
+        title="Previews"
+        icon={<MonitorPlay className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
+        actions={<RefreshButton onClick={previews.reload} loading={previews.loading} label="Refresh previews" />}
+      >
+        <div aria-busy={previews.loading}>
+          {previews.loading && !data ? (
+            <SectionLoading label="Loading previews…" />
+          ) : previews.error ? (
+            <SectionError message={previews.error} onRetry={previews.reload} />
+          ) : !data || sorted.length === 0 ? (
+            <SectionEmpty>
+              {data?.state === 'unavailable'
+                ? (data.error ?? 'Hosting is not available here.')
+                : 'Nothing is hosted yet. Set up hosting to get a preview of each branch.'}
+            </SectionEmpty>
+          ) : (
+            <div className="grid gap-3 p-3 md:grid-cols-2">
+              {sorted.map(preview =>
+                preview.surface === 'health' ? (
+                  <HealthCard key={preview.branch} projectId={projectId} repo={repo} preview={preview} />
+                ) : (
+                  <PageCard key={preview.branch} preview={preview} />
+                )
+              )}
+            </div>
+          )}
+        </div>
+      </RepoSection>
+      {sorted.length > 0 && <RepoLogs projectId={projectId} repo={repo} branches={sorted.map(p => p.branch)} />}
+    </>
   );
 };
 
@@ -185,7 +189,11 @@ const PageCard: React.FC<{ preview: BranchPreview }> = ({ preview }) => {
   );
 };
 
-const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPreview }> = ({ projectId, repo, preview }) => {
+const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPreview }> = ({
+  projectId,
+  repo,
+  preview
+}) => {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<HealthResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -207,8 +215,9 @@ const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPre
       <CardHeader preview={preview} />
       <div className="space-y-2 border-y border-white/[0.06] bg-white/[0.02] px-3 py-3">
         <p className="text-[11px] leading-relaxed text-gray-400">
-          A backend has no page to show. Check that it answers on <code className="font-mono text-gray-300">/health</code>
-          {' '}— a sleeping free-tier service can take up to a minute to wake.
+          A backend has no page to show. Check that it answers on{' '}
+          <code className="font-mono text-gray-300">/health</code> — a sleeping free-tier service can take up to a
+          minute to wake.
         </p>
         <button
           type="button"
@@ -216,7 +225,11 @@ const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPre
           disabled={checking || !preview.url}
           className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-gray-200 transition-colors hover:bg-white/10 disabled:opacity-50"
         >
-          {checking ? <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden /> : <Activity className="h-3 w-3" aria-hidden />}
+          {checking ? (
+            <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden />
+          ) : (
+            <Activity className="h-3 w-3" aria-hidden />
+          )}
           {checking ? 'Checking…' : 'Check health'}
         </button>
         <div aria-live="polite">
@@ -224,7 +237,7 @@ const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPre
             <p className={`text-[11px] ${result.ok ? 'text-emerald-300' : 'text-amber-300'}`}>
               {result.ok
                 ? `Healthy — answered ${result.status} in ${(result.latencyMs / 1000).toFixed(1)}s.`
-                : result.error ?? `Unhealthy — answered ${result.status ?? 'nothing'}.`}
+                : (result.error ?? `Unhealthy — answered ${result.status ?? 'nothing'}.`)}
             </p>
           )}
           {error && <p className="text-[11px] text-amber-300">{error}</p>}
