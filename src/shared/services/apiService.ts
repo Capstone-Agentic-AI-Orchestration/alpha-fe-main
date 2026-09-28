@@ -13,7 +13,6 @@ import {
   SquadRun,
   ChatThread,
   ChatMessage,
-  ScaffoldStack,
   McpServer,
   McpServerInput,
   RemoteAction,
@@ -30,7 +29,16 @@ import {
   ProjectChatSnapshot,
   AgentCallMode,
   AgentCallTarget,
-  ChatMessage as ProjectChatMessage
+  ChatMessage as ProjectChatMessage,
+  ScaffoldRequest,
+  ScaffoldResponse,
+  RepoBranch,
+  RepoTree,
+  RepoFile,
+  RepoCompare,
+  RepoPullRequest,
+  RepoRun,
+  PromoteResult
 } from '@/shared/types';
 
 import { API_BASE } from '@/shared/config';
@@ -154,6 +162,38 @@ export function normalizeGitHubRepo(value: unknown): string | undefined {
     /github\.com[/:]([A-Za-z0-9._-]+\/[A-Za-z0-9._-]+?)(?:\.git)?\/?$/i
   );
   return match?.[1];
+}
+
+/** `/projects/:id/repos/:owner/:name`, each segment encoded on its own. */
+function projectRepoPath(projectId: string, repo: string): string {
+  const slash = repo.indexOf('/');
+  const owner = slash > 0 ? repo.slice(0, slash) : repo;
+  const name = slash > 0 ? repo.slice(slash + 1) : '';
+  return `/projects/${encodeURIComponent(projectId)}/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+}
+
+/** A query string from the defined values, or nothing. */
+function query(params: Record<string, string | undefined>): string {
+  const pairs = Object.entries(params)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== '')
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
+  return pairs.length > 0 ? `?${pairs.join('&')}` : '';
+}
+
+/** Every repository a scaffold response created, standalone or paired. */
+export function scaffoldedRepositories(response: ScaffoldResponse) {
+  return response.shape === 'paired' ? response.repositories : [response];
+}
+
+/**
+ * Split a `fetchJson` failure back into its status and the server's sentence.
+ * `fetchJson` throws `API Error [409]: A repository with that name exists.`
+ */
+export function parseApiError(err: unknown): { status: number | null; message: string } {
+  const text = err instanceof Error ? err.message : String(err);
+  const match = text.match(/^API Error \[(\d+)\]:\s*([\s\S]*)$/);
+  if (!match) return { status: null, message: text };
+  return { status: Number(match[1]), message: match[2].trim() || `Request failed (${match[1]})` };
 }
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
@@ -674,19 +714,39 @@ export const apiService = {
    * Create an organization repository that starts with a project structure.
    * The organization comes from the project; `org` only seeds it the first time.
    */
-  scaffoldGitHubRepo: (payload: {
-    projectId: string;
-    repoName: string;
-    stack: ScaffoldStack;
-    org?: string;
-    visibility?: 'private' | 'public';
-    shape?: string;
-    includeDocker?: boolean;
-  }) =>
-    fetchJson<{ url: string; nameWithOwner: string; localPath: string; files: string[] }>(
-      '/github/repos/scaffold',
-      { method: 'POST', body: JSON.stringify(payload) }
-    ),
+  scaffoldGitHubRepo: (payload: ScaffoldRequest) =>
+    fetchJson<ScaffoldResponse>('/github/repos/scaffold', {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
+
+  /*
+   * A project's GitHub repositories, read through the API.
+   *
+   * `repo` is always `owner/name`. Owner and name are encoded as separate path
+   * segments: encoding the pair as one would turn the slash into `%2F`, which
+   * the route does not match.
+   */
+  getProjectRepos: (projectId: string) =>
+    fetchJson<{ repositories: string[] }>(`/projects/${encodeURIComponent(projectId)}/repos`),
+  getRepoBranches: (projectId: string, repo: string) =>
+    fetchJson<{ branches: RepoBranch[] }>(`${projectRepoPath(projectId, repo)}/branches`),
+  getRepoTree: (projectId: string, repo: string, ref: string) =>
+    fetchJson<RepoTree>(`${projectRepoPath(projectId, repo)}/tree${query({ ref })}`),
+  getRepoFile: (projectId: string, repo: string, path: string, ref: string) =>
+    fetchJson<RepoFile>(`${projectRepoPath(projectId, repo)}/file${query({ path, ref })}`),
+  compareRepoBranches: (projectId: string, repo: string, base: string, head: string) =>
+    fetchJson<RepoCompare>(`${projectRepoPath(projectId, repo)}/compare${query({ base, head })}`),
+  getRepoPulls: (projectId: string, repo: string, state: 'open' | 'closed' | 'all' = 'open') =>
+    fetchJson<{ pullRequests: RepoPullRequest[] }>(`${projectRepoPath(projectId, repo)}/pulls${query({ state })}`),
+  getRepoRuns: (projectId: string, repo: string, branch: string) =>
+    fetchJson<{ runs: RepoRun[] }>(`${projectRepoPath(projectId, repo)}/runs${query({ branch })}`),
+  /** Open (or find) the pull request that moves work one step along the pipeline. PM and admin only. */
+  promoteRepoBranch: (projectId: string, repo: string, step: { from: 'dev'; to: 'uat' } | { from: 'uat'; to: 'main' }) =>
+    fetchJson<PromoteResult>(`${projectRepoPath(projectId, repo)}/promote`, {
+      method: 'POST',
+      body: JSON.stringify(step)
+    }),
 
   cloneGitHubRepo: (payload: { repo: string; intoDir: string }) =>
     fetchJson<{ path: string }>('/github/repos/clone', {

@@ -1,8 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { apiService } from '@/shared/services/apiService';
-import { ProjectResource, ScaffoldStack } from '@/shared/types';
+import { apiService, parseApiError, scaffoldedRepositories } from '@/shared/services/apiService';
+import {
+  ProjectResource,
+  ScaffoldBackendStack,
+  ScaffoldFrontendStack,
+  ScaffoldRepoResult,
+  ScaffoldRequest,
+  ScaffoldStack
+} from '@/shared/types';
+import { useApp } from '@/app/AppContext';
 import { GitBranch, Folder, FolderOpen, Plus, Trash2 } from 'lucide-react';
 import { ProjectWorkspaceCard } from './ProjectWorkspaceCard';
+import { ScaffoldResultCard } from './ScaffoldResultCard';
+
+type RepoShape = 'standalone' | 'paired';
+
+/** A toast title that says what went wrong; the API's own sentence goes underneath. */
+function scaffoldFailureTitle(status: number | null): string {
+  switch (status) {
+    case 400: return 'Check the repository details';
+    case 403: return 'No permission to create repositories';
+    case 409: return 'That repository name is taken';
+    case 502: return 'CI template unreachable';
+    default: return 'Repository not created';
+  }
+}
 
 interface ProjectResourcesPanelProps {
   /** Owning project. Repositories are scaffolded against it, never standalone. */
@@ -52,6 +74,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   canCreateRepository = true
 }) => {
   const isFull = variant === 'full';
+  const { showToast } = useApp();
 
   /* -------------------------------------------------------------------------
    * Create a GitHub repository for this project.
@@ -72,6 +95,13 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   const [ghOrgs, setGhOrgs] = useState<Array<{ login: string; role: string }>>([]);
   const [ghOwner, setGhOwner] = useState(githubOrg ?? '');
   const [ghStack, setGhStack] = useState<ScaffoldStack>('nodejs');
+  const [ghShape, setGhShape] = useState<RepoShape>('standalone');
+  const [ghFrontendStack, setGhFrontendStack] = useState<ScaffoldFrontendStack>('react');
+  const [ghBackendStack, setGhBackendStack] = useState<ScaffoldBackendStack>('nodejs');
+  const [ghDeploy, setGhDeploy] = useState(true);
+  /** What the last create made, kept until dismissed: it lists what is still to set up. */
+  const [ghResults, setGhResults] = useState<ScaffoldRepoResult[]>([]);
+  const isPaired = ghShape === 'paired';
 
   // Once the project has an org, it is settled for every repository in it.
   const orgLocked = Boolean(githubOrg);
@@ -106,40 +136,58 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
     setGhBusy(true);
     setGhError(null);
     try {
-      const repo = await apiService.scaffoldGitHubRepo({
-        projectId,
-        repoName,
-        stack: ghStack,
-        org,
-        visibility: ghVisibility
-      });
+      const base = { projectId, repoName, org, visibility: ghVisibility, deploy: ghDeploy };
+      const request: ScaffoldRequest = isPaired
+        ? { ...base, shape: 'paired', frontendStack: ghFrontendStack, backendStack: ghBackendStack }
+        : { ...base, shape: 'standalone', stack: ghStack };
+      const created = scaffoldedRepositories(await apiService.scaffoldGitHubRepo(request));
 
+      const stamp = Date.now();
       onChange([
         ...resources,
-        {
-          id: `res-${Date.now()}`,
+        ...created.map((repo, index): ProjectResource => ({
+          id: `res-${stamp}-${index}`,
           type: 'github_repo',
           name: repo.nameWithOwner,
           pathOrUrl: repo.url,
-          branchOrMachine: 'main',
-          stack: ghStack,
-          shape: 'standalone',
+          // Work lands on dev; uat and main only move by promotion.
+          branchOrMachine: 'dev',
+          stack: isPaired ? pairedStack(repo, index) : ghStack,
+          shape: ghShape,
           // Alpha pushed from this directory, so it is already a working copy —
           // nothing needs cloning for a repository created here.
           localPath: repo.localPath
-        }
+        }))
       ]);
 
       // First repository settles the organization for the whole project.
       if (!orgLocked) onOrgChange?.(org);
       setGhRepoName('');
+      setGhResults(created);
+      showToast(
+        created.length > 1 ? 'Repositories created' : 'Repository created',
+        created.map(repo => repo.nameWithOwner).join(', '),
+        'success'
+      );
     } catch (err) {
       // Surface the real reason — a name collision is the common case and the
       // user can fix it immediately.
-      setGhError(err instanceof Error ? err.message : String(err));
+      const { status, message } = parseApiError(err);
+      setGhError(message);
+      showToast(scaffoldFailureTitle(status), message, 'error');
     } finally {
       setGhBusy(false);
     }
+  };
+
+  /**
+   * The paired response is `[backend, frontend]`. Prefer the name suffix,
+   * which cannot be reordered, and fall back to that position.
+   */
+  const pairedStack = (repo: ScaffoldRepoResult, index: number): ScaffoldStack => {
+    if (/-fe$/i.test(repo.nameWithOwner)) return ghFrontendStack;
+    if (/-be$/i.test(repo.nameWithOwner)) return ghBackendStack;
+    return index === 0 ? ghBackendStack : ghFrontendStack;
   };
 
   const [newResType, setNewResType] = useState<'github_repo' | 'local_dir'>('local_dir');
@@ -252,6 +300,31 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
             </p>
           ) : (
             <>
+              {/* Shape first: it decides what the name means and which stacks apply. */}
+              <fieldset disabled={ghBusy}>
+                <legend className="text-[11px] text-gray-500 mb-1.5">Repository shape</legend>
+                <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-surface p-0.5">
+                  {([
+                    { value: 'standalone', label: 'Single repository' },
+                    { value: 'paired', label: 'Frontend + backend (paired)' }
+                  ] as const).map(option => (
+                    <label key={option.value} className="relative cursor-pointer">
+                      <input
+                        type="radio"
+                        name={`gh-shape-${projectId}`}
+                        value={option.value}
+                        checked={ghShape === option.value}
+                        onChange={() => setGhShape(option.value)}
+                        className="peer sr-only"
+                      />
+                      <span className="block rounded-lg px-2.5 py-1.5 text-center text-[11px] text-gray-400 transition-colors hover:text-white peer-checked:bg-white/10 peer-checked:font-medium peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand-400">
+                        {option.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+
               <div className="flex items-center gap-2">
                 {orgLocked ? (
                   // Settled for this project — a control that only ever has one
@@ -281,7 +354,15 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   type="text"
                   value={ghRepoName}
                   onChange={(e) => setGhRepoName(e.target.value)}
-                  placeholder="repository-name"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      void handleCreateRepo();
+                    }
+                  }}
+                  placeholder={isPaired ? 'base-name' : 'repository-name'}
+                  aria-label={isPaired ? 'Base name for the paired repositories' : 'Repository name'}
+                  aria-describedby={isPaired ? `gh-paired-hint-${projectId}` : undefined}
                   disabled={ghBusy}
                   className="flex-1 min-w-0 bg-surface border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 disabled:opacity-50"
                 />
@@ -295,30 +376,72 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                 </button>
               </div>
 
-              {/* Stack and visibility sit on their own row: the first already
-                  carries the owner, the name and the action. */}
-              <div className="flex items-center gap-2">
-                <label htmlFor="gh-stack" className="text-[11px] text-gray-500 flex-shrink-0">
-                  Stack
-                </label>
-                <select
-                  id="gh-stack"
-                  value={ghStack}
-                  onChange={(e) => setGhStack(e.target.value as ScaffoldStack)}
-                  disabled={ghBusy}
-                  className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
-                >
-                  <option value="nodejs">Node.js</option>
-                  <option value="nestjs">NestJS</option>
-                  <option value="nextjs">Next.js</option>
-                  <option value="react">React</option>
-                </select>
+              {isPaired && (
+                <p id={`gh-paired-hint-${projectId}`} className="text-[11px] text-gray-500">
+                  Creates{' '}
+                  <code className="font-mono text-gray-300">{`${ghRepoName.trim() || 'name'}-fe`}</code> and{' '}
+                  <code className="font-mono text-gray-300">{`${ghRepoName.trim() || 'name'}-be`}</code>.
+                </p>
+              )}
 
-                <label htmlFor="gh-visibility" className="text-[11px] text-gray-500 flex-shrink-0 ml-1">
+              {/* Stacks and visibility sit on their own row: the first already
+                  carries the owner, the name and the action. */}
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+                {isPaired ? (
+                  <>
+                    <label htmlFor={`gh-fe-stack-${projectId}`} className="text-[11px] text-gray-500 flex-shrink-0">
+                      Frontend
+                    </label>
+                    <select
+                      id={`gh-fe-stack-${projectId}`}
+                      value={ghFrontendStack}
+                      onChange={(e) => setGhFrontendStack(e.target.value as ScaffoldFrontendStack)}
+                      disabled={ghBusy}
+                      className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                    >
+                      <option value="react">React</option>
+                      <option value="nextjs">Next.js</option>
+                    </select>
+
+                    <label htmlFor={`gh-be-stack-${projectId}`} className="text-[11px] text-gray-500 flex-shrink-0 ml-1">
+                      Backend
+                    </label>
+                    <select
+                      id={`gh-be-stack-${projectId}`}
+                      value={ghBackendStack}
+                      onChange={(e) => setGhBackendStack(e.target.value as ScaffoldBackendStack)}
+                      disabled={ghBusy}
+                      className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                    >
+                      <option value="nodejs">Node.js</option>
+                      <option value="nestjs">NestJS</option>
+                    </select>
+                  </>
+                ) : (
+                  <>
+                    <label htmlFor={`gh-stack-${projectId}`} className="text-[11px] text-gray-500 flex-shrink-0">
+                      Stack
+                    </label>
+                    <select
+                      id={`gh-stack-${projectId}`}
+                      value={ghStack}
+                      onChange={(e) => setGhStack(e.target.value as ScaffoldStack)}
+                      disabled={ghBusy}
+                      className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                    >
+                      <option value="nodejs">Node.js</option>
+                      <option value="nestjs">NestJS</option>
+                      <option value="nextjs">Next.js</option>
+                      <option value="react">React</option>
+                    </select>
+                  </>
+                )}
+
+                <label htmlFor={`gh-visibility-${projectId}`} className="text-[11px] text-gray-500 flex-shrink-0 ml-1">
                   Visibility
                 </label>
                 <select
-                  id="gh-visibility"
+                  id={`gh-visibility-${projectId}`}
                   value={ghVisibility}
                   onChange={(e) => setGhVisibility(e.target.value as 'private' | 'public')}
                   disabled={ghBusy}
@@ -329,9 +452,30 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                 </select>
               </div>
 
+              <div className="flex items-start gap-2">
+                <input
+                  id={`gh-deploy-${projectId}`}
+                  type="checkbox"
+                  checked={ghDeploy}
+                  onChange={(e) => setGhDeploy(e.target.checked)}
+                  disabled={ghBusy}
+                  aria-describedby={`gh-deploy-help-${projectId}`}
+                  className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
+                />
+                <div className="space-y-0.5">
+                  <label htmlFor={`gh-deploy-${projectId}`} className="block text-[11px] text-gray-300 cursor-pointer">
+                    Set up deploys
+                  </label>
+                  <p id={`gh-deploy-help-${projectId}`} className="text-[11px] leading-relaxed text-gray-500">
+                    Backends deploy to Render, frontends to Vercel. Deploys stay off until the repository has its
+                    secrets and <code className="font-mono text-gray-400">ALPHAORCH_DEPLOY=true</code>.
+                  </p>
+                </div>
+              </div>
+
               <p className="text-[11px] text-gray-500">
-                Creates the repository with a starter structure — package.json, tsconfig, lint,
-                tests and a README. No CI workflows.
+                Creates the repository with a starter structure (package.json, tsconfig, lint, tests, a README and
+                a CI workflow) on dev, uat and main branches. Work lands on dev.
               </p>
 
               {/* With personal repositories removed, no organizations means no
@@ -355,10 +499,23 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
               )}
 
               {ghError && (
-                <p className="text-[11px] text-rose-300 font-mono break-words">{ghError}</p>
+                <p role="alert" className="text-[11px] text-rose-300 font-mono break-words">{ghError}</p>
               )}
             </>
           )}
+        </div>
+      )}
+
+      {/* What the last create made, and what it still needs from a person. */}
+      {isFull && ghResults.length > 0 && (
+        <div className="space-y-2" aria-live="polite">
+          {ghResults.map(result => (
+            <ScaffoldResultCard
+              key={result.nameWithOwner}
+              result={result}
+              onDismiss={() => setGhResults(prev => prev.filter(r => r.nameWithOwner !== result.nameWithOwner))}
+            />
+          ))}
         </div>
       )}
 

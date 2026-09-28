@@ -224,6 +224,141 @@ export type ProjectPriority = 'urgent' | 'high' | 'medium' | 'low' | 'none';
 
 /** Stacks the scaffold can generate, in the order the UI offers them. */
 export type ScaffoldStack = 'nodejs' | 'nestjs' | 'nextjs' | 'react';
+/** The frontend half of a paired scaffold. */
+export type ScaffoldFrontendStack = 'react' | 'nextjs';
+/** The backend half of a paired scaffold. */
+export type ScaffoldBackendStack = 'nodejs' | 'nestjs';
+
+interface ScaffoldRequestBase {
+  projectId: string;
+  repoName: string;
+  org?: string;
+  visibility?: 'private' | 'public';
+  includeDocker?: boolean;
+  /** Wire the deploy job (Render for backends, Vercel for frontends). */
+  deploy?: boolean;
+}
+
+/**
+ * `POST /github/repos/scaffold`. A paired request creates `<repoName>-be` and
+ * `<repoName>-fe`; a standalone one creates `<repoName>`.
+ */
+export type ScaffoldRequest =
+  | (ScaffoldRequestBase & { shape?: 'standalone'; stack?: ScaffoldStack })
+  | (ScaffoldRequestBase & {
+      shape: 'paired';
+      frontendStack: ScaffoldFrontendStack;
+      backendStack: ScaffoldBackendStack;
+    });
+
+/** One repository the scaffold created. */
+export interface ScaffoldRepoResult {
+  /** Standalone responses may carry it; paired ones wrap these instead. */
+  shape?: 'standalone';
+  url: string;
+  nameWithOwner: string;
+  localPath?: string;
+  files: string[];
+  commitSha: string;
+  /** The pipeline branches, in order: dev, uat, main. */
+  branches: string[];
+  protectedBranches: string[];
+  /** Why GitHub refused branch protection (usually the plan), when it did. */
+  protectionUnavailable?: string;
+  /** The repository exists but this machine could not clone it. */
+  cloneError?: string;
+  deployTarget: 'render' | 'vercel' | null;
+  /** Secret names the deploy job reads. */
+  requiredSecrets: string[];
+  /** Repository variable that switches deploys on (`ALPHAORCH_DEPLOY`). */
+  deployVariable: string | null;
+  ciSource: string;
+}
+
+export interface ScaffoldPairedResult {
+  shape: 'paired';
+  /** `[backend, frontend]`. */
+  repositories: ScaffoldRepoResult[];
+}
+
+export type ScaffoldResponse = ScaffoldRepoResult | ScaffoldPairedResult;
+
+/** The promotion pipeline, in the order work moves through it. */
+export const PIPELINE_BRANCHES = ['dev', 'uat', 'main'] as const;
+export type PipelineBranch = (typeof PIPELINE_BRANCHES)[number];
+
+export interface RepoBranch {
+  name: string;
+  sha: string;
+  protected: boolean;
+  /** dev, uat or main. */
+  pipeline: boolean;
+  /** An agent's working branch (`agent/*`). */
+  agent: boolean;
+}
+
+export interface RepoTreeEntry {
+  /** Full path from the repository root, e.g. `src/app/main.ts`. */
+  path: string;
+  type: 'file' | 'dir';
+  size?: number;
+}
+
+export interface RepoTree {
+  ref: string;
+  /** GitHub stopped listing before the end of a very large tree. */
+  truncated: boolean;
+  entries: RepoTreeEntry[];
+}
+
+export interface RepoFile {
+  path: string;
+  ref?: string;
+  size: number;
+  /** Null when the file is over 1MB. */
+  content: string | null;
+  truncated: boolean;
+}
+
+export interface RepoCompare {
+  base: string;
+  head: string;
+  status: string;
+  aheadBy: number;
+  behindBy: number;
+  commits: Array<{ sha: string; message: string; author?: string; date?: string }>;
+  files: Array<{ path: string; status: string; additions: number; deletions: number }>;
+}
+
+export interface RepoPullRequest {
+  number: number;
+  title: string;
+  url: string;
+  head: string;
+  base: string;
+  draft: boolean;
+  author?: string;
+  createdAt: string;
+  /** Opened by Alpha to move work dev → uat or uat → main. */
+  promotion: boolean;
+}
+
+export interface RepoRun {
+  id: number | string;
+  name: string;
+  branch: string;
+  event: string;
+  status: string;
+  conclusion: string | null;
+  url: string;
+  createdAt: string;
+}
+
+export type PromoteResult =
+  /** `commits` is how many commits the pull request carries. */
+  | { status: 'opened'; url: string; number: number; commits: number }
+  | { status: 'existing'; url: string; number: number }
+  | { status: 'nothing_to_promote' };
 
 export interface ProjectResource {
   id: string;
