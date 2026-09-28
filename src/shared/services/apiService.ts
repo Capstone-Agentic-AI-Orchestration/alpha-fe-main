@@ -39,7 +39,9 @@ import {
   RepoPullRequest,
   RepoRun,
   PromoteResult,
-  HostingStatus
+  HostingStatus,
+  HostingPreviews,
+  HealthResult
 } from '@/shared/types';
 
 import { API_BASE } from '@/shared/config';
@@ -753,6 +755,11 @@ export const apiService = {
   /** Sets up hosting the first time, or retries a failed/partial one. PM and admin only; can take 10-40s. */
   setUpRepoHosting: (projectId: string, repo: string) =>
     fetchJson<HostingStatus>(`${projectRepoPath(projectId, repo)}/hosting`, { method: 'POST' }),
+  getRepoHostingPreviews: (projectId: string, repo: string) =>
+    fetchJson<HostingPreviews>(`${projectRepoPath(projectId, repo)}/hosting/previews`),
+  /** Checks a backend branch's `/health`. On request only: it can wake a sleeping service (up to a minute). */
+  checkRepoHealth: (projectId: string, repo: string, branch: string) =>
+    fetchJson<HealthResult>(`${projectRepoPath(projectId, repo)}/hosting/health?branch=${encodeURIComponent(branch)}`),
 
   cloneGitHubRepo: (payload: { repo: string; intoDir: string }) =>
     fetchJson<{ path: string }>('/github/repos/clone', {

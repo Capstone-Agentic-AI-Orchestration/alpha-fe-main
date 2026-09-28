@@ -8,6 +8,7 @@ import { BranchSwitcher } from './BranchSwitcher';
 import { PipelineStrip } from './PipelineStrip';
 import { RepoFileBrowser } from './RepoFileBrowser';
 import { RepoHostingPanel } from './RepoHostingPanel';
+import { RepoPreviews } from './RepoPreviews';
 import { RepoPullsList } from './RepoPullsList';
 import { RepoRunsList } from './RepoRunsList';
 import { defaultBranch } from './repoFormat';
@@ -174,6 +175,7 @@ const RepoPanel: React.FC<{ projectId: string; repo: string; canPromote: boolean
           {/* Full width: the environment/variable detail below reads cramped
               in the narrower right-hand column next to runs and pull requests. */}
           <RepoHostingPanel projectId={projectId} repo={repo} canManage={canSetUpHosting} />
+          <RepoPreviews projectId={projectId} repo={repo} />
 
           {branch && (
             <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_24rem]">
