@@ -2,6 +2,7 @@ import {
   Project,
   ProjectBinding,
   CheckoutStatus,
+  RepositoryCheckout,
   Agent,
   AgentPersonaFile,
   Issue,
@@ -347,17 +348,31 @@ export const apiService = {
   /** Where this machine keeps a project's code. Null in the cloud, which has no checkout. */
   getProjectBinding: (projectId: string) =>
     fetchJson<ProjectBinding | null>(`/projects/${encodeURIComponent(projectId)}/binding`),
-  /** Point this machine at a folder that already holds the project's code. */
-  bindProject: (projectId: string, localDir: string) =>
+  /**
+   * Point this machine at a folder that already holds one of the project's
+   * repositories. The folder's origin says which; `repo` is only needed for
+   * a folder without one.
+   */
+  bindProject: (projectId: string, localDir: string, repo?: string) =>
     fetchJson<ProjectBinding>(`/projects/${encodeURIComponent(projectId)}/binding`, {
       method: 'PUT',
-      body: JSON.stringify({ localDir })
+      body: JSON.stringify({ localDir, ...(repo ? { repo } : {}) })
     }),
-  unbindProject: (projectId: string) =>
-    fetchJson<{ success: boolean }>(`/projects/${encodeURIComponent(projectId)}/binding`, { method: 'DELETE' }),
-  /** Clone the repository here and bind it, in one press. Safe to repeat. */
-  cloneProject: (projectId: string) =>
-    fetchJson<ProjectBinding>(`/projects/${encodeURIComponent(projectId)}/clone`, { method: 'POST' }),
+  /** Forget one repository's folder on this machine, or -- with none named -- all of them. */
+  unbindProject: (projectId: string, repo?: string) =>
+    fetchJson<{ success: boolean }>(
+      `/projects/${encodeURIComponent(projectId)}/binding${repo ? `?repo=${encodeURIComponent(repo)}` : ''}`,
+      { method: 'DELETE' }
+    ),
+  /** Clone one repository here and bind it, or every one not here yet. Safe to repeat. */
+  cloneProject: (projectId: string, repo?: string) =>
+    fetchJson<ProjectBinding[]>(`/projects/${encodeURIComponent(projectId)}/clone`, {
+      method: 'POST',
+      body: JSON.stringify(repo ? { repo } : {})
+    }),
+  /** Each of the project's repositories and this machine's checkout of it, if any. */
+  getRepositoryCheckouts: (projectId: string) =>
+    fetchJson<{ checkouts: RepositoryCheckout[] }>(`/projects/${encodeURIComponent(projectId)}/checkouts`),
   /** Branch, uncommitted work and unpushed commits, read from git now. */
   getProjectCheckoutStatus: (projectId: string) =>
     fetchJson<CheckoutStatus | null>(`/projects/${encodeURIComponent(projectId)}/binding/status`),

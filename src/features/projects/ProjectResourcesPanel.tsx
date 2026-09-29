@@ -10,7 +10,7 @@ import {
 } from '@/shared/types';
 import { useApp } from '@/app/AppContext';
 import { GitBranch, Folder, FolderOpen, Plus, Trash2, Unlink } from 'lucide-react';
-import { ProjectWorkspaceCard } from './ProjectWorkspaceCard';
+import { CheckoutSummary, RepoCheckoutLine, useRepositoryCheckouts } from './ProjectWorkspaceCard';
 import { ScaffoldResultCard } from './ScaffoldResultCard';
 import { DeleteRepositoryConfirm, repoNameWithOwner } from './DeleteRepositoryConfirm';
 import type { RepoDeletionResult } from '@/shared/types';
@@ -76,7 +76,14 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   canCreateRepository = true
 }) => {
   const isFull = variant === 'full';
-  const { showToast } = useApp();
+  const { showToast, can } = useApp();
+  const canBind = can('bind_workspace');
+  // Re-read whenever the repositories change: one created, attached or deleted.
+  const repoKey = resources
+    .filter(r => r.type === 'github_repo')
+    .map(r => r.pathOrUrl)
+    .join('|');
+  const checkouts = useRepositoryCheckouts(projectId, repoKey);
 
   /* -------------------------------------------------------------------------
    * Create a GitHub repository for this project.
@@ -537,30 +544,17 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         </div>
       )}
 
-      {isFull && !readOnly && !canCreateRepository && (
-        <p className="rounded-xl border border-brand-400/15 bg-brand-500/[0.06] px-3 py-2.5 text-[11px] leading-relaxed text-gray-400">
-          You can attach an existing repository or local folder here. New GitHub repositories are created by a
-          project manager.
-        </p>
-      )}
-
       {/*
-        Getting a checkout is the first thing a new collaborator does, and
-        there was no way to do it — the panel could only scaffold a brand new
-        repository, which is the wrong shape for someone who has just joined
-        a team that already has one. Placed above the list because on a fresh
-        project the list is empty and this is the only useful control here.
-
-        The folder is not a project resource: the project belongs to the team
-        and the folder to this machine, so the card reads and writes the
-        per-machine binding instead.
+        Getting a checkout is the first thing a new collaborator does, so each
+        repository says right on its row whether this machine has it, and
+        offers to clone it or link the folder it is already in. The folder is
+        not a project resource -- the project is the team's and the folder
+        this machine's -- so those read and write the per-machine binding.
       */}
-      {variant === 'full' && (
-        <ProjectWorkspaceCard project={{ id: projectId, name: 'this project', resources }} />
-      )}
+      {variant === 'full' && <CheckoutSummary projectId={projectId} checkouts={checkouts} canBind={canBind} />}
 
       {/* Attached resources */}
-      <div className={`space-y-2 overflow-y-auto ${deletingId ? 'max-h-96' : 'max-h-48'}`}>
+      <div className={`space-y-2 overflow-y-auto ${deletingId ? 'max-h-[28rem]' : 'max-h-72'}`}>
         {resources.length === 0 ? (
           <p className="p-3 text-gray-500 italic bg-well rounded-xl border border-white/5">
             Nothing attached yet. Agents need a working copy before they can run —
@@ -571,56 +565,62 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
             const repo = res.type === 'github_repo' ? repoNameWithOwner(res.pathOrUrl) : null;
             return (
               <div key={res.id}>
-                <div
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-white/5 font-mono text-xs"
-                >
-                  <div className="flex items-center gap-2.5 min-w-0">
-                    {res.type === 'github_repo' ? (
-                      <div className="flex items-center gap-1.5 text-brand-300 min-w-0">
-                        <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="font-medium truncate">{res.pathOrUrl}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-1.5 text-amber-300 min-w-0">
-                        <Folder className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="font-medium truncate">{res.pathOrUrl}</span>
-                      </div>
-                    )}
-                    <span className="text-[10px] text-gray-500 font-sans flex-shrink-0">({res.branchOrMachine})</span>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => navigator.clipboard.writeText(res.pathOrUrl)}
-                      className="text-gray-400 hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors text-[10px]"
-                      title="Copy path"
-                    >
-                      Copy
-                    </button>
-                    {!readOnly && (
+                {/* One card per resource: the row, and for a repository whether this machine has it. */}
+                <div className="rounded-xl bg-surface border border-white/5">
+                  <div
+                    className="flex items-center justify-between p-2.5 font-mono text-xs"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {res.type === 'github_repo' ? (
+                        <div className="flex items-center gap-1.5 text-brand-300 min-w-0">
+                          <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span className="font-medium truncate">{res.pathOrUrl}</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5 text-amber-300 min-w-0">
+                          <Folder className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span className="font-medium truncate">{res.pathOrUrl}</span>
+                        </div>
+                      )}
+                      <span className="text-[10px] text-gray-500 font-sans flex-shrink-0">({res.branchOrMachine})</span>
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
                       <button
                         type="button"
-                        onClick={() => handleRemoveResource(res.id)}
-                        className="p-1 text-gray-500 hover:text-white transition-colors"
-                        title="Detach from this project (nothing is deleted)"
-                        aria-label={`Detach ${res.name}`}
+                        onClick={() => navigator.clipboard.writeText(res.pathOrUrl)}
+                        className="text-gray-400 hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors text-[10px]"
+                        title="Copy path"
                       >
-                        <Unlink className="w-3.5 h-3.5" />
+                        Copy
                       </button>
-                    )}
-                    {canDeleteRepository && repo && (
-                      <button
-                        type="button"
-                        onClick={() => setDeletingId(current => (current === res.id ? null : res.id))}
-                        className="p-1 text-gray-500 hover:text-rose-400 transition-colors"
-                        title="Delete the repository and its hosting"
-                        aria-label={`Delete ${repo}`}
-                        aria-expanded={deletingId === res.id}
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+                      {!readOnly && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveResource(res.id)}
+                          className="p-1 text-gray-500 hover:text-white transition-colors"
+                          title="Detach from this project (nothing is deleted)"
+                          aria-label={`Detach ${res.name}`}
+                        >
+                          <Unlink className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {canDeleteRepository && repo && (
+                        <button
+                          type="button"
+                          onClick={() => setDeletingId(current => (current === res.id ? null : res.id))}
+                          className="p-1 text-gray-500 hover:text-rose-400 transition-colors"
+                          title="Delete the repository and its hosting"
+                          aria-label={`Delete ${repo}`}
+                          aria-expanded={deletingId === res.id}
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
+                  {repo && isFull && (
+                    <RepoCheckoutLine projectId={projectId} repo={repo} checkouts={checkouts} canBind={canBind} />
+                  )}
                 </div>
                 {deletingId === res.id && repo && (
                   <DeleteRepositoryConfirm
