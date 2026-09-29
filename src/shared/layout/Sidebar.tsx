@@ -371,16 +371,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
         every project manager, admin and client -- had no way to leave it.
       */}
       <div className={`border-t border-white/[0.06] py-2.5 ${compact ? 'px-1.5' : 'px-2.5'}`}>
+        {/* One group either way: collapsed, the avatar and sign-out stack in
+            the same centred column as the navigation icons above them. */}
         <div
-          className={`flex w-full items-center py-2 ${
-            compact ? 'justify-center px-0' : 'gap-2.5 px-2.5'
+          className={`flex w-full items-center ${
+            compact ? 'flex-col gap-1' : 'gap-2.5 px-2.5 py-2'
           }`}
         >
           {onSwitchProfile ? (
             <button
               type="button"
               onClick={onSwitchProfile}
-              className={`flex min-w-0 items-center rounded-lg text-left transition hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-brand-300/70 ${compact ? 'justify-center p-1' : 'flex-1 gap-2.5 px-1.5 py-1'}`}
+              className={`flex min-w-0 items-center rounded-lg text-left transition hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-brand-300/70 ${compact ? 'h-9 w-9 justify-center' : 'flex-1 gap-2.5 px-1.5 py-1'}`}
               title={`Switch GitHub profile · ${userName}`}
               aria-label={`Switch GitHub profile. Currently ${userName}`}
             >
@@ -403,7 +405,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           ) : (
             <div
-              className={`flex min-w-0 items-center ${compact ? 'justify-center px-0' : 'flex-1 gap-2.5 px-1.5'}`}
+              className={`flex min-w-0 items-center ${compact ? 'h-9 w-9 justify-center' : 'flex-1 gap-2.5 px-1.5'}`}
               title={`${userName} · ${ROLE_LABEL[role]}`}
               aria-label={`${userName}, ${ROLE_LABEL[role]}`}
             >
@@ -425,27 +427,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
             </div>
           )}
-          {!compact && (
-            <button
-              onClick={() => void onSignOut()}
-              className="flex-shrink-0 rounded-lg p-1.5 text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200"
-              title="Sign out"
-              aria-label="Sign out"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-        {compact && (
           <button
+            type="button"
             onClick={() => void onSignOut()}
-            className="flex h-9 w-9 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200"
+            className={`flex flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200 focus-visible:ring-2 focus-visible:ring-brand-300/70 ${
+              compact ? 'h-9 w-9' : 'p-1.5'
+            }`}
             title="Sign out"
             aria-label="Sign out"
           >
             <LogOut className="h-4 w-4" />
           </button>
-        )}
+        </div>
       </div>
 
       <div className={`border-t border-white/[0.06] py-2.5 text-xs text-gray-400 ${compact ? 'px-1.5' : 'px-4'}`}>
