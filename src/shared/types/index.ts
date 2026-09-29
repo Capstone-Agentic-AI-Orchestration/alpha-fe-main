@@ -392,6 +392,42 @@ export interface HostingStatus {
   github: { secrets: string[]; variables: Array<{ name: string; value: string }> };
 }
 
+/**
+ * `GET /projects/:id/repos/:owner/:name/hosting/previews`. What each branch
+ * can show: a frontend's page (framed only when the server confirmed the site
+ * allows it), or a backend's health.
+ */
+export interface BranchPreview {
+  branch: PipelineBranch;
+  /** The branch's stable address; never a single deploy's own hostname. */
+  url: string | null;
+  surface: 'page' | 'health';
+  /** The platform's own word for the latest deploy (`READY`, `live`, `BUILDING`...). */
+  deployStatus: string | null;
+  ready: boolean;
+  /** true: safe to frame. false: must not be framed (`reason` says why). null: unknown. */
+  embeddable: boolean | null;
+  reason: string | null;
+}
+
+export interface HostingPreviews {
+  repo: string;
+  role: HostingStatus['role'];
+  platform: HostingStatus['platform'];
+  state: HostingStatus['state'];
+  error?: string;
+  previews: BranchPreview[];
+}
+
+/** `GET .../hosting/health?branch=`. Run on request only: it can wake a sleeping service. */
+export interface HealthResult {
+  url: string | null;
+  ok: boolean;
+  status: number | null;
+  latencyMs: number;
+  error?: string;
+}
+
 export interface ProjectResource {
   id: string;
   /**
