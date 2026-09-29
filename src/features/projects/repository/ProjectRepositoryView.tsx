@@ -7,6 +7,7 @@ import { RepoBranch, RepoPullRequest } from '@/shared/types';
 import { BranchSwitcher } from './BranchSwitcher';
 import { PipelineStrip } from './PipelineStrip';
 import { RepoFileBrowser } from './RepoFileBrowser';
+import { RepoHostingPanel } from './RepoHostingPanel';
 import { RepoPullsList } from './RepoPullsList';
 import { RepoRunsList } from './RepoRunsList';
 import { defaultBranch } from './repoFormat';
@@ -30,8 +31,11 @@ const shortName = (repo: string) => repo.split('/').pop() ?? repo;
  * promotion, which opens a pull request rather than merging anything.
  */
 export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({ projectId, repositories }) => {
-  const { role } = useApp();
+  const { role, can } = useApp();
   const canPromote = role === 'pm' || role === 'admin';
+  // Same gate as provisioning a repository in the first place.
+  // The same role the server checks (deployment.manage): project managers and admins.
+  const canSetUpHosting = can('manage_deployments');
 
   const [selectedRepo, setSelectedRepo] = useState<string | null>(repositories[0] ?? null);
   // The list can change under us (a repository created, the project switched).
@@ -81,15 +85,22 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({ pr
 
       {/* Keyed by repository: branch choice, promotion outcomes and the open
           file all belong to one repository and must not carry across. */}
-      <RepoPanel key={selectedRepo} projectId={projectId} repo={selectedRepo} canPromote={canPromote} />
+      <RepoPanel
+        key={selectedRepo}
+        projectId={projectId}
+        repo={selectedRepo}
+        canPromote={canPromote}
+        canSetUpHosting={canSetUpHosting}
+      />
     </div>
   );
 };
 
-const RepoPanel: React.FC<{ projectId: string; repo: string; canPromote: boolean }> = ({
+const RepoPanel: React.FC<{ projectId: string; repo: string; canPromote: boolean; canSetUpHosting: boolean }> = ({
   projectId,
   repo,
-  canPromote
+  canPromote,
+  canSetUpHosting
 }) => {
   const branches = useRepoResource<{ branches: RepoBranch[] }>(
     () => apiService.getRepoBranches(projectId, repo),
@@ -159,6 +170,10 @@ const RepoPanel: React.FC<{ projectId: string; repo: string; canPromote: boolean
             canPromote={canPromote}
             onPromoted={pulls.reload}
           />
+
+          {/* Full width: the environment/variable detail below reads cramped
+              in the narrower right-hand column next to runs and pull requests. */}
+          <RepoHostingPanel projectId={projectId} repo={repo} canManage={canSetUpHosting} />
 
           {branch && (
             <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_24rem]">

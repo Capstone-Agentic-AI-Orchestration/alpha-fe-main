@@ -273,6 +273,8 @@ export interface ScaffoldRepoResult {
   /** Repository variable that switches deploys on (`ALPHAORCH_DEPLOY`). */
   deployVariable: string | null;
   ciSource: string;
+  /** Where the platform (Render or Vercel) stands right after scaffolding, if known yet. */
+  hosting?: HostingStatus;
 }
 
 export interface ScaffoldPairedResult {
@@ -359,6 +361,36 @@ export type PromoteResult =
   | { status: 'opened'; url: string; number: number; commits: number }
   | { status: 'existing'; url: string; number: number }
   | { status: 'nothing_to_promote' };
+
+/**
+ * `GET`/`POST /projects/:id/repos/:owner/:name/hosting`. Where the platform —
+ * Render for backends, Vercel for frontends — stands for a repository. CI no
+ * longer deploys: the platforms deploy through their own GitHub apps, and this
+ * is Alpha's read of what each one has running.
+ */
+export interface HostingStatus {
+  repo: string;
+  role: 'backend' | 'frontend' | null;
+  platform: 'render' | 'vercel' | null;
+  configured: boolean;
+  state: 'not_set_up' | 'ready' | 'partial' | 'failed' | 'unavailable';
+  error?: string;
+  /** The paired repository this one talks to (`owner/name`), when there is one. */
+  partner?: string | null;
+  /**
+   * After a set-up with a partner: whether the partner was updated with this
+   * repository's URLs (CORS for a backend, the API URL for a frontend).
+   */
+  partnerWiring?: { ok: boolean; error?: string };
+  environments: Array<{
+    branch: PipelineBranch;
+    url: string | null;
+    dashboardUrl: string | null;
+    latestDeploy: { status: string; createdAt: string | null; url: string | null } | null;
+  }>;
+  envVars: Array<{ key: string; value: string | null; scope: string; managedByAlpha: boolean }>;
+  github: { secrets: string[]; variables: Array<{ name: string; value: string }> };
+}
 
 export interface ProjectResource {
   id: string;
