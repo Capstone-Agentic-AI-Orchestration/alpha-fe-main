@@ -387,7 +387,11 @@ export interface HostingStatus {
     url: string | null;
     dashboardUrl: string | null;
     latestDeploy: { status: string; createdAt: string | null; url: string | null } | null;
+    /** true: deploys only once CI passes. false: on every push, whatever CI says. null: unknown (Vercel). */
+    waitsForCi?: boolean | null;
   }>;
+  /** After a set-up: whether the ALPHA_URL_* repository variables were written. */
+  urlVariables?: { ok: boolean; error?: string };
   envVars: Array<{ key: string; value: string | null; scope: string; managedByAlpha: boolean }>;
   github: { secrets: string[]; variables: Array<{ name: string; value: string }> };
 }
