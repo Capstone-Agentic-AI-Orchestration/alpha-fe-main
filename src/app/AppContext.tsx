@@ -3440,8 +3440,9 @@ ${e.detail}`;
     });
   }, [projects, requirementDocs, role, currentUser, users]);
 
-  /** Work access remains assignment-scoped even though project discovery is
-   * workspace-wide for PM-owned projects. */
+  /** The projects this person may work in, as the server marks them
+   * (`assigned`): every PM-owned project for the workspace's team, and only
+   * assigned ones for a client. */
   const assignedProjectIds = useMemo(
     () => new Set(scopedProjects.filter(project => project.assigned !== false).map(project => project.id)),
     [scopedProjects]
