@@ -89,13 +89,12 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     return projects.find(p => p.id === selectedProjectId) || null;
   }, [projects, selectedProjectId]);
 
-  // GitHub repositories the API can read for this project. Keyed on the
-  // attached repositories so one created a moment ago shows up at once.
-  const attachedRepoKey = (selectedProject?.resources ?? [])
+  // GitHub repositories the API can read for this project. Given the attached
+  // repositories so one created a moment ago shows up without a reload.
+  const attachedRepos = (selectedProject?.resources ?? [])
     .filter(r => r.type === 'github_repo')
-    .map(r => r.pathOrUrl)
-    .join('|');
-  const { repos: projectRepos } = useProjectRepos(selectedProject?.id ?? null, attachedRepoKey);
+    .map(r => r.pathOrUrl);
+  const { repos: projectRepos } = useProjectRepos(selectedProject?.id ?? null, attachedRepos);
   /** The repository view replaces the board, and only exists while there is a repository to show. */
   const showRepository = boardViewMode === 'repository' && projectRepos.length > 0;
 
