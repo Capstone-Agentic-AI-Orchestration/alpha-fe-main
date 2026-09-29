@@ -812,6 +812,16 @@ export const apiService = {
       }).toString()}`,
       { method: 'DELETE' }
     ),
+  /** Production variable changes an agent asked for in this run -- keys only. Desktop only. */
+  getRunHostingApprovals: (runId: string) =>
+    fetchJson<{
+      approvals: Array<{ id: string; runId: string; agentId: string | null; repo: string; environment: 'main'; keys: string[]; redeploy: boolean; createdAt: string }>;
+    }>(`/runs/${encodeURIComponent(runId)}/hosting-approvals`),
+  decideRunHostingApproval: (runId: string, id: string, decision: 'approve' | 'reject') =>
+    fetchJson<EnvChangeResult | { status: 'rejected'; keys: string[] }>(
+      `/runs/${encodeURIComponent(runId)}/hosting-approvals/${encodeURIComponent(id)}/${decision}`,
+      { method: 'POST' }
+    ),
   /** Checks a backend branch's `/health`. On request only: it can wake a sleeping service (up to a minute). */
   checkRepoHealth: (projectId: string, repo: string, branch: string) =>
     fetchJson<HealthResult>(`${projectRepoPath(projectId, repo)}/hosting/health?branch=${encodeURIComponent(branch)}`),

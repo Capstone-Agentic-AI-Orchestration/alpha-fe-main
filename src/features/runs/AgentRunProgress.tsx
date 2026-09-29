@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, GitBranch, Loader2, MinusCircle, RotateCcw, Square } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
 import { RemoteActivity } from '@/features/runs/RemoteActivity';
+import { HostingApprovals } from '@/features/runs/HostingApprovals';
 import { ActivityFeed } from '@/features/runs/ActivityFeed';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 
@@ -187,6 +188,9 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
           Open CI/CD validation →
         </button>
       )}
+
+      {/* Production variable changes the agent is waiting on a person for. */}
+      <HostingApprovals runId={run.id} />
 
       {/* What the run did to the remote. Renders nothing until something did. */}
       <RemoteActivity runId={run.id} />
