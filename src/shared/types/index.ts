@@ -870,7 +870,33 @@ export interface LiveBuildRoomPhase {
   progress: number;
 }
 
+export type LiveBuildRoomActivityKind =
+  | 'status'
+  | 'stage'
+  | 'assistant'
+  | 'tool'
+  | 'tool_result'
+  | 'file_change'
+  | 'handoff'
+  | 'error'
+  | 'summary';
+
+export interface LiveBuildRoomActivity {
+  id: string;
+  sequence: number;
+  kind: LiveBuildRoomActivityKind;
+  message: string;
+  toolName?: string;
+  detail?: string;
+  paths?: string[];
+  createdAt: string;
+}
+
 export interface LiveBuildRoomAgentCard {
+  /** A run or agent call. Agent ids alone are not unique across executions. */
+  executionId: string;
+  source: 'squad' | 'project_chat' | 'agent_run';
+  sourceLabel: string;
   agentId: string;
   agentName: string;
   agentRole: string;
@@ -881,9 +907,29 @@ export interface LiveBuildRoomAgentCard {
   currentTask: string;
   currentStage?: string;
   runId?: string;
-  activity: RunActivity[];
+  agentCallId?: string;
+  squadRunId?: string;
+  activity: LiveBuildRoomActivity[];
+  filePaths?: string[];
+  branchName?: string;
   updatedAt?: string | null;
+  isStale?: boolean;
   output?: { kind: string; label: string; value: string };
+}
+
+export interface LiveBuildRoomHandoff {
+  id: string;
+  executionId: string;
+  source: 'squad' | 'project_chat';
+  squadRunId?: string;
+  agentCallId?: string;
+  fromAgentId?: string;
+  from: string;
+  toAgentId?: string;
+  to: string;
+  summary: string;
+  createdAt: string;
+  branchName?: string;
 }
 
 export interface AgentCallActivity {
@@ -891,6 +937,7 @@ export interface AgentCallActivity {
   sequence: number;
   kind: 'status' | 'stage' | 'tool' | 'tool_result' | 'file_change' | 'handoff' | 'error' | 'summary';
   message: string;
+  toolName?: string;
   detail?: string;
   paths?: string[];
   createdAt: string;
@@ -922,7 +969,7 @@ export interface LiveBuildRoomChatCall {
 
 export interface LiveBuildRoomSnapshot {
   project: Pick<Project, 'id' | 'name' | 'key' | 'description' | 'color' | 'status'>;
-  squad: Squad & { projectIds: string[]; memberCount: number };
+  squad: (Squad & { projectIds: string[]; memberCount: number }) | null;
   squads: Array<Squad & { assignment?: WorkspaceSquadProjectAssignment }>;
   eligible: boolean;
   canRun: boolean;
@@ -933,13 +980,17 @@ export interface LiveBuildRoomSnapshot {
     completed: number;
     running: number;
     waiting: number;
+    review: number;
+    failed: number;
+    stale: number;
     progress: number;
   };
   phases: LiveBuildRoomPhase[];
   issue?: Issue;
   activeRun: (SquadRun & { memberRuns: PrototypeRun[]; activities: RunActivity[] }) | null;
   agentCards: LiveBuildRoomAgentCard[];
-  activity: RunActivity[];
+  activity: LiveBuildRoomActivity[];
+  handoffs: LiveBuildRoomHandoff[];
   handoff: {
     from: string;
     to: string;

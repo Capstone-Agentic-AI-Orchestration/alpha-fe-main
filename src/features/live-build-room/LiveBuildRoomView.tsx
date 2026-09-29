@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -14,7 +14,6 @@ import {
   GitBranch,
   MessageSquare,
   Layers3,
-  Loader2,
   Play,
   RadioTower,
   RefreshCw,
@@ -30,12 +29,13 @@ import type {
   LiveBuildRoomAgentCard,
   LiveBuildRoomCardStatus,
   LiveBuildRoomPhase,
+  LiveBuildRoomActivity,
   LiveBuildRoomChatCall,
   LiveBuildRoomSnapshot,
-  RunActivity
 } from '@/shared/types';
 
-type DetailTab = 'activity' | 'handoff' | 'files' | 'notes';
+type DetailTab = 'activity' | 'handoff' | 'files' | 'tools';
+type AgentStatusFilter = 'all' | 'running' | 'waiting' | 'review' | 'failed' | 'completed' | 'idle' | 'stale';
 
 const statusMeta: Record<LiveBuildRoomCardStatus, {
   label: string;
@@ -90,25 +90,45 @@ const statusMeta: Record<LiveBuildRoomCardStatus, {
 
 function timeAgo(value?: string | null): string {
   if (!value) return '—';
-  const seconds = Math.max(0, Math.round((Date.now() - Date.parse(value)) / 1000));
+  const timestamp = Date.parse(value);
+  if (!Number.isFinite(timestamp)) return '—';
+  const seconds = Math.max(0, Math.round((Date.now() - timestamp) / 1000));
   if (seconds < 45) return 'Just now';
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
   if (seconds < 86400) return `${Math.round(seconds / 3600)}h ago`;
   return `${Math.round(seconds / 86400)}d ago`;
 }
 
-function activityLabel(activity: RunActivity): string {
-  if (activity.kind === 'tool' || activity.kind === 'tool_result') return 'Tool activity';
+function activityLabel(activity: LiveBuildRoomActivity): string {
+  if (activity.kind === 'tool') return activity.toolName ? `Tool call · ${activity.toolName}` : 'Tool call';
+  if (activity.kind === 'tool_result') return activity.toolName ? `Tool result · ${activity.toolName}` : 'Tool result';
+  if (activity.kind === 'file_change') return activity.toolName ? `File change · ${activity.toolName}` : 'File change';
+  if (activity.kind === 'handoff') return 'Handoff';
   if (activity.kind === 'error') return 'Attention';
   if (activity.kind === 'summary') return 'Summary';
+  if (activity.kind === 'stage') return 'Stage update';
   return 'Agent update';
 }
 
-function activityTone(activity: RunActivity): string {
+function activityTone(activity: LiveBuildRoomActivity): string {
   if (activity.kind === 'error') return 'bg-rose-400';
   if (activity.kind === 'tool' || activity.kind === 'tool_result') return 'bg-sky-400';
+  if (activity.kind === 'file_change') return 'bg-emerald-400';
+  if (activity.kind === 'handoff') return 'bg-amber-300';
   if (activity.kind === 'summary') return 'bg-emerald-400';
   return 'bg-violet-400';
+}
+
+function toolDetail(activity: LiveBuildRoomActivity): string | undefined {
+  if (!activity.detail) return undefined;
+  try {
+    const parsed = JSON.parse(activity.detail);
+    if (typeof parsed.command === 'string') return parsed.command;
+    if (typeof parsed.tool === 'string') return `${parsed.tool}${parsed.input ? ` · ${JSON.stringify(parsed.input)}` : ''}`;
+  } catch {
+    // Most tools provide a plain-text detail rather than a JSON payload.
+  }
+  return activity.detail;
 }
 
 function phaseClasses(phase: LiveBuildRoomPhase): string {
@@ -159,13 +179,16 @@ const AgentCard: React.FC<{
           </div>
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-white">{card.agentName}</div>
-            <div className="truncate text-[11px] text-slate-400">{card.agentRole}</div>
+            <div className="truncate text-[11px] text-slate-400">{card.agentRole} · {card.sourceLabel}</div>
           </div>
         </div>
-        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${card.status === 'running' ? 'animate-pulse' : ''}`} />
-          {meta.label}
-        </span>
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+          {card.isStale && <span title="No execution activity has been recorded for five minutes" className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/[0.06] px-2 py-1 text-[10px] font-semibold text-amber-200"><Clock3 className="h-3 w-3" />No signal</span>}
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${card.status === 'running' && !card.isStale ? 'animate-pulse' : ''}`} />
+            {meta.label}
+          </span>
+        </div>
       </div>
 
       <div className="mt-4 flex items-center justify-between gap-3 text-[11px] text-slate-400">
@@ -194,7 +217,7 @@ const AgentCard: React.FC<{
           <FileText className="h-3.5 w-3.5 shrink-0" />
           {card.output?.value || card.currentStage || 'No output yet'}
         </span>
-        <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-300" />
+        <span className="flex shrink-0 items-center gap-2"><span className="text-slate-500">{card.updatedAt ? timeAgo(card.updatedAt) : ''}</span><ArrowRight className="h-3.5 w-3.5 text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-300" /></span>
       </div>
     </button>
   );
@@ -241,10 +264,18 @@ const ActivityPanel: React.FC<{
     { id: 'activity', label: 'Activity' },
     { id: 'handoff', label: 'Handoff' },
     { id: 'files', label: 'Files' },
-    { id: 'notes', label: 'Notes' }
+    { id: 'tools', label: 'Tools' }
   ];
-  const run = snapshot.activeRun?.memberRuns.find(item => item.id === card.runId);
-  const activities = card.activity.length ? card.activity : snapshot.activity;
+  const activities = card.activity;
+  const handoffs = snapshot.handoffs.filter(handoff =>
+    card.squadRunId
+      ? handoff.squadRunId === card.squadRunId && (handoff.fromAgentId === card.agentId || handoff.toAgentId === card.agentId)
+      : card.agentCallId
+        ? handoff.agentCallId === card.agentCallId
+        : handoff.executionId === card.executionId
+  );
+  const filePaths = [...new Set([...(card.filePaths ?? []), ...activities.flatMap(activity => activity.paths ?? [])])];
+  const toolActivities = activities.filter(activity => activity.kind === 'tool' || activity.kind === 'tool_result' || Boolean(activity.toolName));
 
   return (
     <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.10] bg-surface-100/90 shadow-2xl shadow-black/20 xl:sticky xl:top-0 xl:h-[calc(100vh-8.5rem)]">
@@ -257,6 +288,7 @@ const ActivityPanel: React.FC<{
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {card.isStale && <span title="No execution activity has been recorded for five minutes" className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 px-2 py-1 text-[10px] font-semibold text-amber-200"><Clock3 className="h-3 w-3" />No signal</span>}
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}>
             <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${card.status === 'running' ? 'animate-pulse' : ''}`} />
             {meta.label}
@@ -296,30 +328,47 @@ const ActivityPanel: React.FC<{
 
         {tab === 'handoff' && (
           <div className="space-y-4">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Current handoff</div>
-            <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="text-[10px] text-slate-500">From</div><div className="mt-1 truncate text-xs font-semibold text-white">{snapshot.handoff.from}</div></div>
-              <ArrowRight className="h-4 w-4 text-slate-500" />
-              <div className="rounded-xl border border-violet-400/30 bg-violet-400/[0.06] p-3"><div className="text-[10px] text-slate-500">To</div><div className="mt-1 truncate text-xs font-semibold text-white">{snapshot.handoff.to}</div></div>
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Handoff history</div>
+              <p className="mt-1 text-[11px] leading-5 text-slate-400">See what moved between agents and when this execution received it.</p>
             </div>
-            <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-xs leading-5 text-slate-400">The next agent receives the project context, completed work, and the current branch through the squad handoff.</div>
-            {snapshot.handoff.next && <div className="flex items-center gap-2 text-xs text-slate-400"><Clock3 className="h-3.5 w-3.5" /> Next in sequence: <span className="font-medium text-slate-200">{snapshot.handoff.next}</span></div>}
+            {card.squadRunId === snapshot.activeRun?.id && snapshot.handoff.next && <div className="rounded-xl border border-violet-400/25 bg-violet-400/[0.06] p-3 text-xs text-slate-300"><span className="font-medium text-white">Next in sequence:</span> {snapshot.handoff.next}</div>}
+            {handoffs.length ? <div className="space-y-3">
+              {handoffs.map(handoff => (
+                <div key={handoff.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2 text-xs"><span className="truncate font-medium text-slate-200">{handoff.from}</span><ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-300" /><span className="truncate font-semibold text-white">{handoff.to}</span></div>
+                    <time className="shrink-0 text-[10px] text-slate-500">{timeAgo(handoff.createdAt)}</time>
+                  </div>
+                  <p className="mt-2 text-[11px] leading-5 text-slate-400">{handoff.summary}</p>
+                  {handoff.branchName && <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500"><GitBranch className="h-3 w-3" />{handoff.branchName}</div>}
+                </div>
+              ))}
+            </div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No handoff has reached this execution yet. Transfers will appear here as the project moves between agents.</div>}
           </div>
         )}
 
         {tab === 'files' && (
           <div className="space-y-3">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Run outputs</div>
+            <div><div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Files and outputs</div><p className="mt-1 text-[11px] leading-5 text-slate-400">Paths come from recorded project activity.</p></div>
+            {filePaths.length ? <div className="space-y-2">{filePaths.map(file => <div key={file} className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-xs text-slate-200"><FileCode2 className="h-4 w-4 shrink-0 text-violet-300" /><code className="min-w-0 break-all">{file}</code></div>)}</div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No changed file paths have been recorded for this execution yet.</div>}
             {card.output ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="flex items-center gap-2 text-xs font-medium text-white"><FileCode2 className="h-4 w-4 text-violet-300" />{card.output.label}</div><div className="mt-2 break-all text-[11px] text-slate-500">{card.output.value}</div></div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No output has been recorded for this agent yet.</div>}
-            {run?.branchName && <div className="flex items-center gap-2 text-xs text-slate-400"><GitBranch className="h-3.5 w-3.5" /><span className="truncate">{run.branchName}</span></div>}
-            <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-xs leading-5 text-slate-400">Only artifacts produced inside this project run are shown here.</div>
+            {card.branchName && <div className="flex items-center gap-2 text-xs text-slate-400"><GitBranch className="h-3.5 w-3.5" /><span className="truncate">{card.branchName}</span></div>}
+            {card.runId && snapshot.artifacts.filter(artifact => artifact.runId === card.runId).map(artifact => <div key={artifact.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="text-xs font-medium text-white">{artifact.name}</div><div className="mt-1 break-all text-[11px] text-slate-500">{artifact.detail}</div></div>)}
           </div>
         )}
 
-        {tab === 'notes' && (
-          <div className="space-y-4">
-            <div><div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Project mission</div><div className="mt-2 text-xs leading-5 text-slate-300">{snapshot.activeRun?.mission || snapshot.issue?.title || 'No active mission'}</div></div>
-            {snapshot.issue && <div><div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Issue context</div><div className="mt-2 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="text-xs font-semibold text-white">{snapshot.issue.identifier} · {snapshot.issue.title}</div><div className="mt-2 line-clamp-5 text-xs leading-5 text-slate-400">{snapshot.issue.description || 'No additional issue description.'}</div></div></div>}
+        {tab === 'tools' && (
+          <div className="space-y-3">
+            <div><div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Commands and tools</div><p className="mt-1 text-[11px] leading-5 text-slate-400">Recorded tool calls and results for this execution.</p></div>
+            {toolActivities.length ? toolActivities.slice().reverse().map(activity => (
+              <div key={activity.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+                <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-slate-200">{activityLabel(activity)}</span><time className="text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</time></div>
+                <div className="mt-2 text-xs leading-5 text-white">{activity.message}</div>
+                {toolDetail(activity) && <pre className="mt-2 overflow-x-auto rounded-lg bg-black/25 p-2.5 text-[10px] leading-4 text-slate-300">{toolDetail(activity)}</pre>}
+                {activity.paths?.length ? <div className="mt-2 flex flex-wrap gap-1.5">{activity.paths.map(file => <code key={file} className="rounded bg-white/[0.05] px-1.5 py-1 text-[10px] text-slate-300">{file}</code>)}</div> : null}
+              </div>
+            )) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">Tool calls and commands will appear here as the agent uses them.</div>}
           </div>
         )}
       </div>
@@ -341,7 +390,9 @@ export const LiveBuildRoomView: React.FC = () => {
   } = useApp();
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
+  const [agentSearch, setAgentSearch] = useState('');
+  const [agentStatusFilter, setAgentStatusFilter] = useState<AgentStatusFilter>('all');
   const [selectedChatCallId, setSelectedChatCallId] = useState<string | null>(null);
   const [chatFilter, setChatFilter] = useState('all');
   const [chatAgentFilter, setChatAgentFilter] = useState('all');
@@ -354,6 +405,9 @@ export const LiveBuildRoomView: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const requestIdRef = useRef(0);
+  const refreshTimerRef = useRef<number | null>(null);
 
   const eligibleRole = role !== 'client' && can('view_squads');
   const storageKey = `live_build_room_project:${activeWorkspaceId || 'default'}`;
@@ -374,20 +428,35 @@ export const LiveBuildRoomView: React.FC = () => {
 
   const loadRoom = useCallback(async (silent = false) => {
     if (!selectedProjectId || !eligibleRole) return;
-    if (silent) setRefreshing(true); else setLoading(true);
+    const requestId = ++requestIdRef.current;
+    if (silent) setRefreshing(true);
+    else {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const next = await apiService.getLiveBuildRoom(selectedProjectId);
+      if (requestId !== requestIdRef.current) return;
       setSnapshot(next);
       setError(null);
-      setSelectedAgentId(current => current && next.agentCards.some(card => card.agentId === current) ? current : next.agentCards[0]?.agentId ?? null);
+      setSelectedExecutionId(current => current && next.agentCards.some(card => card.executionId === current)
+        ? current
+        : next.agentCards.find(card => card.status === 'running')?.executionId ?? next.agentCards[0]?.executionId ?? null);
       const calls = next.chatCalls ?? [];
-      setSelectedChatCallId(current => current && calls.some(call => call.id === current) ? current : calls[0]?.id ?? null);
+      const liveCallIds = new Set(next.agentCards.map(card => card.agentCallId).filter((id): id is string => Boolean(id)));
+      setSelectedChatCallId(current => current && calls.some(call => call.id === current && !liveCallIds.has(call.id))
+        ? current
+        : calls.find(call => !liveCallIds.has(call.id))?.id ?? null);
+      setLastSyncedAt(new Date().toISOString());
     } catch (err: any) {
+      if (requestId !== requestIdRef.current) return;
       setSnapshot(null);
-      setError(err?.message || 'This project does not have an accessible squad room.');
+      setError(err?.message || 'The project room could not be loaded.');
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (requestId === requestIdRef.current) {
+        setLoading(false);
+        setRefreshing(false);
+      }
     }
   }, [eligibleRole, selectedProjectId]);
 
@@ -398,9 +467,19 @@ export const LiveBuildRoomView: React.FC = () => {
       if (document.visibilityState === 'visible') void loadRoom(true);
     }, 10_000);
     const eventNames = ['stage_update', 'run_activity', 'run_started', 'run_completed', 'run_failed', 'run_cancelled', 'squad_member_started', 'squad_run_completed', 'squad_run_failed', 'agent_call.created', 'agent_call.queued', 'agent_call.started', 'agent_call.activity', 'agent_call.completed', 'agent_call.failed', 'agent_call.cancelled'];
-    const unsubs = eventNames.map(event => runnerSocket.on(event, () => void loadRoom(true)));
+    const scheduleRefresh = () => {
+      if (refreshTimerRef.current !== null) window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = window.setTimeout(() => {
+        refreshTimerRef.current = null;
+        void loadRoom(true);
+      }, 180);
+    };
+    const unsubs = eventNames.map(event => runnerSocket.on(event, scheduleRefresh));
     return () => {
       window.clearInterval(interval);
+      requestIdRef.current += 1;
+      if (refreshTimerRef.current !== null) window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
       unsubs.forEach(unsub => unsub());
     };
   }, [eligibleRole, loadRoom, selectedProjectId]);
@@ -415,34 +494,71 @@ export const LiveBuildRoomView: React.FC = () => {
    * means. Every member run of the active squad run is subscribed while the
    * room is open, and released when it is not.
    */
+  const runStreamKey = useMemo(() => [...new Set([
+    ...(snapshot?.activeRun?.memberRuns ?? []).map(run => run.id),
+    ...(snapshot?.agentCards ?? []).map(card => card.runId).filter((id): id is string => Boolean(id))
+  ])].sort().join('|'), [snapshot?.activeRun?.memberRuns, snapshot?.agentCards]);
+
   useEffect(() => {
-    const runIds = (snapshot?.activeRun?.memberRuns ?? []).map(run => run.id);
+    const runIds = runStreamKey ? runStreamKey.split('|') : [];
     runIds.forEach(runId => runnerSocket.subscribeToRunStream(runId));
     return () => runIds.forEach(runId => runnerSocket.unsubscribeFromRunStream(runId));
-  }, [snapshot?.activeRun?.id, snapshot?.activeRun?.memberRuns?.length]);
+  }, [runStreamKey]);
 
-  const selectedCard = useMemo(() => {
-    if (!snapshot) return null;
-    return snapshot.agentCards.find(card => card.agentId === selectedAgentId) ?? snapshot.agentCards[0] ?? null;
-  }, [selectedAgentId, snapshot]);
+  const visibleAgentCards = useMemo(() => (snapshot?.agentCards ?? []).filter(card => {
+    const matchesStatus = agentStatusFilter === 'all'
+      || (agentStatusFilter === 'stale' ? Boolean(card.isStale) : card.status === agentStatusFilter);
+    const query = agentSearch.trim().toLocaleLowerCase();
+    const matchesSearch = !query || `${card.agentName} ${card.agentRole} ${card.currentTask} ${card.sourceLabel}`.toLocaleLowerCase().includes(query);
+    return matchesStatus && matchesSearch;
+  }), [agentSearch, agentStatusFilter, snapshot?.agentCards]);
 
-  const visibleChatCalls = (snapshot?.chatCalls ?? []).filter(call =>
+  const selectedCard = useMemo(() =>
+    visibleAgentCards.find(card => card.executionId === selectedExecutionId) ?? visibleAgentCards[0] ?? null,
+  [selectedExecutionId, visibleAgentCards]);
+
+  const liveCallIds = useMemo(() => new Set(
+    (snapshot?.agentCards ?? []).map(card => card.agentCallId).filter((id): id is string => Boolean(id))
+  ), [snapshot?.agentCards]);
+  const recentChatCalls = (snapshot?.chatCalls ?? []).filter(call => !liveCallIds.has(call.id));
+
+  const visibleChatCalls = recentChatCalls.filter(call =>
     (chatFilter === 'all' || (call.threadId ?? 'private') === chatFilter) &&
     (chatAgentFilter === 'all' || call.agentId === chatAgentFilter) &&
     (chatStatusFilter === 'all' || call.status === chatStatusFilter)
   );
   const selectedChatCall = visibleChatCalls.find(call => call.id === selectedChatCallId) ?? null;
-  const chatOptions = [...new Map((snapshot?.chatCalls ?? []).map(call => [call.threadId ?? 'private', {
+  const chatOptions = [...new Map(recentChatCalls.map(call => [call.threadId ?? 'private', {
     id: call.threadId ?? 'private',
     label: call.threadId ? call.chatLabel : 'Private project chats'
   }] as const)).values()];
 
   const activeProject = projects.find(project => project.id === selectedProjectId);
-  const fallbackIssue = issues.find(issue => issue.projectId === selectedProjectId && issue.assignedSquadId === snapshot?.squad.id)
+  const agentStatusCounts = (snapshot?.agentCards ?? []).reduce<Record<AgentStatusFilter, number>>((counts, card) => {
+    counts[card.status] += 1;
+    if (card.isStale) counts.stale += 1;
+    return counts;
+  }, { all: snapshot?.agentCards.length ?? 0, running: 0, waiting: 0, review: 0, failed: 0, completed: 0, idle: 0, stale: 0 });
+  const fallbackIssue = issues.find(issue => issue.projectId === selectedProjectId && issue.assignedSquadId === snapshot?.squad?.id)
     ?? issues.find(issue => issue.projectId === selectedProjectId);
 
+  const handleProjectChange = (projectId: string) => {
+    requestIdRef.current += 1;
+    setSelectedProjectId(projectId);
+    setSelectedExecutionId(null);
+    setSelectedChatCallId(null);
+    setAgentSearch('');
+    setAgentStatusFilter('all');
+    setChatFilter('all');
+    setChatAgentFilter('all');
+    setPatchPreview(null);
+    setSnapshot(null);
+    setError(null);
+    setLoading(true);
+  };
+
   const handleRunBuild = async () => {
-    if (!snapshot || starting || !snapshot.canRun) return;
+    if (!snapshot || !snapshot.squad || starting || !snapshot.canRun) return;
     const issue = snapshot.issue ?? fallbackIssue;
     if (!issue) {
       showToast('Add an issue first', 'A squad run needs a project issue as its build target.', 'info');
@@ -487,7 +603,7 @@ export const LiveBuildRoomView: React.FC = () => {
         <div className="max-w-md rounded-2xl border border-white/[0.08] bg-surface-100 p-8">
           <ShieldAlert className="mx-auto h-8 w-8 text-slate-500" />
           <h1 className="mt-4 text-lg font-semibold text-white">Live Build Room is an internal view</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Project squad execution is available to developers, project managers, and workspace administrators. Client progress remains available in the project portal.</p>
+          <p className="mt-2 text-sm leading-6 text-slate-400">Project agent activity is available to developers, project managers, and workspace administrators. Client progress remains available in the project portal.</p>
         </div>
       </div>
     );
@@ -498,8 +614,8 @@ export const LiveBuildRoomView: React.FC = () => {
       <div className="flex h-full items-center justify-center bg-shell p-6 text-center">
         <div className="max-w-md rounded-2xl border border-white/[0.08] bg-surface-100 p-8">
           <Layers3 className="mx-auto h-8 w-8 text-slate-500" />
-          <h1 className="mt-4 text-lg font-semibold text-white">Choose a project to open its room</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">You need an assigned project before squad execution can be displayed.</p>
+          <h1 className="mt-4 text-lg font-semibold text-white">No projects available</h1>
+          <p className="mt-2 text-sm leading-6 text-slate-400">Projects you can access will appear here with their live agent activity.</p>
         </div>
       </div>
     );
@@ -507,14 +623,22 @@ export const LiveBuildRoomView: React.FC = () => {
 
   if (error || (!loading && !snapshot)) {
     return (
-      <div className="flex h-full items-center justify-center bg-shell p-6 text-center">
-        <div className="max-w-lg rounded-2xl border border-white/[0.08] bg-surface-100 p-8">
-          <Users className="mx-auto h-8 w-8 text-slate-500" />
-          <h1 className="mt-4 text-lg font-semibold text-white">No squad room for this project</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">{error?.includes('404') ? 'Assign an owned or reusable squad to the selected project to open its Live Build Room.' : error || 'The room could not be loaded.'}</p>
-          <div className="mt-5 flex justify-center gap-2">
-            <button type="button" onClick={() => void loadRoom()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/[0.06]"><RefreshCw className="h-3.5 w-3.5" />Retry</button>
-            <button type="button" onClick={() => setActiveTab('squads')} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-400"><Users className="h-3.5 w-3.5" />Open squads</button>
+      <div className="h-full overflow-y-auto bg-shell p-4 text-slate-200 sm:p-6">
+        <div className="mx-auto flex min-h-full max-w-[1800px] flex-col">
+          <div className="flex flex-col gap-4 border-b border-white/[0.08] pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div><h1 className="text-xl font-semibold tracking-tight text-white">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">Project agent activity and execution details.</p></div>
+            <label className="relative flex min-w-[220px] items-center rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2"><span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-500">Project</span><select value={selectedProjectId} onChange={event => handleProjectChange(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none">{projects.map(project => <option key={project.id} value={project.id} className="bg-surface-100">{project.key} · {project.name}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-500" /></label>
+          </div>
+          <div className="flex flex-1 items-center justify-center p-6 text-center">
+            <div className="max-w-lg rounded-2xl border border-white/[0.08] bg-surface-100 p-8">
+              <AlertTriangle className="mx-auto h-8 w-8 text-amber-300" />
+              <h2 className="mt-4 text-lg font-semibold text-white">Could not load this project room</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-400">{error || 'The room could not be loaded. Check your project access and try again.'}</p>
+              <div className="mt-5 flex justify-center gap-2">
+                <button type="button" onClick={() => void loadRoom()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/[0.06]"><RefreshCw className="h-3.5 w-3.5" />Retry</button>
+                <button type="button" onClick={() => setActiveTab('projects')} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/[0.06]"><Layers3 className="h-3.5 w-3.5" />Projects</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -522,61 +646,82 @@ export const LiveBuildRoomView: React.FC = () => {
   }
 
   if (loading || !snapshot) {
-    return <div className="flex h-full items-center justify-center bg-shell text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /><span className="ml-2 text-sm">Loading project squad room…</span></div>;
-  }
-
-  if (!selectedCard) {
     return (
-      <div className="flex h-full items-center justify-center bg-shell p-6 text-center">
-        <div className="max-w-md rounded-2xl border border-white/[0.08] bg-surface-100 p-8">
-          <Users className="mx-auto h-8 w-8 text-slate-500" />
-          <h1 className="mt-4 text-lg font-semibold text-white">This squad has no agents yet</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Add at least one member to the project squad before opening its live execution view.</p>
-          <button type="button" onClick={() => setActiveTab('squads')} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white hover:bg-violet-400"><Users className="h-3.5 w-3.5" />Open squads</button>
+      <div className="h-full overflow-y-auto bg-shell p-4 text-slate-200 sm:p-6">
+        <div className="mx-auto max-w-[1800px] space-y-4">
+          <div className="flex flex-col gap-4 border-b border-white/[0.08] pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div><h1 className="text-xl font-semibold tracking-tight text-white">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">Loading project agents and recent activity…</p></div>
+            <label className="relative flex min-w-[220px] items-center rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2"><span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-500">Project</span><select value={selectedProjectId} onChange={event => handleProjectChange(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none">{projects.map(project => <option key={project.id} value={project.id} className="bg-surface-100">{project.key} · {project.name}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-500" /></label>
+          </div>
+          <div className="animate-pulse space-y-4" aria-label="Loading project room" role="status">
+          <div className="h-24 rounded-2xl border border-white/[0.08] bg-surface-100/60" />
+          <div className="h-24 rounded-2xl border border-white/[0.08] bg-surface-100/60" />
+          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="h-52 rounded-2xl border border-white/[0.08] bg-surface-100/60" />)}</div>
+          <span className="sr-only">Loading project activity…</span>
+          </div>
         </div>
       </div>
     );
   }
 
-  const roomStatus = snapshot.status === 'idle' ? 'Ready for a build' : snapshot.status === 'awaiting_approval' ? 'Review required' : snapshot.status === 'failed' || snapshot.status === 'cancelled' ? 'Build stopped' : 'Build in progress';
-  const roomStatusTone = snapshot.status === 'failed' || snapshot.status === 'cancelled' ? 'text-rose-300 bg-rose-400/10 border-rose-400/25' : snapshot.status === 'awaiting_approval' ? 'text-amber-200 bg-amber-400/10 border-amber-400/25' : snapshot.status === 'idle' ? 'text-slate-300 bg-white/[0.04] border-white/10' : 'text-violet-200 bg-violet-400/10 border-violet-400/25';
+  const roomStatus = snapshot.summary.review > 0 || snapshot.status === 'awaiting_approval'
+    ? 'Review required'
+    : snapshot.summary.failed > 0 || snapshot.status === 'failed' || snapshot.status === 'cancelled'
+      ? 'Needs attention'
+      : snapshot.summary.stale > 0
+        ? 'Signal delayed'
+        : snapshot.summary.running > 0
+        ? 'Agents working'
+        : snapshot.summary.waiting > 0
+          ? 'Agents queued'
+          : snapshot.status === 'idle' ? 'Ready for a build' : 'Build in progress';
+  const roomStatusTone = roomStatus === 'Needs attention'
+    ? 'text-rose-300 bg-rose-400/10 border-rose-400/25'
+    : roomStatus === 'Review required'
+      ? 'text-amber-200 bg-amber-400/10 border-amber-400/25'
+      : roomStatus === 'Signal delayed'
+        ? 'text-amber-200 bg-amber-400/10 border-amber-400/25'
+      : roomStatus === 'Ready for a build'
+        ? 'text-slate-300 bg-white/[0.04] border-white/10'
+        : 'text-violet-200 bg-violet-400/10 border-violet-400/25';
 
   return (
     <div className="h-full overflow-y-auto bg-shell text-slate-200">
-      <div className="mx-auto max-w-[1800px] space-y-4 p-4 pb-8 sm:p-6">
+      <div className="mx-auto flex max-w-[1800px] flex-col gap-4 p-4 pb-8 sm:p-6">
         <div className="flex flex-col gap-4 border-b border-white/[0.08] pb-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"><span>Workspace</span><span>/</span><span className="text-slate-300">{activeProject?.name || snapshot.project.name}</span><span>/</span><span>Automation</span></div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-200"><RadioTower className="h-5 w-5" /></div>
-              <div><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">Watch project chat agents research, use tools, and prepare changes</p></div>
+              <div><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">See which agents are working across this project and inspect their live activity.</p></div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative flex min-w-[220px] items-center rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2">
               <span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-500">Project</span>
-              <select value={selectedProjectId} onChange={event => { setSelectedProjectId(event.target.value); setSnapshot(null); setError(null); }} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none">
+              <select value={selectedProjectId} onChange={event => handleProjectChange(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none">
                 {projects.map(project => <option key={project.id} value={project.id} className="bg-surface-100">{project.key} · {project.name}</option>)}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-500" />
             </label>
-            <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 text-xs"><Users className="h-3.5 w-3.5 text-violet-300" /><span className="text-slate-400">Squad</span><span className="font-semibold text-white">{snapshot.squad.name}</span><span className="text-slate-500">· {snapshot.squad.memberCount}</span></div>
+            <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 text-xs"><Users className="h-3.5 w-3.5 text-violet-300" /><span className="text-slate-400">Squad</span><span className="font-semibold text-white">{snapshot.squad?.name ?? 'None assigned'}</span>{snapshot.squad && <span className="text-slate-500">· {snapshot.squad.memberCount}</span>}</div>
             <button type="button" onClick={() => { setDetailOpen(true); setDetailTab('activity'); }} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.10] px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-white/[0.06] hover:text-white"><TerminalSquare className="h-3.5 w-3.5" />View logs</button>
             <button type="button" onClick={() => void loadRoom(true)} className="rounded-xl border border-white/[0.10] p-2.5 text-slate-400 hover:bg-white/[0.06] hover:text-white" title="Refresh room" aria-label="Refresh room"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button>
+            <span className="w-full text-right text-[10px] text-slate-500 xl:w-auto">{lastSyncedAt ? `Synced ${timeAgo(lastSyncedAt)}` : 'Waiting for first sync'}</span>
           </div>
         </div>
 
-        <section className="rounded-2xl border border-violet-400/20 bg-surface-100/60 p-4 sm:p-5">
+        <section className="order-5 rounded-2xl border border-violet-400/20 bg-surface-100/60 p-4 sm:p-5">
           <div className="flex flex-col gap-3 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-end lg:justify-between">
-            <div><div className="flex items-center gap-2 text-sm font-semibold text-white"><MessageSquare className="h-4 w-4 text-violet-300" />Project chat agent activity</div><p className="mt-1 text-xs text-slate-500">Live and recent agent calls across this project’s chats. Prompts and private reasoning stay in their chat.</p></div>
+            <div><div className="flex items-center gap-2 text-sm font-semibold text-white"><MessageSquare className="h-4 w-4 text-violet-300" />Recent project chat activity</div><p className="mt-1 text-xs text-slate-500">Completed and past chat agent calls. Active calls are shown with the live project agents above.</p></div>
             <div className="flex flex-wrap gap-2">
               <select aria-label="Filter by chat" value={chatFilter} onChange={event => setChatFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All chats</option>{chatOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
-              <select aria-label="Filter by agent" value={chatAgentFilter} onChange={event => setChatAgentFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All agents</option>{[...new Map((snapshot.chatCalls ?? []).map(call => [call.agentId, call] as const)).values()].map(call => <option key={call.agentId} value={call.agentId}>{call.agentName}</option>)}</select>
+              <select aria-label="Filter by agent" value={chatAgentFilter} onChange={event => setChatAgentFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All agents</option>{[...new Map(recentChatCalls.map(call => [call.agentId, call] as const)).values()].map(call => <option key={call.agentId} value={call.agentId}>{call.agentName}</option>)}</select>
               <select aria-label="Filter by status" value={chatStatusFilter} onChange={event => setChatStatusFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All statuses</option>{['awaiting_confirmation', 'queued', 'running', 'completed', 'failed', 'cancelled'].map(status => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}</select>
             </div>
           </div>
-          {(snapshot.chatCalls ?? []).length === 0 ? (
-            <div className="mt-4 rounded-xl border border-dashed border-white/10 px-4 py-7 text-center"><div className="text-sm font-medium text-slate-300">No project chat agent activity yet</div><p className="mt-1 text-xs text-slate-500">Message or call a project agent and its live activity will appear here.</p><button type="button" onClick={() => setActiveTab('chat')} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]"><MessageSquare className="h-3.5 w-3.5" />Open project chat</button></div>
+          {recentChatCalls.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-white/10 px-4 py-7 text-center"><div className="text-sm font-medium text-slate-300">{(snapshot.chatCalls ?? []).length ? 'Active chat calls are in the agent overview' : 'No project chat activity yet'}</div><p className="mt-1 text-xs text-slate-500">{(snapshot.chatCalls ?? []).length ? 'Select a running project chat agent above to inspect its current work.' : 'Past calls will appear here after a project agent is used in chat.'}</p><button type="button" onClick={() => setActiveTab('chat')} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]"><MessageSquare className="h-3.5 w-3.5" />Open project chat</button></div>
           ) : (
             <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(260px,0.75fr)_minmax(0,1.5fr)]">
               <div className="space-y-2">
@@ -596,7 +741,7 @@ export const LiveBuildRoomView: React.FC = () => {
                 <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-semibold text-white">{selectedChatCall.agentName}<span className="font-normal text-slate-400"> · {selectedChatCall.agentRole}</span></div><div className="mt-1 text-xs text-slate-500">{selectedChatCall.origin === 'chat_turn' ? 'Chat message' : 'Agent call'} · {selectedChatCall.chatLabel} · {selectedChatCall.operationMode} · {selectedChatCall.target?.label || selectedChatCall.target?.type || 'Project chat'}</div></div><div className="flex flex-wrap gap-2">{selectedChatCall.canOpenChat && selectedChatCall.threadId && <button type="button" onClick={() => { setActiveThreadId(selectedChatCall.threadId!); setActiveTab('chat'); }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-2 text-[11px] text-slate-200 hover:bg-white/[0.06]"><MessageSquare className="h-3.5 w-3.5" />Open chat</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && <button type="button" onClick={() => void reviewChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 px-2.5 py-2 text-[11px] text-violet-200 hover:bg-violet-400/10"><FileCode2 className="h-3.5 w-3.5" />{patchPreview?.callId === selectedChatCall.id ? 'Refresh diff' : 'Review diff'}</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && selectedChatCall.status === 'completed' && can('run_agents') && !selectedChatCall.patchApplied && <button type="button" disabled={patchBusyCallId === selectedChatCall.id} onClick={() => void applyChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 px-2.5 py-2 text-[11px] text-emerald-200 hover:bg-emerald-400/10 disabled:opacity-50"><Check className="h-3.5 w-3.5" />{patchBusyCallId === selectedChatCall.id ? 'Applying…' : 'Apply patch'}</button>}{selectedChatCall.patchApplied && <span className="self-center text-[10px] text-emerald-300">Patch applied</span>}</div></div>
                 <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>Working copy: {selectedChatCall.workingCopyId?.split(':').at(-1) || 'project workspace'}</span>{selectedChatCall.workingBranch && <span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" />{selectedChatCall.workingBranch}</span>}{selectedChatCall.target?.type === 'issue' && <span>Issue: {selectedChatCall.target.label || selectedChatCall.target.id}</span>}{selectedChatCall.target?.type === 'pull_request' && selectedChatCall.target.id && <a href={selectedChatCall.target.id} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-violet-300 hover:text-violet-200">{selectedChatCall.target.label || 'Pull request'}<ExternalLink className="h-3 w-3" /></a>}</div>
                 <div className="mt-4 max-h-[360px] space-y-3 overflow-y-auto border-t border-white/[0.07] pt-3">
-                  {selectedChatCall.activities.length ? selectedChatCall.activities.slice().reverse().map(activity => <div key={activity.id} className="flex gap-3"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'tool' || activity.kind === 'tool_result' ? 'bg-sky-400' : 'bg-violet-400'}`} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-slate-200">{activity.message}</span><time className="text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</time></div>{activity.detail && <div className="mt-1 text-[11px] leading-4 text-slate-500">{activity.detail}</div>}{activity.paths?.length ? <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <code key={file} className="rounded bg-white/[0.05] px-1.5 py-1 text-[10px] text-slate-300">{file}</code>)}</div> : null}</div></div>) : <div className="text-xs text-slate-500">Waiting for the first activity event.</div>}
+                  {selectedChatCall.activities.length ? selectedChatCall.activities.slice().reverse().map(activity => <div key={activity.id} className="flex gap-3"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'tool' || activity.kind === 'tool_result' ? 'bg-sky-400' : 'bg-violet-400'}`} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-slate-200">{activity.toolName && <span className="font-medium text-violet-200">{activity.toolName} · </span>}{activity.message}</span><time className="text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</time></div>{activity.detail && <div className="mt-1 text-[11px] leading-4 text-slate-500">{activity.detail}</div>}{activity.paths?.length ? <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <code key={file} className="rounded bg-white/[0.05] px-1.5 py-1 text-[10px] text-slate-300">{file}</code>)}</div> : null}</div></div>) : <div className="text-xs text-slate-500">Waiting for the first activity event.</div>}
                 </div>
                 {patchPreview?.callId === selectedChatCall.id && <div className="mt-4 border-t border-white/[0.07] pt-3"><div className="mb-2 flex items-center justify-between"><div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Proposed diff</div><button type="button" onClick={() => setPatchPreview(null)} className="text-[10px] text-slate-500 hover:text-slate-200">Close</button></div><pre className="max-h-[420px] overflow-auto rounded-lg border border-white/[0.07] bg-black/30 p-3 text-[10px] leading-5 text-slate-300">{patchPreview.content}</pre></div>}
               </div> : <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-white/10 text-xs text-slate-500">Select an agent call to inspect its activity.</div>}
@@ -604,22 +749,62 @@ export const LiveBuildRoomView: React.FC = () => {
           )}
         </section>
 
-        <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-slate-300"><TerminalSquare className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.issue ? `${snapshot.issue.identifier} · ${snapshot.issue.title}` : 'Ready for the next project issue'}</div><div className="mt-1 text-xs text-slate-500">{snapshot.activeRun?.mission || 'Run a squad against a project issue to start a live build.'}</div></div></div>
-          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span><button type="button" onClick={() => void handleRunBuild()} disabled={!snapshot.canRun || starting || !snapshot.issue && !fallbackIssue} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-3.5 w-3.5 fill-current" />{starting ? 'Starting…' : 'Run Build'}</button></div>
+        <div className="order-1 flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-slate-300"><TerminalSquare className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.issue ? `${snapshot.issue.identifier} · ${snapshot.issue.title}` : snapshot.squad ? 'Ready for the next project issue' : 'No squad assigned to this project'}</div><div className="mt-1 text-xs text-slate-500">{snapshot.activeRun?.mission || (snapshot.squad ? 'Run a squad against a project issue to start a live build.' : 'Assign a squad before starting a squad build.')}</div></div></div>
+          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.squad ? <button type="button" onClick={() => void handleRunBuild()} disabled={!snapshot.canRun || starting || !snapshot.issue && !fallbackIssue} title={!snapshot.issue && !fallbackIssue ? 'Create a project issue before starting a squad run.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-3.5 w-3.5 fill-current" />{starting ? 'Starting…' : 'Run Build'}</button> : <button type="button" onClick={() => setActiveTab('squads')} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400"><Users className="h-3.5 w-3.5" />Set up a squad</button>}</div>
         </div>
 
-        <PhaseTimeline phases={snapshot.phases} />
+        {snapshot.phases.length > 0 && <div className="order-3"><PhaseTimeline phases={snapshot.phases} /></div>}
 
-        <div className={`grid gap-4 ${detailOpen ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'xl:grid-cols-1'}`}>
+        <div className={`order-2 grid gap-4 ${detailOpen && selectedCard ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'xl:grid-cols-1'}`}>
           <div className="min-w-0 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-sm font-semibold text-white">Squad execution</div><div className="mt-1 text-xs text-slate-500">Select an agent card to inspect its operational activity and handoff.</div></div><div className="flex items-center gap-3 text-xs text-slate-500"><span>{snapshot.summary.completed} completed</span><span>{snapshot.summary.running} running</span><span>{snapshot.summary.waiting} waiting</span></div></div>
-            <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-              {snapshot.agentCards.map(card => <AgentCard key={card.agentId} card={card} selected={selectedCard.agentId === card.agentId} onSelect={() => { setSelectedAgentId(card.agentId); setDetailTab('activity'); setDetailOpen(true); }} />)}
+            <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/45 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-sm font-semibold text-white">Project agents</div>
+                <div className="mt-1 text-xs text-slate-500">Live squad, direct-run, and project-chat executions for {activeProject?.name || snapshot.project.name}.</div>
+              </div>
+              {snapshot.agentCards.length > 0 && <label className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 sm:w-72">
+                <span className="sr-only">Search project agents</span>
+                <Code2 className="h-3.5 w-3.5 shrink-0 text-slate-500" />
+                <input value={agentSearch} onChange={event => setAgentSearch(event.target.value)} placeholder="Search agents or current work" className="min-w-0 flex-1 bg-transparent text-xs text-white placeholder:text-slate-500 outline-none" />
+              </label>}
             </div>
-            <div className="rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4"><div className="flex items-center justify-between gap-3"><div><div className="text-sm font-semibold text-white">Build artifacts</div><div className="mt-1 text-xs text-slate-500">Outputs produced by this project squad run</div></div><button type="button" onClick={() => { setSelectedAgentId(selectedCard.agentId); setDetailTab('files'); setDetailOpen(true); }} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/[0.06]">Open artifacts <ExternalLink className="h-3.5 w-3.5" /></button></div><div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{snapshot.artifacts.length ? snapshot.artifacts.map(artifact => <div key={artifact.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-200">{artifact.kind === 'pull_request' ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}</div><div className="min-w-0"><div className="truncate text-xs font-medium text-slate-200">{artifact.name}</div><div className="truncate text-[10px] text-slate-500">{artifact.detail}</div></div></div>) : <div className="col-span-full rounded-xl border border-dashed border-white/10 px-3 py-5 text-center text-xs text-slate-500">Artifacts will appear as agents complete work.</div>}</div></div>
+            {snapshot.agentCards.length > 0 && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter project agents by status">
+              {(['all', 'running', 'waiting', 'review', 'failed', 'stale', 'completed', 'idle'] as AgentStatusFilter[]).map(status => {
+                const label = status === 'all' ? 'All' : status === 'stale' ? 'No signal' : statusMeta[status].label;
+                const count = status === 'all' ? snapshot.summary.totalAgents : status === 'stale' ? snapshot.summary.stale : agentStatusCounts[status];
+                return <button key={status} type="button" onClick={() => setAgentStatusFilter(status)} aria-pressed={agentStatusFilter === status} className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${agentStatusFilter === status ? 'border-violet-400/40 bg-violet-400/10 text-violet-100' : 'border-white/[0.08] text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`}>
+                  {label}<span className="ml-1.5 text-slate-500">{count}</span>
+                </button>;
+              })}
+            </div>}
+            {snapshot.agentCards.length > 0 ? <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
+              {visibleAgentCards.map(card => <AgentCard key={card.executionId} card={card} selected={selectedCard?.executionId === card.executionId} onSelect={() => { setSelectedExecutionId(card.executionId); setDetailTab('activity'); setDetailOpen(true); }} />)}
+              {!visibleAgentCards.length && <div className="col-span-full rounded-2xl border border-dashed border-white/10 px-5 py-8 text-center">
+                <div className="text-sm font-medium text-slate-300">No agents match these filters</div>
+                <p className="mt-1 text-xs text-slate-500">Clear the search or choose another status to see project activity.</p>
+                <button type="button" onClick={() => { setAgentSearch(''); setAgentStatusFilter('all'); }} className="mt-3 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]">Clear filters</button>
+              </div>}
+            </div> : <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] text-slate-400"><Users className="h-5 w-5" /></div>
+              <div className="mt-3 text-sm font-medium text-slate-200">No visible agent activity</div>
+              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">When a squad, direct run, or project chat agent starts work, its live status and activity will appear here.{snapshot.squad?.memberCount ? ' This project squad is ready for a build.' : ' Add an agent to a squad or start a project agent to begin.'}</p>
+              {(!snapshot.squad || snapshot.squad.memberCount === 0) && <button type="button" onClick={() => setActiveTab('squads')} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]"><Users className="h-3.5 w-3.5" />Open squads</button>}
+            </div>}
+            <div className="rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div><div className="text-sm font-semibold text-white">Build artifacts</div><div className="mt-1 text-xs text-slate-500">Outputs recorded from visible project executions</div></div>
+                <button type="button" disabled={!selectedCard} onClick={() => { if (!selectedCard) return; setSelectedExecutionId(selectedCard.executionId); setDetailTab('files'); setDetailOpen(true); }} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40">Open artifacts <ExternalLink className="h-3.5 w-3.5" /></button>
+              </div>
+              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {snapshot.artifacts.length ? snapshot.artifacts.map(artifact => <div key={artifact.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-200">{artifact.kind === 'pull_request' ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}</div>
+                  <div className="min-w-0"><div className="truncate text-xs font-medium text-slate-200">{artifact.name}</div><div className="truncate text-[10px] text-slate-500">{artifact.detail}</div></div>
+                </div>) : <div className="col-span-full rounded-xl border border-dashed border-white/10 px-3 py-5 text-center text-xs text-slate-500">Artifacts will appear as agents produce outputs.</div>}
+              </div>
+            </div>
           </div>
-          {detailOpen && <ActivityPanel snapshot={snapshot} card={selectedCard} tab={detailTab} setTab={setDetailTab} onClose={() => setDetailOpen(false)} />}
+          {detailOpen && selectedCard && <ActivityPanel snapshot={snapshot} card={selectedCard} tab={detailTab} setTab={setDetailTab} onClose={() => setDetailOpen(false)} />}
         </div>
       </div>
     </div>
