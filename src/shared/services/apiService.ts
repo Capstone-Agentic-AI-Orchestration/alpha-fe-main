@@ -39,7 +39,11 @@ import {
   RepoPullRequest,
   RepoRun,
   PromoteResult,
-  HostingStatus
+  HostingStatus,
+  HostingPreviews,
+  HealthResult,
+  HostingEnvList,
+  EnvChangeResult
 } from '@/shared/types';
 
 import { API_BASE } from '@/shared/config';
@@ -753,6 +757,74 @@ export const apiService = {
   /** Sets up hosting the first time, or retries a failed/partial one. PM and admin only; can take 10-40s. */
   setUpRepoHosting: (projectId: string, repo: string) =>
     fetchJson<HostingStatus>(`${projectRepoPath(projectId, repo)}/hosting`, { method: 'POST' }),
+  getRepoHostingPreviews: (projectId: string, repo: string) =>
+    fetchJson<HostingPreviews>(`${projectRepoPath(projectId, repo)}/hosting/previews`),
+  /**
+   * One page of a hosted branch's logs. Answered as raw JSON: the log view
+   * normalises it, so an older server's shape still reads. List filters are
+   * comma-joined, as the server parses them.
+   */
+  getRepoHostingLogs: (
+    projectId: string,
+    repo: string,
+    branch: string,
+    query: {
+      startTime?: string;
+      endTime?: string | null;
+      direction?: 'backward' | 'forward';
+      limit?: number;
+      type?: readonly string[];
+      level?: readonly string[];
+      text?: string;
+      instance?: readonly string[];
+    }
+  ) => {
+    const params = new URLSearchParams({ branch });
+    for (const [key, value] of Object.entries(query)) {
+      if (value === undefined || value === null || value === '') continue;
+      const text = Array.isArray(value) ? value.join(',') : String(value);
+      if (text) params.set(key, text);
+    }
+    return fetchJson<Record<string, unknown>>(`${projectRepoPath(projectId, repo)}/hosting/logs?${params.toString()}`);
+  },
+  getRepoHostingEnv: (projectId: string, repo: string) =>
+    fetchJson<HostingEnvList>(`${projectRepoPath(projectId, repo)}/hosting/env`),
+  /**
+   * Set variables on one environment. Values go in the body only -- never a
+   * URL -- and are never readable afterwards. `main` needs a project manager
+   * or admin; uat and dev any developer. Redeploys unless `redeploy: false`.
+   */
+  setRepoHostingEnv: (
+    projectId: string,
+    repo: string,
+    change: { environment: string; vars: Array<{ key: string; value: string }>; redeploy: boolean }
+  ) =>
+    fetchJson<EnvChangeResult>(`${projectRepoPath(projectId, repo)}/hosting/env`, {
+      method: 'PUT',
+      body: JSON.stringify(change)
+    }),
+  deleteRepoHostingEnv: (projectId: string, repo: string, environment: string, key: string, redeploy: boolean) =>
+    fetchJson<EnvChangeResult>(
+      `${projectRepoPath(projectId, repo)}/hosting/env?${new URLSearchParams({
+        environment,
+        key,
+        redeploy: String(redeploy)
+      }).toString()}`,
+      { method: 'DELETE' }
+    ),
+  /** Production variable changes an agent asked for in this run -- keys only. Desktop only. */
+  getRunHostingApprovals: (runId: string) =>
+    fetchJson<{
+      approvals: Array<{ id: string; runId: string; agentId: string | null; repo: string; environment: 'main'; keys: string[]; redeploy: boolean; createdAt: string }>;
+    }>(`/runs/${encodeURIComponent(runId)}/hosting-approvals`),
+  decideRunHostingApproval: (runId: string, id: string, decision: 'approve' | 'reject') =>
+    fetchJson<EnvChangeResult | { status: 'rejected'; keys: string[] }>(
+      `/runs/${encodeURIComponent(runId)}/hosting-approvals/${encodeURIComponent(id)}/${decision}`,
+      { method: 'POST' }
+    ),
+  /** Checks a backend branch's `/health`. On request only: it can wake a sleeping service (up to a minute). */
+  checkRepoHealth: (projectId: string, repo: string, branch: string) =>
+    fetchJson<HealthResult>(`${projectRepoPath(projectId, repo)}/hosting/health?branch=${encodeURIComponent(branch)}`),
 
   cloneGitHubRepo: (payload: { repo: string; intoDir: string }) =>
     fetchJson<{ path: string }>('/github/repos/clone', {

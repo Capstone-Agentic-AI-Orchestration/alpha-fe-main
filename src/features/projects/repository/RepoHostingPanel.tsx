@@ -66,12 +66,17 @@ export const RepoHostingPanel: React.FC<RepoHostingPanelProps> = ({ projectId, r
     try {
       const result = await apiService.setUpRepoHosting(projectId, repo);
       // Only a set-up knows how wiring the partner went; a plain status read does not.
+      const problems = [];
       if (result.partnerWiring && !result.partnerWiring.ok) {
-        setActionError(
-          `Hosting is set up, but ${result.partner ?? 'the paired repository'} could not be updated with its URLs: ` +
+        problems.push(
+          `${result.partner ?? 'The paired repository'} could not be updated with its URLs: ` +
             `${result.partnerWiring.error ?? 'unknown error'}. Retry to connect them.`
         );
       }
+      if (result.urlVariables && !result.urlVariables.ok) {
+        problems.push(`The ALPHA_URL_* repository variables were not written: ${result.urlVariables.error ?? 'unknown error'}.`);
+      }
+      if (problems.length) setActionError(`Hosting is set up, but: ${problems.join(' ')}`);
       hosting.reload();
     } catch (err) {
       const { status } = parseApiError(err);
@@ -123,6 +128,40 @@ export const RepoHostingPanel: React.FC<RepoHostingPanelProps> = ({ projectId, r
       </div>
     </RepoSection>
   );
+};
+
+/**
+ * Whether a deploy waits for this repository's CI. Render is set up to wait
+ * and says so per service -- the one to flag is a service that fell back to
+ * deploying every push. Vercel does not report it; production waits only when
+ * the project's Deployment Checks are on, which its API cannot switch on.
+ */
+const CiGateNote: React.FC<{ data: HostingStatus }> = ({ data }) => {
+  if (data.platform === 'render') {
+    const ungated = data.environments.filter(env => env.waitsForCi === false).map(env => env.branch);
+    if (!ungated.length) return null;
+    return (
+      <p className="flex items-start gap-1.5 px-3.5 py-2.5 text-[11px] leading-relaxed text-amber-300">
+        <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" aria-hidden />
+        <span>
+          {ungated.join(' and ')} deploy{ungated.length === 1 ? 's' : ''} on every push without waiting for CI. In
+          Render, set the service&apos;s auto-deploy to &ldquo;After CI Checks Pass&rdquo;.
+        </span>
+      </p>
+    );
+  }
+  if (data.platform === 'vercel' && data.state !== 'unavailable') {
+    return (
+      <p className="flex items-start gap-1.5 px-3.5 py-2.5 text-[11px] leading-relaxed text-gray-400">
+        <Info className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-500" aria-hidden />
+        <span>
+          Production goes live as soon as Vercel builds it. To hold it until CI passes, turn on Deployment Checks in the
+          Vercel project (Settings → Build and Deployment) and require the Frontend CI jobs.
+        </span>
+      </p>
+    );
+  }
+  return null;
 };
 
 const HostingBody: React.FC<{
@@ -256,6 +295,8 @@ const HostingBody: React.FC<{
             )}
           </ul>
 
+          <CiGateNote data={data} />
+
           <p className="px-3.5 py-2.5 text-[11px] leading-relaxed text-gray-400">
             {data.partner ? (
               <>
@@ -271,43 +312,7 @@ const HostingBody: React.FC<{
             )}
           </p>
 
-          <div className="space-y-1 px-3.5 py-2.5">
-            <p className="text-[10px] text-gray-500">Environment variables</p>
-            {data.envVars.length === 0 ? (
-              <p className="text-[11px] text-gray-500">None.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {data.envVars.map(v => (
-                  <li key={`${v.scope}-${v.key}`} className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                      <code className="truncate font-mono text-[11px] text-gray-200">{v.key}</code>
-                      <span className="flex-shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-gray-400">
-                        {v.scope}
-                      </span>
-                      {v.managedByAlpha && (
-                        <span className="flex-shrink-0 rounded bg-brand-500/15 px-1.5 py-px text-[10px] text-brand-400">
-                          Set by Alpha
-                        </span>
-                      )}
-                    </span>
-                    {v.value === null ? (
-                      <span className="flex flex-shrink-0 items-center gap-1 text-[11px] text-gray-500">
-                        <Lock className="h-3 w-3" aria-hidden /> Secret — set
-                      </span>
-                    ) : (
-                      <span className="flex min-w-0 flex-shrink items-center gap-1.5">
-                        <code className="max-w-[10rem] truncate font-mono text-[11px] text-gray-200" title={v.value}>
-                          {v.value}
-                        </code>
-                        <CopyButton value={v.value} label={v.key} />
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
+          {/* Variables are listed and edited in their own section (RepoEnvEditor). */}
           <div className="space-y-1.5 px-3.5 py-2.5">
             <p className="text-[10px] text-gray-500">GitHub Actions</p>
             {data.github.secrets.length === 0 && data.github.variables.length === 0 ? (

@@ -387,9 +387,78 @@ export interface HostingStatus {
     url: string | null;
     dashboardUrl: string | null;
     latestDeploy: { status: string; createdAt: string | null; url: string | null } | null;
+    /** true: deploys only once CI passes. false: on every push, whatever CI says. null: unknown (Vercel). */
+    waitsForCi?: boolean | null;
   }>;
+  /** After a set-up: whether the ALPHA_URL_* repository variables were written. */
+  urlVariables?: { ok: boolean; error?: string };
   envVars: Array<{ key: string; value: string | null; scope: string; managedByAlpha: boolean }>;
   github: { secrets: string[]; variables: Array<{ name: string; value: string }> };
+}
+
+/**
+ * `GET /projects/:id/repos/:owner/:name/hosting/previews`. What each branch
+ * can show: a frontend's page (framed only when the server confirmed the site
+ * allows it), or a backend's health.
+ */
+export interface BranchPreview {
+  branch: PipelineBranch;
+  /** The branch's stable address; never a single deploy's own hostname. */
+  url: string | null;
+  surface: 'page' | 'health';
+  /** The platform's own word for the latest deploy (`READY`, `live`, `BUILDING`...). */
+  deployStatus: string | null;
+  ready: boolean;
+  /** true: safe to frame. false: must not be framed (`reason` says why). null: unknown. */
+  embeddable: boolean | null;
+  reason: string | null;
+}
+
+export interface HostingPreviews {
+  repo: string;
+  role: HostingStatus['role'];
+  platform: HostingStatus['platform'];
+  state: HostingStatus['state'];
+  error?: string;
+  previews: BranchPreview[];
+}
+
+/**
+ * `GET .../hosting/env`. A hosted repository's variables by environment.
+ * Values are write-only: only the URLs Alpha derives itself are readable.
+ */
+export interface HostingEnvList {
+  repo: string;
+  role: HostingStatus['role'];
+  state: string;
+  error?: string;
+  /** The environments this repository is hosted in, and so can hold variables. */
+  environments: PipelineBranch[];
+  vars: Array<{
+    key: string;
+    /** `all-previews`: a Vercel preview variable not scoped to one branch. */
+    environment: PipelineBranch | 'all-previews';
+    managedByAlpha: boolean;
+    value: string | null;
+  }>;
+}
+
+/** `PUT`/`DELETE .../hosting/env`: what the platform accepted, key by key. */
+export interface EnvChangeResult {
+  environment: PipelineBranch;
+  changed: string[];
+  failed: Array<{ key: string; error: string }>;
+  redeployed: boolean;
+  redeployError?: string;
+}
+
+/** `GET .../hosting/health?branch=`. Run on request only: it can wake a sleeping service. */
+export interface HealthResult {
+  url: string | null;
+  ok: boolean;
+  status: number | null;
+  latencyMs: number;
+  error?: string;
 }
 
 export interface ProjectResource {

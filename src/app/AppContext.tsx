@@ -317,6 +317,8 @@ export type Capability =
   | 'sync_board'
   | 'manage_settings'
   | 'manage_deployments'
+  /** Set hosting variables on uat and dev; main needs manage_deployments. Mirrors the server's deployment.env_preview. */
+  | 'manage_preview_env'
   | 'create_project'
   | 'manage_documents'
   | 'approve_scope'
@@ -336,6 +338,8 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'view_identity',
     'view_projects',
     'edit_projects',
+    // Hosting variables on uat and dev; production stays with project managers.
+    'manage_preview_env',
     'view_issues',
     'manage_issues',
     'view_agents',
@@ -379,6 +383,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'view_integrations',
     'manage_integrations',
     'manage_deployments',
+    'manage_preview_env',
     'manage_mcp',
     'sync_board',
     'manage_settings',
@@ -419,6 +424,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'sync_board',
     'manage_settings',
     'manage_deployments',
+    'manage_preview_env',
     'approve_production',
     'run_agents',
     'contact_client',

@@ -8,6 +8,8 @@ import { BranchSwitcher } from './BranchSwitcher';
 import { PipelineStrip } from './PipelineStrip';
 import { RepoFileBrowser } from './RepoFileBrowser';
 import { RepoHostingPanel } from './RepoHostingPanel';
+import { RepoPreviews } from './RepoPreviews';
+import { RepoEnvEditor } from './RepoEnvEditor';
 import { RepoPullsList } from './RepoPullsList';
 import { RepoRunsList } from './RepoRunsList';
 import { defaultBranch } from './repoFormat';
@@ -36,6 +38,8 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({ pr
   // Same gate as provisioning a repository in the first place.
   // The same role the server checks (deployment.manage): project managers and admins.
   const canSetUpHosting = can('manage_deployments');
+  // uat/dev variables: any developer. Production goes with canSetUpHosting (deployment.manage).
+  const canManagePreviewEnv = can('manage_preview_env');
 
   const [selectedRepo, setSelectedRepo] = useState<string | null>(repositories[0] ?? null);
   // The list can change under us (a repository created, the project switched).
@@ -91,16 +95,24 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({ pr
         repo={selectedRepo}
         canPromote={canPromote}
         canSetUpHosting={canSetUpHosting}
+        canManagePreviewEnv={canManagePreviewEnv}
       />
     </div>
   );
 };
 
-const RepoPanel: React.FC<{ projectId: string; repo: string; canPromote: boolean; canSetUpHosting: boolean }> = ({
+const RepoPanel: React.FC<{
+  projectId: string;
+  repo: string;
+  canPromote: boolean;
+  canSetUpHosting: boolean;
+  canManagePreviewEnv: boolean;
+}> = ({
   projectId,
   repo,
   canPromote,
-  canSetUpHosting
+  canSetUpHosting,
+  canManagePreviewEnv
 }) => {
   const branches = useRepoResource<{ branches: RepoBranch[] }>(
     () => apiService.getRepoBranches(projectId, repo),
@@ -174,6 +186,13 @@ const RepoPanel: React.FC<{ projectId: string; repo: string; canPromote: boolean
           {/* Full width: the environment/variable detail below reads cramped
               in the narrower right-hand column next to runs and pull requests. */}
           <RepoHostingPanel projectId={projectId} repo={repo} canManage={canSetUpHosting} />
+          <RepoPreviews projectId={projectId} repo={repo} />
+          <RepoEnvEditor
+            projectId={projectId}
+            repo={repo}
+            canManageMain={canSetUpHosting}
+            canManagePreview={canManagePreviewEnv}
+          />
 
           {branch && (
             <div className="grid gap-4 2xl:grid-cols-[minmax(0,1fr)_24rem]">
