@@ -46,6 +46,7 @@ export function previewFrameSandbox(frameUrl: string, appOrigin: string | null):
 /** Why a branch shows no inline preview, in words for the card. */
 export function previewUnavailableReason(preview: BranchPreview): string {
   if (!preview.url) return 'No address yet — this branch has not been deployed.';
-  if (!preview.ready) return preview.deployStatus ? `The latest deploy is ${preview.deployStatus.toLowerCase()}.` : 'Not deployed yet.';
+  if (!preview.ready)
+    return preview.deployStatus ? `The latest deploy is ${preview.deployStatus.toLowerCase()}.` : 'Not deployed yet.';
   return preview.reason ?? 'This site cannot be shown inside Alpha. Open it in your browser instead.';
 }
