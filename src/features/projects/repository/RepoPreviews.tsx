@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, ExternalLink, Eye, Loader2, Maximize2, Minimize2, MonitorPlay } from 'lucide-react';
+import { Activity, ExternalLink, Eye, Loader2, Maximize2, Minimize2, MonitorPlay, ScrollText } from 'lucide-react';
 
 import { apiService } from '@/shared/services/apiService';
 import type { BranchPreview, HealthResult, HostingPreviews } from '@/shared/types';
@@ -35,39 +35,76 @@ export const RepoPreviews: React.FC<{ projectId: string; repo: string }> = ({ pr
     : [];
 
   return (
-    <>
-      <RepoSection
-        id={`repo-previews-${repo}`}
-        title="Previews"
-        icon={<MonitorPlay className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
-        actions={<RefreshButton onClick={previews.reload} loading={previews.loading} label="Refresh previews" />}
-      >
-        <div aria-busy={previews.loading}>
-          {previews.loading && !data ? (
-            <SectionLoading label="Loading previews…" />
-          ) : previews.error ? (
-            <SectionError message={previews.error} onRetry={previews.reload} />
-          ) : !data || sorted.length === 0 ? (
-            <SectionEmpty>
-              {data?.state === 'unavailable'
-                ? (data.error ?? 'Hosting is not available here.')
-                : 'Nothing is hosted yet. Set up hosting to get a preview of each branch.'}
-            </SectionEmpty>
-          ) : (
-            <div className="grid gap-3 p-3 md:grid-cols-2">
-              {sorted.map(preview =>
-                preview.surface === 'health' ? (
-                  <HealthCard key={preview.branch} projectId={projectId} repo={repo} preview={preview} />
-                ) : (
-                  <PageCard key={preview.branch} preview={preview} />
-                )
-              )}
-            </div>
-          )}
-        </div>
-      </RepoSection>
-      {sorted.length > 0 && <RepoLogs projectId={projectId} repo={repo} branches={sorted.map(p => p.branch)} />}
-    </>
+    <RepoSection
+      id={`repo-previews-${repo}`}
+      title="Previews"
+      icon={<MonitorPlay className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
+      actions={<RefreshButton onClick={previews.reload} loading={previews.loading} label="Refresh previews" />}
+    >
+      <div aria-busy={previews.loading}>
+        {previews.loading && !data ? (
+          <SectionLoading label="Loading previews…" />
+        ) : previews.error ? (
+          <SectionError message={previews.error} onRetry={previews.reload} />
+        ) : !data || sorted.length === 0 ? (
+          <SectionEmpty>
+            {data?.state === 'unavailable'
+              ? (data.error ?? 'Hosting is not available here.')
+              : 'Nothing is hosted yet. Set up hosting to get a preview of each branch.'}
+          </SectionEmpty>
+        ) : (
+          <div className="grid gap-3 p-3 md:grid-cols-2">
+            {sorted.map(preview =>
+              preview.surface === 'health' ? (
+                <HealthCard key={preview.branch} projectId={projectId} repo={repo} preview={preview} />
+              ) : (
+                <PageCard key={preview.branch} preview={preview} />
+              )
+            )}
+          </div>
+        )}
+      </div>
+    </RepoSection>
+  );
+};
+
+/**
+ * The Logs tab: the logs of each branch that is hosted, which is the same
+ * list the previews are drawn from -- a backend has main and uat, a
+ * frontend dev as well.
+ */
+export const RepoLogsTab: React.FC<{ projectId: string; repo: string; active: boolean }> = ({ projectId, repo, active }) => {
+  const previews = useRepoResource<HostingPreviews>(
+    () => apiService.getRepoHostingPreviews(projectId, repo),
+    `${projectId}|${repo}|previews`
+  );
+  const branches = previews.data
+    ? previews.data.previews
+        .map(p => p.branch)
+        .sort((a, b) => PIPELINE_BRANCHES.indexOf(a) - PIPELINE_BRANCHES.indexOf(b))
+    : [];
+
+  if (branches.length > 0) return <RepoLogs projectId={projectId} repo={repo} branches={branches} active={active} />;
+
+  return (
+    <RepoSection
+      id={`repo-logs-${repo}`}
+      title="Logs"
+      icon={<ScrollText className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
+      actions={<RefreshButton onClick={previews.reload} loading={previews.loading} label="Refresh logs" />}
+    >
+      {previews.loading && !previews.data ? (
+        <SectionLoading label="Loading logs…" />
+      ) : previews.error ? (
+        <SectionError message={previews.error} onRetry={previews.reload} />
+      ) : (
+        <SectionEmpty>
+          {previews.data?.state === 'unavailable'
+            ? (previews.data.error ?? 'Hosting is not available here.')
+            : 'Nothing is hosted yet, so there are no logs. Set up hosting from the Overview tab.'}
+        </SectionEmpty>
+      )}
+    </RepoSection>
   );
 };
 
