@@ -24,7 +24,6 @@ import {
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
 import { IssuesView } from '@/features/issues/IssuesView';
-import { ProjectEnvPanel } from '@/features/projects/ProjectEnvPanel';
 import { ProjectRepositoryView } from '@/features/projects/repository/ProjectRepositoryView';
 import { useProjectRepos } from '@/features/projects/repository/useProjectRepos';
 import { deriveProjectKey } from '@/features/projects/useProjectsViewModel';
@@ -493,15 +492,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </button>
               </div>
             )}
-
-            {/* Values this project's agents resolve MCP servers against. */}
-            <div className="space-y-2 pt-2 border-t border-white/5">
-              <ProjectEnvPanel
-                envVars={selectedProject.envVars || []}
-                onChange={(next) => updateProject(selectedProject.id, { envVars: next })}
-                readOnly={!canEditProjects}
-              />
-            </div>
 
             {/* 5. Active Agents. Dropped entirely when there are none — a
                 header plus an italic "no agents" line is pure noise. */}
