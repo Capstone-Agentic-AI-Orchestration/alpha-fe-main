@@ -362,6 +362,24 @@ export type PromoteResult =
   | { status: 'existing'; url: string; number: number }
   | { status: 'nothing_to_promote' };
 
+/** What removing a repository's hosting did, one readable line per platform resource. */
+export interface HostingTeardown {
+  repo: string;
+  removed: string[];
+  /** Found but left alone: linked to another repository, or still holding something else. */
+  kept: string[];
+  failed: string[];
+}
+
+/** `DELETE /projects/:id/repos/:owner/:name`. */
+export interface RepoDeletionResult {
+  repo: string;
+  hosting: HostingTeardown;
+  github: 'deleted' | 'already_gone';
+  /** Alpha's own working copies on this machine. */
+  localCopies: { removed: string[]; failed: string[] };
+}
+
 /**
  * `GET`/`POST /projects/:id/repos/:owner/:name/hosting`. Where the platform —
  * Render for backends, Vercel for frontends — stands for a repository. CI no
