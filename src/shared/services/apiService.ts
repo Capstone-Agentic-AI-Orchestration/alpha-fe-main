@@ -43,7 +43,8 @@ import {
   HostingPreviews,
   HealthResult,
   HostingEnvList,
-  EnvChangeResult
+  EnvChangeResult,
+  RepoDeletionResult
 } from '@/shared/types';
 
 import { API_BASE } from '@/shared/config';
@@ -751,6 +752,15 @@ export const apiService = {
     fetchJson<PromoteResult>(`${projectRepoPath(projectId, repo)}/promote`, {
       method: 'POST',
       body: JSON.stringify(step)
+    }),
+  /**
+   * Delete the repository on GitHub with its Render and Vercel hosting, and
+   * unlink it from the project. PM only; `repo` doubles as the typed
+   * confirmation the API requires. Can take as long as setting hosting up.
+   */
+  deleteProjectRepository: (projectId: string, repo: string) =>
+    fetchJson<RepoDeletionResult>(`${projectRepoPath(projectId, repo)}?confirm=${encodeURIComponent(repo)}`, {
+      method: 'DELETE'
     }),
   getRepoHosting: (projectId: string, repo: string) =>
     fetchJson<HostingStatus>(`${projectRepoPath(projectId, repo)}/hosting`),

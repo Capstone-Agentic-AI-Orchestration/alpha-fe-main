@@ -9,9 +9,11 @@ import {
   ScaffoldStack
 } from '@/shared/types';
 import { useApp } from '@/app/AppContext';
-import { GitBranch, Folder, FolderOpen, Plus, Trash2 } from 'lucide-react';
+import { GitBranch, Folder, FolderOpen, Plus, Trash2, Unlink } from 'lucide-react';
 import { ProjectWorkspaceCard } from './ProjectWorkspaceCard';
 import { ScaffoldResultCard } from './ScaffoldResultCard';
+import { DeleteRepositoryConfirm, repoNameWithOwner } from './DeleteRepositoryConfirm';
+import type { RepoDeletionResult } from '@/shared/types';
 
 type RepoShape = 'standalone' | 'paired';
 
@@ -267,6 +269,22 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   const handleRemoveResource = (id: string) => {
     if (readOnly) return;
     onChange(resources.filter(r => r.id !== id));
+  };
+
+  /** The repository whose delete confirmation is open; one at a time. */
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // Deleting is creating's counterpart, and a PM's alone, like creating.
+  const canDeleteRepository = isFull && !readOnly && canCreateRepository;
+
+  const handleRepositoryDeleted = (resourceId: string, result: RepoDeletionResult) => {
+    setDeletingId(null);
+    onChange(resources.filter(r => r.id !== resourceId));
+    const notes = [
+      result.hosting.removed.length ? `Removed ${result.hosting.removed.join(', ')}.` : 'No hosting was set up.',
+      ...(result.hosting.kept.length ? [`Left alone: ${result.hosting.kept.join(', ')}.`] : []),
+      ...(result.localCopies.failed.length ? [`Remove by hand: ${result.localCopies.failed.join(', ')}.`] : [])
+    ];
+    showToast(`Deleted ${result.repo}`, notes.join(' '), 'success');
   };
 
   const hasLocalDir = resources.some(r => r.type === 'local_dir');
@@ -542,54 +560,79 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       )}
 
       {/* Attached resources */}
-      <div className="space-y-2 max-h-48 overflow-y-auto">
+      <div className={`space-y-2 overflow-y-auto ${deletingId ? 'max-h-96' : 'max-h-48'}`}>
         {resources.length === 0 ? (
           <p className="p-3 text-gray-500 italic bg-well rounded-xl border border-white/5">
             Nothing attached yet. Agents need a working copy before they can run —
             attach a folder above.
           </p>
         ) : (
-          resources.map((res) => (
-            <div
-              key={res.id}
-              className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-white/5 font-mono text-xs"
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                {res.type === 'github_repo' ? (
-                  <div className="flex items-center gap-1.5 text-brand-300 min-w-0">
-                    <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="font-medium truncate">{res.pathOrUrl}</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5 text-amber-300 min-w-0">
-                    <Folder className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span className="font-medium truncate">{res.pathOrUrl}</span>
-                  </div>
-                )}
-                <span className="text-[10px] text-gray-500 font-sans flex-shrink-0">({res.branchOrMachine})</span>
-              </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => navigator.clipboard.writeText(res.pathOrUrl)}
-                  className="text-gray-400 hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors text-[10px]"
-                  title="Copy path"
+          resources.map((res) => {
+            const repo = res.type === 'github_repo' ? repoNameWithOwner(res.pathOrUrl) : null;
+            return (
+              <div key={res.id}>
+                <div
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-surface border border-white/5 font-mono text-xs"
                 >
-                  Copy
-                </button>
-                {!readOnly && (
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveResource(res.id)}
-                    className="p-1 text-gray-500 hover:text-rose-400 transition-colors"
-                    title="Detach"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {res.type === 'github_repo' ? (
+                      <div className="flex items-center gap-1.5 text-brand-300 min-w-0">
+                        <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="font-medium truncate">{res.pathOrUrl}</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-amber-300 min-w-0">
+                        <Folder className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="font-medium truncate">{res.pathOrUrl}</span>
+                      </div>
+                    )}
+                    <span className="text-[10px] text-gray-500 font-sans flex-shrink-0">({res.branchOrMachine})</span>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard.writeText(res.pathOrUrl)}
+                      className="text-gray-400 hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors text-[10px]"
+                      title="Copy path"
+                    >
+                      Copy
+                    </button>
+                    {!readOnly && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveResource(res.id)}
+                        className="p-1 text-gray-500 hover:text-white transition-colors"
+                        title="Detach from this project (nothing is deleted)"
+                        aria-label={`Detach ${res.name}`}
+                      >
+                        <Unlink className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                    {canDeleteRepository && repo && (
+                      <button
+                        type="button"
+                        onClick={() => setDeletingId(current => (current === res.id ? null : res.id))}
+                        className="p-1 text-gray-500 hover:text-rose-400 transition-colors"
+                        title="Delete the repository and its hosting"
+                        aria-label={`Delete ${repo}`}
+                        aria-expanded={deletingId === res.id}
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {deletingId === res.id && repo && (
+                  <DeleteRepositoryConfirm
+                    projectId={projectId}
+                    repo={repo}
+                    onDeleted={result => handleRepositoryDeleted(res.id, result)}
+                    onCancel={() => setDeletingId(null)}
+                  />
                 )}
               </div>
-            </div>
-          ))
+            );
+          })
         )}
       </div>
 
