@@ -36,18 +36,20 @@ const controlClass =
  * deployment's for a frontend. Secrets are redacted on the server before a
  * line ever reaches this view.
  */
-export const RepoLogs: React.FC<{ projectId: string; repo: string; branches: PipelineBranch[] }> = ({
-  projectId,
-  repo,
-  branches
-}) => {
+export const RepoLogs: React.FC<{
+  projectId: string;
+  repo: string;
+  branches: PipelineBranch[];
+  /** False while the view is out of sight (another tab): the tail stops polling until it is shown again. */
+  active?: boolean;
+}> = ({ projectId, repo, branches, active = true }) => {
   const [branch, setBranch] = useState<PipelineBranch>(branches.includes('main') ? 'main' : branches[0]);
   const [preset, setPreset] = useState<LogRangePreset>('1h');
   const [type, setType] = useState<LogQueryFilters['type']>(null);
   // Measured once per choice: an open window keeps tailing from its start.
   const logWindow = useMemo(() => rangeWindow(preset, Date.now(), null), [preset]);
 
-  const vm = useHostingLogs({ projectId, repo, branch, window: logWindow, filters: { type } });
+  const vm = useHostingLogs({ projectId, repo, branch, window: logWindow, filters: { type }, enabled: active });
 
   return (
     <RepoSection
