@@ -419,6 +419,35 @@ export interface HostingPreviews {
   previews: BranchPreview[];
 }
 
+/**
+ * `GET .../hosting/env`. A hosted repository's variables by environment.
+ * Values are write-only: only the URLs Alpha derives itself are readable.
+ */
+export interface HostingEnvList {
+  repo: string;
+  role: HostingStatus['role'];
+  state: string;
+  error?: string;
+  /** The environments this repository is hosted in, and so can hold variables. */
+  environments: PipelineBranch[];
+  vars: Array<{
+    key: string;
+    /** `all-previews`: a Vercel preview variable not scoped to one branch. */
+    environment: PipelineBranch | 'all-previews';
+    managedByAlpha: boolean;
+    value: string | null;
+  }>;
+}
+
+/** `PUT`/`DELETE .../hosting/env`: what the platform accepted, key by key. */
+export interface EnvChangeResult {
+  environment: PipelineBranch;
+  changed: string[];
+  failed: Array<{ key: string; error: string }>;
+  redeployed: boolean;
+  redeployError?: string;
+}
+
 /** `GET .../hosting/health?branch=`. Run on request only: it can wake a sleeping service. */
 export interface HealthResult {
   url: string | null;

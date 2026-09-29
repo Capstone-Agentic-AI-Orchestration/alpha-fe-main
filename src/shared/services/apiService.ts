@@ -41,7 +41,9 @@ import {
   PromoteResult,
   HostingStatus,
   HostingPreviews,
-  HealthResult
+  HealthResult,
+  HostingEnvList,
+  EnvChangeResult
 } from '@/shared/types';
 
 import { API_BASE } from '@/shared/config';
@@ -785,6 +787,31 @@ export const apiService = {
     }
     return fetchJson<Record<string, unknown>>(`${projectRepoPath(projectId, repo)}/hosting/logs?${params.toString()}`);
   },
+  getRepoHostingEnv: (projectId: string, repo: string) =>
+    fetchJson<HostingEnvList>(`${projectRepoPath(projectId, repo)}/hosting/env`),
+  /**
+   * Set variables on one environment. Values go in the body only -- never a
+   * URL -- and are never readable afterwards. `main` needs a project manager
+   * or admin; uat and dev any developer. Redeploys unless `redeploy: false`.
+   */
+  setRepoHostingEnv: (
+    projectId: string,
+    repo: string,
+    change: { environment: string; vars: Array<{ key: string; value: string }>; redeploy: boolean }
+  ) =>
+    fetchJson<EnvChangeResult>(`${projectRepoPath(projectId, repo)}/hosting/env`, {
+      method: 'PUT',
+      body: JSON.stringify(change)
+    }),
+  deleteRepoHostingEnv: (projectId: string, repo: string, environment: string, key: string, redeploy: boolean) =>
+    fetchJson<EnvChangeResult>(
+      `${projectRepoPath(projectId, repo)}/hosting/env?${new URLSearchParams({
+        environment,
+        key,
+        redeploy: String(redeploy)
+      }).toString()}`,
+      { method: 'DELETE' }
+    ),
   /** Checks a backend branch's `/health`. On request only: it can wake a sleeping service (up to a minute). */
   checkRepoHealth: (projectId: string, repo: string, branch: string) =>
     fetchJson<HealthResult>(`${projectRepoPath(projectId, repo)}/hosting/health?branch=${encodeURIComponent(branch)}`),

@@ -271,43 +271,7 @@ const HostingBody: React.FC<{
             )}
           </p>
 
-          <div className="space-y-1 px-3.5 py-2.5">
-            <p className="text-[10px] text-gray-500">Environment variables</p>
-            {data.envVars.length === 0 ? (
-              <p className="text-[11px] text-gray-500">None.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {data.envVars.map(v => (
-                  <li key={`${v.scope}-${v.key}`} className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                      <code className="truncate font-mono text-[11px] text-gray-200">{v.key}</code>
-                      <span className="flex-shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-gray-400">
-                        {v.scope}
-                      </span>
-                      {v.managedByAlpha && (
-                        <span className="flex-shrink-0 rounded bg-brand-500/15 px-1.5 py-px text-[10px] text-brand-400">
-                          Set by Alpha
-                        </span>
-                      )}
-                    </span>
-                    {v.value === null ? (
-                      <span className="flex flex-shrink-0 items-center gap-1 text-[11px] text-gray-500">
-                        <Lock className="h-3 w-3" aria-hidden /> Secret — set
-                      </span>
-                    ) : (
-                      <span className="flex min-w-0 flex-shrink items-center gap-1.5">
-                        <code className="max-w-[10rem] truncate font-mono text-[11px] text-gray-200" title={v.value}>
-                          {v.value}
-                        </code>
-                        <CopyButton value={v.value} label={v.key} />
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
+          {/* Variables are listed and edited in their own section (RepoEnvEditor). */}
           <div className="space-y-1.5 px-3.5 py-2.5">
             <p className="text-[10px] text-gray-500">GitHub Actions</p>
             {data.github.secrets.length === 0 && data.github.variables.length === 0 ? (
