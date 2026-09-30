@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { apiService, normalizeGitHubRepo } from '@/shared/services/apiService';
 
 export interface LiveWorkflowRun {
@@ -15,9 +15,9 @@ export interface LiveWorkflowRun {
 }
 
 export function useDeploymentsViewModel() {
-  const { deployments, agents, issues, projects, showToast, can } = useApp();
+  const { deployments, agents, issues, projects, showToast, can, isActiveTab } = useApp();
   const [liveRuns, setLiveRuns] = useState<LiveWorkflowRun[]>([]);
-  const [selectedRunId, setSelectedRunId] = useState<number | null>(null);
+  const [selectedRunId, setSelectedRunId] = useTabSessionState<number | null>('deployments.selectedWorkflowRun', null);
   const [failedLogs, setFailedLogs] = useState<string | null>(null);
   const [isLoadingLogs, setIsLoadingLogs] = useState(false);
   const [isSelfHealing, setIsSelfHealing] = useState(false);
@@ -53,10 +53,11 @@ export function useDeploymentsViewModel() {
   }, [workspace]);
 
   useEffect(() => {
-    loadGitHubRuns();
+    if (!isActiveTab) return undefined;
+    void loadGitHubRuns();
     const interval = setInterval(loadGitHubRuns, 15000);
     return () => clearInterval(interval);
-  }, [loadGitHubRuns]);
+  }, [isActiveTab, loadGitHubRuns]);
 
   const handleInspectFailedLogs = async (runId: number) => {
     setSelectedRunId(runId);

@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, useEffect } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
   Rocket, 
   Play, 
@@ -41,18 +41,18 @@ export const DeploymentsView: React.FC = () => {
   } = useDeploymentsViewModel();
 
   // Active Sub-view Tab: 'actions' (Live GitHub Actions) | 'deployments' (Environment Releases)
-  const [viewMode, setViewMode] = useState<'actions' | 'deployments'>('actions');
+  const [viewMode, setViewMode] = useTabSessionState<'actions' | 'deployments'>('deployments.viewMode', 'actions');
 
   // States
-  const [selectedDepId, setSelectedDepId] = useState<string | null>(null);
+  const [selectedDepId, setSelectedDepId] = useTabSessionState<string | null>('deployments.selectedDeployment', null);
   const [triggerModalOpen, setTriggerModalOpen] = useState<boolean>(false);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useTabSessionState<string>('deployments.search', '');
 
   // Filter & Sort state
-  const [envFilter, setEnvFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [envFilter, setEnvFilter] = useTabSessionState<string>('deployments.environmentFilter', 'all');
+  const [statusFilter, setStatusFilter] = useTabSessionState<string>('deployments.statusFilter', 'all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [sortOrder, setSortOrder] = useTabSessionState<'desc' | 'asc'>('deployments.sortOrder', 'desc');
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
 
   // Trigger form state
@@ -62,8 +62,8 @@ export const DeploymentsView: React.FC = () => {
       Boolean(resource.localPath || resource.pathOrUrl)
     )
   ) || projects[0];
-  const [targetProjectId, setTargetProjectId] = useState<string>(deployableProject?.id || '');
-  const [targetEnv, setTargetEnv] = useState<'Production' | 'Staging' | 'Preview'>('Staging');
+  const [targetProjectId, setTargetProjectId] = useTabSessionState<string>('deployments.targetProject', deployableProject?.id || '');
+  const [targetEnv, setTargetEnv] = useTabSessionState<'Production' | 'Staging' | 'Preview'>('deployments.targetEnvironment', 'Staging');
   const [copiedLogId, setCopiedLogId] = useState<boolean>(false);
 
   useEffect(() => {

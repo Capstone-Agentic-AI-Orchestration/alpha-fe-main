@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useApp } from '@/app/AppContext';
+import React from 'react';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { InboxNotification } from '@/shared/types';
 import { 
   Inbox, 
@@ -34,8 +34,8 @@ export const InboxView: React.FC = () => {
   const canApprove = can('approve_runs');
   const canRunAgents = can('run_agents');
 
-  const [selectedNotifId, setSelectedNotifId] = useState<string | null>(inbox[0]?.id || null);
-  const [showArchived, setShowArchived] = useState(false);
+  const [selectedNotifId, setSelectedNotifId] = useTabSessionState<string | null>('inbox.selectedNotification', inbox[0]?.id || null);
+  const [showArchived, setShowArchived] = useTabSessionState<boolean>('inbox.showArchived', false);
 
   const activeNotifications = inbox.filter(n => !n.archived);
   const archivedNotifications = inbox.filter(n => n.archived);

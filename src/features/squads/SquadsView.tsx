@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { SquadTopology } from '@/shared/types';
 import type { WorkspaceSquadProjectAssignment } from '@/shared/types';
 import { apiService } from '@/shared/services/apiService';
@@ -21,7 +21,7 @@ import { CreateSquadModal } from '@/features/squads/CreateSquadModal';
 import { SquadRunFlow } from '@/features/runs/SquadRunFlow';
 
 export const SquadsView: React.FC = () => {
-  const { squads, agents, issues, projects, triggerSquadRun, can, showToast, refreshLiveBuildRoomProjects } = useApp();
+  const { squads, agents, issues, projects, triggerSquadRun, can, showToast, refreshLiveBuildRoomProjects, isActiveTab } = useApp();
   const canManageSquads = can('manage_squads');
   const canRunSquads = can('run_squads');
 
@@ -33,7 +33,7 @@ export const SquadsView: React.FC = () => {
    * repository on a branch, so it has to be told which issue — asking is the
    * whole difference between a button and a build.
    */
-  const [launchSquadId, setLaunchSquadId] = useState<string | null>(null);
+  const [launchSquadId, setLaunchSquadId] = useTabSessionState<string | null>('squads.launchSquad', null);
 
   const launchSquad = squads.find(s => s.id === launchSquadId);
 
@@ -44,21 +44,21 @@ export const SquadsView: React.FC = () => {
   );
   
   // Selected squad for centered pop-up modal
-  const [selectedSquadId, setSelectedAgentSquadId] = useState<string | null>(null);
+  const [selectedSquadId, setSelectedAgentSquadId] = useTabSessionState<string | null>('squads.selectedSquad', null);
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   
   // Search & Filter state
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [topologyFilter, setTopologyFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useTabSessionState<string>('squads.search', '');
+  const [topologyFilter, setTopologyFilter] = useTabSessionState<string>('squads.topologyFilter', 'all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
   
   // Sorting state
-  const [sortBy, setSortBy] = useState<'runs' | 'name' | 'members'>('runs');
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [sortBy, setSortBy] = useTabSessionState<'runs' | 'name' | 'members'>('squads.sortBy', 'runs');
+  const [sortOrder, setSortOrder] = useTabSessionState<'desc' | 'asc'>('squads.sortOrder', 'desc');
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
   
   // Active sub-tab inside centered modal
-  const [modalTab, setModalTab] = useState<'flow' | 'members' | 'projects' | 'mission' | 'metrics'>('flow');
+  const [modalTab, setModalTab] = useTabSessionState<'flow' | 'members' | 'projects' | 'mission' | 'metrics'>('squads.modalTab', 'flow');
   const [projectAssignments, setProjectAssignments] = useState<WorkspaceSquadProjectAssignment[]>([]);
   const [assignmentBusy, setAssignmentBusy] = useState<string | null>(null);
 
@@ -68,7 +68,7 @@ export const SquadsView: React.FC = () => {
   }, [squads, selectedSquadId]);
 
   useEffect(() => {
-    if (!selectedSquadId) {
+    if (!isActiveTab || !selectedSquadId) {
       setProjectAssignments([]);
       return;
     }
@@ -81,7 +81,7 @@ export const SquadsView: React.FC = () => {
         if (!cancelled) setProjectAssignments([]);
       });
     return () => { cancelled = true; };
-  }, [selectedSquadId]);
+  }, [isActiveTab, selectedSquadId]);
 
   const toggleProjectAssignment = async (projectId: string) => {
     if (!selectedSquad || !canManageSquads) return;

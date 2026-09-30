@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { DocStatus, Band, SectionLabel } from '@/features/delivery/Ledger';
 import { Send, Paperclip, Check, MessageSquare } from 'lucide-react';
 
@@ -15,11 +15,11 @@ export const DocumentsView: React.FC = () => {
     projects
   } = useApp();
 
-  const [selectedId, setSelectedId] = useState<string | null>(
+  const [selectedId, setSelectedId] = useTabSessionState<string | null>('documents.selectedRequirement',
     requirementDocs.find(d => d.status === 'awaiting_client')?.id ?? requirementDocs[0]?.id ?? null
   );
   const [showChangeRequest, setShowChangeRequest] = useState(false);
-  const [changeRequest, setChangeRequest] = useState('');
+  const [changeRequest, setChangeRequest] = useTabSessionState<string>('documents.changeRequestDraft', '');
   const doc = requirementDocs.find(d => d.id === selectedId);
   const project = doc?.projectId ? projects.find(p => p.id === doc.projectId) : undefined;
   const canApprove = role === 'client' && can('approve_scope');

@@ -27,7 +27,7 @@ import {
   X
 } from 'lucide-react';
 
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import {
@@ -125,6 +125,8 @@ export const ChatView: React.FC = () => {
     sendChatMessage,
     refreshChatThread,
     isAgentTyping,
+    isActiveTab,
+    activeChatAgentId,
     projects,
     issues,
     activeWorkspace,
@@ -134,17 +136,17 @@ export const ChatView: React.FC = () => {
     showToast
   } = useApp();
 
-  const [input, setInput] = useState('');
-  const [callInstruction, setCallInstruction] = useState('');
+  const [input, setInput] = useTabSessionState<string>('chatDraft', '');
+  const [callInstruction, setCallInstruction] = useTabSessionState<string>('chatCallInstruction', '');
   const [showCallPanel, setShowCallPanel] = useState(false);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
-  const [selectedSquadId, setSelectedSquadId] = useState('');
-  const [selectedAgentId, setSelectedAgentId] = useState('');
-  const [mode, setMode] = useState<AgentCallMode>('ask');
-  const [targetType, setTargetType] = useState<AgentCallTarget['type']>('issue');
-  const [targetId, setTargetId] = useState('');
+  const [selectedSquadId, setSelectedSquadId] = useTabSessionState<string>('chatSelectedSquadId', '');
+  const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string>('chatSelectedAgentId', '');
+  const [mode, setMode] = useTabSessionState<AgentCallMode>('chatCallMode', 'ask');
+  const [targetType, setTargetType] = useTabSessionState<AgentCallTarget['type']>('chatTargetType', 'issue');
+  const [targetId, setTargetId] = useTabSessionState<string>('chatTargetId', '');
   const [calls, setCalls] = useState<Record<string, AgentCall>>({});
   const [busyCallId, setBusyCallId] = useState<string | null>(null);
   const [expandedDiffs, setExpandedDiffs] = useState<Record<string, boolean>>({});
@@ -181,12 +183,15 @@ export const ChatView: React.FC = () => {
   }, [currentMessages, isAgentTyping, highlightedCall?.status]);
 
   useEffect(() => {
+    if (isActiveTab && activeThreadId) setActiveThreadId(activeThreadId);
+  }, [activeThreadId, isActiveTab, setActiveThreadId]);
+
+  useEffect(() => {
+    if (!isActiveTab) return undefined;
     let cancelled = false;
     setSnapshot(null);
     setSnapshotError(null);
     setCalls({});
-    setSelectedAgentId('');
-    setSelectedSquadId('');
     setShowCallPanel(false);
 
     if (isClient || !activeThread?.projectId) return undefined;
@@ -198,11 +203,14 @@ export const ChatView: React.FC = () => {
       if (cancelled) return;
       setSnapshot(nextSnapshot);
       setCalls(Object.fromEntries(nextCalls.calls.map(call => [call.id, call])));
-      const firstSquad = nextSnapshot.squads[0];
-      const firstAgent = firstSquad?.agents[0];
-      setSelectedSquadId(firstSquad?.id ?? '');
+      const preferredSquad = nextSnapshot.squads.find(squad => squad.id === selectedSquadId) ?? nextSnapshot.squads[0];
+      const preferredAgentId = selectedAgentId || activeChatAgentId;
+      const firstAgent = preferredSquad?.agents.find(agent => agent.id === preferredAgentId) ?? preferredSquad?.agents[0];
+      setSelectedSquadId(preferredSquad?.id ?? '');
       setSelectedAgentId(firstAgent?.id ?? '');
-      setMode(firstAgent?.supportedModes.includes('ask') ? 'ask' : firstAgent?.supportedModes[0] ?? 'ask');
+      setMode(current => firstAgent?.supportedModes.includes(current)
+        ? current
+        : firstAgent?.supportedModes.includes('ask') ? 'ask' : firstAgent?.supportedModes[0] ?? 'ask');
     }).catch((error: any) => {
       if (!cancelled) setSnapshotError(error?.message ?? 'Could not load project agents.');
     }).finally(() => {
@@ -210,13 +218,14 @@ export const ChatView: React.FC = () => {
     });
 
     return () => { cancelled = true; };
-  }, [activeThread?.id, activeThread?.projectId, isClient]);
+  }, [activeChatAgentId, activeThread?.id, activeThread?.projectId, isActiveTab, isClient]);
 
   useEffect(() => {
     if (!visibleModes.includes(mode)) setMode(visibleModes[0] ?? 'ask');
   }, [mode, visibleModes]);
 
   useEffect(() => {
+    if (!isActiveTab) return undefined;
     const projectId = activeThread?.projectId;
     const threadId = activeThread?.id;
     if (isClient || !projectId || !threadId) return undefined;
@@ -262,9 +271,10 @@ export const ChatView: React.FC = () => {
     ];
     const unsubscribers = eventNames.map(eventName => runnerSocket.on(eventName, payload => updateFromSocket(payload, eventName)));
     return () => unsubscribers.forEach(unsubscribe => unsubscribe());
-  }, [activeThread?.id, activeThread?.projectId, isClient, refreshChatThread]);
+  }, [activeThread?.id, activeThread?.projectId, isActiveTab, isClient, refreshChatThread]);
 
   useEffect(() => {
+    if (!isActiveTab) return undefined;
     const projectId = activeThread?.projectId;
     const threadId = activeThread?.id;
     if (isClient || !projectId || !threadId || !activeCall) return undefined;
@@ -287,7 +297,7 @@ export const ChatView: React.FC = () => {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [activeCall?.id, activeCall?.status, activeThread?.id, activeThread?.projectId, isClient, refreshChatThread]);
+  }, [activeCall?.id, activeCall?.status, activeThread?.id, activeThread?.projectId, isActiveTab, isClient, refreshChatThread]);
 
   const selectSquad = (squadId: string) => {
     setSelectedSquadId(squadId);

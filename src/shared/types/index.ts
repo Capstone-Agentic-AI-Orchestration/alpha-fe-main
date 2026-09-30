@@ -23,6 +23,8 @@ export interface TabItem {
   projectId?: string;
   /** Optional run context when a tab was opened from a specific execution. */
   buildRunId?: string;
+  /** Serializable view/session state owned by this tab, never shared with peers. */
+  sessionState?: Record<string, unknown>;
 }
 
 export type IssueStatus = 'backlog' | 'todo' | 'in_progress' | 'agent_running' | 'review' | 'done';

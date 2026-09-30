@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
   Cpu, 
   RefreshCw, 
@@ -26,16 +26,16 @@ export const RuntimesView: React.FC = () => {
   const canManageRuntimes = can('manage_runtimes');
   
   // States
-  const [selectedRuntimeId, setSelectedRuntimeId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedRuntimeId, setSelectedRuntimeId] = useTabSessionState<string | null>('runtimes.selectedRuntime', null);
+  const [searchQuery, setSearchQuery] = useTabSessionState<string>('runtimes.search', '');
   
   // Filter & Sort state
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useTabSessionState<string>('runtimes.typeFilter', 'all');
+  const [statusFilter, setStatusFilter] = useTabSessionState<string>('runtimes.statusFilter', 'all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortOrder, setSortOrder] = useTabSessionState<'asc' | 'desc'>('runtimes.sortOrder', 'asc');
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
-  const [sortBy, setSortBy] = useState<'latency' | 'name' | 'models'>('latency');
+  const [sortBy, setSortBy] = useTabSessionState<'latency' | 'name' | 'models'>('runtimes.sortBy', 'latency');
   const [copiedEndpointId, setCopiedEndpointId] = useState<string | null>(null);
 
   // Selected Runtime Memo
