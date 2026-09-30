@@ -12,7 +12,7 @@ import {
   Sparkles,
   Trash2
 } from 'lucide-react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { Modal } from '@/shared/components/Modal';
 
 type PlanningStep = 'draft' | 'approval';
@@ -30,10 +30,11 @@ export const AgentRunModal: React.FC = () => {
     showToast,
     startPrototypeRun
   } = useApp();
-  const [selectedAgentId, setSelectedAgentId] = useState('');
-  const [planItems, setPlanItems] = useState<string[]>([]);
+  const [draftIssueId, setDraftIssueId] = useTabSessionState<string | null>('agentRun.draftIssue', null);
+  const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string>('agentRun.selectedAgent', '');
+  const [planItems, setPlanItems] = useTabSessionState<string[]>('agentRun.planItems', []);
   const [planReady, setPlanReady] = useState(false);
-  const [planningStep, setPlanningStep] = useState<PlanningStep>('draft');
+  const [planningStep, setPlanningStep] = useTabSessionState<PlanningStep>('agentRun.step', 'draft');
 
   const issue = issues.find(item => item.id === runSetupIssueId);
   const project = projects.find(item => item.id === issue?.projectId);
@@ -54,14 +55,17 @@ export const AgentRunModal: React.FC = () => {
 
   useEffect(() => {
     if (!runSetupIssueId) return;
-    const saved = runPlanDrafts[runSetupIssueId];
-    setSelectedAgentId(runSetupAgentId || saved?.agentId || agents[0]?.id || '');
-    setPlanItems(saved?.plan?.length ? saved.plan : generatedPlan);
-    setPlanningStep('draft');
+    if (draftIssueId !== runSetupIssueId) {
+      const saved = runPlanDrafts[runSetupIssueId];
+      setSelectedAgentId(runSetupAgentId || saved?.agentId || agents[0]?.id || '');
+      setPlanItems(saved?.plan?.length ? saved.plan : generatedPlan);
+      setPlanningStep('draft');
+      setDraftIssueId(runSetupIssueId);
+    }
     setPlanReady(false);
     const timer = window.setTimeout(() => setPlanReady(true), 700);
     return () => window.clearTimeout(timer);
-  }, [runSetupIssueId, runSetupAgentId, agents, generatedPlan]);
+  }, [runSetupIssueId, runSetupAgentId, draftIssueId, agents, generatedPlan, runPlanDrafts, setSelectedAgentId, setPlanItems, setPlanningStep, setDraftIssueId]);
 
   if (!issue) return null;
 

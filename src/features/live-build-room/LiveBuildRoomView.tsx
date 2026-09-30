@@ -22,7 +22,7 @@ import {
   Users,
   X
 } from 'lucide-react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import type {
@@ -382,25 +382,25 @@ export const LiveBuildRoomView: React.FC = () => {
     issues,
     role,
     can,
-    activeWorkspaceId,
+    isActiveTab,
     showToast,
     triggerSquadRun,
     setActiveTab,
     setActiveThreadId
   } = useApp();
-  const [selectedProjectId, setSelectedProjectId] = useState('');
+  const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string>('liveBuildProjectId', '');
   const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
-  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
-  const [agentSearch, setAgentSearch] = useState('');
-  const [agentStatusFilter, setAgentStatusFilter] = useState<AgentStatusFilter>('all');
-  const [selectedChatCallId, setSelectedChatCallId] = useState<string | null>(null);
-  const [chatFilter, setChatFilter] = useState('all');
-  const [chatAgentFilter, setChatAgentFilter] = useState('all');
-  const [chatStatusFilter, setChatStatusFilter] = useState('all');
+  const [selectedExecutionId, setSelectedExecutionId] = useTabSessionState<string | null>('liveBuildExecutionId', null);
+  const [agentSearch, setAgentSearch] = useTabSessionState<string>('liveBuildAgentSearch', '');
+  const [agentStatusFilter, setAgentStatusFilter] = useTabSessionState<AgentStatusFilter>('liveBuildAgentStatusFilter', 'all');
+  const [selectedChatCallId, setSelectedChatCallId] = useTabSessionState<string | null>('liveBuildChatCallId', null);
+  const [chatFilter, setChatFilter] = useTabSessionState<string>('liveBuildChatFilter', 'all');
+  const [chatAgentFilter, setChatAgentFilter] = useTabSessionState<string>('liveBuildChatAgentFilter', 'all');
+  const [chatStatusFilter, setChatStatusFilter] = useTabSessionState<string>('liveBuildChatStatusFilter', 'all');
   const [patchPreview, setPatchPreview] = useState<{ callId: string; content: string } | null>(null);
   const [patchBusyCallId, setPatchBusyCallId] = useState<string | null>(null);
-  const [detailTab, setDetailTab] = useState<DetailTab>('activity');
-  const [detailOpen, setDetailOpen] = useState(true);
+  const [detailTab, setDetailTab] = useTabSessionState<DetailTab>('liveBuildDetailTab', 'activity');
+  const [detailOpen, setDetailOpen] = useTabSessionState<boolean>('liveBuildDetailOpen', true);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -410,21 +410,14 @@ export const LiveBuildRoomView: React.FC = () => {
   const refreshTimerRef = useRef<number | null>(null);
 
   const eligibleRole = role !== 'client' && can('view_squads');
-  const storageKey = `live_build_room_project:${activeWorkspaceId || 'default'}`;
 
   useEffect(() => {
     if (!projects.length) {
       setSelectedProjectId('');
       return;
     }
-    const stored = window.localStorage.getItem(storageKey);
-    const next = stored && projects.some(project => project.id === stored) ? stored : projects[0].id;
-    setSelectedProjectId(current => current && projects.some(project => project.id === current) ? current : next);
-  }, [projects, storageKey]);
-
-  useEffect(() => {
-    if (selectedProjectId) window.localStorage.setItem(storageKey, selectedProjectId);
-  }, [selectedProjectId, storageKey]);
+    setSelectedProjectId(current => current && projects.some(project => project.id === current) ? current : projects[0].id);
+  }, [projects, setSelectedProjectId]);
 
   const loadRoom = useCallback(async (silent = false) => {
     if (!selectedProjectId || !eligibleRole) return;
@@ -461,6 +454,7 @@ export const LiveBuildRoomView: React.FC = () => {
   }, [eligibleRole, selectedProjectId]);
 
   useEffect(() => {
+    if (!isActiveTab) return undefined;
     void loadRoom();
     if (!selectedProjectId || !eligibleRole) return;
     const interval = window.setInterval(() => {
@@ -482,7 +476,7 @@ export const LiveBuildRoomView: React.FC = () => {
       refreshTimerRef.current = null;
       unsubs.forEach(unsub => unsub());
     };
-  }, [eligibleRole, loadRoom, selectedProjectId]);
+  }, [eligibleRole, isActiveTab, loadRoom, selectedProjectId]);
 
   /**
    * Join the channels of the runs on screen.
@@ -500,10 +494,11 @@ export const LiveBuildRoomView: React.FC = () => {
   ])].sort().join('|'), [snapshot?.activeRun?.memberRuns, snapshot?.agentCards]);
 
   useEffect(() => {
+    if (!isActiveTab) return undefined;
     const runIds = runStreamKey ? runStreamKey.split('|') : [];
     runIds.forEach(runId => runnerSocket.subscribeToRunStream(runId));
     return () => runIds.forEach(runId => runnerSocket.unsubscribeFromRunStream(runId));
-  }, [runStreamKey]);
+  }, [isActiveTab, runStreamKey]);
 
   const visibleAgentCards = useMemo(() => (snapshot?.agentCards ?? []).filter(card => {
     const matchesStatus = agentStatusFilter === 'all'

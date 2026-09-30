@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
   Terminal, 
   Search, 
@@ -27,17 +27,17 @@ export const SkillsView: React.FC = () => {
   const canManageSkills = can('manage_skills');
   
   // Selected skill for centered popup modal
-  const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
+  const [selectedSkillId, setSelectedSkillId] = useTabSessionState<string | null>('skills.selectedSkill', null);
   
   // Search & Filter state
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [searchQuery, setSearchQuery] = useTabSessionState<string>('skills.search', '');
+  const [selectedCategory, setSelectedCategory] = useTabSessionState<string>('skills.category', 'all');
+  const [statusFilter, setStatusFilter] = useTabSessionState<'all' | 'enabled' | 'disabled'>('skills.statusFilter', 'all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
   
   // Sort state
-  const [sortBy, setSortBy] = useState<'name' | 'category' | 'agents'>('name');
-  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [sortBy, setSortBy] = useTabSessionState<'name' | 'category' | 'agents'>('skills.sortBy', 'name');
+  const [sortOrder, setSortOrder] = useTabSessionState<'asc' | 'desc'>('skills.sortOrder', 'asc');
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
   
   // Copied indicator

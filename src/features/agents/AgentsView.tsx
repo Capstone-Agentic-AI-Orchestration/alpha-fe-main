@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
   Bot, 
   Plus, 
@@ -62,22 +62,22 @@ export const AgentsView: React.FC = () => {
   const canManageAgents = can('manage_agents');
 
   // Selected agent for centered pop-up modal
-  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string | null>('agents.selectedAgent', null);
 
   // Search & Filter state
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [scopeTab, setScopeTab] = useState<'all' | 'mine' | 'archived'>('all');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [accessFilter, setAccessFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useTabSessionState<string>('agents.search', '');
+  const [scopeTab, setScopeTab] = useTabSessionState<'all' | 'mine' | 'archived'>('agents.scope', 'all');
+  const [statusFilter, setStatusFilter] = useTabSessionState<string>('agents.statusFilter', 'all');
+  const [accessFilter, setAccessFilter] = useTabSessionState<string>('agents.accessFilter', 'all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
   
   // Sorting state
-  const [sortBy, setSortBy] = useState<'lastActive' | 'name' | 'runs'>('lastActive');
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [sortBy, setSortBy] = useTabSessionState<'lastActive' | 'name' | 'runs'>('agents.sortBy', 'lastActive');
+  const [sortOrder, setSortOrder] = useTabSessionState<'desc' | 'asc'>('agents.sortOrder', 'desc');
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
 
   // Selection & Modals
-  const [selectedAgentIds, setSelectedAgentIds] = useState<string[]>([]);
+  const [selectedAgentIds, setSelectedAgentIds] = useTabSessionState<string[]>('agents.selectedAgentIds', []);
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [bulkAccessMenuOpen, setBulkAccessMenuOpen] = useState<boolean>(false);
 
@@ -113,7 +113,7 @@ export const AgentsView: React.FC = () => {
   };
 
   // Pop-up Sub-tabs
-  const [profileTab, setProfileTab] = useState<'instructions' | 'persona' | 'skills' | 'env' | 'mcp' | 'history'>('instructions');
+  const [profileTab, setProfileTab] = useTabSessionState<'instructions' | 'persona' | 'skills' | 'env' | 'mcp' | 'history'>('agents.profileTab', 'instructions');
   const [revealedEnvKeys, setRevealedEnvKeys] = useState<Record<string, boolean>>({});
   const [newEnvKey, setNewEnvKey] = useState<string>('');
   const [newEnvValue, setNewEnvValue] = useState<string>('');

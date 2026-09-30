@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IssueStatus, IssuePriority, Issue
 } from '@/shared/types';
 import { StatusBadge, PriorityBadge } from '@/shared/components/Badge';
@@ -85,11 +85,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     role
   } = useApp();
 
+  const sessionPrefix = embedded ? `projectIssues:${lockedProjectId ?? 'project'}` : 'issues';
+
   const canManageIssues = can('manage_issues');
   const canRunAgents = can('run_agents');
   const canRunSquads = can('run_squads');
 
-  const [viewMode, setViewMode] = useState<'board' | 'list'>('list');
+  const [viewMode, setViewMode] = useTabSessionState<'board' | 'list'>(`${sessionPrefix}.viewMode`, 'list');
   /**
    * `mine` is issues you created, which is what My Issues always claimed to be.
    *
@@ -97,11 +99,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
    * which is neither yours nor created by you, and which one click on the All
    * chip undid. Issues now record `createdBy`, so the question is answerable.
    */
-  const [filterCategory, setFilterCategory] = useState<'all' | 'mine' | 'members' | 'agents'>(
+  const [filterCategory, setFilterCategory] = useTabSessionState<'all' | 'mine' | 'members' | 'agents'>(
+    `${sessionPrefix}.filterCategory`,
     onlyMyIssues ? 'mine' : 'all'
   );
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedProject, setSelectedProject] = useState<string>(lockedProjectId ?? 'all');
+  const [searchQuery, setSearchQuery] = useTabSessionState<string>(`${sessionPrefix}.search`, '');
+  const [selectedProject, setSelectedProject] = useTabSessionState<string>(`${sessionPrefix}.project`, lockedProjectId ?? 'all');
 
   /**
    * Follow the lock when the page switches projects.
@@ -116,21 +119,21 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
   /** The column an inline add is open in, or null. */
   const [quickAddStatus, setQuickAddStatus] = useState<IssueStatus | null>(null);
-  const [quickAddTitle, setQuickAddTitle] = useState('');
-  const [selectedPriority, setSelectedPriority] = useState<string>('all');
-  const [selectedAgent, setSelectedAgent] = useState<string>('all');
+  const [quickAddTitle, setQuickAddTitle] = useTabSessionState<string>(`${sessionPrefix}.quickAddTitle`, '');
+  const [selectedPriority, setSelectedPriority] = useTabSessionState<string>(`${sessionPrefix}.priority`, 'all');
+  const [selectedAgent, setSelectedAgent] = useTabSessionState<string>(`${sessionPrefix}.agent`, 'all');
   const [showFilterBar, setShowFilterBar] = useState(false);
   const [draggedIssueId, setDraggedIssueId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<IssueStatus | null>(null);
   const [pendingDoneIssueId, setPendingDoneIssueId] = useState<string | null>(null);
   
   // Collapsed status sections state (Jira style)
-  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const [collapsedSections, setCollapsedSections] = useTabSessionState<Record<string, boolean>>(`${sessionPrefix}.collapsedSections`, {});
 
   // Slide-over drawer state
-  const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
-  const [newSubtaskTitle, setNewSubtaskTitle] = useState('');
-  const [newCommentContent, setNewCommentContent] = useState('');
+  const [selectedIssueId, setSelectedIssueId] = useTabSessionState<string | null>(`${sessionPrefix}.selectedIssue`, null);
+  const [newSubtaskTitle, setNewSubtaskTitle] = useTabSessionState<string>(`${sessionPrefix}.newSubtaskTitle`, '');
+  const [newCommentContent, setNewCommentContent] = useTabSessionState<string>(`${sessionPrefix}.newComment`, '');
 
   const toggleSection = (sectionKey: string) => {
     setCollapsedSections(prev => ({

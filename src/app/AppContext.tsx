@@ -114,8 +114,15 @@ interface AppContextType {
   tabs: TabItem[];
   activeTabId: string;
   setActiveTabId: (id: string) => void;
-  openNewTab: (view?: NavigationTab) => void;
+  openNewTab: (view?: NavigationTab) => string;
   closeTab: (tabId: string) => void;
+  isActiveTab: boolean;
+  setTabView: (tabId: string, view: NavigationTab) => void;
+  setTabSessionState: (
+    tabId: string,
+    key: string,
+    value: unknown | ((current: unknown) => unknown)
+  ) => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   
@@ -220,12 +227,13 @@ interface AppContextType {
   deleteThread: (id: string) => void;
   chatMessages: ChatMessage[];
   isAgentTyping: boolean;
+  chatTypingByThread: Record<string, boolean>;
   activeChatAgentId: string | null;
   setActiveChatAgentId: (id: string | null) => void;
   activeChatSquadId: string | null;
   setActiveChatSquadId: (id: string | null) => void;
-  sendChatMessage: (content: string) => Promise<void>;
-  clearChat: () => void;
+  sendChatMessage: (content: string, threadId?: string | null) => Promise<void>;
+  clearChat: (threadId?: string | null) => void;
   
   // Settings
   settings: WorkspaceSettings;
@@ -443,6 +451,39 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
 const ROLE_TABS = ROLE_NAV;
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+export const TabSessionContext = createContext<{ tabId: string } | null>(null);
+
+const navigationTabs: NavigationTab[] = [
+  'portal', 'intake', 'documents', 'inbox', 'chat', 'issues', 'projects', 'agents',
+  'squads', 'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments',
+  'build_room', 'settings'
+];
+
+function createTabId(): string {
+  const id = globalThis.crypto?.randomUUID?.()
+    ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+  return `tab-${id}`;
+}
+
+function normalizeTabs(saved: unknown, fallback: TabItem): TabItem[] {
+  if (!Array.isArray(saved) || saved.length === 0) return [fallback];
+  const usedIds = new Set<string>();
+  const normalized = saved.flatMap((item: unknown): TabItem[] => {
+    if (!item || typeof item !== 'object') return [];
+    const raw = item as Partial<TabItem>;
+    const view = navigationTabs.includes(raw.view as NavigationTab)
+      ? raw.view as NavigationTab
+      : fallback.view;
+    let id = typeof raw.id === 'string' && raw.id.trim() ? raw.id : createTabId();
+    if (usedIds.has(id)) id = createTabId();
+    usedIds.add(id);
+    const sessionState = raw.sessionState && typeof raw.sessionState === 'object' && !Array.isArray(raw.sessionState)
+      ? raw.sessionState as Record<string, unknown>
+      : {};
+    return [{ ...raw, id, view, sessionState }];
+  });
+  return normalized.length ? normalized : [fallback];
+}
 
 type WorkspaceMemberRecord = {
   id: string;
@@ -688,19 +729,17 @@ ${e.detail}`;
    * an explanation instead of a workspace. Falling through to `pm` there gave
    * an unrecognised member the most powerful role in the product.
    */
-  const initialDefaultTabs: TabItem[] = [{ id: 'tab-default', view: roleTabs[0] }];
+  const initialDefaultTabs: TabItem[] = [{ id: 'tab-default', view: roleTabs[0], sessionState: {} }];
 
   const [tabs, setTabs] = useState<TabItem[]>(() => {
-    const saved = loadFromStorage<TabItem[]>('workspace_tabs_v2', initialDefaultTabs);
-    if (Array.isArray(saved) && saved.length > 0 && saved[0]?.view) {
-      return saved;
-    }
-    return initialDefaultTabs;
+    const savedCurrent = loadFromStorage<unknown>('workspace_tabs_v3', null);
+    const savedLegacy = loadFromStorage<unknown>('workspace_tabs_v2', null);
+    return normalizeTabs(savedCurrent ?? savedLegacy, initialDefaultTabs[0]);
   });
 
   const [activeTabId, setActiveTabId] = useState<string>(() => {
-    const saved = loadFromStorage<string>('active_tab_id_v2', 'tab-default');
-    return saved || 'tab-default';
+    const saved = loadFromStorage<string>('active_tab_id_v3', loadFromStorage<string>('active_tab_id_v2', 'tab-default'));
+    return tabs.some(tab => tab.id === saved) ? saved : tabs[0].id;
   });
 
   // Calculate current active tab view.
@@ -711,38 +750,49 @@ ${e.detail}`;
   const requestedTab: NavigationTab = currentTab ? currentTab.view : roleTabs[0];
   const activeTab: NavigationTab = roleTabs.includes(requestedTab) ? requestedTab : roleTabs[0];
 
-  // When clicking any section / sidebar / command:
-  // It navigates inside the CURRENT active tab without creating a new tab!
-  const setActiveTab = (view: NavigationTab) => {
+  const setTabView = useCallback<AppContextType['setTabView']>((tabId, view) => {
     setTabs(prev => {
-      if (prev.length === 0) {
-        const newTab: TabItem = { id: `tab-${Date.now()}`, view };
-        setActiveTabId(newTab.id);
-        return [newTab];
-      }
-      return prev.map(tab => {
-        if (tab.id === activeTabId || (prev.length === 1)) {
-          return { ...tab, view };
-        }
-        return tab;
-      });
+      if (!prev.some(tab => tab.id === tabId)) return prev;
+      return prev.map(tab => tab.id === tabId ? { ...tab, view } : tab);
     });
-  };
+  }, []);
+
+  // Sidebar and in-page navigation replace the destination in that tab only.
+  const setActiveTab = (view: NavigationTab) => setTabView(activeTabId, view);
+
+  const setTabSessionState = useCallback<AppContextType['setTabSessionState']>((tabId, key, value) => {
+    setTabs(prev => {
+      let changed = false;
+      const nextTabs = prev.map(tab => {
+        if (tab.id !== tabId) return tab;
+        const sessionState = tab.sessionState ?? {};
+        const current = sessionState[key];
+        const next = typeof value === 'function'
+          ? (value as (current: unknown) => unknown)(current)
+          : value;
+        if (Object.is(current, next)) return tab;
+        changed = true;
+        return { ...tab, sessionState: { ...sessionState, [key]: next } };
+      });
+      return changed ? nextTabs : prev;
+    });
+  }, []);
 
   // Only when user presses + (and selects a destination):
   // Creates a brand new tab and activates it!
   const openNewTab = (view: NavigationTab = roleTabs[0]) => {
-    const newTabId = `tab-${Date.now()}`;
-    const newTab: TabItem = { id: newTabId, view };
+    const newTabId = createTabId();
+    const newTab: TabItem = { id: newTabId, view, sessionState: {} };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTabId);
+    return newTabId;
   };
 
   const closeTab = (tabIdToClose: string) => {
     setTabs(prev => {
       const filtered = prev.filter(t => t.id !== tabIdToClose);
       if (filtered.length === 0) {
-        const fallbackTab: TabItem = { id: `tab-${Date.now()}`, view: roleTabs[0] };
+        const fallbackTab: TabItem = { id: createTabId(), view: roleTabs[0], sessionState: {} };
         setActiveTabId(fallbackTab.id);
         return [fallbackTab];
       }
@@ -819,7 +869,8 @@ ${e.detail}`;
   );
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
   const [isScanningSkills, setIsScanningSkills] = useState(false);
-  const [isAgentTyping, setIsAgentTyping] = useState(false);
+  const [chatTypingByThread, setChatTypingByThread] = useState<Record<string, boolean>>({});
+  const isAgentTyping = activeThreadId ? Boolean(chatTypingByThread[activeThreadId]) : false;
   const [activeChatAgentId, setActiveChatAgentId] = useState<string | null>(null);
   const [activeChatSquadId, setActiveChatSquadId] = useState<string | null>(null);
 
@@ -1057,8 +1108,8 @@ ${e.detail}`;
 
   // Sync to local storage
   useEffect(() => { saveToStorage('active_workspace_id', activeWorkspaceId); }, [activeWorkspaceId]);
-  useEffect(() => { saveToStorage('workspace_tabs_v2', tabs); }, [tabs]);
-  useEffect(() => { saveToStorage('active_tab_id_v2', activeTabId); }, [activeTabId]);
+  useEffect(() => { saveToStorage('workspace_tabs_v3', tabs); }, [tabs]);
+  useEffect(() => { saveToStorage('active_tab_id_v3', activeTabId); }, [activeTabId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('issues'), issues); }, [issues, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('projects'), projects); }, [projects, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('agents'), agents); }, [agents, activeWorkspaceId]);
@@ -1209,8 +1260,8 @@ ${e.detail}`;
         setAnalytics(normalizeAnalytics(snapshot.analytics));
       }
       setServerStatus('online');
-      const nextTabId = `tab-${Date.now()}`;
-      setTabs([{ id: nextTabId, view: ROLE_TABS[target.role][0] }]);
+      const nextTabId = createTabId();
+      setTabs([{ id: nextTabId, view: ROLE_TABS[target.role][0], sessionState: {} }]);
       setActiveTabId(nextTabId);
       showToast('Workspace switched', `Now viewing ${target.name}.`, 'success');
     } catch (error) {
@@ -2837,9 +2888,9 @@ ${e.detail}`;
     );
   };
 
-  const sendChatMessage = async (content: string) => {
+  const sendChatMessage = async (content: string, threadIdOverride?: string | null) => {
     if (!requireCapability('manage_chat')) return;
-    let targetThreadId = activeThreadId;
+    let targetThreadId = threadIdOverride ?? activeThreadId;
     if (!targetThreadId) {
       targetThreadId = createNewThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
     }
@@ -2890,7 +2941,7 @@ ${e.detail}`;
       return;
     }
 
-    setIsAgentTyping(true);
+    setChatTypingByThread(prev => ({ ...prev, [targetThreadId!]: true }));
 
     /**
      * Who will answer is decided by the daemon, from the @mentions in this
@@ -3040,14 +3091,19 @@ ${e.detail}`;
 
       setChatMessages(prev => prev.map(m => m.id === streamingMsgId ? fallbackMsg : m));
     } finally {
-      setIsAgentTyping(false);
+      setChatTypingByThread(prev => {
+        if (!prev[targetThreadId!]) return prev;
+        const next = { ...prev };
+        delete next[targetThreadId!];
+        return next;
+      });
     }
 
   };
 
-  const clearChat = () => {
+  const clearChat = (threadIdOverride?: string | null) => {
     if (!requireCapability('manage_chat')) return;
-    const id = activeThreadId;
+    const id = threadIdOverride ?? activeThreadId;
     if (!id) return;
 
     const previous = chatThreads.find(t => t.id === id)?.messages;
@@ -3547,6 +3603,9 @@ ${e.detail}`;
       setActiveTabId,
       openNewTab,
       closeTab,
+      isActiveTab: true,
+      setTabView,
+      setTabSessionState,
       commandPaletteOpen,
       setCommandPaletteOpen,
       issues: scopedIssues,
@@ -3634,6 +3693,7 @@ ${e.detail}`;
       deleteThread,
       chatMessages,
       isAgentTyping,
+      chatTypingByThread,
       activeChatAgentId,
       setActiveChatAgentId,
       activeChatSquadId,
@@ -3674,8 +3734,102 @@ ${e.detail}`;
 
 export const useApp = () => {
   const context = useContext(AppContext);
+  const tabSession = useContext(TabSessionContext);
   if (!context) {
     throw new Error('useApp must be used within an AppProvider');
   }
-  return context;
+
+  if (!tabSession) return context;
+  const tab = context.tabs.find(item => item.id === tabSession.tabId);
+  if (!tab) return context;
+
+  const visibleView = context.visibleTabs.includes(tab.view) ? tab.view : context.visibleTabs[0];
+  const sessionState = tab.sessionState ?? {};
+  const selectedThread = sessionState.activeThreadId;
+  const activeThreadId = typeof selectedThread === 'string'
+    && context.chatThreads.some(thread => thread.id === selectedThread)
+    ? selectedThread
+    : null;
+  const setSessionValue = (key: string, value: unknown) =>
+    context.setTabSessionState(tab.id, key, value);
+  const createScopedThread = (title?: string, projectId?: string) => {
+    const id = context.createNewThread(title, projectId);
+    if (id) setSessionValue('activeThreadId', id);
+    return id;
+  };
+
+  return {
+    ...context,
+    activeTab: visibleView,
+    activeTabId: tab.id,
+    isActiveTab: context.activeTabId === tab.id,
+    setActiveTab: (view: NavigationTab) => context.setTabView(tab.id, view),
+    runSetupIssueId: typeof sessionState.runSetupIssueId === 'string' ? sessionState.runSetupIssueId : null,
+    runSetupAgentId: typeof sessionState.runSetupAgentId === 'string' ? sessionState.runSetupAgentId : null,
+    runAgentOnIssue: (issueId: string, agentId?: string) => {
+      context.runAgentOnIssue(issueId, agentId);
+      const targetIssue = context.issues.find(issue => issue.id === issueId);
+      const alreadyRunning = context.prototypeRuns.some(run =>
+        run.issueId === issueId && ['queued', 'running', 'awaiting_approval', 'validating'].includes(run.status)
+      );
+      if (targetIssue && context.can('run_agents') && !alreadyRunning) {
+        const chosenAgentId = agentId || context.runPlanDrafts[issueId]?.agentId || targetIssue.assignedAgentId || context.agents[0]?.id;
+        setSessionValue('runSetupIssueId', issueId);
+        setSessionValue('runSetupAgentId', chosenAgentId ?? null);
+      }
+    },
+    closeRunSetup: () => {
+      context.closeRunSetup();
+      setSessionValue('runSetupIssueId', null);
+      setSessionValue('runSetupAgentId', null);
+    },
+    startPrototypeRun: (issueId: string, agentId: string, plan: string[], scenario: PrototypeRun['scenario']) => {
+      const run = context.startPrototypeRun(issueId, agentId, plan, scenario);
+      if (run) {
+        setSessionValue('runSetupIssueId', null);
+        setSessionValue('runSetupAgentId', null);
+      }
+      return run;
+    },
+    setActiveThreadId: (id: string | null) => {
+      context.setActiveThreadId(id);
+      setSessionValue('activeThreadId', id);
+    },
+    createNewThread: createScopedThread,
+    sendChatMessage: async (content: string) => {
+      let threadId = activeThreadId;
+      if (!threadId) threadId = createScopedThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
+      if (threadId) await context.sendChatMessage(content, threadId);
+    },
+    clearChat: () => context.clearChat(activeThreadId),
+    chatMessages: activeThreadId
+      ? context.chatThreads.find(thread => thread.id === activeThreadId)?.messages ?? []
+      : [],
+    isAgentTyping: activeThreadId ? Boolean(context.chatTypingByThread[activeThreadId]) : false,
+    activeChatAgentId: typeof sessionState.activeChatAgentId === 'string' ? sessionState.activeChatAgentId : null,
+    setActiveChatAgentId: (id: string | null) => setSessionValue('activeChatAgentId', id),
+    activeChatSquadId: typeof sessionState.activeChatSquadId === 'string' ? sessionState.activeChatSquadId : null,
+    setActiveChatSquadId: (id: string | null) => setSessionValue('activeChatSquadId', id)
+  };
 };
+
+export function useTabSessionState<T>(
+  key: string,
+  initialValue: T | (() => T)
+): [T, React.Dispatch<React.SetStateAction<T>>] {
+  const app = useApp();
+  const tabSession = useContext(TabSessionContext);
+  const tabId = tabSession?.tabId ?? app.activeTabId;
+  const tab = app.tabs.find(item => item.id === tabId);
+  const hasStoredValue = Boolean(tab?.sessionState && Object.prototype.hasOwnProperty.call(tab.sessionState, key));
+  const fallback = typeof initialValue === 'function' ? (initialValue as () => T)() : initialValue;
+  const value = hasStoredValue ? tab!.sessionState![key] as T : fallback;
+
+  const setValue = useCallback<React.Dispatch<React.SetStateAction<T>>>(next => {
+    app.setTabSessionState(tabId, key, (current: unknown) =>
+      typeof next === 'function' ? (next as (previous: T) => T)(current as T) : next
+    );
+  }, [app.setTabSessionState, key, tabId]);
+
+  return [value, setValue];
+}

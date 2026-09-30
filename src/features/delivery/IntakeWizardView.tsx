@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IntakeAnswers, IssuePriority } from '@/shared/types';
 import { SectionLabel } from '@/features/delivery/Ledger';
 import { ArrowLeft, ArrowRight, Check, Plus, X, Paperclip, Loader2 } from 'lucide-react';
@@ -48,8 +48,8 @@ const field =
 export const IntakeWizardView: React.FC = () => {
   const { submitIntake, setActiveTab } = useApp();
 
-  const [step, setStep] = useState(1);
-  const [a, setA] = useState<IntakeAnswers>(EMPTY);
+  const [step, setStep] = useTabSessionState<number>('intake.step', 1);
+  const [a, setA] = useTabSessionState<IntakeAnswers>('intake.answers', () => ({ ...EMPTY, capabilities: [...EMPTY.capabilities], concerns: [...EMPTY.concerns], attachments: [...EMPTY.attachments] }));
   const [submitting, setSubmitting] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
   Key, 
   Server, 
@@ -23,7 +23,7 @@ export const SettingsView: React.FC = () => {
   const { settings, updateSettings, role, can } = useApp();
   const canManageSettings = can('manage_settings');
   const canManageMcp = can('manage_mcp');
-  const [requestedTab, setActiveTab] = useState<'general' | 'members' | 'project_access' | 'integrations' | 'keys' | 'runtimes' | 'autonomy'>('general');
+  const [requestedTab, setActiveTab] = useTabSessionState<'general' | 'members' | 'project_access' | 'integrations' | 'keys' | 'runtimes' | 'autonomy'>('settings.section', 'general');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
 

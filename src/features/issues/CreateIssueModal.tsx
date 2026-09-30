@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IssuePriority, IssueStatus } from '@/shared/types';
 import { 
   X, 
@@ -48,20 +48,20 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   const { createIssue, projects, agents, squads } = useApp();
 
   // Mode: 'agent' (Create with agent) vs 'manual' (Create manually)
-  const [mode, setMode] = useState<'agent' | 'manual'>('agent');
+  const [mode, setMode] = useTabSessionState<'agent' | 'manual'>('issueModal.mode', 'agent');
   const [createAnother, setCreateAnother] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Common fields
-  const [promptText, setPromptText] = useState(initialPrompt ?? '');
-  const [title, setTitle] = useState(initialTitle ?? '');
-  const [description, setDescription] = useState(initialDescription ?? '');
-  const [selectedProjectId, setSelectedProjectId] = useState(initialProjectId || projects[0]?.id || 'proj-1');
-  const [selectedSquadId, setSelectedSquadId] = useState(initialAssignedSquadId || '');
-  const [selectedAgentId, setSelectedAgentId] = useState(initialAssignedSquadId ? '' : (initialAssignedAgentId || agents[1]?.id || agents[0]?.id || ''));
-  const [status, setStatus] = useState<IssueStatus>('todo');
-  const [priority, setPriority] = useState<IssuePriority>('none');
-  const [selectedLabels, setSelectedLabels] = useState<string[]>([]);
+  const [promptText, setPromptText] = useTabSessionState<string>('issueModal.prompt', initialPrompt ?? '');
+  const [title, setTitle] = useTabSessionState<string>('issueModal.title', initialTitle ?? '');
+  const [description, setDescription] = useTabSessionState<string>('issueModal.description', initialDescription ?? '');
+  const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string>('issueModal.project', initialProjectId || projects[0]?.id || 'proj-1');
+  const [selectedSquadId, setSelectedSquadId] = useTabSessionState<string>('issueModal.squad', initialAssignedSquadId || '');
+  const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string>('issueModal.agent', initialAssignedSquadId ? '' : (initialAssignedAgentId || agents[1]?.id || agents[0]?.id || ''));
+  const [status, setStatus] = useTabSessionState<IssueStatus>('issueModal.status', 'todo');
+  const [priority, setPriority] = useTabSessionState<IssuePriority>('issueModal.priority', 'none');
+  const [selectedLabels, setSelectedLabels] = useTabSessionState<string[]>('issueModal.labels', []);
 
   // The modal is mounted before the daemon hydrates its collections. If the
   // hydrated rows use different ids than the local fallback values, move the

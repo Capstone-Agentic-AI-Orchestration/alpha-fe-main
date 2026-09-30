@@ -9,7 +9,7 @@ import { DeveloperGateway } from '@/features/onboarding/DeveloperGateway';
 import { ConnectingScreen } from '@/features/onboarding/ConnectingScreen';
 import { apiService } from '@/shared/services/apiService';
 import { API_BASE } from '@/shared/config';
-import { useApp } from '@/app/AppContext';
+import { TabSessionContext, useApp, useTabSessionState } from '@/app/AppContext';
 import { Sidebar } from '@/shared/layout/Sidebar';
 import { CommandPalette } from '@/shared/components/CommandPalette';
 import { CreateIssueModal } from '@/features/issues/CreateIssueModal';
@@ -46,6 +46,38 @@ import { isDesktop } from '@/shared/desktop';
  */
 const ALL_TABS = NAV_ITEMS;
 
+const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
+  const [createIssueOpen, setCreateIssueOpen] = useTabSessionState<boolean>('issueModal.open', false);
+  const { isActiveTab, runSetupIssueId } = useApp();
+  const onOpenNewIssue = () => setCreateIssueOpen(true);
+  let content: React.ReactNode;
+  switch (view) {
+    case 'portal': content = <ClientPortalView />; break;
+    case 'intake': content = <IntakeWizardView />; break;
+    case 'documents': content = <DocumentsView />; break;
+    case 'inbox': content = <InboxView />; break;
+    case 'chat': content = <ChatView />; break;
+    case 'issues': content = <IssuesView onOpenNewIssue={onOpenNewIssue} />; break;
+    case 'projects': content = <ProjectsView onOpenNewIssue={onOpenNewIssue} />; break;
+    case 'agents': content = <AgentsView />; break;
+    case 'squads': content = <SquadsView />; break;
+    case 'live_build_room': content = <LiveBuildRoomView />; break;
+    case 'analytics': content = <AnalyticsView />; break;
+    case 'runtimes': content = <RuntimesView />; break;
+    case 'skills': content = <SkillsView />; break;
+    case 'deployments': content = <DeploymentsView />; break;
+    case 'settings': content = <SettingsView />; break;
+    default: content = null;
+  }
+  return (
+    <>
+      {content}
+      {isActiveTab && createIssueOpen && <CreateIssueModal isOpen onClose={() => setCreateIssueOpen(false)} />}
+      {isActiveTab && runSetupIssueId && <AgentRunModal />}
+    </>
+  );
+};
+
 
 /**
  * Why a sign-in attempt bounced back, from the fragment the daemon redirects
@@ -68,7 +100,9 @@ function consumeSignInError(): SignInError | undefined {
 const desktopDownloadUrl = `${API_BASE}/download/desktop`;
 
 export const App: React.FC = () => {
-  const { activeTab, tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role,
+  const {
+    tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role, setTabSessionState,
+    projects, chatThreads, issues, agents, squads, runtimes, skills, deployments, requirementDocs,
     identity,
     identityStatus,
     refreshIdentity,
@@ -76,12 +110,69 @@ export const App: React.FC = () => {
     continueInLocalMode
   } = useApp();
   const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
+  const [mountedTabIds, setMountedTabIds] = useState<Set<string>>(() => new Set([activeTabId]));
+
+  useEffect(() => {
+    setMountedTabIds(previous => previous.has(activeTabId)
+      ? previous
+      : new Set(previous).add(activeTabId));
+  }, [activeTabId]);
+
+  const activateTab = (tabId: string) => {
+    setMountedTabIds(previous => previous.has(tabId) ? previous : new Set(previous).add(tabId));
+    setActiveTabId(tabId);
+  };
+
+  const closeWorkspaceTab = (tabId: string) => {
+    setMountedTabIds(previous => {
+      const next = new Set(previous);
+      next.delete(tabId);
+      return next;
+    });
+    closeTab(tabId);
+  };
 
 
   // A tab persisted under a different role must not keep its old label in the
   // strip; resolve it the same way the context resolves the rendered view.
   const resolveView = (view: NavigationTab): NavigationTab =>
     visibleTabs.includes(view) ? view : visibleTabs[0];
+  const getTabContextTitle = (tab: (typeof tabs)[number]) => {
+    const view = resolveView(tab.view);
+    const session = tab.sessionState ?? {};
+    const projectTitle = (id: unknown) => typeof id === 'string'
+      ? projects.find(item => item.id === id)?.name
+      : undefined;
+    const contextualTitle = (label: string | undefined) => label ? `${getTabTitle(view)} · ${label}` : getTabTitle(view);
+
+    if (view === 'live_build_room') {
+      return contextualTitle(projectTitle(session.liveBuildProjectId));
+    }
+    if (view === 'chat') {
+      const threadId = session.activeThreadId;
+      const thread = typeof threadId === 'string' ? chatThreads.find(item => item.id === threadId) : undefined;
+      return contextualTitle(thread?.title);
+    }
+    if (view === 'projects') return contextualTitle(projectTitle(session['projects.selectedProject']));
+    if (view === 'issues') {
+      const selectedIssue = issues.find(item => item.id === session['issues.selectedIssue']);
+      return contextualTitle(selectedIssue?.identifier ?? projectTitle(session['issues.project']));
+    }
+    if (view === 'agents') return contextualTitle(agents.find(item => item.id === session['agents.selectedAgent'])?.name);
+    if (view === 'squads') return contextualTitle(squads.find(item => item.id === session['squads.selectedSquad'])?.name);
+    if (view === 'runtimes') return contextualTitle(runtimes.find(item => item.id === session['runtimes.selectedRuntime'])?.name);
+    if (view === 'skills') return contextualTitle(skills.find(item => item.id === session['skills.selectedSkill'])?.name);
+    if (view === 'deployments') return contextualTitle(deployments.find(item => item.id === session['deployments.selectedDeployment'])?.name);
+    if (view === 'documents') {
+      const doc = requirementDocs.find(item => item.id === session['documents.selectedRequirement']);
+      return contextualTitle(doc?.title);
+    }
+    if (view === 'intake') {
+      const answers = session['intake.answers'] as { title?: unknown } | undefined;
+      return contextualTitle(typeof answers?.title === 'string' ? answers.title.trim() : undefined);
+    }
+    return getTabTitle(view);
+  };
   // Read once on mount: the fragment is cleared as it is read, so deriving
   // this during render would lose it on the first re-render.
   const [signInError] = useState<SignInError | undefined>(consumeSignInError);
@@ -103,7 +194,6 @@ export const App: React.FC = () => {
       window.location.reload();
     }
   };
-  const [createIssueOpen, setCreateIssueOpen] = useState(false);
   // Start in the compact rail. The sidebar reveals itself on pointer hover or
   // keyboard focus, and users can pin it open from the rail's control.
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -307,7 +397,7 @@ export const App: React.FC = () => {
       <Sidebar 
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
-        onOpenNewIssue={() => setCreateIssueOpen(true)}
+        onOpenNewIssue={() => setTabSessionState(activeTabId, 'issueModal.open', true)}
         onSignOut={signOut}
         onSwitchProfile={isDesktop ? () => setProfilePickerOpen(true) : undefined}
       />
@@ -325,26 +415,27 @@ export const App: React.FC = () => {
             >
             {tabs.map((tab) => {
               const isActive = activeTabId === tab.id;
+              const title = getTabContextTitle(tab);
               return (
                 <div
                   key={tab.id}
-                  onClick={() => setActiveTabId(tab.id)}
+                  onClick={() => activateTab(tab.id)}
                   onKeyDown={(event) => {
                     if (event.key === 'Enter' || event.key === ' ') {
                       event.preventDefault();
-                      setActiveTabId(tab.id);
+                      activateTab(tab.id);
                     }
                   }}
                   onMouseDown={(e) => {
                     if (e.button === 1) {
                       e.preventDefault();
-                      closeTab(tab.id);
+                      closeWorkspaceTab(tab.id);
                     }
                   }}
                   role="tab"
                   aria-selected={isActive}
                   tabIndex={isActive ? 0 : -1}
-                  title={getTabTitle(resolveView(tab.view))}
+                  title={title}
                   className={`group flex h-9 min-w-[112px] max-w-[220px] cursor-pointer select-none items-center gap-2 rounded-xl border px-3 text-xs font-medium transition-all ${
                     isActive
                       ? 'border-brand-400/30 bg-brand-500/15 text-white shadow-sm'
@@ -354,16 +445,16 @@ export const App: React.FC = () => {
                   <span className={`flex-shrink-0 ${isActive ? 'text-brand-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
                     {getTabIcon(resolveView(tab.view))}
                   </span>
-                  <span className="truncate flex-1 text-left">{getTabTitle(resolveView(tab.view))}</span>
+                  <span className="truncate flex-1 text-left">{title}</span>
                   {tabs.length > 1 && (
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        closeTab(tab.id);
+                        closeWorkspaceTab(tab.id);
                       }}
                       className="rounded-md p-1 text-gray-500 opacity-0 transition-all hover:bg-white/10 hover:text-white focus:opacity-100 group-hover:opacity-100"
                       title="Close tab"
-                      aria-label={`Close ${getTabTitle(resolveView(tab.view))} tab`}
+                      aria-label={`Close ${title} tab`}
                     >
                       <X className="w-3 h-3" />
                     </button>
@@ -416,7 +507,8 @@ export const App: React.FC = () => {
                         key={item.id}
                         role="menuitem"
                         onClick={() => {
-                          openNewTab(item.id);
+                          const tabId = openNewTab(item.id);
+                          setMountedTabIds(previous => new Set(previous).add(tabId));
                           setNewTabMenuOpen(false);
                         }}
                         className="flex w-full items-center justify-between rounded-xl p-2 text-left text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
@@ -447,34 +539,29 @@ export const App: React.FC = () => {
 
         {/* Dynamic View Content */}
         <main className="relative h-full overflow-hidden pt-16 sm:pt-20">
-          {activeTab === 'portal' && <ClientPortalView />}
-          {activeTab === 'intake' && <IntakeWizardView />}
-          {activeTab === 'documents' && <DocumentsView />}
-          {activeTab === 'inbox' && <InboxView />}
-          {activeTab === 'chat' && <ChatView />}
-          {activeTab === 'issues' && <IssuesView onOpenNewIssue={() => setCreateIssueOpen(true)} />}
-          {activeTab === 'projects' && <ProjectsView onOpenNewIssue={() => setCreateIssueOpen(true)} />}
-          {activeTab === 'agents' && <AgentsView />}
-          {activeTab === 'squads' && <SquadsView />}
-          {activeTab === 'live_build_room' && <LiveBuildRoomView />}
-          {activeTab === 'analytics' && <AnalyticsView />}
-          {activeTab === 'runtimes' && <RuntimesView />}
-          {activeTab === 'skills' && <SkillsView />}
-          {activeTab === 'deployments' && <DeploymentsView />}
-          {activeTab === 'settings' && <SettingsView />}
+          {tabs.filter(tab => mountedTabIds.has(tab.id)).map(tab => {
+            const view = resolveView(tab.view);
+            const isActive = activeTabId === tab.id;
+            return (
+              <div
+                key={tab.id}
+                role="tabpanel"
+                aria-label={getTabContextTitle(tab)}
+                hidden={!isActive}
+                className="h-full min-h-0"
+              >
+                <TabSessionContext.Provider value={{ tabId: tab.id }}>
+                  <WorkspaceTabView view={view} />
+                </TabSessionContext.Provider>
+              </div>
+            );
+          })}
         </main>
       </div>
 
       {/* Global ⌘K Command Palette */}
       <CommandPalette />
 
-      {/* Create issue */}
-      <CreateIssueModal
-        isOpen={createIssueOpen}
-        onClose={() => setCreateIssueOpen(false)}
-      />
-
-      <AgentRunModal />
       <PrototypeGuide />
       <ToastRegion />
       {isDesktop && profilePickerOpen && (

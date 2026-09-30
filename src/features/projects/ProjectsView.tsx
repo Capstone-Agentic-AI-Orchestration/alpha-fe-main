@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
   Plus, 
   Folder,
@@ -56,7 +56,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const canManageIssues = can('manage_issues');
   
   // Selected Project for dedicated Workspace Kanban View
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string | null>('projects.selectedProject', null);
   
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
@@ -64,24 +64,24 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const [resourcesModalOpen, setResourcesModalOpen] = useState<boolean>(false);
 
   // Search & Filters on main list
-  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useTabSessionState<string>('projects.search', '');
   /**
    * Mine, or the whole workspace.
    *
    * The API returns only projects created by active PMs. This switch separates
    * assigned work from the wider PM-owned workspace catalogue.
    */
-  const [scope, setScope] = useState<'mine' | 'all'>('mine');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [scope, setScope] = useTabSessionState<'mine' | 'all'>('projects.scope', 'mine');
+  const [statusFilter, setStatusFilter] = useTabSessionState<string>('projects.statusFilter', 'all');
+  const [priorityFilter, setPriorityFilter] = useTabSessionState<string>('projects.priorityFilter', 'all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [sortOrder, setSortOrder] = useTabSessionState<'desc' | 'asc'>('projects.sortOrder', 'desc');
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
-  const [sortBy, setSortBy] = useState<'createdAt' | 'name' | 'progress' | 'targetDate'>('createdAt');
+  const [sortBy, setSortBy] = useTabSessionState<'createdAt' | 'name' | 'progress' | 'targetDate'>('projects.sortBy', 'createdAt');
 
   // Workspace board view state
-  const [boardViewMode, setBoardViewMode] = useState<'kanban' | 'list' | 'repository'>('kanban');
-  const [boardSearchQuery, setBoardSearchQuery] = useState<string>('');
+  const [boardViewMode, setBoardViewMode] = useTabSessionState<'kanban' | 'list' | 'repository'>('projects.boardView', 'kanban');
+  const [boardSearchQuery, setBoardSearchQuery] = useTabSessionState<string>('projects.boardSearch', '');
 
   // Selected project memo
   const selectedProject = useMemo(() => {
