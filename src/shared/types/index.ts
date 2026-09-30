@@ -531,6 +531,17 @@ export interface CheckoutStatus {
   tracking?: string;
 }
 
+/** `GET /projects/:id/checkouts`: one of the project's repositories, and this machine's checkout of it. */
+export interface RepositoryCheckout {
+  /** `owner/name`. */
+  repo: string;
+  /** Null when this machine does not have it. */
+  localDir: string | null;
+  /** Cloned by Alpha, rather than a folder someone linked. */
+  managed: boolean;
+  status: CheckoutStatus | null;
+}
+
 export interface Project {
   /**
    * Whether this project is the caller's own work.
@@ -1303,6 +1314,9 @@ export interface ProjectChatSnapshot {
     workingCopy: {
       status: 'connected' | 'not_connected';
       managed: boolean;
+      /** The project's repositories, and how many of them this machine has. Absent from an older daemon. */
+      repositories?: number;
+      onMachine?: number;
     };
     assignedSquadNames: string[];
   };
