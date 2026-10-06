@@ -1042,8 +1042,10 @@ export interface RuntimeEngine {
   account?: {
     email?: string;
     org?: string;
-    billing?: 'subscription' | 'api';
+    authMethod?: string;
+    billing?: 'subscription' | 'api' | 'account' | 'unknown';
     plan?: string;
+    note?: string;
   };
   vramUsageGb?: number;
   vramTotalGb?: number;

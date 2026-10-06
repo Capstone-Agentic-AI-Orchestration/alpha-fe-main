@@ -21,6 +21,18 @@ import { RuntimeEngine, RuntimeStatus } from '@/shared/types';
 const runtimeModels = (runtime: RuntimeEngine): string[] =>
   runtime.models?.length ? runtime.models : runtime.modelsLoaded ?? [];
 
+type RuntimeBilling = NonNullable<RuntimeEngine['account']>['billing'];
+
+const billingLabel = (billing: RuntimeBilling) => {
+  switch (billing) {
+    case 'subscription': return 'Subscription';
+    case 'api': return 'API usage';
+    case 'account': return 'Account-based access';
+    case 'unknown': return 'Unknown';
+    default: return undefined;
+  }
+};
+
 export const RuntimesView: React.FC = () => {
   const { runtimes, scanLocalRuntimes, isScanningRuntimes, setDefaultRuntime, can } = useApp();
   const canManageRuntimes = can('manage_runtimes');
@@ -271,7 +283,7 @@ export const RuntimesView: React.FC = () => {
       <div className="w-full">
         {/* Table Column Headers */}
         <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-gray-500 border-b border-white/[0.04]">
-          <div className="col-span-4">Engine & Endpoint</div>
+          <div className="col-span-4">Engine & Account</div>
           <div className="col-span-2">Type</div>
           <div className="col-span-2">Status</div>
           <div className="col-span-2">Loaded Models</div>
@@ -292,7 +304,7 @@ export const RuntimesView: React.FC = () => {
                   selectedRuntimeId === rt.id ? 'bg-white/[0.04]' : ''
                 }`}
               >
-                {/* 1. Engine Name & Endpoint */}
+                {/* 1. Engine Name & Account */}
                 <div className="col-span-4 min-w-0 space-y-0.5">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-white truncate group-hover:text-gray-200">
@@ -302,9 +314,19 @@ export const RuntimesView: React.FC = () => {
                       {rt.provider}
                     </span>
                   </div>
-                  <div className="text-[11px] text-gray-500 font-mono truncate">
-                    {rt.endpoint}
+                  <div className="text-[11px] text-gray-400 truncate">
+                    {rt.account
+                      ? [
+                          rt.account.authMethod || rt.account.email || 'Account detected',
+                          rt.account.plan || (rt.account.billing === 'account'
+                            ? 'Plan not reported'
+                            : billingLabel(rt.account.billing))
+                        ].filter(Boolean).join(' · ')
+                      : rt.endpoint || 'Local CLI process'}
                   </div>
+                  {rt.account && rt.endpoint && (
+                    <div className="text-[10px] text-gray-600 font-mono truncate">{rt.endpoint}</div>
+                  )}
                 </div>
 
                 {/* 2. Type Badge */}
@@ -406,22 +428,62 @@ export const RuntimesView: React.FC = () => {
           {/* Drawer Body */}
           <div className="flex-1 overflow-y-auto p-5 space-y-6 text-xs text-gray-300">
             
-            {/* Endpoint Connection Block */}
+            {/* Runtime connection */}
             <div className="p-3.5 rounded-xl bg-surface border border-white/5 space-y-2">
               <div className="flex items-center justify-between text-[11px] text-gray-400">
-                <span>Inference API Endpoint</span>
-                <button
-                  onClick={() => handleCopyEndpoint(selectedRuntime.endpoint || '', selectedRuntime.id)}
-                  className="flex items-center gap-1 text-gray-400 hover:text-white"
-                >
-                  {copiedEndpointId === selectedRuntime.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                  <span>{copiedEndpointId === selectedRuntime.id ? 'Copied' : 'Copy'}</span>
-                </button>
+                <span>{selectedRuntime.endpoint ? 'Inference API Endpoint' : 'Runtime connection'}</span>
+                {selectedRuntime.endpoint && (
+                  <button
+                    onClick={() => handleCopyEndpoint(selectedRuntime.endpoint || '', selectedRuntime.id)}
+                    className="flex items-center gap-1 text-gray-400 hover:text-white"
+                  >
+                    {copiedEndpointId === selectedRuntime.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                    <span>{copiedEndpointId === selectedRuntime.id ? 'Copied' : 'Copy'}</span>
+                  </button>
+                )}
               </div>
               <div className="font-mono text-white text-xs bg-black/30 p-2.5 rounded-lg border border-white/5 truncate">
-                {selectedRuntime.endpoint || selectedRuntime.account?.email || 'Local Ambient Process'}
+                {selectedRuntime.endpoint || 'Local CLI process'}
               </div>
             </div>
+
+            {selectedRuntime.account && (
+              <div className="p-3.5 rounded-xl bg-surface border border-white/5 space-y-3">
+                <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                  Account &amp; billing
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="p-2.5 rounded-lg bg-black/20 border border-white/5 space-y-1">
+                    <div className="text-[10px] text-gray-500 font-mono">Authentication</div>
+                    <div className="text-white font-medium truncate">
+                      {selectedRuntime.account.authMethod || selectedRuntime.account.email || 'Not reported'}
+                    </div>
+                  </div>
+                  <div className="p-2.5 rounded-lg bg-black/20 border border-white/5 space-y-1">
+                    <div className="text-[10px] text-gray-500 font-mono">Billing route</div>
+                    <div className="text-teal-300 font-medium">
+                      {billingLabel(selectedRuntime.account.billing) || 'Not reported'}
+                    </div>
+                  </div>
+                </div>
+                {(selectedRuntime.account.plan || selectedRuntime.account.org || selectedRuntime.account.email || selectedRuntime.account.note) && (
+                  <div className="rounded-lg bg-black/20 border border-white/5 p-2.5 space-y-1">
+                    {selectedRuntime.account.plan && (
+                      <div><span className="text-gray-500">Plan:</span> {selectedRuntime.account.plan}</div>
+                    )}
+                    {selectedRuntime.account.org && (
+                      <div><span className="text-gray-500">Organization:</span> {selectedRuntime.account.org}</div>
+                    )}
+                    {selectedRuntime.account.email && (
+                      <div><span className="text-gray-500">Account:</span> {selectedRuntime.account.email}</div>
+                    )}
+                    {selectedRuntime.account.note && (
+                      <p className="text-gray-400 leading-relaxed">{selectedRuntime.account.note}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Local Host Hardware Telemetry (if local) */}
             {selectedRuntime.type === 'local' && (
