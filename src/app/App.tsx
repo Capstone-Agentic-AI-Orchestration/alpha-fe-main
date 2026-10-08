@@ -31,6 +31,7 @@ import { SettingsView } from '@/features/settings/SettingsView';
 import { ClientPortalView } from '@/features/delivery/ClientPortalView';
 import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
 import { DocumentsView } from '@/features/delivery/DocumentsView';
+import { PmTicketsPage } from '@/features/ticketing/PmTicketsPage';
 import { NavigationTab } from '@/shared/types';
 import { Plus, X } from 'lucide-react';
 // Whether this is the packaged desktop app rather than a browser tab, read from
@@ -55,6 +56,7 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
     case 'portal': content = <ClientPortalView />; break;
     case 'intake': content = <IntakeWizardView />; break;
     case 'documents': content = <DocumentsView />; break;
+    case 'tickets': content = <PmTicketsPage />; break;
     case 'inbox': content = <InboxView />; break;
     case 'chat': content = <ChatView />; break;
     case 'issues': content = <IssuesView onOpenNewIssue={onOpenNewIssue} />; break;

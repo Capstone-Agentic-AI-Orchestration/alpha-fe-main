@@ -454,7 +454,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
-  'portal', 'intake', 'documents', 'inbox', 'chat', 'issues', 'projects', 'agents',
+  'portal', 'intake', 'documents', 'inbox', 'chat', 'issues', 'projects', 'tickets', 'agents',
   'squads', 'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments',
   'build_room', 'settings'
 ];
@@ -732,9 +732,10 @@ ${e.detail}`;
   const initialDefaultTabs: TabItem[] = [{ id: 'tab-default', view: roleTabs[0], sessionState: {} }];
 
   const [tabs, setTabs] = useState<TabItem[]>(() => {
-    const savedCurrent = loadFromStorage<unknown>('workspace_tabs_v3', null);
-    const savedLegacy = loadFromStorage<unknown>('workspace_tabs_v2', null);
-    return normalizeTabs(savedCurrent ?? savedLegacy, initialDefaultTabs[0]);
+    // Storage checks the fallback shape; null would reject every saved array.
+    const savedCurrent = loadFromStorage<unknown[]>('workspace_tabs_v3', []);
+    const savedLegacy = loadFromStorage<unknown[]>('workspace_tabs_v2', []);
+    return normalizeTabs(savedCurrent.length ? savedCurrent : savedLegacy, initialDefaultTabs[0]);
   });
 
   const [activeTabId, setActiveTabId] = useState<string>(() => {
