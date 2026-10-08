@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, ArrowLeft, Check, Clock3, LockKeyhole, MessageSquare, RefreshCw, Search, Send,
+  AlertCircle, ArrowLeft, Check, Clock3, Info, LockKeyhole, MessageSquare, RefreshCw, Search, Send,
   StickyNote, Ticket as TicketIcon, UserRound,
 } from 'lucide-react';
 
@@ -61,7 +61,6 @@ function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): string {
   if (error.status === 401) return 'Your sign-in has expired. Sign in again to manage tickets.';
   if (error.status === 403) return 'Your current workspace role does not allow ticket management.';
   if (error.status === 404) return 'Ticket service is not connected in this environment, or this ticket is no longer available.';
-  if (error.status === 503 && area === 'queue') return 'Ticket intake is not enabled in this environment yet. The Tickets interface is available; connected ticket data and changes will arrive in a later phase.';
   if (error.status === 409) return 'The ticket changed before this action completed. Refresh it and review the latest state.';
   if (error.status === 429) return 'Too many requests. Wait a little, then try again.';
   if (error.status !== null && error.status >= 500) return 'Ticket service is temporarily unavailable.';
@@ -92,7 +91,7 @@ function EmptyPanel({ title, detail }: { title: string; detail: string }) {
   </div>;
 }
 
-export function PmTicketsView({ api = pmTicketApi }: { api?: typeof pmTicketApi } = {}) {
+export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true }: { api?: typeof pmTicketApi; intakeEnabled?: boolean } = {}) {
   const [queue, setQueue] = useState<PmTicketQueuePage | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [searchInput, setSearchInput] = useState('');
@@ -111,7 +110,7 @@ export function PmTicketsView({ api = pmTicketApi }: { api?: typeof pmTicketApi 
   const [drafts, setDrafts] = useState<Record<Panel, string>>({ conversation: '', notes: '' });
   const draft = drafts[panel];
   const setDraft = (value: string) => setDrafts(current => ({ ...current, [panel]: value }));
-  const [queueLoading, setQueueLoading] = useState(true);
+  const [queueLoading, setQueueLoading] = useState(intakeEnabled);
   const [queueMoreLoading, setQueueMoreLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -139,6 +138,10 @@ export function PmTicketsView({ api = pmTicketApi }: { api?: typeof pmTicketApi 
 
   const loadQueue = useCallback(async () => {
     const generation = ++queueGeneration.current;
+    if (!intakeEnabled) {
+      setQueue(null); setSelectedId(null); setQueueLoading(false); setQueueMoreLoading(false); setQueueError('');
+      return;
+    }
     setQueueLoading(true);
     setQueueMoreLoading(false);
     setQueueError('');
@@ -156,7 +159,7 @@ export function PmTicketsView({ api = pmTicketApi }: { api?: typeof pmTicketApi 
     } finally {
       if (generation === queueGeneration.current) setQueueLoading(false);
     }
-  }, [api, filter, search]);
+  }, [api, filter, search, intakeEnabled]);
 
   useEffect(() => { void loadQueue(); }, [loadQueue, refreshVersion]);
 
@@ -227,7 +230,7 @@ export function PmTicketsView({ api = pmTicketApi }: { api?: typeof pmTicketApi 
   };
 
   async function performWrite(operation: PendingOperation, clearDraft = false): Promise<boolean> {
-    if (writeLock.current) return false;
+    if (!intakeEnabled || writeLock.current) return false;
     writeLock.current = true;
     const draftPanel = operation.draftPanel ?? panel;
     setWriting(true); setWriteError('');
@@ -414,19 +417,24 @@ export function PmTicketsView({ api = pmTicketApi }: { api?: typeof pmTicketApi 
         <h1 className="text-xl font-semibold text-gray-100">Tickets</h1>
         <p className="mt-1 text-xs text-gray-500">Review client requests and manage their conversation in this workspace.</p>
       </div>
-      <button onClick={refreshAll} disabled={queueLoading || Boolean(pending)} className={secondary}>
+      <button onClick={refreshAll} disabled={!intakeEnabled || queueLoading || Boolean(pending)} className={secondary}>
         <RefreshCw size={14} className={queueLoading ? 'animate-spin' : ''} />Refresh
       </button>
     </header>
 
-    {queue?.counters.kind === 'pm' && <section aria-label="Ticket counters" className="grid grid-cols-2 gap-2 md:grid-cols-4">
+    {!intakeEnabled && <div role="status" className="flex items-start gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-xs leading-relaxed text-gray-400">
+      <Info size={15} className="mt-0.5 shrink-0 text-gray-500" />
+      <p>Ticketing is coming soon. You can review the interface, but submissions are not available yet.</p>
+    </div>}
+
+    {intakeEnabled && queue?.counters.kind === 'pm' && <section aria-label="Ticket counters" className="grid grid-cols-2 gap-2 md:grid-cols-4">
       <Counter label="Needs PM" value={queue.counters.needsPm} active={filter === 'needs_pm'} onClick={() => activeFilter('needs_pm')} />
       <Counter label="In progress" value={queue.counters.inProgress} active={filter === 'in_progress'} onClick={() => activeFilter('in_progress')} />
       <Counter label="Waiting on client" value={queue.counters.waitingClient} active={filter === 'waiting_client'} onClick={() => activeFilter('waiting_client')} />
       <Counter label="Closed this month" value={queue.counters.closedMonth} active={filter === 'closed_month'} onClick={() => activeFilter('closed_month')} />
     </section>}
 
-    {queueError && <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-3 text-xs text-rose-200">
+    {intakeEnabled && queueError && <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-3 text-xs text-rose-200">
       <AlertCircle size={15} className="mt-0.5 shrink-0" />{queueError}
     </div>}
 
@@ -435,16 +443,17 @@ export function PmTicketsView({ api = pmTicketApi }: { api?: typeof pmTicketApi 
         <div className="space-y-3 border-b border-white/[0.07] p-3">
           <label className="relative block"><Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-gray-600" />
             <span className="sr-only">Search tickets</span>
-            <input value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search tickets…" className={`${input} py-2 pl-9`} />
+            <input value={searchInput} disabled={!intakeEnabled} onChange={event => setSearchInput(event.target.value)} placeholder="Search tickets…" className={`${input} py-2 pl-9 disabled:cursor-not-allowed disabled:opacity-50`} />
           </label>
           <div className="flex flex-wrap gap-1.5">
-            {filters.map(option => <button key={option.id} aria-pressed={filter === option.id} onClick={() => activeFilter(option.id)} className={`rounded-md px-2 py-1 text-[10px] ${filter === option.id ? 'bg-brand-500/15 text-brand-200' : 'text-gray-500 hover:bg-white/[0.05] hover:text-gray-300'}`}>
+            {filters.map(option => <button key={option.id} aria-pressed={filter === option.id} disabled={!intakeEnabled} onClick={() => activeFilter(option.id)} className={`rounded-md px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:opacity-50 ${filter === option.id ? 'bg-brand-500/15 text-brand-200' : 'text-gray-500 hover:bg-white/[0.05] hover:text-gray-300'}`}>
               {option.label}
             </button>)}
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {queueLoading && !queue ? <div className="p-6 text-center text-xs text-gray-500">Loading tickets…</div>
+          {!intakeEnabled ? <EmptyPanel title="Live tickets are not connected yet" detail="No ticket data is loaded while ticketing is disabled." />
+            : queueLoading && !queue ? <div className="p-6 text-center text-xs text-gray-500">Loading tickets…</div>
             : queue && queue.items.length > 0 ? queue.items.map(item => <button key={item.id}
               disabled={Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setPanel('conversation'); setMessageAction('reply'); setDraft(''); setWriteError(''); }}
               className={`w-full border-b border-white/[0.05] p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${selectedId === item.id ? 'bg-brand-500/[0.08] shadow-[inset_2px_0_0_0_#a78bfa]' : 'hover:bg-white/[0.025]'}`}>
@@ -466,7 +475,8 @@ export function PmTicketsView({ api = pmTicketApi }: { api?: typeof pmTicketApi 
       </div>
 
       <div role="region" aria-label="Ticket detail panel" className={`${selectedId ? 'block' : 'hidden xl:block'} min-h-[420px] min-w-0 rounded-xl border border-white/[0.08] bg-surface xl:overflow-x-hidden xl:overflow-y-auto`}>
-        {!selectedId || !selectedQueueItem ? <EmptyPanel title={queueError ? 'Ticket queue unavailable' : 'Select a ticket'} detail={queueError ? 'No ticket data is shown when the service cannot be reached.' : 'Choose a request from the queue to review its details and conversation.'} />
+        {!intakeEnabled ? <EmptyPanel title="Ticketing is coming soon" detail="Ticket details and conversations will be available when ticketing is connected." />
+          : !selectedId || !selectedQueueItem ? <EmptyPanel title={queueError ? 'Ticket queue unavailable' : 'Select a ticket'} detail={queueError ? 'No ticket data is shown when the service cannot be reached.' : 'Choose a request from the queue to review its details and conversation.'} />
           : detailLoading ? <div role="status" className="p-8 text-center text-xs text-gray-500">Loading ticket…</div>
             : detailError ? <div role="alert" className="m-4 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-4 text-xs text-rose-200">{detailError}</div>
               : detail && selectedQueueItem && <div className="flex min-h-full flex-col">

@@ -8,9 +8,12 @@ six-phase implementation history in `application-first.md`.
 - PM: **Tickets** inside Alpha's existing authenticated app, sidebar and tabs.
   Queue, minimal counters, search/filter, detail, public conversation and private
   notes reuse the actual ticket components. Other navigation remains present.
-- Development only: **Show sample tickets** on that same PM page loads explicitly
-  fictional, read-only records. **Use connected service** removes them. No sample
+- Development only: **Show sample data** on that same PM page loads explicitly
+  fictional, read-only records. **Hide sample data** removes them. No sample
   fallback is used when a connected request fails.
+- Until ticketing is enabled, that page shows a neutral **Ticketing is coming
+  soon** notice, disables search/filter/refresh, makes no ticket API requests,
+  and does not fabricate empty results or zero counters. Samples remain browsable.
 - Client web: `/#/client` shows the real email-access entry, with sign-in disabled
   until secure account access is connected. `/#/request` shows the real inquiry
   interface with submission disabled. Both links and browser back/forward work.
@@ -69,12 +72,25 @@ preserved in the separate local-preservation archive, not deleted or reset.
 ## How to review
 
 1. Open the local frontend and sign in normally as a PM.
-2. Open **Tickets** under Delivery, then **Show sample tickets**.
-3. Inspect connected mode separately; the unavailable-service message is expected
-   while ticket reads/intake remain gated.
+2. Open **Tickets** under Delivery, then **Show sample data**.
+3. Use **Hide sample data** to return to the neutral unavailable state. The
+   development toggle is omitted by normal production builds, including the
+   standard desktop preparation command. Local desktop review needs a development
+   renderer; an installed/released build deliberately has no sample records.
 4. Open `http://localhost:3000/?ticketing-preview=client` to inspect client samples.
 5. Open `http://localhost:3000/#/request` and `http://localhost:3000/#/client` for the
    real public entry screens. Their unavailable actions are intentionally disabled.
 
 The next feature phase should connect one approved workflow to these interfaces;
 it should not build another PM shell or substitute a prototype for the app.
+
+## UI availability (9 October 2026)
+
+`VITE_TICKETING_ENABLED=1` opts the real PM page into connected requests at build
+time. It is **off by default** and does not enable any backend route, grant a
+role or bypass authentication. No environment file is changed by the UI update.
+Enable it only when the backend read boundary and approved database are ready.
+When connected mode is explicitly enabled, unexpected errors (including HTTP
+503) remain errors; they are not disguised as the planned coming-soon state or
+replaced by sample records. Sample transports reject writes and never fall back
+to real transport calls. The local toggle stays inside the normal PM app shell.

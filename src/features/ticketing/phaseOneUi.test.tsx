@@ -3,8 +3,20 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientCreateTicketForm } from './ClientCreateTicketForm';
 import PublicInquiryUnavailable from './PublicInquiryUnavailable';
+import { PmTicketsView } from './PmTicketsView';
 
 describe('phase-one real app interfaces', () => {
+  it('shows a neutral planned-unavailable Tickets interface with controls disabled', () => {
+    const html = renderToStaticMarkup(<PmTicketsView intakeEnabled={false} />);
+    expect(html).toContain('Ticketing is coming soon.');
+    expect(html).toContain('Live tickets are not connected yet');
+    expect(html).toContain('role="status"');
+    expect(html).not.toContain('role="alert"');
+    expect(html).not.toContain('No tickets in this view');
+    expect(html).not.toContain('Ticket counters');
+    expect(html).toMatch(/<input[^>]*disabled=""[^>]*placeholder="Search tickets…"/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Refresh<\/button>/);
+  });
   it('renders the inquiry form at the real public entry without enabling submission', () => {
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
     expect(html).toContain('Tell us what you need');
@@ -13,6 +25,17 @@ describe('phase-one real app interfaces', () => {
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
     expect(html).toContain('nothing is sent or saved');
     expect(html).not.toContain('Create developer');
+  });
+
+  it('requires an email address on the actual public inquiry form', () => {
+    const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
+    const emailInput = html.match(/<input\b[^>]*type="email"[^>]*>/)?.[0];
+    expect(emailInput).toBeDefined();
+    expect(emailInput).toMatch(/\brequired=""/);
+    expect(emailInput).toContain('autoComplete="email"');
+    expect(emailInput).toContain('maxLength="254"');
+    expect(html).toMatch(/Email <span[^>]*>\(required\)<\/span>/);
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
   });
 
   it('shows the planned email-access interface without pretending to authenticate', () => {
