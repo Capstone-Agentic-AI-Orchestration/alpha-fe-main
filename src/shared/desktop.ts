@@ -33,7 +33,9 @@ export interface DesktopBridge {
   appVersion?: () => Promise<string>;
 }
 
-export const desktop = (window as unknown as { alphaDesktop?: DesktopBridge }).alphaDesktop;
+export const desktop = typeof window === 'undefined'
+  ? undefined
+  : (window as unknown as { alphaDesktop?: DesktopBridge }).alphaDesktop;
 
 /** Whether this is the packaged desktop app rather than a browser tab. */
 export const isDesktop = Boolean(desktop?.isDesktop);

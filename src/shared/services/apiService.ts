@@ -203,6 +203,20 @@ export function parseApiError(err: unknown): { status: number | null; message: s
   return { status: Number(match[1]), message: match[2].trim() || `Request failed (${match[1]})` };
 }
 
+/** Structured metadata for ticket operation reconciliation; message format stays compatible with existing callers. */
+export class ApiRequestError extends Error {
+  constructor(
+    readonly status: number | null,
+    message: string,
+    readonly code: string | null = null,
+    readonly reconciliationRequired = false,
+    readonly retryAfterSeconds: number | null = null,
+  ) {
+    super(message);
+    this.name = 'ApiRequestError';
+  }
+}
+
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${url}`, {
     /**
@@ -232,21 +246,54 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     // message shown to a user should read as a sentence, not as a JSON blob
     // with the sentence buried inside it.
     let detail = errorText;
+    let code: string | null = null;
+    let reconciliationRequired = false;
     try {
-      const parsed = JSON.parse(errorText);
-      if (parsed && typeof parsed.error === 'string') detail = parsed.error;
+      const parsed: unknown = JSON.parse(errorText);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const payload = parsed as Record<string, unknown>;
+        if (typeof payload.error === 'string') detail = payload.error;
+        if (typeof payload.code === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(payload.code)) code = payload.code;
+        reconciliationRequired = payload.reconciliationRequired === true || code?.endsWith('_outcome_unknown') === true;
+      }
     } catch {
       /* not JSON — the raw text is the best we have */
     }
     if (res.status === 403 && detail === WORKSPACE_REFUSED && activeWorkspaceId) {
       workspaceRefusedHandler?.(activeWorkspaceId);
     }
-    throw new Error(`API Error [${res.status}]: ${detail}`);
+    const retryAfterHeader = Number(res.headers.get('Retry-After'));
+    const retryAfterSeconds = res.status === 429 && Number.isSafeInteger(retryAfterHeader)
+      && retryAfterHeader > 0 && retryAfterHeader <= 86400 ? retryAfterHeader : null;
+    throw new ApiRequestError(res.status, `API Error [${res.status}]: ${detail}`, code, reconciliationRequired, retryAfterSeconds);
   }
   return res.json();
 }
 
 export const apiService = {
+  /** Internal ticket API path; preserves the existing session, workspace and desktop relay transport. */
+  ticketRequest: async <T>(path: string, options?: RequestInit): Promise<T> => {
+    if (typeof path !== 'string' || path.length > 2048 || !/^\/tickets(?:[/?]|$)/.test(path)
+      || path.startsWith('//') || path.includes('\\') || path.includes('#') || /[\u0000-\u0020\u007f]/.test(path)
+      || path.split('?')[0].split('/').some(segment => {
+        try { const decoded = decodeURIComponent(segment); return decoded === '.' || decoded === '..'; }
+        catch { return true; }
+      })) {
+      throw new Error('Invalid internal ticket API path.');
+    }
+    const method = (options?.method ?? 'GET').toUpperCase();
+    try {
+      return await fetchJson<T>(path, options);
+    } catch (error) {
+      if (error instanceof ApiRequestError || ['GET', 'HEAD', 'OPTIONS'].includes(method)) throw error;
+      // The server may have committed before the transport failed. Ticket
+      // callers reconcile the same operation ID before attempting a replay.
+      throw new ApiRequestError(
+        null, 'The ticket operation result could not be confirmed.', 'ticket_transport_outcome_unknown', true,
+      );
+    }
+  },
+
   // Health
   checkHealth: () => fetchJson<{ status: string; version: string }>('/health'),
 

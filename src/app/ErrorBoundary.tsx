@@ -17,6 +17,8 @@ import React from 'react';
 
 interface Props {
   children: React.ReactNode;
+  /** Client entry must never inspect/reset the internal browser cache. */
+  internal?: boolean;
 }
 
 interface State {
@@ -34,12 +36,18 @@ export class ErrorBoundary extends React.Component<Props, State> {
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
+    if (this.props.internal === false) {
+      console.error('[Alpha] client page render crash');
+      this.setState({ info: '' });
+      return;
+    }
     // Also log it, so the console has the full trace when it is available.
     console.error('[Alpha] render crash:', error, info.componentStack);
     this.setState({ info: info.componentStack ?? '' });
   }
 
   private clearLocalState = () => {
+    if (this.props.internal === false) return;
     try {
       Object.keys(localStorage)
         .filter(k => k.startsWith(STORAGE_PREFIX))
@@ -53,6 +61,16 @@ export class ErrorBoundary extends React.Component<Props, State> {
   render() {
     const { error, info } = this.state;
     if (!error) return this.props.children;
+
+    if (this.props.internal === false) return (
+      <main className="min-h-dvh flex items-center justify-center bg-canvas p-6">
+        <section role="alert" className="max-w-md space-y-4 rounded-xl border border-white/10 bg-surface p-6">
+          <h1 className="text-lg font-semibold text-white">This page could not be displayed</h1>
+          <p className="text-sm text-gray-400">Reload to try again. No ticket submission or approval is confirmed by this error.</p>
+          <button className="rounded-lg bg-brand-500 px-4 py-2 text-sm text-on-accent" onClick={() => window.location.reload()}>Reload page</button>
+        </section>
+      </main>
+    );
 
     return (
       <div className="min-h-screen bg-background text-white flex items-center justify-center p-6">

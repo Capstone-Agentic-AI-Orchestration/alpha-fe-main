@@ -4,6 +4,7 @@ export type NavigationTab =
   | 'documents'
   | 'inbox'
   | 'chat'
+  | 'tickets'
   | 'issues'
   | 'projects'
   | 'agents'
