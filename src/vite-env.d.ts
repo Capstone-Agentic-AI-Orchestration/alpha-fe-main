@@ -1,6 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
+  /** UI rollout only; backend availability and authorization are enforced separately. */
+  readonly VITE_TICKETING_ENABLED?: string;
   /** Local Alpha daemon REST base, e.g. http://localhost:3001/api */
   readonly VITE_API_URL: string;
   /** Local Alpha daemon WebSocket, e.g. ws://localhost:3001 */

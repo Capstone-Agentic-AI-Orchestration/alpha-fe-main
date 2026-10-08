@@ -69,19 +69,29 @@ try {
   const expand = page.getByRole('button', { name: 'Keep sidebar open', exact: true });
   if (await expand.count()) await expand.click();
   await page.getByRole('button', { name: 'Tickets', exact: true }).first().click();
-  await page.getByRole('button', { name: 'Show sample tickets', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Show sample data', exact: true }).waitFor();
   await page.reload();
-  await page.getByRole('button', { name: 'Show sample tickets', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Show sample data', exact: true }).waitFor();
   assert.equal(await page.getByRole('tab', { name: 'Tickets', exact: true }).getAttribute('aria-selected'), 'true');
-  await page.getByText('Ticket intake is not enabled', { exact: false }).waitFor();
+  await page.getByText('Ticketing is coming soon. You can review the interface', { exact: false }).waitFor();
+  assert.equal(await page.getByPlaceholder('Search tickets…').isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Refresh', exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('alert').filter({ hasText: /Ticket intake|Ticket service/ }).count(), 0);
+  assert.equal(requests.filter(request => /^\/api\/tickets(?:\/|$)/.test(request.path)).length, 0, 'Disabled ticketing must not call the ticket API.');
   for (const name of ['All Projects', 'All Issues', 'Chat', 'Settings']) {
     assert.ok(await page.getByRole('button', { name, exact: true }).count(), `Missing existing navigation: ${name}`);
   }
   checks.push('Real PM application shell, auth gate and existing navigation render with test-only API identity.');
-  await page.getByRole('button', { name: 'Show sample tickets', exact: true }).click();
+  await page.getByRole('button', { name: 'Show sample data', exact: true }).click();
+  await page.getByText('Sample data — not real tickets.', { exact: false }).waitFor();
   await page.getByRole('heading', { name: 'Add CSV export to the monthly sales report', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Private notes', exact: true }).click();
   await page.getByText('Preview example: linked to the existing Operations Dashboard project and developer issue.', { exact: true }).waitFor();
+  assert.equal(await page.getByLabel('Private note', { exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Save private note', exact: true }).isDisabled(), true);
+  await page.getByRole('button', { name: 'Conversation', exact: true }).click();
+  assert.equal(await page.getByLabel('Message to client', { exact: true }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Send update', exact: true }).last().isDisabled(), true);
   await screenshot('phase-one-pm-desktop');
   await noOverflow();
   assert.equal(await page.getByRole('form', { name: /create.*(?:developer|issue)/i }).count(), 0);
@@ -92,10 +102,11 @@ try {
   await page.getByText('Request an inventory overview', { exact: true }).waitFor();
   await noOverflow();
   await screenshot('phase-one-pm-mobile');
-  await page.getByRole('button', { name: 'Use connected service', exact: true }).click();
-  await page.getByText('Ticket intake is not enabled', { exact: false }).waitFor();
+  await page.getByRole('button', { name: 'Hide sample data', exact: true }).click();
+  await page.getByText('Ticketing is coming soon. You can review the interface', { exact: false }).waitFor();
   assert.equal(await page.getByText('Request an inventory overview', { exact: true }).count(), 0);
-  checks.push('PM samples, private notes, mobile back/search, disabled writes and return to connected mode.');
+  assert.equal(requests.filter(request => /^\/api\/tickets(?:\/|$)/.test(request.path)).length, 0);
+  checks.push('Actual PM page: neutral unavailable state and samples make zero ticket API calls; sample conversations/notes are read-only; search/filter/mobile/back and hide samples work.');
 
   await page.setViewportSize({ width: 1600, height: 1000 });
   const beforeClient = requests.length;
