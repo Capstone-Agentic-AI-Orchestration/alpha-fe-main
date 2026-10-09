@@ -1,24 +1,20 @@
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { PublicInquiryForm } from './PublicInquiryForm';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { publicTicketIntakeApi } from './publicIntakeApi';
-import { TicketInquiryVerification } from './TicketInquiryVerification';
 
-/** Fails closed until the durable inquiry API and abuse-proof provider are connected. */
+/** Fails closed until the durable inquiry API is enabled by the server. */
 export default function PublicInquiryUnavailable() {
-  const [configuration, setConfiguration] = useState<{ enabled: boolean; siteKey: string | null }>({ enabled: false, siteKey: null });
-  const [token, setToken] = useState('');
-  const [generation, setGeneration] = useState(0);
+  const [configuration, setConfiguration] = useState<{ enabled: boolean }>({ enabled: false });
   const [slug] = useState(() => {
     if (typeof window === 'undefined') return '';
     const url = new URL(window.location.href);
     return new URLSearchParams(url.hash.split('?')[1] ?? url.search).get('intake') ?? '';
   });
-  const onToken = useCallback((value: string) => setToken(value), []);
   useEffect(() => {
     let active = true;
     void publicTicketIntakeApi.configuration(slug).then(value => { if (active) setConfiguration(value); })
-      .catch(() => { if (active) setConfiguration({ enabled: false, siteKey: null }); });
+      .catch(() => { if (active) setConfiguration({ enabled: false }); });
     return () => { active = false; };
   }, [slug]);
   return <main className="min-h-dvh bg-canvas font-sans text-gray-300">
@@ -28,12 +24,8 @@ export default function PublicInquiryUnavailable() {
     </header>
     <p role="status" className="mx-auto mt-6 max-w-2xl px-5 text-xs leading-relaxed text-amber-100/80">{configuration.enabled
       ? 'Submit your inquiry for PM review. Acknowledgment emails and client account activation are not available yet.'
-      : 'Secure submission is not enabled for this inquiry link yet. Nothing is sent or saved.'}</p>
-    {configuration.siteKey && <div className="mx-auto mt-4 max-w-2xl px-5"><TicketInquiryVerification
-      siteKey={configuration.siteKey} slug={slug} generation={generation} onToken={onToken} /></div>}
-    <PublicInquiryForm submissionEnabled={configuration.enabled} verificationReady={Boolean(token)} onSubmit={async inquiry => {
-      try { await publicTicketIntakeApi.submit(slug, { proofToken: token, inquiry }); }
-      finally { setToken(''); setGeneration(value => value + 1); }
-    }} onCancel={() => { window.location.href = '/#/client'; }} />
+      : 'Submission is not enabled for this inquiry link yet. Nothing is sent or saved.'}</p>
+    <PublicInquiryForm submissionEnabled={configuration.enabled} onSubmit={async inquiry => { await publicTicketIntakeApi.submit(slug, { inquiry }); }}
+      onCancel={() => { window.location.href = '/#/client'; }} />
   </main>;
 }

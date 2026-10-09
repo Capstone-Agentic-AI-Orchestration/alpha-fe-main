@@ -4,7 +4,6 @@ import { createPublicTicketInquirySubmitter, PublicTicketIntakeApiError, publicT
 import type { PublicTicketInquiryRequest } from './publicIntakeContract';
 
 const request: PublicTicketInquiryRequest = {
-  proofToken: 'one-time-proof-token',
   inquiry: {
     schemaVersion: 1,
     operationId: 'operation-1',
@@ -34,26 +33,26 @@ afterEach(() => {
 });
 
 describe('public inquiry browser transport', () => {
-  it('accepts only public configuration fields, ignoring unrelated server fields', async () => {
+  it('accepts only the public enabled flag, ignoring unrelated server fields', async () => {
     browser();
-    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { enabled: true, siteKey: 'public-key', testing: true })));
-    expect(await publicTicketIntakeApi.configuration('alpha-workspace')).toEqual({ enabled: true, siteKey: 'public-key' });
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { enabled: true, testing: true })));
+    expect(await publicTicketIntakeApi.configuration('alpha-workspace')).toEqual({ enabled: true });
   });
-  it('loads only public site-key configuration from the same-origin API', async () => {
+  it('loads only public intake configuration from the same-origin API', async () => {
     browser();
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { enabled: true, siteKey: 'public-test-site-key' }));
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { enabled: true }));
     vi.stubGlobal('fetch', fetchMock);
-    expect(await publicTicketIntakeApi.configuration('alpha-workspace')).toEqual({ enabled: true, siteKey: 'public-test-site-key' });
+    expect(await publicTicketIntakeApi.configuration('alpha-workspace')).toEqual({ enabled: true });
     expect(fetchMock).toHaveBeenCalledWith('/api/public/ticket-intakes/alpha-workspace/config', expect.objectContaining({ credentials: 'omit', mode: 'same-origin' }));
   });
   it('fails closed when intake configuration is unavailable or malformed', async () => {
     browser();
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(503, {}))
-      .mockResolvedValueOnce(jsonResponse(200, { enabled: true, siteKey: null }));
+      .mockResolvedValueOnce(jsonResponse(200, { enabled: 'true' }));
     vi.stubGlobal('fetch', fetchMock);
-    expect(await publicTicketIntakeApi.configuration('alpha-workspace')).toEqual({ enabled: false, siteKey: null });
-    expect(await publicTicketIntakeApi.configuration('alpha-workspace')).toEqual({ enabled: false, siteKey: null });
-    expect(await publicTicketIntakeApi.configuration('../foreign')).toEqual({ enabled: false, siteKey: null });
+    expect(await publicTicketIntakeApi.configuration('alpha-workspace')).toEqual({ enabled: false });
+    expect(await publicTicketIntakeApi.configuration('alpha-workspace')).toEqual({ enabled: false });
+    expect(await publicTicketIntakeApi.configuration('../foreign')).toEqual({ enabled: false });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
   it('submits same-origin without cookies or internal desktop credentials and exposes only a receipt', async () => {
@@ -90,32 +89,16 @@ describe('public inquiry browser transport', () => {
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ mode: 'same-origin', credentials: 'omit' });
   });
 
-  it('connects the form payload to the existing API using only an injected proof provider', async () => {
+  it('connects the form payload to the existing API without a provider token', async () => {
     browser();
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(202, { received: true }));
-    const getProofToken = vi.fn().mockResolvedValue('provider-proof-token');
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(createPublicTicketInquirySubmitter('acme-client', getProofToken)(request.inquiry)).resolves.toBeUndefined();
-    expect(getProofToken).toHaveBeenCalledOnce();
+    await expect(createPublicTicketInquirySubmitter('acme-client')(request.inquiry)).resolves.toBeUndefined();
     expect(fetchMock).toHaveBeenCalledWith('/api/public/ticket-intakes/acme-client', expect.objectContaining({
       method: 'POST',
-      body: JSON.stringify({ proofToken: 'provider-proof-token', inquiry: request.inquiry }),
+      body: JSON.stringify({ inquiry: request.inquiry }),
     }));
-  });
-
-  it('does not leak proof-provider errors or call the API when proof is unavailable', async () => {
-    browser();
-    const fetchMock = vi.fn();
-    vi.stubGlobal('fetch', fetchMock);
-
-    await expect(createPublicTicketInquirySubmitter('acme-client', () => {
-      throw new Error('private provider diagnostic');
-    })(request.inquiry)).rejects.toMatchObject({
-      code: 'ticket_intake_not_verified',
-      message: 'Please verify this submission and try again.',
-    });
-    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it('refuses insecure non-loopback origins before making a request', async () => {

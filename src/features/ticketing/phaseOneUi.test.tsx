@@ -7,11 +7,11 @@ import PublicInquiryUnavailable from './PublicInquiryUnavailable';
 import { PmTicketsView } from './PmTicketsView';
 
 describe('phase-one real app interfaces', () => {
-  it('keeps an enabled inquiry form waiting for provider verification without claiming the service is disabled', () => {
-    const html = renderToStaticMarkup(<PublicInquiryForm submissionEnabled verificationReady={false} onSubmit={() => undefined} onCancel={() => undefined} />);
-    expect(html).toContain('Complete the submission verification');
+  it('lets an enabled inquiry form submit without an external verification widget', () => {
+    const html = renderToStaticMarkup(<PublicInquiryForm submissionEnabled onSubmit={() => undefined} onCancel={() => undefined} />);
+    expect(html).not.toContain('verification');
     expect(html).not.toContain('UI-only');
-    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*>.*Submit inquiry/);
   });
   it('shows a neutral planned-unavailable Tickets interface with controls disabled', () => {
     const html = renderToStaticMarkup(<PmTicketsView intakeEnabled={false} />);

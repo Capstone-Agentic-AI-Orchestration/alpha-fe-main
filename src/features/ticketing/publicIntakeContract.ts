@@ -13,9 +13,7 @@ export interface PublicTicketInquiryPayload {
   requestedDeadline: string | null;
 }
 
-/** The proof is transport-only; it is never part of the inquiry record. */
 export interface PublicTicketInquiryRequest {
-  proofToken: string;
   inquiry: PublicTicketInquiryPayload;
 }
 

@@ -5,12 +5,11 @@ import type { PublicTicketInquiryPayload } from './publicIntakeContract';
 import { PublicTicketIntakeApiError } from './publicIntakeApi';
 import { input, primary, secondary } from './ticketUi';
 
-export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = false, verificationReady = true }: {
+export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = false }: {
   /** Resolve only after the configured intake transport returns its generic receipt. */
   onSubmit: (value: PublicTicketInquiryPayload) => void | Promise<void>;
   onCancel: () => void;
   submissionEnabled?: boolean;
-  verificationReady?: boolean;
 }) {
   const operationId = useRef(crypto.randomUUID());
   const submissionInFlight = useRef(false);
@@ -32,7 +31,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
     </div>
     <form aria-busy={isSubmitting} className="space-y-5 rounded-xl border border-white/[0.08] bg-surface p-5 md:p-7" onSubmit={event => {
       event.preventDefault();
-      if (!submissionEnabled || !verificationReady || submissionInFlight.current || submitted) return;
+      if (!submissionEnabled || submissionInFlight.current || submitted) return;
       submissionInFlight.current = true;
       setIsSubmitting(true);
       setError('');
@@ -74,8 +73,8 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
       {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
       {submitted && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-emerald-200">Inquiry received. The project manager will review it. This does not create an account or grant access to a ticket.</p>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-5">
-        <p className="max-w-xs text-[11px] text-gray-500">{submitted ? 'Your email remains unverified and cannot be used to access a ticket.' : !submissionEnabled ? 'Submission is not enabled yet. This form is UI-only; nothing is sent or saved. Do not enter sensitive information.' : !verificationReady ? 'Complete the submission verification before sending your inquiry.' : 'Your inquiry will be sent for review. Your email remains unverified and does not grant ticket access.'}</p>
-        <div className="flex gap-2"><button type="button" onClick={onCancel} className={secondary} disabled={isSubmitting}>Cancel</button><button className={primary} type="submit" disabled={!submissionEnabled || !verificationReady || isSubmitting || submitted}><Send size={14} />{isSubmitting ? 'Submitting…' : submitted ? 'Inquiry received' : 'Submit inquiry'}</button></div>
+        <p className="max-w-xs text-[11px] text-gray-500">{submitted ? 'Your email remains unverified and cannot be used to access a ticket.' : !submissionEnabled ? 'Submission is not enabled yet. This form is UI-only; nothing is sent or saved. Do not enter sensitive information.' : 'Your inquiry will be sent for review. Your email remains unverified and does not grant ticket access.'}</p>
+        <div className="flex gap-2"><button type="button" onClick={onCancel} className={secondary} disabled={isSubmitting}>Cancel</button><button className={primary} type="submit" disabled={!submissionEnabled || isSubmitting || submitted}><Send size={14} />{isSubmitting ? 'Submitting…' : submitted ? 'Inquiry received' : 'Submit inquiry'}</button></div>
       </div>
     </form>
   </section>;
