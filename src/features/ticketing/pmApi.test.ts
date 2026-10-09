@@ -56,13 +56,12 @@ describe('PM ticket transport', () => {
     ]);
   });
 
-  it('issues an invitation without accepting recipient or role data from the UI', async () => {
+  it('requests a PM invitation email without accepting recipient or account data from the UI', async () => {
     const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({
-      invitationId: 'invitation-1', ticketId: 'ticket-1', status: 'pending',
-      expiresAt: '2026-10-09T00:00:00.000Z', alreadyPending: false,
+      deliveryId: 'delivery-1', ticketId: 'ticket-1', status: 'queued', alreadyRequested: false,
     } as never);
 
-    await pmTicketApi.inviteClient('ticket-1');
+    await pmTicketApi.sendInvitationEmail('ticket-1');
 
     expect(request).toHaveBeenCalledWith('/tickets/ticket-1/invitations', { method: 'POST', body: '{}' });
   });
