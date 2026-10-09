@@ -58,7 +58,7 @@ describe('phase-one real app interfaces', () => {
     expect(html).toContain('Continue with email');
     expect(html).toMatch(/<input[^>]*type="email"[^>]*disabled=""/);
     expect(html).toContain('no code is sent');
-    expect(html).toContain('href="/#/request"');
+    expect(html).toContain('href="/#/request?intake=alpha-workspace"');
   });
 
   it('lets clients inspect the same request form with submission disabled', () => {

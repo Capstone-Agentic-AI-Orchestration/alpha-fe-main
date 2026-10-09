@@ -11,7 +11,7 @@ export function ClientAccessPanel({ unavailable, error, onRetry }: {
   return <main className="min-h-dvh bg-canvas font-sans text-gray-300">
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] bg-shell px-5 py-4 md:px-8">
       <a href="/#/client" className="flex items-center gap-3"><img src={alphaMarkUrl} alt="Alpha" className="h-8 w-8 object-contain" /><span className="text-sm font-semibold text-white">Alpha <span className="ml-2 font-normal text-gray-500">Client portal</span></span></a>
-      <a href="/#/request" className="text-xs text-gray-400 hover:text-white">Have a new inquiry?</a>
+      <a href="/#/request?intake=alpha-workspace" className="text-xs text-gray-400 hover:text-white">Have a new inquiry?</a>
     </header>
     <section className="mx-auto grid w-full max-w-4xl gap-8 px-5 py-12 md:grid-cols-2 md:gap-12 md:py-20">
       <div className="space-y-5 md:pt-6">
