@@ -27,7 +27,7 @@ defines schema history, authorization boundaries and rollout requirements.
 4. Hosted backend functionality must be released before desktop acceptance.
 5. Review the PM interface in the next approved installed desktop update.
 6. Real inquiry submission is a browser feature and needs an approved hosted
-   client page and real Turnstile configuration. No localhost tests are planned.
+   client page with its origin in the backend allowlist. No local app test is planned.
 
 Frontend CI uses `VITE_API_URL=/api` for regression tests and production builds.
 On 9 October 2026, typecheck, production build and **25 files / 287 tests** passed

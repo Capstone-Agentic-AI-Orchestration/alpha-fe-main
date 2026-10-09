@@ -32,7 +32,7 @@ function safeFailure(code: unknown, status: number): { code: string | null; mess
   const messages: Record<string, { message: string; retrySame?: boolean }> = {
     ticket_intake_entry_unavailable: { message: 'This inquiry link is unavailable.' },
     ticket_intake_writes_disabled: { message: 'Inquiry submission is temporarily unavailable.' },
-    ticket_intake_not_verified: { message: 'Please verify this submission and try again.' },
+    ticket_intake_not_verified: { message: 'This inquiry could not be accepted from this page.' },
     ticket_intake_rate_limited: { message: 'Too many submissions. Please wait before trying again.' },
     ticket_intake_operation_conflict: { message: 'The submission changed. Start a new inquiry.' },
     ticket_intake_outcome_unknown: {
@@ -49,18 +49,17 @@ function safeFailure(code: unknown, status: number): { code: string | null; mess
 
 /** Anonymous intake transport; it never uses the internal API/desktop token or client session. */
 export const publicTicketIntakeApi = {
-  async configuration(slug: string): Promise<{ enabled: boolean; siteKey: string | null }> {
+  async configuration(slug: string): Promise<{ enabled: boolean }> {
     if (!browserOriginAllowed() || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(slug)) {
-      return { enabled: false, siteKey: null };
+      return { enabled: false };
     }
     const response = await fetch(`${API_ROOT}/${encodeURIComponent(slug)}/config`, {
       credentials: 'omit', mode: 'same-origin', cache: 'no-store', redirect: 'error',
       signal: AbortSignal.timeout(PUBLIC_INTAKE_TIMEOUT_MS),
     });
-    if (!response.ok) return { enabled: false, siteKey: null };
+    if (!response.ok) return { enabled: false };
     const value = await response.json();
-    return value?.enabled === true && typeof value.siteKey === 'string' && value.siteKey.length > 0
-      ? { enabled: true, siteKey: value.siteKey } : { enabled: false, siteKey: null };
+    return value?.enabled === true ? { enabled: true } : { enabled: false };
   },
   async submit(slug: string, request: PublicTicketInquiryRequest): Promise<PublicTicketInquiryResponse> {
     if (!browserOriginAllowed()) {
@@ -123,28 +122,11 @@ export const publicTicketIntakeApi = {
   },
 };
 
-/** Bind the existing browser API to a provider-supplied proof token. No default
- * provider or token exists, so the caller must explicitly supply both a proof
- * provider and a server-owned intake slug before enabling the inquiry form.
- */
+/** Bind the browser API to a server-owned public inquiry slug. */
 export function createPublicTicketInquirySubmitter(
   slug: string,
-  getProofToken: () => string | Promise<string>,
 ): (inquiry: PublicTicketInquiryPayload) => Promise<void> {
   return async inquiry => {
-    let proofToken: string;
-    try {
-      proofToken = await getProofToken();
-    } catch {
-      throw new PublicTicketIntakeApiError(
-        null, 'Please verify this submission and try again.', 'ticket_intake_not_verified',
-      );
-    }
-    if (typeof proofToken !== 'string' || proofToken.length === 0 || proofToken.trim() !== proofToken) {
-      throw new PublicTicketIntakeApiError(
-        null, 'Please verify this submission and try again.', 'ticket_intake_not_verified',
-      );
-    }
-    await publicTicketIntakeApi.submit(slug, { proofToken, inquiry });
+    await publicTicketIntakeApi.submit(slug, { inquiry });
   };
 }

@@ -18,7 +18,7 @@ export function selectAppEntry(
   const browser = ['http:', 'https:'].includes(location.protocol);
   const hashPath = hashRoutePath(location.hash);
   // Public inquiry URLs must never fall through to the internal workspace app,
-  // even while the proof provider and server endpoint are deliberately off.
+  // even while the public intake endpoint is deliberately off.
   if (browser && (isRoute(location.pathname, '/request') || isRoute(hashPath, '/request'))) {
     return 'public-inquiry-unavailable';
   }
