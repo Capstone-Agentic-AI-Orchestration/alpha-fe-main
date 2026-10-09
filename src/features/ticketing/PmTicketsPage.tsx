@@ -2,9 +2,10 @@ import { lazy, Suspense, useState } from 'react';
 import { FlaskConical } from 'lucide-react';
 import { PmTicketsView } from './PmTicketsView';
 
-// UI availability is separate from the server's rollout gate. Neither switch
-// grants permissions or enables writes; both must be ready for connected use.
-const intakeEnabled = import.meta.env.VITE_TICKETING_ENABLED === '1';
+// Use the real cloud-backed queue by default. "0" keeps it disabled.
+// The server's rollout switch, workspace gate and fresh PM authorization
+// control writes; this flag grants no authority and never enables samples.
+const intakeEnabled = import.meta.env.VITE_TICKETING_ENABLED !== '0';
 
 // Development samples are a separate lazy module, never a production fallback.
 const SampleTickets = import.meta.env.DEV
@@ -24,7 +25,7 @@ export function PmTicketsPage() {
       </button>
     </div>}
     <div className="min-h-0 flex-1">
-      {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-gray-400">Loading sample tickets…</p>}><SampleTickets /></Suspense> : <PmTicketsView intakeEnabled={intakeEnabled} />}
+      {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-gray-400">Loading sample tickets…</p>}><SampleTickets /></Suspense> : <PmTicketsView intakeEnabled={intakeEnabled} workflowActions="triage" />}
     </div>
   </div>;
 }

@@ -2,10 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientCreateTicketForm } from './ClientCreateTicketForm';
+import { PublicInquiryForm } from './PublicInquiryForm';
 import PublicInquiryUnavailable from './PublicInquiryUnavailable';
 import { PmTicketsView } from './PmTicketsView';
 
 describe('phase-one real app interfaces', () => {
+  it('keeps an enabled inquiry form waiting for provider verification without claiming the service is disabled', () => {
+    const html = renderToStaticMarkup(<PublicInquiryForm submissionEnabled verificationReady={false} onSubmit={() => undefined} onCancel={() => undefined} />);
+    expect(html).toContain('Complete the submission verification');
+    expect(html).not.toContain('UI-only');
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+  });
   it('shows a neutral planned-unavailable Tickets interface with controls disabled', () => {
     const html = renderToStaticMarkup(<PmTicketsView intakeEnabled={false} />);
     expect(html).toContain('Ticketing is coming soon.');
@@ -14,6 +21,7 @@ describe('phase-one real app interfaces', () => {
     expect(html).not.toContain('role="alert"');
     expect(html).not.toContain('No tickets in this view');
     expect(html).not.toContain('Ticket counters');
+    expect(html).not.toContain('Client-provided documents');
     expect(html).toMatch(/<input[^>]*disabled=""[^>]*placeholder="Search tickets…"/);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Refresh<\/button>/);
   });
@@ -25,6 +33,12 @@ describe('phase-one real app interfaces', () => {
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
     expect(html).toContain('nothing is sent or saved');
     expect(html).not.toContain('Create developer');
+  });
+
+  it('keeps direct inquiry form use fail-closed unless a submit handler is explicitly enabled', () => {
+    const html = renderToStaticMarkup(<PublicInquiryForm onSubmit={() => undefined} onCancel={() => undefined} />);
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+    expect(html).toContain('nothing is sent or saved');
   });
 
   it('requires an email address on the actual public inquiry form', () => {

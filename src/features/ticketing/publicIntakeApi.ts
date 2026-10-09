@@ -1,9 +1,10 @@
 import type {
-  PublicTicketInquiryRequest, PublicTicketInquiryResponse,
+  PublicTicketInquiryPayload, PublicTicketInquiryRequest, PublicTicketInquiryResponse,
 } from './publicIntakeContract';
 
 const API_ROOT = '/api/public/ticket-intakes';
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+const PUBLIC_INTAKE_TIMEOUT_MS = 30_000;
 
 export class PublicTicketIntakeApiError extends Error {
   constructor(
@@ -48,6 +49,19 @@ function safeFailure(code: unknown, status: number): { code: string | null; mess
 
 /** Anonymous intake transport; it never uses the internal API/desktop token or client session. */
 export const publicTicketIntakeApi = {
+  async configuration(slug: string): Promise<{ enabled: boolean; siteKey: string | null }> {
+    if (!browserOriginAllowed() || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(slug)) {
+      return { enabled: false, siteKey: null };
+    }
+    const response = await fetch(`${API_ROOT}/${encodeURIComponent(slug)}/config`, {
+      credentials: 'omit', mode: 'same-origin', cache: 'no-store', redirect: 'error',
+      signal: AbortSignal.timeout(PUBLIC_INTAKE_TIMEOUT_MS),
+    });
+    if (!response.ok) return { enabled: false, siteKey: null };
+    const value = await response.json();
+    return value?.enabled === true && typeof value.siteKey === 'string' && value.siteKey.length > 0
+      ? { enabled: true, siteKey: value.siteKey } : { enabled: false, siteKey: null };
+  },
   async submit(slug: string, request: PublicTicketInquiryRequest): Promise<PublicTicketInquiryResponse> {
     if (!browserOriginAllowed()) {
       throw new PublicTicketIntakeApiError(null, 'Inquiry submission is available only in a secure web browser or local development.');
@@ -57,6 +71,8 @@ export const publicTicketIntakeApi = {
     }
 
     let response: Response;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), PUBLIC_INTAKE_TIMEOUT_MS);
     try {
       response = await fetch(`${API_ROOT}/${encodeURIComponent(slug)}`, {
         method: 'POST',
@@ -67,6 +83,7 @@ export const publicTicketIntakeApi = {
         cache: 'no-store',
         redirect: 'error',
         referrerPolicy: 'no-referrer',
+        signal: controller.signal,
       });
     } catch {
       throw new PublicTicketIntakeApiError(
@@ -74,6 +91,8 @@ export const publicTicketIntakeApi = {
         'We could not confirm whether this went through. Keep the same submission ID and verify again before retrying.',
         'transport_outcome_unknown', null, true,
       );
+    } finally {
+      clearTimeout(timeout);
     }
 
     if (!response.ok) {
@@ -103,3 +122,29 @@ export const publicTicketIntakeApi = {
     );
   },
 };
+
+/** Bind the existing browser API to a provider-supplied proof token. No default
+ * provider or token exists, so the caller must explicitly supply both a proof
+ * provider and a server-owned intake slug before enabling the inquiry form.
+ */
+export function createPublicTicketInquirySubmitter(
+  slug: string,
+  getProofToken: () => string | Promise<string>,
+): (inquiry: PublicTicketInquiryPayload) => Promise<void> {
+  return async inquiry => {
+    let proofToken: string;
+    try {
+      proofToken = await getProofToken();
+    } catch {
+      throw new PublicTicketIntakeApiError(
+        null, 'Please verify this submission and try again.', 'ticket_intake_not_verified',
+      );
+    }
+    if (typeof proofToken !== 'string' || proofToken.length === 0 || proofToken.trim() !== proofToken) {
+      throw new PublicTicketIntakeApiError(
+        null, 'Please verify this submission and try again.', 'ticket_intake_not_verified',
+      );
+    }
+    await publicTicketIntakeApi.submit(slug, { proofToken, inquiry });
+  };
+}
