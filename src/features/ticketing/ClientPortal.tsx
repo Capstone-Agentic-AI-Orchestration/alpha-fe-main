@@ -48,9 +48,11 @@ function statusName(status: ClientTicketQueueItem['status']): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, value => value.toUpperCase());
 }
 
-export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false }: {
+export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false, phaseFourReadOnly = false }: {
   api?: typeof clientTicketApi;
   inspectionOnly?: boolean;
+  /** Phase 4 connects account access and ticket previews; ticket writes come later. */
+  phaseFourReadOnly?: boolean;
 } = {}) {
   const [portalState, setPortalState] = useState<PortalState>('checking');
   const [session, setSession] = useState<ClientSession | null>(null);
@@ -83,6 +85,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [replyResetVersion, setReplyResetVersion] = useState(0);
   const [sessionCheckVersion, setSessionCheckVersion] = useState(0);
+  const [signInPending, setSignInPending] = useState(false);
+  const [signInSent, setSignInSent] = useState(false);
+  const [signInError, setSignInError] = useState('');
   const queueGeneration = useRef(0);
   const historyGeneration = useRef(0);
   const writeLock = useRef(false);
@@ -101,6 +106,19 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     if (!(error instanceof ClientTicketApiError) || error.status !== 401) return false;
     clearExpiredClientSession();
     return true;
+  }
+
+  async function requestSignInLink(email: string): Promise<void> {
+    if (signInPending || portalState === 'unavailable') return;
+    setSignInPending(true); setSignInSent(false); setSignInError('');
+    try {
+      await api.requestSignInLink(email);
+      setSignInSent(true);
+    } catch (error) {
+      setSignInError(friendlyError(error, 'session'));
+    } finally {
+      setSignInPending(false);
+    }
   }
 
   useEffect(() => {
@@ -181,12 +199,15 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     let current = true;
     const generation = ++historyGeneration.current;
     setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setHistoryError(''); setHistoryLoading(false); setDetailLoading(true);
-    Promise.all([
-      api.getTicket(workspaceId, selectedId),
-      api.getMessages(workspaceId, selectedId, { limit: 50 }),
-    ]).then(([ticket, page]) => {
+    const load = phaseFourReadOnly
+      ? api.getTicket(workspaceId, selectedId).then(ticket => [ticket, null] as const)
+      : Promise.all([
+        api.getTicket(workspaceId, selectedId),
+        api.getMessages(workspaceId, selectedId, { limit: 50 }),
+      ] as const);
+    load.then(([ticket, page]) => {
       if (!current) return;
-      setDetail(ticket); setMessages(page.items); setMessageCursor(page.nextCursor);
+      setDetail(ticket); setMessages(page?.items ?? []); setMessageCursor(page?.nextCursor ?? null);
     }).catch(error => {
       if (current && !isExpiredClientSession(error)) setDetailError(friendlyError(error, 'ticket'));
     }).finally(() => {
@@ -196,7 +217,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       current = false;
       if (historyGeneration.current === generation) historyGeneration.current += 1;
     };
-  }, [portalState, workspaceId, selectedId, selectedQueueItem?.id, refreshVersion, api]);
+  }, [portalState, workspaceId, selectedId, selectedQueueItem?.id, refreshVersion, api, phaseFourReadOnly]);
 
   async function loadMoreQueue() {
     if (!workspaceId || !queue?.nextCursor || queueMoreLoading) return;
@@ -352,6 +373,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   if (portalState === 'checking') return <FullPageState title="Checking secure client access…" />;
   if (portalState === 'signed_out' || portalState === 'unavailable') return <ClientAccessPanel
     unavailable={portalState === 'unavailable'} error={pageError}
+    signInError={signInError} signInSent={signInSent} signingIn={signInPending}
+    onRequestSignIn={email => void requestSignInLink(email)}
     onRetry={() => setSessionCheckVersion(value => value + 1)}
   />;
 
@@ -377,7 +400,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
     {workspaceOptions.length === 0 ? <section className="mx-auto w-full max-w-2xl p-6 md:p-12">
       <EmptyState title="No shared workspace yet" body="Your project manager has not enabled client access to a workspace. You will only see projects and requests that are explicitly shared with your account." />
-    </section> : view === 'create' && createContext ? <ClientCreateTicketForm
+    </section> : !phaseFourReadOnly && view === 'create' && createContext ? <ClientCreateTicketForm
       context={createContext}
       submissionEnabled={!inspectionOnly}
       relatedTicket={relatedTicket ? { id: relatedTicket.id, reference: relatedTicket.reference, title: relatedTicket.title } : null}
@@ -387,12 +410,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     /> : <section className="grid min-h-0 flex-1 gap-4 p-4 md:p-6 xl:grid-cols-[minmax(280px,0.72fr)_minmax(0,1.6fr)]">
       <div className={`${selectedId ? 'hidden xl:flex' : 'flex'} min-h-[360px] min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-surface`}>
         <div className="space-y-3 border-b border-white/[0.07] p-3">
-          <div className="flex items-center justify-between gap-2"><div><h1 className="text-sm font-semibold text-gray-100">My tickets</h1><p className="mt-0.5 text-[10px] text-gray-500">Talk with your project manager on each request.</p></div>
-            <button onClick={() => void openCreateForm()} disabled={!workspaceId || createLoading || Boolean(pending)} className={primary}><Plus size={14} />{createLoading ? 'Loading…' : 'New request'}</button></div>
+          <div className="flex items-center justify-between gap-2"><div><h1 className="text-sm font-semibold text-gray-100">My tickets</h1><p className="mt-0.5 text-[10px] text-gray-500">Review your inquiry and follow its status.</p></div>
+            {!phaseFourReadOnly && <button onClick={() => void openCreateForm()} disabled={!workspaceId || createLoading || Boolean(pending)} className={primary}><Plus size={14} />{createLoading ? 'Loading…' : 'New request'}</button>}</div>
           <label className="relative block"><Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-gray-600" /><span className="sr-only">Search tickets</span>
             <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search your tickets…" className={`${input} py-2 pl-9`} /></label>
-          <div className="flex flex-wrap gap-1.5">{filters.map(option => <button key={option.id} aria-pressed={filter === option.id} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`rounded-md px-2 py-1 text-[10px] ${filter === option.id ? 'bg-brand-500/15 text-brand-200' : 'text-gray-500 hover:bg-white/[0.05] hover:text-gray-300'}`}>{option.label}</button>)}</div>
-          {queue?.counters.kind === 'client' && <div className="grid grid-cols-2 gap-2"><Metric label="Open" value={queue.counters.open} /><Metric label="Needs your action" value={queue.counters.needsClient} /></div>}
+          <div className="flex flex-wrap gap-1.5">{filters.filter(option => !phaseFourReadOnly || option.id !== 'needs_client').map(option => <button key={option.id} aria-pressed={filter === option.id} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`rounded-md px-2 py-1 text-[10px] ${filter === option.id ? 'bg-brand-500/15 text-brand-200' : 'text-gray-500 hover:bg-white/[0.05] hover:text-gray-300'}`}>{option.label}</button>)}</div>
+          {queue?.counters.kind === 'client' && <div className={`grid gap-2 ${phaseFourReadOnly ? 'grid-cols-1' : 'grid-cols-2'}`}><Metric label="Open" value={queue.counters.open} />{!phaseFourReadOnly && <Metric label="Needs your action" value={queue.counters.needsClient} />}</div>}
         </div>
         {queueError && <p role="alert" className="m-3 rounded-md border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{queueError}</p>}
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -400,7 +423,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             : queue?.items.length ? queue.items.map(item => <button key={item.id} disabled={Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setView('tickets'); setWriteError(''); }} className={`w-full border-b border-white/[0.05] p-4 text-left transition-colors disabled:opacity-50 ${selectedId === item.id ? 'bg-brand-500/[0.08] shadow-[inset_2px_0_0_0_#a78bfa]' : 'hover:bg-white/[0.025]'}`}>
               <div className="flex items-center justify-between gap-2"><span className="font-mono text-[10px] text-gray-500">{item.reference}</span><StatusPill status={item.status} /></div>
               <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-200">{item.title}</p>
-              <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-gray-500"><span>{item.requestedAction ? 'Your action needed' : ['closed', 'declined', 'cancelled'].includes(item.status) ? 'Read-only history' : item.status === 'in_progress' ? 'Work in progress' : 'With your project manager'}</span><time dateTime={item.updatedAt}>{time(item.updatedAt)}</time></div>
+              <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-gray-500"><span>{phaseFourReadOnly ? statusName(item.status) : item.requestedAction ? 'Your action needed' : ['closed', 'declined', 'cancelled'].includes(item.status) ? 'Read-only history' : item.status === 'in_progress' ? 'Work in progress' : 'With your project manager'}</span><time dateTime={item.updatedAt}>{time(item.updatedAt)}</time></div>
             </button>)
               : !queueError && <EmptyState title="No tickets in this view" body={filter === 'all' ? 'Submit a request when you need help with your project.' : 'Try another filter or clear your search.'} />}
         </div>
@@ -408,7 +431,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       </div>
 
       <div className={`${selectedId ? 'block' : 'hidden xl:block'} min-h-[420px] min-w-0 overflow-hidden rounded-xl border border-white/[0.08] bg-surface`}>
-        {!selectedId || !selectedQueueItem ? <EmptyState title="Select a ticket" body="Choose one of your requests to read the conversation, review shared scope or results, and reply to your project manager." />
+        {!selectedId || !selectedQueueItem ? <EmptyState title="Select a ticket" body={phaseFourReadOnly ? 'Choose one of your inquiries to review its details and current status.' : 'Choose one of your requests to read the conversation, review shared scope or results, and reply to your project manager.'} />
           : detailLoading ? <p role="status" className="p-8 text-center text-xs text-gray-500">Loading ticket…</p>
             : detailError ? <div role="alert" className="m-4 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-4 text-xs text-rose-200">{detailError}</div>
               : detail && <ClientTicketDetail
@@ -423,6 +446,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                 busy={writing || Boolean(pending)}
                 error={writeError}
                 replyResetVersion={replyResetVersion}
+                phaseFourReadOnly={phaseFourReadOnly}
                 onBack={() => { historyGeneration.current += 1; setSelectedId(null); setDetail(null); }}
                 onLoadMore={() => void loadMoreMessages()}
                 onReply={sendReply}

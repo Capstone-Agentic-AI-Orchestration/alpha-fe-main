@@ -330,8 +330,8 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     setWriteError('');
     try {
       const receipt = await api.sendInvitationEmail(ticketId);
-      if (receipt.ticketId !== ticketId || !receipt.deliveryId
-        || !['queued', 'accepted', 'failed'].includes(receipt.status)) throw new Error('Invalid invitation email receipt.');
+      if (receipt.ticketId !== ticketId || !receipt.invitationId || !Number.isFinite(Date.parse(receipt.expiresAt))
+        || receipt.status !== 'pending' || typeof receipt.alreadyPending !== 'boolean') throw new Error('Invalid client invitation receipt.');
       setInvitationEmailReceipt(receipt);
     } catch (error) {
       setInvitationEmailError(safeError(error, 'write'));
@@ -557,9 +557,9 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                       && detail.writesAvailable && <button type="button" onClick={() => void sendClientInvitationEmail()}
                         disabled={invitationEmailSending || writing || Boolean(pending)} className={secondary}>
                         <Send size={13} />{invitationEmailSending ? 'Sending…'
-                          : invitationEmailReceipt?.ticketId === detail.id ? 'Check email status' : 'Send invitation email'}
+                          : invitationEmailReceipt?.ticketId === detail.id ? 'Invitation pending' : 'Invite client to portal'}
                       </button>}
-                    {detail.internal.request?.source === 'public_inquiry' && !selectedQueueItem.internal.clientAccessActive && <span className="rounded-md border border-amber-400/15 bg-amber-500/[0.05] px-2.5 py-2 text-[10px] text-amber-200/80">Client access is not active · email does not create an account</span>}
+                    {detail.internal.request?.source === 'public_inquiry' && !selectedQueueItem.internal.clientAccessActive && <span className="rounded-md border border-amber-400/15 bg-amber-500/[0.05] px-2.5 py-2 text-[10px] text-amber-200/80">Ticket access starts only after the invited client verifies their email</span>}
                     {detail.internal.request?.source === 'public_inquiry' && <span className="rounded-md border border-white/[0.07] px-2.5 py-2 text-[10px] text-gray-500">Unverified public inquiry</span>}
                     {detail.internal.authorizedScopeVersionId && <span className="text-[10px] text-gray-500">Scope locked after work authorization · new work needs a linked ticket</span>}
                     {workflowActions === 'all' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <button className={secondary} disabled={writing || Boolean(pending)}
@@ -570,13 +570,11 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                       onClick={() => { setWriteError(''); setReviewAction('close'); }}>Close accepted ticket</button>}
                   </div>
                   {invitationEmailError && <p role="alert" className="mt-3 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{invitationEmailError}</p>}
-                  {invitationEmailReceipt?.ticketId === detail.id && <p role="status" className={`mt-3 rounded-lg border p-2.5 text-[11px] ${invitationEmailReceipt.status === 'failed' ? 'border-amber-400/15 bg-amber-500/[0.04] text-amber-200/80' : 'border-emerald-400/15 bg-emerald-500/[0.04] text-emerald-200/80'}`}>
-                    {invitationEmailReceipt.status === 'accepted'
-                      ? 'Resend accepted this invitation email. Check the recipient inbox; this does not create an account or grant access.'
-                      : invitationEmailReceipt.status === 'failed'
-                        ? 'The email could not be confirmed. Check Resend before retrying; Alpha will not send a duplicate automatically.'
-                        : 'Invitation email queued. No account was created and no client access was granted.'}
-                    {invitationEmailReceipt.alreadyRequested && ' Repeating this action will not send a duplicate.'}
+                  {invitationEmailReceipt?.ticketId === detail.id && <p role="status" className="mt-3 rounded-lg border border-emerald-400/15 bg-emerald-500/[0.04] p-2.5 text-[11px] text-emerald-200/80">
+                    {invitationEmailReceipt.alreadyPending
+                      ? 'An active invitation already exists; Alpha did not create a duplicate.'
+                      : 'Invitation queued. The client gets access only after verifying the invited email and activating this ticket.'}
+                    {' '}Expires {new Date(invitationEmailReceipt.expiresAt).toLocaleString()}.
                   </p>}
                 </div>
 
@@ -601,7 +599,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                       <p className="flex items-center gap-1.5"><UserRound size={12} />{detail.internal.request.contact.fullName}</p>
                       <p className="break-all">{detail.internal.request.contact.email} <span className="text-amber-300/80">· unverified</span></p>
                     </div>}
-                    <p className="mt-3 text-[10px] text-gray-500">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : 'Client account not active'}</p>
+                    <p className="mt-3 text-[10px] text-gray-500">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : invitationEmailReceipt?.ticketId === detail.id ? 'Invitation pending · no access until verified' : 'Client account not active'}</p>
                     <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectId ? 'Linked to a project' : 'No project linked yet'}</p>
                   </div>
                 </div>
@@ -644,7 +642,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                     {(panel === 'conversation' ? messageCursor : noteCursor) && <button onClick={() => void loadMoreHistory()} disabled={historyLoading} className="mx-auto block rounded-md px-3 py-1.5 text-[10px] text-brand-300 hover:bg-white/[0.04] disabled:opacity-50">{historyLoading ? 'Loading…' : 'Load more'}</button>}
                     {historyError && <div role="alert" className="rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2 text-[10px] text-rose-200">{historyError}</div>}
                     {panel === 'conversation' && !selectedQueueItem.internal.clientAccessActive
-                      ? <div className="flex min-h-32 flex-col items-center justify-center text-center"><LockKeyhole size={18} className="text-gray-600" /><p className="mt-2 text-xs text-gray-400">Client conversation is unavailable until secure client access is implemented.</p><p className="mt-1 max-w-sm text-[10px] text-gray-600">The invitation email is only a notice; use private notes for internal triage.</p></div>
+                      ? <div className="flex min-h-32 flex-col items-center justify-center text-center"><LockKeyhole size={18} className="text-gray-600" /><p className="mt-2 text-xs text-gray-400">Client conversation is available after the invited client activates access.</p><p className="mt-1 max-w-sm text-[10px] text-gray-600">The invitation email contains a one-time activation link. Use private notes for internal triage until then.</p></div>
                       : panel === 'conversation' && messages.length === 0
                         ? <p className="py-8 text-center text-xs text-gray-600">No messages yet.</p>
                         : panel === 'notes' && notes.length === 0
