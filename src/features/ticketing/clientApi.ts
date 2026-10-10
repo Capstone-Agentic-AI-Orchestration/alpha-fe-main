@@ -53,6 +53,7 @@ export interface ClientTicketReceipt {
   reference?: string; messageId?: string;
 }
 export interface ClientSession { authenticated: boolean; expiresAt?: string }
+export type ClientEmailLinkType = 'invite' | 'magiclink';
 export interface ClientTicketCreateInput {
   intakeContextId: string;
   schemaVersion: 1;
@@ -211,19 +212,23 @@ function pageQuery(options: { limit?: number; after?: string | null }): string {
   return value ? `?${value}` : '';
 }
 
-/** Client-only HTTP facade; it does not sign in a provider or persist tokens. */
+/** Client-only HTTP facade; provider tokens are exchanged immediately and never persisted. */
 export const clientTicketApi = {
-  activateInvitation(invitationToken: string, providerCredential: string) {
-    return requestJson<{ activated: true }>('/auth/activate', {
-      method: 'POST', csrf: false,
-      headers: { Authorization: `Bearer ${providerCredential}` },
-      body: JSON.stringify({ invitationToken }),
+  requestSignInLink(email: string) {
+    return requestJson<{ accepted: true; message: string }>('/auth/sign-in-link', {
+      method: 'POST', csrf: false, body: JSON.stringify({ email }),
     });
   },
-  createSession(providerCredential: string) {
+  activateInvitation(invitationToken: string, providerTokenHash: string, providerTokenType: ClientEmailLinkType) {
+    return requestJson<{ activated: true }>('/auth/activate', {
+      method: 'POST', csrf: false,
+      body: JSON.stringify({ invitationToken, providerTokenHash, providerTokenType }),
+    });
+  },
+  createSessionFromEmailLink(providerTokenHash: string, providerTokenType: ClientEmailLinkType) {
     return requestJson<{ authenticated: true; expiresAt: string }>('/auth/session', {
       method: 'POST', csrf: false,
-      headers: { Authorization: `Bearer ${providerCredential}` },
+      body: JSON.stringify({ providerTokenHash, providerTokenType }),
     });
   },
   getSession() { return requestJson<ClientSession>('/session'); },

@@ -52,12 +52,13 @@ describe('phase-one real app interfaces', () => {
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
   });
 
-  it('shows the planned email-access interface without pretending to authenticate', () => {
-    const html = renderToStaticMarkup(<ClientAccessPanel unavailable error="" onRetry={() => undefined} />);
+  it('shows the invitation-only sign-in interface without offering open account creation', () => {
+    const html = renderToStaticMarkup(<ClientAccessPanel unavailable={false} error="" signInError=""
+      signInSent={false} signingIn={false} onRetry={() => undefined} onRequestSignIn={() => undefined} />);
     expect(html).toContain('Access your tickets');
-    expect(html).toContain('Continue with email');
-    expect(html).toMatch(/<input[^>]*type="email"[^>]*disabled=""/);
-    expect(html).toContain('no code is sent');
+    expect(html).toContain('Send sign-in link');
+    expect(html).toMatch(/<input[^>]*type="email"[^>]*required=""/);
+    expect(html).toContain('New client accounts are invitation-only');
     expect(html).toContain('href="/#/request"');
   });
 

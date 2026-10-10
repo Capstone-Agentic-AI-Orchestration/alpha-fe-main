@@ -22,6 +22,6 @@ export default function AppEntry({ entry }: { entry: Entry }) {
     </main>
   );
   return <Suspense fallback={<div className="min-h-dvh flex items-center justify-center text-gray-400" role="status">Loading Alpha…</div>}>
-    {entry === 'internal' ? <InternalApp /> : entry === 'client-portal' ? <ClientPortal /> : TicketingPreview && <TicketingPreview initialRole={entry === 'preview-pm' ? 'pm' : 'client'} />}
+    {entry === 'internal' ? <InternalApp /> : entry === 'client-portal' ? <ClientPortal phaseFourReadOnly /> : TicketingPreview && <TicketingPreview initialRole={entry === 'preview-pm' ? 'pm' : 'client'} />}
   </Suspense>;
 }

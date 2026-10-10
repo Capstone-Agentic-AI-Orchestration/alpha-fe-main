@@ -136,12 +136,14 @@ export interface PmTicketScopeProposalInput {
 export interface PmTicketScopeProposalReceipt extends PmTicketReceipt {
   scopeVersionId: string;
 }
-export interface PmTicketInvitationEmailReceipt {
+export interface PmTicketInvitationReceipt {
   ticketId: string;
-  deliveryId: string;
-  status: 'queued' | 'accepted' | 'failed';
-  alreadyRequested: boolean;
+  invitationId: string;
+  expiresAt: string;
+  status: 'pending';
+  alreadyPending: boolean;
 }
+export type PmTicketInvitationEmailReceipt = PmTicketInvitationReceipt;
 
 function encodeId(value: string): string { return encodeURIComponent(value); }
 function query(values: Record<string, string | null | undefined>): string {
@@ -249,7 +251,7 @@ export const pmTicketApi = {
     });
   },
   sendInvitationEmail(ticketId: string) {
-    return apiService.ticketRequest<PmTicketInvitationEmailReceipt>(
+    return apiService.ticketRequest<PmTicketInvitationReceipt>(
       `/tickets/${encodeId(ticketId)}/invitations`, { method: 'POST', body: '{}' },
     );
   },

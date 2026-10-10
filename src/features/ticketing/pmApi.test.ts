@@ -58,7 +58,8 @@ describe('PM ticket transport', () => {
 
   it('requests a PM invitation email without accepting recipient or account data from the UI', async () => {
     const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({
-      deliveryId: 'delivery-1', ticketId: 'ticket-1', status: 'queued', alreadyRequested: false,
+      invitationId: 'invitation-1', ticketId: 'ticket-1', status: 'pending',
+      expiresAt: '2026-10-10T00:00:00.000Z', alreadyPending: false,
     } as never);
 
     await pmTicketApi.sendInvitationEmail('ticket-1');
