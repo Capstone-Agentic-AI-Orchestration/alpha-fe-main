@@ -52,7 +52,7 @@ function statusStyle(status: TicketStatus): string {
   return 'bg-white/[0.06] text-gray-300';
 }
 
-function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): string {
+export function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): string {
   if (!(error instanceof ApiRequestError)) {
     return area === 'queue' ? 'Could not load tickets. Check your connection and try again.'
       : area === 'ticket' ? 'Could not load this ticket. Refresh and try again.'
@@ -62,6 +62,12 @@ function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): string {
   if (error.status === 401) return 'Your sign-in has expired. Sign in again to manage tickets.';
   if (error.status === 403) return 'Your current workspace role does not allow ticket management.';
   if (error.status === 404) return 'Ticket service is not connected in this environment, or this ticket is no longer available.';
+  if (area === 'write' && error.status === 503 && error.code === 'client_invitation_unavailable') {
+    return 'Client invitations are not configured on the hosted backend. Ask the deployment owner to check the client portal setup; retrying will not send an email until it is ready.';
+  }
+  if (area === 'write' && error.status === 409 && error.code === 'ticket_invitation_recipient_restricted') {
+    return 'The email sender currently allows only its configured test recipient. Submit an inquiry with that email, or configure a verified sender before inviting other clients.';
+  }
   if (error.status === 409) return 'The ticket changed before this action completed. Refresh it and review the latest state.';
   if (error.status === 429) return 'Too many requests. Wait a little, then try again.';
   if (error.status !== null && error.status >= 500) return 'Ticket service is temporarily unavailable.';

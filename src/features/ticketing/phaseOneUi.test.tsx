@@ -4,9 +4,25 @@ import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientCreateTicketForm } from './ClientCreateTicketForm';
 import { PublicInquiryForm } from './PublicInquiryForm';
 import PublicInquiryUnavailable from './PublicInquiryUnavailable';
-import { PmTicketsView } from './PmTicketsView';
+import { PmTicketsView, safeError } from './PmTicketsView';
+import { ApiRequestError } from '@/shared/services/apiService';
 
 describe('phase-one real app interfaces', () => {
+  it('explains an unavailable client invitation without displaying server secrets', () => {
+    const message = safeError(new ApiRequestError(503, 'private server details', 'client_invitation_unavailable'), 'write');
+    expect(message).toContain('Client invitations are not configured on the hosted backend');
+    expect(message).not.toContain('private server details');
+    expect(safeError(new ApiRequestError(503, 'private server details', 'unknown'), 'write'))
+      .toBe('Ticket service is temporarily unavailable.');
+  });
+
+  it('distinguishes the invitation sender restriction from a stale ticket version', () => {
+    const message = safeError(new ApiRequestError(409, 'private recipient', 'ticket_invitation_recipient_restricted'), 'write');
+    expect(message).toContain('configured test recipient');
+    expect(message).not.toContain('private recipient');
+    expect(safeError(new ApiRequestError(409, 'version changed', 'ticket_version_conflict'), 'write'))
+      .toContain('The ticket changed');
+  });
   it('lets an enabled inquiry form submit without an external verification widget', () => {
     const html = renderToStaticMarkup(<PublicInquiryForm submissionEnabled onSubmit={() => undefined} onCancel={() => undefined} />);
     expect(html).not.toContain('verification');
