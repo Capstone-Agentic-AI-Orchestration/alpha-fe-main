@@ -14,7 +14,9 @@ describe('existing API transport compatibility', () => {
       expect(error).toBeInstanceOf(Error);
       expect(parseApiError(error)).toEqual({ status: 403, message: 'Existing permission refusal.' });
     }
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: 'include', headers: { 'X-Workspace-Id': 'workspace-existing' } });
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.credentials).toBe('include');
+    expect(new Headers(options.headers).get('X-Workspace-Id')).toBe('workspace-existing');
   });
   it('keeps existing workspace-refusal recovery for non-ticket requests', async () => {
     const handler = vi.fn(); setActiveWorkspaceId('workspace-existing'); onWorkspaceRefused(handler);
@@ -44,7 +46,9 @@ describe('new ticket helper stays within its namespace', () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ error: 'Ticket changed.', code: 'ticket_version_conflict' }, 409)); vi.stubGlobal('fetch', fetchMock);
     await expect(apiService.ticketRequest('/tickets/id/commands', { method: 'POST', body: '{}' }))
       .rejects.toMatchObject({ status: 409, code: 'ticket_version_conflict', reconciliationRequired: false, message: 'API Error [409]: Ticket changed.' });
-    expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: 'include', headers: { 'X-Workspace-Id': 'workspace-existing' } });
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.credentials).toBe('include');
+    expect(new Headers(options.headers).get('X-Workspace-Id')).toBe('workspace-existing');
   });
   it('marks only ticket write network uncertainty for same-operation reconciliation', async () => {
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Test-only transport failure')));

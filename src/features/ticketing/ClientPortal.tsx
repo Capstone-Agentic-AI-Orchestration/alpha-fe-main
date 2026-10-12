@@ -48,11 +48,14 @@ function statusName(status: ClientTicketQueueItem['status']): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, value => value.toUpperCase());
 }
 
-export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false, phaseFourReadOnly = false }: {
+export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false, phaseFourReadOnly = false,
+  phaseFiveCommunicationEnabled = false }: {
   api?: typeof clientTicketApi;
   inspectionOnly?: boolean;
   /** Phase 4 connects account access and ticket previews; ticket writes come later. */
   phaseFourReadOnly?: boolean;
+  /** Phase 5 enables ticket-scoped messages and documents without enabling later workflow decisions. */
+  phaseFiveCommunicationEnabled?: boolean;
 } = {}) {
   const [portalState, setPortalState] = useState<PortalState>('checking');
   const [session, setSession] = useState<ClientSession | null>(null);
@@ -199,7 +202,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     let current = true;
     const generation = ++historyGeneration.current;
     setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setHistoryError(''); setHistoryLoading(false); setDetailLoading(true);
-    const load = phaseFourReadOnly
+    const load = phaseFourReadOnly && !phaseFiveCommunicationEnabled
       ? api.getTicket(workspaceId, selectedId).then(ticket => [ticket, null] as const)
       : Promise.all([
         api.getTicket(workspaceId, selectedId),
@@ -217,7 +220,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       current = false;
       if (historyGeneration.current === generation) historyGeneration.current += 1;
     };
-  }, [portalState, workspaceId, selectedId, selectedQueueItem?.id, refreshVersion, api, phaseFourReadOnly]);
+  }, [portalState, workspaceId, selectedId, selectedQueueItem?.id, refreshVersion, api, phaseFourReadOnly, phaseFiveCommunicationEnabled]);
 
   async function loadMoreQueue() {
     if (!workspaceId || !queue?.nextCursor || queueMoreLoading) return;
@@ -240,7 +243,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   }
 
   async function loadMoreMessages() {
-    if (!workspaceId || !selectedId || !messageCursor || historyLoading) return;
+    if (!phaseFiveCommunicationEnabled || !workspaceId || !selectedId || !messageCursor || historyLoading) return;
     const generation = historyGeneration.current;
     const activeWorkspace = workspaceId;
     const activeTicket = selectedId;
@@ -447,6 +450,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                 error={writeError}
                 replyResetVersion={replyResetVersion}
                 phaseFourReadOnly={phaseFourReadOnly}
+                communicationEnabled={phaseFiveCommunicationEnabled && !inspectionOnly}
                 onBack={() => { historyGeneration.current += 1; setSelectedId(null); setDetail(null); }}
                 onLoadMore={() => void loadMoreMessages()}
                 onReply={sendReply}

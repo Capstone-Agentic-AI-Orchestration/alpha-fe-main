@@ -5,7 +5,9 @@ import type {
   ClientTicketCommandInput, ClientTicketDetail as ClientTicketRecord,
   ClientTicketMessage,
 } from './clientApi';
-import { clientTicketApi } from './clientApi';
+import { clientTicketApi, clientTicketDocumentsApi } from './clientApi';
+import type { TicketDocumentsApi } from './ticketDocuments';
+import { TicketDocumentsPanel } from './TicketDocumentsPanel';
 import { input, primary, secondary, time } from './ticketUi';
 import { ClientDeliveryFiles } from './ClientDeliveryFiles';
 import { canReviewClientDelivery, clientDeliveryReviewKey } from './clientReview';
@@ -14,11 +16,14 @@ type Decision = Extract<ClientTicketCommandInput['command'], { type: 'agree_scop
 
 export function ClientTicketDetail({
   workspaceId, ticket, messages, messageCursor, historyLoading, historyError, busy, error, replyResetVersion,
-  onBack, onLoadMore, onReply, onDecision, onAdditionalWork, onCorrection, api = clientTicketApi, phaseFourReadOnly = false,
+  onBack, onLoadMore, onReply, onDecision, onAdditionalWork, onCorrection, api = clientTicketApi,
+  documentsApi = clientTicketDocumentsApi, phaseFourReadOnly = false, communicationEnabled = false,
 }: {
   workspaceId: string;
   api?: typeof clientTicketApi;
+  documentsApi?: TicketDocumentsApi;
   phaseFourReadOnly?: boolean;
+  communicationEnabled?: boolean;
   ticket: ClientTicketRecord;
   messages: ClientTicketMessage[];
   messageCursor: string | null;
@@ -45,10 +50,10 @@ export function ClientTicketDetail({
     setInspectedKey(verified ? deliveryKey : ''); setReviewAcknowledged(false); setConfirming(null);
   }, [deliveryKey]);
   const canReview = canReviewClientDelivery(ticket, inspectedKey);
-  const canReply = ticket.writesAvailable && !ticket.readOnly;
+  const terminal = ticket.status === 'closed' || ticket.status === 'declined' || ticket.status === 'cancelled';
+  const canReply = communicationEnabled ? !terminal : ticket.writesAvailable && !ticket.readOnly;
   const scopeDecision = ticket.requestedAction === 'agree_scope' && ticket.scope && !ticket.scope.agreed
     ? { type: 'agree_scope' as const, scopeVersionId: ticket.scope.id } : null;
-  const terminal = ticket.status === 'closed' || ticket.status === 'declined' || ticket.status === 'cancelled';
 
   useEffect(() => { setBody(''); }, [replyResetVersion]);
   useEffect(() => { setCorrectionBody(''); setCorrectionOpen(false); setConfirming(null); setReviewAcknowledged(false); }, [deliveryKey]);
@@ -115,7 +120,7 @@ export function ClientTicketDetail({
       </InfoCard>}
     </div>
 
-    {phaseFourReadOnly ? <section className="mt-5 rounded-xl border border-white/[0.08] bg-surface p-4">
+    {phaseFourReadOnly && !communicationEnabled ? <section className="mt-5 rounded-xl border border-white/[0.08] bg-surface p-4">
       <h2 className="text-sm font-medium text-gray-100">Ticket communication</h2>
       <p className="mt-2 text-xs leading-relaxed text-gray-500">Your account is active and this ticket is visible to you. Ticket messages and result review will be enabled in a later phase.</p>
     </section> : <section className="mt-5 rounded-xl border border-white/[0.08] bg-surface">
@@ -135,6 +140,11 @@ export function ClientTicketDetail({
         <div className="flex items-center justify-between gap-2"><span className="text-[10px] text-gray-600">Visible to you and your project manager</span><button type="submit" disabled={busy || !body.trim()} className={primary}><Send size={13} />Send</button></div>
       </form> : <p className="border-t border-white/[0.07] px-4 py-3 text-center text-[11px] text-gray-500">{terminal ? 'This ticket is closed. Its history remains available.' : 'This ticket is currently read-only.'}</p>}
     </section>}
+
+    {communicationEnabled && <TicketDocumentsPanel
+      api={documentsApi} scope={workspaceId} ticketId={ticket.id}
+      canUpload={!terminal} heading="Documents for this ticket"
+    />}
 
     {!phaseFourReadOnly && confirming && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setConfirming(null); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="client-ticket-confirm-title" className="w-full max-w-md rounded-xl border border-white/10 bg-surface p-5 shadow-2xl">

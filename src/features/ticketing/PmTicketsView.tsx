@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 import { ApiRequestError } from '@/shared/services/apiService';
-import { pmTicketApi } from './pmApi';
+import { pmTicketApi, pmTicketDocumentsApi } from './pmApi';
 import type {
   PmTicketCommandInput, PmTicketDetail, PmTicketMessage, PmTicketMessageInput,
   PmTicketNote, PmTicketNoteInput, PmTicketQueueItem, PmTicketQueueOptions,
@@ -19,6 +19,7 @@ import { canAssessTicketDelivery, canCloseAcceptedTicket, canShareAssessedDelive
 import { PmDeliveryReview } from './PmDeliveryReview';
 import { PmDeliveryAssessment } from './PmDeliveryAssessment';
 import { input, primary, secondary, time } from './ticketUi';
+import { TicketDocumentsPanel } from './TicketDocumentsPanel';
 
 type Filter = NonNullable<PmTicketQueueOptions['filter']>;
 type Panel = 'conversation' | 'notes';
@@ -109,11 +110,13 @@ export function PmContactVerification({ verification }: { verification: unknown 
   return <span className="text-gray-500">Unable to verify status</span>;
 }
 
-export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflowActions = 'all' }: {
+export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false }: {
   api?: typeof pmTicketApi;
   intakeEnabled?: boolean;
   /** Limit actions to the implemented production phase. */
   workflowActions?: WorkflowActions;
+  /** Enable only the conversation and document capabilities of Phase 5. */
+  communicationEnabled?: boolean;
 } = {}) {
   const [queue, setQueue] = useState<PmTicketQueuePage | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
@@ -301,10 +304,11 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
   }
 
   function submitReply() {
-    if (!detail || !selectedQueueItem?.internal.clientAccessActive || !detail.writesAvailable || !draft.trim() || pending) return;
+    if (!detail || !selectedQueueItem?.internal.clientAccessActive || !detail.writesAvailable
+      || (!communicationEnabled && workflowActions === 'triage') || !draft.trim() || pending) return;
     const inputValue: PmTicketMessageInput = {
       schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
-      body: draft, action: { type: messageAction },
+      body: draft, action: { type: communicationEnabled ? 'reply' : messageAction },
     };
     void performWrite({
       ticketId: detail.id, operationId: inputValue.operationId,
@@ -683,9 +687,9 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                       if (succeeded && ['correction authorization', 'accepted ticket closure'].includes(operation.label)) setReviewAction(null);
                     }} disabled={writing} className={secondary}>{writing ? 'Checking…' : 'Check and retry'}</button>
                   </div>}
-                  {(panel === 'notes' || (workflowActions !== 'triage' && selectedQueueItem.internal.clientAccessActive)) && <form className="border-t border-white/[0.06] p-3" onSubmit={event => { event.preventDefault(); panel === 'notes' ? submitNote() : submitReply(); }}>
+                  {(panel === 'notes' || ((communicationEnabled || workflowActions !== 'triage') && selectedQueueItem.internal.clientAccessActive)) && <form className="border-t border-white/[0.06] p-3" onSubmit={event => { event.preventDefault(); panel === 'notes' ? submitNote() : submitReply(); }}>
                     <label className="sr-only" htmlFor="ticket-message-draft">{panel === 'notes' ? 'Private note' : 'Message to client'}</label>
-                    {panel === 'conversation' && <div className="mb-2 flex flex-wrap items-center gap-2">
+                    {panel === 'conversation' && !communicationEnabled && <div className="mb-2 flex flex-wrap items-center gap-2">
                       <button type="button" aria-pressed={messageAction === 'reply'} onClick={() => setMessageAction('reply')} className={`rounded-md px-2.5 py-1.5 text-[10px] ${messageAction === 'reply' ? 'bg-brand-500/15 text-brand-200' : 'text-gray-500 hover:bg-white/[0.04]'}`}>Send update</button>
                       <button type="button" aria-pressed={messageAction === 'request_details'} onClick={() => setMessageAction('request_details')} disabled={!['under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)} className={`rounded-md px-2.5 py-1.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-40 ${messageAction === 'request_details' ? 'bg-amber-500/10 text-amber-200' : 'text-gray-500 hover:bg-white/[0.04]'}`}>Request details</button>
                       {messageAction === 'request_details' && <span className="text-[10px] text-amber-200/70">Sets the next action to the client.</span>}
@@ -700,6 +704,10 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                   </form>}
                   {!detail.writesAvailable && <div className="border-t border-white/[0.06] px-4 py-3 text-center text-[10px] text-gray-600">This ticket is read-only or ticket changes are disabled.</div>}
                 </div>
+                {communicationEnabled && <TicketDocumentsPanel
+                  api={pmTicketDocumentsApi} ticketId={detail.id}
+                  canUpload={detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status)}
+                />}
               </div>}
       </div>
     </section>

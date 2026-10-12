@@ -1,6 +1,7 @@
 import { ApiRequestError, apiService } from '@/shared/services/apiService';
 import { parseClientDeliveryFile, parseClientDeliveryManifest, readPmDeliveryFile, type ClientDeliveryFile } from './clientDelivery';
 import { parsePmDeliveryCandidates } from './pmDeliveryCandidates';
+import { parseTicketDocument, parseTicketDocumentList, type TicketDocumentsApi } from './ticketDocuments';
 
 export type TicketStatus = 'received' | 'under_review' | 'awaiting_client' | 'in_progress'
   | 'ready_for_review' | 'on_hold' | 'closed' | 'declined' | 'cancelled';
@@ -217,6 +218,20 @@ export const pmTicketApi = {
       `/tickets/${encodeId(ticketId)}/notes${query({ limit: options.limit === undefined ? undefined : String(options.limit), after: options.after })}`,
     );
   },
+  async getDocuments(ticketId: string) {
+    return parseTicketDocumentList(await apiService.ticketRequest<unknown>(`/tickets/${encodeId(ticketId)}/documents`));
+  },
+  async uploadDocument(ticketId: string, file: File, replacesDocumentId: string | null, operationId: string) {
+    return parseTicketDocument(await apiService.ticketUploadDocument<unknown>(
+      `/tickets/${encodeId(ticketId)}/documents`, file,
+      { operationId, filename: file.name, contentType: file.type, replacesDocumentId },
+    ));
+  },
+  downloadDocument(ticketId: string, documentId: string) {
+    return apiService.ticketDownloadDocument(
+      `/tickets/${encodeId(ticketId)}/documents/${encodeId(documentId)}/content`,
+    );
+  },
   getOperation(ticketId: string, operationId: string) {
     return apiService.ticketRequest<PmTicketReceipt>(
       `/tickets/operations/${encodeId(operationId)}${query({ ticketId })}`,
@@ -255,4 +270,11 @@ export const pmTicketApi = {
       `/tickets/${encodeId(ticketId)}/invitations`, { method: 'POST', body: '{}' },
     );
   },
+};
+
+export const pmTicketDocumentsApi: TicketDocumentsApi = {
+  list: (_workspaceId, ticketId) => pmTicketApi.getDocuments(ticketId),
+  upload: (_workspaceId, ticketId, file, replacesDocumentId, operationId) =>
+    pmTicketApi.uploadDocument(ticketId, file, replacesDocumentId, operationId),
+  download: (_workspaceId, ticketId, documentId) => pmTicketApi.downloadDocument(ticketId, documentId),
 };
