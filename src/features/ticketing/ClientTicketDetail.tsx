@@ -17,12 +17,12 @@ type Decision = Extract<ClientTicketCommandInput['command'], { type: 'agree_scop
 export function ClientTicketDetail({
   workspaceId, ticket, messages, messageCursor, historyLoading, historyError, busy, error, replyResetVersion,
   onBack, onLoadMore, onReply, onDecision, onAdditionalWork, onCorrection, api = clientTicketApi,
-  documentsApi = clientTicketDocumentsApi, phaseFourReadOnly = false, communicationEnabled = false,
+  documentsApi = clientTicketDocumentsApi, workflowActionsDisabled = false, communicationEnabled = false,
 }: {
   workspaceId: string;
   api?: typeof clientTicketApi;
   documentsApi?: TicketDocumentsApi;
-  phaseFourReadOnly?: boolean;
+  workflowActionsDisabled?: boolean;
   communicationEnabled?: boolean;
   ticket: ClientTicketRecord;
   messages: ClientTicketMessage[];
@@ -76,10 +76,10 @@ export function ClientTicketDetail({
       <div><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs text-gray-500">{ticket.reference}</span><Status status={ticket.status} /></div>
         <h1 className="mt-2 break-words text-xl font-semibold text-white">{ticket.title}</h1>
         <p className="mt-1 text-[11px] text-gray-500">Updated {time(ticket.updatedAt)}</p></div>
-      {!phaseFourReadOnly && <button onClick={onAdditionalWork} disabled={busy} className={secondary}>Request additional work</button>}
+      {!workflowActionsDisabled && <button onClick={onAdditionalWork} disabled={busy} className={secondary}>Request additional work</button>}
     </header>
 
-    {!phaseFourReadOnly && ticket.requestedAction && <div className="mb-4 flex items-start gap-2 rounded-lg border border-brand-400/15 bg-brand-500/[0.06] p-3 text-xs text-brand-200"><Clock3 size={14} className="mt-0.5 shrink-0" /><span>{ticket.requestedAction === 'reply' ? 'Your project manager needs a reply.' : ticket.requestedAction === 'agree_scope' ? 'Please review the proposed scope.' : 'Your PM shared a result. Download and review its protected files, then accept it or explain what needs fixing.'}</span></div>}
+    {!workflowActionsDisabled && ticket.requestedAction && <div className="mb-4 flex items-start gap-2 rounded-lg border border-brand-400/15 bg-brand-500/[0.06] p-3 text-xs text-brand-200"><Clock3 size={14} className="mt-0.5 shrink-0" /><span>{ticket.requestedAction === 'reply' ? 'Your project manager needs a reply.' : ticket.requestedAction === 'agree_scope' ? 'Please review the proposed scope.' : 'Your PM shared a result. Download and review its protected files, then accept it or explain what needs fixing.'}</span></div>}
 
     <div className="grid gap-3 lg:grid-cols-2">
       <InfoCard title="Your request" icon={<FileText size={14} />}>
@@ -91,12 +91,12 @@ export function ClientTicketDetail({
           : <p className="text-xs text-gray-500">No project has been shared on this ticket yet. Your PM will decide whether to link a project, propose a new one, or answer without development.</p>}
         {ticket.relatedTicket && <p className="mt-3 text-[10px] text-gray-500">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
       </InfoCard>
-      {!phaseFourReadOnly && ticket.scope && <InfoCard title="Agreed work" icon={<ShieldCheck size={14} />}>
+      {!workflowActionsDisabled && ticket.scope && <InfoCard title="Agreed work" icon={<ShieldCheck size={14} />}>
         <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-300">{ticket.scope.summary}</p>
         <p className="mt-2 text-[10px] text-gray-500">{ticket.scope.agreed ? 'You agreed to this scope.' : 'Waiting for your decision.'}</p>
         {scopeDecision && canReply && <button onClick={() => setConfirming(scopeDecision)} disabled={busy} className={`${primary} mt-3`}><CheckCircle2 size={14} />Agree to scope</button>}
       </InfoCard>}
-      {!phaseFourReadOnly && ticket.delivery && <InfoCard title="Result summary" icon={<CheckCircle2 size={14} />}>
+      {!workflowActionsDisabled && ticket.delivery && <InfoCard title="Result summary" icon={<CheckCircle2 size={14} />}>
         <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-300">{ticket.delivery.summary}</p>
         <p className="mt-2 text-[10px] text-gray-500">Shared {time(ticket.delivery.sharedAt)}{ticket.delivery.accepted ? ' · accepted' : ''}</p>
         <ClientDeliveryFiles key={JSON.stringify([workspaceId, ticket.id, ticket.delivery.id, ticket.delivery.scopeVersionId])}
@@ -120,7 +120,7 @@ export function ClientTicketDetail({
       </InfoCard>}
     </div>
 
-    {phaseFourReadOnly && !communicationEnabled ? <section className="mt-5 rounded-xl border border-white/[0.08] bg-surface p-4">
+    {workflowActionsDisabled && !communicationEnabled ? <section className="mt-5 rounded-xl border border-white/[0.08] bg-surface p-4">
       <h2 className="text-sm font-medium text-gray-100">Ticket communication</h2>
       <p className="mt-2 text-xs leading-relaxed text-gray-500">Your account is active and this ticket is visible to you. Ticket messages and result review will be enabled in a later phase.</p>
     </section> : <section className="mt-5 rounded-xl border border-white/[0.08] bg-surface">
@@ -146,7 +146,7 @@ export function ClientTicketDetail({
       canUpload={!terminal} heading="Documents for this ticket"
     />}
 
-    {!phaseFourReadOnly && confirming && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setConfirming(null); }}>
+    {!workflowActionsDisabled && confirming && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setConfirming(null); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="client-ticket-confirm-title" className="w-full max-w-md rounded-xl border border-white/10 bg-surface p-5 shadow-2xl">
         <h2 id="client-ticket-confirm-title" className="text-base font-semibold text-white">{confirming.type === 'accept_delivery' ? 'Accept this exact result?' : 'Agree to this scope?'}</h2>
         <p className="mt-2 text-sm leading-relaxed text-gray-400">{confirming.type === 'accept_delivery' ? 'This records acceptance of the shared result, not project completion or permission to deploy. The PM closes this ticket separately.' : 'This records your agreement to the displayed work. The project manager still has to authorize and assign the work before development starts.'}</p>

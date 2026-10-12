@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, ArrowLeft, Check, Clock3, Info, LockKeyhole, MessageSquare,
+  AlertCircle, ArrowLeft, Check, Clock3, Copy, Info, LockKeyhole, MessageSquare,
   RefreshCw, Search, Send, StickyNote, Ticket as TicketIcon, UserRound,
 } from 'lucide-react';
 
@@ -9,7 +9,7 @@ import { pmTicketApi, pmTicketDocumentsApi } from './pmApi';
 import type {
   PmTicketCommandInput, PmTicketDetail, PmTicketMessage, PmTicketMessageInput,
   PmTicketNote, PmTicketNoteInput, PmTicketQueueItem, PmTicketQueueOptions,
-  PmTicketQueuePage, PmTicketReceipt, PmTicketScopeProposalInput, PmTicketInvitationEmailReceipt, TicketStatus,
+  PmTicketQueuePage, PmTicketReceipt, PmTicketScopeProposalInput, TicketStatus,
 } from './pmApi';
 import { PmScopeProposalForm, type PmScopeProposalDraft } from './PmScopeProposalForm';
 import { PmWorkHandoffForm, type PmWorkHandoffDraft } from './PmWorkHandoffForm';
@@ -53,6 +53,35 @@ function statusStyle(status: TicketStatus): string {
   return 'bg-white/[0.06] text-gray-300';
 }
 
+type ClientInvitationSummary = PmTicketQueueItem['internal']['clientInvitation'];
+
+export function invitationButtonLabel(invitation: ClientInvitationSummary): string {
+  if (!invitation) return 'Invite client to portal';
+  if (invitation.status === 'expired' || invitation.status === 'revoked') return 'Send new invitation';
+  if (invitation.status === 'consumed') return 'Invitation already used';
+  if (invitation.delivery === 'failed') return 'Retry invitation email';
+  if (invitation.delivery === 'sending') return 'Sending invitation…';
+  if (invitation.delivery === 'retrying') return 'Retrying invitation…';
+  if (invitation.delivery === 'accepted_by_provider') return 'Invitation email accepted';
+  if (invitation.delivery === 'unknown') return 'Invitation status unavailable';
+  return 'Invitation queued';
+}
+
+export function invitationStatusMessage(invitation: ClientInvitationSummary): string | null {
+  if (!invitation) return null;
+  if (invitation.status === 'expired') return 'The invitation expired. Send a new invitation if the inquiry is still eligible.';
+  if (invitation.status === 'revoked') return 'The invitation was revoked. Send a new invitation if the inquiry is still eligible.';
+  if (invitation.status === 'consumed') return 'The invitation link was used, but client access is not active. Check the workspace’s client access configuration.';
+  switch (invitation.delivery) {
+    case 'queued': return 'Invitation email is queued. Ticket access starts only after the client verifies the invited email and activates the account.';
+    case 'sending': return 'The invitation email is being sent. Ticket access still requires email verification and activation.';
+    case 'retrying': return 'The email service is retrying the invitation. Ticket access is not active yet.';
+    case 'accepted_by_provider': return 'The email provider accepted the invitation; this does not confirm inbox delivery. Ticket access starts after email verification and activation.';
+    case 'failed': return 'The invitation email failed. Use Retry invitation email to issue a fresh link.';
+    case 'unknown': return 'Alpha could not confirm the invitation email state. No client access is granted.';
+  }
+}
+
 export function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): string {
   if (!(error instanceof ApiRequestError)) {
     return area === 'queue' ? 'Could not load tickets. Check your connection and try again.'
@@ -62,6 +91,8 @@ export function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): s
   if (error.reconciliationRequired) return 'The result is uncertain. Use “Check and retry” to reconcile this same operation before starting another.';
   if (error.status === 401) return 'Your sign-in has expired. Sign in again to manage tickets.';
   if (error.status === 403) return 'Your current workspace role does not allow ticket management.';
+  if (area === 'ticket' && error.code === 'ticket_intake_code_unavailable') return 'No published inquiry form is configured in this workspace yet.';
+  if (area === 'ticket' && error.code === 'ticket_intake_code_ambiguous') return 'More than one inquiry form is published for this workspace. Ask an administrator to review the configuration.';
   if (error.status === 404) return 'Ticket service is not connected in this environment, or this ticket is no longer available.';
   if (area === 'write' && error.status === 503 && error.code === 'client_invitation_unavailable') {
     return 'Client invitations are not configured on the hosted backend. Ask the deployment owner to check the client portal setup; retrying will not send an email until it is ready.';
@@ -147,9 +178,12 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
   const [detailError, setDetailError] = useState('');
   const [historyError, setHistoryError] = useState('');
   const [writeError, setWriteError] = useState('');
-  const [invitationEmailReceipt, setInvitationEmailReceipt] = useState<PmTicketInvitationEmailReceipt | null>(null);
   const [invitationEmailSending, setInvitationEmailSending] = useState(false);
   const [invitationEmailError, setInvitationEmailError] = useState('');
+  const [inquiryCode, setInquiryCode] = useState<{ code: string; submissionEnabled: boolean } | null>(null);
+  const [inquiryCodeLoading, setInquiryCodeLoading] = useState(false);
+  const [inquiryCodeCopied, setInquiryCodeCopied] = useState(false);
+  const [inquiryCodeError, setInquiryCodeError] = useState('');
   const [pending, setPending] = useState<PendingOperation | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const queueGeneration = useRef(0);
@@ -161,7 +195,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     // composers also keep separate drafts, so changing tabs cannot publish a note.
     setDrafts({ conversation: '', notes: '' }); setMessageAction('reply'); setWriteError('');
     setDeclineOpen(false); setDeclineReason('');
-    setInvitationEmailReceipt(null); setInvitationEmailError('');
+    setInvitationEmailError('');
   }, [selectedId]);
 
   useEffect(() => {
@@ -200,6 +234,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     () => queue?.items.find(item => item.id === selectedId) ?? null,
     [queue, selectedId],
   );
+  const selectedInvitation = selectedQueueItem?.internal.clientInvitation ?? null;
 
   useEffect(() => {
     setScopeComposerOpen(false);
@@ -340,9 +375,39 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     });
   }
 
+  async function loadInquiryCode() {
+    if (inquiryCodeLoading) return;
+    setInquiryCodeLoading(true);
+    setInquiryCodeError('');
+    setInquiryCodeCopied(false);
+    try {
+      setInquiryCode(await api.getPublicInquiryCode());
+    } catch (error) {
+      setInquiryCode(null);
+      setInquiryCodeError(safeError(error, 'ticket'));
+    } finally {
+      setInquiryCodeLoading(false);
+    }
+  }
+
+  async function copyInquiryCode() {
+    if (!inquiryCode) return;
+    setInquiryCodeError('');
+    try {
+      await navigator.clipboard.writeText(inquiryCode.code);
+      setInquiryCodeCopied(true);
+    } catch {
+      setInquiryCodeCopied(false);
+      setInquiryCodeError('Clipboard access is unavailable. Select the inquiry code and copy it manually.');
+    }
+  }
+
   async function sendClientInvitationEmail() {
+    const invitation = selectedQueueItem?.internal.clientInvitation ?? null;
+    const canRetryFailed = invitation?.status === 'pending' && invitation.delivery === 'failed';
     if (!detail || !selectedQueueItem || detail.status !== 'under_review' || !detail.writesAvailable
       || selectedQueueItem.internal.clientAccessActive || invitationEmailSending || writing || pending
+      || invitation?.status === 'consumed' || (invitation?.status === 'pending' && !canRetryFailed)
       || writeLock.current) return;
     const ticketId = detail.id;
     writeLock.current = true;
@@ -353,7 +418,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
       const receipt = await api.sendInvitationEmail(ticketId);
       if (receipt.ticketId !== ticketId || !receipt.invitationId || !Number.isFinite(Date.parse(receipt.expiresAt))
         || receipt.status !== 'pending' || typeof receipt.alreadyPending !== 'boolean') throw new Error('Invalid client invitation receipt.');
-      setInvitationEmailReceipt(receipt);
+      refreshAll();
     } catch (error) {
       setInvitationEmailError(safeError(error, 'write'));
     } finally {
@@ -486,10 +551,30 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
         <h1 className="text-xl font-semibold text-gray-100">Tickets</h1>
         <p className="mt-1 text-xs text-gray-500">Review client requests and manage their conversation in this workspace.</p>
       </div>
-      <button onClick={refreshAll} disabled={!intakeEnabled || queueLoading || Boolean(pending)} className={secondary}>
-        <RefreshCw size={14} className={queueLoading ? 'animate-spin' : ''} />Refresh
-      </button>
+      <div className="flex flex-wrap gap-2">
+        {intakeEnabled && <button onClick={() => void loadInquiryCode()} disabled={inquiryCodeLoading} className={secondary}>
+          <Copy size={14} />{inquiryCodeLoading ? 'Loading code…' : inquiryCode ? 'Refresh inquiry code' : 'Share inquiry code'}
+        </button>}
+        <button onClick={refreshAll} disabled={!intakeEnabled || queueLoading || Boolean(pending)} className={secondary}>
+          <RefreshCw size={14} className={queueLoading ? 'animate-spin' : ''} />Refresh
+        </button>
+      </div>
     </header>
+
+    {(inquiryCode || inquiryCodeError) && <section aria-label="Client inquiry access" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-surface p-4">
+      {inquiryCode ? <div className="min-w-0">
+        <p className="text-[10px] uppercase tracking-wide text-gray-500">Workspace inquiry code</p>
+        <p className="mt-1 font-mono text-sm text-gray-100" aria-label="Inquiry code">{inquiryCode.code}</p>
+        <p className="mt-1 text-[11px] text-gray-500">Share the Alpha web app link and this code. The client enters it to open this workspace’s inquiry form.</p>
+        <p className={`mt-1 text-[10px] ${inquiryCode.submissionEnabled ? 'text-emerald-300/80' : 'text-amber-300/80'}`}>
+          {inquiryCode.submissionEnabled ? 'Inquiry submissions are enabled.' : 'The link is published, but submissions are currently unavailable.'}
+        </p>
+      </div> : <p role="alert" className="text-xs text-rose-200">{inquiryCodeError}</p>}
+      {inquiryCode && <button onClick={() => void copyInquiryCode()} className={secondary}>
+        <Copy size={13} />{inquiryCodeCopied ? 'Copied' : 'Copy code'}
+      </button>}
+      {inquiryCode && inquiryCodeError && <p role="alert" className="w-full text-[11px] text-amber-200">{inquiryCodeError}</p>}
+    </section>}
 
     {!intakeEnabled && <div role="status" className="flex items-start gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-xs leading-relaxed text-gray-400">
       <Info size={15} className="mt-0.5 shrink-0 text-gray-500" />
@@ -575,10 +660,10 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                     </button>}
                     {workflowActions !== 'none' && detail.internal.request?.source === 'public_inquiry'
                       && !selectedQueueItem.internal.clientAccessActive && detail.status === 'under_review'
-                      && detail.writesAvailable && <button type="button" onClick={() => void sendClientInvitationEmail()}
-                        disabled={invitationEmailSending || writing || Boolean(pending)} className={secondary}>
-                        <Send size={13} />{invitationEmailSending ? 'Sending…'
-                          : invitationEmailReceipt?.ticketId === detail.id ? 'Invitation pending' : 'Invite client to portal'}
+                      && detail.writesAvailable && selectedInvitation?.status !== 'consumed' && <button type="button" onClick={() => void sendClientInvitationEmail()}
+                        disabled={invitationEmailSending || writing || Boolean(pending)
+                          || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')} className={secondary}>
+                        <Send size={13} />{invitationEmailSending ? 'Sending…' : invitationButtonLabel(selectedInvitation)}
                       </button>}
                     {detail.internal.request?.source === 'public_inquiry' && !selectedQueueItem.internal.clientAccessActive && <span className="rounded-md border border-amber-400/15 bg-amber-500/[0.05] px-2.5 py-2 text-[10px] text-amber-200/80">Ticket access starts only after the invited client verifies their email</span>}
                     {detail.internal.request?.source === 'public_inquiry' && <span className="rounded-md border border-white/[0.07] px-2.5 py-2 text-[10px] text-gray-500">Public inquiry · <PmContactVerification verification={detail.internal.request.contact?.verification} /></span>}
@@ -591,11 +676,8 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                       onClick={() => { setWriteError(''); setReviewAction('close'); }}>Close accepted ticket</button>}
                   </div>
                   {invitationEmailError && <p role="alert" className="mt-3 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{invitationEmailError}</p>}
-                  {invitationEmailReceipt?.ticketId === detail.id && <p role="status" className="mt-3 rounded-lg border border-emerald-400/15 bg-emerald-500/[0.04] p-2.5 text-[11px] text-emerald-200/80">
-                    {invitationEmailReceipt.alreadyPending
-                      ? 'An active invitation already exists; Alpha did not create a duplicate.'
-                      : 'Invitation queued. The client gets access only after verifying the invited email and activating this ticket.'}
-                    {' '}Expires {new Date(invitationEmailReceipt.expiresAt).toLocaleString()}.
+                  {selectedInvitation && !selectedQueueItem.internal.clientAccessActive && <p role="status" className="mt-3 rounded-lg border border-white/[0.08] bg-white/[0.025] p-2.5 text-[11px] leading-relaxed text-gray-300">
+                    {invitationStatusMessage(selectedInvitation)} Expires {time(selectedInvitation.expiresAt)}.
                   </p>}
                 </div>
 
@@ -620,7 +702,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                       <p className="flex items-center gap-1.5"><UserRound size={12} />{detail.internal.request.contact.fullName}</p>
                       <p className="break-all">{detail.internal.request.contact.email} · <PmContactVerification verification={detail.internal.request.contact.verification} /></p>
                     </div>}
-                    <p className="mt-3 text-[10px] text-gray-500">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : invitationEmailReceipt?.ticketId === detail.id ? 'Invitation pending · no access until verified' : 'Client account not active'}</p>
+                    <p className="mt-3 text-[10px] text-gray-500">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : selectedInvitation?.status === 'pending' ? 'Invitation pending · no access until verified' : 'Client account not active'}</p>
                     <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectId ? 'Linked to a project' : 'No project linked yet'}</p>
                   </div>
                 </div>

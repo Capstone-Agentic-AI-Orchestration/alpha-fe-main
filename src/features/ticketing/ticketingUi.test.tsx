@@ -4,14 +4,14 @@ import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientCreateTicketForm } from './ClientCreateTicketForm';
 import { PublicInquiryForm } from './PublicInquiryForm';
 import PublicInquiryUnavailable from './PublicInquiryUnavailable';
-import { PmContactVerification, PmTicketsView, safeError } from './PmTicketsView';
+import { invitationButtonLabel, invitationStatusMessage, PmContactVerification, PmTicketsView, safeError } from './PmTicketsView';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { activationFailureMessage, activationLink, scrubbedActivationUrl } from './ClientActivationUnavailable';
 import { ClientTicketApiError } from './clientApi';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
-describe('phase-one real app interfaces', () => {
+describe('real ticketing interfaces in the Alpha app', () => {
   it.each([
     ['verified', 'Email verified'],
     ['unverified_submission', 'Pending email verification'],
@@ -40,6 +40,18 @@ describe('phase-one real app interfaces', () => {
     expect(message).not.toContain('private recipient');
     expect(safeError(new ApiRequestError(409, 'version changed', 'ticket_version_conflict'), 'write'))
       .toContain('The ticket changed');
+  });
+  it('explains provider acceptance without claiming inbox delivery and offers recovery for a failed invitation', () => {
+    const accepted = { status: 'pending' as const, delivery: 'accepted_by_provider' as const, expiresAt: '2026-10-14T00:00:00.000Z' };
+    const failed = { status: 'pending' as const, delivery: 'failed' as const, expiresAt: '2026-10-14T00:00:00.000Z' };
+    expect(invitationStatusMessage(accepted)).toContain('does not confirm inbox delivery');
+    expect(invitationButtonLabel(failed)).toBe('Retry invitation email');
+    expect(invitationStatusMessage(failed)).toContain('issue a fresh link');
+  });
+  it('offers the PM a database-backed inquiry code action, without a sample code in the UI', () => {
+    const html = renderToStaticMarkup(<PmTicketsView intakeEnabled />);
+    expect(html).toContain('Share inquiry code');
+    expect(html).not.toContain('workspace-intake');
   });
   it('lets an enabled inquiry form submit without an external verification widget', () => {
     const html = renderToStaticMarkup(<PublicInquiryForm submissionEnabled onSubmit={() => undefined} onCancel={() => undefined} />);

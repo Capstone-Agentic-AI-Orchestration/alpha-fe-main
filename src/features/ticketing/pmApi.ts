@@ -27,6 +27,11 @@ export interface PmTicketQueueItem {
     nextAction: TicketNextAction;
     projectId: string | null;
     clientAccessActive: boolean;
+    clientInvitation: {
+      status: 'pending' | 'expired' | 'revoked' | 'consumed';
+      delivery: 'queued' | 'sending' | 'retrying' | 'accepted_by_provider' | 'failed' | 'unknown';
+      expiresAt: string;
+    } | null;
   };
 }
 export interface PmTicketQueuePage {
@@ -144,6 +149,7 @@ export interface PmTicketInvitationReceipt {
   status: 'pending';
   alreadyPending: boolean;
 }
+export interface PmPublicInquiryCode { code: string; submissionEnabled: boolean }
 export type PmTicketInvitationEmailReceipt = PmTicketInvitationReceipt;
 
 function encodeId(value: string): string { return encodeURIComponent(value); }
@@ -172,6 +178,14 @@ async function withOperationRecovery(
 
 /** Internal PM transport uses apiService's active workspace/session/desktop relay. */
 export const pmTicketApi = {
+  async getPublicInquiryCode(): Promise<PmPublicInquiryCode> {
+    const value = await apiService.ticketRequest<unknown>('/tickets/inquiry-code');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Inquiry code response is invalid.');
+    const record = value as Record<string, unknown>;
+    if (typeof record.code !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(record.code)
+      || typeof record.submissionEnabled !== 'boolean') throw new Error('Inquiry code response is invalid.');
+    return { code: record.code, submissionEnabled: record.submissionEnabled };
+  },
   list(options: PmTicketQueueOptions = {}) {
     return apiService.ticketRequest<PmTicketQueuePage>(`/tickets${query({
       limit: options.limit === undefined ? undefined : String(options.limit),
