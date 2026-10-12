@@ -1,31 +1,55 @@
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { PublicInquiryForm } from './PublicInquiryForm';
 import { useEffect, useState } from 'react';
-import { publicTicketIntakeApi } from './publicIntakeApi';
+import { clientPortalHref, publicInquiryHref, publicInquirySlug, publicTicketIntakeApi } from './publicIntakeApi';
+import { input, primary, secondary } from './ticketUi';
 
 /** Fails closed until the durable inquiry API is enabled by the server. */
 export default function PublicInquiryUnavailable() {
-  const [configuration, setConfiguration] = useState<{ enabled: boolean }>({ enabled: false });
+  const [configuration, setConfiguration] = useState<'checking' | 'enabled' | 'unavailable'>('checking');
+  const [retryVersion, setRetryVersion] = useState(0);
+  const [inquiryCode, setInquiryCode] = useState('');
+  const [linkError, setLinkError] = useState('');
   const [slug] = useState(() => {
     if (typeof window === 'undefined') return '';
-    const url = new URL(window.location.href);
-    return new URLSearchParams(url.hash.split('?')[1] ?? url.search).get('intake') ?? '';
+    return publicInquirySlug(window.location);
   });
   useEffect(() => {
+    if (!slug) return;
     let active = true;
-    void publicTicketIntakeApi.configuration(slug).then(value => { if (active) setConfiguration(value); })
-      .catch(() => { if (active) setConfiguration({ enabled: false }); });
+    setConfiguration('checking');
+    void publicTicketIntakeApi.configuration(slug).then(value => { if (active) setConfiguration(value.enabled ? 'enabled' : 'unavailable'); })
+      .catch(() => { if (active) setConfiguration('unavailable'); });
     return () => { active = false; };
-  }, [slug]);
+  }, [slug, retryVersion]);
+  const clientHref = clientPortalHref(slug);
   return <main className="min-h-dvh bg-canvas font-sans text-gray-300">
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] bg-shell px-5 py-4 md:px-8">
-      <a href="/#/client" className="flex items-center gap-3"><img src={alphaMarkUrl} alt="Alpha" className="h-8 w-8 object-contain" /><span className="text-sm font-semibold text-white">Alpha <span className="ml-2 font-normal text-gray-500">Project inquiry</span></span></a>
-      <a href="/#/client" className="text-xs text-gray-400 hover:text-white">Already invited? Client access</a>
+      <a href={clientHref} className="flex items-center gap-3"><img src={alphaMarkUrl} alt="Alpha" className="h-8 w-8 object-contain" /><span className="text-sm font-semibold text-white">Alpha <span className="ml-2 font-normal text-gray-500">Project inquiry</span></span></a>
+      <a href={clientHref} className="text-xs text-gray-400 hover:text-white">Already invited? Client access</a>
     </header>
-    <p role="status" className="mx-auto mt-6 max-w-2xl px-5 text-xs leading-relaxed text-amber-100/80">{configuration.enabled
-      ? 'Submit your inquiry for PM review. Acknowledgment emails and client account activation are not available yet.'
-      : 'Submission is not enabled for this inquiry link yet. Nothing is sent or saved.'}</p>
-    <PublicInquiryForm submissionEnabled={configuration.enabled} onSubmit={async inquiry => { await publicTicketIntakeApi.submit(slug, { inquiry }); }}
-      onCancel={() => { window.location.href = '/#/client'; }} />
+    {!slug ? <section className="mx-auto max-w-2xl space-y-4 p-5 md:p-10">
+      <h1 className="text-2xl font-semibold text-white">Choose your inquiry destination</h1>
+      <p className="text-sm leading-relaxed text-gray-400">Open the workspace-specific inquiry link your project manager shared, or enter its inquiry code below. Alpha will not guess which workspace should receive your request.</p>
+      <form className="space-y-3" onSubmit={event => {
+        event.preventDefault();
+        const code = inquiryCode.trim();
+        const href = publicInquiryHref(code);
+        if (href === '/#/request') { setLinkError('Enter the inquiry code from your project manager’s link.'); return; }
+        window.location.assign(href);
+      }}>
+        <label className="block space-y-2"><span className="text-xs text-gray-300">Workspace inquiry code</span><input required maxLength={100} value={inquiryCode} onChange={event => { setInquiryCode(event.target.value); setLinkError(''); }} className={input} autoComplete="off" /></label>
+        {linkError && <p role="alert" className="text-xs text-rose-200">{linkError}</p>}
+        <button type="submit" className={primary}>Open inquiry form</button>
+      </form>
+    </section> : <>
+      <p role="status" className="mx-auto mt-6 max-w-2xl px-5 text-xs leading-relaxed text-amber-100/80">{configuration === 'enabled'
+        ? 'Submit your inquiry for PM review. Submission does not approve work or grant client access.'
+        : configuration === 'checking' ? 'Checking whether this inquiry link can accept submissions…'
+          : 'This inquiry link is unavailable or could not be checked. Nothing has been submitted. Try again or contact your project manager.'}</p>
+      {configuration === 'unavailable' && <div className="mx-auto mt-3 max-w-2xl px-5"><button type="button" className={secondary} onClick={() => setRetryVersion(value => value + 1)}>Check inquiry availability again</button></div>}
+      <PublicInquiryForm submissionEnabled={configuration === 'enabled'} unavailableMessage={configuration === 'checking' ? 'Checking inquiry availability. Nothing has been submitted.' : 'Inquiry submission is currently unavailable for this link. Nothing has been submitted.'} onSubmit={async inquiry => { await publicTicketIntakeApi.submit(slug, { inquiry }); }}
+        onCancel={() => { window.location.href = clientHref; }} />
+    </>}
   </main>;
 }

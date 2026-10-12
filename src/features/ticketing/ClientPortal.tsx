@@ -38,7 +38,7 @@ function friendlyError(error: unknown, context: 'session' | 'queue' | 'ticket' |
   }
   if (context === 'session' && error.status === 404) return 'The secure client service is not connected in this environment yet.';
   if (context === 'session' && error.status === 503) return 'Secure client sign-in is not configured in this environment yet.';
-  if (context === 'session' && error.status === 401) return 'There is no active client session. Secure invitation sign-in is not connected in this environment yet.';
+  if (context === 'session' && error.status === 401) return 'Your client session has expired. Request a new sign-in link to continue.';
   if (context === 'queue' && error.status === 404) return 'Your ticket service is not connected in this environment yet.';
   if (error.reconciliationRequired) return 'The result is still uncertain. Use “Check same request” before starting another request.';
   return error.message;
@@ -399,7 +399,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     {pageError && <div role="alert" className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-3 text-xs text-rose-200 md:mx-6"><AlertCircle size={14} className="mt-0.5 shrink-0" />{pageError}</div>}
 
     {workspaceOptions.length === 0 ? <section className="mx-auto w-full max-w-2xl p-6 md:p-12">
-      <EmptyState title="No shared workspace yet" body="Your project manager has not enabled client access to a workspace. You will only see projects and requests that are explicitly shared with your account." />
+      <EmptyState title="No authorized tickets available" body="No active ticket grants were returned for your account. Contact your project manager if you expected access. Client access does not open internal projects or workspaces." />
     </section> : !phaseFourReadOnly && view === 'create' && createContext ? <ClientCreateTicketForm
       context={createContext}
       submissionEnabled={!inspectionOnly}

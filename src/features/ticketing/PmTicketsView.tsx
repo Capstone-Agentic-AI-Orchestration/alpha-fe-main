@@ -98,6 +98,17 @@ function EmptyPanel({ title, detail }: { title: string; detail: string }) {
   </div>;
 }
 
+/** Display only a server-reported verification fact, never delivery/access state. */
+export function PmContactVerification({ verification }: { verification: unknown }) {
+  if (verification === 'verified') {
+    return <span className="text-emerald-300/80">Email verified</span>;
+  }
+  if (verification === 'unverified_submission') {
+    return <span className="text-amber-300/80">Pending email verification</span>;
+  }
+  return <span className="text-gray-500">Unable to verify status</span>;
+}
+
 export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflowActions = 'all' }: {
   api?: typeof pmTicketApi;
   intakeEnabled?: boolean;
@@ -566,7 +577,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                           : invitationEmailReceipt?.ticketId === detail.id ? 'Invitation pending' : 'Invite client to portal'}
                       </button>}
                     {detail.internal.request?.source === 'public_inquiry' && !selectedQueueItem.internal.clientAccessActive && <span className="rounded-md border border-amber-400/15 bg-amber-500/[0.05] px-2.5 py-2 text-[10px] text-amber-200/80">Ticket access starts only after the invited client verifies their email</span>}
-                    {detail.internal.request?.source === 'public_inquiry' && <span className="rounded-md border border-white/[0.07] px-2.5 py-2 text-[10px] text-gray-500">Unverified public inquiry</span>}
+                    {detail.internal.request?.source === 'public_inquiry' && <span className="rounded-md border border-white/[0.07] px-2.5 py-2 text-[10px] text-gray-500">Public inquiry · <PmContactVerification verification={detail.internal.request.contact?.verification} /></span>}
                     {detail.internal.authorizedScopeVersionId && <span className="text-[10px] text-gray-500">Scope locked after work authorization · new work needs a linked ticket</span>}
                     {workflowActions === 'all' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <button className={secondary} disabled={writing || Boolean(pending)}
                       onClick={() => { setWriteError(''); setScopeComposerOpen(false); setHandoffOpen(false); setReviewAction(value => value === 'correction' ? null : 'correction'); }}>
@@ -603,7 +614,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                     <p className="mt-2 text-xs text-gray-300">{detail.companyLabel}</p>
                     {detail.internal.request?.contact && <div className="mt-2 space-y-1 text-[11px] text-gray-400">
                       <p className="flex items-center gap-1.5"><UserRound size={12} />{detail.internal.request.contact.fullName}</p>
-                      <p className="break-all">{detail.internal.request.contact.email} <span className="text-amber-300/80">· unverified</span></p>
+                      <p className="break-all">{detail.internal.request.contact.email} · <PmContactVerification verification={detail.internal.request.contact.verification} /></p>
                     </div>}
                     <p className="mt-3 text-[10px] text-gray-500">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : invitationEmailReceipt?.ticketId === detail.id ? 'Invitation pending · no access until verified' : 'Client account not active'}</p>
                     <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectId ? 'Linked to a project' : 'No project linked yet'}</p>
