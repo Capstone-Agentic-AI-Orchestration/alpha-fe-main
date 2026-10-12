@@ -52,7 +52,7 @@ function statusStyle(status: TicketStatus): string {
   return 'bg-white/[0.06] text-gray-300';
 }
 
-function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): string {
+export function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): string {
   if (!(error instanceof ApiRequestError)) {
     return area === 'queue' ? 'Could not load tickets. Check your connection and try again.'
       : area === 'ticket' ? 'Could not load this ticket. Refresh and try again.'
@@ -62,6 +62,12 @@ function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): string {
   if (error.status === 401) return 'Your sign-in has expired. Sign in again to manage tickets.';
   if (error.status === 403) return 'Your current workspace role does not allow ticket management.';
   if (error.status === 404) return 'Ticket service is not connected in this environment, or this ticket is no longer available.';
+  if (area === 'write' && error.status === 503 && error.code === 'client_invitation_unavailable') {
+    return 'Client invitations are not configured on the hosted backend. Ask the deployment owner to check the client portal setup; retrying will not send an email until it is ready.';
+  }
+  if (area === 'write' && error.status === 409 && error.code === 'ticket_invitation_recipient_restricted') {
+    return 'The email sender currently allows only its configured test recipient. Submit an inquiry with that email, or configure a verified sender before inviting other clients.';
+  }
   if (error.status === 409) return 'The ticket changed before this action completed. Refresh it and review the latest state.';
   if (error.status === 429) return 'Too many requests. Wait a little, then try again.';
   if (error.status !== null && error.status >= 500) return 'Ticket service is temporarily unavailable.';
@@ -90,6 +96,17 @@ function EmptyPanel({ title, detail }: { title: string; detail: string }) {
     <p className="mt-3 text-sm font-medium text-gray-300">{title}</p>
     <p className="mt-1 max-w-md text-xs leading-relaxed text-gray-500">{detail}</p>
   </div>;
+}
+
+/** Display only a server-reported verification fact, never delivery/access state. */
+export function PmContactVerification({ verification }: { verification: unknown }) {
+  if (verification === 'verified') {
+    return <span className="text-emerald-300/80">Email verified</span>;
+  }
+  if (verification === 'unverified_submission') {
+    return <span className="text-amber-300/80">Pending email verification</span>;
+  }
+  return <span className="text-gray-500">Unable to verify status</span>;
 }
 
 export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflowActions = 'all' }: {
@@ -560,7 +577,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                           : invitationEmailReceipt?.ticketId === detail.id ? 'Invitation pending' : 'Invite client to portal'}
                       </button>}
                     {detail.internal.request?.source === 'public_inquiry' && !selectedQueueItem.internal.clientAccessActive && <span className="rounded-md border border-amber-400/15 bg-amber-500/[0.05] px-2.5 py-2 text-[10px] text-amber-200/80">Ticket access starts only after the invited client verifies their email</span>}
-                    {detail.internal.request?.source === 'public_inquiry' && <span className="rounded-md border border-white/[0.07] px-2.5 py-2 text-[10px] text-gray-500">Unverified public inquiry</span>}
+                    {detail.internal.request?.source === 'public_inquiry' && <span className="rounded-md border border-white/[0.07] px-2.5 py-2 text-[10px] text-gray-500">Public inquiry · <PmContactVerification verification={detail.internal.request.contact?.verification} /></span>}
                     {detail.internal.authorizedScopeVersionId && <span className="text-[10px] text-gray-500">Scope locked after work authorization · new work needs a linked ticket</span>}
                     {workflowActions === 'all' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <button className={secondary} disabled={writing || Boolean(pending)}
                       onClick={() => { setWriteError(''); setScopeComposerOpen(false); setHandoffOpen(false); setReviewAction(value => value === 'correction' ? null : 'correction'); }}>
@@ -597,7 +614,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                     <p className="mt-2 text-xs text-gray-300">{detail.companyLabel}</p>
                     {detail.internal.request?.contact && <div className="mt-2 space-y-1 text-[11px] text-gray-400">
                       <p className="flex items-center gap-1.5"><UserRound size={12} />{detail.internal.request.contact.fullName}</p>
-                      <p className="break-all">{detail.internal.request.contact.email} <span className="text-amber-300/80">· unverified</span></p>
+                      <p className="break-all">{detail.internal.request.contact.email} · <PmContactVerification verification={detail.internal.request.contact.verification} /></p>
                     </div>}
                     <p className="mt-3 text-[10px] text-gray-500">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : invitationEmailReceipt?.ticketId === detail.id ? 'Invitation pending · no access until verified' : 'Client account not active'}</p>
                     <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectId ? 'Linked to a project' : 'No project linked yet'}</p>

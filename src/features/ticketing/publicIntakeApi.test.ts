@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createPublicTicketInquirySubmitter, PublicTicketIntakeApiError, publicTicketIntakeApi } from './publicIntakeApi';
+import { clientPortalHref, createPublicTicketInquirySubmitter, publicInquiryHref, publicInquirySlug, PublicTicketIntakeApiError, publicTicketIntakeApi } from './publicIntakeApi';
 import type { PublicTicketInquiryRequest } from './publicIntakeContract';
 
 const request: PublicTicketInquiryRequest = {
@@ -33,6 +33,25 @@ afterEach(() => {
 });
 
 describe('public inquiry browser transport', () => {
+  it('preserves explicit inquiry context across hash and path routes without choosing a default tenant', () => {
+    expect(publicInquirySlug({ hash: '#/request?intake=workspace-a', search: '' })).toBe('workspace-a');
+    expect(publicInquirySlug({ hash: '#/client', search: '?intake=workspace-b' })).toBe('workspace-b');
+    expect(publicInquiryHref('workspace-a')).toBe('/#/request?intake=workspace-a');
+    expect(clientPortalHref('workspace-a')).toBe('/#/client?intake=workspace-a');
+    expect(publicInquirySlug({ hash: '#/request' })).toBe('');
+    expect(publicInquiryHref('')).toBe('/#/request');
+  });
+
+  it('rejects malformed and ambiguous workspace context instead of selecting either destination', () => {
+    for (const location of [
+      { hash: '#/request?intake=../foreign' },
+      { hash: '#/client?intake=a&intake=b' },
+      { hash: '#/client?intake=a', search: '?intake=b' },
+      { search: '?intake=https://other.example' },
+    ]) expect(publicInquirySlug(location)).toBe('');
+    expect(publicInquiryHref('../foreign')).toBe('/#/request');
+    expect(clientPortalHref('https://other.example')).toBe('/#/client');
+  });
   it('accepts only the public enabled flag, ignoring unrelated server fields', async () => {
     browser();
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(jsonResponse(200, { enabled: true, testing: true })));

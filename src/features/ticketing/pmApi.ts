@@ -75,7 +75,7 @@ export interface PmTicketDetail {
       preferredProjectId: string | null;
       projectLabel: string | null;
       requestedDeadline: string | null;
-      contact: { fullName: string; email: string; company: string | null; verification: 'unverified_submission' } | null;
+      contact: { fullName: string; email: string; company: string | null; verification: 'verified' | 'unverified_submission' } | null;
     } | null;
     scopeVersion: { id: string; summary: string; developerBrief: string | null; proposedAt: string; immutable: boolean; clientVisible: boolean } | null;
     deliveryAssessment: {

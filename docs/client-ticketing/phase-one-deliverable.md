@@ -3,6 +3,33 @@
 Date: 8 October 2026. Scope: the newest deliverable-first plan, not the older
 six-phase implementation history in `application-first.md`.
 
+## Current Phases 1–4 corrections (12 October 2026)
+
+The sections below record the original Phase 1 checkpoint, not current deployment
+readiness. Current inquiry submission is enabled only by the same-origin intake
+configuration response. `/#/request?intake=<published-code>` keeps explicit workspace
+routing; inquiry/client navigation preserves that code. The generic `/#/request`
+entry asks for the PM's inquiry code instead of silently choosing a workspace or
+showing a permanently disabled form. Missing, duplicate or malformed routing
+context cannot select a tenant. Routing context never grants client access.
+
+The actual inquiry form distinguishes availability checks from unavailable intake,
+offers a configuration retry, and no longer describes backend failures as “UI-only.”
+It does not claim that acknowledgment or activation is unavailable when those
+features may be configured. Name/email/title/details remain required.
+
+Activation removes one-time values from the address bar before redemption and
+provides a sign-in recovery link. Unavailable service, rate limit and expired-link
+messages are separated without exposing provider errors. Client API requests are
+bounded to 30 seconds; a one-time proof is not automatically replayed after an
+uncertain outcome. PM email status uses the persisted backend verification field,
+not email-delivery success or a fixed “unverified” label.
+
+These changes stay in existing feature folders and the existing fix branch.
+No desktop, GitHub role, Render setting, database write, push or release is part
+of this gap review. Automated checks do not establish deployed email delivery;
+real hosted activation remains required before Phase 4 can be called complete.
+
 ## Delivered
 
 - PM: **Tickets** inside Alpha's existing authenticated app, sidebar and tabs.

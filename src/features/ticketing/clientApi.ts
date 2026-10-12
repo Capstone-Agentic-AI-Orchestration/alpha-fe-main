@@ -172,8 +172,10 @@ async function requestResponse(path: string, options: RequestOptions = {}): Prom
 
   let response: Response;
   try {
+    const timeout = AbortSignal.timeout(30_000);
     response = await fetch(`${API_ROOT}${path}`, {
       ...fetchOptions,
+      signal: fetchOptions.signal ? AbortSignal.any([fetchOptions.signal, timeout]) : timeout,
       headers,
       credentials: 'same-origin',
       mode: 'same-origin',

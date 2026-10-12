@@ -1,12 +1,46 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientCreateTicketForm } from './ClientCreateTicketForm';
 import { PublicInquiryForm } from './PublicInquiryForm';
 import PublicInquiryUnavailable from './PublicInquiryUnavailable';
-import { PmTicketsView } from './PmTicketsView';
+import { PmContactVerification, PmTicketsView, safeError } from './PmTicketsView';
+import { ApiRequestError } from '@/shared/services/apiService';
+import { activationFailureMessage, activationLink, scrubbedActivationUrl } from './ClientActivationUnavailable';
+import { ClientTicketApiError } from './clientApi';
+
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('phase-one real app interfaces', () => {
+  it.each([
+    ['verified', 'Email verified'],
+    ['unverified_submission', 'Pending email verification'],
+    [undefined, 'Unable to verify status'],
+    [null, 'Unable to verify status'],
+    ['unexpected-status', 'Unable to verify status'],
+    [true, 'Unable to verify status'],
+  ])('renders only the backend verification fact %s', (verification, label) => {
+    const html = renderToStaticMarkup(<PmContactVerification verification={verification} />);
+    expect(html).toContain(label);
+    if (verification !== 'verified') expect(html).not.toContain('Email verified');
+    if (verification !== 'unverified_submission') expect(html).not.toContain('Pending email verification');
+  });
+
+  it('explains an unavailable client invitation without displaying server secrets', () => {
+    const message = safeError(new ApiRequestError(503, 'private server details', 'client_invitation_unavailable'), 'write');
+    expect(message).toContain('Client invitations are not configured on the hosted backend');
+    expect(message).not.toContain('private server details');
+    expect(safeError(new ApiRequestError(503, 'private server details', 'unknown'), 'write'))
+      .toBe('Ticket service is temporarily unavailable.');
+  });
+
+  it('distinguishes the invitation sender restriction from a stale ticket version', () => {
+    const message = safeError(new ApiRequestError(409, 'private recipient', 'ticket_invitation_recipient_restricted'), 'write');
+    expect(message).toContain('configured test recipient');
+    expect(message).not.toContain('private recipient');
+    expect(safeError(new ApiRequestError(409, 'version changed', 'ticket_version_conflict'), 'write'))
+      .toContain('The ticket changed');
+  });
   it('lets an enabled inquiry form submit without an external verification widget', () => {
     const html = renderToStaticMarkup(<PublicInquiryForm submissionEnabled onSubmit={() => undefined} onCancel={() => undefined} />);
     expect(html).not.toContain('verification');
@@ -25,24 +59,34 @@ describe('phase-one real app interfaces', () => {
     expect(html).toMatch(/<input[^>]*disabled=""[^>]*placeholder="Search tickets…"/);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Refresh<\/button>/);
   });
-  it('renders the inquiry form at the real public entry without enabling submission', () => {
+  it('requires explicit workspace context instead of showing a permanently disabled generic form', () => {
+    const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
+    expect(html).toContain('Choose your inquiry destination');
+    expect(html).toContain('Workspace inquiry code');
+    expect(html).not.toContain('Submit inquiry');
+    expect(html).not.toContain('UI-only');
+    expect(html).not.toContain('Create developer');
+  });
+
+  it('checks the real inquiry link before enabling its form and preserves context on return', () => {
+    vi.stubGlobal('window', { location: { hash: '#/request?intake=workspace-a', search: '' } });
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
     expect(html).toContain('Tell us what you need');
-    expect(html).toContain('Your name');
-    expect(html).toContain('Requested target date');
+    expect(html).toContain('Checking whether this inquiry link');
+    expect(html).toContain('href="/#/client?intake=workspace-a"');
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
-    expect(html).toContain('nothing is sent or saved');
-    expect(html).not.toContain('Create developer');
+    expect(html).not.toContain('UI-only');
+    expect(html).not.toContain('Acknowledgment emails and client account activation are not available yet');
   });
 
   it('keeps direct inquiry form use fail-closed unless a submit handler is explicitly enabled', () => {
     const html = renderToStaticMarkup(<PublicInquiryForm onSubmit={() => undefined} onCancel={() => undefined} />);
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
-    expect(html).toContain('nothing is sent or saved');
+    expect(html).toContain('Nothing is sent or saved');
   });
 
   it('requires an email address on the actual public inquiry form', () => {
-    const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
+    const html = renderToStaticMarkup(<PublicInquiryForm onSubmit={() => undefined} onCancel={() => undefined} />);
     const emailInput = html.match(/<input\b[^>]*type="email"[^>]*>/)?.[0];
     expect(emailInput).toBeDefined();
     expect(emailInput).toMatch(/\brequired=""/);
@@ -60,6 +104,39 @@ describe('phase-one real app interfaces', () => {
     expect(html).toMatch(/<input[^>]*type="email"[^>]*required=""/);
     expect(html).toContain('New client accounts are invitation-only');
     expect(html).toContain('href="/#/request"');
+  });
+
+  it('does not lose the workspace inquiry code when a client follows the new-inquiry link', () => {
+    vi.stubGlobal('window', { location: { hash: '#/client?intake=workspace-a', search: '' } });
+    const html = renderToStaticMarkup(<ClientAccessPanel unavailable={false} error="" signInError=""
+      signInSent={false} signingIn={false} onRetry={() => undefined} onRequestSignIn={() => undefined} />);
+    expect(html).toContain('href="/#/request?intake=workspace-a"');
+    expect(html).not.toContain('href="/#/request"');
+  });
+
+  it('parses invitation and returning-sign-in links without accepting duplicate credentials', () => {
+    const token = 'a'.repeat(43); const proof = 'b'.repeat(32);
+    const location = { pathname: '/', search: '', hash: `#/client/activate?token=${token}&providerTokenHash=${proof}&providerTokenType=invite` };
+    expect(activationLink(location)).toEqual({ invitationToken: token, providerTokenHash: proof, providerTokenType: 'invite' });
+    expect(activationLink({ ...location, hash: `${location.hash}&token=${token}` })).toBeNull();
+    expect(activationLink({ ...location, hash: `#/client/activate?providerTokenHash=${proof}&providerTokenType=magiclink` }))
+      .toEqual({ invitationToken: null, providerTokenHash: proof, providerTokenType: 'magiclink' });
+    expect(activationLink({ ...location, hash: '#/client' })).toBeNull();
+  });
+
+  it('removes one-time link values from query and fragment before redemption', () => {
+    const clean = scrubbedActivationUrl({ pathname: '/', search: '?token=secret&intake=workspace-a',
+      hash: '#/client/activate?providerTokenHash=proof&providerTokenType=invite&token=secret' });
+    expect(clean).toBe('/?intake=workspace-a#/client/activate');
+    for (const secret of ['secret', 'proof', 'providerTokenHash', 'providerTokenType', 'token=']) expect(clean).not.toContain(secret);
+  });
+
+  it('distinguishes unavailable activation from an expired link without exposing provider errors', () => {
+    expect(activationFailureMessage(new ClientTicketApiError(503, 'private provider error'))).toContain('not configured');
+    expect(activationFailureMessage(new ClientTicketApiError(null, 'private network error'))).toContain('fresh sign-in link');
+    expect(activationFailureMessage(new ClientTicketApiError(404, 'private provider error'))).toContain('expired');
+    expect(activationFailureMessage(new ClientTicketApiError(429, 'private provider error'))).toContain('Too many attempts');
+    expect(activationFailureMessage(new Error('private secret'))).not.toContain('private secret');
   });
 
   it('lets clients inspect the same request form with submission disabled', () => {

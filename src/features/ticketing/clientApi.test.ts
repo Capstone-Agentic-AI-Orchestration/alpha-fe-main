@@ -16,9 +16,41 @@ function jsonResponse(status: number, payload: unknown): Response {
   });
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('client browser transport', () => {
+  it('bounds a stalled sign-in request and does not automatically redeem a one-time proof again', async () => {
+    browser();
+    const timeout = new AbortController();
+    const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(timeout.signal);
+    const fetchMock = vi.fn((_url: string, options: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      options.signal!.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')), { once: true });
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    const outcome = clientTicketApi.activateInvitation('a'.repeat(43), 'b'.repeat(32), 'invite')
+      .catch(error => error);
+    timeout.abort();
+    expect(await outcome).toMatchObject({ status: null, reconciliationRequired: true });
+    expect(timeoutSpy).toHaveBeenCalledWith(30_000);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it('redeems activation and returning sign-in proofs only through the isolated client API', async () => {
+    browser();
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { activated: true }))
+      .mockResolvedValueOnce(jsonResponse(200, { authenticated: true, expiresAt: '2026-10-12T12:00:00Z' }));
+    vi.stubGlobal('fetch', fetchMock);
+    await clientTicketApi.activateInvitation('a'.repeat(43), 'b'.repeat(32), 'invite');
+    await clientTicketApi.createSessionFromEmailLink('c'.repeat(32), 'magiclink');
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/client/auth/activate', '/api/client/auth/session']);
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options).toMatchObject({ credentials: 'same-origin', mode: 'same-origin', referrerPolicy: 'no-referrer' });
+      const headers = new Headers(options.headers);
+      expect(headers.get('Authorization')).toBeNull();
+      expect(headers.get('X-CSRF-Token')).toBeNull();
+      expect(headers.get('X-Alpha-Local-Token')).toBeNull();
+    }
+  });
   it('loads only the requested delivery manifest through the isolated same-origin transport', async () => {
     browser(); const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, {
       deliveryId: 'delivery/a', scopeVersionId: 'scope-a', files: [

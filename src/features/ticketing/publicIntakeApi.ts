@@ -5,6 +5,25 @@ import type {
 const API_ROOT = '/api/public/ticket-intakes';
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 const PUBLIC_INTAKE_TIMEOUT_MS = 30_000;
+const INTAKE_SLUG = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+
+/** Routing context only: the server still resolves and authorizes the intake. */
+export function publicInquirySlug(location: { hash?: string; search?: string }): string {
+  const hashQuery = location.hash?.startsWith('#/') ? location.hash.split('?').slice(1).join('?') : '';
+  const hashValues = new URLSearchParams(hashQuery).getAll('intake');
+  const searchValues = new URLSearchParams(location.search ?? '').getAll('intake');
+  // Never silently pick one workspace when a URL supplies conflicting context.
+  const values = [...hashValues, ...searchValues];
+  return values.length === 1 && INTAKE_SLUG.test(values[0]) ? values[0] : '';
+}
+
+export function publicInquiryHref(slug: string): string {
+  return INTAKE_SLUG.test(slug) ? `/#/request?${new URLSearchParams({ intake: slug })}` : '/#/request';
+}
+
+export function clientPortalHref(slug: string): string {
+  return INTAKE_SLUG.test(slug) ? `/#/client?${new URLSearchParams({ intake: slug })}` : '/#/client';
+}
 
 export class PublicTicketIntakeApiError extends Error {
   constructor(
@@ -50,7 +69,7 @@ function safeFailure(code: unknown, status: number): { code: string | null; mess
 /** Anonymous intake transport; it never uses the internal API/desktop token or client session. */
 export const publicTicketIntakeApi = {
   async configuration(slug: string): Promise<{ enabled: boolean }> {
-    if (!browserOriginAllowed() || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(slug)) {
+    if (!browserOriginAllowed() || !INTAKE_SLUG.test(slug)) {
       return { enabled: false };
     }
     const response = await fetch(`${API_ROOT}/${encodeURIComponent(slug)}/config`, {
@@ -65,7 +84,7 @@ export const publicTicketIntakeApi = {
     if (!browserOriginAllowed()) {
       throw new PublicTicketIntakeApiError(null, 'Inquiry submission is available only in a secure web browser or local development.');
     }
-    if (!/^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/.test(slug)) {
+    if (!INTAKE_SLUG.test(slug)) {
       throw new PublicTicketIntakeApiError(404, 'This inquiry link is unavailable.', 'ticket_intake_entry_unavailable');
     }
 
