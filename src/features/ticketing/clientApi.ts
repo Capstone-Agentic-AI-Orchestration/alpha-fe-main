@@ -1,5 +1,6 @@
 import { parseClientDeliveryFile, parseClientDeliveryManifest, readClientDeliveryFile, type ClientDeliveryFile } from './clientDelivery';
 import { ClientTicketApiError } from './clientApiError';
+import { parseTicketDocument, parseTicketDocumentList, type TicketDocumentsApi } from './ticketDocuments';
 export { ClientTicketApiError } from './clientApiError';
 
 /** Browser-only client portal transport.
@@ -167,7 +168,7 @@ async function requestResponse(path: string, options: RequestOptions = {}): Prom
   const csrfRequired = csrfOverride ?? !['GET', 'HEAD', 'OPTIONS'].includes(method);
   const headers = new Headers(options.headers);
   headers.set('Accept', accept);
-  if (options.body !== undefined) headers.set('Content-Type', 'application/json');
+  if (options.body !== undefined && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
   if (csrfRequired) headers.set('X-CSRF-Token', csrfToken());
 
   let response: Response;
@@ -292,6 +293,29 @@ export const clientTicketApi = {
       () => clientTicketApi.getOperation(workspaceId, ticketId, input.operationId),
     );
   },
+  async getDocuments(workspaceId: string, ticketId: string) {
+    return parseTicketDocumentList(await requestJson<unknown>(
+      `/workspaces/${pathId(workspaceId)}/tickets/${pathId(ticketId)}/documents`,
+    ));
+  },
+  async uploadDocument(workspaceId: string, ticketId: string, file: File, replacesDocumentId: string | null, operationId: string) {
+    const metadata = { operationId, filename: file.name, contentType: file.type, replacesDocumentId };
+    const encoded = encodeURIComponent(JSON.stringify(metadata));
+    if (encoded.length > 2048) throw new ClientTicketApiError(400, 'The file name is too long. Rename it and try again.');
+    return parseTicketDocument(await requestJson<unknown>(
+      `/workspaces/${pathId(workspaceId)}/tickets/${pathId(ticketId)}/documents`,
+      { method: 'POST', body: file, headers: {
+        'Content-Type': 'application/octet-stream', 'X-Alpha-Ticket-Document': encoded,
+      } },
+    ));
+  },
+  async downloadDocument(workspaceId: string, ticketId: string, documentId: string): Promise<Blob> {
+    const response = await requestResponse(
+      `/workspaces/${pathId(workspaceId)}/tickets/${pathId(ticketId)}/documents/${pathId(documentId)}/content`,
+      { accept: 'application/octet-stream' },
+    );
+    return response.blob();
+  },
   decide(workspaceId: string, ticketId: string, input: ClientTicketCommandInput) {
     return withOperationRecovery(
       () => requestJson<ClientTicketReceipt>(
@@ -306,4 +330,11 @@ export const clientTicketApi = {
       `/workspaces/${pathId(workspaceId)}/tickets/${pathId(ticketId)}/operations/${pathId(operationId)}`,
     );
   },
+};
+
+export const clientTicketDocumentsApi: TicketDocumentsApi = {
+  list: (workspaceId, ticketId) => clientTicketApi.getDocuments(workspaceId ?? '', ticketId),
+  upload: (workspaceId, ticketId, file, replacesDocumentId, operationId) =>
+    clientTicketApi.uploadDocument(workspaceId ?? '', ticketId, file, replacesDocumentId, operationId),
+  download: (workspaceId, ticketId, documentId) => clientTicketApi.downloadDocument(workspaceId ?? '', ticketId, documentId),
 };

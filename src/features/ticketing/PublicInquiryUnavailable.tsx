@@ -6,20 +6,36 @@ import { input, primary, secondary } from './ticketUi';
 
 /** Fails closed until the durable inquiry API is enabled by the server. */
 export default function PublicInquiryUnavailable() {
-  const [configuration, setConfiguration] = useState<'checking' | 'enabled' | 'unavailable'>('checking');
   const [retryVersion, setRetryVersion] = useState(0);
   const [inquiryCode, setInquiryCode] = useState('');
   const [linkError, setLinkError] = useState('');
-  const [slug] = useState(() => {
+  const readSlug = () => {
     if (typeof window === 'undefined') return '';
     return publicInquirySlug(window.location);
-  });
+  };
+  const [slug, setSlug] = useState(readSlug);
+  const [configurationResult, setConfigurationResult] = useState<{
+    slug: string;
+    state: 'checking' | 'enabled' | 'unavailable';
+  }>(() => ({ slug: readSlug(), state: 'checking' }));
+  const configuration = configurationResult.slug === slug ? configurationResult.state : 'checking';
+
+  useEffect(() => {
+    const updateSlug = () => setSlug(readSlug());
+    window.addEventListener('hashchange', updateSlug);
+    window.addEventListener('popstate', updateSlug);
+    return () => {
+      window.removeEventListener('hashchange', updateSlug);
+      window.removeEventListener('popstate', updateSlug);
+    };
+  }, []);
   useEffect(() => {
     if (!slug) return;
     let active = true;
-    setConfiguration('checking');
-    void publicTicketIntakeApi.configuration(slug).then(value => { if (active) setConfiguration(value.enabled ? 'enabled' : 'unavailable'); })
-      .catch(() => { if (active) setConfiguration('unavailable'); });
+    setConfigurationResult({ slug, state: 'checking' });
+    void publicTicketIntakeApi.configuration(slug).then(value => {
+      if (active) setConfigurationResult({ slug, state: value.enabled ? 'enabled' : 'unavailable' });
+    }).catch(() => { if (active) setConfigurationResult({ slug, state: 'unavailable' }); });
     return () => { active = false; };
   }, [slug, retryVersion]);
   const clientHref = clientPortalHref(slug);
@@ -48,7 +64,7 @@ export default function PublicInquiryUnavailable() {
         : configuration === 'checking' ? 'Checking whether this inquiry link can accept submissions…'
           : 'This inquiry link is unavailable or could not be checked. Nothing has been submitted. Try again or contact your project manager.'}</p>
       {configuration === 'unavailable' && <div className="mx-auto mt-3 max-w-2xl px-5"><button type="button" className={secondary} onClick={() => setRetryVersion(value => value + 1)}>Check inquiry availability again</button></div>}
-      <PublicInquiryForm submissionEnabled={configuration === 'enabled'} unavailableMessage={configuration === 'checking' ? 'Checking inquiry availability. Nothing has been submitted.' : 'Inquiry submission is currently unavailable for this link. Nothing has been submitted.'} onSubmit={async inquiry => { await publicTicketIntakeApi.submit(slug, { inquiry }); }}
+      <PublicInquiryForm key={slug} submissionEnabled={configuration === 'enabled'} unavailableMessage={configuration === 'checking' ? 'Checking inquiry availability. Nothing has been submitted.' : 'Inquiry submission is currently unavailable for this link. Nothing has been submitted.'} onSubmit={async inquiry => { await publicTicketIntakeApi.submit(slug, { inquiry }); }}
         onCancel={() => { window.location.href = clientHref; }} />
     </>}
   </main>;

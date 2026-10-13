@@ -218,6 +218,12 @@ export class ApiRequestError extends Error {
 }
 
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
+  const headers = new Headers({
+    'Content-Type': 'application/json',
+    ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
+    ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {}),
+  });
+  new Headers(options?.headers).forEach((value, key) => headers.set(key, value));
   const res = await fetch(`${API_BASE}${url}`, {
     /**
      * Send the session cookie.
@@ -233,12 +239,8 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
      * line cannot be turned against us.
      */
     credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
-      ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {})
-    },
-    ...options
+    ...options,
+    headers,
   });
   if (!res.ok) {
     const errorText = await res.text().catch(() => res.statusText);
@@ -270,17 +272,36 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+function validInternalTicketPath(path: string): boolean {
+  return typeof path === 'string' && path.length <= 2048 && /^\/tickets(?:[/?]|$)/.test(path)
+    && !path.startsWith('//') && !path.includes('\\') && !path.includes('#') && !/[\u0000-\u0020\u007f]/.test(path)
+    && !path.split('?')[0].split('/').some(segment => {
+      try { const decoded = decodeURIComponent(segment); return decoded === '.' || decoded === '..'; }
+      catch { return true; }
+    });
+}
+
+function ticketApiError(res: Response, detail: string): ApiRequestError {
+  let message = detail;
+  let code: string | null = null;
+  let reconciliationRequired = false;
+  try {
+    const payload: unknown = JSON.parse(detail);
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+      const value = payload as Record<string, unknown>;
+      if (typeof value.error === 'string') message = value.error;
+      if (typeof value.code === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(value.code)) code = value.code;
+      reconciliationRequired = value.reconciliationRequired === true || code?.endsWith('_outcome_unknown') === true;
+    }
+  } catch { /* retain the bounded response text */ }
+  return new ApiRequestError(res.status, `API Error [${res.status}]: ${message || res.statusText}`,
+    code, reconciliationRequired);
+}
+
 export const apiService = {
   /** Internal ticket API path; preserves the existing session, workspace and desktop relay transport. */
   ticketRequest: async <T>(path: string, options?: RequestInit): Promise<T> => {
-    if (typeof path !== 'string' || path.length > 2048 || !/^\/tickets(?:[/?]|$)/.test(path)
-      || path.startsWith('//') || path.includes('\\') || path.includes('#') || /[\u0000-\u0020\u007f]/.test(path)
-      || path.split('?')[0].split('/').some(segment => {
-        try { const decoded = decodeURIComponent(segment); return decoded === '.' || decoded === '..'; }
-        catch { return true; }
-      })) {
-      throw new Error('Invalid internal ticket API path.');
-    }
+    if (!validInternalTicketPath(path)) throw new Error('Invalid internal ticket API path.');
     const method = (options?.method ?? 'GET').toUpperCase();
     try {
       return await fetchJson<T>(path, options);
@@ -292,6 +313,38 @@ export const apiService = {
         null, 'The ticket operation result could not be confirmed.', 'ticket_transport_outcome_unknown', true,
       );
     }
+  },
+
+  /** Raw ticket attachment upload through the same authenticated workspace and desktop/cloud relay. */
+  ticketUploadDocument: async <T>(path: string, file: File, metadata: {
+    operationId: string; filename: string; contentType: string; replacesDocumentId: string | null;
+  }): Promise<T> => {
+    if (!validInternalTicketPath(path)) throw new Error('Invalid internal ticket API path.');
+    const encoded = encodeURIComponent(JSON.stringify(metadata));
+    if (encoded.length > 2048) throw new Error('The file name is too long. Rename it and try again.');
+    try {
+      return await fetchJson<T>(path, { method: 'POST', body: file, headers: {
+        'Content-Type': 'application/octet-stream', 'X-Alpha-Ticket-Document': encoded,
+      } });
+    } catch (error) {
+      if (error instanceof ApiRequestError || error instanceof Error && /API Error \[\d+\]/.test(error.message)) throw error;
+      throw new ApiRequestError(null, 'The ticket document upload result could not be confirmed.', 'ticket_document_transport_outcome_unknown', true);
+    }
+  },
+
+  /** Binary ticket attachment download; file content never goes through JSON parsing. */
+  ticketDownloadDocument: async (path: string): Promise<Blob> => {
+    if (!validInternalTicketPath(path)) throw new Error('Invalid internal ticket API path.');
+    const res = await fetch(`${API_BASE}${path}`, {
+      credentials: 'include', cache: 'no-store', redirect: 'error',
+      headers: {
+        Accept: 'application/octet-stream',
+        ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
+        ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {}),
+      },
+    });
+    if (!res.ok) throw ticketApiError(res, await res.text().catch(() => res.statusText));
+    return res.blob();
   },
 
   // Health

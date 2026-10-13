@@ -25,7 +25,7 @@ export function PmTicketsPage() {
       </button>
     </div>}
     <div className="min-h-0 flex-1">
-      {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-gray-400">Loading sample tickets…</p>}><SampleTickets /></Suspense> : <PmTicketsView intakeEnabled={intakeEnabled} workflowActions="triage" />}
+      {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-gray-400">Loading sample tickets…</p>}><SampleTickets /></Suspense> : <PmTicketsView intakeEnabled={intakeEnabled} workflowActions="triage" communicationEnabled />}
     </div>
   </div>;
 }

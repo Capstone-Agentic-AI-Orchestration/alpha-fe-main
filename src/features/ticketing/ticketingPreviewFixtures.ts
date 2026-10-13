@@ -121,7 +121,7 @@ function toQueueItem(ticket: DemoTicket): PmTicketQueueItem {
     readOnly: true, writesAvailable: false, requestedAction: ticket.requestedAction,
     internal: {
       updatedAt: ticket.updatedAt, actionOwner: ticket.actionOwner, nextAction: ticket.nextAction,
-      projectId: ticket.projectId, clientAccessActive: ticket.clientAccessActive,
+      projectId: ticket.projectId, clientAccessActive: ticket.clientAccessActive, clientInvitation: null,
     },
   };
 }

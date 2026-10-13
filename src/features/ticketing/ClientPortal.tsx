@@ -48,11 +48,14 @@ function statusName(status: ClientTicketQueueItem['status']): string {
   return status.replace(/_/g, ' ').replace(/\b\w/g, value => value.toUpperCase());
 }
 
-export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false, phaseFourReadOnly = false }: {
+export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false, workflowActionsDisabled = false,
+  communicationEnabled = false }: {
   api?: typeof clientTicketApi;
   inspectionOnly?: boolean;
-  /** Phase 4 connects account access and ticket previews; ticket writes come later. */
-  phaseFourReadOnly?: boolean;
+  /** Disables client-initiated workflow decisions while preserving scoped ticket access. */
+  workflowActionsDisabled?: boolean;
+  /** Enables ticket-scoped messages and documents independently of workflow decisions. */
+  communicationEnabled?: boolean;
 } = {}) {
   const [portalState, setPortalState] = useState<PortalState>('checking');
   const [session, setSession] = useState<ClientSession | null>(null);
@@ -199,7 +202,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     let current = true;
     const generation = ++historyGeneration.current;
     setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setHistoryError(''); setHistoryLoading(false); setDetailLoading(true);
-    const load = phaseFourReadOnly
+    const load = workflowActionsDisabled && !communicationEnabled
       ? api.getTicket(workspaceId, selectedId).then(ticket => [ticket, null] as const)
       : Promise.all([
         api.getTicket(workspaceId, selectedId),
@@ -217,7 +220,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       current = false;
       if (historyGeneration.current === generation) historyGeneration.current += 1;
     };
-  }, [portalState, workspaceId, selectedId, selectedQueueItem?.id, refreshVersion, api, phaseFourReadOnly]);
+  }, [portalState, workspaceId, selectedId, selectedQueueItem?.id, refreshVersion, api, workflowActionsDisabled, communicationEnabled]);
 
   async function loadMoreQueue() {
     if (!workspaceId || !queue?.nextCursor || queueMoreLoading) return;
@@ -240,7 +243,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   }
 
   async function loadMoreMessages() {
-    if (!workspaceId || !selectedId || !messageCursor || historyLoading) return;
+    if (!communicationEnabled || !workspaceId || !selectedId || !messageCursor || historyLoading) return;
     const generation = historyGeneration.current;
     const activeWorkspace = workspaceId;
     const activeTicket = selectedId;
@@ -400,7 +403,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
     {workspaceOptions.length === 0 ? <section className="mx-auto w-full max-w-2xl p-6 md:p-12">
       <EmptyState title="No authorized tickets available" body="No active ticket grants were returned for your account. Contact your project manager if you expected access. Client access does not open internal projects or workspaces." />
-    </section> : !phaseFourReadOnly && view === 'create' && createContext ? <ClientCreateTicketForm
+    </section> : !workflowActionsDisabled && view === 'create' && createContext ? <ClientCreateTicketForm
       context={createContext}
       submissionEnabled={!inspectionOnly}
       relatedTicket={relatedTicket ? { id: relatedTicket.id, reference: relatedTicket.reference, title: relatedTicket.title } : null}
@@ -411,11 +414,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       <div className={`${selectedId ? 'hidden xl:flex' : 'flex'} min-h-[360px] min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-surface`}>
         <div className="space-y-3 border-b border-white/[0.07] p-3">
           <div className="flex items-center justify-between gap-2"><div><h1 className="text-sm font-semibold text-gray-100">My tickets</h1><p className="mt-0.5 text-[10px] text-gray-500">Review your inquiry and follow its status.</p></div>
-            {!phaseFourReadOnly && <button onClick={() => void openCreateForm()} disabled={!workspaceId || createLoading || Boolean(pending)} className={primary}><Plus size={14} />{createLoading ? 'Loading…' : 'New request'}</button>}</div>
+            {!workflowActionsDisabled && <button onClick={() => void openCreateForm()} disabled={!workspaceId || createLoading || Boolean(pending)} className={primary}><Plus size={14} />{createLoading ? 'Loading…' : 'New request'}</button>}</div>
           <label className="relative block"><Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-gray-600" /><span className="sr-only">Search tickets</span>
             <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search your tickets…" className={`${input} py-2 pl-9`} /></label>
-          <div className="flex flex-wrap gap-1.5">{filters.filter(option => !phaseFourReadOnly || option.id !== 'needs_client').map(option => <button key={option.id} aria-pressed={filter === option.id} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`rounded-md px-2 py-1 text-[10px] ${filter === option.id ? 'bg-brand-500/15 text-brand-200' : 'text-gray-500 hover:bg-white/[0.05] hover:text-gray-300'}`}>{option.label}</button>)}</div>
-          {queue?.counters.kind === 'client' && <div className={`grid gap-2 ${phaseFourReadOnly ? 'grid-cols-1' : 'grid-cols-2'}`}><Metric label="Open" value={queue.counters.open} />{!phaseFourReadOnly && <Metric label="Needs your action" value={queue.counters.needsClient} />}</div>}
+          <div className="flex flex-wrap gap-1.5">{filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => <button key={option.id} aria-pressed={filter === option.id} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`rounded-md px-2 py-1 text-[10px] ${filter === option.id ? 'bg-brand-500/15 text-brand-200' : 'text-gray-500 hover:bg-white/[0.05] hover:text-gray-300'}`}>{option.label}</button>)}</div>
+          {queue?.counters.kind === 'client' && <div className={`grid gap-2 ${workflowActionsDisabled ? 'grid-cols-1' : 'grid-cols-2'}`}><Metric label="Open" value={queue.counters.open} />{!workflowActionsDisabled && <Metric label="Needs your action" value={queue.counters.needsClient} />}</div>}
         </div>
         {queueError && <p role="alert" className="m-3 rounded-md border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{queueError}</p>}
         <div className="min-h-0 flex-1 overflow-y-auto">
@@ -423,7 +426,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             : queue?.items.length ? queue.items.map(item => <button key={item.id} disabled={Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setView('tickets'); setWriteError(''); }} className={`w-full border-b border-white/[0.05] p-4 text-left transition-colors disabled:opacity-50 ${selectedId === item.id ? 'bg-brand-500/[0.08] shadow-[inset_2px_0_0_0_#a78bfa]' : 'hover:bg-white/[0.025]'}`}>
               <div className="flex items-center justify-between gap-2"><span className="font-mono text-[10px] text-gray-500">{item.reference}</span><StatusPill status={item.status} /></div>
               <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-200">{item.title}</p>
-              <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-gray-500"><span>{phaseFourReadOnly ? statusName(item.status) : item.requestedAction ? 'Your action needed' : ['closed', 'declined', 'cancelled'].includes(item.status) ? 'Read-only history' : item.status === 'in_progress' ? 'Work in progress' : 'With your project manager'}</span><time dateTime={item.updatedAt}>{time(item.updatedAt)}</time></div>
+              <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-gray-500"><span>{workflowActionsDisabled ? statusName(item.status) : item.requestedAction ? 'Your action needed' : ['closed', 'declined', 'cancelled'].includes(item.status) ? 'Read-only history' : item.status === 'in_progress' ? 'Work in progress' : 'With your project manager'}</span><time dateTime={item.updatedAt}>{time(item.updatedAt)}</time></div>
             </button>)
               : !queueError && <EmptyState title="No tickets in this view" body={filter === 'all' ? 'Submit a request when you need help with your project.' : 'Try another filter or clear your search.'} />}
         </div>
@@ -431,7 +434,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       </div>
 
       <div className={`${selectedId ? 'block' : 'hidden xl:block'} min-h-[420px] min-w-0 overflow-hidden rounded-xl border border-white/[0.08] bg-surface`}>
-        {!selectedId || !selectedQueueItem ? <EmptyState title="Select a ticket" body={phaseFourReadOnly ? 'Choose one of your inquiries to review its details and current status.' : 'Choose one of your requests to read the conversation, review shared scope or results, and reply to your project manager.'} />
+        {!selectedId || !selectedQueueItem ? <EmptyState title="Select a ticket" body={workflowActionsDisabled ? 'Choose one of your inquiries to review its details and current status.' : 'Choose one of your requests to read the conversation, review shared scope or results, and reply to your project manager.'} />
           : detailLoading ? <p role="status" className="p-8 text-center text-xs text-gray-500">Loading ticket…</p>
             : detailError ? <div role="alert" className="m-4 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-4 text-xs text-rose-200">{detailError}</div>
               : detail && <ClientTicketDetail
@@ -446,7 +449,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                 busy={writing || Boolean(pending)}
                 error={writeError}
                 replyResetVersion={replyResetVersion}
-                phaseFourReadOnly={phaseFourReadOnly}
+                workflowActionsDisabled={workflowActionsDisabled}
+                communicationEnabled={communicationEnabled && !inspectionOnly}
                 onBack={() => { historyGeneration.current += 1; setSelectedId(null); setDetail(null); }}
                 onLoadMore={() => void loadMoreMessages()}
                 onReply={sendReply}

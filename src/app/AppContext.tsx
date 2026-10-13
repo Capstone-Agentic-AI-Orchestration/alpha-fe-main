@@ -1082,18 +1082,31 @@ ${e.detail}`;
    * Fetched once per thread per session. Live sends append to state directly,
    * so re-fetching on every switch would cost a request to learn what is
    * already on screen.
+  *
+  * Keep in-flight requests separately from successfully loaded threads. React
+  * StrictMode replays effects in development; marking a thread loaded before
+  * the request finishes lets the replay skip it, while the first effect's
+  * cleanup cancels the only response handler. The conversation then stays
+  * falsely empty for the rest of that session.
    */
+  const loadingThreadsRef = useRef<Map<string, Promise<ChatMessage[]>>>(new Map());
+
   useEffect(() => {
     const threadId = activeThreadId;
     if (!threadId || loadedThreadsRef.current.has(threadId)) return;
 
-    let cancelled = false;
-    loadedThreadsRef.current.add(threadId);
+    // A StrictMode effect replay (or a rapid tab switch) shares the same
+    // request. Do not cancel its callback on effect cleanup: loading a thread
+    // into the provider cache remains useful after the user changes tabs.
+    if (loadingThreadsRef.current.has(threadId)) return;
 
-    apiService
-      .getChatMessages(threadId)
+    const request = apiService.getChatMessages(threadId);
+    loadingThreadsRef.current.set(threadId, request);
+
+    void request
       .then(messages => {
-        if (cancelled || !messages) return;
+        if (!Array.isArray(messages)) throw new Error('Chat messages response was invalid');
+        loadedThreadsRef.current.add(threadId);
         setChatThreads(prev =>
           prev.map(t => (t.id === threadId ? { ...t, messages } : t))
         );
@@ -1102,9 +1115,12 @@ ${e.detail}`;
         // Allow a retry on the next open rather than leaving the thread
         // permanently marked as loaded against a daemon that was briefly down.
         loadedThreadsRef.current.delete(threadId);
+      })
+      .finally(() => {
+        if (loadingThreadsRef.current.get(threadId) === request) {
+          loadingThreadsRef.current.delete(threadId);
+        }
       });
-
-    return () => { cancelled = true; };
   }, [activeThreadId]);
 
   // Sync to local storage
