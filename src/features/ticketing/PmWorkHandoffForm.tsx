@@ -8,8 +8,10 @@ import { primary, secondary } from './ticketUi';
 
 export interface PmWorkHandoffDraft { projectId: string; issueIds: string[] }
 
-export function PmWorkHandoffForm({ disabled, onCancel, onSubmit }: {
+export function PmWorkHandoffForm({ disabled, linkedProjectId = null, linkedProjectName = null, onCancel, onSubmit }: {
   disabled: boolean;
+  linkedProjectId?: string | null;
+  linkedProjectName?: string | null;
   onCancel: () => void;
   onSubmit: (draft: PmWorkHandoffDraft) => void;
 }) {
@@ -24,14 +26,20 @@ export function PmWorkHandoffForm({ disabled, onCancel, onSubmit }: {
   useEffect(() => {
     let current = true;
     setLoading(true); setFailed(false); setOptions(null);
-    setProjectId(''); setIssueIds([]); setConfirmed(false);
-    loadPmHandoffOptions().then(value => { if (current) setOptions(value); })
+    setProjectId(linkedProjectId ?? ''); setIssueIds([]); setConfirmed(false);
+    loadPmHandoffOptions().then(value => { if (current) {
+      setOptions(value);
+      setProjectId(linkedProjectId ?? '');
+    } })
       .catch(() => { if (current) setFailed(true); })
       .finally(() => { if (current) setLoading(false); });
     return () => { current = false; };
-  }, [refresh]);
+  }, [refresh, linkedProjectId]);
 
   const project = options?.projects.find(item => item.id === projectId);
+  const availableProjects = linkedProjectId
+    ? options?.projects.filter(item => item.id === linkedProjectId) ?? []
+    : options?.projects ?? [];
   const issues = options?.issues.filter(issue => isHandoffIssueCandidate(issue, projectId)) ?? [];
   const ready = !disabled && !loading && confirmed && options !== null
     && validHandoffSelection(options, projectId, issueIds);
@@ -56,8 +64,9 @@ export function PmWorkHandoffForm({ disabled, onCancel, onSubmit }: {
             <span className="truncate">{project ? `${project.key} · ${project.name}` : 'Choose a project'}</span><ChevronDown size={13} className="shrink-0 text-gray-500" />
           </summary>
           <div className="max-h-48 overflow-y-auto border-t border-white/[0.07] p-1">
-            {options.projects.length === 0 && <p className="p-2 text-xs text-gray-500">No projects are available in this workspace.</p>}
-            {options.projects.map(item => <button type="button" key={item.id} aria-pressed={projectId === item.id}
+            {availableProjects.length === 0 && <p className="p-2 text-xs text-gray-500">{linkedProjectId ? 'The linked project is not available in this workspace project list.' : 'No projects are available in this workspace.'}</p>}
+            {availableProjects.map(item => <button type="button" key={item.id} aria-pressed={projectId === item.id}
+              disabled={Boolean(linkedProjectId)}
               className="block w-full rounded-md px-2.5 py-2 text-left text-xs text-gray-300 hover:bg-brand-500/10 aria-pressed:bg-brand-500/15 aria-pressed:text-brand-200"
               onClick={event => {
                 setProjectId(item.id); setIssueIds([]); setConfirmed(false);
@@ -66,6 +75,7 @@ export function PmWorkHandoffForm({ disabled, onCancel, onSubmit }: {
           </div>
         </details>
       </div>
+      {linkedProjectId && <p className="text-[10px] text-gray-500">This request is already organized under {project?.name ?? linkedProjectName ?? 'its linked project'}. Authorized work must stay in that project.</p>}
       {project && <div>
         <p className="text-[11px] font-medium text-gray-300">Issues to include</p>
         <p className="mt-1 text-[10px] leading-relaxed text-gray-500">Only Backlog or Todo Issues with a human assignee appear. The server checks current developer access, existing ticket links and active runs before saving.</p>

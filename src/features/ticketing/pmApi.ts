@@ -26,7 +26,9 @@ export interface PmTicketQueueItem {
     actionOwner: TicketActionOwner;
     nextAction: TicketNextAction;
     projectId: string | null;
+    projectName?: string | null;
     clientAccessActive: boolean;
+    clientGroup?: { key: string; displayName: string; acceptsNewRequests: boolean; accessActive: boolean };
     clientInvitation: {
       status: 'pending' | 'expired' | 'revoked' | 'consumed';
       delivery: 'queued' | 'sending' | 'retrying' | 'accepted_by_provider' | 'failed' | 'unknown';
@@ -69,6 +71,8 @@ export interface PmTicketDetail {
   internal: {
     updatedAt: string;
     projectId: string | null;
+    projectName?: string | null;
+    projectClientVisible?: boolean;
     requiredIssueIds: string[];
     actionOwner: TicketActionOwner;
     nextAction: TicketNextAction;
@@ -149,6 +153,19 @@ export interface PmTicketInvitationReceipt {
   status: 'pending';
   alreadyPending: boolean;
 }
+export interface PmTicketProjectLinkInput {
+  schemaVersion: 1;
+  operationId: string;
+  expectedVersion: number;
+  projectId: string | null;
+  clientVisible: boolean;
+}
+export interface PmTicketProjectLinkReceipt extends PmTicketReceipt {
+  projectId: string | null;
+  projectName: string | null;
+  clientVisible: boolean;
+}
+export interface PmClientRequestAccessReceipt { ticketId: string; acceptsNewRequests: boolean }
 export interface PmPublicInquiryCode { code: string; submissionEnabled: boolean }
 export type PmTicketInvitationEmailReceipt = PmTicketInvitationReceipt;
 
@@ -282,6 +299,18 @@ export const pmTicketApi = {
   sendInvitationEmail(ticketId: string) {
     return apiService.ticketRequest<PmTicketInvitationReceipt>(
       `/tickets/${encodeId(ticketId)}/invitations`, { method: 'POST', body: '{}' },
+    );
+  },
+  linkProject(ticketId: string, input: PmTicketProjectLinkInput) {
+    return apiService.ticketRequest<PmTicketProjectLinkReceipt>(
+      `/tickets/${encodeId(ticketId)}/project`, { method: 'PUT', body: JSON.stringify(input) },
+    );
+  },
+  setClientRequestsEnabled(ticketId: string, acceptsNewRequests: boolean) {
+    return apiService.ticketRequest<PmClientRequestAccessReceipt>(
+      `/tickets/${encodeId(ticketId)}/client-requests`, {
+        method: 'PUT', body: JSON.stringify({ acceptsNewRequests }),
+      },
     );
   },
 };

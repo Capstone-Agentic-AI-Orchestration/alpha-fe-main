@@ -87,8 +87,8 @@ export function ClientTicketDetail({
         {ticket.request?.requestedDeadline && <p className="mt-3 text-[10px] text-gray-500">Requested date: {ticket.request.requestedDeadline} · not guaranteed</p>}
       </InfoCard>
       <InfoCard title="Shared project" icon={<FolderKanban size={14} />}>
-      {ticket.sharedProjectName ? <><p className="text-xs font-medium text-gray-200">{ticket.sharedProjectName}</p><p className="mt-1 text-[10px] text-gray-500">Shared by your project manager. A read-only project preview is not connected yet.</p></>
-          : <p className="text-xs text-gray-500">No project has been shared on this ticket yet. Your PM will decide whether to link a project, propose a new one, or answer without development.</p>}
+      {ticket.sharedProjectName ? <><p className="text-xs font-medium text-gray-200">{ticket.sharedProjectName}</p><p className="mt-1 text-[10px] text-gray-500">Your PM shared this project name as a limited preview. Its Issues, files, and other requests remain private.</p></>
+          : <p className="text-xs text-gray-500">No project name has been shared on this request yet. Your PM may link it to a project or handle it without developer work.</p>}
         {ticket.relatedTicket && <p className="mt-3 text-[10px] text-gray-500">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
       </InfoCard>
       {!workflowActionsDisabled && ticket.scope && <InfoCard title="Agreed work" icon={<ShieldCheck size={14} />}>

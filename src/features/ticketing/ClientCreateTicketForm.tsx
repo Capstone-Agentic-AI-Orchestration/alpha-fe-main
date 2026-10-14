@@ -70,11 +70,11 @@ export function ClientCreateTicketForm({
         <legend className="text-xs font-medium text-gray-300">Which project is this for?</legend>
         <label className="flex items-center gap-2 text-xs text-gray-400"><input type="radio" name="project-preference" checked={projectPreference === 'not_sure'} disabled={busy} onChange={() => { edited(); setProjectPreference('not_sure'); }} />I’m not sure yet</label>
         <label className="flex items-center gap-2 text-xs text-gray-400"><input type="radio" name="project-preference" checked={projectPreference === 'new_project'} disabled={busy} onChange={() => { edited(); setProjectPreference('new_project'); }} />This may need a new project</label>
-        {context.sharedProjects.length > 0 && <label className="flex items-center gap-2 text-xs text-gray-400"><input type="radio" name="project-preference" checked={projectPreference === 'shared_project'} disabled={busy} onChange={() => { edited(); setProjectPreference('shared_project'); setProjectOptionId(current => current || context.sharedProjects[0].optionId); }} />Connect it to a project my PM shared</label>}
+        {context.sharedProjects.length > 0 && <label className="flex items-center gap-2 text-xs text-gray-400"><input type="radio" name="project-preference" checked={projectPreference === 'shared_project'} disabled={busy} onChange={() => { edited(); setProjectPreference('shared_project'); setProjectOptionId(current => current || context.sharedProjects[0].optionId); }} />I think this is related to a project my PM shared</label>}
         {projectPreference === 'shared_project' && context.sharedProjects.length > 0 && <select className={input} value={projectOptionId} disabled={busy} onChange={event => { edited(); setProjectOptionId(event.target.value); }}>
           {context.sharedProjects.map(project => <option key={project.optionId} value={project.optionId}>{project.displayName}</option>)}
         </select>}
-        <p className="text-[10px] text-gray-600">This is a preference for the PM, not approval to begin work.</p>
+        <p className="text-[10px] text-gray-600">This is a suggestion only. Your PM confirms the project link and decides whether any work proceeds.</p>
       </fieldset>
       <label className="block max-w-xs space-y-2"><span className="text-xs font-medium text-gray-300">Requested date <span className="text-gray-500">(optional, not guaranteed)</span></span>
         <input className={input} type="date" value={deadline} disabled={busy} onChange={event => { edited(); setDeadline(event.target.value); }} /></label>
