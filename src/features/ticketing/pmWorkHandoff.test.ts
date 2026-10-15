@@ -36,17 +36,20 @@ describe('PM work handoff display preflight', () => {
     const state = detail(); state.status = status;
     expect(canAuthorizeTicketWork(state, true)).toBe(false);
   });
-  it.each(['disabled', 'read-only', 'authorized', 'project-linked', 'manifest-present', 'withdrawing', 'stale-scope', 'no-scope'])('fails closed on %s', condition => {
+  it.each(['disabled', 'read-only', 'authorized', 'manifest-present', 'withdrawing', 'stale-scope', 'no-scope'])('fails closed on %s', condition => {
     const state = detail();
     if (condition === 'disabled') state.writesAvailable = false;
     if (condition === 'read-only') state.readOnly = true;
     if (condition === 'authorized') state.internal.authorizedScopeVersionId = 'scope';
-    if (condition === 'project-linked') state.internal.projectId = 'project-a';
     if (condition === 'manifest-present') state.internal.requiredIssueIds = ['issue-a'];
     if (condition === 'withdrawing') state.internal.withdrawalRequested = true;
     if (condition === 'stale-scope') state.internal.scopeVersion!.id = 'other-scope';
     if (condition === 'no-scope') state.scope = null;
     expect(canAuthorizeTicketWork(state, true)).toBe(false);
+  });
+  it('allows agreed work after PM organization has linked the ticket to its project', () => {
+    const state = detail(); state.internal.projectId = 'project-a';
+    expect(canAuthorizeTicketWork(state, true)).toBe(true);
   });
   it('does not lose handoff access when a client follow-up changes the suggested next action', () => {
     const state = detail(); state.internal.nextAction = 'reply';

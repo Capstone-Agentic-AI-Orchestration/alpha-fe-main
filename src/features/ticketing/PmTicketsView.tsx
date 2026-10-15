@@ -9,10 +9,12 @@ import { pmTicketApi, pmTicketDocumentsApi } from './pmApi';
 import type {
   PmTicketCommandInput, PmTicketDetail, PmTicketMessage, PmTicketMessageInput,
   PmTicketNote, PmTicketNoteInput, PmTicketQueueItem, PmTicketQueueOptions,
-  PmTicketQueuePage, PmTicketReceipt, PmTicketScopeProposalInput, TicketStatus,
+  PmTicketQueuePage, PmTicketReceipt, PmTicketScopeProposalInput, PmTicketProjectLinkInput, TicketStatus,
 } from './pmApi';
 import { PmScopeProposalForm, type PmScopeProposalDraft } from './PmScopeProposalForm';
 import { PmWorkHandoffForm, type PmWorkHandoffDraft } from './PmWorkHandoffForm';
+import { PmProjectLinkForm, type PmProjectLinkDraft } from './PmProjectLinkForm';
+import { PmTicketQueueList } from './PmTicketQueueList';
 import { canAuthorizeTicketWork } from './pmWorkHandoff';
 import { PmCorrectionForm } from './PmCorrectionForm';
 import { canAssessTicketDelivery, canCloseAcceptedTicket, canShareAssessedDelivery, pmCorrectionCommand, pmCorrectionMode, type PmCorrectionDraft } from './pmReview';
@@ -108,13 +110,6 @@ export function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): s
       : 'The action could not be completed. Refresh the ticket and try again.';
 }
 
-function actionOwnerLabel(item: PmTicketQueueItem): string {
-  if (item.internal.actionOwner === 'pm') return 'PM action';
-  if (item.internal.actionOwner === 'client') return 'Client action';
-  if (item.internal.actionOwner === 'developer') return 'Developer action';
-  return 'No action pending';
-}
-
 function Counter({ label, value, active, onClick }: { label: string; value: number; active: boolean; onClick: () => void }) {
   return <button onClick={onClick} aria-pressed={active} className={`rounded-xl border p-3 text-left transition-colors ${active ? 'border-brand-400/50 bg-brand-500/10' : 'border-white/[0.07] bg-surface hover:bg-white/[0.04]'}`}>
     <span className="block text-[11px] text-gray-500">{label}</span>
@@ -162,6 +157,11 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
   const [panel, setPanel] = useState<Panel>('conversation');
   const [scopeComposerOpen, setScopeComposerOpen] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
+  const [projectLinkOpen, setProjectLinkOpen] = useState(false);
+  const [projectLinkSaving, setProjectLinkSaving] = useState(false);
+  const [projectLinkError, setProjectLinkError] = useState('');
+  const [requestAccessSaving, setRequestAccessSaving] = useState<string | null>(null);
+  const [requestAccessError, setRequestAccessError] = useState('');
   const [declineReason, setDeclineReason] = useState('');
   const [declineOpen, setDeclineOpen] = useState(false);
   const [reviewAction, setReviewAction] = useState<'correction' | 'close' | null>(null);
@@ -196,6 +196,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     setDrafts({ conversation: '', notes: '' }); setMessageAction('reply'); setWriteError('');
     setDeclineOpen(false); setDeclineReason('');
     setInvitationEmailError('');
+    setProjectLinkOpen(false); setProjectLinkError(''); setRequestAccessError('');
   }, [selectedId]);
 
   useEffect(() => {
@@ -297,6 +298,47 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     setHistoryLoading(false);
     setRefreshVersion(version => version + 1);
   };
+
+  async function saveProjectLink(value: PmProjectLinkDraft) {
+    if (!detail || !detail.writesAvailable || writing || projectLinkSaving || pending || writeLock.current
+      || (detail.internal.authorizedScopeVersionId && value.projectId !== detail.internal.projectId)) return;
+    const inputValue: PmTicketProjectLinkInput = {
+      schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
+      projectId: value.projectId, clientVisible: value.clientVisible,
+    };
+    writeLock.current = true; setProjectLinkSaving(true); setProjectLinkError(''); setWriteError('');
+    try {
+      const receipt = await api.linkProject(detail.id, inputValue);
+      if (receipt.ticketId !== detail.id || receipt.operationId !== inputValue.operationId
+        || !Number.isSafeInteger(receipt.version) || receipt.version < detail.version
+        || receipt.projectId !== inputValue.projectId || typeof receipt.clientVisible !== 'boolean') {
+        throw new Error('The project link could not be confirmed. Refresh the request before trying again.');
+      }
+      setProjectLinkOpen(false); refreshAll();
+    } catch (error) {
+      setProjectLinkError(safeError(error, 'write'));
+      if (error instanceof ApiRequestError && error.reconciliationRequired) refreshAll();
+    } finally {
+      writeLock.current = false; setProjectLinkSaving(false);
+    }
+  }
+
+  async function setClientRequestAccess(ticketId: string, enabled: boolean) {
+    if (!intakeEnabled || writing || requestAccessSaving || pending || writeLock.current) return;
+    writeLock.current = true; setRequestAccessSaving(ticketId); setRequestAccessError('');
+    try {
+      const result = await api.setClientRequestsEnabled(ticketId, enabled);
+      if (result.ticketId !== ticketId || result.acceptsNewRequests !== enabled) {
+        throw new Error('The request setting could not be confirmed. Refresh the queue.');
+      }
+      refreshAll();
+    } catch (error) {
+      setRequestAccessError(safeError(error, 'write'));
+      if (error instanceof ApiRequestError && error.reconciliationRequired) refreshAll();
+    } finally {
+      writeLock.current = false; setRequestAccessSaving(null);
+    }
+  }
 
 
   async function performWrite(operation: PendingOperation, clearDraft = false): Promise<boolean> {
@@ -441,7 +483,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
   async function submitScopeProposal(draftValue: PmScopeProposalDraft) {
     if (workflowActions === 'none' || !detail || !selectedQueueItem?.internal.clientAccessActive || !detail.writesAvailable || pending
       || !['under_review', 'awaiting_client'].includes(detail.status)
-      || detail.internal.authorizedScopeVersionId || detail.internal.projectId || detail.internal.requiredIssueIds.length > 0) return;
+      || detail.internal.authorizedScopeVersionId || detail.internal.requiredIssueIds.length > 0) return;
     const inputValue: PmTicketScopeProposalInput = {
       schemaVersion: 1,
       operationId: crypto.randomUUID(),
@@ -459,7 +501,8 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
   }
 
   async function submitWorkHandoff(value: PmWorkHandoffDraft) {
-    if (!detail || writing || pending || !canAuthorizeTicketWork(detail, selectedQueueItem?.internal.clientAccessActive === true)) return;
+    if (!detail || writing || pending || (detail.internal.projectId && value.projectId !== detail.internal.projectId)
+      || !canAuthorizeTicketWork(detail, selectedQueueItem?.internal.clientAccessActive === true)) return;
     const inputValue: PmTicketCommandInput = {
       schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
       command: { type: 'authorize_work', scopeVersionId: detail.scope!.id, projectId: value.projectId, issueIds: [...value.issueIds] },
@@ -606,20 +649,13 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
           </div>
         </div>
         <div className="min-h-0 flex-1 overflow-y-auto">
+          {requestAccessError && <p role="alert" className="m-3 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{requestAccessError}</p>}
           {!intakeEnabled ? <EmptyPanel title="Live tickets are not connected yet" detail="No ticket data is loaded while ticketing is disabled." />
             : queueLoading && !queue ? <div className="p-6 text-center text-xs text-gray-500">Loading tickets…</div>
-            : queue && queue.items.length > 0 ? queue.items.map(item => <button key={item.id}
-              disabled={Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setPanel('conversation'); setMessageAction('reply'); setDraft(''); setWriteError(''); }}
-              className={`w-full border-b border-white/[0.05] p-4 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${selectedId === item.id ? 'bg-brand-500/[0.08] shadow-[inset_2px_0_0_0_#a78bfa]' : 'hover:bg-white/[0.025]'}`}>
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-[10px] text-gray-500">{item.reference}</span>
-                <span className={`rounded px-1.5 py-0.5 text-[10px] ${statusStyle(item.status)}`}>{statusLabel(item.status)}</span>
-              </div>
-              <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-200">{item.title}</p>
-              <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-gray-500">
-                <span>{actionOwnerLabel(item)}</span><time dateTime={item.updatedAt}>{time(item.updatedAt)}</time>
-              </div>
-            </button>)
+            : queue && queue.items.length > 0 ? <PmTicketQueueList items={queue.items} selectedId={selectedId}
+              disabled={Boolean(pending)} requestAccessSaving={requestAccessSaving}
+              onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDraft(''); setWriteError(''); }}
+              onToggleRequests={(ticketId, enabled) => void setClientRequestAccess(ticketId, enabled)} />
               : queue && <EmptyPanel title="No tickets in this view" detail={filter === 'all' ? 'New client inquiries and requests will appear here when ticket intake is enabled.' : 'Try another filter or clear your search.'} />}
         </div>
         {queue && <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-3 py-2 text-[10px] text-gray-600">
@@ -648,7 +684,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                       && <button onClick={() => { setDeclineReason(''); setDeclineOpen(value => !value); }} disabled={writing || Boolean(pending)} className={secondary}>Decline inquiry</button>}
                     {(workflowActions === 'all' || workflowActions === 'review_scope') && detail.writesAvailable && selectedQueueItem.internal.clientAccessActive
                       && ['under_review', 'awaiting_client'].includes(detail.status)
-                      && !detail.internal.authorizedScopeVersionId && !detail.internal.projectId
+                      && !detail.internal.authorizedScopeVersionId
                       && detail.internal.requiredIssueIds.length === 0
                       && <button onClick={() => { setWriteError(''); setHandoffOpen(false); setScopeComposerOpen(value => !value); }} disabled={writing || Boolean(pending)} className={secondary}>
                         {scopeComposerOpen ? 'Close scope editor' : detail.scope?.agreed ? 'Replace agreed scope' : detail.scope ? 'Revise proposed scope' : 'Propose scope'}
@@ -657,6 +693,11 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                       onClick={() => { setWriteError(''); setScopeComposerOpen(false); setHandoffOpen(value => !value); }}
                       disabled={writing || Boolean(pending)} className={primary}>
                       {handoffOpen ? 'Close work selector' : 'Link agreed work'}
+                    </button>}
+                    {workflowActions !== 'none' && detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status) && <button
+                      type="button" onClick={() => { setProjectLinkError(''); setProjectLinkOpen(value => !value); }}
+                      disabled={writing || projectLinkSaving || Boolean(pending)} className={secondary}>
+                      {projectLinkOpen ? 'Close project link' : detail.internal.projectId ? 'Manage project link' : 'Link to project'}
                     </button>}
                     {workflowActions !== 'none' && detail.internal.request?.source === 'public_inquiry'
                       && !selectedQueueItem.internal.clientAccessActive && detail.status === 'under_review'
@@ -703,9 +744,20 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                       <p className="break-all">{detail.internal.request.contact.email} · <PmContactVerification verification={detail.internal.request.contact.verification} /></p>
                     </div>}
                     <p className="mt-3 text-[10px] text-gray-500">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : selectedInvitation?.status === 'pending' ? 'Invitation pending · no access until verified' : 'Client account not active'}</p>
-                    <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectId ? 'Linked to a project' : 'No project linked yet'}</p>
+                    <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectId ? `Project: ${detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? 'linked'}` : 'No project linked yet'}</p>
+                    {detail.internal.projectId && <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectClientVisible ? 'Project name preview is visible to this ticket’s client; project and Issue access remain private.' : 'Project link is PM-only.'}</p>}
                   </div>
                 </div>
+
+                {projectLinkOpen && <div className="border-b border-white/[0.07] p-4 md:p-5">
+                  {projectLinkError && <p role="alert" className="mb-3 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{projectLinkError}</p>}
+                  <PmProjectLinkForm key={`${detail.id}:${detail.version}:${detail.internal.projectId ?? ''}:${detail.internal.projectClientVisible === true}`}
+                    initialProjectId={detail.internal.projectId}
+                    initialClientVisible={detail.internal.projectClientVisible === true}
+                    projectLocked={Boolean(detail.internal.authorizedScopeVersionId || detail.internal.requiredIssueIds.length)}
+                    disabled={writing || projectLinkSaving || Boolean(pending)}
+                    onCancel={() => setProjectLinkOpen(false)} onSubmit={value => void saveProjectLink(value)} />
+                </div>}
 
                 {declineOpen && ['received', 'under_review'].includes(detail.status) && <form aria-label="Decline inquiry" className="m-4 space-y-3 rounded-lg border border-rose-400/20 p-4" onSubmit={event => { event.preventDefault(); declineTicket(); }}>
                   <label className="block text-xs text-gray-300">Reason for declining (required)<textarea required maxLength={4000} value={declineReason} onChange={event => setDeclineReason(event.target.value)} disabled={writing || Boolean(pending)} className={`${input} mt-2`} /></label>
@@ -722,7 +774,9 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                 <PmScopeProposalForm existingScopeAgreed={detail.scope?.agreed === true} disabled={writing || Boolean(pending)} onCancel={() => setScopeComposerOpen(false)} onSubmit={draftValue => void submitScopeProposal(draftValue)} />
               </div>}
               {handoffOpen && canAuthorizeTicketWork(detail, selectedQueueItem.internal.clientAccessActive) && <div className="border-b border-white/[0.07] p-4 md:p-5">
-                <PmWorkHandoffForm key={`${detail.id}:${detail.version}`} disabled={writing || Boolean(pending)} onCancel={() => setHandoffOpen(false)} onSubmit={value => void submitWorkHandoff(value)} />
+                <PmWorkHandoffForm key={`${detail.id}:${detail.version}`} linkedProjectId={detail.internal.projectId}
+                  linkedProjectName={detail.internal.projectName ?? null} disabled={writing || Boolean(pending)}
+                  onCancel={() => setHandoffOpen(false)} onSubmit={value => void submitWorkHandoff(value)} />
               </div>}
               {reviewAction === 'correction' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <div className="border-b border-white/[0.07] p-4 md:p-5">
                 <PmCorrectionForm key={`${detail.id}:${detail.version}`} ticket={detail} mode={pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive)!}

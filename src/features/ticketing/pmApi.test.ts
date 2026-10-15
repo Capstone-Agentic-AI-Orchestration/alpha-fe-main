@@ -66,4 +66,29 @@ describe('PM ticket transport', () => {
 
     expect(request).toHaveBeenCalledWith('/tickets/ticket-1/invitations', { method: 'POST', body: '{}' });
   });
+
+  it('links a request to a workspace project through the PM ticket API only', async () => {
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({
+      ticketId: 'ticket/one', operationId: 'link-operation', version: 3, status: 'under_review',
+      projectId: 'project-a', projectName: 'Client-safe name', clientVisible: true,
+    } as never);
+    const input = { schemaVersion: 1 as const, operationId: 'link-operation', expectedVersion: 2,
+      projectId: 'project-a', clientVisible: true };
+
+    await pmTicketApi.linkProject('ticket/one', input);
+
+    expect(request).toHaveBeenCalledWith('/tickets/ticket%2Fone/project', { method: 'PUT', body: JSON.stringify(input) });
+  });
+
+  it('changes client request permission through the PM ticket API', async () => {
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({
+      ticketId: 'ticket-1', acceptsNewRequests: true,
+    } as never);
+
+    await pmTicketApi.setClientRequestsEnabled('ticket-1', true);
+
+    expect(request).toHaveBeenCalledWith('/tickets/ticket-1/client-requests', {
+      method: 'PUT', body: JSON.stringify({ acceptsNewRequests: true }),
+    });
+  });
 });

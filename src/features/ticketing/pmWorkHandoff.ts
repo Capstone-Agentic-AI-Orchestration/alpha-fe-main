@@ -18,7 +18,7 @@ export function canAuthorizeTicketWork(detail: PmTicketDetail, clientAccessActiv
   return clientAccessActive && detail.writesAvailable && !detail.readOnly
     && detail.status === 'under_review'
     && detail.scope?.agreed === true && detail.scope.id === detail.internal.scopeVersion?.id
-    && !detail.internal.authorizedScopeVersionId && !detail.internal.projectId
+    && !detail.internal.authorizedScopeVersionId
     && detail.internal.requiredIssueIds.length === 0 && !detail.internal.withdrawalRequested;
 }
 
