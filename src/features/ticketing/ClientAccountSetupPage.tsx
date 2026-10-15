@@ -4,10 +4,12 @@ import { ClientAuthShell } from './ClientAuthShell';
 import { clientAccountApi, type ClientAccountLink, type ClientAccountSetup } from './clientAccountApi';
 
 interface LinkLocation { hash: string; search: string; pathname: string }
+const defaultFailureMessage = () => 'This link is incomplete, expired, or already used. Request password recovery if your account is active, or ask your PM for a fresh invitation.';
 
-export function ClientAccountSetupPage({ readLink, cleanUrl }: {
+export function ClientAccountSetupPage({ readLink, cleanUrl, failureMessage = defaultFailureMessage }: {
   readLink: (location: LinkLocation) => ClientAccountLink | null;
   cleanUrl: (location: LinkLocation) => string;
+  failureMessage?: (error: unknown) => string;
 }) {
   const [setup, setSetup] = useState<ClientAccountSetup | null>(null);
   const [checking, setChecking] = useState(true);
@@ -24,8 +26,8 @@ export function ClientAccountSetupPage({ readLink, cleanUrl }: {
     const proof = readLink(window.location);
     history.replaceState(null, '', cleanUrl(window.location));
     const pending = proof ? clientAccountApi.begin(proof) : clientAccountApi.setup();
-    void pending.catch(() => clientAccountApi.setup()).then(setSetup).catch(() => setError('This link is incomplete, expired, or already used. Request password recovery if your account is active, or ask your PM for a fresh invitation.')).finally(() => setChecking(false));
-  }, [readLink, cleanUrl]);
+    void pending.then(setSetup).catch(error => setError(failureMessage(error))).finally(() => setChecking(false));
+  }, [readLink, cleanUrl, failureMessage]);
   const existing = setup?.action === 'sign_in';
   return <ClientAuthShell><h2>{complete ? 'Your portal is ready.' : checking ? 'Verifying your email…' : existing ? 'Accept your invitation.' : setup?.action === 'reset_password' ? 'Choose your password.' : 'Finish your account setup.'}</h2>
     <p className="ca-description">{complete ? 'Your authorized requests are together in your client portal.' : existing ? 'This email already has a password. Sign in to finish, keeping your existing account.' : 'Your email comes from the verified invitation or recovery link. Choose a password so you can sign in directly next time.'}</p>

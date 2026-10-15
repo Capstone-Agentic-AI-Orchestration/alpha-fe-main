@@ -6,15 +6,23 @@ const API_ROOT = '/api/public/ticket-intakes';
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
 const PUBLIC_INTAKE_TIMEOUT_MS = 30_000;
 const INTAKE_SLUG = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
+export type PublicInquiryContext = { kind: 'central' } | { kind: 'workspace'; slug: string } | { kind: 'invalid' };
 
 /** Routing context only: the server still resolves and authorizes the intake. */
-export function publicInquirySlug(location: { hash?: string; search?: string }): string {
+export function publicInquiryContext(location: { hash?: string; search?: string }): PublicInquiryContext {
   const hashQuery = location.hash?.startsWith('#/') ? location.hash.split('?').slice(1).join('?') : '';
   const hashValues = new URLSearchParams(hashQuery).getAll('intake');
   const searchValues = new URLSearchParams(location.search ?? '').getAll('intake');
   // Never silently pick one workspace when a URL supplies conflicting context.
   const values = [...hashValues, ...searchValues];
-  return values.length === 1 && INTAKE_SLUG.test(values[0]) ? values[0] : '';
+  if (values.length === 0) return { kind: 'central' };
+  if (values.length !== 1 || !INTAKE_SLUG.test(values[0])) return { kind: 'invalid' };
+  return { kind: 'workspace', slug: values[0] };
+}
+
+export function publicInquirySlug(location: { hash?: string; search?: string }): string {
+  const context = publicInquiryContext(location);
+  return context.kind === 'workspace' ? context.slug : '';
 }
 
 export function publicInquiryHref(slug: string): string {
@@ -58,6 +66,7 @@ function safeFailure(code: unknown, status: number): { code: string | null; mess
     ticket_intake_not_verified: { message: 'This inquiry could not be accepted from this page.' },
     ticket_intake_rate_limited: { message: 'Too many submissions. Please wait before trying again.' },
     ticket_intake_operation_conflict: { message: 'The submission changed. Start a new inquiry.' },
+    ticket_intake_invalid_request: { message: 'Check the inquiry fields and try again.' },
     ticket_intake_outcome_unknown: {
       message: 'We could not confirm whether this went through. Keep the same submission ID and verify again before retrying.',
       retrySame: true,
@@ -72,6 +81,16 @@ function safeFailure(code: unknown, status: number): { code: string | null; mess
 
 /** Anonymous intake transport; it never uses the internal API/desktop token or client session. */
 export const publicTicketIntakeApi = {
+  async centralConfiguration(): Promise<{ enabled: boolean }> {
+    if (!browserOriginAllowed()) return { enabled: false };
+    const response = await fetch(`${API_ROOT}/config`, {
+      credentials: 'omit', mode: 'same-origin', cache: 'no-store', redirect: 'error',
+      signal: AbortSignal.timeout(PUBLIC_INTAKE_TIMEOUT_MS),
+    });
+    if (!response.ok) return { enabled: false };
+    const value = await response.json();
+    return value?.enabled === true ? { enabled: true } : { enabled: false };
+  },
   async configuration(slug: string): Promise<{ enabled: boolean }> {
     if (!browserOriginAllowed() || !INTAKE_SLUG.test(slug)) {
       return { enabled: false };
@@ -88,15 +107,16 @@ export const publicTicketIntakeApi = {
     if (!browserOriginAllowed()) {
       throw new PublicTicketIntakeApiError(null, 'Inquiry submission is available only in a secure web browser or local development.');
     }
-    if (!INTAKE_SLUG.test(slug)) {
+    if (slug !== '' && !INTAKE_SLUG.test(slug)) {
       throw new PublicTicketIntakeApiError(404, 'This inquiry link is unavailable.', 'ticket_intake_entry_unavailable');
     }
+    const endpoint = slug ? `${API_ROOT}/${encodeURIComponent(slug)}` : API_ROOT;
 
     let response: Response;
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), PUBLIC_INTAKE_TIMEOUT_MS);
     try {
-      response = await fetch(`${API_ROOT}/${encodeURIComponent(slug)}`, {
+      response = await fetch(endpoint, {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
@@ -142,6 +162,9 @@ export const publicTicketIntakeApi = {
       response.status, 'We could not confirm whether this went through. Keep the same submission ID and verify again before retrying.',
       'response_outcome_unknown', null, true,
     );
+  },
+  async submitCentral(request: PublicTicketInquiryRequest): Promise<PublicTicketInquiryResponse> {
+    return publicTicketIntakeApi.submit('', request);
   },
 };
 

@@ -5,6 +5,7 @@ import { ClientCreateTicketForm } from './ClientCreateTicketForm';
 import { PublicInquiryForm } from './PublicInquiryForm';
 import PublicInquiryUnavailable from './PublicInquiryUnavailable';
 import { invitationButtonLabel, invitationStatusMessage, PmContactVerification, PmTicketsView, safeError } from './PmTicketsView';
+import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { activationFailureMessage, activationLink, scrubbedActivationUrl } from './ClientActivationUnavailable';
 import { ClientTicketApiError } from './clientApi';
@@ -71,16 +72,23 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toMatch(/<input[^>]*disabled=""[^>]*placeholder="Search tickets…"/);
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Refresh<\/button>/);
   });
-  it('requires explicit workspace context instead of showing a permanently disabled generic form', () => {
+  it('opens the shared inquiry form directly without workspace selection or New Request', () => {
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
-    expect(html).toContain('Send an inquiry to a workspace');
-    expect(html).toContain('Inquiry code from your project manager');
-    expect(html).toContain('Already have client access? Sign in first');
-    expect(html).toContain('New request');
+    expect(html).toContain('Tell us what you need');
+    expect(html).toContain('shared inbox and accept it into their workspace');
+    expect(html).not.toContain('Inquiry code from your project manager');
+    expect(html).not.toContain('New request');
     expect(html).toContain('href="/#/client"');
-    expect(html).not.toContain('Submit inquiry');
+    expect(html).toContain('Submit inquiry');
     expect(html).not.toContain('UI-only');
     expect(html).not.toContain('Create developer');
+  });
+
+  it('shows PMs that accepting creates a ticket only in the selected workspace', () => {
+    const html = renderToStaticMarkup(<PmCentralIntakeInbox workspaceId="workspace-a" workspaceName="Workspace A" workspaceCanReview onAccepted={() => undefined} />);
+    expect(html).toContain('One shared intake queue for Alpha');
+    expect(html).toContain('Accept destination:');
+    expect(html).toContain('Workspace A');
   });
 
   it('checks the real inquiry link before enabling its form and preserves context on return', () => {
