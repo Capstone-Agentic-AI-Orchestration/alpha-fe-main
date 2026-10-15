@@ -73,8 +73,11 @@ describe('real ticketing interfaces in the Alpha app', () => {
   });
   it('requires explicit workspace context instead of showing a permanently disabled generic form', () => {
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
-    expect(html).toContain('Choose your inquiry destination');
-    expect(html).toContain('Workspace inquiry code');
+    expect(html).toContain('Send an inquiry to a workspace');
+    expect(html).toContain('Inquiry code from your project manager');
+    expect(html).toContain('Already have client access? Sign in first');
+    expect(html).toContain('New request');
+    expect(html).toContain('href="/#/client"');
     expect(html).not.toContain('Submit inquiry');
     expect(html).not.toContain('UI-only');
     expect(html).not.toContain('Create developer');
@@ -114,7 +117,9 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toContain('Access your tickets');
     expect(html).toContain('Send sign-in link');
     expect(html).toMatch(/<input[^>]*type="email"[^>]*required=""/);
-    expect(html).toContain('New client accounts are invitation-only');
+    expect(html).toContain('Your project manager must review it and invite you before you can sign in');
+    expect(html).toContain('A sign-in link will not create access');
+    expect(html).toContain('New to Alpha? Send an inquiry');
     expect(html).toContain('href="/#/request"');
   });
 

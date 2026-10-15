@@ -6,6 +6,8 @@ import alphaMarkUrl from '@/assets/alpha-mark.png';
 
 const InternalApp = lazy(() => import('./InternalApp'));
 const ClientPortal = lazy(() => import('@/features/ticketing/ClientPortal'));
+const ClientLandingPage = lazy(() => import('@/features/landing/ClientLandingPage'));
+const ClientPasswordRecovery = lazy(() => import('@/features/ticketing/ClientPasswordRecovery'));
 const TicketingPreview = import.meta.env.DEV ? lazy(() => import('@/features/ticketing/TicketingPreview')) : null;
 
 export default function AppEntry({ entry }: { entry: Entry }) {
@@ -22,6 +24,9 @@ export default function AppEntry({ entry }: { entry: Entry }) {
     </main>
   );
   return <Suspense fallback={<div className="min-h-dvh flex items-center justify-center text-gray-400" role="status">Loading Alpha…</div>}>
-    {entry === 'internal' ? <InternalApp /> : entry === 'client-portal' ? <ClientPortal workflowActionsDisabled communicationEnabled /> : TicketingPreview && <TicketingPreview initialRole={entry === 'preview-pm' ? 'pm' : 'client'} />}
+    {entry === 'internal' ? <InternalApp /> : entry === 'landing' ? <ClientLandingPage />
+      : entry === 'client-recovery' ? <ClientPasswordRecovery />
+        : entry === 'client-portal' ? <ClientPortal workflowActionsDisabled communicationEnabled />
+          : TicketingPreview && <TicketingPreview initialRole={entry === 'preview-pm' ? 'pm' : 'client'} />}
   </Suspense>;
 }

@@ -25,6 +25,10 @@ export function clientPortalHref(slug: string): string {
   return INTAKE_SLUG.test(slug) ? `/#/client?${new URLSearchParams({ intake: slug })}` : '/#/client';
 }
 
+export function clientLandingHref(slug: string): string {
+  return INTAKE_SLUG.test(slug) ? `/#/?${new URLSearchParams({ intake: slug })}` : '/#/';
+}
+
 export class PublicTicketIntakeApiError extends Error {
   constructor(
     readonly status: number | null,
