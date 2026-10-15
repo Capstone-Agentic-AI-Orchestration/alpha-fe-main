@@ -1,4 +1,4 @@
-export type AppEntry = 'internal' | 'client-portal' | 'client-activation' | 'public-inquiry-unavailable' | 'preview-client' | 'preview-pm';
+export type AppEntry = 'internal' | 'landing' | 'client-recovery' | 'client-portal' | 'client-activation' | 'public-inquiry-unavailable' | 'preview-client' | 'preview-pm';
 
 function isRoute(path: string, base: string): boolean {
   return path === base || path.startsWith(`${base}/`);
@@ -17,6 +17,7 @@ export function selectAppEntry(
   const loopback = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
   const browser = ['http:', 'https:'].includes(location.protocol);
   const hashPath = hashRoutePath(location.hash);
+  if (browser && (isRoute(hashPath, '/client/forgot') || isRoute(location.pathname, '/client/forgot'))) return 'client-recovery';
   // Public inquiry URLs must never fall through to the internal workspace app,
   // even while the public intake endpoint is deliberately off.
   if (browser && (isRoute(location.pathname, '/request') || isRoute(hashPath, '/request'))) {
@@ -39,5 +40,10 @@ export function selectAppEntry(
   if (browser && (isRoute(hashPath, '/client') || isRoute(location.pathname, '/client'))) {
     return 'client-portal';
   }
+  // Browser visitors get the client landing page. Keep Electron, staff routes,
+  // historical internal routes, and OAuth callback fragments on the staff entry.
+  if (browser && location.pathname === '/' && (!location.hash || hashPath === '/' || hashPath === '/home')
+    && !new URLSearchParams(location.search).has('ticketing-preview')
+    && !new URLSearchParams(location.search).has('code')) return 'landing';
   return 'internal';
 }

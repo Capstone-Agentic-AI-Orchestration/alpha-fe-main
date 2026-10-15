@@ -199,7 +199,7 @@ async function requestResponse(path: string, options: RequestOptions = {}): Prom
   return response;
 }
 
-async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
+export async function requestJson<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const response = await requestResponse(path, options);
   if (response.status === 204) return undefined as T;
   try { return await response.json() as T; }

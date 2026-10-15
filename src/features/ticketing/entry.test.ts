@@ -25,8 +25,22 @@ describe('isolated ticket application entry', () => {
   ])('routes invitation activation %s %s to its isolated entry', (pathname, hash) => {
     expect(selectAppEntry({ ...location, pathname, hash }, false)).toBe('client-activation');
   });
-  it.each(['/', '/projects', '/clientele', '/clients'])('preserves the internal entry at %s', pathname => {
+  it.each(['/projects', '/clientele', '/clients'])('preserves the internal entry at %s', pathname => {
     expect(selectAppEntry({ ...location, pathname }, false)).toBe('internal');
+  });
+  it('opens the landing page for browser visitors while preserving staff and packaged desktop entry', () => {
+    expect(selectAppEntry(location, false)).toBe('landing');
+    expect(selectAppEntry({ ...location, hash: '#/' }, false)).toBe('landing');
+    expect(selectAppEntry({ ...location, hash: '#/?intake=team-a' }, false)).toBe('landing');
+    expect(selectAppEntry({ ...location, hash: '#/team' }, false)).toBe('internal');
+    expect(selectAppEntry({ ...location, hash: '#alpha_signed_in=1' }, false)).toBe('internal');
+    expect(selectAppEntry({ ...location, protocol: 'file:' }, false)).toBe('internal');
+    expect(selectAppEntry({ ...location, search: '?code=oauth-code' }, false)).toBe('internal');
+  });
+  it('keeps password recovery isolated from staff and invitation processing', () => {
+    expect(selectAppEntry({ ...location, hash: '#/client/forgot' }, false)).toBe('client-recovery');
+    expect(selectAppEntry({ ...location, pathname: '/client/forgot' }, false)).toBe('client-recovery');
+    expect(selectAppEntry({ ...location, hash: '#/client/forgot', protocol: 'file:' }, false)).toBe('internal');
   });
   it.each(['#/client', '#/client/', '#/client/tickets/ticket-id'])('supports a client link at the existing single-page web URL: %s', hash => {
     expect(selectAppEntry({ ...location, hash }, false)).toBe('client-portal');
