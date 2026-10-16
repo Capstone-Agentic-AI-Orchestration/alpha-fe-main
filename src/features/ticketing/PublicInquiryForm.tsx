@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, ArrowUpRight, Check, Send, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, Send, ShieldCheck } from 'lucide-react';
 import { PUBLIC_TICKET_INQUIRY_SCHEMA_VERSION } from './publicIntakeContract';
 import type { PublicTicketInquiryPayload } from './publicIntakeContract';
 import { PublicTicketIntakeApiError } from './publicIntakeApi';
 import { useClientPageMotion } from './publicClient/useClientPageMotion';
+import { input, primary, secondary } from './ticketUi';
 
 export type InquiryNavigationState = { dirty: boolean; locked: boolean };
 
@@ -91,21 +92,22 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
     }}>
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Your name <span className="text-gray-500">(required)</span></span>
-          <input className={input} required maxLength={160} autoComplete="name" disabled={isSubmitting || outcomeUnknown || submitted} value={fullName} onChange={event => { setFullName(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+          <input className={input} required maxLength={160} autoComplete="name" disabled={fieldsDisabled} value={fullName} onChange={event => { setFullName(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
         <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Email <span className="text-gray-500">(required)</span></span>
-          <input className={input} type="email" required maxLength={254} autoComplete="email" disabled={isSubmitting || outcomeUnknown || submitted} value={email} onChange={event => { setEmail(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+          <input className={input} type="email" required maxLength={254} autoComplete="email" disabled={fieldsDisabled} value={email} onChange={event => { setEmail(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
       </div>
       <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Company <span className="text-gray-500">(optional)</span></span>
-        <input className={input} maxLength={160} autoComplete="organization" disabled={isSubmitting || outcomeUnknown || submitted} value={company} onChange={event => { setCompany(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+        <input className={input} maxLength={160} autoComplete="organization" disabled={fieldsDisabled} value={company} onChange={event => { setCompany(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
       <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">What do you need? <span className="text-gray-500">(required)</span></span>
-        <input className={input} required maxLength={160} disabled={isSubmitting || outcomeUnknown || submitted} value={title} onChange={event => { setTitle(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="A short summary" /></label>
+        <input className={input} required maxLength={160} disabled={fieldsDisabled} value={title} onChange={event => { setTitle(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="A short summary" /></label>
       <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Details <span className="text-gray-500">(required)</span></span>
-        <textarea className={`${input} min-h-36 resize-y`} required maxLength={6000} disabled={isSubmitting || outcomeUnknown || submitted} value={description} onChange={event => { setDescription(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="Describe the outcome you’re looking for and any useful context." /></label>
+        <textarea className={`${input} min-h-36 resize-y`} required maxLength={6000} disabled={fieldsDisabled} value={description} onChange={event => { setDescription(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="Describe the outcome you’re looking for and any useful context." /></label>
       <label className="block max-w-xs space-y-2"><span className="text-xs font-medium text-gray-300">Requested target date <span className="text-gray-500">(optional, not guaranteed)</span></span>
-        <input className={input} type="date" disabled={isSubmitting || outcomeUnknown || submitted} value={requestedDeadline} onChange={event => { setRequestedDeadline(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+        <input className={input} type="date" disabled={fieldsDisabled} value={requestedDeadline} onChange={event => { setRequestedDeadline(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
       <div className="flex items-start gap-2 rounded-lg bg-white/[0.03] p-3 text-xs leading-relaxed text-gray-400"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-gray-500" />
         <p>This starts a review, not development or an account. The email is unverified and cannot be used to access a ticket. Do not include passwords or sensitive files.</p></div>
       {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
+      {validationError && <p role="alert" className="text-xs text-amber-200">{validationError}</p>}
       {outcomeUnknown && <p role="status" className="rounded-lg border border-amber-400/20 bg-amber-500/[0.05] p-3 text-xs leading-relaxed text-amber-100">Keep this page open and check the same submission. Alpha will retry the exact saved-in-memory payload with the same operation ID; it will not start a second inquiry.</p>}
       {submitted && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-emerald-200">Inquiry received. The project manager will review it. This does not create an account or grant access to a ticket.</p>}
       {submitted && <p className="text-xs leading-relaxed text-gray-400">If your PM invites you, open the email to verify this address and choose your password. After setup, return through client sign-in whenever you need to follow up.</p>}
