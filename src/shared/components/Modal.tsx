@@ -8,6 +8,7 @@ interface ModalProps {
   subtitle?: string;
   children: React.ReactNode;
   maxWidth?: string;
+  footer?: React.ReactNode;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -16,7 +17,8 @@ export const Modal: React.FC<ModalProps> = ({
   title,
   subtitle,
   children,
-  maxWidth = 'max-w-2xl'
+  maxWidth = 'max-w-2xl',
+  footer
 }) => {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -32,17 +34,28 @@ export const Modal: React.FC<ModalProps> = ({
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const handleEscape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Tab') {
+        const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]') ?? []).filter(item => item.getClientRects().length);
+        const first = items[0];
+        const last = items[items.length - 1];
+        if (!first) { e.preventDefault(); return; }
+        if (e.shiftKey && (document.activeElement === first || document.activeElement === dialogRef.current)) { e.preventDefault(); last.focus({ preventScroll: true }); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus({ preventScroll: true }); }
+      }
     };
 
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     window.addEventListener('keydown', handleEscape);
-    const focusTimer = window.setTimeout(() => dialogRef.current?.focus(), 0);
+    const focusTimer = window.setTimeout(() => {
+      if (!dialogRef.current?.contains(document.activeElement)) dialogRef.current?.focus({ preventScroll: true });
+    }, 0);
 
     return () => {
       window.clearTimeout(focusTimer);
-      document.body.style.overflow = 'unset';
+      document.body.style.overflow = previousOverflow;
       window.removeEventListener('keydown', handleEscape);
-      previouslyFocused?.focus();
+      previouslyFocused?.focus({ preventScroll: true });
     };
   }, [isOpen]);
 
@@ -68,7 +81,7 @@ export const Modal: React.FC<ModalProps> = ({
         className={`relative ${maxWidth} bg-surface-100 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-10 animate-slide-up flex flex-col max-h-[90vh] focus:outline-none`}
       >
         {/* Header */}
-        <div className="flex items-start justify-between p-5 border-b border-white/10 bg-surface-200/50">
+        <div className="flex shrink-0 items-start justify-between p-5 border-b border-white/10 bg-surface-200/50">
           <div>
             <h3 id={titleId} className="text-lg font-semibold text-white tracking-tight">{title}</h3>
             {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
@@ -83,9 +96,10 @@ export const Modal: React.FC<ModalProps> = ({
         </div>
 
         {/* Content */}
-        <div className="p-6 overflow-y-auto space-y-4">
+        <div className="min-h-0 p-5 sm:p-6 overflow-y-auto overscroll-contain space-y-4">
           {children}
         </div>
+        {footer && <div className="shrink-0 border-t border-white/10 bg-surface-200/50 px-5 py-4 sm:px-6">{footer}</div>}
       </div>
     </div>
   );

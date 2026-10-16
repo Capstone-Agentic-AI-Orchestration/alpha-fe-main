@@ -1,3 +1,4 @@
+import { ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IssueStatus, IssuePriority, Issue
@@ -1147,68 +1148,17 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   </select>
                 </div>
 
-                {/* Assigned Agent */}
-                <div className="space-y-1.5">
-                  <label className="text-gray-400 font-medium">Assigned Agent</label>
-                  <select
-                    value={selectedIssue.assignedAgentId || ''}
-                    onChange={(e) => {
-                      const assignedAgentId = e.target.value || undefined;
-                      updateIssue(selectedIssue.id, {
-                        assignedAgentId,
-                        assignedSquadId: assignedAgentId ? undefined : selectedIssue.assignedSquadId
-                      });
-                    }}
-                    className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500"
-                  >
-                    <option value="">Unassigned</option>
-                    {agents.map(a => (
-                      <option key={a.id} value={a.id}>{a.name} ({a.role})</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/*
-                  A squad could be chosen when an issue was created and never
-                  afterwards — and the choice was discarded anyway, because the
-                  column did not exist. Sitting under the agent picker because
-                  they answer the same question: who owns this issue.
-                */}
-                <div className="space-y-1.5">
-                  <label className="text-gray-400 font-medium">Assigned Squad</label>
-                  <select
-                    value={selectedIssue.assignedSquadId || ''}
-                    onChange={(e) => {
-                      const assignedSquadId = e.target.value || undefined;
-                      updateIssue(selectedIssue.id, {
-                        assignedSquadId,
-                        assignedAgentId: assignedSquadId ? undefined : selectedIssue.assignedAgentId
-                      });
-                    }}
-                    className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500"
-                  >
-                    <option value="">No squad</option>
-                    {squads.map(sq => (
-                      <option key={sq.id} value={sq.id}>
-                        {sq.name} ({sq.memberAgentIds.length})
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-[10px] leading-relaxed text-gray-500">An issue has one execution owner. Selecting a squad clears the assigned agent, and vice versa.</p>
-                </div>
-
-                {/* Project */}
-                <div className="space-y-1.5">
-                  <label className="text-gray-400 font-medium">Strategic Project</label>
-                  <select
-                    value={selectedIssue.projectId}
-                    onChange={(e) => updateIssue(selectedIssue.id, { projectId: e.target.value })}
-                    className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500"
-                  >
-                    {projects.map(p => (
-                      <option key={p.id} value={p.id}>{p.name} ({p.key})</option>
-                    ))}
-                  </select>
+                <ExecutionOwnerSelect
+                  agents={agents} squads={squads}
+                  value={selectedIssue.assignedSquadId ? { type: 'squad', id: selectedIssue.assignedSquadId } : selectedIssue.assignedAgentId ? { type: 'agent', id: selectedIssue.assignedAgentId } : null}
+                  onChange={owner => updateIssue(selectedIssue.id, {
+                    assignedAgentId: owner?.type === 'agent' ? owner.id : '',
+                    assignedSquadId: owner?.type === 'squad' ? owner.id : ''
+                  })}
+                />
+                <div className="border-t border-white/5 pt-4 text-xs text-gray-500">
+                  <span className="block text-[11px] mb-1">Project</span>
+                  <span className="text-gray-300">{projects.find(project => project.id === selectedIssue.projectId)?.name ?? selectedIssue.projectId}</span>
                 </div>
 
                 {/* Git branch info */}

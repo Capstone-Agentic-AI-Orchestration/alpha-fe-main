@@ -19,7 +19,7 @@ import { RuntimeEngine, RuntimeStatus } from '@/shared/types';
 
 /** Prefer the current daemon field, while still reading older cached rows. */
 const runtimeModels = (runtime: RuntimeEngine): string[] =>
-  runtime.models?.length ? runtime.models : runtime.modelsLoaded ?? [];
+  runtime.models ?? runtime.modelsLoaded ?? [];
 
 type RuntimeBilling = NonNullable<RuntimeEngine['account']>['billing'];
 
@@ -145,7 +145,7 @@ export const RuntimesView: React.FC = () => {
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm disabled:opacity-50"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isScanningRuntimes ? 'animate-spin' : ''}`} />
-            <span>{isScanningRuntimes ? 'Scanning ports...' : 'Scan host engines'}</span>
+            <span>{isScanningRuntimes ? 'Scanning runtimes…' : 'Scan host engines'}</span>
           </button>
         )}
       </div>
@@ -286,7 +286,7 @@ export const RuntimesView: React.FC = () => {
           <div className="col-span-4">Engine & Account</div>
           <div className="col-span-2">Type</div>
           <div className="col-span-2">Status</div>
-          <div className="col-span-2">Loaded Models</div>
+          <div className="col-span-2">Available models</div>
           <div className="col-span-1 text-left">Latency</div>
           <div className="col-span-1 text-right">Default</div>
         </div>
@@ -315,14 +315,14 @@ export const RuntimesView: React.FC = () => {
                     </span>
                   </div>
                   <div className="text-[11px] text-gray-400 truncate">
-                    {rt.account
+                    {rt.type !== 'local' && rt.account && Object.values(rt.account).some(Boolean)
                       ? [
-                          rt.account.authMethod || rt.account.email || 'Account detected',
+                          rt.account.authMethod || rt.account.email || 'Account information unavailable',
                           rt.account.plan || (rt.account.billing === 'account'
                             ? 'Plan not reported'
                             : billingLabel(rt.account.billing))
                         ].filter(Boolean).join(' · ')
-                      : rt.endpoint || 'Local CLI process'}
+                      : rt.endpoint || (rt.type === 'local' ? 'Local installation detected' : 'Local CLI process')}
                   </div>
                   {rt.account && rt.endpoint && (
                     <div className="text-[10px] text-gray-600 font-mono truncate">{rt.endpoint}</div>
@@ -345,10 +345,11 @@ export const RuntimesView: React.FC = () => {
                   {renderStatusBadge(rt.status)}
                 </div>
 
-                {/* 4. Loaded Models */}
+                {/* 4. Available models */}
                 <div className="col-span-2 min-w-0" title={modelLabel}>
                   <div className="font-mono text-white text-[11px]">
                     {models.length} {models.length === 1 ? 'model' : 'models'}
+                    {rt.catalogStale && <span className="ml-2 font-sans text-[10px] text-amber-300">Cached</span>}
                   </div>
                   <div className="text-gray-500 font-mono text-[10px] leading-4 line-clamp-2 break-words">
                     {modelLabel}
@@ -358,7 +359,7 @@ export const RuntimesView: React.FC = () => {
                 {/* 5. Latency */}
                 <div className="col-span-1 text-left font-mono text-xs">
                   <span className={(rt.latencyMs || 0) < 50 ? 'text-emerald-400' : 'text-gray-400'}>
-                    {rt.latencyMs || 25}ms
+                    {rt.latencyMs != null ? `${rt.latencyMs}ms` : '—'}
                   </span>
                 </div>
 
@@ -371,11 +372,12 @@ export const RuntimesView: React.FC = () => {
                     </span>
                   ) : (
                     <button
+                      disabled={rt.status !== 'online' || models.length === 0}
                       onClick={(e) => {
                         e.stopPropagation();
                         setDefaultRuntime(rt.id);
                       }}
-                      className="text-[11px] text-gray-500 hover:text-white px-2 py-0.5 rounded hover:bg-white/5 transition-colors"
+                      className="text-[11px] text-gray-500 hover:text-white px-2 py-0.5 rounded hover:bg-white/5 transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       Make default
                     </button>
@@ -385,6 +387,10 @@ export const RuntimesView: React.FC = () => {
             );
           })}
         </div>
+        {filteredRuntimes.length === 0 && <div role="status" className="py-16 text-center">
+          <p className="text-sm font-medium text-gray-300">{runtimes.length ? 'No runtimes match your filters' : 'No runtimes detected yet'}</p>
+          <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-gray-500">{runtimes.length ? 'Try another search or clear the filters to see your detected engines.' : 'Start an installed engine, then scan this host to discover its available models.'}</p>
+        </div>}
       </div>
 
       {/* ================= RUNTIME INSPECTOR DRAWER ================= */}
@@ -508,19 +514,20 @@ export const RuntimesView: React.FC = () => {
               </div>
             )}
 
-            {/* Loaded Models Catalog */}
+            {/* Available models Catalog */}
             <div className="space-y-2.5">
               <div className="flex items-center justify-between text-[11px] font-medium text-gray-400 uppercase tracking-wider">
                 <span className="flex items-center gap-1.5">
                   <Layers className="w-3.5 h-3.5 text-teal-400" />
-                  <span>Available Models ({runtimeModels(selectedRuntime).length})</span>
+                  <span>Available models ({runtimeModels(selectedRuntime).length})</span>
                 </span>
                 <span className="text-gray-500 font-mono">
-                  {selectedRuntime.status === 'online' ? 'Ready for dispatch' : 'Catalog snapshot'}
+                  {selectedRuntime.catalogStale ? 'Cached catalog · refresh to verify' : selectedRuntime.status === 'online' && runtimeModels(selectedRuntime).length > 0 ? 'Ready for dispatch' : 'Catalog snapshot'}
                 </span>
               </div>
 
               <div className="space-y-2">
+                {runtimeModels(selectedRuntime).length === 0 && <p className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-relaxed text-gray-500">No models reported. Check the engine’s model catalog, then scan this host again.</p>}
                 {runtimeModels(selectedRuntime).map((model) => (
                   <div
                     key={model}
@@ -531,7 +538,7 @@ export const RuntimesView: React.FC = () => {
                       <span className="font-mono text-white font-medium truncate">{model}</span>
                     </div>
                     <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-gray-400">
-                      {selectedRuntime.status === 'online' ? 'Active' : 'Unavailable'}
+                      {selectedRuntime.catalogStale ? 'Cached' : selectedRuntime.status === 'online' ? 'Available' : 'Unavailable'}
                     </span>
                   </div>
                 ))}
@@ -543,7 +550,8 @@ export const RuntimesView: React.FC = () => {
               <div className="pt-2 border-t border-white/5">
                 <button
                   onClick={() => setDefaultRuntime(selectedRuntime.id)}
-                  className="w-full py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs shadow-glow-brand transition-all"
+                  disabled={selectedRuntime.status !== 'online' || runtimeModels(selectedRuntime).length === 0}
+                  className="w-full py-2 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs transition-colors disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Set as Default LLM Engine
                 </button>

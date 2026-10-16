@@ -1,3 +1,4 @@
+import { ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
 import React, { useState, useEffect } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IssuePriority, IssueStatus } from '@/shared/types';
@@ -112,7 +113,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   ]);
 
   // Popover menus
-  const [openMenu, setOpenMenu] = useState<'project' | 'status' | 'priority' | 'assignee' | 'label' | 'more' | null>(null);
+  const [openMenu, setOpenMenu] = useState<'project' | 'status' | 'priority' | 'label' | 'more' | null>(null);
 
   const availableLabels = ['UI/UX', 'core', 'backend', 'runtime', 'frontend', 'bug', 'feature', 'performance'];
 
@@ -125,9 +126,6 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
    * app, which is what made "New Issue" show a blank screen.
    */
   const activeProject = projects.find(p => p.id === selectedProjectId) || projects[0];
-  const activeSquad = squads.find(s => s.id === selectedSquadId);
-  const activeAgent = agents.find(a => a.id === selectedAgentId);
-  const activeOwner = activeSquad?.name || activeAgent?.name || 'Unassigned';
 
   // Keyboard shortcut for Cmd+Enter
   useEffect(() => {
@@ -267,23 +265,10 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             </div>
           </div>
 
-          {/* Subheader / Created By (in Agent mode) */}
-          {mode === 'agent' && (
-            <div className="px-6 pt-4 flex items-center gap-2.5 text-sm text-gray-400">
-              <span>Owner</span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenMenu(openMenu === 'assignee' ? null : 'assignee');
-                }}
-                className="flex items-center gap-2 px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-200 border border-white/5 transition-colors font-medium text-xs"
-              >
-                <Users className="w-4 h-4 text-indigo-400" />
-                <span>{activeOwner}</span>
-              </button>
-            </div>
-          )}
+          {mode === 'agent' && <div className="px-6 pt-4"><ExecutionOwnerSelect agents={agents} squads={squads}
+            value={selectedSquadId ? { type: 'squad', id: selectedSquadId } : selectedAgentId ? { type: 'agent', id: selectedAgentId } : null}
+            onChange={owner => { setSelectedAgentId(owner?.type === 'agent' ? owner.id : ''); setSelectedSquadId(owner?.type === 'squad' ? owner.id : ''); }}
+          /></div>}
 
           {/* Main Input Area */}
           <div className="p-6 space-y-3">
@@ -429,78 +414,10 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               </div>
             )}
 
-            {/* Assignee / Squad Pill */}
-            <div className="relative">
-              {mode === 'manual' && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenu(openMenu === 'assignee' ? null : 'assignee');
-                  }}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-surface-200 hover:bg-surface-50 border border-white/10 text-gray-300 transition-colors"
-                >
-                  <Users className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="truncate max-w-[140px]">{activeSquad?.name || activeAgent?.name || 'Assignee'}</span>
-                </button>
-              )}
-
-              {openMenu === 'assignee' && (
-                <div className="absolute bottom-full mb-1.5 left-0 z-40 w-72 bg-surface-100 border border-white/15 rounded-xl shadow-2xl p-2.5 space-y-2.5 animate-slide-up max-h-72 overflow-y-auto text-xs">
-                  <div>
-                    <div className="text-[11px] font-mono uppercase text-gray-500 px-2 py-0.5 font-semibold">Squads</div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedSquadId('');
-                        setSelectedAgentId('');
-                        setOpenMenu(null);
-                      }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left ${!selectedSquadId && !selectedAgentId ? 'bg-brand-500/20 text-white font-semibold' : 'text-gray-300 hover:bg-white/5'}`}
-                    >
-                      <Users className="h-4 w-4 text-gray-500" />
-                      <span>Unassigned</span>
-                    </button>
-                    {squads.map(sq => (
-                      <button
-                        key={sq.id}
-                        onClick={() => {
-                          setSelectedSquadId(sq.id);
-                          setSelectedAgentId('');
-                          setOpenMenu(null);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left ${
-                          selectedSquadId === sq.id ? 'bg-brand-500/20 text-white font-semibold' : 'text-gray-300 hover:bg-white/5'
-                        }`}
-                      >
-                        <span className="text-base">{sq.avatar}</span>
-                        <span className="truncate">{sq.name}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="border-t border-white/5 pt-1.5">
-                    <div className="text-[11px] font-mono uppercase text-gray-500 px-2 py-0.5 font-semibold">Specialist Agents</div>
-                    {agents.map(ag => (
-                      <button
-                        key={ag.id}
-                        onClick={() => {
-                          setSelectedAgentId(ag.id);
-                          setSelectedSquadId('');
-                          setOpenMenu(null);
-                        }}
-                        className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left ${
-                          selectedAgentId === ag.id ? 'bg-brand-500/20 text-white font-semibold' : 'text-gray-300 hover:bg-white/5'
-                        }`}
-                      >
-                        <img src={ag.avatar} alt="" className="w-5 h-5 rounded-full object-cover" />
-                        <span className="truncate">{ag.name} ({ag.role})</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            {mode === 'manual' && <div className="w-full border-t border-white/5 pt-3 pb-1"><ExecutionOwnerSelect agents={agents} squads={squads}
+              value={selectedSquadId ? { type: 'squad', id: selectedSquadId } : selectedAgentId ? { type: 'agent', id: selectedAgentId } : null}
+              onChange={owner => { setSelectedAgentId(owner?.type === 'agent' ? owner.id : ''); setSelectedSquadId(owner?.type === 'squad' ? owner.id : ''); }}
+            /></div>}
 
             {/* Label Pill (manual mode) */}
             {mode === 'manual' && (

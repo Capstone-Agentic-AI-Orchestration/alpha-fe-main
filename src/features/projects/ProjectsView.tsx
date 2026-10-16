@@ -1,3 +1,4 @@
+import { ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
@@ -44,6 +45,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
 
     agents,
+    squads,
     can,
     role
   } = useApp();
@@ -405,10 +407,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
               {/* Project Lead */}
               <div className="flex items-center justify-between">
-                <span className="text-gray-500">Lead</span>
+                <span className="text-gray-500">Execution owner</span>
                 <div className="flex items-center gap-1.5 text-gray-300">
                   <Bot className="w-3.5 h-3.5 text-gray-400" />
-                  <span className="truncate max-w-[120px]">{selectedProject.leadName || 'Unassigned'}</span>
+                  <span className="truncate max-w-[120px]">{selectedProject.leadSquadId ? squads.find(squad => squad.id === selectedProject.leadSquadId)?.name || selectedProject.leadName || 'Squad' : agents.find(agent => agent.id === selectedProject.leadAgentId)?.name || selectedProject.leadName || 'Unassigned'}</span>
                 </div>
               </div>
 
@@ -553,7 +555,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             isOpen={true}
             onClose={() => setEditingProject(null)}
             title="Edit Project"
-            subtitle="Update status, priority, lead, or target dates."
+            subtitle="Update project details, priority, or target dates."
           >
             <form
               onSubmit={(e) => {
@@ -670,13 +672,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               </div>
 
               <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1">Project Lead</label>
-                <input
-                  type="text"
-                  value={editingProject.leadName || ''}
-                  onChange={(e) => setEditingProject({ ...editingProject, leadName: e.target.value })}
-                  placeholder="Name or GitHub username"
-                  className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                <ExecutionOwnerSelect label="Execution owner" required agents={agents} squads={squads}
+                  value={editingProject.leadSquadId ? { type: 'squad', id: editingProject.leadSquadId } : editingProject.leadAgentId ? { type: 'agent', id: editingProject.leadAgentId } : null}
+                  onChange={owner => setEditingProject({ ...editingProject, leadAgentId: owner?.type === 'agent' ? owner.id : '', leadSquadId: owner?.type === 'squad' ? owner.id : '', leadName: owner?.type === 'agent' ? agents.find(agent => agent.id === owner.id)?.name : squads.find(squad => squad.id === owner?.id)?.name })}
                 />
               </div>
 
@@ -975,12 +973,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
         <div className="w-full">
           {/* Table Column Headers */}
           <div className="grid grid-cols-12 gap-4 border-b border-white/[0.04] px-4 py-2 text-xs font-normal text-gray-500">
-            <div className="col-span-4">Name</div>
+            <div className="col-span-5">Name</div>
             <div className="col-span-2">Status</div>
             <div className="col-span-2">Priority</div>
             <div className="col-span-1 text-left">Progress</div>
-            <div className="col-span-2 pl-4">Lead</div>
-            <div className="col-span-1 flex items-center justify-end gap-1 text-right">
+            <div className="col-span-2 flex items-center justify-end gap-1 text-right">
               <span>Created</span>
               <ArrowDown className="h-3 w-3 text-gray-500" />
             </div>
@@ -1002,7 +999,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   className="group grid grid-cols-12 items-center gap-4 px-4 py-3.5 text-xs transition-colors hover:bg-white/[0.02]"
                 >
                 {/* 1. Name with Emoji / Icon */}
-                <div className="col-span-4 flex items-center gap-3 min-w-0">
+                <div className="col-span-5 flex items-center gap-3 min-w-0">
                   <span className="text-base flex-shrink-0">{project.icon || '⚡'}</span>
                   <span className="font-medium text-white truncate group-hover:text-gray-200">
                     {project.name}
@@ -1047,27 +1044,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   {renderProgressRing(doneIssues, totalIssues)}
                 </div>
 
-                {/* 5. Lead */}
-                <div className="col-span-2 pl-4 flex items-center gap-2">
-                  {project.leadName ? (
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="w-5 h-5 rounded-full bg-orange-600/30 border border-orange-500/40 flex items-center justify-center text-[10px] text-orange-200 font-bold overflow-hidden">
-                        {project.leadName.charAt(0).toUpperCase()}
-                      </div>
-                      <span className="text-xs text-gray-300 truncate">{project.leadName}</span>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2 text-gray-600">
-                      <div className="w-4 h-4 rounded-full border border-dashed border-gray-600 flex items-center justify-center text-[10px]">
-                      </div>
-                      <span className="text-gray-500">—</span>
-                    </div>
-                  )}
-                </div>
-
                 {/* 6. Created */}
-                <div className="col-span-1 text-right text-xs text-gray-500 font-mono">
-                  {project.createdAt || '4d ago'}
+                <div className="col-span-2 text-right text-xs text-gray-500 tabular-nums">
+                  {project.createdAt ? new Date(project.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                 </div>
                 </div>
               );

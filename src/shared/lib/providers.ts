@@ -46,10 +46,8 @@ export function providerOptions(runtimes: RuntimeEngine[]): ProviderOption[] {
     const provider = RUNTIME_TO_PROVIDER[runtime.id];
     if (!provider) continue;
 
-    // The daemon sends `models`; older cached rows used `modelsLoaded`. Prefer
-    // a non-empty current list so an empty placeholder from an older row does
-    // not hide a freshly discovered catalog.
-    const models = runtime.models?.length ? runtime.models : runtime.modelsLoaded ?? [];
+    // A current empty catalog is authoritative; use the legacy field only when absent.
+    const models = runtime.models ?? runtime.modelsLoaded ?? [];
 
     options.push({
       runtimeId: runtime.id,
@@ -59,7 +57,7 @@ export function providerOptions(runtimes: RuntimeEngine[]): ProviderOption[] {
       label:
         runtime.status === 'online'
           ? runtime.name
-          : `${runtime.name} — ${runtime.status === 'degraded' ? 'not signed in' : 'not installed'}`,
+          : `${runtime.name} — ${runtime.status === 'degraded' ? 'needs attention' : 'offline'}`,
       models,
       status: runtime.status,
       available: runtime.status === 'online'

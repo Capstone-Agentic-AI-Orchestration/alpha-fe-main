@@ -23,6 +23,8 @@ export interface BuilderMessage {
 export interface StoredBuilderSession {
   /** What the daemon keys the CLI's own resumable session off. */
   sessionId: string;
+  runtimeId?: string;
+  modelName?: string;
   messages: BuilderMessage[];
 }
 
