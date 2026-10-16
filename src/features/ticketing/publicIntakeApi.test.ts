@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { clientPortalHref, createPublicTicketInquirySubmitter, publicInquiryHref, publicInquirySlug, PublicTicketIntakeApiError, publicTicketIntakeApi } from './publicIntakeApi';
+import { clientPortalHref, createPublicTicketInquirySubmitter, publicInquiryContext, publicInquiryHref, publicInquirySlug, PublicTicketIntakeApiError, publicTicketIntakeApi } from './publicIntakeApi';
 import type { PublicTicketInquiryRequest } from './publicIntakeContract';
 
 const request: PublicTicketInquiryRequest = {
@@ -33,6 +33,12 @@ afterEach(() => {
 });
 
 describe('public inquiry browser transport', () => {
+  it('distinguishes the shared default inbox from explicit or malformed workspace links', () => {
+    expect(publicInquiryContext({ hash: '#/request' })).toEqual({ kind: 'central' });
+    expect(publicInquiryContext({ hash: '#/request?intake=workspace-a' })).toEqual({ kind: 'workspace', slug: 'workspace-a' });
+    expect(publicInquiryContext({ hash: '#/request?intake=workspace-a', search: '?intake=workspace-b' })).toEqual({ kind: 'invalid' });
+    expect(publicInquiryContext({ hash: '#/request?intake=bad%20slug' })).toEqual({ kind: 'invalid' });
+  });
   it('preserves explicit inquiry context across hash and path routes without choosing a default tenant', () => {
     expect(publicInquirySlug({ hash: '#/request?intake=workspace-a', search: '' })).toBe('workspace-a');
     expect(publicInquirySlug({ hash: '#/client', search: '?intake=workspace-b' })).toBe('workspace-b');
@@ -63,6 +69,15 @@ describe('public inquiry browser transport', () => {
     vi.stubGlobal('fetch', fetchMock);
     expect(await publicTicketIntakeApi.configuration('alpha-workspace')).toEqual({ enabled: true });
     expect(fetchMock).toHaveBeenCalledWith('/api/public/ticket-intakes/alpha-workspace/config', expect.objectContaining({ credentials: 'omit', mode: 'same-origin' }));
+  });
+  it('checks the shared intake configuration without choosing a workspace', async () => {
+    browser();
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { enabled: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    expect(await publicTicketIntakeApi.centralConfiguration()).toEqual({ enabled: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/public/ticket-intakes/config', expect.objectContaining({
+      credentials: 'omit', mode: 'same-origin', cache: 'no-store',
+    }));
   });
   it('fails closed when intake configuration is unavailable or malformed', async () => {
     browser();
@@ -96,6 +111,18 @@ describe('public inquiry browser transport', () => {
     expect(headers.get('Authorization')).toBeNull();
     expect(headers.get('X-Alpha-Local-Token')).toBeNull();
     expect(options.credentials).toBe('omit');
+  });
+  it('submits the default inquiry to central PM intake with no workspace code or client credentials', async () => {
+    browser();
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(202, { received: true }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(publicTicketIntakeApi.submitCentral(request)).resolves.toEqual({ received: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/public/ticket-intakes', expect.objectContaining({
+      method: 'POST', credentials: 'omit', mode: 'same-origin', body: JSON.stringify(request),
+    }));
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(new Headers(options.headers).get('Authorization')).toBeNull();
+    expect(new Headers(options.headers).get('X-Workspace-Id')).toBeNull();
   });
 
   it('allows local HTTP only on loopback and still uses same-origin transport', async () => {

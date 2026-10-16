@@ -167,6 +167,12 @@ export interface PmTicketProjectLinkReceipt extends PmTicketReceipt {
 }
 export interface PmClientRequestAccessReceipt { ticketId: string; acceptsNewRequests: boolean }
 export interface PmPublicInquiryCode { code: string; submissionEnabled: boolean }
+export interface PmCentralIntakeItem {
+  id: string; fullName: string; email: string; company: string | null; title: string;
+  description: string; requestedDeadline: string | null; submittedAt: string;
+}
+export interface PmCentralIntakePage { items: PmCentralIntakeItem[]; nextCursor: string | null }
+export interface PmCentralIntakeAcceptance { ticketId: string; workspaceId: string; reference: string; operationId: string }
 export type PmTicketInvitationEmailReceipt = PmTicketInvitationReceipt;
 
 function encodeId(value: string): string { return encodeURIComponent(value); }
@@ -195,6 +201,41 @@ async function withOperationRecovery(
 
 /** Internal PM transport uses apiService's active workspace/session/desktop relay. */
 export const pmTicketApi = {
+  async listCentralIntakes(after: string | null = null): Promise<PmCentralIntakePage> {
+    const value = await apiService.ticketRequest<unknown>(`/tickets/intakes${query({ limit: '50', after })}`);
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Shared inquiry response is invalid.');
+    const page = value as Record<string, unknown>;
+    if (!Array.isArray(page.items) || (page.nextCursor !== null && typeof page.nextCursor !== 'string')) {
+      throw new Error('Shared inquiry response is invalid.');
+    }
+    const items = page.items.map((value): PmCentralIntakeItem => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Shared inquiry response is invalid.');
+      const row = value as Record<string, unknown>;
+      if (typeof row.id !== 'string' || !row.id.trim() || typeof row.fullName !== 'string' || !row.fullName.trim()
+        || typeof row.email !== 'string' || !row.email.trim()
+        || (row.company !== null && typeof row.company !== 'string')
+        || typeof row.title !== 'string' || !row.title.trim() || typeof row.description !== 'string' || !row.description.trim()
+        || (row.requestedDeadline !== null && typeof row.requestedDeadline !== 'string')
+        || typeof row.submittedAt !== 'string' || !Number.isFinite(Date.parse(row.submittedAt))) {
+        throw new Error('Shared inquiry response is invalid.');
+      }
+      return { id: row.id, fullName: row.fullName, email: row.email, company: row.company as string | null,
+        title: row.title, description: row.description, requestedDeadline: row.requestedDeadline as string | null,
+        submittedAt: row.submittedAt };
+    });
+    return { items, nextCursor: page.nextCursor as string | null };
+  },
+  async acceptCentralIntake(intakeId: string, operationId: string): Promise<PmCentralIntakeAcceptance> {
+    const value = await apiService.ticketRequest<unknown>(`/tickets/intakes/${encodeId(intakeId)}/accept`, {
+      method: 'POST', body: JSON.stringify({ schemaVersion: 1, operationId }),
+    });
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Inquiry acceptance response is invalid.');
+    const row = value as Record<string, unknown>;
+    if (typeof row.ticketId !== 'string' || !row.ticketId.trim() || typeof row.workspaceId !== 'string' || !row.workspaceId.trim()
+      || typeof row.reference !== 'string' || !/^TKT-[A-F0-9]{32}$/.test(row.reference)
+      || row.operationId !== operationId) throw new Error('Inquiry acceptance response is invalid.');
+    return { ticketId: row.ticketId, workspaceId: row.workspaceId, reference: row.reference, operationId };
+  },
   async getPublicInquiryCode(): Promise<PmPublicInquiryCode> {
     const value = await apiService.ticketRequest<unknown>('/tickets/inquiry-code');
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Inquiry code response is invalid.');
