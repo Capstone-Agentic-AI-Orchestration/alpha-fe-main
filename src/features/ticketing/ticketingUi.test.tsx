@@ -75,7 +75,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
   it('opens the shared inquiry form directly without workspace selection or New Request', () => {
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
     expect(html).toContain('Tell us what you need');
-    expect(html).toContain('shared inbox and accept it into their workspace');
+    expect(html).toContain('shared inbox and accepts it into their workspace');
     expect(html).not.toContain('Inquiry code from your project manager');
     expect(html).not.toContain('New request');
     expect(html).toContain('href="/#/client"');
