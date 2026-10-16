@@ -127,7 +127,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toMatch(/<input[^>]*type="email"[^>]*required=""/);
     expect(html).toContain('Your project manager must review it and invite you before you can sign in');
     expect(html).toContain('A sign-in link will not create access');
-    expect(html).toContain('New to Alpha? Send an inquiry');
+    expect(html).toContain('Start a project inquiry');
     expect(html).toContain('href="/#/request"');
   });
 
