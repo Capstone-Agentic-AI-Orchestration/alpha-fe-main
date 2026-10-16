@@ -1,15 +1,14 @@
 import { lazy, Suspense } from 'react';
 import type { AppEntry as Entry } from '@/features/ticketing/entry';
-import PublicInquiryUnavailable from '@/features/ticketing/PublicInquiryUnavailable';
 import ClientActivationUnavailable from '@/features/ticketing/ClientActivationUnavailable';
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 
 const InternalApp = lazy(() => import('./InternalApp'));
 const ClientPortal = lazy(() => import('@/features/ticketing/ClientPortal'));
+const PublicInquiryUnavailable = lazy(() => import('@/features/ticketing/PublicInquiryUnavailable'));
 const TicketingPreview = import.meta.env.DEV ? lazy(() => import('@/features/ticketing/TicketingPreview')) : null;
 
 export default function AppEntry({ entry }: { entry: Entry }) {
-  if (entry === 'public-inquiry-unavailable') return <PublicInquiryUnavailable />;
   if (entry === 'client-activation') return <ClientActivationUnavailable />;
   if ((entry === 'preview-client' || entry === 'preview-pm') && !TicketingPreview) return (
     <main className="min-h-dvh flex items-center justify-center bg-canvas p-6">
@@ -22,6 +21,6 @@ export default function AppEntry({ entry }: { entry: Entry }) {
     </main>
   );
   return <Suspense fallback={<div className="min-h-dvh flex items-center justify-center text-gray-400" role="status">Loading Alpha…</div>}>
-    {entry === 'internal' ? <InternalApp /> : entry === 'client-portal' ? <ClientPortal workflowActionsDisabled communicationEnabled /> : TicketingPreview && <TicketingPreview initialRole={entry === 'preview-pm' ? 'pm' : 'client'} />}
+    {entry === 'public-inquiry-unavailable' ? <PublicInquiryUnavailable /> : entry === 'internal' ? <InternalApp /> : entry === 'client-portal' ? <ClientPortal workflowActionsDisabled communicationEnabled /> : TicketingPreview && <TicketingPreview initialRole={entry === 'preview-pm' ? 'pm' : 'client'} />}
   </Suspense>;
 }

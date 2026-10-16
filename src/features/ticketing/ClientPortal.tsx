@@ -112,7 +112,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   }
 
   async function requestSignInLink(email: string): Promise<void> {
-    if (signInPending || portalState === 'unavailable') return;
+    if (signInPending || portalState !== 'signed_out') return;
     setSignInPending(true); setSignInSent(false); setSignInError('');
     try {
       await api.requestSignInLink(email);
@@ -373,8 +373,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }
   }
 
-  if (portalState === 'checking') return <FullPageState title="Checking secure client access…" />;
-  if (portalState === 'signed_out' || portalState === 'unavailable') return <ClientAccessPanel
+  if (portalState === 'checking' || portalState === 'signed_out' || portalState === 'unavailable') return <ClientAccessPanel
+    checking={portalState === 'checking'}
     unavailable={portalState === 'unavailable'} error={pageError}
     signInError={signInError} signInSent={signInSent} signingIn={signInPending}
     onRequestSignIn={email => void requestSignInLink(email)}
@@ -467,10 +467,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     </div>}
     {session?.expiresAt && <span className="sr-only">Session expires {session.expiresAt}</span>}
   </main>;
-}
-
-function FullPageState({ title }: { title: string }) {
-  return <main className="flex min-h-dvh items-center justify-center bg-canvas p-6 text-sm text-gray-400" role="status"><RefreshCw size={15} className="mr-2 animate-spin" />{title}</main>;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
