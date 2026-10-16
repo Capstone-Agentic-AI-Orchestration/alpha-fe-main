@@ -54,5 +54,5 @@ export function activationFailureMessage(error: unknown): string {
 
 /** Existing invitation URLs now enter the resumable password setup flow. */
 export default function ClientActivationUnavailable() {
-  return <ClientAccountSetupPage readLink={activationLink} cleanUrl={scrubbedActivationUrl} />;
+  return <ClientAccountSetupPage readLink={activationLink} cleanUrl={scrubbedActivationUrl} failureMessage={activationFailureMessage} />;
 }
