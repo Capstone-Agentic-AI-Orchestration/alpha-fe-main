@@ -131,6 +131,16 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).not.toContain('href="/#/request"');
   });
 
+  it('keeps sign-in disabled while checking access, with the inquiry journey available', () => {
+    const html = renderToStaticMarkup(<ClientAccessPanel checking unavailable={false} error="" signInError=""
+      signInSent={false} signingIn={false} onRetry={() => undefined} onRequestSignIn={() => undefined} />);
+    expect(html).toContain('Access your tickets');
+    expect(html).toContain('Checking secure client access…');
+    expect(html.match(/<input\b[^>]*type="email"[^>]*>/)?.[0]).toContain('disabled=""');
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
+    expect(html).toContain('href="/#/request"');
+  });
+
   it('parses invitation and returning-sign-in links without accepting duplicate credentials', () => {
     const token = 'a'.repeat(43); const proof = 'b'.repeat(32);
     const location = { pathname: '/', search: '', hash: `#/client/activate?token=${token}&providerTokenHash=${proof}&providerTokenType=invite` };

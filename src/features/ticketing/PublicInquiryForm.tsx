@@ -1,20 +1,24 @@
-import { useRef, useState } from 'react';
-import { ArrowLeft, Send, ShieldCheck } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, ArrowUpRight, Check, Send, ShieldCheck } from 'lucide-react';
 import { PUBLIC_TICKET_INQUIRY_SCHEMA_VERSION } from './publicIntakeContract';
 import type { PublicTicketInquiryPayload } from './publicIntakeContract';
 import { PublicTicketIntakeApiError } from './publicIntakeApi';
-import { input, primary, secondary } from './ticketUi';
+import { useClientPageMotion } from './publicClient/useClientPageMotion';
 
-export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = false, unavailableMessage = 'Inquiry submission is unavailable. Nothing is sent or saved.' }: {
+export type InquiryNavigationState = { dirty: boolean; locked: boolean };
+
+export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = false, unavailableMessage = 'Inquiry submission is unavailable. Nothing is sent or saved.', onNavigationStateChange }: {
   /** Resolve only after the configured intake transport returns its generic receipt. */
   onSubmit: (value: PublicTicketInquiryPayload) => void | Promise<void>;
   onCancel: () => void;
   submissionEnabled?: boolean;
   unavailableMessage?: string;
+  onNavigationStateChange?: (state: InquiryNavigationState) => void;
 }) {
   const operationId = useRef(crypto.randomUUID());
   const retryPayload = useRef<PublicTicketInquiryPayload | null>(null);
   const submissionInFlight = useRef(false);
+  const exitApproved = useRef(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
@@ -22,17 +26,38 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
   const [description, setDescription] = useState('');
   const [requestedDeadline, setRequestedDeadline] = useState('');
   const [error, setError] = useState('');
+  const [validationError, setValidationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [outcomeUnknown, setOutcomeUnknown] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const motionRef = useClientPageMotion();
+  const locked = isSubmitting || outcomeUnknown;
+  const fieldsDisabled = locked || submitted;
+  const dirty = !submitted && Boolean(fullName || email || company || title || description || requestedDeadline);
+  useEffect(() => {
+    onNavigationStateChange?.({ dirty, locked });
+  }, [dirty, locked, onNavigationStateChange]);
+  useEffect(() => {
+    if (!dirty && !locked) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => {
+      if (exitApproved.current) return;
+      event.preventDefault(); event.returnValue = '';
+    };
+    window.addEventListener('beforeunload', beforeUnload);
+    return () => window.removeEventListener('beforeunload', beforeUnload);
+  }, [dirty, locked]);
+  const cancel = () => {
+    if (locked) return;
+    if (!dirty || window.confirm('Leave this inquiry? Your unsent details will be lost.')) {
+      exitApproved.current = true;
+      onCancel();
+    }
+  };
 
-  return <section className="mx-auto w-full max-w-2xl p-5 md:p-10">
-    <button onClick={onCancel} disabled={isSubmitting || outcomeUnknown} className="mb-6 inline-flex items-center gap-2 text-xs text-gray-400 hover:text-white disabled:cursor-wait disabled:opacity-50"><ArrowLeft size={14} />Back to Alpha entry</button>
-    <div className="mb-7">
-      <h1 className="text-2xl font-semibold text-white">Tell us what you need</h1>
-      <p className="mt-2 text-sm leading-relaxed text-gray-400">Send an inquiry for the project manager to review. You do not need an Alpha account to start.</p>
-    </div>
-    <form aria-busy={isSubmitting} className="space-y-5 rounded-xl border border-white/[0.08] bg-surface p-5 md:p-7" onSubmit={event => {
+  return <div ref={motionRef} className="public-inquiry-body">
+    <button type="button" onClick={cancel} disabled={locked} className="public-text-link public-back-link"><ArrowLeft size={15} />Back to Alpha entry</button>
+    <div className="public-inquiry-intro" data-public-arrival><h1>Tell us what you need<span>.</span></h1><p>A good project starts with a conversation. Share your idea, the outcome you’re after, and what matters most. Your project manager will take it from here.</p></div>
+    <form aria-label="Project inquiry" aria-busy={isSubmitting} className="public-inquiry-form" onInvalidCapture={() => setValidationError('Please complete the required fields and use a valid email address.')} onInput={() => setValidationError('')} onSubmit={event => {
       event.preventDefault();
       if (!submissionEnabled || submissionInFlight.current || submitted) return;
       submissionInFlight.current = true;
@@ -89,5 +114,5 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
         <div className="flex gap-2"><button type="button" onClick={onCancel} className={secondary} disabled={isSubmitting || outcomeUnknown}>Cancel</button><button className={primary} type="submit" disabled={!submissionEnabled || isSubmitting || submitted}><Send size={14} />{isSubmitting ? 'Submitting…' : submitted ? 'Inquiry received' : outcomeUnknown ? 'Check same submission' : 'Submit inquiry'}</button></div>
       </div>
     </form>
-  </section>;
+  </div>;
 }

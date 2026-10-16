@@ -1,11 +1,13 @@
-import { useState } from 'react';
-import { LockKeyhole, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
-import alphaMarkUrl from '@/assets/alpha-mark.png';
-import { input, primary, secondary } from './ticketUi';
-import { clientPortalHref, publicInquiryHref, publicInquirySlug } from './publicIntakeApi';
+import { useEffect, useState } from 'react';
+import { ArrowUpRight, Check, LockKeyhole, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import { publicInquiryHref, publicInquirySlug } from './publicIntakeApi';
+import { ClientPublicShell } from './publicClient/ClientPublicShell';
+import { InquiryWorkflow } from './publicClient/InquiryWorkflow';
+import { useClientPageMotion } from './publicClient/useClientPageMotion';
 
 /** Email-link sign-in for previously activated, ticket-scoped client accounts. */
-export function ClientAccessPanel({ unavailable, error, signInError, signInSent, signingIn, onRetry, onRequestSignIn }: {
+export function ClientAccessPanel({ checking = false, unavailable, error, signInError, signInSent, signingIn, onRetry, onRequestSignIn }: {
+  checking?: boolean;
   unavailable: boolean;
   error: string;
   signInError: string;
@@ -48,7 +50,16 @@ export function ClientAccessPanel({ unavailable, error, signInError, signInSent,
         <button type="button" onClick={onRetry} className={`${secondary} mt-4 w-full`}><RefreshCw size={13} />Check access again</button>
         {import.meta.env.DEV && <a href="/?ticketing-preview=client" className="mt-4 block text-center text-[11px] text-brand-300 hover:text-brand-200">Inspect the client UI with fictional sample tickets</a>}
       </section>
-    </section>
-    <footer className="mx-auto max-w-4xl border-t border-white/[0.06] px-5 py-5 text-[11px] text-gray-500">Your client access never opens internal workspaces, repositories, developer controls or private PM notes.</footer>
-  </main>;
+      <div className="public-assurances public-container">{['Only the tickets shared with you', 'No GitHub account required', 'No desktop download needed'].map(label => <span key={label}><Check size={16} />{label}</span>)}</div>
+      <InquiryWorkflow />
+      <section className="public-questions public-container" aria-labelledby="client-questions-heading">
+        <div><h2 id="client-questions-heading">Before you begin.</h2><p>A few things to know about your client space.</p></div>
+        <div className="public-question-list">
+          <details><summary>Do I need an account to send an inquiry?</summary><p>No. Share your project using the workspace inquiry link your project manager provided. Sending an inquiry starts a review; it does not create an account or approve development.</p></details>
+          <details><summary>What can I see after I’m invited?</summary><p>Only the tickets explicitly shared with your account. Internal workspaces, repositories, developer controls, and private project manager notes stay private.</p></details>
+          <details><summary>My sign-in link hasn’t arrived. What next?</summary><p>Check that you used your invited email address and look in your spam folder. If the link still doesn’t arrive, contact your project manager to check your client access.</p></details>
+        </div>
+      </section>
+    </div>
+  </ClientPublicShell>;
 }

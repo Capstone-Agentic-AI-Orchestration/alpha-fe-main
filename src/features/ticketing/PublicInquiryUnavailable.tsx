@@ -1,5 +1,4 @@
-import alphaMarkUrl from '@/assets/alpha-mark.png';
-import { PublicInquiryForm } from './PublicInquiryForm';
+import { PublicInquiryForm, type InquiryNavigationState } from './PublicInquiryForm';
 import { useEffect, useState } from 'react';
 import { clientLandingHref, clientPortalHref, publicInquiryHref, publicInquirySlug, publicTicketIntakeApi } from './publicIntakeApi';
 import { input, primary, secondary } from './ticketUi';
@@ -9,6 +8,7 @@ export default function PublicInquiryUnavailable() {
   const [retryVersion, setRetryVersion] = useState(0);
   const [inquiryCode, setInquiryCode] = useState('');
   const [linkError, setLinkError] = useState('');
+  const [navigation, setNavigation] = useState<InquiryNavigationState>({ dirty: false, locked: false });
   const readSlug = () => {
     if (typeof window === 'undefined') return '';
     return publicInquirySlug(window.location);
@@ -19,6 +19,10 @@ export default function PublicInquiryUnavailable() {
     state: 'checking' | 'enabled' | 'unavailable';
   }>(() => ({ slug: readSlug(), state: 'checking' }));
   const configuration = configurationResult.slug === slug ? configurationResult.state : 'checking';
+
+  useEffect(() => {
+    if (!slug) setNavigation({ dirty: false, locked: false });
+  }, [slug]);
 
   useEffect(() => {
     const updateSlug = () => setSlug(readSlug());

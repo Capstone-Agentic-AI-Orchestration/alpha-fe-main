@@ -1,6 +1,5 @@
 import { lazy, Suspense } from 'react';
 import type { AppEntry as Entry } from '@/features/ticketing/entry';
-import PublicInquiryUnavailable from '@/features/ticketing/PublicInquiryUnavailable';
 import ClientActivationUnavailable from '@/features/ticketing/ClientActivationUnavailable';
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 
@@ -11,7 +10,6 @@ const ClientPasswordRecovery = lazy(() => import('@/features/ticketing/ClientPas
 const TicketingPreview = import.meta.env.DEV ? lazy(() => import('@/features/ticketing/TicketingPreview')) : null;
 
 export default function AppEntry({ entry }: { entry: Entry }) {
-  if (entry === 'public-inquiry-unavailable') return <PublicInquiryUnavailable />;
   if (entry === 'client-activation') return <ClientActivationUnavailable />;
   if ((entry === 'preview-client' || entry === 'preview-pm') && !TicketingPreview) return (
     <main className="min-h-dvh flex items-center justify-center bg-canvas p-6">
