@@ -10,6 +10,7 @@ import { ClientTicketApiError, clientTicketApi } from './clientApi';
 import { ClientCreateTicketForm } from './ClientCreateTicketForm';
 import { ClientTicketDetail } from './ClientTicketDetail';
 import { ClientAccessPanel } from './ClientAccessPanel';
+import { ClientPasswordSignIn } from './ClientPasswordSignIn';
 import { input, primary, secondary, time } from './ticketUi';
 
 type Filter = NonNullable<Parameters<typeof clientTicketApi.listTickets>[1]>['filter'];
@@ -373,8 +374,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }
   }
 
-  if (portalState === 'checking' || portalState === 'signed_out' || portalState === 'unavailable') return <ClientAccessPanel
-    checking={portalState === 'checking'}
+  if (portalState === 'checking') return <FullPageState title="Checking secure client access…" />;
+  if (!inspectionOnly && (portalState === 'signed_out' || portalState === 'unavailable')) return <ClientPasswordSignIn
+    unavailable={portalState === 'unavailable'} error={pageError}
+    onRetry={() => setSessionCheckVersion(value => value + 1)}
+    onSignedIn={() => setSessionCheckVersion(value => value + 1)} />;
+  if (portalState === 'signed_out' || portalState === 'unavailable') return <ClientAccessPanel
     unavailable={portalState === 'unavailable'} error={pageError}
     signInError={signInError} signInSent={signInSent} signingIn={signInPending}
     onRequestSignIn={email => void requestSignInLink(email)}

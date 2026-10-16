@@ -1,15 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
-import { CheckCircle2, LoaderCircle, ShieldAlert } from 'lucide-react';
+import { ClientTicketApiError } from './clientApi';
+import type { ClientAccountLink } from './clientAccountApi';
+import { ClientAccountSetupPage } from './ClientAccountSetupPage';
 
-import alphaMarkUrl from '@/assets/alpha-mark.png';
-import { ClientTicketApiError, clientTicketApi, type ClientEmailLinkType } from './clientApi';
-import { primary } from './ticketUi';
-
-type LinkPayload = {
-  invitationToken: string | null;
-  providerTokenHash: string;
-  providerTokenType: ClientEmailLinkType;
-} | null;
+type LinkPayload = ClientAccountLink | null;
 
 export function activationLink(location: { hash: string; pathname: string; search: string }): LinkPayload {
   const hash = location.hash;
@@ -26,12 +19,12 @@ export function activationLink(location: { hash: string; pathname: string; searc
   const providerType = params.getAll('providerTokenType');
   if (invitation.length > 1 || providerHash.length !== 1 || providerType.length !== 1
     || !/^[A-Za-z0-9_-]{20,256}$/.test(providerHash[0])
-    || (providerType[0] !== 'invite' && providerType[0] !== 'magiclink')) return null;
+    || !['invite', 'magiclink', 'recovery'].includes(providerType[0])) return null;
   if (invitation.length === 1 && !/^[A-Za-z0-9_-]{43}$/.test(invitation[0])) return null;
   return {
     invitationToken: invitation[0] ?? null,
     providerTokenHash: providerHash[0],
-    providerTokenType: providerType[0],
+    providerTokenType: providerType[0] as ClientAccountLink['providerTokenType'],
   };
 }
 
@@ -59,47 +52,7 @@ export function activationFailureMessage(error: unknown): string {
   return 'The link may have expired or already been used. Request a new sign-in link, or ask your project manager to reissue the invitation.';
 }
 
-/** Consumes Supabase's one-time email proof, then establishes Alpha's scoped HttpOnly session. */
+/** Existing invitation URLs now enter the resumable password setup flow. */
 export default function ClientActivationUnavailable() {
-  const [state, setState] = useState<'working' | 'complete' | 'invalid' | 'failed'>('working');
-  const [failureMessage, setFailureMessage] = useState('');
-  const started = useRef(false);
-
-  useEffect(() => {
-    if (started.current) return;
-    started.current = true;
-    const link = activationLink(window.location);
-    // Remove secrets before any network call or subsequent browser navigation.
-    history.replaceState(null, '', scrubbedActivationUrl(window.location));
-    if (!link) { setState('invalid'); return; }
-
-    const redeem = link.invitationToken
-      ? clientTicketApi.activateInvitation(link.invitationToken, link.providerTokenHash, link.providerTokenType)
-      : clientTicketApi.createSessionFromEmailLink(link.providerTokenHash, link.providerTokenType);
-    redeem.then(() => setState('complete')).catch(error => { setFailureMessage(activationFailureMessage(error)); setState('failed'); });
-  }, []);
-
-  return <main className="flex min-h-dvh items-center justify-center bg-canvas p-6 text-gray-300">
-    <section className="w-full max-w-md space-y-5 rounded-2xl border border-white/10 bg-surface p-7 shadow-2xl">
-      <img src={alphaMarkUrl} alt="Alpha" className="h-10 w-10 object-contain" />
-      <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wider text-brand-300">Alpha · Client access</p>
-        <h1 className="text-xl font-semibold text-white">
-          {state === 'working' ? 'Verifying your email…' : state === 'complete' ? 'Secure access is ready' : state === 'invalid' ? 'This link is incomplete' : 'This link could not be used'}
-        </h1>
-        <p role={state === 'failed' || state === 'invalid' ? 'alert' : 'status'} className="text-sm leading-relaxed text-gray-400">
-          {state === 'working' ? 'Alpha is checking this one-time link. This may take a moment.'
-            : state === 'complete' ? 'You are signed in. Your account can see only the tickets explicitly granted to it.'
-              : state === 'invalid' ? 'The link is missing required information. Ask your project manager to send a new invitation, or request a fresh sign-in link.'
-                : failureMessage}
-        </p>
-      </div>
-      {state === 'working' && <LoaderCircle size={18} aria-label="Verifying" className="animate-spin text-brand-300" />}
-      {state === 'complete' && <button type="button" onClick={() => window.location.replace('/#/client')} className={primary}><CheckCircle2 size={14} />Open My Tickets</button>}
-      {(state === 'invalid' || state === 'failed') && <>
-        <a href="/#/client" className={primary}>Return to client sign-in</a>
-        <div className="flex items-center gap-2 text-xs text-gray-500"><ShieldAlert size={14} />The one-time values have been removed from the address bar. This does not sign you into Alpha’s internal workspace.</div>
-      </>}
-    </section>
-  </main>;
+  return <ClientAccountSetupPage readLink={activationLink} cleanUrl={scrubbedActivationUrl} />;
 }
