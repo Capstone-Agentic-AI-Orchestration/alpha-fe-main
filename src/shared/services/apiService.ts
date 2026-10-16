@@ -565,7 +565,7 @@ export const apiService = {
    * encoded envelope — see `builderProtocol.encodeBuilderInput`. `sessionId` is
    * minted by the client and is what makes the next turn a continuation.
    */
-  sendBuilderMessage: (payload: { sessionId: string; runtimeId: string; message: string }) =>
+  sendBuilderMessage: (payload: { sessionId: string; runtimeId: string; modelName: string; message: string }) =>
     fetchJson<{ content: string; runtimeId: string; provider: string; modelName: string }>(
       '/agents/builder/message',
       { method: 'POST', body: JSON.stringify(payload) }

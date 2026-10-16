@@ -7,7 +7,7 @@ import {
   reasoningEffortsForRuntime,
   REASONING_EFFORT_LABELS
 } from '@/shared/lib/providers';
-import { AgentDraft, applyDraftRuntimeChange } from '@/features/agents/agentDraft';
+import { AgentDraft } from '@/features/agents/agentDraft';
 import { BuilderMessage, StoredBuilderSession } from '@/features/agents/draftStore';
 import {
   encodeBuilderInput,
@@ -78,7 +78,14 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
     () => reasoningEffortsForRuntime(runtimes, draft.runtimeId, draft.modelName),
     [runtimes, draft.runtimeId, draft.modelName]
   );
-  const runtimeLabel = runtimeChoices.find(c => c.runtimeId === draft.runtimeId)?.label;
+  const builderChoices = runtimeChoices.filter(c => ['claude', 'codex', 'antigravity', 'gemini', 'opencode'].includes(c.runtimeId));
+  const builderRuntimeId = session.runtimeId ?? runtimes.find(runtime => runtime.isDefault && builderChoices.some(choice => choice.runtimeId === runtime.id && choice.available && choice.models.length))?.id ?? builderChoices.find(c => c.available && c.models.length)?.runtimeId ?? builderChoices[0]?.runtimeId ?? '';
+  const builderRuntime = builderChoices.find(c => c.runtimeId === builderRuntimeId);
+  const builderModels = builderRuntime?.models ?? [];
+  const builderModelName = session.modelName ?? builderModels[0] ?? '';
+  const builderReady = !!builderRuntime?.available && builderModels.includes(builderModelName);
+  const runtimeLabel = builderRuntime?.label;
+  const configuredSession = { ...session, runtimeId: builderRuntimeId, modelName: builderModelName };
   const started = messages.length > 0;
 
   useEffect(() => {
@@ -86,12 +93,12 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
   }, [messages, busy]);
 
   const appendMessage = (message: BuilderMessage, base: BuilderMessage[]) =>
-    onSessionChange({ ...session, messages: [...base, message] });
+    onSessionChange({ ...configuredSession, messages: [...base, message] });
 
   const send = async (text: string) => {
     if (!canManageAgents) return;
     const request = text.trim();
-    if (!request || busy) return;
+    if (!request || busy || !builderReady) return;
 
     const withRequest: BuilderMessage[] = [
       ...messages,
@@ -100,13 +107,14 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
 
     setComposer('');
     setError(null);
-    onSessionChange({ ...session, messages: withRequest });
+    onSessionChange({ ...configuredSession, messages: withRequest });
     setBusy(true);
 
     try {
       const { content } = await apiService.sendBuilderMessage({
         sessionId: session.sessionId,
-        runtimeId: draft.runtimeId,
+        runtimeId: builderRuntimeId,
+        modelName: builderModelName,
         // Every turn re-states the whole draft and the catalogs of legal ids,
         // so the builder is never guessing at what it is editing.
         message: encodeBuilderInput(request, draft, skills, models, reasoningEfforts)
@@ -149,38 +157,36 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
   if (!started) {
     return (
       <div className="space-y-4 py-2">
-        <div>
-          <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
-            Runtime for the builder
-          </label>
-          {runtimeChoices.length === 0 ? (
-            <p className="px-3 py-2 rounded-lg bg-surface-200 border border-amber-500/30 text-[11px] text-amber-300">
-              No runtimes detected. Scan for runtimes in Settings before building with AI.
-            </p>
-          ) : (
-            <>
-              <select
-                value={draft.runtimeId}
-                onChange={(e) => onDraftChange(applyDraftRuntimeChange(draft, runtimes, e.target.value))}
-                className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
-              >
-                {runtimeChoices.map(choice => (
-                  <option key={choice.runtimeId} value={choice.runtimeId}>{choice.label}</option>
-                ))}
+        <section className="space-y-3 rounded-xl border border-white/10 bg-surface-200/40 p-4">
+          <div><h4 className="text-sm font-medium text-white">Choose your builder</h4><p className="mt-1 text-xs leading-relaxed text-gray-400">This model helps you design the agent. You can choose a different model for the finished agent.</p></div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5"><label htmlFor="builder-runtime" className="text-xs font-medium text-gray-300">Builder runtime</label>
+              <select id="builder-runtime" value={builderRuntimeId} onChange={e => {
+                const runtimeId = e.target.value;
+                const next = builderChoices.find(c => c.runtimeId === runtimeId);
+                onSessionChange({ ...session, runtimeId, modelName: next?.models[0] ?? '' });
+              }} className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2.5 text-sm text-white focus:border-brand-400 focus:outline-none">
+                {!builderChoices.length && <option value="">No supported runtimes detected</option>}
+                {builderChoices.map(c => <option key={c.runtimeId} value={c.runtimeId}>{c.label}</option>)}
               </select>
-              <p className="mt-1.5 text-[11px] text-gray-500">
-                Runs the conversation. The agent you design can use a different model.
-              </p>
-            </>
-          )}
-        </div>
+            </div>
+            <div className="space-y-1.5"><label htmlFor="builder-model" className="text-xs font-medium text-gray-300">Builder model</label>
+              <select id="builder-model" value={builderModelName} disabled={!builderModels.length} onChange={e => onSessionChange({ ...configuredSession, modelName: e.target.value })} className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2.5 text-sm text-white focus:border-brand-400 focus:outline-none disabled:opacity-50">
+                {!builderModels.includes(builderModelName) && <option value={builderModelName}>{builderModelName || 'No models available'}</option>}
+                {builderModels.map(model => <option key={model} value={model}>{model}</option>)}
+              </select>
+            </div>
+          </div>
+          {!builderReady && <p role="status" className="text-xs text-amber-300">{!builderRuntime?.available ? 'Connect a supported runtime on the Runtimes page to continue.' : 'Refresh this runtime’s model catalog and choose an available model.'}</p>}
+        </section>
 
         <div>
-          <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center gap-2">
+          <label htmlFor="builder-description" className="block text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-brand-400" />
-            <span>Describe the Agent You Need</span>
+            <span>Describe the agent you need</span>
           </label>
           <textarea
+            id="builder-description"
             rows={4}
             value={composer}
             onChange={(e) => setComposer(e.target.value)}
@@ -223,7 +229,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
           <button
             type="button"
             onClick={() => void send(composer)}
-            disabled={busy || !composer.trim() || !draft.runtimeId}
+            disabled={busy || !composer.trim() || !builderReady}
             className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-on-accent shadow-glow-brand transition-all disabled:opacity-50"
           >
             {busy ? (
@@ -295,7 +301,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
           <button
             type="button"
             onClick={() => void send(composer)}
-            disabled={busy || !composer.trim()}
+            disabled={busy || !composer.trim() || !builderReady}
             className="p-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent transition-colors disabled:opacity-40"
             title="Send"
           >
@@ -308,7 +314,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
       <div className="flex flex-col min-h-0 lg:w-1/2 rounded-xl border border-white/10 bg-well">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
           <span className="text-[11px] font-medium text-gray-400">Configuration</span>
-          {runtimeLabel && <span className="text-[10px] text-gray-500">{runtimeLabel}</span>}
+          <span className="truncate text-[10px] text-gray-400" title={`${runtimeLabel} · ${builderModelName}`}>Builder: {builderModelName}</span>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 text-xs">

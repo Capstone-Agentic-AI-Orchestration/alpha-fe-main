@@ -1621,11 +1621,15 @@ ${e.detail}`;
 
   const updateIssue = (id: string, updates: Partial<Issue>) => {
     if (!requireCapability('manage_issues')) return;
+    const before = issues.find(issue => issue.id === id);
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...updates, updatedAt: new Date().toISOString() } : iss));
     persist(
       () => apiService.updateIssue(id, updates),
-      () => {},
-      msg => showToast('Issue not saved', msg, 'error')
+      saved => setIssues(prev => prev.map(issue => issue.id === id ? saved : issue)),
+      msg => {
+        if (before) setIssues(prev => prev.map(issue => issue.id === id ? before : issue));
+        showToast('Issue not saved', msg, 'error');
+      }
     );
   };
 
@@ -2192,11 +2196,10 @@ ${e.detail}`;
 
     try {
       const saved = await apiService.createProject(draft);
-      // Take only the id from the server. The daemon echoes the draft back
-      // unchanged, but the Supabase fallback returns a snake_case row, and
-      // spreading that would put `start_date`-shaped keys into state.
+      // Keep the server's canonical ownership and resource values immediately after creation.
       const project: Project = {
         ...draft,
+        ...saved,
         id: saved?.id ?? draft.id,
         createdBy: saved?.createdBy ?? identity?.login
       };
@@ -2215,11 +2218,15 @@ ${e.detail}`;
   const updateProject = (id: string, updates: Partial<Project>) => {
     // Developers run projects too; starting and removing one stays a PM's.
     if (!requireCapability('edit_projects')) return;
+    const before = projects.find(project => project.id === id);
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
     persist(
       () => apiService.updateProject(id, updates),
-      () => {},
-      msg => showToast('Project not saved', msg, 'error')
+      saved => setProjects(prev => prev.map(project => project.id === id ? { ...project, ...saved } : project)),
+      msg => {
+        if (before) setProjects(prev => prev.map(project => project.id === id ? before : project));
+        showToast('Project not saved', msg, 'error');
+      }
     );
   };
 
@@ -2541,7 +2548,7 @@ ${e.detail}`;
     setIsScanningRuntimes(true);
     try {
       const realRuntimes = await apiService.scanRuntimes();
-      if (realRuntimes && realRuntimes.length > 0) {
+      if (realRuntimes) {
         setRuntimes(realRuntimes as any);
         showToast('Runtime scan completed', `Discovered ${realRuntimes.filter(r => r.status === 'online').length} online AI tools.`, 'success');
       }

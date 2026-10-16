@@ -1,627 +1,119 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useApp } from '@/app/AppContext';
 import { Modal } from '@/shared/components/Modal';
-import { deriveProjectKey } from '@/features/projects/useProjectsViewModel';
-import { Project, ProjectStatus, ProjectPriority, ProjectResource } from '@/shared/types';
-import {
-  Circle,
-  PlayCircle,
-  PauseCircle,
-  CheckCircle2,
-  XCircle,
-  Flame,
-  ChevronUp,
-  Minus,
-  ChevronDown,
-  Bot,
-  User,
-  GitBranch,
-  Folder,
-  FolderOpen,
-  Calendar,
-  MoreHorizontal,
-  Trash2
-} from 'lucide-react';
+import { ExecutionOwner, ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
+import { deriveProjectKey } from './useProjectsViewModel';
+import { normalizeProjectRepositoryUrl } from './projectRepositoryUrl';
+import { Project, ProjectPriority, ProjectResource } from '@/shared/types';
+import { AlertCircle, ChevronDown, FolderOpen, GitBranch, Loader2, Plus, Trash2 } from 'lucide-react';
 
 interface CreateProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
-  /** Fires once the daemon has confirmed the write, so the caller can open the project. */
   onCreated?: (project: Project) => void;
 }
 
-const ICON_PRESETS = ['⚡', '🎨', '🚀', '🛡️', '💳', '🧠', '📦', '🌐', '⚙️', '🎯', '📱', '🔒'];
+const ICONS = ['⚡', '🎨', '🚀', '🛡️', '💳', '🧠', '📦', '🌐', '⚙️', '🎯', '📱', '🔒'];
+const inputClass = 'w-full min-w-0 rounded-xl border border-white/10 bg-surface px-3.5 py-2.5 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:border-brand-400';
 
-const STATUS_OPTIONS: { id: ProjectStatus; label: string; icon: React.ReactNode }[] = [
-  { id: 'planned', label: 'Planned', icon: <Circle className="w-3.5 h-3.5 text-gray-400" /> },
-  { id: 'in_progress', label: 'In progress', icon: <PlayCircle className="w-3.5 h-3.5 text-cyan-400" /> },
-  { id: 'paused', label: 'Paused', icon: <PauseCircle className="w-3.5 h-3.5 text-amber-400" /> },
-  { id: 'completed', label: 'Completed', icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" /> },
-  { id: 'cancelled', label: 'Cancelled', icon: <XCircle className="w-3.5 h-3.5 text-gray-500" /> }
-];
-
-const PRIORITY_OPTIONS: { id: ProjectPriority; label: string; icon: React.ReactNode }[] = [
-  { id: 'urgent', label: 'Urgent', icon: <Flame className="w-3.5 h-3.5 text-rose-400" /> },
-  { id: 'high', label: 'High', icon: <ChevronUp className="w-3.5 h-3.5 text-orange-400" /> },
-  { id: 'medium', label: 'Medium', icon: <Minus className="w-3.5 h-3.5 text-amber-400" /> },
-  { id: 'low', label: 'Low', icon: <ChevronDown className="w-3.5 h-3.5 text-sky-400" /> },
-  { id: 'none', label: 'No priority', icon: <Circle className="w-3.5 h-3.5 text-gray-500" /> }
-];
-
-type OpenMenu = 'status' | 'priority' | 'lead' | 'repos' | 'more' | 'icon' | null;
-
-const pillClass =
-  'flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-surface-200 hover:bg-surface-50 border border-white/10 text-gray-300 transition-colors';
-
-const popoverClass =
-  'absolute bottom-full mb-1.5 left-0 z-40 bg-surface-100 border border-white/15 rounded-xl shadow-2xl p-2 space-y-0.5 animate-slide-up text-xs';
-
-interface PillOption<T extends string> {
-  id: T;
-  label: string;
-  icon: React.ReactNode;
-}
-
-/** One-of-N pill. Status and priority differ only in their option list. */
-function PillSelect<T extends string>({
-  options,
-  value,
-  onChange,
-  open,
-  onToggle,
-  width
-}: {
-  options: PillOption<T>[];
-  value: T;
-  onChange: (next: T) => void;
-  open: boolean;
-  onToggle: (e: React.MouseEvent) => void;
-  width: string;
-}) {
-  const active = options.find(o => o.id === value) ?? options[0];
-
-  return (
-    <div className="relative">
-      <button type="button" onClick={onToggle} className={pillClass}>
-        {active.icon}
-        <span>{active.label}</span>
-      </button>
-      {open && (
-        <div className={`${popoverClass} ${width}`} onClick={(e) => e.stopPropagation()}>
-          {options.map(opt => (
-            <button
-              key={opt.id}
-              type="button"
-              onClick={() => onChange(opt.id)}
-              className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left ${
-                value === opt.id ? 'bg-brand-500/20 text-white font-semibold' : 'text-gray-300 hover:bg-white/5'
-              }`}
-            >
-              {opt.icon}
-              <span>{opt.label}</span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/**
- * Create a project from one screen.
- *
- * This was a four-step wizard collecting fourteen fields, thirteen of which had
- * defaults. Only `name` was ever required. The shape here matches
- * CreateIssueModal — title, description, a row of optional pills — because that
- * is already the house pattern for the entity people create most.
- */
 export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose, onCreated }) => {
-  const { createProject, projects, agents } = useApp();
-
+  const { createProject, projects, agents, squads } = useApp();
+  const formId = useId();
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('⚡');
   const [description, setDescription] = useState('');
-  const [status, setStatus] = useState<ProjectStatus>('planned');
+  const [owner, setOwner] = useState<ExecutionOwner | null>(null);
   const [priority, setPriority] = useState<ProjectPriority>('medium');
-  const [leadType, setLeadType] = useState<'member' | 'agent'>('agent');
-  const [leadAgentId, setLeadAgentId] = useState('');
-  const [leadMemberName, setLeadMemberName] = useState('');
   const [targetDate, setTargetDate] = useState('');
   const [resources, setResources] = useState<ProjectResource[]>([]);
   const [repoUrl, setRepoUrl] = useState('');
-
-  const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
-  const [createAnother, setCreateAnother] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   const [error, setError] = useState<string | null>(null);
-
-  const nameRef = useRef<HTMLInputElement>(null);
-  const folderInputRef = useRef<HTMLInputElement>(null);
-
-  // The key is derived, never typed. It has to be unique — see deriveProjectKey.
-  const derivedKey = useMemo(() => deriveProjectKey(name, projects), [name, projects]);
-
-  const canSubmit = name.trim().length > 0 && !submitting;
-
-  const resetForm = () => {
-    setName('');
-    setIcon('⚡');
-    setDescription('');
-    setStatus('planned');
-    setPriority('medium');
-    setLeadType('agent');
-    setLeadAgentId('');
-    setLeadMemberName('');
-    setTargetDate('');
-    setResources([]);
-    setRepoUrl('');
-    setOpenMenu(null);
-    setError(null);
-  };
-
-  // The old dialog reset four of its fourteen fields on close, so an icon and a
-  // priority chosen for one project silently became the defaults for the next.
-  useEffect(() => {
-    if (isOpen) {
-      resetForm();
-      setCreateAnother(false);
-    }
-  }, [isOpen]);
-
-  const handleSubmit = async () => {
-    if (!canSubmit) return;
-
-    setSubmitting(true);
-    setError(null);
-
-    const chosenLeadAgent = agents.find(a => a.id === leadAgentId);
-    const leadName = leadType === 'agent'
-      ? chosenLeadAgent?.name
-      : (leadMemberName.trim() || undefined);
-
-    try {
-      const created = await createProject({
-        name: name.trim(),
-        key: derivedKey,
-        description: description.trim(),
-        icon,
-        color: '#6366f1',
-        status,
-        priority,
-        targetDate,
-        leadType,
-        leadName,
-        leadAgentId: leadType === 'agent' ? leadAgentId || undefined : undefined,
-        resources
-      });
-
-      if (createAnother) {
-        resetForm();
-        nameRef.current?.focus();
-      } else {
-        // Creation ends inside the thing you made, not back on the list.
-        onCreated?.(created);
-        onClose();
-      }
-    } catch (err) {
-      // createProject already toasts. Repeat it here so the reason stays visible
-      // next to the button that failed.
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setSubmitting(false);
-    }
-  };
+  const [repoError, setRepoError] = useState<string | null>(null);
+  const [showIcons, setShowIcons] = useState(false);
+  const folderRef = useRef<HTMLInputElement>(null);
+  const key = useMemo(() => deriveProjectKey(name, projects), [name, projects]);
+  const eligibleOwner = !!owner && (owner.type === 'agent' ? agents.some(agent => agent.id === owner.id && !agent.isArchived) : squads.some(squad => squad.id === owner.id));
 
   useEffect(() => {
     if (!isOpen) return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleSubmit();
-      } else if (e.key === 'Escape' && openMenu !== null) {
-        // Close the popover first — Modal's own Escape handler closes the dialog.
-        e.stopPropagation();
-        setOpenMenu(null);
-      }
-    };
-    window.addEventListener('keydown', onKeyDown, true);
-    return () => window.removeEventListener('keydown', onKeyDown, true);
-  }, [isOpen, openMenu, canSubmit, name, description, icon, status, priority, leadType, leadAgentId, leadMemberName, targetDate, resources, createAnother]);
+    setName(''); setIcon('⚡'); setDescription(''); setOwner(null); setPriority('medium');
+    setTargetDate(''); setResources([]); setRepoUrl(''); setError(null); setRepoError(null); setShowIcons(false);
+  }, [isOpen]);
 
-  const addResource = (res: ProjectResource) => setResources(prev => [...prev, res]);
-
-  const handleAddRepo = () => {
-    const url = repoUrl.trim();
-    if (!url) return;
-    addResource({
-      id: `res-${Date.now()}`,
-      type: 'github_repo',
-      name: url.split('/').pop() || 'repo',
-      pathOrUrl: url,
-      branchOrMachine: 'main'
-    });
-    setRepoUrl('');
+  const pendingRepository = (): ProjectResource | null => {
+    if (!repoUrl.trim()) return null;
+    let url: string;
+    try { url = normalizeProjectRepositoryUrl(repoUrl); }
+    catch { throw new Error('Use a repository URL like https://github.com/owner/repository.'); }
+    if (resources.some(resource => resource.type === 'github_repo' && resource.pathOrUrl.toLowerCase() === url.toLowerCase())) throw new Error('This repository is already attached.');
+    return { id: `res-${crypto.randomUUID()}`, type: 'github_repo', name: url.split('/').at(-1)!, pathOrUrl: url };
   };
 
-  const handleOpenFolderPicker = async () => {
-    if ((window as any).alphaAPI?.selectFolder) {
-      const picked = await (window as any).alphaAPI.selectFolder();
-      if (picked) {
-        const folderName = picked.replace(/\\/g, '/').split('/').filter(Boolean).pop() || 'local-project';
-        addResource({
-          id: `res-${Date.now()}`,
-          type: 'local_dir',
-          name: folderName,
-          pathOrUrl: picked,
-          branchOrMachine: 'Local Machine'
-        });
-      }
-    } else if (folderInputRef.current) {
-      folderInputRef.current.click();
-    }
+  const addRepository = () => {
+    try {
+      const resource = pendingRepository();
+      if (resource) setResources(previous => [...previous, resource]);
+      setRepoUrl(''); setRepoError(null);
+    } catch (err) { setRepoError((err as Error).message); }
   };
 
-  const handleFolderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      const firstFile = files[0] as any;
-      const fullPath = firstFile.path || (firstFile.webkitRelativePath ? firstFile.webkitRelativePath.split('/')[0] : firstFile.name);
-      const folderName = firstFile.webkitRelativePath ? firstFile.webkitRelativePath.split('/')[0] : (firstFile.name || 'local-project');
-      addResource({
-        id: `res-${Date.now()}`,
-        type: 'local_dir',
-        name: folderName,
-        pathOrUrl: fullPath,
-        branchOrMachine: 'Local Machine'
-      });
-    }
-    if (e.target) e.target.value = '';
+  const addFolder = (path: string) => {
+    if (resources.some(resource => resource.pathOrUrl === path)) return;
+    setResources(previous => [...previous, { id: `res-${crypto.randomUUID()}`, type: 'local_dir', name: path.replace(/\\/g, '/').split('/').filter(Boolean).at(-1) || 'Local folder', pathOrUrl: path, branchOrMachine: 'Local machine' }]);
+  };
+  const chooseFolder = async () => {
+    try {
+      const api = (window as any).alphaAPI;
+      if (api?.selectFolder) { const path = await api.selectFolder(); if (path) addFolder(path); }
+      else folderRef.current?.click();
+    } catch { setError('Could not open the folder picker. Please try again.'); }
   };
 
-  const leadLabel = leadType === 'agent'
-    ? (agents.find(a => a.id === leadAgentId)?.name ?? 'Lead')
-    : (leadMemberName.trim() || 'Lead');
-
-  const toggle = (menu: Exclude<OpenMenu, null>) => (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setOpenMenu(openMenu === menu ? null : menu);
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (submittingRef.current || !name.trim() || !eligibleOwner) return;
+    let pending: ProjectResource | null;
+    try { pending = pendingRepository(); }
+    catch (err) { setRepoError((err as Error).message); return; }
+    submittingRef.current = true; setSubmitting(true); setError(null); setRepoError(null);
+    const leadName = owner?.type === 'agent' ? agents.find(agent => agent.id === owner.id)?.name : squads.find(squad => squad.id === owner?.id)?.name;
+    try {
+      const project = await createProject({ name: name.trim(), key, description: description.trim(), icon, color: '#6366f1', status: 'planned', priority, targetDate,
+        leadType: 'agent', leadName, leadAgentId: owner?.type === 'agent' ? owner.id : undefined,
+        leadSquadId: owner?.type === 'squad' ? owner.id : undefined, resources: pending ? [...resources, pending] : resources });
+      onCreated?.(project); onClose();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Could not create the project. Please try again.'); }
+    finally { submittingRef.current = false; setSubmitting(false); }
   };
 
-  return (
-    <Modal
-      isOpen={isOpen}
-      onClose={onClose}
-      title="New project"
-      subtitle="A shared workspace grouping issues and ground rules so agents have unified context."
-      maxWidth="max-w-lg"
-    >
-      <div className="space-y-4" onClick={() => setOpenMenu(null)}>
-        {/* ---------------- Icon + name + derived key ---------------- */}
-        <div className="flex items-start gap-3">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={toggle('icon')}
-              className="w-11 h-10 rounded-xl bg-surface border border-white/10 flex items-center justify-center text-xl hover:border-brand-500/50 transition-colors"
-              title="Project icon"
-            >
-              {icon}
-            </button>
-            {openMenu === 'icon' && (
-              <div
-                className="absolute top-full left-0 mt-1 p-2 bg-surface-100 border border-white/15 rounded-xl shadow-2xl z-40 grid grid-cols-4 gap-1.5 w-40"
-                onClick={(e) => e.stopPropagation()}
-              >
-                {ICON_PRESETS.map(emoji => (
-                  <button
-                    key={emoji}
-                    type="button"
-                    onClick={() => {
-                      setIcon(emoji);
-                      setOpenMenu(null);
-                    }}
-                    className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-lg transition-colors"
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="flex-1 relative">
-            <input
-              ref={nameRef}
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  handleSubmit();
-                }
-              }}
-              placeholder="Project name"
-              autoFocus
-              className="w-full bg-surface border border-white/10 rounded-xl pl-3.5 pr-16 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
-            />
-            {/* Derived, not typed — it prefixes every issue in the project. */}
-            {name.trim() && (
-              <span
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] text-gray-500 pointer-events-none"
-                title="Issue prefix, editable later in project settings"
-              >
-                {derivedKey}
-              </span>
-            )}
+  return <Modal isOpen={isOpen} onClose={() => { if (!submittingRef.current) onClose(); }} title="New project" subtitle="Set the direction, choose who will execute, and bring your code." maxWidth="max-w-3xl"
+    footer={<div className="flex items-center justify-between gap-4"><span className="hidden text-[11px] text-gray-500 sm:block">You can refine the project after creating it.</span><div className="ml-auto flex items-center gap-2"><button type="button" onClick={onClose} disabled={submitting} className="rounded-lg px-4 py-2.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50">Cancel</button><button type="submit" form={formId} disabled={submitting || !name.trim() || !eligibleOwner} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-brand-400 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">{submitting && <Loader2 className="h-4 w-4 animate-spin" />}{submitting ? 'Creating project…' : 'Create project'}</button></div></div>}>
+    <form id={formId} onSubmit={submit} className="space-y-6">
+      <fieldset disabled={submitting} className="space-y-6 min-w-0">
+        <div className="space-y-2">
+          <label htmlFor={`${formId}-name`} className="block text-xs font-medium text-gray-300">Project name <span className="text-brand-300">*</span></label>
+          <div className="flex items-start gap-3">
+            <div className="relative shrink-0"><button type="button" onClick={() => setShowIcons(!showIcons)} aria-label="Choose project icon" aria-expanded={showIcons} className="flex h-11 items-center gap-1 rounded-xl border border-white/10 bg-surface px-3 text-xl hover:border-white/25">{icon}<ChevronDown className="h-3 w-3 text-gray-500" /></button>
+              {showIcons && <div className="absolute left-0 top-full z-20 mt-2 grid w-48 grid-cols-4 gap-1 rounded-xl border border-white/10 bg-surface-raised p-2 shadow-xl">{ICONS.map(item => <button key={item} type="button" aria-label={`Use ${item} icon`} onClick={() => { setIcon(item); setShowIcons(false); }} className="rounded-lg p-2 hover:bg-white/10">{item}</button>)}</div>}
+            </div>
+            <div className="relative min-w-0 flex-1"><input id={`${formId}-name`} autoFocus required maxLength={120} value={name} onChange={event => setName(event.target.value)} placeholder="e.g. Customer portal" className={`${inputClass} pr-20`} />{name.trim() && <span className="pointer-events-none absolute right-3 top-3 font-mono text-xs text-gray-500" title="Issue prefix">{key}</span>}</div>
           </div>
         </div>
-
-        {/* ---------------- Description ---------------- */}
-        <div className="space-y-1">
-          <textarea
-            rows={3}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            placeholder="Goal & ground rules — objective, stack, architectural constraints…"
-            className="w-full bg-well border border-white/10 rounded-xl p-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 leading-relaxed"
-          />
-          <p className="text-[11px] text-gray-500">
-            Shared with agents as context for every issue in this project.
-          </p>
-        </div>
-
-        {/* ---------------- Attached resources (added via the Repos pill) ---------------- */}
-        {resources.length > 0 && (
-          <div className="space-y-1.5">
-            {resources.map(res => (
-              <div
-                key={res.id}
-                className="flex items-center justify-between p-2 rounded-lg bg-well border border-white/5 font-mono text-[11px]"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  {res.type === 'github_repo'
-                    ? <GitBranch className="w-3.5 h-3.5 text-brand-400 flex-shrink-0" />
-                    : <Folder className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />}
-                  <span className="text-white truncate">{res.pathOrUrl}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setResources(prev => prev.filter(r => r.id !== res.id))}
-                  className="p-1 text-gray-500 hover:text-rose-400 transition-colors flex-shrink-0"
-                  title="Remove"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            ))}
-            {resources.some(r => r.type === 'local_dir') && (
-              <p className="text-[11px] text-amber-300/90">
-                Agents on other machines cannot see a local path — they will fail to start.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* ---------------- Pill toolbar ---------------- */}
-        <div className="flex flex-wrap items-center gap-2 relative">
-          <PillSelect
-            options={STATUS_OPTIONS}
-            value={status}
-            onChange={(next) => { setStatus(next); setOpenMenu(null); }}
-            open={openMenu === 'status'}
-            onToggle={toggle('status')}
-            width="w-48"
-          />
-
-          <PillSelect
-            options={PRIORITY_OPTIONS}
-            value={priority}
-            onChange={(next) => { setPriority(next); setOpenMenu(null); }}
-            open={openMenu === 'priority'}
-            onToggle={toggle('priority')}
-            width="w-44"
-          />
-
-          {/* Lead */}
-          <div className="relative">
-            <button type="button" onClick={toggle('lead')} className={pillClass}>
-              {leadType === 'agent'
-                ? <Bot className="w-3.5 h-3.5 text-cyan-400" />
-                : <User className="w-3.5 h-3.5 text-gray-400" />}
-              <span className="truncate max-w-[8rem]">{leadLabel}</span>
-            </button>
-            {openMenu === 'lead' && (
-              <div className={`${popoverClass} w-64 max-h-72 overflow-y-auto`} onClick={(e) => e.stopPropagation()}>
-                <div className="text-[11px] uppercase text-gray-500 px-2 py-0.5 font-semibold">Agents</div>
-                {agents.map(a => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => {
-                      setLeadType('agent');
-                      setLeadAgentId(a.id);
-                      setOpenMenu(null);
-                    }}
-                    className={`w-full flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg text-left ${
-                      leadType === 'agent' && leadAgentId === a.id
-                        ? 'bg-brand-500/20 text-white font-semibold'
-                        : 'text-gray-300 hover:bg-white/5'
-                    }`}
-                  >
-                    <Bot className="w-3.5 h-3.5 text-cyan-400 flex-shrink-0" />
-                    <span className="truncate">{a.name} ({a.role})</span>
-                  </button>
-                ))}
-                <div className="border-t border-white/5 pt-1.5 mt-1.5 space-y-1.5">
-                  <div className="text-[11px] uppercase text-gray-500 px-2 font-semibold">Team member</div>
-                  <input
-                    type="text"
-                    value={leadMemberName}
-                    onChange={(e) => {
-                      setLeadType('member');
-                      setLeadMemberName(e.target.value);
-                    }}
-                    placeholder="e.g. Alex Rivers"
-                    className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
-                </div>
-                <p className="text-[11px] text-gray-500 px-2 pt-1.5">
-                  A label for coordination — it does not auto-assign issues.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Repos — selection only. Creating a repository lives on the project,
-              so an abandoned dialog can no longer orphan a real one. */}
-          <div className="relative">
-            <button type="button" onClick={toggle('repos')} className={pillClass}>
-              <GitBranch className="w-3.5 h-3.5 text-brand-400" />
-              <span>{resources.length > 0 ? `${resources.length} attached` : 'Repos'}</span>
-            </button>
-            {openMenu === 'repos' && (
-              <div className={`${popoverClass} w-80 space-y-2`} onClick={(e) => e.stopPropagation()}>
-                <div className="text-[11px] uppercase text-gray-500 px-1 font-semibold">Attach existing</div>
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={repoUrl}
-                    onChange={(e) => setRepoUrl(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddRepo();
-                      }
-                    }}
-                    placeholder="github.com/owner/repo"
-                    className="flex-1 min-w-0 bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddRepo}
-                    disabled={!repoUrl.trim()}
-                    className="px-2.5 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-xs font-medium text-on-accent disabled:opacity-40 transition-colors flex-shrink-0"
-                  >
-                    Add
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleOpenFolderPicker}
-                  className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-gray-300 hover:bg-white/5 text-left"
-                >
-                  <FolderOpen className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
-                  <span>Browse for a local folder…</span>
-                </button>
-                <p className="text-[11px] text-gray-500 px-1">
-                  Need a new repository? Create one from the project once it exists.
-                </p>
-              </div>
-            )}
-          </div>
-
-          {/* Target date. Unset it is a `⋯` overflow, because most projects
-              never get one; setting it promotes the value to a real pill and the
-              overflow has nothing left to offer. Same trigger, same popover. */}
-          <div className="relative">
-            {targetDate ? (
-              <button type="button" onClick={toggle('more')} className={pillClass}>
-                <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                <span>{targetDate}</span>
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={toggle('more')}
-                className="flex items-center justify-center w-8 h-8 rounded-full bg-surface-200 hover:bg-surface-50 border border-white/10 text-gray-400 hover:text-white transition-colors"
-                title="More options"
-              >
-                <MoreHorizontal className="w-4 h-4" />
-              </button>
-            )}
-
-            {openMenu === 'more' && (
-              <div className={`${popoverClass} w-56 space-y-1.5`} onClick={(e) => e.stopPropagation()}>
-                <label className="block text-[11px] font-medium text-gray-400 px-1">Target date</label>
-                <input
-                  type="date"
-                  value={targetDate}
-                  onChange={(e) => setTargetDate(e.target.value)}
-                  className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-brand-500"
-                />
-                {targetDate && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setTargetDate('');
-                      setOpenMenu(null);
-                    }}
-                    className="text-[11px] text-gray-400 hover:text-white px-1"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Hidden native OS folder picker input */}
-        <input
-          ref={folderInputRef}
-          type="file"
-          {...({ webkitdirectory: '', directory: '' } as any)}
-          className="hidden"
-          onChange={handleFolderInputChange}
-        />
-
-        {error && (
-          <p className="text-[11px] text-rose-300 font-mono break-words">{error}</p>
-        )}
-
-        {/* ---------------- Footer ---------------- */}
-        <div className="flex items-center justify-between pt-3 border-t border-white/10">
-          <div className="flex items-center gap-2 text-gray-300 select-none">
-            <button
-              type="button"
-              role="switch"
-              aria-checked={createAnother}
-              aria-label="Create another project after this one"
-              onClick={() => setCreateAnother(!createAnother)}
-              className={`flex h-5 w-9 items-center rounded-full border p-0.5 transition-colors ${
-                createAnother ? 'border-brand-400 bg-brand-500' : 'border-white/10 bg-white/10 hover:border-white/20'
-              }`}
-            >
-              <span
-                className={`h-4 w-4 rounded-full bg-on-accent shadow-sm transition-transform ${
-                  createAnother ? 'translate-x-4' : 'translate-x-0'
-                }`}
-              />
-            </button>
-            <span className="text-xs font-medium">Create another</span>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-xl text-xs text-gray-400 hover:text-white transition-colors"
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={!canSubmit}
-              title="Create project (Ctrl/Cmd + Enter)"
-              className="inline-flex min-w-[112px] items-center justify-center rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-xs font-semibold text-on-accent transition-colors disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              {submitting ? 'Creating…' : 'Create project'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Modal>
-  );
+        <div className="space-y-2"><label htmlFor={`${formId}-description`} className="block text-xs font-medium text-gray-300">Goal & ground rules <span className="ml-1 font-normal text-gray-500">Optional</span></label><textarea id={`${formId}-description`} rows={3} value={description} onChange={event => setDescription(event.target.value)} placeholder="What are we building? Include the stack, constraints, and what success looks like." className={`${inputClass} resize-y leading-relaxed`} /><p className="text-[11px] text-gray-500">Shared with agents as context for every issue in this project.</p></div>
+        <div className="border-t border-white/5 pt-5"><ExecutionOwnerSelect label="Execution owner" required value={owner} onChange={setOwner} agents={agents} squads={squads} /></div>
+        <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><label htmlFor={`${formId}-priority`} className="text-xs font-medium text-gray-300">Priority</label><select id={`${formId}-priority`} value={priority} onChange={event => setPriority(event.target.value as ProjectPriority)} className={inputClass}><option value="none">No priority</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div className="space-y-2"><label htmlFor={`${formId}-date`} className="text-xs font-medium text-gray-300">Target date <span className="ml-1 font-normal text-gray-500">Optional</span></label><input id={`${formId}-date`} type="date" value={targetDate} onChange={event => setTargetDate(event.target.value)} className={`${inputClass} [color-scheme:dark]`} /></div></div>
+        <section className="space-y-3 border-t border-white/5 pt-5" aria-label="Project repositories">
+          <div className="space-y-2"><label htmlFor={`${formId}-repo`} className="text-xs font-medium text-gray-300">Repository URL <span className="ml-1 font-normal text-gray-500">Optional</span></label><div className="flex gap-2"><div className="relative min-w-0 flex-1"><GitBranch className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-500" /><input id={`${formId}-repo`} value={repoUrl} onChange={event => { setRepoUrl(event.target.value); setRepoError(null); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addRepository(); } }} placeholder="https://github.com/owner/repository" aria-invalid={!!repoError} aria-describedby={repoError ? `${formId}-repo-error` : `${formId}-repo-hint`} className={`${inputClass} pl-9`} /></div><button type="button" onClick={addRepository} disabled={!repoUrl.trim()} aria-label="Attach repository and add another" title="Attach repository and add another" className="rounded-xl border border-white/10 px-3 text-gray-300 hover:bg-white/5 disabled:opacity-30"><Plus className="h-4 w-4" /></button></div>
+          {repoError ? <p id={`${formId}-repo-error`} role="alert" className="text-xs text-rose-300">{repoError}</p> : <p id={`${formId}-repo-hint`} className="text-[11px] text-gray-500">Saved when you create the project. Use + to attach more than one.</p>}</div>
+          {resources.map(resource => <div key={resource.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-xs"><span className="min-w-0 truncate text-gray-300" title={resource.pathOrUrl}>{resource.pathOrUrl}</span><button type="button" onClick={() => setResources(previous => previous.filter(item => item.id !== resource.id))} aria-label={`Remove ${resource.name}`} className="shrink-0 rounded p-1 text-gray-500 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></div>)}
+          <button type="button" onClick={chooseFolder} className="inline-flex items-center gap-2 text-xs text-gray-400 transition-colors hover:text-white"><FolderOpen className="h-3.5 w-3.5" />Attach a local folder</button>
+          {resources.some(resource => resource.type === 'local_dir') && <p className="text-[11px] text-amber-300">Local folders are available only on this machine.</p>}
+          <input ref={folderRef} type="file" className="hidden" {...{ webkitdirectory: '', directory: '' } as any} onChange={event => { const file = event.target.files?.[0] as (File & { path?: string }) | undefined; if (file) addFolder(file.path || file.webkitRelativePath.split('/')[0]); event.target.value = ''; }} />
+        </section>
+      </fieldset>
+      {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-rose-400/20 bg-rose-500/10 p-3 text-xs leading-relaxed text-rose-200"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
+    </form>
+  </Modal>;
 };
