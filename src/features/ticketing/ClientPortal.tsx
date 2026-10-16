@@ -474,6 +474,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   </main>;
 }
 
+function FullPageState({ title }: { title: string }) {
+  return <main className="flex min-h-dvh items-center justify-center bg-canvas p-6 text-sm text-gray-400" role="status"><RefreshCw size={15} className="mr-2 animate-spin" />{title}</main>;
+}
+
 function EmptyState({ title, body }: { title: string; body: string }) {
   return <div className="flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center"><Ticket size={22} className="text-gray-600" /><p className="mt-3 text-sm font-medium text-gray-300">{title}</p><p className="mt-1 max-w-md text-xs leading-relaxed text-gray-500">{body}</p></div>;
 }
