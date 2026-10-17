@@ -1,8 +1,9 @@
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { FlaskConical } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
 import { PmTicketsView } from './PmTicketsView';
 import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
+import { pmTicketApi } from './pmApi';
 
 // Use the real cloud-backed queue by default. "0" keeps it disabled.
 // The server's rollout switch, workspace gate and fresh PM authorization
@@ -19,7 +20,20 @@ const SampleTickets = import.meta.env.DEV
 export function PmTicketsPage() {
   const [samples, setSamples] = useState(false);
   const [section, setSection] = useState<'tickets' | 'inquiries'>('tickets');
+  const [workflowActions, setWorkflowActions] = useState<'triage' | 'all'>('triage');
   const { activeWorkspace, showToast } = useApp();
+
+  useEffect(() => {
+    let current = true;
+    setWorkflowActions('triage');
+    void pmTicketApi.getWorkflowCapabilities().then(capabilities => {
+      if (current && capabilities.phaseWorkflowEnabled) setWorkflowActions('all');
+    }).catch(() => {
+      // Keep the existing triage path available when this backend has not
+      // enabled the optional Phase 7–9 endpoints.
+    });
+    return () => { current = false; };
+  }, [activeWorkspace?.id]);
   return <div className="flex h-full min-h-0 flex-col">
     {SampleTickets && <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/15 bg-amber-500/[0.04] px-3 py-2 text-[11px] md:mx-6">
       <p className="flex items-center gap-2 text-amber-100/80"><FlaskConical size={14} className="shrink-0" />
@@ -39,7 +53,7 @@ export function PmTicketsPage() {
         : section === 'inquiries' ? <PmCentralIntakeInbox workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? null}
           workspaceCanReview={activeWorkspace?.role === 'pm'}
           onAccepted={reference => { showToast('Inquiry accepted', `${reference} was created in ${activeWorkspace?.name ?? 'your workspace'}. It is now in Tickets; client invitation and access remain separate.`, 'success'); setSection('tickets'); }} />
-          : <PmTicketsView intakeEnabled={intakeEnabled} workflowActions="triage" communicationEnabled />}
+          : <PmTicketsView intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled />}
     </div>
   </div>;
 }

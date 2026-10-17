@@ -11,18 +11,20 @@ import { TicketDocumentsPanel } from './TicketDocumentsPanel';
 import { input, primary, secondary, time } from './ticketUi';
 import { ClientDeliveryFiles } from './ClientDeliveryFiles';
 import { canReviewClientDelivery, clientDeliveryReviewKey } from './clientReview';
+import { clientTicketProgress } from './clientTicketProgress';
 
 type Decision = Extract<ClientTicketCommandInput['command'], { type: 'agree_scope' | 'accept_delivery' }>;
 
 export function ClientTicketDetail({
   workspaceId, ticket, messages, messageCursor, historyLoading, historyError, busy, error, replyResetVersion,
   onBack, onLoadMore, onReply, onDecision, onAdditionalWork, onCorrection, api = clientTicketApi,
-  documentsApi = clientTicketDocumentsApi, workflowActionsDisabled = false, communicationEnabled = false,
+  documentsApi = clientTicketDocumentsApi, workflowActionsDisabled = false, newRequestsDisabled = true, communicationEnabled = false,
 }: {
   workspaceId: string;
   api?: typeof clientTicketApi;
   documentsApi?: TicketDocumentsApi;
   workflowActionsDisabled?: boolean;
+  newRequestsDisabled?: boolean;
   communicationEnabled?: boolean;
   ticket: ClientTicketRecord;
   messages: ClientTicketMessage[];
@@ -52,6 +54,7 @@ export function ClientTicketDetail({
   const canReview = canReviewClientDelivery(ticket, inspectedKey);
   const terminal = ticket.status === 'closed' || ticket.status === 'declined' || ticket.status === 'cancelled';
   const canReply = communicationEnabled ? !terminal : ticket.writesAvailable && !ticket.readOnly;
+  const progress = clientTicketProgress(ticket.status, ticket.requestedAction);
   const scopeDecision = ticket.requestedAction === 'agree_scope' && ticket.scope && !ticket.scope.agreed
     ? { type: 'agree_scope' as const, scopeVersionId: ticket.scope.id } : null;
 
@@ -76,10 +79,13 @@ export function ClientTicketDetail({
       <div><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-xs text-gray-500">{ticket.reference}</span><Status status={ticket.status} /></div>
         <h1 className="mt-2 break-words text-xl font-semibold text-white">{ticket.title}</h1>
         <p className="mt-1 text-[11px] text-gray-500">Updated {time(ticket.updatedAt)}</p></div>
-      {!workflowActionsDisabled && <button onClick={onAdditionalWork} disabled={busy} className={secondary}>Request additional work</button>}
+      {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className={secondary}>Request additional work</button>}
     </header>
 
-    {!workflowActionsDisabled && ticket.requestedAction && <div className="mb-4 flex items-start gap-2 rounded-lg border border-brand-400/15 bg-brand-500/[0.06] p-3 text-xs text-brand-200"><Clock3 size={14} className="mt-0.5 shrink-0" /><span>{ticket.requestedAction === 'reply' ? 'Your project manager needs a reply.' : ticket.requestedAction === 'agree_scope' ? 'Please review the proposed scope.' : 'Your PM shared a result. Download and review its protected files, then accept it or explain what needs fixing.'}</span></div>}
+    {!workflowActionsDisabled && <section aria-live="polite" className="mb-4 flex items-start gap-2 rounded-lg border border-brand-400/15 bg-brand-500/[0.06] p-3">
+      <Clock3 size={15} className="mt-0.5 shrink-0 text-brand-200" />
+      <div><h2 className="text-xs font-semibold text-brand-100">{progress.label}</h2><p className="mt-1 text-xs leading-relaxed text-gray-300">{progress.description}</p></div>
+    </section>}
 
     <div className="grid gap-3 lg:grid-cols-2">
       <InfoCard title="Your request" icon={<FileText size={14} />}>

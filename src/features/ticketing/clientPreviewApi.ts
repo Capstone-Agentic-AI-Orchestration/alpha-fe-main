@@ -25,6 +25,7 @@ function assertWorkspace(value: string): void {
 }
 
 const methods: Partial<typeof clientTicketApi> = {
+  async getWorkflowCapabilities() { return { phaseWorkflowEnabled: false }; },
   async getSession() { return { authenticated: true }; },
   async listWorkspaces() { return { items: [{ workspaceId: workspace, displayName: 'Northstar Demo Co. · fictional samples' }] }; },
   async listTickets(workspaceId: string, options: ClientTicketQueueOptions = {}): Promise<ClientTicketQueue> {

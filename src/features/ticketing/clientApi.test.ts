@@ -19,6 +19,17 @@ function jsonResponse(status: number, payload: unknown): Response {
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('client browser transport', () => {
+  it('loads workflow capabilities from the isolated same-origin client API', async () => {
+    browser();
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { phaseWorkflowEnabled: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(clientTicketApi.getWorkflowCapabilities()).resolves.toEqual({ phaseWorkflowEnabled: true });
+    expect(fetchMock).toHaveBeenCalledWith('/api/client/workflow-capabilities', expect.objectContaining({
+      credentials: 'same-origin', mode: 'same-origin', cache: 'no-store', redirect: 'error',
+    }));
+  });
+
   it('bounds a stalled sign-in request and does not automatically redeem a one-time proof again', async () => {
     browser();
     const timeout = new AbortController();

@@ -201,6 +201,14 @@ async function withOperationRecovery(
 
 /** Internal PM transport uses apiService's active workspace/session/desktop relay. */
 export const pmTicketApi = {
+  async getWorkflowCapabilities(): Promise<{ phaseWorkflowEnabled: boolean }> {
+    const value = await apiService.ticketRequest<unknown>('/tickets/workflow-capabilities');
+    if (!value || typeof value !== 'object' || Array.isArray(value)
+      || typeof (value as Record<string, unknown>).phaseWorkflowEnabled !== 'boolean') {
+      throw new Error('Ticket workflow capabilities response is invalid.');
+    }
+    return { phaseWorkflowEnabled: (value as { phaseWorkflowEnabled: boolean }).phaseWorkflowEnabled };
+  },
   async listCentralIntakes(after: string | null = null): Promise<PmCentralIntakePage> {
     const value = await apiService.ticketRequest<unknown>(`/tickets/intakes${query({ limit: '50', after })}`);
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Shared inquiry response is invalid.');

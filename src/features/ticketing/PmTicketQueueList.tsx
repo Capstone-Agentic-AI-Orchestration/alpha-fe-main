@@ -2,6 +2,7 @@ import { FolderKanban, UserRound } from 'lucide-react';
 
 import type { PmTicketQueueItem } from './pmApi';
 import { groupPmTickets } from './pmTicketGrouping';
+import { pmTicketNextAction } from './pmTicketNextAction';
 import { time } from './ticketUi';
 
 function statusLabel(status: PmTicketQueueItem['status']): string {
@@ -21,6 +22,13 @@ function actionOwnerLabel(item: PmTicketQueueItem): string {
   if (item.internal.actionOwner === 'client') return 'Client action';
   if (item.internal.actionOwner === 'developer') return 'Developer action';
   return 'No action pending';
+}
+
+function actionSummary(item: PmTicketQueueItem): string {
+  const nextAction = pmTicketNextAction(item.internal.nextAction);
+  if (!nextAction) return actionOwnerLabel(item);
+  const owner = item.internal.actionOwner ? actionOwnerLabel(item) : 'Next step';
+  return `${owner} · ${nextAction}`;
 }
 
 export function PmTicketQueueList({ items, selectedId, disabled, requestAccessSaving, onSelect, onToggleRequests }: {
@@ -45,7 +53,7 @@ export function PmTicketQueueList({ items, selectedId, disabled, requestAccessSa
         {client.accessActive && <button type="button" disabled={disabled || requestAccessSaving !== null}
           onClick={() => onToggleRequests(items.find(item => item.internal.clientGroup?.key === client.key)?.id ?? items[0]!.id, !client.acceptsNewRequests)}
           aria-label={`${client.acceptsNewRequests ? 'Pause' : 'Allow'} new requests for ${client.name}`}
-          className="shrink-0 rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 disabled:opacity-50">
+          className="min-h-8 shrink-0 rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-gray-400 hover:text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300 disabled:opacity-50">
           {requestAccessSaving && items.some(item => item.id === requestAccessSaving && item.internal.clientGroup?.key === client.key)
             ? 'Saving…' : client.acceptsNewRequests ? 'Pause new requests' : 'Allow new requests'}
         </button>}
@@ -56,16 +64,16 @@ export function PmTicketQueueList({ items, selectedId, disabled, requestAccessSa
           <span className="truncate">{project.name ?? 'Not linked to a project'}</span>
           <span className="ml-auto shrink-0">{project.tickets.length}</span>
         </div>
-        {project.tickets.map(item => <button key={item.id} type="button" disabled={disabled}
+        {project.tickets.map(item => <button key={item.id} type="button" aria-pressed={selectedId === item.id} disabled={disabled}
           onClick={() => onSelect(item.id)}
-          className={`w-full border-t border-white/[0.04] p-3.5 pl-5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${selectedId === item.id ? 'bg-brand-500/[0.08] shadow-[inset_2px_0_0_0_#a78bfa]' : 'hover:bg-white/[0.025]'}`}>
+          className={`w-full border-t border-white/[0.04] p-3.5 pl-5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-300 disabled:cursor-not-allowed disabled:opacity-50 ${selectedId === item.id ? 'bg-brand-500/[0.08] shadow-[inset_2px_0_0_0_#a78bfa]' : 'hover:bg-white/[0.025]'}`}>
           <div className="flex items-center justify-between gap-2">
             <span className="font-mono text-[10px] text-gray-500">{item.reference}</span>
             <span className={`rounded px-1.5 py-0.5 text-[10px] ${statusStyle(item.status)}`}>{statusLabel(item.status)}</span>
           </div>
           <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-200">{item.title}</p>
           <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-gray-500">
-            <span>{actionOwnerLabel(item)}</span><time dateTime={item.updatedAt}>{time(item.updatedAt)}</time>
+            <span className="min-w-0 truncate">{actionSummary(item)}</span><time dateTime={item.updatedAt}>{time(item.updatedAt)}</time>
           </div>
         </button>)}
       </div>)}

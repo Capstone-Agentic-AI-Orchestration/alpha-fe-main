@@ -36,6 +36,7 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
       </a>
       <nav aria-label="Client navigation">
         {page === 'landing' ? <>
+          <a className="public-text-link" href={clientHref}>Client sign in</a>
           <button className="public-text-link public-how-link" onClick={() => document.getElementById('alpha-workflow')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })}>How it works</button>
           <a className="public-nav-action" href={publicInquiryHref(slug)}>Start an inquiry <ArrowUpRight size={15} /></a>
         </> : <a className="public-text-link" href={clientHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>Client access <ArrowUpRight size={15} /></a>}

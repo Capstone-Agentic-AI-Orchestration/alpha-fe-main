@@ -6,6 +6,12 @@ import { pmTicketApi } from './pmApi';
 afterEach(() => vi.restoreAllMocks());
 
 describe('PM ticket transport', () => {
+  it('loads the server-owned Phase 7–9 capability without making it a UI grant', async () => {
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ phaseWorkflowEnabled: true } as never);
+    await expect(pmTicketApi.getWorkflowCapabilities()).resolves.toEqual({ phaseWorkflowEnabled: true });
+    expect(request).toHaveBeenCalledWith('/tickets/workflow-capabilities');
+  });
+
   it('uses only the PM candidate namespace and allowlists its list response', async () => {
     const controller = new AbortController();
     const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ items: [{ id: 'candidate', scopeVersionId: 'scope', summary: 'Prepared result', fileCount: 1, privateNotes: 'secret' }], nextCursor: null } as never);
