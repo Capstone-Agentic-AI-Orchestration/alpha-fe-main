@@ -465,15 +465,18 @@ function createTabId(): string {
   return `tab-${id}`;
 }
 
-function normalizeTabs(saved: unknown, fallback: TabItem): TabItem[] {
+function normalizeTabs(saved: unknown, fallback: TabItem, allowedViews: NavigationTab[]): TabItem[] {
   if (!Array.isArray(saved) || saved.length === 0) return [fallback];
   const usedIds = new Set<string>();
   const normalized = saved.flatMap((item: unknown): TabItem[] => {
     if (!item || typeof item !== 'object') return [];
     const raw = item as Partial<TabItem>;
-    const view = navigationTabs.includes(raw.view as NavigationTab)
+    const savedView = navigationTabs.includes(raw.view as NavigationTab)
       ? raw.view as NavigationTab
       : fallback.view;
+    // Archive destinations removed for this role by migrating their saved tab
+    // to the role's landing view. This also updates the visible tab title.
+    const view = allowedViews.includes(savedView) ? savedView : fallback.view;
     let id = typeof raw.id === 'string' && raw.id.trim() ? raw.id : createTabId();
     if (usedIds.has(id)) id = createTabId();
     usedIds.add(id);
@@ -735,7 +738,7 @@ ${e.detail}`;
     // Storage checks the fallback shape; null would reject every saved array.
     const savedCurrent = loadFromStorage<unknown[]>('workspace_tabs_v3', []);
     const savedLegacy = loadFromStorage<unknown[]>('workspace_tabs_v2', []);
-    return normalizeTabs(savedCurrent.length ? savedCurrent : savedLegacy, initialDefaultTabs[0]);
+    return normalizeTabs(savedCurrent.length ? savedCurrent : savedLegacy, initialDefaultTabs[0], roleTabs);
   });
 
   const [activeTabId, setActiveTabId] = useState<string>(() => {
