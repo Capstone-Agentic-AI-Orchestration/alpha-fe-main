@@ -24,7 +24,7 @@ interface Props {
 }
 
 export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
-  const { projects, showToast, can, setThreadProject, createNewThread, setActiveThreadId } = useApp();
+  const { projects, chatThreads, showToast, can, setThreadProject, createNewThread, setActiveThreadId } = useApp();
   const canManageChat = can('manage_chat');
 
   const [selected, setSelected] = useState<string>(projectId ?? '');
@@ -69,7 +69,8 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
       // Keep each transcript tied to the project it was written for. Moving
       // an existing conversation silently cleared it in the UI and could also
       // carry old project context into the next repository.
-      const messages = await apiService.getChatMessages(threadId);
+      const cachedMessages = chatThreads.find(thread => thread.id === threadId)?.messages ?? [];
+      const messages = cachedMessages.length ? cachedMessages : await apiService.getChatMessages(threadId);
       if (messages.length > 0) {
         const newThreadId = createNewThread(
           next ? 'New project conversation' : 'New conversation',
