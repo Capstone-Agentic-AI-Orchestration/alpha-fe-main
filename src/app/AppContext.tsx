@@ -2471,6 +2471,7 @@ ${e.detail}`;
     const newSquad: Squad = {
       ...input,
       id: `sq-${Date.now()}`,
+      ownerId: identity?.login,
       activeRunsCount: 0,
       completedRunsCount: 0
     };
@@ -3581,14 +3582,10 @@ ${e.detail}`;
 
   const scopedSquads = useMemo(() => {
     if (role === 'client') return [];
-    if (role === 'dev') {
-      // Developer squad visibility is fail-closed. The daemon decorates squad
-      // rows with the workspace owner; legacy/local rows without that field
-      // must not silently become visible to every developer.
-      return identity?.login ? squads.filter(squad => squad.ownerId === identity.login) : [];
-    }
+    // Squads are a workspace catalogue. Ownership controls who may change a
+    // squad; it does not hide that squad from fellow developers.
     return squads;
-  }, [squads, role, identity]);
+  }, [squads, role]);
 
   const scopedDeployments = useMemo(() => {
     if (role === 'admin') return deployments;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NavigationTab, UserRole } from '@/shared/types';
-import { landingTab, ROLE_NAV, sectionsFor } from './navigation';
+import { landingTab, NAV_ITEMS, ROLE_NAV, sectionsFor } from './navigation';
 
 /** Navigation destinations retained after archiving the PM/admin Overview entry. */
 const existing: Record<UserRole, NavigationTab[]> = {
@@ -31,5 +31,10 @@ describe('existing navigation compatibility', () => {
     expect(ROLE_NAV.pm).toContain('tickets');
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('tickets');
     for (const role of ['client', 'dev', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('tickets');
+  });
+  it('labels developer squads as a workspace-shared catalogue', () => {
+    const squads = NAV_ITEMS.find(item => item.id === 'squads');
+    expect(squads?.labels?.dev).toBe('Workspace Squads');
+    expect(squads?.labels?.dev).not.toMatch(/^My /);
   });
 });
