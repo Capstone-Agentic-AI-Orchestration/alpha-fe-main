@@ -164,6 +164,7 @@ interface AppContextType {
    */
   importAgent: (content: string) => Promise<{ agent: Agent; warnings: string[] }>;
   updateAgent: (id: string, updates: Partial<Agent>) => void;
+  setAgentSharing: (id: string, shared: boolean) => Promise<void>;
   duplicateAgent: (id: string) => Agent | null;
   archiveAgent: (id: string) => void;
   restoreAgent: (id: string) => void;
@@ -2328,6 +2329,21 @@ ${e.detail}`;
     );
   };
 
+  const setAgentSharing = async (id: string, shared: boolean) => {
+    if (!requireCapability('manage_agents')) return;
+    try {
+      const saved = shared ? await apiService.shareAgent(id) : await apiService.unshareAgent(id);
+      setAgents(prev => prev.map(agent => agent.id === id ? saved : agent));
+      showToast(
+        shared ? 'Agent shared across workspaces' : 'Agent sharing stopped',
+        shared ? 'Members of your other workspaces can now use this agent.' : 'This workspace keeps its own copy.',
+        'success'
+      );
+    } catch (err: any) {
+      showToast('Agent sharing not changed', err?.message ?? 'Could not update sharing for this agent.', 'error');
+    }
+  };
+
   const duplicateAgent = (id: string): Agent | null => {
     if (!requireCapability('manage_agents')) return null;
     const existing = agents.find(a => a.id === id);
@@ -3659,6 +3675,7 @@ ${e.detail}`;
       createAgent,
     importAgent,
       updateAgent,
+      setAgentSharing,
       addIssueComment,
       duplicateAgent,
       archiveAgent,

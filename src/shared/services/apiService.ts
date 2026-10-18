@@ -509,6 +509,10 @@ export const apiService = {
     fetchJson<Agent>('/agents', { method: 'POST', body: JSON.stringify(agent) }),
   updateAgent: (id: string, updates: Partial<Agent>) =>
     fetchJson<Agent>(`/agents/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
+  shareAgent: (id: string) =>
+    fetchJson<Agent>(`/agents/${id}/share`, { method: 'POST' }),
+  unshareAgent: (id: string) =>
+    fetchJson<Agent>(`/agents/${id}/share`, { method: 'DELETE' }),
   deleteAgent: (id: string) =>
     fetchJson<{ success: boolean }>(`/agents/${id}`, { method: 'DELETE' }),
   /**

@@ -722,6 +722,8 @@ export interface Agent {
   phase?: AgentPhase;
   /** True for Alpha's built-in, idempotently seeded role instances. */
   isSeeded?: boolean;
+  /** Profile edits propagate to this agent's copies in the user's workspaces. */
+  sharedKey?: string;
   machineStatus?: ReachabilityStatus;
   workStatus?: WorkStatus;
   machineName?: string;
