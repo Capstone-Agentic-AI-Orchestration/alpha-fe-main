@@ -1193,7 +1193,7 @@ export interface ChatMessage {
   thinkingProcess?: string;
   toolsExecuted?: ToolExecutionRecord[];
   isStreaming?: boolean;
-  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call';
+  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build';
   agentCallId?: string;
   operationMode?: AgentCallMode;
   agentCallStatus?: AgentCallStatus;
@@ -1323,6 +1323,8 @@ export interface ProjectChatSnapshot {
       repositories?: number;
       onMachine?: number;
     };
+    /** Per-repository checkout state, used to route a build to the right working copy. */
+    repositories?: Array<{ repo: string; connected: boolean }>;
     assignedSquadNames: string[];
   };
   squads: Array<{
@@ -1332,6 +1334,8 @@ export interface ProjectChatSnapshot {
   }>;
   agents: ProjectChatAgent[];
 }
+
+export type ChatIntent = 'auto' | 'build' | 'ask';
 
 export interface AnalyticsData {
   totalRuns24h: number;
