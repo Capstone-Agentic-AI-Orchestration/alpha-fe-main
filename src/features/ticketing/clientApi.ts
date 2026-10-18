@@ -217,6 +217,9 @@ function pageQuery(options: { limit?: number; after?: string | null }): string {
 
 /** Client-only HTTP facade; provider tokens are exchanged immediately and never persisted. */
 export const clientTicketApi = {
+  getWorkflowCapabilities() {
+    return requestJson<{ phaseWorkflowEnabled: boolean }>('/workflow-capabilities');
+  },
   requestSignInLink(email: string) {
     return requestJson<{ accepted: true; message: string }>('/auth/sign-in-link', {
       method: 'POST', csrf: false, body: JSON.stringify({ email }),
