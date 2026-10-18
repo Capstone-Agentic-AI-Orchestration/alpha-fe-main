@@ -38,7 +38,8 @@ import {
   ChatMessage,
   ProjectChatAgent,
   ProjectChatSnapshot,
-  ChatIntent
+  ChatIntent,
+  ChatSyncStatus
 } from '@/shared/types';
 import { ThreadProjectPicker } from '@/features/chat/ThreadProjectPicker';
 import { MessageMarkdown } from './MessageMarkdown';
@@ -148,6 +149,8 @@ export const ChatView: React.FC = () => {
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
+  const [chatSyncStatus, setChatSyncStatus] = useState<ChatSyncStatus | null>(null);
+  const [syncRetrying, setSyncRetrying] = useState(false);
   const [selectedSquadId, setSelectedSquadId] = useTabSessionState<string>('chatSelectedSquadId', '');
   const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string>('chatSelectedAgentId', '');
   const [selectedBuildRepository, setSelectedBuildRepository] = useTabSessionState<string>('chatBuildRepository', '');
@@ -171,6 +174,28 @@ export const ChatView: React.FC = () => {
   const isClient = role === 'client';
   const project = projects.find(item => item.id === activeThread?.projectId);
   const projectIssues = issues.filter(issue => issue.projectId === activeThread?.projectId);
+
+  useEffect(() => {
+    if (isClient || !activeThreadId || !isActiveTab) {
+      setChatSyncStatus(null);
+      return undefined;
+    }
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const status = await apiService.getChatSyncStatus(activeThreadId);
+        if (!cancelled) setChatSyncStatus(status);
+      } catch {
+        if (!cancelled) setChatSyncStatus(null);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 15_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [activeThreadId, isActiveTab, isClient]);
   const pmName = users.find(user => user.role === 'pm')?.name ?? 'your project manager';
   const selectedAgent = snapshot?.agents.find(agent => agent.id === selectedAgentId);
   const visibleModes = selectedAgent?.supportedModes ?? [];
@@ -483,6 +508,22 @@ export const ChatView: React.FC = () => {
     followNextMessage();
     setInput('');
     await sendChatMessage(message, activeThread?.id, selectedBuildRepository || undefined, chatIntent);
+    if (activeThread?.id) {
+      void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
+    }
+  };
+
+  const handleRetryChatSync = async () => {
+    if (!activeThread?.id || syncRetrying) return;
+    setSyncRetrying(true);
+    try {
+      await apiService.retryChatSync(activeThread.id);
+      setChatSyncStatus(await apiService.getChatSyncStatus(activeThread.id));
+    } catch (error: any) {
+      showToast('Sync retry unavailable', error?.message || 'The conversation could not be queued for sync.', 'error');
+    } finally {
+      setSyncRetrying(false);
+    }
   };
 
   const openLiveBuildRoom = () => {
@@ -567,7 +608,7 @@ export const ChatView: React.FC = () => {
 
       <main className="relative flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden bg-shell">
         {activeThread ? <>
-          <header className="shrink-0 min-h-16 px-5 lg:px-7 border-b border-white/[0.06] bg-shell flex items-center justify-between gap-4"><div className="min-w-0 flex items-center gap-3"><div className="h-9 w-9 rounded-xl bg-brand-500/15 border border-brand-400/20 flex items-center justify-center shrink-0"><Sparkles className="h-4 w-4 text-brand-300" /></div><div className="min-w-0"><h2 className="text-sm font-semibold text-white truncate">{activeThread.title}</h2><div className="mt-1 flex items-center gap-2 flex-wrap text-[10px] text-gray-500"><span className="text-gray-300">{isClient ? `${pmName} · Project Manager` : activeWorkspace?.name ?? 'Workspace'}</span>{!isClient && project && <><span>·</span><span className="text-brand-300">{project.key} · {project.name}</span></>}<span>·</span><span>{currentMessages.length} messages</span></div>{!isClient && project && snapshot && <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[10px] text-gray-600"><span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" /> {snapshot.project.branch ?? 'No branch detected'}</span>{(() => { const { workingCopy } = snapshot.project; const total = workingCopy.repositories ?? 0; const here = workingCopy.onMachine ?? (workingCopy.status === 'connected' ? total : 0); const all = total > 0 ? here === total : workingCopy.status === 'connected'; return <span className={all ? 'text-emerald-400' : 'text-amber-400'}>● {total > 1 ? `${here} of ${total} repositories on this machine` : all ? 'Working copy connected' : 'No local working copy'}</span>; })()}{snapshot.project.assignedSquadNames.length > 0 && <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" /> {snapshot.project.assignedSquadNames.join(', ')}</span>}</div>}</div></div><div className="flex items-center gap-2 shrink-0">{!isClient && <ThreadProjectPicker key={activeThread.id} threadId={activeThread.id} projectId={activeThread.projectId} />}{!isClient && project && <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/25 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-500/20"><Activity className="h-3.5 w-3.5" /> Live room</button>}{!isClient && <button type="button" onClick={openCallPanel} className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${showCallPanel ? 'bg-brand-500 text-on-accent' : 'border border-brand-400/25 bg-brand-500/10 text-brand-200 hover:bg-brand-500/20'}`}><Bot className="h-3.5 w-3.5" /> Call Agent</button>}<button type="button" onClick={() => clearChat()} className="p-2 rounded-lg text-gray-500 hover:text-rose-300 hover:bg-white/5" title="Clear conversation"><Trash2 className="h-4 w-4" /></button><button type="button" onClick={() => deleteThread(activeThread.id)} className="hidden md:inline-flex p-2 rounded-lg text-xs text-gray-500 hover:text-rose-300 hover:bg-white/5">Delete</button></div></header>
+          <header className="shrink-0 min-h-16 px-5 lg:px-7 border-b border-white/[0.06] bg-shell flex items-center justify-between gap-4"><div className="min-w-0 flex items-center gap-3"><div className="h-9 w-9 rounded-xl bg-brand-500/15 border border-brand-400/20 flex items-center justify-center shrink-0"><Sparkles className="h-4 w-4 text-brand-300" /></div><div className="min-w-0"><h2 className="text-sm font-semibold text-white truncate">{activeThread.title}</h2><div className="mt-1 flex items-center gap-2 flex-wrap text-[10px] text-gray-500"><span className="text-gray-300">{isClient ? `${pmName} · Project Manager` : activeWorkspace?.name ?? 'Workspace'}</span>{!isClient && project && <><span>·</span><span className="text-brand-300">{project.key} · {project.name}</span></>}<span>·</span><span>{currentMessages.length} messages</span>{!isClient && chatSyncStatus && <><span>·</span><span aria-live="polite" className={chatSyncStatus.state === 'failed' ? 'text-amber-300' : chatSyncStatus.state === 'synced' || chatSyncStatus.state === 'shared' ? 'text-emerald-400' : 'text-gray-500'}>{chatSyncStatus.state === 'synced' ? 'Synced' : chatSyncStatus.state === 'syncing' ? 'Syncing…' : chatSyncStatus.state === 'failed' ? 'Sync paused' : chatSyncStatus.state === 'local_only' ? 'Saved on this device' : 'Shared chat'}</span>{chatSyncStatus.state === 'failed' && <button type="button" onClick={() => void handleRetryChatSync()} disabled={syncRetrying} className="rounded-md border border-amber-400/20 px-1.5 py-0.5 text-[10px] text-amber-200 hover:bg-amber-400/10 disabled:opacity-50">{syncRetrying ? 'Retrying…' : 'Retry'}</button>}</>}</div>{!isClient && project && snapshot && <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[10px] text-gray-600"><span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" /> {snapshot.project.branch ?? 'No branch detected'}</span>{(() => { const { workingCopy } = snapshot.project; const total = workingCopy.repositories ?? 0; const here = workingCopy.onMachine ?? (workingCopy.status === 'connected' ? total : 0); const all = total > 0 ? here === total : workingCopy.status === 'connected'; return <span className={all ? 'text-emerald-400' : 'text-amber-400'}>● {total > 1 ? `${here} of ${total} repositories on this machine` : all ? 'Working copy connected' : 'No local working copy'}</span>; })()}{snapshot.project.assignedSquadNames.length > 0 && <span className="inline-flex items-center gap-1"><Users className="h-3 w-3" /> {snapshot.project.assignedSquadNames.join(', ')}</span>}</div>}</div></div><div className="flex items-center gap-2 shrink-0">{!isClient && <ThreadProjectPicker key={activeThread.id} threadId={activeThread.id} projectId={activeThread.projectId} />}{!isClient && project && <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/25 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-500/20"><Activity className="h-3.5 w-3.5" /> Live room</button>}{!isClient && <button type="button" onClick={openCallPanel} className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${showCallPanel ? 'bg-brand-500 text-on-accent' : 'border border-brand-400/25 bg-brand-500/10 text-brand-200 hover:bg-brand-500/20'}`}><Bot className="h-3.5 w-3.5" /> Call Agent</button>}<button type="button" onClick={() => clearChat()} className="p-2 rounded-lg text-gray-500 hover:text-rose-300 hover:bg-white/5" title="Clear conversation"><Trash2 className="h-4 w-4" /></button><button type="button" onClick={() => deleteThread(activeThread.id)} className="hidden md:inline-flex p-2 rounded-lg text-xs text-gray-500 hover:text-rose-300 hover:bg-white/5">Delete</button></div></header>
 
           {!isClient && activeCall && <div className={`mx-5 mt-4 rounded-xl border px-4 py-3 flex items-center gap-3 ${statusTone(activeCall.status)} shadow-[0_0_22px_rgba(99,102,241,0.08)]`}><div className="relative h-8 w-8 rounded-lg bg-black/20 flex items-center justify-center shrink-0"><Bot className="h-4 w-4" />{(activeCall.status === 'running' || activeCall.status === 'queued') && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-current animate-ping opacity-70" />}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-xs font-semibold"><span>{agentForCall(activeCall)?.name ?? activeCall.agentId}</span><span className="opacity-60">·</span><span>{MODE_META[activeCall.operationMode].label}</span><span className="opacity-60">·</span><span>{statusLabel(activeCall.status)}</span></div><p className="mt-0.5 text-[10px] opacity-75 truncate">{activeCall.status === 'awaiting_confirmation' ? 'Waiting for your confirmation before the agent generates a patch.' : activeCall.status === 'running' ? 'Reading the selected project context and preparing a safe response…' : 'The call is queued for this project.'}</p></div>{activeCall.revisionTarget && <span className="hidden md:inline-flex items-center gap-1 text-[10px] opacity-75"><TargetIcon type={activeCall.revisionTarget.type} /> {activeCall.revisionTarget.label ?? activeCall.revisionTarget.id}</span>}</div>}
 

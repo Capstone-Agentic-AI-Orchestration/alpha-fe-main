@@ -12,6 +12,7 @@ import {
   FileCode2,
   FileText,
   GitBranch,
+  Globe2,
   MessageSquare,
   Layers3,
   Play,
@@ -32,10 +33,24 @@ import type {
   LiveBuildRoomActivity,
   LiveBuildRoomChatCall,
   LiveBuildRoomSnapshot,
+  BuildBranchPreview,
 } from '@/shared/types';
 
 type DetailTab = 'activity' | 'handoff' | 'files' | 'tools';
 type AgentStatusFilter = 'all' | 'running' | 'waiting' | 'review' | 'failed' | 'completed' | 'idle' | 'stale';
+
+function ciStateLabel(state: BuildBranchPreview['ci']['state']): string {
+  return state === 'passed' ? 'Passed' : state === 'failed' ? 'Failed' : state === 'running' ? 'Running' :
+    state === 'unknown' ? 'Unavailable' : 'Waiting';
+}
+
+function ciStateTone(state: BuildBranchPreview['ci']['state']): string {
+  return state === 'passed' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200' :
+    state === 'failed' ? 'border-rose-400/25 bg-rose-400/10 text-rose-200' :
+      state === 'running' ? 'border-sky-400/25 bg-sky-400/10 text-sky-100' :
+        state === 'unknown' ? 'border-white/10 bg-white/[0.04] text-slate-300' :
+          'border-amber-400/25 bg-amber-400/10 text-amber-100';
+}
 
 const statusMeta: Record<LiveBuildRoomCardStatus, {
   label: string;
@@ -406,10 +421,15 @@ export const LiveBuildRoomView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [buildPreview, setBuildPreview] = useState<BuildBranchPreview | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const refreshTimerRef = useRef<number | null>(null);
 
   const eligibleRole = role !== 'client' && can('view_squads');
+  const buildRepository = snapshot?.issue?.githubRepo ?? null;
+  const buildBranch = snapshot?.activeRun?.branchName ?? snapshot?.issue?.branchName ?? null;
 
   useEffect(() => {
     if (!projects.length) {
@@ -477,6 +497,40 @@ export const LiveBuildRoomView: React.FC = () => {
       unsubs.forEach(unsub => unsub());
     };
   }, [eligibleRole, isActiveTab, loadRoom, selectedProjectId]);
+
+  useEffect(() => {
+    let cancelled = false;
+    let timer: number | null = null;
+    if (!isActiveTab || !selectedProjectId || !buildRepository || !buildBranch) {
+      setBuildPreview(null);
+      setPreviewError(null);
+      setPreviewLoading(false);
+      return undefined;
+    }
+
+    const loadPreview = async (showLoading: boolean) => {
+      if (showLoading) setPreviewLoading(true);
+      try {
+        const preview = await apiService.getRepoBuildBranchPreview(selectedProjectId, buildRepository, buildBranch);
+        if (!cancelled) {
+          setBuildPreview(preview);
+          setPreviewError(null);
+        }
+      } catch (err: any) {
+        if (!cancelled) setPreviewError(err?.message || 'The build preview status could not be loaded.');
+      } finally {
+        if (!cancelled && showLoading) setPreviewLoading(false);
+      }
+    };
+
+    void loadPreview(true);
+    const buildStillMoving = snapshot?.activeRun?.status === 'running' || snapshot?.activeRun?.status === 'awaiting_approval';
+    if (buildStillMoving) timer = window.setInterval(() => void loadPreview(false), 30_000);
+    return () => {
+      cancelled = true;
+      if (timer !== null) window.clearInterval(timer);
+    };
+  }, [buildBranch, buildRepository, isActiveTab, selectedProjectId, snapshot?.activeRun?.status]);
 
   /**
    * Join the channels of the runs on screen.
@@ -748,6 +802,55 @@ export const LiveBuildRoomView: React.FC = () => {
           <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-slate-300"><TerminalSquare className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.issue ? `${snapshot.issue.identifier} · ${snapshot.issue.title}` : snapshot.squad ? 'Ready for the next project issue' : 'No squad assigned to this project'}</div><div className="mt-1 text-xs text-slate-500">{snapshot.activeRun?.mission || (snapshot.squad ? 'Run a squad against a project issue to start a live build.' : 'Assign a squad before starting a squad build.')}</div></div></div>
           <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.squad ? <button type="button" onClick={() => void handleRunBuild()} disabled={!snapshot.canRun || starting || !snapshot.issue && !fallbackIssue} title={!snapshot.issue && !fallbackIssue ? 'Create a project issue before starting a squad run.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-3.5 w-3.5 fill-current" />{starting ? 'Starting…' : 'Run Build'}</button> : <button type="button" onClick={() => setActiveTab('squads')} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400"><Users className="h-3.5 w-3.5" />Set up a squad</button>}</div>
         </div>
+
+        {buildRepository && buildBranch && <section className="order-2 flex flex-col gap-4 rounded-2xl border border-sky-400/20 bg-gradient-to-r from-sky-500/[0.07] to-surface-100/50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-live="polite">
+          <div className="flex min-w-0 items-start gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-400/10 text-sky-200"><Globe2 className="h-5 w-5" /></div>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-semibold text-white">Build preview</h2>
+                <span className={`rounded-full border px-2 py-1 text-[10px] font-medium ${
+                  buildPreview?.state === 'ready' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200'
+                    : buildPreview?.state === 'failed' || previewError ? 'border-rose-400/25 bg-rose-400/10 text-rose-200'
+                      : buildPreview?.state === 'unsupported' ? 'border-white/10 bg-white/[0.04] text-slate-300'
+                        : 'border-amber-400/25 bg-amber-400/10 text-amber-100'
+                }`}>
+                  {previewLoading ? 'Checking host…' : previewError ? 'Status unavailable' : buildPreview?.state === 'ready' ? 'Ready' : buildPreview?.state === 'building' ? 'Deploying' : buildPreview?.state === 'failed' ? 'Deployment failed' : buildPreview?.state === 'unsupported' ? 'Provider limitation' : buildPreview?.state === 'unavailable' ? 'Host unavailable' : 'Waiting for preview'}
+                </span>
+                {buildPreview?.ci && <span className={`rounded-full border px-2 py-1 text-[10px] font-medium ${ciStateTone(buildPreview.ci.state)}`}>CI {ciStateLabel(buildPreview.ci.state)}</span>}
+              </div>
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+                <span className="truncate">{buildRepository}</span><span className="text-slate-600">·</span><span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" />{buildBranch}</span>
+                {buildPreview?.platform && <><span className="text-slate-600">·</span><span className="capitalize">{buildPreview.platform}</span></>}
+                {buildPreview?.ci && <><span className="text-slate-600">·</span><span>{buildPreview.ci.checks.length ? `${buildPreview.ci.checks.length} CI checks` : 'No CI checks reported yet'}</span>{buildPreview.ci.commitSha && <code className="text-slate-500">{buildPreview.ci.commitSha.slice(0, 7)}</code>}</>}
+              </div>
+              {buildPreview?.ci?.checks.length ? <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Latest GitHub CI checks">
+                {buildPreview.ci.checks.slice(0, 3).map((check, index) => {
+                  const tone = check.state === 'failed' ? 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200' :
+                    check.state === 'passed' || check.state === 'skipped' ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' :
+                      check.state === 'running' || check.state === 'queued' ? 'border-sky-400/20 bg-sky-400/[0.06] text-sky-100' :
+                        'border-white/[0.08] bg-white/[0.03] text-slate-300';
+                  const label = check.state === 'passed' ? 'passed' : check.state === 'failed' ? 'failed' : check.state === 'running' ? 'running' : check.state === 'queued' ? 'queued' : check.state === 'skipped' ? 'skipped' : 'unknown';
+                  const content = <>{check.name} · {label}</>;
+                  return check.url
+                    ? <a key={`${check.name}-${index}`} href={check.url} target="_blank" rel="noreferrer" title={check.name} className={`max-w-full truncate rounded-md border px-2 py-1 text-[10px] ${tone} hover:bg-white/[0.08]`}>{content}</a>
+                    : <span key={`${check.name}-${index}`} title={check.name} className={`max-w-full truncate rounded-md border px-2 py-1 text-[10px] ${tone}`}>{content}</span>;
+                })}
+                {buildPreview.ci.checks.length > 3 && <span className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-slate-500">+{buildPreview.ci.checks.length - 3} more</span>}
+              </div> : null}
+              {(previewError || buildPreview?.error) && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-400">{previewError || buildPreview?.error}</p>}
+              {buildPreview?.ci?.state === 'not_run' && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">GitHub has not reported checks for this branch yet. Repository CI commonly starts when the build pull request opens.</p>}
+              {buildPreview?.ci?.error && <p className="mt-2 max-w-2xl text-xs leading-5 text-amber-200/80">CI status could not be read: {buildPreview.ci.error}</p>}
+              {!buildPreview && !previewError && !previewLoading && <p className="mt-2 text-xs text-slate-500">Checking the hosting provider for this build’s branch deployment.</p>}
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {buildPreview?.ci?.checksUrl && <a href={buildPreview.ci.checksUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.05]">View CI<ExternalLink className="h-3.5 w-3.5" /></a>}
+            {buildPreview?.url && <a href={buildPreview.url} target="_blank" rel="noreferrer" className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition ${buildPreview.state === 'ready' ? 'border-sky-300/30 bg-sky-300/10 text-sky-100 hover:bg-sky-300/15' : 'border-white/10 text-slate-300 hover:bg-white/[0.05]'}`}>
+              {buildPreview.state === 'ready' ? 'Open preview' : 'View deployment'}<ExternalLink className="h-3.5 w-3.5" />
+            </a>}
+          </div>
+        </section>}
 
         {snapshot.phases.length > 0 && <div className="order-3"><PhaseTimeline phases={snapshot.phases} /></div>}
 

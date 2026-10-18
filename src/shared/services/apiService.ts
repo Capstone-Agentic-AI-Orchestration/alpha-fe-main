@@ -14,6 +14,7 @@ import {
   SquadRun,
   ChatThread,
   ChatMessage,
+  ChatSyncStatus,
   McpServer,
   McpServerInput,
   RemoteAction,
@@ -42,6 +43,7 @@ import {
   PromoteResult,
   HostingStatus,
   HostingPreviews,
+  BuildBranchPreview,
   HealthResult,
   HostingEnvList,
   EnvChangeResult,
@@ -661,6 +663,13 @@ export const apiService = {
 
   // Chat
   getChatThreads: () => fetchJson<ChatThread[]>('/chat/threads'),
+  getChatSyncStatus: (threadId?: string) =>
+    fetchJson<ChatSyncStatus>(`/chat/sync/status${threadId ? `?threadId=${encodeURIComponent(threadId)}` : ''}`),
+  retryChatSync: (threadId?: string) =>
+    fetchJson<{ queued: number }>('/chat/sync/retry', {
+      method: 'POST',
+      body: JSON.stringify(threadId ? { threadId } : {})
+    }),
   /**
    * Point a thread at a project, or at nothing.
    *
@@ -897,6 +906,8 @@ export const apiService = {
     fetchJson<HostingStatus>(`${projectRepoPath(projectId, repo)}/hosting`, { method: 'POST' }),
   getRepoHostingPreviews: (projectId: string, repo: string) =>
     fetchJson<HostingPreviews>(`${projectRepoPath(projectId, repo)}/hosting/previews`),
+  getRepoBuildBranchPreview: (projectId: string, repo: string, branch: string) =>
+    fetchJson<BuildBranchPreview>(`${projectRepoPath(projectId, repo)}/hosting/branch-preview?branch=${encodeURIComponent(branch)}`),
   /**
    * One page of a hosted branch's logs. Answered as raw JSON: the log view
    * normalises it, so an older server's shape still reads. List filters are
