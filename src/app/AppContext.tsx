@@ -234,7 +234,7 @@ interface AppContextType {
   setActiveChatAgentId: (id: string | null) => void;
   activeChatSquadId: string | null;
   setActiveChatSquadId: (id: string | null) => void;
-  sendChatMessage: (content: string, threadId?: string | null, repository?: string, intent?: 'auto' | 'build' | 'ask') => Promise<void>;
+  sendChatMessage: (content: string, threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask') => Promise<void>;
   clearChat: (threadId?: string | null) => void;
   
   // Settings
@@ -2950,7 +2950,7 @@ ${e.detail}`;
     );
   };
 
-  const sendChatMessage = async (content: string, threadIdOverride?: string | null, repository?: string, intent?: 'auto' | 'build' | 'ask') => {
+  const sendChatMessage = async (content: string, threadIdOverride?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask') => {
     if (!requireCapability('manage_chat')) return;
     let targetThreadId = threadIdOverride ?? activeThreadId;
     if (!targetThreadId) {
@@ -3060,7 +3060,8 @@ ${e.detail}`;
         threadId: targetThreadId,
         content,
         senderName: currentUser.name,
-        repository,
+        repository: repositories?.length === 1 ? repositories[0] : undefined,
+        repositories,
         projectId: chatThreads.find(thread => thread.id === targetThreadId)?.projectId,
         intent,
         clientMessageId: userMsg.id
@@ -3860,10 +3861,10 @@ export const useApp = () => {
       setSessionValue('activeThreadId', id);
     },
     createNewThread: createScopedThread,
-    sendChatMessage: async (content: string, _threadId?: string | null, repository?: string, intent?: 'auto' | 'build' | 'ask') => {
+    sendChatMessage: async (content: string, _threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask') => {
       let threadId = activeThreadId;
       if (!threadId) threadId = createScopedThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
-      if (threadId) await context.sendChatMessage(content, threadId, repository, intent);
+      if (threadId) await context.sendChatMessage(content, threadId, repositories, intent);
     },
     clearChat: () => context.clearChat(activeThreadId),
     chatMessages: activeThreadId

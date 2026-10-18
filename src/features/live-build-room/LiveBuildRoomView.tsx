@@ -410,6 +410,7 @@ export const LiveBuildRoomView: React.FC = () => {
     setActiveThreadId
   } = useApp();
   const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string>('liveBuildProjectId', '');
+  const [selectedBuildRunId, setSelectedBuildRunId] = useTabSessionState<string>('liveBuildRunId', '');
   const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
   const [selectedExecutionId, setSelectedExecutionId] = useTabSessionState<string | null>('liveBuildExecutionId', null);
   const [agentSearch, setAgentSearch] = useTabSessionState<string>('liveBuildAgentSearch', '');
@@ -468,9 +469,12 @@ export const LiveBuildRoomView: React.FC = () => {
       setError(null);
     }
     try {
-      const next = await apiService.getLiveBuildRoom(selectedProjectId);
+      const next = await apiService.getLiveBuildRoom(selectedProjectId, selectedBuildRunId || undefined);
       if (requestId !== requestIdRef.current) return;
       setSnapshot(next);
+      setSelectedBuildRunId(current => current && next.buildRuns.some(run => run.id === current)
+        ? current
+        : next.activeRun?.id ?? next.buildRuns[0]?.id ?? '');
       setError(null);
       setSelectedExecutionId(current => current && next.agentCards.some(card => card.executionId === current)
         ? current
@@ -491,7 +495,7 @@ export const LiveBuildRoomView: React.FC = () => {
         setRefreshing(false);
       }
     }
-  }, [eligibleRole, selectedProjectId]);
+  }, [eligibleRole, selectedBuildRunId, selectedProjectId, setSelectedBuildRunId]);
 
   useEffect(() => {
     if (!isActiveTab) return undefined;
@@ -681,6 +685,7 @@ export const LiveBuildRoomView: React.FC = () => {
   const handleProjectChange = (projectId: string) => {
     requestIdRef.current += 1;
     setSelectedProjectId(projectId);
+    setSelectedBuildRunId('');
     setSelectedExecutionId(null);
     setSelectedChatCallId(null);
     setAgentSearch('');
@@ -862,6 +867,13 @@ export const LiveBuildRoomView: React.FC = () => {
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-500" />
             </label>
+            {snapshot.buildRuns.length > 1 && <label className="relative flex min-w-[220px] items-center rounded-xl border border-violet-400/20 bg-violet-500/[0.06] px-3 py-2">
+              <span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-400">Build</span>
+              <select aria-label="Choose project build" value={selectedBuildRunId || snapshot.activeRun?.id || ''} onChange={event => setSelectedBuildRunId(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none">
+                {snapshot.buildRuns.map(run => <option key={run.id} value={run.id} className="bg-surface-100 text-white">{[run.repository, run.issueIdentifier, run.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') || 'Project build'}</option>)}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-400" />
+            </label>}
             <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 text-xs"><Users className="h-3.5 w-3.5 text-violet-300" /><span className="text-slate-400">Squad</span><span className="font-semibold text-white">{snapshot.squad?.name ?? 'None assigned'}</span>{snapshot.squad && <span className="text-slate-500">· {snapshot.squad.memberCount}</span>}</div>
             <button type="button" onClick={() => { setDetailOpen(true); setDetailTab('activity'); }} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.10] px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-white/[0.06] hover:text-white"><TerminalSquare className="h-3.5 w-3.5" />View logs</button>
             <button type="button" onClick={() => void loadRoom(true)} className="rounded-xl border border-white/[0.10] p-2.5 text-slate-400 hover:bg-white/[0.06] hover:text-white" title="Refresh room" aria-label="Refresh room"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button>
