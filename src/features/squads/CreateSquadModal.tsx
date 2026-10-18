@@ -93,7 +93,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
       isOpen={isOpen}
       onClose={handleClose}
       title="Create Multi-Agent Squad"
-      subtitle="Assemble an autonomous team of agents with custom workflow topologies and leader oversight."
+      subtitle="Create a workspace-shared squad. Developers can view and reuse it; its creator or a workspace admin manages its roster and mission."
     >
       <form onSubmit={handleSubmit} className="space-y-6">
         

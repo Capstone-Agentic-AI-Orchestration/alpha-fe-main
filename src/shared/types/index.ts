@@ -896,7 +896,7 @@ export interface Squad {
   mission: string;
   activeRunsCount: number;
   completedRunsCount: number;
-  /** Workspace-level owner used to scope developer-owned reusable squads. */
+  /** Workspace-level owner; squad visibility is shared, while management remains owner-scoped. */
   ownerId?: string;
 }
 

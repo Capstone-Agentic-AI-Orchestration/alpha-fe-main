@@ -23,6 +23,7 @@ import { SquadRunFlow } from '@/features/runs/SquadRunFlow';
 export const SquadsView: React.FC = () => {
   const { squads, agents, issues, projects, triggerSquadRun, can, showToast, refreshLiveBuildRoomProjects, isActiveTab } = useApp();
   const canManageSquads = can('manage_squads');
+  const canEditProjectAssignments = can('edit_projects');
   const canRunSquads = can('run_squads');
 
   /**
@@ -66,7 +67,6 @@ export const SquadsView: React.FC = () => {
   const selectedSquad = useMemo(() => {
     return squads.find(s => s.id === selectedSquadId) || null;
   }, [squads, selectedSquadId]);
-
   useEffect(() => {
     if (!isActiveTab || !selectedSquadId) {
       setProjectAssignments([]);
@@ -84,7 +84,7 @@ export const SquadsView: React.FC = () => {
   }, [isActiveTab, selectedSquadId]);
 
   const toggleProjectAssignment = async (projectId: string) => {
-    if (!selectedSquad || !canManageSquads) return;
+    if (!selectedSquad || !canEditProjectAssignments) return;
     const existing = projectAssignments.find(assignment => assignment.projectId === projectId && assignment.status === 'active');
     setAssignmentBusy(projectId);
     try {
@@ -164,6 +164,10 @@ export const SquadsView: React.FC = () => {
           </button>
         )}
       </div>
+
+      <p className="-mt-3 text-[11px] text-gray-500">
+        Shared across this workspace. Developers can browse squads; project access and agent permissions still apply when running them.
+      </p>
 
       {/* ================= SEARCH & ACTION ROW ================= */}
       <div className="flex items-center justify-between gap-4">
@@ -588,7 +592,9 @@ export const SquadsView: React.FC = () => {
                 <div className="space-y-4">
                   <div>
                     <div className="text-[11px] font-medium uppercase tracking-wider text-gray-400">Project squad access</div>
-                    <p className="mt-1 text-xs leading-5 text-gray-500">Assign this reusable squad to a project to enable that project’s Live Build Room. Developers can attach their own squad only to projects assigned to them.</p>
+                    <p className="mt-1 text-xs leading-5 text-gray-500">
+                      Workspace squads are reusable across projects. You can assign this squad to projects you can edit; only its owner or a workspace admin can change its roster and mission.
+                    </p>
                   </div>
                   <div className="space-y-2">
                     {projects.length === 0 ? (
@@ -603,11 +609,12 @@ export const SquadsView: React.FC = () => {
                           </div>
                           <button
                             type="button"
-                            disabled={!canManageSquads || assignmentBusy === project.id}
+                            disabled={!canEditProjectAssignments || assignmentBusy === project.id}
                             onClick={() => void toggleProjectAssignment(project.id)}
                             className={`shrink-0 rounded-lg border px-2.5 py-1.5 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${assigned ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-300 hover:bg-rose-400/10 hover:text-rose-200' : 'border-violet-400/25 bg-violet-400/10 text-violet-200 hover:bg-violet-400/20'}`}
+                            title={!canEditProjectAssignments ? 'You do not have permission to edit this project.' : undefined}
                           >
-                            {assignmentBusy === project.id ? 'Saving…' : assigned ? 'Unassign' : 'Assign squad'}
+                            {assignmentBusy === project.id ? 'Saving…' : !canEditProjectAssignments && assigned ? 'Assigned' : !canEditProjectAssignments ? 'Read only' : assigned ? 'Unassign' : 'Assign squad'}
                           </button>
                         </div>
                       );
