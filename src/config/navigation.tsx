@@ -187,11 +187,11 @@ export const ROLE_NAV: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
   dev: ['issues', 'projects', 'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
   pm: [
-    'portal', 'projects', 'tickets', 'issues', 'documents', 'inbox', 'chat',
+    'issues', 'projects', 'tickets', 'documents', 'inbox', 'chat',
     'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
   ],
   admin: [
-    'portal', 'projects', 'issues', 'documents', 'inbox', 'chat',
+    'issues', 'projects', 'documents', 'inbox', 'chat',
     'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
   ]
 };
