@@ -42,6 +42,34 @@ describe('squad build cancellation', () => {
   });
 });
 
+describe('multi-repository project builds', () => {
+  it('sends the full repository selection with the project chat request', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ userMessage: {}, agentMessage: {} }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiService.sendChatMessage({
+      threadId: 'thread-1',
+      content: 'Build the full stack feature.',
+      repositories: ['acme/app-fe', 'acme/app-be'],
+      intent: 'build'
+    });
+
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toMatchObject({
+      repositories: ['acme/app-fe', 'acme/app-be'],
+      intent: 'build'
+    });
+  });
+
+  it('requests the selected repository run in the Live Build Room', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({}));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiService.getLiveBuildRoom('project-1', 'run/with space');
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('runId=run%2Fwith%20space');
+  });
+});
+
 describe('new ticket helper stays within its namespace', () => {
   it('accepts the actual PM queue URL including its query string', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ items: [] })); vi.stubGlobal('fetch', fetchMock);

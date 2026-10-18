@@ -1035,6 +1035,15 @@ export interface LiveBuildRoomSnapshot {
     progress: number;
   };
   phases: LiveBuildRoomPhase[];
+  buildRuns: Array<{
+    id: string;
+    status: SquadRun['status'];
+    issueIdentifier?: string;
+    issueTitle?: string;
+    repository?: string;
+    branchName: string;
+    updatedAt: string;
+  }>;
   issue?: Issue;
   activeRun: (SquadRun & { memberRuns: PrototypeRun[]; activities: RunActivity[] }) | null;
   agentCards: LiveBuildRoomAgentCard[];

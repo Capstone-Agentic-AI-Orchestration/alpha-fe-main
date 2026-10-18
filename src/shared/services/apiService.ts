@@ -618,8 +618,8 @@ export const apiService = {
       `/squads/${encodeURIComponent(squadId)}/projects/${encodeURIComponent(projectId)}`,
       { method: 'DELETE' }
     ),
-  getLiveBuildRoom: (projectId: string) =>
-    fetchJson<LiveBuildRoomSnapshot>(`/projects/${encodeURIComponent(projectId)}/live-build-room`),
+  getLiveBuildRoom: (projectId: string, runId?: string) =>
+    fetchJson<LiveBuildRoomSnapshot>(`/projects/${encodeURIComponent(projectId)}/live-build-room${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`),
   getLiveBuildRoomProjects: () =>
     fetchJson<Array<Pick<Project, 'id' | 'key' | 'name' | 'color'>>>('/live-build-room/projects'),
 
@@ -699,7 +699,7 @@ export const apiService = {
       method: 'DELETE'
     }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
-  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string }) =>
+  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;
@@ -708,8 +708,21 @@ export const apiService = {
        * answers in turn. `agentMessage` is the first of these.
        */
       agentMessages?: ChatMessage[];
+      builds?: Array<{
+        status: 'started' | 'queued' | 'in_progress' | 'awaiting_review' | 'failed' | 'blocked';
+        projectId?: string;
+        projectName?: string;
+        repository?: string;
+        issueId?: string;
+        issueIdentifier?: string;
+        squadId?: string;
+        squadName?: string;
+        squadRunId?: string;
+        branchName?: string;
+        reason?: string;
+      }>;
       build?: {
-        status: 'started' | 'queued' | 'blocked';
+        status: 'started' | 'queued' | 'in_progress' | 'awaiting_review' | 'failed' | 'blocked';
         projectId?: string;
         projectName?: string;
         repository?: string;
