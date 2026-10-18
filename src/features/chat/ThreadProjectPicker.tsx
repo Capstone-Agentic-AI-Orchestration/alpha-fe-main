@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, FolderGit2, Loader2 } from 'lucide-react';
 
 import { useApp } from '@/app/AppContext';
+import { apiService } from '@/shared/services/apiService';
 
 /**
  * Which project a conversation is about.
@@ -23,7 +24,7 @@ interface Props {
 }
 
 export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
-  const { projects, showToast, can, setThreadProject } = useApp();
+  const { projects, chatThreads, showToast, can, setThreadProject, createNewThread, setActiveThreadId } = useApp();
   const canManageChat = can('manage_chat');
 
   const [selected, setSelected] = useState<string>(projectId ?? '');
@@ -60,10 +61,34 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
   const choose = async (next: string) => {
     setOpen(false);
     const previous = selected;
+    if (next === (projectId ?? '')) return;
     setSelected(next);
     setBusy(true);
 
     try {
+      // Keep each transcript tied to the project it was written for. Moving
+      // an existing conversation silently cleared it in the UI and could also
+      // carry old project context into the next repository.
+      const cachedMessages = chatThreads.find(thread => thread.id === threadId)?.messages ?? [];
+      const messages = cachedMessages.length ? cachedMessages : await apiService.getChatMessages(threadId);
+      if (messages.length > 0) {
+        const newThreadId = createNewThread(
+          next ? 'New project conversation' : 'New conversation',
+          next || undefined
+        );
+        if (!newThreadId) throw new Error('A new conversation could not be created.');
+        setActiveThreadId(newThreadId);
+        const nextProject = projects.find(project => project.id === next);
+        showToast(
+          'Conversation saved',
+          nextProject
+            ? `Opened a new chat in ${nextProject.name}. Your previous project conversation is still in the list.`
+            : 'Opened a general chat. Your previous project conversation is still in the list.',
+          'info'
+        );
+        return;
+      }
+
       const updated = await setThreadProject(threadId, next || null);
       setWorkspaceDir(updated.workspaceDir ?? null);
       setWorkspaceManaged(updated.workspaceManaged ?? null);

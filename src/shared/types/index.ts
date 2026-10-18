@@ -63,6 +63,8 @@ export interface Issue {
    * the "Mine" filter treats absence as "not yours" rather than guessing.
    */
   createdBy?: string;
+  /** The project repository this issue/build is executing against, when scoped. */
+  githubRepo?: string;
   assignedAgentId?: string;
   assignedSquadId?: string;
   assignedHuman?: string;
@@ -442,6 +444,28 @@ export interface HostingPreviews {
   state: HostingStatus['state'];
   error?: string;
   previews: BranchPreview[];
+}
+
+/** The provider deployment tied to the exact branch used by a project build. */
+export interface BuildBranchPreview {
+  repo: string;
+  branch: string;
+  platform: 'render' | 'vercel' | null;
+  state: 'ready' | 'building' | 'failed' | 'waiting' | 'unsupported' | 'unavailable';
+  url: string | null;
+  deployStatus: string | null;
+  ci: {
+    state: 'not_run' | 'running' | 'passed' | 'failed' | 'unknown';
+    commitSha: string | null;
+    checksUrl: string | null;
+    checks: Array<{
+      name: string;
+      state: 'queued' | 'running' | 'passed' | 'failed' | 'skipped' | 'unknown';
+      url: string | null;
+    }>;
+    error?: string;
+  };
+  error?: string;
 }
 
 /**
@@ -1231,6 +1255,13 @@ export interface ChatThread {
   clientId?: string;
   /** Set on creation. Matches `chat_threads.created_at` in the backend schema. */
   createdAt?: string;
+}
+
+export interface ChatSyncStatus {
+  enabled: boolean;
+  state: 'synced' | 'syncing' | 'failed' | 'local_only' | 'shared';
+  pending: number;
+  failed: number;
 }
 
 export type AgentCallMode = 'ask' | 'review' | 'revise' | 'implement';
