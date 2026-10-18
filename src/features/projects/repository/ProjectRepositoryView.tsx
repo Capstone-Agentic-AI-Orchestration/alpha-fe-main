@@ -33,6 +33,9 @@ interface ProjectRepositoryViewProps {
   projectId: string;
   /** `owner/name`, from `GET /projects/:id/repos`. Render nothing when empty. */
   repositories: string[];
+  /** Repository created from this project: focus it and open its preview once it appears. */
+  initialRepository?: string;
+  onInitialRepositoryApplied?: () => void;
 }
 
 /** `acme/shop-be` → `shop-be`, which is what tells a pair apart. */
@@ -56,7 +59,12 @@ const TAB_ICONS: Record<RepoTab, LucideIcon> = {
  * platforms; the writes are a promotion (which opens a pull request rather
  * than merging anything), setting hosting up, and variables.
  */
-export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({ projectId, repositories }) => {
+export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
+  projectId,
+  repositories,
+  initialRepository,
+  onInitialRepositoryApplied
+}) => {
   const { role, can } = useApp();
   const canPromote = role === 'pm' || role === 'admin';
   // The same role the server checks (deployment.manage): project managers and admins.
@@ -77,6 +85,16 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({ pr
     setTabState(next);
     storeTab(next);
   };
+
+  useEffect(() => {
+    if (!initialRepository) return;
+    const target = repositories.find(repo => repo.toLowerCase() === initialRepository.toLowerCase());
+    if (!target) return;
+    setSelectedRepo(target);
+    setTabState('previews');
+    storeTab('previews');
+    onInitialRepositoryApplied?.();
+  }, [initialRepository, onInitialRepositoryApplied, projectId, repositories]);
 
   if (!selectedRepo || repositories.length === 0) return null;
 
@@ -226,7 +244,14 @@ const RepoPanel: React.FC<{
         {branch && <RepoRunsList projectId={projectId} repo={repo} branch={branch} />}
       </BranchGate>
     ),
-    previews: () => <RepoPreviews projectId={projectId} repo={repo} />,
+    previews: () => (
+      <RepoPreviews
+        projectId={projectId}
+        repo={repo}
+        active={tab === 'previews'}
+        onOpenHosting={() => onTabChange('overview')}
+      />
+    ),
     logs: () => <RepoLogsTab projectId={projectId} repo={repo} active={tab === 'logs'} />,
     environment: () => (
       <RepoEnvEditor projectId={projectId} repo={repo} canManageMain={canSetUpHosting} canManagePreview={canManagePreviewEnv} />

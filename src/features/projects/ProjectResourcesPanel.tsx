@@ -55,6 +55,8 @@ interface ProjectResourcesPanelProps {
    * remains available to callers that can edit project resources.
    */
   canCreateRepository?: boolean;
+  /** Called after provisioning so the project can open the new repository's preview. */
+  onRepositoryCreated?: (repositories: string[], previewRepository: string) => void;
 }
 
 /**
@@ -73,7 +75,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   onOrgChange,
   variant = 'full',
   readOnly = false,
-  canCreateRepository = true
+  canCreateRepository = true,
+  onRepositoryCreated
 }) => {
   const isFull = variant === 'full';
   const { showToast, can } = useApp();
@@ -103,7 +106,9 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   // without an org regardless of what this form sends.
   const [ghOrgs, setGhOrgs] = useState<Array<{ login: string; role: string }>>([]);
   const [ghOwner, setGhOwner] = useState(githubOrg ?? '');
-  const [ghStack, setGhStack] = useState<ScaffoldStack>('nodejs');
+  // New repositories default to a user-facing app so automatic hosting yields
+  // a page preview immediately. Backend-only projects remain an explicit choice.
+  const [ghStack, setGhStack] = useState<ScaffoldStack>('react');
   const [ghShape, setGhShape] = useState<RepoShape>('standalone');
   const [ghFrontendStack, setGhFrontendStack] = useState<ScaffoldFrontendStack>('react');
   const [ghBackendStack, setGhBackendStack] = useState<ScaffoldBackendStack>('nodejs');
@@ -173,10 +178,22 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       if (!orgLocked) onOrgChange?.(org);
       setGhRepoName('');
       setGhResults(created);
+      const previewRepo = isPaired
+        ? created.find((repo, index) => ['react', 'nextjs'].includes(pairedStack(repo, index))) ?? created[1] ?? created[0]
+        : created[0];
+      if (previewRepo) {
+        onRepositoryCreated?.(created.map(repo => repo.nameWithOwner), previewRepo.nameWithOwner);
+      }
+      const previewHosting = previewRepo?.hosting;
+      const toastDescription = !ghDeploy
+        ? 'Open Hosting in the repository overview to set up a live preview.'
+        : previewHosting?.state === 'unavailable' || previewHosting?.state === 'failed'
+          ? `${previewHosting.error ?? 'Hosting needs attention.'} Open the repository overview to review hosting.`
+          : 'Opening the Preview tab. The first deployment may take a few minutes to become live.';
       showToast(
-        created.length > 1 ? 'Repositories created' : 'Repository created',
-        created.map(repo => repo.nameWithOwner).join(', '),
-        'success'
+        created.length > 1 ? 'Repositories created — opening preview' : 'Repository created — opening preview',
+        toastDescription,
+        previewHosting?.state === 'unavailable' || previewHosting?.state === 'failed' ? 'info' : 'success'
       );
     } catch (err) {
       // Surface the real reason — a name collision is the common case and the
@@ -454,10 +471,10 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                       disabled={ghBusy}
                       className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
                     >
+                      <option value="react">React</option>
+                      <option value="nextjs">Next.js</option>
                       <option value="nodejs">Node.js</option>
                       <option value="nestjs">NestJS</option>
-                      <option value="nextjs">Next.js</option>
-                      <option value="react">React</option>
                     </select>
                   </>
                 )}
@@ -489,11 +506,11 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                 />
                 <div className="space-y-0.5">
                   <label htmlFor={`gh-deploy-${projectId}`} className="block text-[11px] text-gray-300 cursor-pointer">
-                    Set up deploys
+                    Automatically create hosting and a live preview
                   </label>
                   <p id={`gh-deploy-help-${projectId}`} className="text-[11px] leading-relaxed text-gray-500">
-                    Alpha sets up hosting on Render (backends) or Vercel (frontends) and connects a paired frontend
-                    and backend, so each calls the other automatically.
+                    Alpha sets up Render for backends or Vercel for frontends. React and Next.js show a live page;
+                    backend repositories show a health check. Paired repositories are connected automatically.
                   </p>
                 </div>
               </div>

@@ -24,15 +24,46 @@ const THUMB_LAYOUT_HEIGHT = 800;
  * renderer's origin is `file://`, which no hosted preview shares, so the
  * frame is genuinely cross-origin in both.
  */
-export const RepoPreviews: React.FC<{ projectId: string; repo: string }> = ({ projectId, repo }) => {
+export const RepoPreviews: React.FC<{
+  projectId: string;
+  repo: string;
+  active: boolean;
+  onOpenHosting?: () => void;
+}> = ({ projectId, repo, active, onOpenHosting }) => {
   const previews = useRepoResource<HostingPreviews>(
     () => apiService.getRepoHostingPreviews(projectId, repo),
     `${projectId}|${repo}|previews`
   );
+  const autoRefreshCount = useRef(0);
   const data = previews.data;
   const sorted = data
     ? [...data.previews].sort((a, b) => PIPELINE_BRANCHES.indexOf(a.branch) - PIPELINE_BRANCHES.indexOf(b.branch))
     : [];
+  const devPreview = data?.previews.find(preview => preview.branch === 'dev');
+  const trackedPreview = devPreview ?? data?.previews[0];
+  const terminalDeploy = /fail|error|cancel/i.test(trackedPreview?.deployStatus ?? '');
+  const shouldAutoRefresh = Boolean(
+    active &&
+    data &&
+    data.role === 'frontend' &&
+    data.state !== 'unavailable' &&
+    trackedPreview &&
+    !trackedPreview.ready &&
+    !terminalDeploy &&
+    autoRefreshCount.current < 18
+  );
+
+  // A newly created Vercel project can be ready before its first branch
+  // deployment is. Keep the preview current briefly so the user sees it come
+  // online without having to leave the tab or keep pressing Refresh.
+  useEffect(() => {
+    if (!shouldAutoRefresh || previews.loading) return;
+    const timer = window.setTimeout(() => {
+      autoRefreshCount.current += 1;
+      previews.reload();
+    }, 8_000);
+    return () => window.clearTimeout(timer);
+  }, [active, shouldAutoRefresh, previews.loading, data, previews.reload]);
 
   return (
     <RepoSection
@@ -47,20 +78,53 @@ export const RepoPreviews: React.FC<{ projectId: string; repo: string }> = ({ pr
         ) : previews.error ? (
           <SectionError message={previews.error} onRetry={previews.reload} />
         ) : !data || sorted.length === 0 ? (
-          <SectionEmpty>
-            {data?.state === 'unavailable'
-              ? (data.error ?? 'Hosting is not available here.')
-              : 'Nothing is hosted yet. Set up hosting to get a preview of each branch.'}
-          </SectionEmpty>
-        ) : (
-          <div className="grid gap-3 p-3 md:grid-cols-2">
-            {sorted.map(preview =>
-              preview.surface === 'health' ? (
-                <HealthCard key={preview.branch} projectId={projectId} repo={repo} preview={preview} />
-              ) : (
-                <PageCard key={preview.branch} preview={preview} />
-              )
+          <div className="space-y-2 px-3.5 py-4">
+            <p className="text-[11px] text-gray-500">
+              {data?.state === 'unavailable'
+                ? (data.error ?? 'Hosting is not available here.')
+                : data?.state === 'failed'
+                  ? (data.error ?? 'Hosting setup needs attention.')
+                  : data?.state === 'partial'
+                    ? 'Hosting is only partly set up. Review the repository overview to finish it.'
+                    : data?.state === 'not_set_up'
+                      ? 'Hosting has not been set up yet. Open the repository overview to start it.'
+                      : 'No hosting status is available yet. Review setup from the repository overview.'}
+            </p>
+            {onOpenHosting && (
+              <button
+                type="button"
+                onClick={onOpenHosting}
+                className="rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-gray-200 transition-colors hover:bg-white/10"
+              >
+                Review hosting setup
+              </button>
             )}
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {shouldAutoRefresh && (
+              <p role="status" className="flex items-center gap-1.5 px-3.5 pt-3 text-[11px] text-gray-400">
+                <Loader2 className="h-3 w-3 motion-safe:animate-spin text-brand-400" aria-hidden />
+                {trackedPreview?.deployStatus
+                  ? `${trackedPreview.branch} is ${humanize(trackedPreview.deployStatus).toLowerCase()}.`
+                  : `Preparing the ${trackedPreview?.branch ?? 'dev'} preview.`}{' '}
+                Refreshing automatically.
+              </p>
+            )}
+            {!shouldAutoRefresh && autoRefreshCount.current >= 18 && trackedPreview && !trackedPreview.ready && !terminalDeploy && (
+              <p role="status" className="px-3.5 pt-3 text-[11px] text-amber-300">
+                The first preview is taking longer than expected. Use Refresh previews to check again.
+              </p>
+            )}
+            <div className="grid gap-3 p-3 md:grid-cols-2">
+              {sorted.map(preview =>
+                preview.surface === 'health' ? (
+                  <HealthCard key={preview.branch} projectId={projectId} repo={repo} preview={preview} />
+                ) : (
+                  <PageCard key={preview.branch} preview={preview} />
+                )
+              )}
+            </div>
           </div>
         )}
       </div>
