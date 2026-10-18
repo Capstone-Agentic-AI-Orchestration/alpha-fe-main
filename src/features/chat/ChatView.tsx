@@ -23,6 +23,7 @@ import {
   Send,
   ShieldCheck,
   Sparkles,
+  Square,
   Trash2,
   Users,
   X
@@ -140,7 +141,8 @@ export const ChatView: React.FC = () => {
     showToast,
     setActiveTab,
     setTabSessionState,
-    activeTabId
+    activeTabId,
+    squadRuns
   } = useApp();
 
   const [input, setInput] = useTabSessionState<string>('chatDraft', '');
@@ -160,6 +162,7 @@ export const ChatView: React.FC = () => {
   const [targetId, setTargetId] = useTabSessionState<string>('chatTargetId', '');
   const [calls, setCalls] = useState<Record<string, AgentCall>>({});
   const [busyCallId, setBusyCallId] = useState<string | null>(null);
+  const [stoppingProjectRunId, setStoppingProjectRunId] = useState<string | null>(null);
   const [expandedDiffs, setExpandedDiffs] = useState<Record<string, boolean>>({});
   const [copiedCallId, setCopiedCallId] = useState<string | null>(null);
   const [expandedCallPanel, setExpandedCallPanel] = useState<Record<string, boolean>>({});
@@ -174,6 +177,11 @@ export const ChatView: React.FC = () => {
   const isClient = role === 'client';
   const project = projects.find(item => item.id === activeThread?.projectId);
   const projectIssues = issues.filter(issue => issue.projectId === activeThread?.projectId);
+  const projectSquadRuns = squadRuns
+    .filter(run => run.projectId === activeThread?.projectId)
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+  const activeProjectBuildRun = projectSquadRuns.find(run => run.status === 'running');
+  const latestProjectBuildRun = projectSquadRuns[0];
 
   useEffect(() => {
     if (isClient || !activeThreadId || !isActiveTab) {
@@ -501,6 +509,16 @@ export const ChatView: React.FC = () => {
     event.preventDefault();
     const message = input.trim();
     if (!message || isAgentTyping) return;
+    if (chatIntent === 'build' && activeProjectBuildRun) {
+      showToast('Build already running', 'Stop the current build or wait for it to finish before starting another one.', 'info');
+      return;
+    }
+    if (chatIntent === 'build' && latestProjectBuildRun?.status === 'awaiting_approval' && !window.confirm(
+      'The previous build is finished and waiting for review. Start another full squad build for this project?'
+    )) return;
+    if (chatIntent === 'build' && (latestProjectBuildRun?.status === 'failed' || latestProjectBuildRun?.status === 'cancelled') && !window.confirm(
+      'The previous build stopped. Start a new squad build attempt for this project?'
+    )) return;
     if (!isClient && isDirectMention(message)) {
       showToast('Use Call Agent', 'Choose an authorized project agent from the explicit Call Agent control, or remove the @mention.', 'info');
       return;
@@ -510,6 +528,19 @@ export const ChatView: React.FC = () => {
     await sendChatMessage(message, activeThread?.id, selectedBuildRepository || undefined, chatIntent);
     if (activeThread?.id) {
       void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
+    }
+  };
+
+  const stopProjectBuild = async () => {
+    if (!activeProjectBuildRun || stoppingProjectRunId) return;
+    setStoppingProjectRunId(activeProjectBuildRun.id);
+    try {
+      await apiService.cancelSquadRun(activeProjectBuildRun.id);
+      showToast('Build stopped', 'The active agent has stopped. Work already on the build branch remains available for review.', 'success');
+    } catch (error: any) {
+      showToast('Could not stop build', error?.message ?? 'The active squad build could not be stopped.', 'error');
+    } finally {
+      setStoppingProjectRunId(null);
     }
   };
 
@@ -618,7 +649,7 @@ export const ChatView: React.FC = () => {
 
           {showLatest && <div className="shrink-0 flex justify-center py-2 border-t border-white/5"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-surface-raised px-4 py-2 text-xs font-medium text-brand-200 hover:bg-brand-500/15">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
           <div className="shrink-0 px-5 py-2.5 bg-surface/80 border-t border-white/5 flex items-center gap-2.5 overflow-x-auto"><span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 whitespace-nowrap">Try</span>{(isClient ? ['Clarify the current scope', 'Ask about timing'] : ['Summarize this project', 'What should I review next?']).map(prompt => <button key={prompt} type="button" onClick={() => setInput(prompt)} className="whitespace-nowrap rounded-full border border-white/10 bg-surface-100 px-3 py-1.5 text-[11px] text-gray-400 hover:border-brand-400/40 hover:text-white">{prompt}</button>)}</div>
-          <div className="shrink-0 p-4 lg:p-5 border-t border-white/[0.08] bg-surface space-y-3">{!isClient && !activeThread.projectId && <div className="flex items-center gap-2 rounded-lg border border-amber-400/15 bg-amber-500/[0.06] px-3 py-2 text-[11px] text-amber-200"><FolderGit2 className="h-3.5 w-3.5" /> Choose a project in the header to start a repository build or call its assigned agents.</div>}<div className="flex flex-wrap items-center justify-between gap-3">{!isClient && <div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">Route</span><div role="group" aria-label="Choose how Alpha handles this message" className="inline-flex rounded-lg border border-white/10 bg-surface-100 p-0.5">{(['auto', 'build', 'ask'] as ChatIntent[]).map(intent => { const label = intent === 'auto' ? 'Auto' : intent === 'build' ? 'Build project' : 'Ask Alpha'; const Icon = intent === 'auto' ? Sparkles : intent === 'build' ? Play : MessageSquare; return <button key={intent} type="button" aria-pressed={chatIntent === intent} onClick={() => setChatIntent(intent)} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition-colors ${chatIntent === intent ? intent === 'build' ? 'bg-violet-500/25 text-violet-100' : 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-200'}`}><Icon className="h-3 w-3" />{label}</button>; })}</div><span className="text-[10px] text-gray-600">{chatIntent === 'auto' ? 'Clear change requests start the project squad; questions stay with Alpha.' : chatIntent === 'build' ? 'Starts the project’s assigned sequential agent build.' : 'Discuss the project without changing repository files.'}</span></div>}{!isClient && project && (projectRepositories.length > 1 ? <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-surface-100 px-2.5 py-1.5 text-[10px] text-gray-500"><FolderGit2 className="h-3.5 w-3.5" /><span>Repository</span><select aria-label="Build repository" value={selectedBuildRepository} onChange={event => setSelectedBuildRepository(event.target.value)} className="max-w-56 bg-transparent text-[10px] text-gray-200 outline-none"><option value="">Choose repository…</option>{projectRepositories.map(item => <option key={item.repo} value={item.repo}>{item.repo}{item.connected ? ' · connected' : ' · connect on build'}</option>)}</select></label> : projectRepositories.length === 1 ? <div className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] ${projectRepositories[0].connected ? 'border-emerald-400/15 bg-emerald-500/[0.05] text-emerald-200' : 'border-amber-400/15 bg-amber-500/[0.05] text-amber-200'}`}><FolderGit2 className="h-3.5 w-3.5" /><span>{projectRepositories[0].repo}</span><span>· {projectRepositories[0].connected ? 'connected' : 'will connect on build'}</span></div> : snapshot ? <span className="inline-flex items-center gap-1.5 text-[10px] text-amber-200"><FolderGit2 className="h-3.5 w-3.5" />Connect a repository to build project files</span> : null)}</div><form onSubmit={handleSend} className="flex items-end gap-2"><textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void handleSend(event); } }} rows={1} placeholder={isClient ? `Write a message to ${pmName}…` : chatIntent === 'build' ? 'Describe the change to build in this repository…' : chatIntent === 'ask' ? 'Ask Alpha a project question…' : 'Describe what you want to build, or ask Alpha…'} disabled={isAgentTyping} className="min-h-12 max-h-32 flex-1 resize-none rounded-2xl border border-white/10 bg-surface-100 px-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-brand-400 disabled:opacity-50" /><button type="submit" aria-label={chatIntent === 'build' ? 'Start project build' : 'Send message'} disabled={!input.trim() || isAgentTyping} className="h-11 w-11 shrink-0 rounded-xl bg-brand-500 flex items-center justify-center text-on-accent hover:bg-brand-400 disabled:opacity-30"><Send className="h-4 w-4" /></button>{!isClient && <button type="button" onClick={openCallPanel} className="h-11 shrink-0 rounded-xl border border-brand-400/25 bg-brand-500/10 px-3 text-xs font-semibold text-brand-200 hover:bg-brand-500/20 sm:hidden"><Bot className="h-4 w-4" /></button>}</form><div className="flex items-center justify-between text-[10px] text-gray-600"><span>Shift + Enter for a new line</span><span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-emerald-400" /> Project boundary enforced</span></div></div>
+          <div className="shrink-0 p-4 lg:p-5 border-t border-white/[0.08] bg-surface space-y-3">{!isClient && !activeThread.projectId && <div className="flex items-center gap-2 rounded-lg border border-amber-400/15 bg-amber-500/[0.06] px-3 py-2 text-[11px] text-amber-200"><FolderGit2 className="h-3.5 w-3.5" /> Choose a project in the header to start a repository build or call its assigned agents.</div>}<div className="flex flex-wrap items-center justify-between gap-3">{!isClient && <div className="flex flex-wrap items-center gap-2"><span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">Route</span><div role="group" aria-label="Choose how Alpha handles this message" className="inline-flex rounded-lg border border-white/10 bg-surface-100 p-0.5">{(['auto', 'build', 'ask'] as ChatIntent[]).map(intent => { const label = intent === 'auto' ? 'Auto' : intent === 'build' ? 'Build project' : 'Ask Alpha'; const Icon = intent === 'auto' ? Sparkles : intent === 'build' ? Play : MessageSquare; const buildBlocked = intent === 'build' && Boolean(activeProjectBuildRun); return <button key={intent} type="button" aria-pressed={chatIntent === intent} disabled={buildBlocked} title={buildBlocked ? 'A squad build is already running for this project.' : undefined} onClick={() => setChatIntent(intent)} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition-colors ${chatIntent === intent ? intent === 'build' ? 'bg-violet-500/25 text-violet-100' : 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-200'} disabled:cursor-not-allowed disabled:opacity-40`}><Icon className="h-3 w-3" />{label}</button>; })}</div><span className="text-[10px] text-gray-600">{chatIntent === 'auto' ? 'Clear change requests start the project squad; questions stay with Alpha.' : chatIntent === 'build' ? 'Starts the project’s assigned sequential agent build.' : 'Discuss the project without changing repository files.'}</span>{activeProjectBuildRun && can('run_squads') && <button type="button" onClick={() => void stopProjectBuild()} disabled={stoppingProjectRunId === activeProjectBuildRun.id} title="Stop the active sequential build for this project." className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/25 bg-rose-500/[0.08] px-2.5 py-1.5 text-[10px] font-semibold text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"><Square className={`h-3 w-3 ${stoppingProjectRunId === activeProjectBuildRun.id ? 'animate-pulse' : 'fill-current'}`} />{stoppingProjectRunId === activeProjectBuildRun.id ? 'Stopping…' : 'Stop build'}</button>}</div>}{!isClient && project && (projectRepositories.length > 1 ? <label className="flex items-center gap-2 rounded-lg border border-white/10 bg-surface-100 px-2.5 py-1.5 text-[10px] text-gray-500"><FolderGit2 className="h-3.5 w-3.5" /><span>Repository</span><select aria-label="Build repository" value={selectedBuildRepository} onChange={event => setSelectedBuildRepository(event.target.value)} className="max-w-56 bg-transparent text-[10px] text-gray-200 outline-none"><option value="">Choose repository…</option>{projectRepositories.map(item => <option key={item.repo} value={item.repo}>{item.repo}{item.connected ? ' · connected' : ' · connect on build'}</option>)}</select></label> : projectRepositories.length === 1 ? <div className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] ${projectRepositories[0].connected ? 'border-emerald-400/15 bg-emerald-500/[0.05] text-emerald-200' : 'border-amber-400/15 bg-amber-500/[0.05] text-amber-200'}`}><FolderGit2 className="h-3.5 w-3.5" /><span>{projectRepositories[0].repo}</span><span>· {projectRepositories[0].connected ? 'connected' : 'will connect on build'}</span></div> : snapshot ? <span className="inline-flex items-center gap-1.5 text-[10px] text-amber-200"><FolderGit2 className="h-3.5 w-3.5" />Connect a repository to build project files</span> : null)}</div><form onSubmit={handleSend} className="flex items-end gap-2"><textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void handleSend(event); } }} rows={1} placeholder={isClient ? `Write a message to ${pmName}…` : chatIntent === 'build' ? 'Describe the change to build in this repository…' : chatIntent === 'ask' ? 'Ask Alpha a project question…' : 'Describe what you want to build, or ask Alpha…'} disabled={isAgentTyping} className="min-h-12 max-h-32 flex-1 resize-none rounded-2xl border border-white/10 bg-surface-100 px-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-brand-400 disabled:opacity-50" /><button type="submit" aria-label={chatIntent === 'build' ? 'Start project build' : 'Send message'} disabled={!input.trim() || isAgentTyping || chatIntent === 'build' && Boolean(activeProjectBuildRun)} title={chatIntent === 'build' && activeProjectBuildRun ? 'Stop the current project build before starting another.' : undefined} className="h-11 w-11 shrink-0 rounded-xl bg-brand-500 flex items-center justify-center text-on-accent hover:bg-brand-400 disabled:opacity-30"><Send className="h-4 w-4" /></button>{!isClient && <button type="button" onClick={openCallPanel} className="h-11 shrink-0 rounded-xl border border-brand-400/25 bg-brand-500/10 px-3 text-xs font-semibold text-brand-200 hover:bg-brand-500/20 sm:hidden"><Bot className="h-4 w-4" /></button>}</form><div className="flex items-center justify-between text-[10px] text-gray-600"><span>Shift + Enter for a new line</span><span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-emerald-400" /> Project boundary enforced</span></div></div>
         </> : <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"><MessageSquare className="h-12 w-12 text-gray-700" /><p className="text-sm text-gray-500">Pick a project conversation, or start a new one with +.</p></div>}
       </main>
     </div>
