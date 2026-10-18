@@ -18,7 +18,9 @@ import {
   Eye, 
   EyeOff, 
   Trash2,
-  Upload
+  Upload,
+  Share2,
+  Unlink
 } from 'lucide-react';
 import { CreateAgentModal } from '@/features/agents/CreateAgentModal';
 import { PersonaFileEditor } from '@/features/agents/PersonaFileEditor';
@@ -48,6 +50,7 @@ export const AgentsView: React.FC = () => {
     runtimes, 
     skills, 
     updateAgent, 
+    setAgentSharing,
     duplicateAgent, 
     archiveAgent, 
     restoreAgent, 
@@ -79,6 +82,7 @@ export const AgentsView: React.FC = () => {
   // Selection & Modals
   const [selectedAgentIds, setSelectedAgentIds] = useTabSessionState<string[]>('agents.selectedAgentIds', []);
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
+  const [sharingAgent, setSharingAgent] = useState(false);
   const [bulkAccessMenuOpen, setBulkAccessMenuOpen] = useState<boolean>(false);
 
   /**
@@ -626,6 +630,7 @@ export const AgentsView: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     {renderStatus(selectedAgent)}
+                    {selectedAgent.sharedKey && <span className="inline-flex items-center gap-1 text-violet-300"><Share2 className="h-3 w-3" />Shared across workspaces</span>}
                     <span className="text-gray-600 font-mono">•</span>
                     <span className="text-gray-400 font-mono text-[11px] truncate">
                       {selectedAgent.machineName || 'Host Node'}
@@ -1109,6 +1114,22 @@ export const AgentsView: React.FC = () => {
                   <Copy className="w-3.5 h-3.5" />
                   <span>Duplicate Agent</span>
                 </button>
+
+                {!selectedAgent.templateKey && (
+                  <button
+                    type="button"
+                    disabled={sharingAgent}
+                    onClick={async () => {
+                      setSharingAgent(true);
+                      await setAgentSharing(selectedAgent.id, !selectedAgent.sharedKey);
+                      setSharingAgent(false);
+                    }}
+                    className={`flex items-center gap-1.5 transition-colors disabled:opacity-50 ${selectedAgent.sharedKey ? 'text-amber-300 hover:text-amber-200' : 'text-violet-300 hover:text-violet-200'}`}
+                  >
+                    {selectedAgent.sharedKey ? <Unlink className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
+                    <span>{sharingAgent ? 'Saving…' : selectedAgent.sharedKey ? 'Stop sharing' : 'Share with my workspaces'}</span>
+                  </button>
+                )}
 
                 {selectedAgent.isArchived ? (
                   <button
