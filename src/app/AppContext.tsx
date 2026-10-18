@@ -232,7 +232,7 @@ interface AppContextType {
   setActiveChatAgentId: (id: string | null) => void;
   activeChatSquadId: string | null;
   setActiveChatSquadId: (id: string | null) => void;
-  sendChatMessage: (content: string, threadId?: string | null) => Promise<void>;
+  sendChatMessage: (content: string, threadId?: string | null, repository?: string, intent?: 'auto' | 'build' | 'ask') => Promise<void>;
   clearChat: (threadId?: string | null) => void;
   
   // Settings
@@ -380,6 +380,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     // Project managers staff the agents used by their PM-owned projects.
     'manage_agents',
     'view_squads',
+    'run_squads',
     'view_skills',
     'manage_skills',
     'view_runtimes',
@@ -2915,7 +2916,7 @@ ${e.detail}`;
     );
   };
 
-  const sendChatMessage = async (content: string, threadIdOverride?: string | null) => {
+  const sendChatMessage = async (content: string, threadIdOverride?: string | null, repository?: string, intent?: 'auto' | 'build' | 'ask') => {
     if (!requireCapability('manage_chat')) return;
     let targetThreadId = threadIdOverride ?? activeThreadId;
     if (!targetThreadId) {
@@ -2923,7 +2924,7 @@ ${e.detail}`;
     }
 
     const userMsg: ChatMessage = {
-      id: `msg-${Date.now()}`,
+      id: `msg-${Date.now()}-${crypto.randomUUID()}`,
       senderType: 'user',
       senderName: currentUser.name,
       content,
@@ -3024,7 +3025,11 @@ ${e.detail}`;
       const res = await apiService.sendChatMessage({
         threadId: targetThreadId,
         content,
-        senderName: currentUser.name
+        senderName: currentUser.name,
+        repository,
+        projectId: chatThreads.find(thread => thread.id === targetThreadId)?.projectId,
+        intent,
+        clientMessageId: userMsg.id
       });
 
       /**
@@ -3050,6 +3055,7 @@ ${e.detail}`;
           senderAvatar: agents.find(a => a.id === reply.agentId)?.avatar,
           content: reply.content,
           timestamp: reply.timestamp || new Date().toISOString(),
+          messageType: reply.messageType,
           isStreaming: false,
           thinkingProcess: reply.thinkingProcess,
           toolsExecuted: (reply.toolsExecuted || []).map((t: any) => ({
@@ -3823,10 +3829,10 @@ export const useApp = () => {
       setSessionValue('activeThreadId', id);
     },
     createNewThread: createScopedThread,
-    sendChatMessage: async (content: string) => {
+    sendChatMessage: async (content: string, _threadId?: string | null, repository?: string, intent?: 'auto' | 'build' | 'ask') => {
       let threadId = activeThreadId;
       if (!threadId) threadId = createScopedThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
-      if (threadId) await context.sendChatMessage(content, threadId);
+      if (threadId) await context.sendChatMessage(content, threadId, repository, intent);
     },
     clearChat: () => context.clearChat(activeThreadId),
     chatMessages: activeThreadId

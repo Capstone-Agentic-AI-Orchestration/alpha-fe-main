@@ -684,7 +684,7 @@ export const apiService = {
       method: 'DELETE'
     }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
-  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string }) =>
+  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;
@@ -693,6 +693,19 @@ export const apiService = {
        * answers in turn. `agentMessage` is the first of these.
        */
       agentMessages?: ChatMessage[];
+      build?: {
+        status: 'started' | 'queued' | 'blocked';
+        projectId?: string;
+        projectName?: string;
+        repository?: string;
+        issueId?: string;
+        issueIdentifier?: string;
+        squadId?: string;
+        squadName?: string;
+        squadRunId?: string;
+        branchName?: string;
+        reason?: string;
+      };
     }>('/chat/messages', {
       method: 'POST',
       body: JSON.stringify(payload)
