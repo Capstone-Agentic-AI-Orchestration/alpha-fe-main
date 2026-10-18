@@ -424,12 +424,19 @@ export const LiveBuildRoomView: React.FC = () => {
   const [buildPreview, setBuildPreview] = useState<BuildBranchPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
+  const [settingUpPreviewHosting, setSettingUpPreviewHosting] = useState(false);
+  const [previewHostingSetupError, setPreviewHostingSetupError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const refreshTimerRef = useRef<number | null>(null);
 
   const eligibleRole = role !== 'client' && can('view_squads');
   const buildRepository = snapshot?.issue?.githubRepo ?? null;
   const buildBranch = snapshot?.activeRun?.branchName ?? snapshot?.issue?.branchName ?? null;
+  const canOfferPreviewHosting = Boolean(
+    selectedProjectId && buildRepository && buildPreview?.platform === 'vercel' &&
+    buildPreview.state === 'waiting' && /set up preview hosting/i.test(buildPreview.error ?? '') && can('manage_deployments')
+  );
 
   useEffect(() => {
     if (!projects.length) {
@@ -508,6 +515,10 @@ export const LiveBuildRoomView: React.FC = () => {
       return undefined;
     }
 
+    setBuildPreview(null);
+    setPreviewError(null);
+    setPreviewHostingSetupError(null);
+
     const loadPreview = async (showLoading: boolean) => {
       if (showLoading) setPreviewLoading(true);
       try {
@@ -530,7 +541,24 @@ export const LiveBuildRoomView: React.FC = () => {
       cancelled = true;
       if (timer !== null) window.clearInterval(timer);
     };
-  }, [buildBranch, buildRepository, isActiveTab, selectedProjectId, snapshot?.activeRun?.status]);
+  }, [buildBranch, buildRepository, isActiveTab, previewRefreshKey, selectedProjectId, snapshot?.activeRun?.status]);
+
+  const handleSetUpPreviewHosting = async () => {
+    if (!selectedProjectId || !buildRepository || settingUpPreviewHosting || !can('manage_deployments')) return;
+    setSettingUpPreviewHosting(true);
+    setPreviewHostingSetupError(null);
+    try {
+      const status = await apiService.setUpRepoHosting(selectedProjectId, buildRepository);
+      if (status.state === 'failed' || status.state === 'unavailable') {
+        throw new Error(status.error || 'Hosting setup could not be completed.');
+      }
+      setPreviewRefreshKey(value => value + 1);
+    } catch (err: any) {
+      setPreviewHostingSetupError(err?.message || 'Hosting setup could not be completed.');
+    } finally {
+      setSettingUpPreviewHosting(false);
+    }
+  };
 
   /**
    * Join the channels of the runs on screen.
@@ -841,10 +869,15 @@ export const LiveBuildRoomView: React.FC = () => {
               {(previewError || buildPreview?.error) && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-400">{previewError || buildPreview?.error}</p>}
               {buildPreview?.ci?.state === 'not_run' && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">GitHub has not reported checks for this branch yet. Repository CI commonly starts when the build pull request opens.</p>}
               {buildPreview?.ci?.error && <p className="mt-2 max-w-2xl text-xs leading-5 text-amber-200/80">CI status could not be read: {buildPreview.ci.error}</p>}
+              {canOfferPreviewHosting && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">This creates or reuses the repository’s Vercel project. Hosting usage may incur charges on your provider account.</p>}
+              {previewHostingSetupError && <p className="mt-2 max-w-2xl text-xs leading-5 text-rose-200">{previewHostingSetupError}</p>}
               {!buildPreview && !previewError && !previewLoading && <p className="mt-2 text-xs text-slate-500">Checking the hosting provider for this build’s branch deployment.</p>}
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {canOfferPreviewHosting && <button type="button" onClick={() => void handleSetUpPreviewHosting()} disabled={settingUpPreviewHosting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-300/25 bg-sky-300/[0.08] px-3.5 py-2.5 text-xs font-semibold text-sky-100 transition hover:bg-sky-300/[0.14] disabled:cursor-wait disabled:opacity-60">
+              {settingUpPreviewHosting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Globe2 className="h-3.5 w-3.5" />}{settingUpPreviewHosting ? 'Setting up…' : 'Set up preview hosting'}
+            </button>}
             {buildPreview?.ci?.checksUrl && <a href={buildPreview.ci.checksUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.05]">View CI<ExternalLink className="h-3.5 w-3.5" /></a>}
             {buildPreview?.url && <a href={buildPreview.url} target="_blank" rel="noreferrer" className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition ${buildPreview.state === 'ready' ? 'border-sky-300/30 bg-sky-300/10 text-sky-100 hover:bg-sky-300/15' : 'border-white/10 text-slate-300 hover:bg-white/[0.05]'}`}>
               {buildPreview.state === 'ready' ? 'Open preview' : 'View deployment'}<ExternalLink className="h-3.5 w-3.5" />
