@@ -357,6 +357,9 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'manage_agents',
     'run_agents',
     'view_squads',
+    // The daemon grants developers squad.manage for squads they own. Keep the
+    // UI capability map aligned so they can create and assign those squads.
+    'manage_squads',
     'run_squads',
     'view_skills',
     'view_runtimes',
