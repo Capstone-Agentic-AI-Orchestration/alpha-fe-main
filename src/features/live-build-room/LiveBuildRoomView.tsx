@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Activity,
   AlertTriangle,
   ArrowRight,
   Check,
@@ -18,6 +19,7 @@ import {
   Play,
   RadioTower,
   RefreshCw,
+  ScrollText,
   ShieldAlert,
   TerminalSquare,
   Users,
@@ -34,7 +36,10 @@ import type {
   LiveBuildRoomChatCall,
   LiveBuildRoomSnapshot,
   BuildBranchPreview,
+  HealthResult,
 } from '@/shared/types';
+import { normalizeLogsResponse } from '@/features/projects/repository/deploymentLogs/logNormalize';
+import type { DeploymentLogsResponse } from '@/features/projects/repository/deploymentLogs/logTypes';
 
 type DetailTab = 'activity' | 'handoff' | 'files' | 'tools';
 type AgentStatusFilter = 'all' | 'running' | 'waiting' | 'review' | 'failed' | 'completed' | 'idle' | 'stale';
@@ -427,6 +432,12 @@ export const LiveBuildRoomView: React.FC = () => {
   const [previewRefreshKey, setPreviewRefreshKey] = useState(0);
   const [settingUpPreviewHosting, setSettingUpPreviewHosting] = useState(false);
   const [previewHostingSetupError, setPreviewHostingSetupError] = useState<string | null>(null);
+  const [previewHealth, setPreviewHealth] = useState<HealthResult | null>(null);
+  const [checkingPreviewHealth, setCheckingPreviewHealth] = useState(false);
+  const [showBuildLogs, setShowBuildLogs] = useState(false);
+  const [buildLogs, setBuildLogs] = useState<DeploymentLogsResponse | null>(null);
+  const [buildLogsLoading, setBuildLogsLoading] = useState(false);
+  const [buildLogsError, setBuildLogsError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const refreshTimerRef = useRef<number | null>(null);
 
@@ -512,12 +523,20 @@ export const LiveBuildRoomView: React.FC = () => {
       setBuildPreview(null);
       setPreviewError(null);
       setPreviewLoading(false);
+      setPreviewHealth(null);
+      setShowBuildLogs(false);
+      setBuildLogs(null);
+      setBuildLogsError(null);
       return undefined;
     }
 
     setBuildPreview(null);
     setPreviewError(null);
     setPreviewHostingSetupError(null);
+    setPreviewHealth(null);
+    setShowBuildLogs(false);
+    setBuildLogs(null);
+    setBuildLogsError(null);
 
     const loadPreview = async (showLoading: boolean) => {
       if (showLoading) setPreviewLoading(true);
@@ -557,6 +576,44 @@ export const LiveBuildRoomView: React.FC = () => {
       setPreviewHostingSetupError(err?.message || 'Hosting setup could not be completed.');
     } finally {
       setSettingUpPreviewHosting(false);
+    }
+  };
+
+  const handleCheckPreviewHealth = async () => {
+    if (!selectedProjectId || !buildRepository || !buildBranch || checkingPreviewHealth) return;
+    setCheckingPreviewHealth(true);
+    setPreviewHealth(null);
+    try {
+      setPreviewHealth(await apiService.checkRepoHealth(selectedProjectId, buildRepository, buildBranch));
+    } catch (err: any) {
+      setPreviewHealth({ url: buildPreview?.url ?? null, ok: false, status: null, latencyMs: 0, error: err?.message || 'The preview did not respond.' });
+    } finally {
+      setCheckingPreviewHealth(false);
+    }
+  };
+
+  const handleToggleBuildLogs = async () => {
+    if (showBuildLogs) {
+      setShowBuildLogs(false);
+      return;
+    }
+    setShowBuildLogs(true);
+    if (buildLogs || buildLogsLoading || !selectedProjectId || !buildRepository || !buildBranch) return;
+    setBuildLogsLoading(true);
+    setBuildLogsError(null);
+    try {
+      const raw = await apiService.getRepoHostingLogs(selectedProjectId, buildRepository, buildBranch, {
+        direction: 'backward',
+        limit: 40,
+        type: ['build']
+      });
+      const response = normalizeLogsResponse(raw);
+      if (response.source === 'unavailable') setBuildLogsError(response.reason || 'Build logs are not available for this deployment.');
+      else setBuildLogs(response);
+    } catch (err: any) {
+      setBuildLogsError(err?.message || 'Build logs could not be loaded.');
+    } finally {
+      setBuildLogsLoading(false);
     }
   };
 
@@ -869,6 +926,9 @@ export const LiveBuildRoomView: React.FC = () => {
               {(previewError || buildPreview?.error) && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-400">{previewError || buildPreview?.error}</p>}
               {buildPreview?.ci?.state === 'not_run' && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">GitHub has not reported checks for this branch yet. Repository CI commonly starts when the build pull request opens.</p>}
               {buildPreview?.ci?.error && <p className="mt-2 max-w-2xl text-xs leading-5 text-amber-200/80">CI status could not be read: {buildPreview.ci.error}</p>}
+              {previewHealth && <p className={`mt-2 text-xs ${previewHealth.ok ? 'text-emerald-200' : 'text-amber-200'}`} role="status">
+                {previewHealth.ok ? `Preview responds · HTTP ${previewHealth.status} · ${previewHealth.latencyMs} ms` : `Preview did not respond${previewHealth.status ? ` · HTTP ${previewHealth.status}` : ''}${previewHealth.error ? ` · ${previewHealth.error}` : ''}`}
+              </p>}
               {canOfferPreviewHosting && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">This creates or reuses the repository’s Vercel project. Hosting usage may incur charges on your provider account.</p>}
               {previewHostingSetupError && <p className="mt-2 max-w-2xl text-xs leading-5 text-rose-200">{previewHostingSetupError}</p>}
               {!buildPreview && !previewError && !previewLoading && <p className="mt-2 text-xs text-slate-500">Checking the hosting provider for this build’s branch deployment.</p>}
@@ -878,11 +938,27 @@ export const LiveBuildRoomView: React.FC = () => {
             {canOfferPreviewHosting && <button type="button" onClick={() => void handleSetUpPreviewHosting()} disabled={settingUpPreviewHosting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-300/25 bg-sky-300/[0.08] px-3.5 py-2.5 text-xs font-semibold text-sky-100 transition hover:bg-sky-300/[0.14] disabled:cursor-wait disabled:opacity-60">
               {settingUpPreviewHosting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Globe2 className="h-3.5 w-3.5" />}{settingUpPreviewHosting ? 'Setting up…' : 'Set up preview hosting'}
             </button>}
+            {buildPreview?.state === 'ready' && buildPreview.platform === 'vercel' && buildPreview.url && <button type="button" onClick={() => void handleCheckPreviewHealth()} disabled={checkingPreviewHealth} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/20 px-3.5 py-2.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.07] disabled:cursor-wait disabled:opacity-60">
+              {checkingPreviewHealth ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}{checkingPreviewHealth ? 'Checking…' : 'Check live URL'}
+            </button>}
+            {buildPreview?.platform === 'vercel' && buildPreview.url && <button type="button" onClick={() => void handleToggleBuildLogs()} disabled={buildLogsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.05] disabled:cursor-wait disabled:opacity-60">
+              {buildLogsLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <TerminalSquare className="h-3.5 w-3.5" />}{buildLogsLoading ? 'Loading logs…' : showBuildLogs ? 'Hide build logs' : 'View build logs'}
+            </button>}
             {buildPreview?.ci?.checksUrl && <a href={buildPreview.ci.checksUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.05]">View CI<ExternalLink className="h-3.5 w-3.5" /></a>}
             {buildPreview?.url && <a href={buildPreview.url} target="_blank" rel="noreferrer" className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition ${buildPreview.state === 'ready' ? 'border-sky-300/30 bg-sky-300/10 text-sky-100 hover:bg-sky-300/15' : 'border-white/10 text-slate-300 hover:bg-white/[0.05]'}`}>
               {buildPreview.state === 'ready' ? 'Open preview' : 'View deployment'}<ExternalLink className="h-3.5 w-3.5" />
             </a>}
           </div>
+        </section>}
+
+        {showBuildLogs && <section className="order-2 overflow-hidden rounded-2xl border border-white/[0.08] bg-black/25" aria-label="Vercel build logs" aria-live="polite">
+          <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-slate-200"><ScrollText className="h-3.5 w-3.5 text-sky-200" />Preview build output <span className="font-normal text-slate-500">· {buildBranch}</span></div>
+            <button type="button" onClick={() => void handleToggleBuildLogs()} className="text-[11px] text-slate-400 hover:text-white">Close</button>
+          </div>
+          {buildLogsLoading ? <div className="px-4 py-5 text-xs text-slate-500">Loading build output from Vercel…</div> : buildLogsError ? <div className="px-4 py-4 text-xs text-amber-200" role="alert">{buildLogsError}</div> : buildLogs?.logs.length ? <div className="max-h-64 space-y-1 overflow-auto p-3 font-mono text-[10px] leading-5">
+            {buildLogs.logs.slice(-40).map(line => <div key={line.id} className={line.level === 'error' ? 'text-rose-200' : line.level === 'warn' ? 'text-amber-200' : 'text-slate-300'}><span className="mr-2 text-slate-600">{Number.isNaN(Date.parse(line.timestamp)) ? '' : new Date(line.timestamp).toLocaleTimeString()}</span>{line.message}</div>)}
+          </div> : <div className="px-4 py-5 text-xs text-slate-500">No build output has been reported for this deployment.</div>}
         </section>}
 
         {snapshot.phases.length > 0 && <div className="order-3"><PhaseTimeline phases={snapshot.phases} /></div>}
