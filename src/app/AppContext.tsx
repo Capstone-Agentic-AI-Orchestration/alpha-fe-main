@@ -1532,6 +1532,16 @@ ${e.detail}`;
       showToast('Squad run stopped', squadRun.stoppedReason ?? 'A member did not finish.', 'error');
     });
 
+    const unsubSquadCancelled = runnerSocket.on('squad_run_cancelled', (squadRun) => {
+      setSquadRuns(prev => prev.map(sr => sr.id === squadRun.id ? squadRun : sr));
+      setSquads(prev => prev.map(s => s.id === squadRun.squadId
+        ? { ...s, activeRunsCount: Math.max(0, s.activeRunsCount - 1) }
+        : s));
+      setIssues(prev => prev.map(issue => issue.id === squadRun.issueId
+        ? { ...issue, status: 'in_progress', updatedAt: new Date().toISOString() }
+        : issue));
+    });
+
     return () => {
       unsubStage();
       unsubLog();
@@ -1543,6 +1553,7 @@ ${e.detail}`;
       unsubSquadMember();
       unsubSquadDone();
       unsubSquadFailed();
+      unsubSquadCancelled();
     };
   }, []);
 

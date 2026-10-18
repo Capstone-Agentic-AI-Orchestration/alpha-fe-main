@@ -30,6 +30,18 @@ describe('existing API transport compatibility', () => {
   });
 });
 
+describe('squad build cancellation', () => {
+  it('posts cancellation for the selected squad run', async () => {
+    const cancelledRun = { id: 'squad-run-1', status: 'cancelled' };
+    const fetchMock = vi.fn().mockResolvedValue(json(cancelledRun));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiService.cancelSquadRun(cancelledRun.id)).resolves.toEqual(cancelledRun);
+    expect(String(fetchMock.mock.calls[0][0])).toMatch(/\/squad-runs\/squad-run-1\/cancel$/);
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST');
+  });
+});
+
 describe('new ticket helper stays within its namespace', () => {
   it('accepts the actual PM queue URL including its query string', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ items: [] })); vi.stubGlobal('fetch', fetchMock);

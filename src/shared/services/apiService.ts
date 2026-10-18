@@ -662,6 +662,8 @@ export const apiService = {
   getSquadRuns: () => fetchJson<SquadRun[]>('/squad-runs'),
   getSquadRun: (id: string) =>
     fetchJson<SquadRun & { runs: PrototypeRun[] }>(`/squad-runs/${id}`),
+  cancelSquadRun: (id: string) =>
+    fetchJson<SquadRun>(`/squad-runs/${id}/cancel`, { method: 'POST' }),
   runSquad: (squadId: string, payload: { issueId: string; plan?: string[]; mission?: string }) =>
     fetchJson<SquadRun>(`/squads/${squadId}/run`, { method: 'POST', body: JSON.stringify(payload) }),
 

@@ -21,6 +21,7 @@ import {
   RefreshCw,
   ScrollText,
   ShieldAlert,
+  Square,
   TerminalSquare,
   Users,
   X
@@ -425,6 +426,7 @@ export const LiveBuildRoomView: React.FC = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [stoppingRun, setStoppingRun] = useState(false);
   const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
   const [buildPreview, setBuildPreview] = useState<BuildBranchPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -498,7 +500,7 @@ export const LiveBuildRoomView: React.FC = () => {
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') void loadRoom(true);
     }, 10_000);
-    const eventNames = ['stage_update', 'run_activity', 'run_started', 'run_completed', 'run_failed', 'run_cancelled', 'squad_member_started', 'squad_run_completed', 'squad_run_failed', 'agent_call.created', 'agent_call.queued', 'agent_call.started', 'agent_call.activity', 'agent_call.completed', 'agent_call.failed', 'agent_call.cancelled'];
+    const eventNames = ['stage_update', 'run_activity', 'run_started', 'run_completed', 'run_failed', 'run_cancelled', 'squad_member_started', 'squad_run_completed', 'squad_run_failed', 'squad_run_cancelled', 'agent_call.created', 'agent_call.queued', 'agent_call.started', 'agent_call.activity', 'agent_call.completed', 'agent_call.failed', 'agent_call.cancelled'];
     const scheduleRefresh = () => {
       if (refreshTimerRef.current !== null) window.clearTimeout(refreshTimerRef.current);
       refreshTimerRef.current = window.setTimeout(() => {
@@ -698,12 +700,34 @@ export const LiveBuildRoomView: React.FC = () => {
       showToast('Add an issue first', 'A squad run needs a project issue as its build target.', 'info');
       return;
     }
+    if (snapshot.activeRun?.status === 'awaiting_approval' && !window.confirm(
+      'This build is finished and waiting for review. Start another full squad build for this issue?'
+    )) return;
+    if ((snapshot.activeRun?.status === 'failed' || snapshot.activeRun?.status === 'cancelled') && !window.confirm(
+      'The previous build stopped. Start a new squad build attempt for this issue?'
+    )) return;
     setStarting(true);
     try {
       await triggerSquadRun(snapshot.squad.id, issue.id, undefined, issue.title);
       await loadRoom(true);
     } finally {
       setStarting(false);
+    }
+  };
+
+  const handleStopBuild = async () => {
+    const run = snapshot?.activeRun;
+    if (!run || run.status !== 'running' || stoppingRun) return;
+    setStoppingRun(true);
+    try {
+      await apiService.cancelSquadRun(run.id);
+      showToast('Build stopped', 'The active agent has stopped. Work already on the build branch remains available for review.', 'success');
+      await loadRoom(true);
+    } catch (error: any) {
+      showToast('Could not stop build', error?.message ?? 'The active squad build could not be stopped.', 'error');
+      await loadRoom(true);
+    } finally {
+      setStoppingRun(false);
     }
   };
 
@@ -885,7 +909,7 @@ export const LiveBuildRoomView: React.FC = () => {
 
         <div className="order-1 flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-slate-300"><TerminalSquare className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.issue ? `${snapshot.issue.identifier} · ${snapshot.issue.title}` : snapshot.squad ? 'Ready for the next project issue' : 'No squad assigned to this project'}</div><div className="mt-1 text-xs text-slate-500">{snapshot.activeRun?.mission || (snapshot.squad ? 'Run a squad against a project issue to start a live build.' : 'Assign a squad before starting a squad build.')}</div></div></div>
-          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.squad ? <button type="button" onClick={() => void handleRunBuild()} disabled={!snapshot.canRun || starting || !snapshot.issue && !fallbackIssue} title={!snapshot.issue && !fallbackIssue ? 'Create a project issue before starting a squad run.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-3.5 w-3.5 fill-current" />{starting ? 'Starting…' : 'Run Build'}</button> : <button type="button" onClick={() => setActiveTab('squads')} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400"><Users className="h-3.5 w-3.5" />Set up a squad</button>}</div>
+          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.squad ? snapshot.activeRun?.status === 'running' ? <button type="button" onClick={() => void handleStopBuild()} disabled={!snapshot.canRun || stoppingRun} title="Stop the active squad agent and leave the build branch available for review." className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-45"><Square className={`h-3.5 w-3.5 ${stoppingRun ? 'animate-pulse' : 'fill-current'}`} />{stoppingRun ? 'Stopping…' : 'Stop build'}</button> : <button type="button" onClick={() => void handleRunBuild()} disabled={!snapshot.canRun || starting || stoppingRun || !snapshot.issue && !fallbackIssue} title={!snapshot.issue && !fallbackIssue ? 'Create a project issue before starting a squad run.' : snapshot.activeRun?.status === 'awaiting_approval' ? 'Start another build after confirming.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-3.5 w-3.5 fill-current" />{starting ? 'Starting…' : snapshot.activeRun?.status === 'awaiting_approval' ? 'Run again' : snapshot.activeRun?.status === 'failed' || snapshot.activeRun?.status === 'cancelled' ? 'Retry build' : 'Run Build'}</button> : <button type="button" onClick={() => setActiveTab('squads')} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400"><Users className="h-3.5 w-3.5" />Set up a squad</button>}</div>
         </div>
 
         {buildRepository && buildBranch && <section className="order-2 flex flex-col gap-4 rounded-2xl border border-sky-400/20 bg-gradient-to-r from-sky-500/[0.07] to-surface-100/50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-live="polite">
