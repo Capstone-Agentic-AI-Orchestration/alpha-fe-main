@@ -1,5 +1,5 @@
 import { ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
   Plus, 
@@ -21,6 +21,7 @@ import {
   ChevronLeft,
   ShieldCheck,
   Workflow,
+  Loader2,
 } from 'lucide-react';
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
@@ -64,6 +65,19 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [resourcesModalOpen, setResourcesModalOpen] = useState<boolean>(false);
+  const [repositoryFocus, setRepositoryFocus] = useState<{ projectId: string; repo: string } | null>(null);
+  const clearRepositoryFocus = useCallback(() => setRepositoryFocus(null), []);
+
+  useEffect(() => {
+    if (!repositoryFocus) return;
+    const focus = repositoryFocus;
+    const timer = window.setTimeout(() => {
+      setRepositoryFocus(current =>
+        current?.projectId === focus.projectId && current.repo === focus.repo ? null : current
+      );
+    }, 15_000);
+    return () => window.clearTimeout(timer);
+  }, [repositoryFocus]);
 
   // Search & Filters on main list
   const [searchQuery, setSearchQuery] = useTabSessionState<string>('projects.search', '');
@@ -96,8 +110,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     .filter(r => r.type === 'github_repo')
     .map(r => r.pathOrUrl);
   const { repos: projectRepos } = useProjectRepos(selectedProject?.id ?? null, attachedRepos);
-  /** The repository view replaces the board, and only exists while there is a repository to show. */
-  const showRepository = boardViewMode === 'repository' && projectRepos.length > 0;
+  const focusedRepo = repositoryFocus && repositoryFocus.projectId === selectedProject?.id
+    ? repositoryFocus.repo.toLowerCase()
+    : null;
+  const repositoryPending = Boolean(
+    boardViewMode === 'repository' &&
+    focusedRepo &&
+    !projectRepos.some(repo => repo.toLowerCase() === focusedRepo)
+  );
+  /** Keep the new-repository handoff on its loading state until that repo is in the project list. */
+  const showRepository = boardViewMode === 'repository' && projectRepos.length > 0 && !repositoryPending;
 
   // `key` is UNIQUE in the daemon's schema and a duplicate makes the write fail
   // with nothing on screen to explain it. Flag it while the dialog is still open.
@@ -265,7 +287,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
           <div className="flex items-center gap-2">
             
             {/* Search Input — issues only, so it goes with the board. */}
-            {!showRepository && (
+            {!showRepository && !repositoryPending && (
             <div className="relative w-48">
               <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
@@ -283,11 +305,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               <button
                 onClick={() => setBoardViewMode('kanban')}
                 className={`p-1.5 rounded-lg transition-colors ${
-                  boardViewMode === 'kanban' || (boardViewMode === 'repository' && !showRepository) ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                  boardViewMode === 'kanban' || (boardViewMode === 'repository' && !showRepository && !repositoryPending) ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
                 }`}
                 title="Kanban Board"
                 aria-label="Kanban board"
-                aria-pressed={boardViewMode === 'kanban' || (boardViewMode === 'repository' && !showRepository)}
+                aria-pressed={boardViewMode === 'kanban' || (boardViewMode === 'repository' && !showRepository && !repositoryPending)}
               >
                 <KanbanIcon className="w-3.5 h-3.5" />
               </button>
@@ -302,15 +324,15 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               >
                 <ListIcon className="w-3.5 h-3.5" />
               </button>
-              {projectRepos.length > 0 && (
+              {(projectRepos.length > 0 || repositoryPending) && (
                 <button
                   onClick={() => setBoardViewMode('repository')}
                   className={`p-1.5 rounded-lg transition-colors ${
-                    showRepository ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                    showRepository || repositoryPending ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
                   }`}
                   title="Repository & pipeline"
                   aria-label="Repository and pipeline"
-                  aria-pressed={showRepository}
+                  aria-pressed={showRepository || repositoryPending}
                 >
                   <Workflow className="w-3.5 h-3.5" />
                 </button>
@@ -360,7 +382,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             // The repository needs the room a file viewer needs; the rail is
             // 320px, so the entry point lives there and the view lives here.
             <div className="flex-1 min-w-0 overflow-y-auto p-5 select-text">
-              <ProjectRepositoryView projectId={selectedProject.id} repositories={projectRepos} />
+              <ProjectRepositoryView
+                projectId={selectedProject.id}
+                repositories={projectRepos}
+                initialRepository={repositoryFocus?.projectId === selectedProject.id ? repositoryFocus.repo : undefined}
+                onInitialRepositoryApplied={clearRepositoryFocus}
+              />
+            </div>
+          ) : repositoryPending ? (
+            <div role="status" className="flex flex-1 items-center justify-center gap-2 text-sm text-gray-400">
+              <Loader2 className="h-4 w-4 motion-safe:animate-spin text-brand-400" aria-hidden />
+              Connecting the new repository and opening its preview…
             </div>
           ) : (
             <div className="flex-1 overflow-hidden">
@@ -545,6 +577,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               onOrgChange={(org) => updateProject(selectedProject.id, { githubOrg: org })}
               readOnly={!canEditProjects}
               canCreateRepository={canProvisionRepositories}
+              onRepositoryCreated={(_repositories, previewRepository) => {
+                setRepositoryFocus({ projectId: selectedProject.id, repo: previewRepository });
+                setResourcesModalOpen(false);
+                setBoardViewMode('repository');
+              }}
             />
           </Modal>
         )}
