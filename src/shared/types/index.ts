@@ -211,10 +211,19 @@ export interface SquadRun {
   status: 'running' | 'awaiting_approval' | 'failed' | 'cancelled';
   mission: string;
   plan: string[];
+  /** Frozen role and phase assignments for each member of this sequential run. */
+  memberAssignments?: SquadMemberAssignment[];
   /** Why the squad stopped early, when it did. */
   stoppedReason?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SquadMemberAssignment {
+  agentId: string;
+  stageLabel: string;
+  phase?: BuildStepPhase;
+  instructions: string;
 }
 
 export interface ToastMessage {
