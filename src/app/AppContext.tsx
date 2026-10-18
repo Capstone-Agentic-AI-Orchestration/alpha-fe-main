@@ -44,6 +44,7 @@ import {
   normalizeSettings
 } from '@/data/defaults';
 import { apiService, normalizeGitHubRepo, normalizeSkill, onWorkspaceRefused, setActiveWorkspaceId } from '@/shared/services/apiService';
+import { mergeThreadsWithCachedMessages } from './chatThreadHydration';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
@@ -951,11 +952,7 @@ ${e.detail}`;
        */
       if (snapshot.chatThreads) {
         setChatThreads(prev => {
-          const loaded = new Map(prev.map(t => [t.id, t.messages]));
-          return (snapshot.chatThreads as ChatThread[]).map(t => ({
-            ...t,
-            messages: t.messages ?? loaded.get(t.id)
-          }));
+          return mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev);
         });
       }
       if (snapshot.runs) setPrototypeRuns(normalizeLegacyPrototypeRuns(snapshot.runs));
@@ -1246,6 +1243,10 @@ ${e.detail}`;
     setActiveWorkspaceId(workspaceId);
     setLiveBuildRoomProjectIds([]);
     setActiveThreadId(null);
+    // The next workspace may have thread IDs loaded earlier in this session.
+    // Clear this cache so opening one always rehydrates its transcript from
+    // that workspace's authoritative store.
+    loadedThreadsRef.current.clear();
     setRunSetupIssueId(null);
     setRunSetupAgentId(null);
     setProjects(loadFromStorage<Project[]>(`projects:${workspaceId}`, []));
@@ -1274,7 +1275,9 @@ ${e.detail}`;
       if (snapshot.squads) setSquads(snapshot.squads as Squad[]);
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
-      if (snapshot.chatThreads) setChatThreads(snapshot.chatThreads as ChatThread[]);
+      if (snapshot.chatThreads) {
+        setChatThreads(prev => mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev));
+      }
       if (snapshot.runs) setPrototypeRuns(normalizeLegacyPrototypeRuns(snapshot.runs));
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
       if (snapshot.analytics && typeof snapshot.analytics === 'object') {
