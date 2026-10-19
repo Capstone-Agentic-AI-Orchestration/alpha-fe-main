@@ -21,13 +21,14 @@ function position(ticket: TicketForSteps): number | 'complete' | null {
   return scope ? 2 : 1;
 }
 
+function stateAt(index: number, at: number | 'complete'): ClientProgressState {
+  if (at === 'complete' || index < at) return 'done';
+  return index === at ? 'current' : 'upcoming';
+}
+
 /** Five plain steps for the client. Display only; the server decides what can actually happen next. */
 export function clientProgressSteps(ticket: TicketForSteps): ClientProgressStep[] {
   const at = position(ticket);
   if (at === null) return [];
-  return CLIENT_PROGRESS_LABELS.map((label, index) => ({
-    label,
-    state: at === 'complete' || index < at ? 'done' : index === at ? 'current' : 'upcoming',
-    needsYou: index === at && ticket.requestedAction !== null,
-  }));
+  return CLIENT_PROGRESS_LABELS.map((label, index) => ({ label, state: stateAt(index, at), needsYou: index === at && ticket.requestedAction !== null }));
 }
