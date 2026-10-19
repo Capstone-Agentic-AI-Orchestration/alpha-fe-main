@@ -20,5 +20,6 @@ describe('client ticket detail', () => {
     expect(html).toContain('Review the proposed work');
     expect(html).toContain('Development cannot start until the scope is agreed and the work is authorized.');
     expect(html).toContain('Agree to scope');
+    expect(html).toContain('Request changes');
   });
 });

@@ -28,6 +28,8 @@ export function ClientDeliveryFiles({ workspaceId, ticketId, deliveryId, scopeVe
       if (controller.signal.aborted) return;
       if (value.scopeVersionId !== scopeVersionId) throw new Error('Changed scope');
       setManifest(value);
+      // Nothing to download: the written result summary is all there is to review.
+      if (value.files.length === 0) inspectionCallback.current?.(true);
     }).catch(() => {
       if (!controller.signal.aborted) setError('Protected result files are unavailable. Refresh or ask your project manager.');
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
