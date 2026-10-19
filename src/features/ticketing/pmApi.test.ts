@@ -86,6 +86,17 @@ describe('PM ticket transport', () => {
     expect(request).toHaveBeenCalledWith('/tickets/ticket%2Fone/project', { method: 'PUT', body: JSON.stringify(input) });
   });
 
+  it('records a shared-inbox decline with its optional internal-only reason', async () => {
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({
+      intakeId: 'intake-1', operationId: 'decline-operation', status: 'declined',
+    } as never);
+    await expect(pmTicketApi.declineCentralIntake('intake-1', 'decline-operation', 'Outside scope.'))
+      .resolves.toEqual({ intakeId: 'intake-1', operationId: 'decline-operation', status: 'declined' });
+    expect(request).toHaveBeenCalledWith('/tickets/intakes/intake-1/decline', {
+      method: 'POST', body: JSON.stringify({ schemaVersion: 1, operationId: 'decline-operation', reason: 'Outside scope.' }),
+    });
+  });
+
   it('changes client request permission through the PM ticket API', async () => {
     const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({
       ticketId: 'ticket-1', acceptsNewRequests: true,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Clock3, FileText, FolderKanban, LockKeyhole, MessageSquare, Send, ShieldCheck } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Clock3, ExternalLink, FileText, FolderKanban, LockKeyhole, MessageSquare, Send, ShieldCheck } from 'lucide-react';
 
 import type {
   ClientTicketCommandInput, ClientTicketDetail as ClientTicketRecord,
@@ -93,7 +93,8 @@ export function ClientTicketDetail({
         {ticket.request?.requestedDeadline && <p className="mt-3 text-[10px] text-gray-500">Requested date: {ticket.request.requestedDeadline} · not guaranteed</p>}
       </InfoCard>
       <InfoCard title="Shared project" icon={<FolderKanban size={14} />}>
-      {ticket.sharedProjectName ? <><p className="text-xs font-medium text-gray-200">{ticket.sharedProjectName}</p><p className="mt-1 text-[10px] text-gray-500">Your PM shared this project name as a limited preview. Its Issues, files, and other requests remain private.</p></>
+        {ticket.sharedProjectName ? <><p className="text-xs font-medium text-gray-200">{ticket.sharedProjectName}</p><p className="mt-1 text-[10px] text-gray-500">Your PM shared this project name as a limited preview. Its Issues, files, and other requests remain private.</p>
+          {ticket.sharedProjectPreviewUrl && <div className="mt-3 rounded-lg border border-white/[0.07] p-3"><a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-xs font-medium text-brand-300 hover:text-brand-200">Open hosted project preview <ExternalLink size={12} /></a><p className="mt-1.5 text-[10px] text-amber-200/70">This opens the hosted site. It may be publicly accessible to anyone with the link; it does not grant access to Alpha project data.</p></div>}</>
           : <p className="text-xs text-gray-500">No project name has been shared on this request yet. Your PM may link it to a project or handle it without developer work.</p>}
         {ticket.relatedTicket && <p className="mt-3 text-[10px] text-gray-500">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
       </InfoCard>

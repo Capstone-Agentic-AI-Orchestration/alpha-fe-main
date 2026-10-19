@@ -29,6 +29,7 @@ export interface PmTicketQueueItem {
     projectName?: string | null;
     clientAccessActive: boolean;
     clientGroup?: { key: string; displayName: string; acceptsNewRequests: boolean; accessActive: boolean };
+    clientReplyUnread?: boolean;
     clientInvitation: {
       status: 'pending' | 'expired' | 'revoked' | 'consumed';
       delivery: 'queued' | 'sending' | 'retrying' | 'accepted_by_provider' | 'failed' | 'unknown';
@@ -64,6 +65,7 @@ export interface PmTicketDetail {
   writesAvailable: boolean;
   requestedAction: 'reply' | 'agree_scope' | 'review_result' | null;
   sharedProjectName: string | null;
+  sharedProjectPreviewUrl?: string | null;
   relatedTicket: { id: string; reference: string; title: string } | null;
   scope: { id: string; summary: string; proposedAt: string; agreed: boolean } | null;
   delivery: { id: string; scopeVersionId: string; summary: string; sharedAt: string; accepted: boolean } | null;
@@ -73,6 +75,7 @@ export interface PmTicketDetail {
     projectId: string | null;
     projectName?: string | null;
     projectClientVisible?: boolean;
+    projectPreview?: { repository: string; branch: 'main' | 'uat'; url: string } | null;
     requiredIssueIds: string[];
     actionOwner: TicketActionOwner;
     nextAction: TicketNextAction;
@@ -159,20 +162,23 @@ export interface PmTicketProjectLinkInput {
   expectedVersion: number;
   projectId: string | null;
   clientVisible: boolean;
+  projectPreview?: { repository: string; branch: 'main' | 'uat'; url: string } | null;
 }
 export interface PmTicketProjectLinkReceipt extends PmTicketReceipt {
   projectId: string | null;
   projectName: string | null;
   clientVisible: boolean;
+  projectPreview: { repository: string; branch: 'main' | 'uat'; url: string } | null;
 }
 export interface PmClientRequestAccessReceipt { ticketId: string; acceptsNewRequests: boolean }
 export interface PmPublicInquiryCode { code: string; submissionEnabled: boolean }
 export interface PmCentralIntakeItem {
-  id: string; fullName: string; email: string; company: string | null; title: string;
+  id: string; publicReference?: string; fullName: string; email: string; company: string | null; title: string;
   description: string; requestedDeadline: string | null; submittedAt: string;
 }
 export interface PmCentralIntakePage { items: PmCentralIntakeItem[]; nextCursor: string | null }
 export interface PmCentralIntakeAcceptance { ticketId: string; workspaceId: string; reference: string; operationId: string }
+export interface PmCentralIntakeDecline { intakeId: string; operationId: string; status: 'declined' }
 export type PmTicketInvitationEmailReceipt = PmTicketInvitationReceipt;
 
 function encodeId(value: string): string { return encodeURIComponent(value); }
@@ -220,6 +226,7 @@ export const pmTicketApi = {
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Shared inquiry response is invalid.');
       const row = value as Record<string, unknown>;
       if (typeof row.id !== 'string' || !row.id.trim() || typeof row.fullName !== 'string' || !row.fullName.trim()
+        || (row.publicReference !== undefined && (typeof row.publicReference !== 'string' || !/^INQ-[A-F0-9]{32}$/.test(row.publicReference)))
         || typeof row.email !== 'string' || !row.email.trim()
         || (row.company !== null && typeof row.company !== 'string')
         || typeof row.title !== 'string' || !row.title.trim() || typeof row.description !== 'string' || !row.description.trim()
@@ -227,7 +234,7 @@ export const pmTicketApi = {
         || typeof row.submittedAt !== 'string' || !Number.isFinite(Date.parse(row.submittedAt))) {
         throw new Error('Shared inquiry response is invalid.');
       }
-      return { id: row.id, fullName: row.fullName, email: row.email, company: row.company as string | null,
+      return { id: row.id, ...(typeof row.publicReference === 'string' ? { publicReference: row.publicReference } : {}), fullName: row.fullName, email: row.email, company: row.company as string | null,
         title: row.title, description: row.description, requestedDeadline: row.requestedDeadline as string | null,
         submittedAt: row.submittedAt };
     });
@@ -243,6 +250,15 @@ export const pmTicketApi = {
       || typeof row.reference !== 'string' || !/^TKT-[A-F0-9]{32}$/.test(row.reference)
       || row.operationId !== operationId) throw new Error('Inquiry acceptance response is invalid.');
     return { ticketId: row.ticketId, workspaceId: row.workspaceId, reference: row.reference, operationId };
+  },
+  async declineCentralIntake(intakeId: string, operationId: string, reason: string | null = null): Promise<PmCentralIntakeDecline> {
+    const value = await apiService.ticketRequest<unknown>(`/tickets/intakes/${encodeId(intakeId)}/decline`, {
+      method: 'POST', body: JSON.stringify({ schemaVersion: 1, operationId, ...(reason ? { reason } : {}) }),
+    });
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Inquiry decline response is invalid.');
+    const row = value as Record<string, unknown>;
+    if (row.intakeId !== intakeId || row.operationId !== operationId || row.status !== 'declined') throw new Error('Inquiry decline response is invalid.');
+    return { intakeId, operationId, status: 'declined' };
   },
   async getPublicInquiryCode(): Promise<PmPublicInquiryCode> {
     const value = await apiService.ticketRequest<unknown>('/tickets/inquiry-code');

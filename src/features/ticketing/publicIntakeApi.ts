@@ -153,10 +153,14 @@ export const publicTicketIntakeApi = {
 
     let payload: unknown;
     try { payload = await response.json(); } catch { payload = null; }
-    if (payload !== null && typeof payload === 'object' && !Array.isArray(payload)
-      && (payload as Record<string, unknown>).received === true
-      && Object.keys(payload as Record<string, unknown>).length === 1) {
-      return { received: true };
+    if (payload !== null && typeof payload === 'object' && !Array.isArray(payload)) {
+      const receipt = payload as Record<string, unknown>;
+      const keys = Object.keys(receipt);
+      if (receipt.received === true && keys.every(key => key === 'received' || key === 'publicReference')
+        && (receipt.publicReference === undefined
+          || (typeof receipt.publicReference === 'string' && /^INQ-[A-F0-9]{32}$/.test(receipt.publicReference)))) {
+        return { received: true, ...(typeof receipt.publicReference === 'string' ? { publicReference: receipt.publicReference } : {}) };
+      }
     }
     throw new PublicTicketIntakeApiError(
       response.status, 'We could not confirm whether this went through. Keep the same submission ID and verify again before retrying.',

@@ -35,6 +35,7 @@ export interface ClientTicketDetail extends ClientTicketQueueItem {
   companyLabel: string;
   version: number;
   sharedProjectName: string | null;
+  sharedProjectPreviewUrl?: string | null;
   relatedTicket: { id: string; reference: string; title: string } | null;
   scope: { id: string; summary: string; proposedAt: string; agreed: boolean } | null;
   delivery: { id: string; scopeVersionId: string; summary: string; sharedAt: string; accepted: boolean } | null;

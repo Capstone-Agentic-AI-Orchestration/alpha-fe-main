@@ -17,7 +17,9 @@ export interface PublicTicketInquiryRequest {
   inquiry: PublicTicketInquiryPayload;
 }
 
-/** The anonymous caller must never receive a ticket id, reference or status. */
+/** Central intake gets only its non-ticket inquiry receipt; workspace intake
+ * retains the legacy generic response. Neither response grants account access. */
 export interface PublicTicketInquiryResponse {
   received: true;
+  publicReference?: string;
 }

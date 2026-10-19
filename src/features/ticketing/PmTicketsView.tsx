@@ -231,6 +231,15 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
 
   useEffect(() => { void loadQueue(); }, [loadQueue, refreshVersion]);
 
+  useEffect(() => {
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible' && !pending) void loadQueue();
+    };
+    const timer = window.setInterval(refreshIfVisible, 30_000);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshIfVisible); };
+  }, [loadQueue, pending]);
+
   const selectedQueueItem = useMemo(
     () => queue?.items.find(item => item.id === selectedId) ?? null,
     [queue, selectedId],
@@ -278,7 +287,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
       if (current) setHistoryError(safeError(error, 'ticket'));
     });
     return () => { current = false; };
-  }, [api, selectedId, panel, selectedQueueItem?.internal.clientAccessActive, refreshVersion]);
+  }, [api, selectedId, panel, selectedQueueItem?.internal.clientAccessActive, selectedQueueItem?.updatedAt, refreshVersion]);
 
   useEffect(() => {
     if (!selectedId || panel !== 'notes' || !selectedQueueItem) return;
@@ -304,7 +313,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
       || (detail.internal.authorizedScopeVersionId && value.projectId !== detail.internal.projectId)) return;
     const inputValue: PmTicketProjectLinkInput = {
       schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
-      projectId: value.projectId, clientVisible: value.clientVisible,
+      projectId: value.projectId, clientVisible: value.clientVisible, projectPreview: value.projectPreview,
     };
     writeLock.current = true; setProjectLinkSaving(true); setProjectLinkError(''); setWriteError('');
     try {
@@ -754,6 +763,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                   <PmProjectLinkForm key={`${detail.id}:${detail.version}:${detail.internal.projectId ?? ''}:${detail.internal.projectClientVisible === true}`}
                     initialProjectId={detail.internal.projectId}
                     initialClientVisible={detail.internal.projectClientVisible === true}
+                    initialProjectPreview={detail.internal.projectPreview ?? null}
                     projectLocked={Boolean(detail.internal.authorizedScopeVersionId || detail.internal.requiredIssueIds.length)}
                     disabled={writing || projectLinkSaving || Boolean(pending)}
                     onCancel={() => setProjectLinkOpen(false)} onSubmit={value => void saveProjectLink(value)} />

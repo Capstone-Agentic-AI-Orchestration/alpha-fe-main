@@ -69,7 +69,7 @@ export function PmTicketQueueList({ items, selectedId, disabled, requestAccessSa
           className={`w-full border-t border-white/[0.04] p-3.5 pl-5 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-300 disabled:cursor-not-allowed disabled:opacity-50 ${selectedId === item.id ? 'bg-brand-500/[0.08] shadow-[inset_2px_0_0_0_#a78bfa]' : 'hover:bg-white/[0.025]'}`}>
           <div className="flex items-center justify-between gap-2">
             <span className="font-mono text-[10px] text-gray-500">{item.reference}</span>
-            <span className={`rounded px-1.5 py-0.5 text-[10px] ${statusStyle(item.status)}`}>{statusLabel(item.status)}</span>
+            <span className="flex items-center gap-1.5">{item.internal.clientReplyUnread && <span className="rounded bg-sky-500/15 px-1.5 py-0.5 text-[9px] text-sky-200">New reply</span>}<span className={`rounded px-1.5 py-0.5 text-[10px] ${statusStyle(item.status)}`}>{statusLabel(item.status)}</span></span>
           </div>
           <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-200">{item.title}</p>
           <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-gray-500">
