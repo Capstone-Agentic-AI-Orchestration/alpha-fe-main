@@ -6,8 +6,8 @@ import { useGSAP } from '@gsap/react';
 const stages: { title: string; short: string; description: string; icon: LucideIcon }[] = [
   { title: 'Share your idea', short: 'Start with the outcome.', description: 'Describe what you want to build, who it is for, and what needs to change. An Alpha account is not needed to send an inquiry.', icon: FileText },
   { title: 'Talk with your PM', short: 'Make the next step clear.', description: 'A project manager reviews your inquiry and follows up to understand your goals, constraints, and timing before any work is scheduled.', icon: MessageSquare },
-  { title: 'Receive an invitation', short: 'Access, when it is ready.', description: 'When your project manager grants client access, an invitation verifies your email and opens the specific tickets shared with you.', icon: Mail },
-  { title: 'Follow your tickets', short: 'Keep the conversation together.', description: 'Return with an email sign-in link to review shared ticket details and status, and communicate with your project manager where available.', icon: Check },
+  { title: 'Receive an invitation', short: 'Access, when it is ready.', description: 'When your project manager grants client access, you get an email invitation. Open it to verify your email and choose a password. It opens only the tickets shared with you.', icon: Mail },
+  { title: 'Follow your tickets', short: 'Keep the conversation together.', description: 'Sign in with your email and password to follow your tickets, message your project manager, attach documents, and review the finished work. Forgot your password? You can request a fresh link any time.', icon: Check },
 ];
 
 export function InquiryWorkflow() {

@@ -12,6 +12,7 @@ import { ClientTicketDetail } from './ClientTicketDetail';
 import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientPasswordSignIn } from './ClientPasswordSignIn';
 import { clientTicketProgress } from './clientTicketProgress';
+import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink';
 import { input, primary, secondary, time } from './ticketUi';
 
 type Filter = NonNullable<Parameters<typeof clientTicketApi.listTickets>[1]>['filter'];
@@ -65,10 +66,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [portalState, setPortalState] = useState<PortalState>('checking');
   const [session, setSession] = useState<ClientSession | null>(null);
   const [phaseWorkflowEnabled, setPhaseWorkflowEnabled] = useState(false);
+  const [workflowChecked, setWorkflowChecked] = useState(false);
   const [workspaceOptions, setWorkspaceOptions] = useState<Array<{ workspaceId: string; displayName: string }>>([]);
   const [workspaceId, setWorkspaceId] = useState('');
   const [queue, setQueue] = useState<ClientTicketQueue | null>(null);
-  const [filter, setFilter] = useState<NonNullable<Filter>>('all');
+  const [filter, setFilter] = useState<NonNullable<Filter>>(() => (typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash)));
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -106,16 +108,22 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   useEffect(() => {
     let current = true;
     setPhaseWorkflowEnabled(false);
-    if (workflowActionsDisabledOverride || inspectionOnly) return () => { current = false; };
+    setWorkflowChecked(false);
+    if (workflowActionsDisabledOverride || inspectionOnly) { setWorkflowChecked(true); return () => { current = false; }; }
     void api.getWorkflowCapabilities().then(capabilities => {
       if (current) setPhaseWorkflowEnabled(capabilities.phaseWorkflowEnabled === true);
     }).catch(() => {
       // A missing/old workflow endpoint is a safe legacy rollout, not a reason
       // to make the client portal or its conversation unavailable.
       if (current) setPhaseWorkflowEnabled(false);
-    });
+    }).finally(() => { if (current) setWorkflowChecked(true); });
     return () => { current = false; };
   }, [api, inspectionOnly, workflowActionsDisabledOverride]);
+
+  // An email deep link may ask for "Needs your action" before we know it is offered here.
+  useEffect(() => {
+    if (workflowChecked && effectivePortalFilter(filter, !workflowActionsDisabled) !== filter) setFilter('all');
+  }, [workflowChecked, workflowActionsDisabled, filter]);
 
   function clearExpiredClientSession(): void {
     setSession({ authenticated: false }); setPortalState('signed_out');
