@@ -2,6 +2,7 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useApp } from '@/app/AppContext';
 import { Modal } from '@/shared/components/Modal';
 import { ExecutionOwner, ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
+import { ProjectResourcesPanel } from './ProjectResourcesPanel';
 import { deriveProjectKey } from './useProjectsViewModel';
 import { normalizeProjectRepositoryUrl } from './projectRepositoryUrl';
 import { Project, ProjectPriority, ProjectResource } from '@/shared/types';
@@ -17,7 +18,10 @@ const ICONS = ['⚡', '🎨', '🚀', '🛡️', '💳', '🧠', '📦', '🌐',
 const inputClass = 'w-full min-w-0 rounded-xl border border-white/10 bg-surface px-3.5 py-2.5 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:border-brand-400';
 
 export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose, onCreated }) => {
-  const { createProject, projects, agents, squads } = useApp();
+  const { createProject, updateProject, projects, agents, squads, can } = useApp();
+  const [createdProject, setCreatedProject] = useState<Project | null>(null);
+  const [setupRepository, setSetupRepository] = useState(true);
+  const [repositoryProvisioning, setRepositoryProvisioning] = useState(false);
   const formId = useId();
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('⚡');
@@ -38,6 +42,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
 
   useEffect(() => {
     if (!isOpen) return;
+    setCreatedProject(null); setSetupRepository(true); setRepositoryProvisioning(false);
     setName(''); setIcon('⚡'); setDescription(''); setOwner(null); setPriority('medium');
     setTargetDate(''); setResources([]); setRepoUrl(''); setError(null); setRepoError(null); setShowIcons(false);
   }, [isOpen]);
@@ -83,10 +88,28 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
       const project = await createProject({ name: name.trim(), key, description: description.trim(), icon, color: '#6366f1', status: 'planned', priority, targetDate,
         leadType: 'agent', leadName, leadAgentId: owner?.type === 'agent' ? owner.id : undefined,
         leadSquadId: owner?.type === 'squad' ? owner.id : undefined, resources: pending ? [...resources, pending] : resources });
-      onCreated?.(project); onClose();
+      if (setupRepository) setCreatedProject(project);
+      else { onCreated?.(project); onClose(); }
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not create the project. Please try again.'); }
     finally { submittingRef.current = false; setSubmitting(false); }
   };
+
+  // Save the project before provisioning so a failed or abandoned setup remains recoverable.
+  if (createdProject) {
+    // Keep the setup panel bound to AppContext's canonical optimistic project.
+    // If persistence fails, AppContext rolls that project back and the panel
+    // reflects the rollback instead of retaining an unattached resource.
+    const setupProject = projects.find(project => project.id === createdProject.id) ?? createdProject;
+    const finish = () => { onCreated?.(setupProject); onClose(); };
+    const saveSetup = (updates: Partial<Project>) => updateProject(setupProject.id, updates);
+    return <Modal isOpen={isOpen} onClose={() => { if (!repositoryProvisioning) finish(); }} title="Set up project repositories" subtitle={`${createdProject.name} is saved. Create a GitHub repository or connect existing code.`} maxWidth="max-w-3xl"
+      footer={<button type="button" onClick={finish} disabled={repositoryProvisioning} className="rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-on-accent hover:bg-brand-400 disabled:cursor-wait disabled:opacity-50">{repositoryProvisioning ? 'Creating repository…' : 'Open project'}</button>}>
+      <ProjectResourcesPanel projectId={setupProject.id} resources={setupProject.resources ?? []}
+        onChange={resources => saveSetup({ resources })} githubOrg={setupProject.githubOrg}
+        onOrgChange={githubOrg => saveSetup({ githubOrg })} canCreateRepository={can('provision_repositories')}
+        onProvisioningChange={setRepositoryProvisioning} />
+    </Modal>;
+  }
 
   return <Modal isOpen={isOpen} onClose={() => { if (!submittingRef.current) onClose(); }} title="New project" subtitle="Set the direction, choose who will execute, and bring your code." maxWidth="max-w-3xl"
     footer={<div className="flex items-center justify-between gap-4"><span className="hidden text-[11px] text-gray-500 sm:block">You can refine the project after creating it.</span><div className="ml-auto flex items-center gap-2"><button type="button" onClick={onClose} disabled={submitting} className="rounded-lg px-4 py-2.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50">Cancel</button><button type="submit" form={formId} disabled={submitting || !name.trim() || !eligibleOwner} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-brand-400 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">{submitting && <Loader2 className="h-4 w-4 animate-spin" />}{submitting ? 'Creating project…' : 'Create project'}</button></div></div>}>
@@ -105,6 +128,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
         <div className="border-t border-white/5 pt-5"><ExecutionOwnerSelect label="Execution owner" required value={owner} onChange={setOwner} agents={agents} squads={squads} /></div>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><label htmlFor={`${formId}-priority`} className="text-xs font-medium text-gray-300">Priority</label><select id={`${formId}-priority`} value={priority} onChange={event => setPriority(event.target.value as ProjectPriority)} className={inputClass}><option value="none">No priority</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div className="space-y-2"><label htmlFor={`${formId}-date`} className="text-xs font-medium text-gray-300">Target date <span className="ml-1 font-normal text-gray-500">Optional</span></label><input id={`${formId}-date`} type="date" value={targetDate} onChange={event => setTargetDate(event.target.value)} className={`${inputClass} [color-scheme:dark]`} /></div></div>
         <section className="space-y-3 border-t border-white/5 pt-5" aria-label="Project repositories">
+          <label className="flex items-start gap-3 text-sm text-gray-200"><input type="checkbox" checked={setupRepository} onChange={event => setSetupRepository(event.target.checked)} className="mt-1 accent-brand-500" /><span>Set up repositories next<span className="mt-1 block text-xs text-gray-500">Create a GitHub repository or connect existing code after saving this project.</span></span></label>
           <div className="space-y-2"><label htmlFor={`${formId}-repo`} className="text-xs font-medium text-gray-300">Repository URL <span className="ml-1 font-normal text-gray-500">Optional</span></label><div className="flex gap-2"><div className="relative min-w-0 flex-1"><GitBranch className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-gray-500" /><input id={`${formId}-repo`} value={repoUrl} onChange={event => { setRepoUrl(event.target.value); setRepoError(null); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addRepository(); } }} placeholder="https://github.com/owner/repository" aria-invalid={!!repoError} aria-describedby={repoError ? `${formId}-repo-error` : `${formId}-repo-hint`} className={`${inputClass} pl-9`} /></div><button type="button" onClick={addRepository} disabled={!repoUrl.trim()} aria-label="Attach repository and add another" title="Attach repository and add another" className="rounded-xl border border-white/10 px-3 text-gray-300 hover:bg-white/5 disabled:opacity-30"><Plus className="h-4 w-4" /></button></div>
           {repoError ? <p id={`${formId}-repo-error`} role="alert" className="text-xs text-rose-300">{repoError}</p> : <p id={`${formId}-repo-hint`} className="text-[11px] text-gray-500">Saved when you create the project. Use + to attach more than one.</p>}</div>
           {resources.map(resource => <div key={resource.id} className="flex items-center justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2 text-xs"><span className="min-w-0 truncate text-gray-300" title={resource.pathOrUrl}>{resource.pathOrUrl}</span><button type="button" onClick={() => setResources(previous => previous.filter(item => item.id !== resource.id))} aria-label={`Remove ${resource.name}`} className="shrink-0 rounded p-1 text-gray-500 hover:text-rose-300"><Trash2 className="h-3.5 w-3.5" /></button></div>)}

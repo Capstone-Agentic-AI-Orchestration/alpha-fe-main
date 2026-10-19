@@ -57,6 +57,8 @@ interface ProjectResourcesPanelProps {
   canCreateRepository?: boolean;
   /** Called after provisioning so the project can open the new repository's preview. */
   onRepositoryCreated?: (repositories: string[], previewRepository: string) => void;
+  /** Lets an owning modal prevent dismissal while GitHub is creating a repo. */
+  onProvisioningChange?: (busy: boolean) => void;
 }
 
 /**
@@ -76,7 +78,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   variant = 'full',
   readOnly = false,
   canCreateRepository = true,
-  onRepositoryCreated
+  onRepositoryCreated,
+  onProvisioningChange
 }) => {
   const isFull = variant === 'full';
   const { showToast, can } = useApp();
@@ -148,6 +151,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
     }
 
     setGhBusy(true);
+    onProvisioningChange?.(true);
     setGhError(null);
     try {
       const base = { projectId, repoName, org, visibility: ghVisibility, deploy: ghDeploy };
@@ -189,7 +193,9 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         ? 'Open Hosting in the repository overview to set up a live preview.'
         : previewHosting?.state === 'unavailable' || previewHosting?.state === 'failed'
           ? `${previewHosting.error ?? 'Hosting needs attention.'} Open the repository overview to review hosting.`
-          : 'Opening the Preview tab. The first deployment may take a few minutes to become live.';
+          : onRepositoryCreated
+            ? 'Opening the Preview tab. The first deployment may take a few minutes to become live.'
+            : 'Open the project to review the new repository and its preview setup.';
       showToast(
         created.length > 1 ? 'Repositories created — opening preview' : 'Repository created — opening preview',
         toastDescription,
@@ -203,6 +209,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       showToast(scaffoldFailureTitle(status), message, 'error');
     } finally {
       setGhBusy(false);
+      onProvisioningChange?.(false);
     }
   };
 

@@ -1016,12 +1016,184 @@ export interface LiveBuildRoomChatCall {
   patchApplied: boolean;
 }
 
+export type LiveBuildOrchestrationStatus =
+  | 'planning'
+  | 'executing'
+  | 'validating'
+  | 'awaiting_approval'
+  | 'publishing'
+  | 'cancelling'
+  | 'completed'
+  | 'blocked'
+  | 'recovery_required'
+  | 'failed'
+  | 'cancelled';
+
+export type LiveBuildTaskStatus =
+  | 'pending'
+  | 'ready'
+  | 'running'
+  | 'submitted'
+  | 'accepted'
+  | 'blocked'
+  | 'failed'
+  | 'cancelled'
+  | 'superseded';
+
+export interface LiveBuildRoomDiffPreview {
+  baseCommit: string;
+  resultCommit: string;
+  branchName: string;
+  changedPaths: string[];
+  pathsTruncated: boolean;
+  diff: string;
+  truncated: boolean;
+}
+
+export type LiveBuildPlanningRecoveryState = 'interrupted' | 'needs_review' | 'manual_review' | 'retained' | 'cleaned';
+
+export interface LiveBuildPlanningRecovery {
+  runId: string;
+  repository: string;
+  branchName: string;
+  baseCommit: string;
+  state: LiveBuildPlanningRecoveryState;
+  reason: string;
+  revision: number;
+  createdAt: string;
+  canPreview: boolean;
+}
+
+export interface LiveBuildPlanningRecoveryPreview {
+  baseCommit: string;
+  headCommit: string;
+  branchName: string;
+  changedPaths: string[];
+  pathsTruncated: boolean;
+  diff: string;
+  truncated: boolean;
+}
+
+export interface LiveBuildRoomOrchestration {
+  run: {
+    id: string;
+    status: LiveBuildOrchestrationStatus;
+    revision: number;
+    planVersion: number;
+    goal: string;
+    exclusions: string[];
+    repository: string;
+    branchName?: string;
+    currentTaskId?: string;
+    stoppedReason?: string;
+    publication?: {
+      branchName: string;
+      baseBranch: string;
+      resultCommit: string;
+      pullRequestUrl: string;
+      publishedAt: string;
+    };
+    createdAt: string;
+    updatedAt: string;
+  };
+  requirements: Array<{ id: string; description: string }>;
+  tasks: Array<{
+    id: string;
+    title: string;
+    description: string;
+    kind: string;
+    ownerAgentId?: string;
+    ownerName: string;
+    dependsOn: string[];
+    requirementIds: string[];
+    acceptanceCriteria: string[];
+    requiredChecks: string[];
+    scope: { includePaths: string[]; excludePaths: string[] };
+    required: boolean;
+    status: LiveBuildTaskStatus;
+    revision: number;
+    attemptCount: number;
+    correctionOfTaskId?: string;
+    correctionCycle?: number;
+  }>;
+  attempts: Array<{
+    id: string;
+    taskId: string;
+    attemptNumber: number;
+    prototypeRunId?: string;
+    agentId?: string;
+    agentName: string;
+    status: 'starting' | 'running' | 'submitted' | 'accepted' | 'rejected' | 'failed' | 'cancelled' | 'recovery_required';
+    startedAt?: string;
+    completedAt?: string;
+    resultCommit?: string;
+    summary?: string;
+    failureReason?: string;
+    report?: {
+      requirementCoverage: Array<{ requirementId?: string; evidence?: string }>;
+      criteriaEvidence: Array<{ criterion?: string; evidence?: string }>;
+      deliverables: Array<{ summary?: string; paths: string[] }>;
+      reportedChecks: Array<{ script?: string; result: 'passed' | 'failed' | 'not_run'; evidence?: string }>;
+      reviewFindings?: Array<{
+        targetTaskId: string;
+        severity: 'warning' | 'blocking' | 'critical';
+        title: string;
+        requirementId?: string;
+        path?: string;
+        evidence: string;
+        instruction: string;
+      }>;
+      blockers: string[];
+    };
+    verification?: {
+      status?: string;
+      missingScripts: string[];
+      commands: Array<{ script?: string; display?: string; exitCode: number | null; signal: string | null }>;
+    };
+    changedPaths: string[];
+  }>;
+  finalValidation?: {
+    status?: string;
+    missingScripts: string[];
+    commands: Array<{ script?: string; display?: string; exitCode: number | null; signal: string | null }>;
+    resultCommit?: string;
+    noOpenBlockingFindings: boolean;
+  };
+  artifacts: Array<{
+    id: string;
+    taskId: string;
+    type: string;
+    version: number;
+    contentHash: string;
+    status: string;
+    createdAt: string;
+  }>;
+  findings: Array<{
+    id: string;
+    taskId: string;
+    sourceTaskId: string;
+    severity: string;
+    requirementId?: string;
+    path?: string;
+    status: string;
+    correctionTaskId?: string;
+    title?: string;
+    evidence?: string;
+    instruction?: string;
+    check?: string;
+    createdAt: string;
+    resolvedAt?: string;
+  }>;
+}
+
 export interface LiveBuildRoomSnapshot {
   project: Pick<Project, 'id' | 'name' | 'key' | 'description' | 'color' | 'status'>;
   squad: (Squad & { projectIds: string[]; memberCount: number }) | null;
   squads: Array<Squad & { assignment?: WorkspaceSquadProjectAssignment }>;
   eligible: boolean;
   canRun: boolean;
+  canControlOrchestration?: boolean;
+  orchestrationResumeAvailable?: boolean;
   canManage: boolean;
   status: SquadRun['status'] | 'idle';
   summary: {
@@ -1037,7 +1209,8 @@ export interface LiveBuildRoomSnapshot {
   phases: LiveBuildRoomPhase[];
   buildRuns: Array<{
     id: string;
-    status: SquadRun['status'];
+    kind: 'squad' | 'orchestration';
+    status: SquadRun['status'] | LiveBuildOrchestrationStatus;
     issueIdentifier?: string;
     issueTitle?: string;
     repository?: string;
@@ -1064,6 +1237,8 @@ export interface LiveBuildRoomSnapshot {
     runId: string;
   }>;
   chatCalls: LiveBuildRoomChatCall[];
+  orchestration?: LiveBuildRoomOrchestration | null;
+  planningRecoveries?: LiveBuildPlanningRecovery[];
   lastUpdated: string;
 }
 
