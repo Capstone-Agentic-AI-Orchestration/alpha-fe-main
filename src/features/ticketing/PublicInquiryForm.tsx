@@ -3,6 +3,7 @@ import { ArrowLeft, Send, ShieldCheck } from 'lucide-react';
 import { PUBLIC_TICKET_INQUIRY_SCHEMA_VERSION } from './publicIntakeContract';
 import type { PublicTicketInquiryPayload, PublicTicketInquiryResponse } from './publicIntakeContract';
 import { PublicTicketIntakeApiError } from './publicIntakeApi';
+import { composeInquiryDescription, INQUIRY_DETAILS_MAX_LENGTH, INQUIRY_LINKS_MAX_LENGTH, INQUIRY_PROMPTS } from './inquiryDetails';
 import { useClientPageMotion } from './publicClient/useClientPageMotion';
 import { input, primary, secondary } from './ticketUi';
 
@@ -25,6 +26,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
   const [company, setCompany] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [links, setLinks] = useState('');
   const [requestedDeadline, setRequestedDeadline] = useState('');
   const [error, setError] = useState('');
   const [validationError, setValidationError] = useState('');
@@ -35,7 +37,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
   const motionRef = useClientPageMotion();
   const locked = isSubmitting || outcomeUnknown;
   const fieldsDisabled = locked || submitted;
-  const dirty = !submitted && Boolean(fullName || email || company || title || description || requestedDeadline);
+  const dirty = !submitted && Boolean(fullName || email || company || title || description || links || requestedDeadline);
   useEffect(() => {
     onNavigationStateChange?.({ dirty, locked });
   }, [dirty, locked, onNavigationStateChange]);
@@ -72,7 +74,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
           email,
           company: company.trim() || null,
           title,
-          description,
+          description: composeInquiryDescription(description, links),
           requestedDeadline: requestedDeadline || null,
         };
       retryPayload.current = payload;
@@ -103,7 +105,14 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
       <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">What do you need? <span className="text-gray-500">(required)</span></span>
         <input className={input} required maxLength={160} disabled={fieldsDisabled} value={title} onChange={event => { setTitle(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="A short summary" /></label>
       <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Details <span className="text-gray-500">(required)</span></span>
-        <textarea className={`${input} min-h-36 resize-y`} required maxLength={6000} disabled={fieldsDisabled} value={description} onChange={event => { setDescription(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="Describe the outcome you’re looking for and any useful context." /></label>
+        <textarea className={`${input} min-h-36 resize-y`} required maxLength={INQUIRY_DETAILS_MAX_LENGTH} aria-describedby="inquiry-prompts" disabled={fieldsDisabled} value={description} onChange={event => { setDescription(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="Describe the outcome you’re looking for and any useful context." /></label>
+      <div id="inquiry-prompts" className="rounded-lg bg-white/[0.03] p-3 text-xs leading-relaxed text-gray-400">
+        <p className="font-medium text-gray-300">Not sure what to write? These help your project manager the most:</p>
+        <ul className="mt-1.5 list-disc space-y-0.5 pl-4">{INQUIRY_PROMPTS.map(prompt => <li key={prompt}>{prompt}</li>)}</ul>
+      </div>
+      <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Links to reference material <span className="text-gray-500">(optional)</span></span>
+        <textarea className={`${input} min-h-20 resize-y`} maxLength={INQUIRY_LINKS_MAX_LENGTH} disabled={fieldsDisabled} value={links} onChange={event => { setLinks(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="One per line: your current website, a shared folder, a design or example you like." />
+        <span className="block text-[11px] text-gray-500">Files can be attached to your ticket once your project manager invites you and you sign in.</span></label>
       <label className="block max-w-xs space-y-2"><span className="text-xs font-medium text-gray-300">Requested target date <span className="text-gray-500">(optional, not guaranteed)</span></span>
         <input className={input} type="date" disabled={fieldsDisabled} value={requestedDeadline} onChange={event => { setRequestedDeadline(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
       <div className="flex items-start gap-2 rounded-lg bg-white/[0.03] p-3 text-xs leading-relaxed text-gray-400"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-gray-500" />

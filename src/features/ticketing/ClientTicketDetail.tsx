@@ -15,6 +15,8 @@ import {
   clientReviewLockMessage, SCOPE_CHANGE_MAX_LENGTH, scopeChangeMessage,
 } from './clientReview';
 import { clientTicketProgress } from './clientTicketProgress';
+import { clientProgressSteps } from './clientProgressSteps';
+import { ClientProgressStrip } from './ClientProgressStrip';
 
 type Decision = Extract<ClientTicketCommandInput['command'], { type: 'agree_scope' | 'accept_delivery' }>;
 export type ClientTicketTab = 'conversation' | 'details' | 'documents';
@@ -152,6 +154,7 @@ export function ClientTicketDetail({
         <div><h2 className={`text-xs font-semibold ${needsAction ? 'text-amber-100' : 'text-brand-100'}`}>{needsAction ? 'Action needed: ' : ''}{progress.label}</h2><p className="mt-1 hidden text-xs leading-relaxed text-gray-300 md:block">{progress.description}</p></div>
       </div>
       {needsAction && canReply && tab !== 'details' && <button onClick={() => setTab('details')} className={`${primary} 2xl:hidden`}>{scopeDecision ? 'Review scope' : 'Review result'}</button>}
+      <div className="basis-full"><ClientProgressStrip steps={clientProgressSteps(ticket)} /></div>
     </section>}
 
     {error && <p role="alert" className="mx-4 mt-3 shrink-0 rounded-md border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-xs text-rose-200 md:mx-6">{error}</p>}

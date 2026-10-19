@@ -28,5 +28,8 @@ describe('client ticket detail layout', () => {
     expect(html).toContain('Write a message…');
     expect(html).toContain('Hello there');
     expect(html).toContain('Copy ticket reference');
+    // The progress path sits in the banner: Agree scope is the current step, and it is the client's turn.
+    expect(html).toContain('aria-label="Request progress"');
+    expect(html).toContain('Agree scope · you');
   });
 });

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Eye, EyeOff } from 'lucide-react';
 import { ClientAuthShell } from './ClientAuthShell';
 import { clientAccountApi, type ClientAccountLink, type ClientAccountSetup } from './clientAccountApi';
+import { ClientFreshLinkRequest } from './ClientFreshLinkRequest';
 
 interface LinkLocation { hash: string; search: string; pathname: string }
 const defaultFailureMessage = () => 'This link is incomplete, expired, or already used. Request password recovery if your account is active, or ask your PM for a fresh invitation.';
@@ -47,6 +48,7 @@ export function ClientAccountSetupPage({ readLink, cleanUrl, failureMessage = de
       <p className="ca-notice">{existing ? 'Your password stays the same. This invitation adds only the request your PM shared.' : 'Use 8–128 characters. A password does not grant access to internal projects or other clients’ requests.'}</p>
     </form>}
     {error && <p className="ca-error" role="alert">{error}</p>}
+    {error && !setup && !checking && !complete && <ClientFreshLinkRequest />}
     {complete && <a className="ca-submit" href="/#/client">Open my requests</a>}
     {!checking && !complete && <><a className="ca-link" href="/#/client/forgot">Set up or reset your password</a><br /><a className="ca-link" href="/#/client">Return to sign in</a></>}
   </ClientAuthShell>;
