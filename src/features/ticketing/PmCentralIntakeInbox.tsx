@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Inbox, Mail, RefreshCw, Send, UserRound } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Clock3, Inbox, Mail, RefreshCw, Send, UserRound, XCircle } from 'lucide-react';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, type PmCentralIntakeItem } from './pmApi';
 import { secondary } from './ticketUi';
@@ -7,6 +7,7 @@ import { secondary } from './ticketUi';
 interface CentralIntakeApi {
   listCentralIntakes(after?: string | null): ReturnType<typeof pmTicketApi.listCentralIntakes>;
   acceptCentralIntake(intakeId: string, operationId: string): ReturnType<typeof pmTicketApi.acceptCentralIntake>;
+  declineCentralIntake(intakeId: string, operationId: string, reason?: string | null): ReturnType<typeof pmTicketApi.declineCentralIntake>;
 }
 
 function friendlyError(error: unknown): string {
@@ -38,8 +39,14 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [accepting, setAccepting] = useState(false);
+  const [declining, setDeclining] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
+  const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
+  const itemsRef = useRef<PmCentralIntakeItem[]>([]);
   const operationIds = useRef(new Map<string, string>());
+  const declineOperationIds = useRef(new Map<string, string>());
+  const initialized = useRef(false);
   const selected = items.find(item => item.id === selectedId) ?? items[0] ?? null;
 
   const load = useCallback(async (after: string | null = null) => {
@@ -48,9 +55,24 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     setError('');
     try {
       const page = await api.listCentralIntakes(after);
-      setItems(current => after ? [...current, ...page.items] : page.items);
+      if (after) {
+        setItems(current => {
+          const combined = [...current, ...page.items];
+          itemsRef.current = combined;
+          return combined;
+        });
+      } else {
+        if (initialized.current) {
+          const currentIds = new Set(itemsRef.current.map(item => item.id));
+          const fresh = page.items.filter(item => !currentIds.has(item.id)).map(item => item.id);
+          if (fresh.length) setNewIds(current => new Set([...current, ...fresh]));
+        }
+        initialized.current = true;
+        itemsRef.current = page.items;
+        setItems(page.items);
+        setSelectedId(current => current && page.items.some(item => item.id === current) ? current : page.items[0]?.id ?? null);
+      }
       setNextCursor(page.nextCursor);
-      setSelectedId(current => after ? current : page.items[0]?.id ?? null);
     } catch (loadError) {
       setError(friendlyError(loadError));
     } finally {
@@ -61,10 +83,19 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
 
   useEffect(() => {
     setItems([]);
+    itemsRef.current = [];
     setSelectedId(null);
     setNextCursor(null);
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!workspaceId || !workspaceCanReview) return;
+    const refreshIfVisible = () => { if (document.visibilityState === 'visible') void load(); };
+    const timer = window.setInterval(refreshIfVisible, 30_000);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+    return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshIfVisible); };
+  }, [load, workspaceCanReview, workspaceId]);
 
   const accept = async () => {
     if (!selected || !workspaceId || accepting) return;
@@ -92,6 +123,34 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     }
   };
 
+  const decline = async () => {
+    if (!selected || !workspaceId || declining || accepting) return;
+    let operationId = declineOperationIds.current.get(selected.id);
+    if (!operationId) {
+      operationId = crypto.randomUUID();
+      declineOperationIds.current.set(selected.id, operationId);
+    }
+    setDeclining(true);
+    setError('');
+    try {
+      await api.declineCentralIntake(selected.id, operationId, declineReason.trim() || null);
+      declineOperationIds.current.delete(selected.id);
+      setNewIds(current => { const next = new Set(current); next.delete(selected.id); return next; });
+      const remaining = items.filter(item => item.id !== selected.id);
+      itemsRef.current = remaining;
+      setItems(remaining);
+      setSelectedId(remaining[0]?.id ?? null);
+      setDeclineReason('');
+    } catch (declineError) {
+      if (!(declineError instanceof ApiRequestError) || (declineError.status !== null && declineError.status < 500)) {
+        declineOperationIds.current.delete(selected.id);
+      }
+      setError(friendlyError(declineError));
+    } finally {
+      setDeclining(false);
+    }
+  };
+
   return <section className="flex h-full min-h-0 flex-col px-4 pb-4 pt-5 md:px-6" aria-label="Shared PM inquiry inbox">
     <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div>
@@ -110,13 +169,13 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
       The shared inquiry inbox is available only to PMs in the selected workspace.
     </div> : <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.5fr)]">
       <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-surface">
-        <div className="border-b border-white/[0.07] px-4 py-3 text-xs text-gray-400">{items.length} loaded {items.length === 1 ? 'inquiry' : 'inquiries'} · Pending PM review</div>
+        <div className="border-b border-white/[0.07] px-4 py-3 text-xs text-gray-400">{items.length} loaded {items.length === 1 ? 'inquiry' : 'inquiries'} · Pending PM review{newIds.size > 0 ? ` · ${newIds.size} new` : ''}</div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           {loading && items.length === 0 ? <p role="status" className="p-5 text-xs text-gray-400">Loading shared inquiries…</p>
             : items.length === 0 ? <div className="p-5 text-center"><Inbox size={22} className="mx-auto text-gray-600" /><p className="mt-3 text-sm text-gray-300">No inquiries waiting</p><p className="mt-1 text-xs text-gray-500">New client inquiries will appear here for PM review.</p></div>
-              : items.map(item => <button key={item.id} type="button" onClick={() => setSelectedId(item.id)} aria-pressed={selected?.id === item.id}
+              : items.map(item => <button key={item.id} type="button" onClick={() => { setSelectedId(item.id); setNewIds(current => { const next = new Set(current); next.delete(item.id); return next; }); setDeclineReason(''); }} aria-pressed={selected?.id === item.id}
                 className={`block w-full border-b border-white/[0.06] border-l-2 p-4 text-left transition-colors ${selected?.id === item.id ? 'border-l-brand-400 bg-brand-500/[0.08]' : 'border-l-transparent hover:bg-white/[0.03]'}`}>
-                <span className="block truncate text-sm font-medium text-gray-100">{item.title}</span>
+                <span className="flex items-center justify-between gap-2"><span className="block truncate text-sm font-medium text-gray-100">{item.title}</span>{newIds.has(item.id) && <span className="shrink-0 rounded bg-brand-500/15 px-1.5 py-0.5 text-[9px] text-brand-200">New</span>}</span>
                 <span className="mt-1 block truncate text-xs text-gray-400">{item.fullName} · {item.email}</span>
                 <span className="mt-2 flex items-center gap-1 text-[11px] text-amber-300/80"><Clock3 size={12} /> Email not verified</span>
               </button>)}
@@ -132,6 +191,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
           <div className="border-b border-white/[0.07] p-5">
             <p className="text-[11px] uppercase tracking-wide text-gray-500">Inquiry · Not yet a ticket</p>
             <h2 className="mt-2 text-lg font-semibold text-white">{selected.title}</h2>
+            {selected.publicReference && <p className="mt-1 font-mono text-[10px] text-gray-500">{selected.publicReference}</p>}
             <p className="mt-2 text-xs text-gray-500">Received {formatDate(selected.submittedAt)}</p>
           </div>
           <div className="grid gap-3 p-5 md:grid-cols-2">
@@ -153,11 +213,17 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
           </div>
           <div className="mt-auto border-t border-white/[0.07] p-5">
             <p className="mb-3 text-xs leading-relaxed text-gray-400">Accepting creates a normal ticket in <span className="font-medium text-gray-200">{workspaceName ?? 'the selected workspace'}</span>. It does not verify the email, create a project, invite the client, or grant portal access.</p>
-            <button type="button" onClick={() => void accept()} disabled={accepting || !workspaceName}
+            <label className="mb-3 block space-y-1.5"><span className="text-[11px] font-medium text-gray-400">Optional internal decline note</span><textarea maxLength={1000} rows={2} value={declineReason} disabled={declining || accepting} onChange={event => setDeclineReason(event.target.value)} className="w-full rounded-lg border border-white/[0.08] bg-black/20 p-2.5 text-xs text-gray-200 outline-none focus:border-brand-400" placeholder="For your team's records only" /></label>
+            <p className="mb-3 text-[10px] text-gray-500">Declining is recorded for the PM team. The note is not emailed to the client; no ticket or account is created.</p>
+            <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void decline()} disabled={declining || accepting || !workspaceName}
+              className="inline-flex items-center gap-2 rounded-lg border border-rose-400/20 px-4 py-2.5 text-sm font-medium text-rose-200 hover:bg-rose-500/[0.06] disabled:cursor-not-allowed disabled:opacity-50">
+              {declining ? <RefreshCw size={15} className="animate-spin" /> : <XCircle size={15} />}
+              {declining ? 'Declining…' : 'Decline inquiry'}
+            </button><button type="button" onClick={() => void accept()} disabled={accepting || declining || !workspaceName}
               className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-50">
               {accepting ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
               {accepting ? 'Accepting…' : `Accept into ${workspaceName ?? 'workspace'}`}
-            </button>
+            </button></div>
           </div>
         </> : <div className="flex min-h-64 flex-1 flex-col items-center justify-center p-6 text-center">
           {error ? <><AlertCircle size={22} className="text-rose-300" /><p className="mt-3 text-sm text-gray-300">The inbox could not be loaded.</p></> : <><Send size={22} className="text-gray-600" /><p className="mt-3 text-sm text-gray-300">Select an inquiry to review</p></>}

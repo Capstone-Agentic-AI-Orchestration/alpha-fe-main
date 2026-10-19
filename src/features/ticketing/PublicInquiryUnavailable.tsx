@@ -90,7 +90,7 @@ export default function PublicInquiryUnavailable() {
             const request = { inquiry };
             if (context.kind === 'invalid') throw new Error('This inquiry link has conflicting or invalid workspace details.');
             if (context.kind === 'workspace') await publicTicketIntakeApi.submit(context.slug, request);
-            else await publicTicketIntakeApi.submitCentral(request);
+            else return publicTicketIntakeApi.submitCentral(request);
           }}
           onCancel={() => { window.location.href = clientLandingHref(slug); }}
         />

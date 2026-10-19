@@ -2,14 +2,27 @@ import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 
 import { apiService } from '@/shared/services/apiService';
-import type { Project } from '@/shared/types';
+import type { BranchPreview, Project } from '@/shared/types';
 import { input, primary, secondary } from './ticketUi';
 
-export interface PmProjectLinkDraft { projectId: string | null; clientVisible: boolean }
+export interface PmProjectPreview { repository: string; branch: 'main' | 'uat'; url: string }
+export interface PmProjectLinkDraft { projectId: string | null; clientVisible: boolean; projectPreview: PmProjectPreview | null }
 
-export function PmProjectLinkForm({ initialProjectId, initialClientVisible, projectLocked, disabled, onCancel, onSubmit }: {
+function shareablePreview(repository: string, preview: BranchPreview): PmProjectPreview | null {
+  if ((preview.branch !== 'main' && preview.branch !== 'uat') || preview.surface !== 'page'
+    || !preview.ready || preview.embeddable !== true || !preview.url) return null;
+  try {
+    const url = new URL(preview.url);
+    return url.protocol === 'https:' && !url.username && !url.password && !url.port
+      && url.hostname !== 'vercel.app' && url.hostname.endsWith('.vercel.app')
+      ? { repository, branch: preview.branch, url: preview.url } : null;
+  } catch { return null; }
+}
+
+export function PmProjectLinkForm({ initialProjectId, initialClientVisible, initialProjectPreview, projectLocked, disabled, onCancel, onSubmit }: {
   initialProjectId: string | null;
   initialClientVisible: boolean;
+  initialProjectPreview: PmProjectPreview | null;
   projectLocked: boolean;
   disabled: boolean;
   onCancel: () => void;
@@ -18,6 +31,10 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, proj
   const [projects, setProjects] = useState<Array<Pick<Project, 'id' | 'key' | 'name'>>>([]);
   const [projectId, setProjectId] = useState(initialProjectId ?? '');
   const [clientVisible, setClientVisible] = useState(initialClientVisible);
+  const [previews, setPreviews] = useState<PmProjectPreview[]>([]);
+  const [previewKey, setPreviewKey] = useState('');
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
   const [refresh, setRefresh] = useState(0);
@@ -35,13 +52,38 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, proj
   useEffect(() => {
     setProjectId(initialProjectId ?? '');
     setClientVisible(initialClientVisible);
-  }, [initialProjectId, initialClientVisible]);
+    setPreviewKey(initialProjectPreview ? `${initialProjectPreview.repository}|${initialProjectPreview.branch}` : '');
+  }, [initialProjectId, initialClientVisible, initialProjectPreview]);
+
+  useEffect(() => {
+    let active = true;
+    if (!projectId) { setPreviews([]); setPreviewLoading(false); setPreviewError(false); return () => { active = false; }; }
+    setPreviewLoading(true); setPreviewError(false);
+    void apiService.getProjectRepos(projectId).then(async result => {
+      const repos = Array.isArray(result?.repositories) ? result.repositories : [];
+      const data = await Promise.all(repos.map(async repository => {
+        try { return { repository, previews: (await apiService.getRepoHostingPreviews(projectId, repository)).previews }; }
+        catch { return null; }
+      }));
+      if (!active) return;
+      const choices = data.flatMap(item => item?.previews
+        .map(preview => shareablePreview(item.repository, preview))
+        .filter((preview): preview is PmProjectPreview => preview !== null) ?? []);
+      if (initialProjectId === projectId && initialProjectPreview
+        && !choices.some(preview => preview.url === initialProjectPreview.url)) choices.unshift(initialProjectPreview);
+      setPreviews(choices);
+    }).catch(() => { if (active) { setPreviews([]); setPreviewError(true); } })
+      .finally(() => { if (active) setPreviewLoading(false); });
+    return () => { active = false; };
+  }, [projectId, refresh, initialProjectId, initialProjectPreview]);
 
   const selected = projects.find(project => project.id === projectId);
   const currentMissing = Boolean(initialProjectId && !projects.some(project => project.id === initialProjectId));
   const valid = projectId === '' || projects.some(project => project.id === projectId);
   return <form aria-label="Link request to project" className="space-y-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4"
-    onSubmit={event => { event.preventDefault(); if (!disabled && valid) onSubmit({ projectId: projectId || null, clientVisible: Boolean(projectId) && clientVisible }); }}>
+    onSubmit={event => { event.preventDefault(); if (!disabled && valid) onSubmit({ projectId: projectId || null,
+      clientVisible: Boolean(projectId) && clientVisible,
+      projectPreview: projectId && clientVisible ? previews.find(preview => `${preview.repository}|${preview.branch}` === previewKey) ?? null : null }); }}>
     <div className="flex items-start justify-between gap-3">
       <div>
         <h3 className="text-sm font-medium text-gray-100">Organize this request</h3>
@@ -54,7 +96,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, proj
     {currentMissing && <p role="status" className="rounded-md border border-amber-400/15 bg-amber-500/[0.04] p-2.5 text-xs text-amber-100/80">The linked project is not in the current project list. Refresh or choose another project if this request has no authorized work.</p>}
     <label className="block space-y-1.5">
       <span className="text-[11px] font-medium text-gray-300">Project</span>
-      <select aria-label="Project" className={input} value={projectId} disabled={disabled || loading || projectLocked} onChange={event => setProjectId(event.target.value)}>
+      <select aria-label="Project" className={input} value={projectId} disabled={disabled || loading || projectLocked} onChange={event => { setProjectId(event.target.value); setPreviewKey(''); }}>
         <option value="">Not linked to a project</option>
         {currentMissing && initialProjectId && <option value={initialProjectId}>Existing project link (unavailable)</option>}
         {projects.map(project => <option key={project.id} value={project.id}>{project.key} · {project.name}</option>)}
@@ -65,7 +107,19 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, proj
     <label className={`flex items-start gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3 text-[11px] leading-relaxed ${projectId ? 'text-gray-300' : 'text-gray-600'}`}>
       <input type="checkbox" className="mt-0.5 accent-brand-500" checked={clientVisible} disabled={disabled || !projectId}
         onChange={event => setClientVisible(event.target.checked)} />
-      Show only the project name as a limited preview in this client’s portal. This never grants access to Issues, project files, or other requests.
+      Show the project name on this ticket in the client portal. This never grants access to Issues, project files, or other requests.
+    </label>
+    <label className={`block space-y-1.5 ${projectId && clientVisible ? '' : 'opacity-50'}`}>
+      <span className="text-[11px] font-medium text-gray-300">Optional hosted preview</span>
+      <select aria-label="Hosted project preview" className={input} value={previewKey} disabled={disabled || loading || previewLoading || !projectId || !clientVisible}
+        onChange={event => setPreviewKey(event.target.value)}>
+        <option value="">Do not share a hosted preview</option>
+        {previews.map(preview => <option key={`${preview.repository}|${preview.branch}`} value={`${preview.repository}|${preview.branch}`}>{preview.repository} · {preview.branch}</option>)}
+      </select>
+      {previewLoading && <span role="status" className="block text-[10px] text-gray-500">Checking ready hosted frontend previews…</span>}
+      {previewError && <span role="alert" className="block text-[10px] text-amber-200">Hosted previews could not be checked. You can still save the project link without sharing one.</span>}
+      {!previewLoading && !previewError && projectId && previews.length === 0 && <span className="block text-[10px] text-gray-500">No ready, embeddable main or uat frontend preview was found.</span>}
+      <span className="block text-[10px] text-gray-500">Only ready hosted frontend previews are offered. The link may be publicly accessible; the client gets no repository, Issue, or internal project access.</span>
     </label>
     <div className="flex flex-wrap justify-end gap-2 border-t border-white/[0.06] pt-3">
       <button type="button" disabled={disabled} onClick={onCancel} className={secondary}>Cancel</button>

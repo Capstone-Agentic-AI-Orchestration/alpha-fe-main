@@ -114,9 +114,10 @@ describe('public inquiry browser transport', () => {
   });
   it('submits the default inquiry to central PM intake with no workspace code or client credentials', async () => {
     browser();
-    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(202, { received: true }));
+    const publicReference = `INQ-${'A'.repeat(32)}`;
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(202, { received: true, publicReference }));
     vi.stubGlobal('fetch', fetchMock);
-    await expect(publicTicketIntakeApi.submitCentral(request)).resolves.toEqual({ received: true });
+    await expect(publicTicketIntakeApi.submitCentral(request)).resolves.toEqual({ received: true, publicReference });
     expect(fetchMock).toHaveBeenCalledWith('/api/public/ticket-intakes', expect.objectContaining({
       method: 'POST', credentials: 'omit', mode: 'same-origin', body: JSON.stringify(request),
     }));

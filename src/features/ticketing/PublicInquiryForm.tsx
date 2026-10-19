@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Send, ShieldCheck } from 'lucide-react';
 import { PUBLIC_TICKET_INQUIRY_SCHEMA_VERSION } from './publicIntakeContract';
-import type { PublicTicketInquiryPayload } from './publicIntakeContract';
+import type { PublicTicketInquiryPayload, PublicTicketInquiryResponse } from './publicIntakeContract';
 import { PublicTicketIntakeApiError } from './publicIntakeApi';
 import { useClientPageMotion } from './publicClient/useClientPageMotion';
 import { input, primary, secondary } from './ticketUi';
@@ -10,7 +10,7 @@ export type InquiryNavigationState = { dirty: boolean; locked: boolean };
 
 export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = false, unavailableMessage = 'Inquiry submission is unavailable. Nothing is sent or saved.', onNavigationStateChange }: {
   /** Resolve only after the configured intake transport returns its generic receipt. */
-  onSubmit: (value: PublicTicketInquiryPayload) => void | Promise<void>;
+  onSubmit: (value: PublicTicketInquiryPayload) => void | PublicTicketInquiryResponse | Promise<void | PublicTicketInquiryResponse>;
   onCancel: () => void;
   submissionEnabled?: boolean;
   unavailableMessage?: string;
@@ -31,6 +31,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [outcomeUnknown, setOutcomeUnknown] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [publicReference, setPublicReference] = useState<string | null>(null);
   const motionRef = useClientPageMotion();
   const locked = isSubmitting || outcomeUnknown;
   const fieldsDisabled = locked || submitted;
@@ -75,9 +76,10 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
           requestedDeadline: requestedDeadline || null,
         };
       retryPayload.current = payload;
-      void Promise.resolve().then(() => onSubmit(payload)).then(() => {
+      void Promise.resolve().then(() => onSubmit(payload)).then(result => {
           retryPayload.current = null;
           setOutcomeUnknown(false);
+          setPublicReference(result && 'publicReference' in result ? result.publicReference ?? null : null);
           setSubmitted(true);
         }).catch(err => {
           const uncertain = err instanceof PublicTicketIntakeApiError && err.retryWithSameOperationId;
@@ -109,7 +111,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
       {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
       {validationError && <p role="alert" className="text-xs text-amber-200">{validationError}</p>}
       {outcomeUnknown && <p role="status" className="rounded-lg border border-amber-400/20 bg-amber-500/[0.05] p-3 text-xs leading-relaxed text-amber-100">Keep this page open and check the same submission. Alpha will retry the exact saved-in-memory payload with the same operation ID; it will not start a second inquiry.</p>}
-      {submitted && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-emerald-200">Inquiry received. The project manager will review it. This does not create an account or grant access to a ticket.</p>}
+      {submitted && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-emerald-200">Inquiry received{publicReference ? <> · reference <span className="font-mono">{publicReference}</span></> : ''}. The project manager will review it. This does not create an account or grant access to a ticket.</p>}
       {submitted && <p className="text-xs leading-relaxed text-gray-400">If your PM invites you, open the email to verify this address and choose your password. After setup, return through client sign-in whenever you need to follow up.</p>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-5">
         <p className="max-w-xs text-[11px] text-gray-500">{submitted ? 'Email ownership must be verified through a client invitation before ticket access is granted.' : !submissionEnabled ? unavailableMessage : 'Your inquiry will be sent for review. Submitting an email address does not grant ticket access.'}</p>
