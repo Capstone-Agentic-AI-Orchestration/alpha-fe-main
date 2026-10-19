@@ -26,6 +26,9 @@ import {
   WorkspaceProjectAssignment,
   WorkspaceSquadProjectAssignment,
   LiveBuildRoomSnapshot,
+  LiveBuildRoomDiffPreview,
+  LiveBuildRoomOrchestration,
+  LiveBuildPlanningRecoveryPreview,
   UserRole,
   AgentCall,
   ProjectChatSnapshot,
@@ -482,6 +485,17 @@ export const apiService = {
     return fetchJson<Project[]>('/projects');
   },
 
+  /** Local executor capability and per-project orchestration opt-in. */
+  getProjectOrchestrationSettings: (projectId: string) =>
+    fetchJson<{ enabled: boolean; available: boolean; localOnly: true; reason?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestration-settings`
+    ),
+  setProjectOrchestrationEnabled: (projectId: string, enabled: boolean) =>
+    fetchJson<{ enabled: boolean; available: boolean; localOnly: true; reason?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestration-settings`,
+      { method: 'PUT', body: JSON.stringify({ enabled }) }
+    ),
+
   createProject: async (project: Partial<Project>): Promise<Project> => {
     return fetchJson<Project>('/projects', { method: 'POST', body: JSON.stringify(project) });
   },
@@ -622,6 +636,44 @@ export const apiService = {
     fetchJson<LiveBuildRoomSnapshot>(`/projects/${encodeURIComponent(projectId)}/live-build-room${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`),
   getLiveBuildRoomProjects: () =>
     fetchJson<Array<Pick<Project, 'id' | 'key' | 'name' | 'color'>>>('/live-build-room/projects'),
+  getOrchestrationDiffPreview: (projectId: string, runId: string) =>
+    fetchJson<LiveBuildRoomDiffPreview>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/diff`
+    ),
+  inspectOrchestrationPlanningRecovery: (projectId: string, runId: string) =>
+    fetchJson<{ runId: string; state: 'cleaned' | 'needs_review' | 'manual_review' | 'retained'; revision?: number; reason?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/planning-recoveries/${encodeURIComponent(runId)}/inspect`,
+      { method: 'POST', body: '{}' }
+    ),
+  getOrchestrationPlanningRecoveryPreview: (projectId: string, runId: string) =>
+    fetchJson<LiveBuildPlanningRecoveryPreview>(
+      `/projects/${encodeURIComponent(projectId)}/planning-recoveries/${encodeURIComponent(runId)}/diff`
+    ),
+  retainOrchestrationPlanningRecovery: (projectId: string, runId: string, expectedRevision: number) =>
+    fetchJson<{ runId: string; state: 'retained'; revision: number }>(
+      `/projects/${encodeURIComponent(projectId)}/planning-recoveries/${encodeURIComponent(runId)}/retain`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) }
+    ),
+  retryOrchestrationTask: (projectId: string, runId: string, taskId: string, expectedTaskRevision: number) =>
+    fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`,
+      { method: 'POST', body: JSON.stringify({ expectedTaskRevision }) }
+    ),
+  resumeOrchestration: (projectId: string, runId: string) =>
+    fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/resume`,
+      { method: 'POST', body: '{}' }
+    ),
+  cancelOrchestration: (projectId: string, runId: string) =>
+    fetchJson<{ runId: string; status: string }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/cancel`,
+      { method: 'POST', body: '{}' }
+    ),
+  approveOrchestration: (projectId: string, runId: string, expectedRevision: number) =>
+    fetchJson<{ runId: string; status: string; issueId: string; publication?: LiveBuildRoomOrchestration['run']['publication'] }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/approve`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) }
+    ),
 
   // Skills
   getSkills: async (): Promise<Skill[]> => {

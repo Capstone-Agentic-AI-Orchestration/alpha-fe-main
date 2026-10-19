@@ -70,6 +70,84 @@ describe('multi-repository project builds', () => {
   });
 });
 
+describe('project orchestration opt-in', () => {
+  it('reads local pilot availability for a selected project', async () => {
+    const settings = { enabled: false, available: true, localOnly: true as const };
+    const fetchMock = vi.fn().mockResolvedValue(json(settings));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiService.getProjectOrchestrationSettings('project/1')).resolves.toEqual(settings);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/projects/project%2F1/orchestration-settings');
+  });
+
+  it('writes an explicit project opt-in', async () => {
+    const settings = { enabled: true, available: true, localOnly: true as const };
+    const fetchMock = vi.fn().mockResolvedValue(json(settings));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiService.setProjectOrchestrationEnabled('project-1', true)).resolves.toEqual(settings);
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('PUT');
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({ enabled: true });
+  });
+});
+
+describe('task workflow controls', () => {
+  it('uses project-scoped endpoints and the task revision for retries', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ runId: 'orchestration-1', status: 'executing', currentTaskId: 'task-1' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiService.retryOrchestrationTask('project/1', 'orchestration/1', 'task 1', 7);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/projects/project%2F1/orchestrations/orchestration%2F1/tasks/task%201/retry');
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST');
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({ expectedTaskRevision: 7 });
+  });
+
+  it('posts resume and cancellation to the selected orchestration run', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(json({ runId: 'orchestration-1', status: 'executing' }))
+      .mockResolvedValueOnce(json({ runId: 'orchestration-1', status: 'cancelled' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiService.resumeOrchestration('project-1', 'orchestration-1');
+    await apiService.cancelOrchestration('project-1', 'orchestration-1');
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/orchestrations/orchestration-1/resume');
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/orchestrations/orchestration-1/cancel');
+    expect(fetchMock.mock.calls.every(([, options]) => (options as RequestInit).method === 'POST')).toBe(true);
+  });
+
+  it('submits an explicit, revision-checked final approval for a task build', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ runId: 'orchestration-1', status: 'completed', issueId: 'issue-1' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiService.approveOrchestration('project-1', 'orchestration-1', 8)).resolves.toMatchObject({ status: 'completed' });
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/projects/project-1/orchestrations/orchestration-1/approve');
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({ expectedRevision: 8 });
+  });
+});
+
+describe('interrupted planning recovery', () => {
+  it('uses project-scoped inspect, preview, and keep-workspace actions', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(json({ runId: 'orchestration-1', state: 'needs_review', revision: 2 }))
+      .mockResolvedValueOnce(json({ baseCommit: 'base', headCommit: 'head', branchName: 'saved', changedPaths: ['README.md'], pathsTruncated: false, diff: '+saved', truncated: false }))
+      .mockResolvedValueOnce(json({ runId: 'orchestration-1', state: 'retained', revision: 3 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiService.inspectOrchestrationPlanningRecovery('project/1', 'orchestration/1');
+    await apiService.getOrchestrationPlanningRecoveryPreview('project/1', 'orchestration/1');
+    await apiService.retainOrchestrationPlanningRecovery('project/1', 'orchestration/1', 2);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/projects/project%2F1/planning-recoveries/orchestration%2F1/inspect');
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('POST');
+    expect(String(fetchMock.mock.calls[1][0])).toContain('/projects/project%2F1/planning-recoveries/orchestration%2F1/diff');
+    expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBeUndefined();
+    expect(String(fetchMock.mock.calls[2][0])).toContain('/projects/project%2F1/planning-recoveries/orchestration%2F1/retain');
+    expect(JSON.parse((fetchMock.mock.calls[2][1] as RequestInit).body as string)).toEqual({ expectedRevision: 2 });
+  });
+});
+
 describe('new ticket helper stays within its namespace', () => {
   it('accepts the actual PM queue URL including its query string', async () => {
     const fetchMock = vi.fn().mockResolvedValue(json({ items: [] })); vi.stubGlobal('fetch', fetchMock);
