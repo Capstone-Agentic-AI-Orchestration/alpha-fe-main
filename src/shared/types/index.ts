@@ -1019,6 +1019,7 @@ export interface LiveBuildRoomChatCall {
 
 export type LiveBuildOrchestrationStatus =
   | 'planning'
+  | 'awaiting_plan_approval'
   | 'executing'
   | 'validating'
   | 'awaiting_approval'
@@ -1042,6 +1043,7 @@ export type LiveBuildTaskStatus =
   | 'superseded';
 
 export interface LiveBuildRoomDiffPreview {
+  repository?: string;
   baseCommit: string;
   resultCommit: string;
   branchName: string;
@@ -1049,6 +1051,16 @@ export interface LiveBuildRoomDiffPreview {
   pathsTruncated: boolean;
   diff: string;
   truncated: boolean;
+  repositories?: Array<{
+    repository: string;
+    baseCommit: string;
+    resultCommit: string;
+    branchName: string;
+    changedPaths: string[];
+    pathsTruncated: boolean;
+    diff: string;
+    truncated: boolean;
+  }>;
 }
 
 export type LiveBuildPlanningRecoveryState = 'interrupted' | 'needs_review' | 'manual_review' | 'retained' | 'cleaned';
@@ -1085,15 +1097,25 @@ export interface LiveBuildRoomOrchestration {
     exclusions: string[];
     repository: string;
     branchName?: string;
+    repositories?: Array<{ repository: string; branchName: string }>;
     currentTaskId?: string;
     stoppedReason?: string;
     publication?: {
+      repository?: string;
       branchName: string;
       baseBranch: string;
       resultCommit: string;
       pullRequestUrl: string;
       publishedAt: string;
     };
+    publications?: Array<{
+      repository: string;
+      branchName: string;
+      baseBranch: string;
+      resultCommit: string;
+      pullRequestUrl: string;
+      publishedAt: string;
+    }>;
     createdAt: string;
     updatedAt: string;
   };
@@ -1103,8 +1125,10 @@ export interface LiveBuildRoomOrchestration {
     title: string;
     description: string;
     kind: string;
+    repository: string;
     ownerAgentId?: string;
     ownerName: string;
+    assignmentReason: string;
     dependsOn: string[];
     requirementIds: string[];
     acceptanceCriteria: string[];
@@ -1159,6 +1183,13 @@ export interface LiveBuildRoomOrchestration {
     commands: Array<{ script?: string; display?: string; exitCode: number | null; signal: string | null }>;
     resultCommit?: string;
     noOpenBlockingFindings: boolean;
+    repositories?: Array<{
+      repository: string;
+      status?: string;
+      missingScripts: string[];
+      commands: Array<{ script?: string; display?: string; exitCode: number | null; signal: string | null }>;
+      resultCommit?: string;
+    }>;
   };
   artifacts: Array<{
     id: string;

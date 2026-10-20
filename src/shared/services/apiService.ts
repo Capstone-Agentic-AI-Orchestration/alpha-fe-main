@@ -485,7 +485,7 @@ export const apiService = {
     return fetchJson<Project[]>('/projects');
   },
 
-  /** Local executor capability and per-project orchestration opt-in. */
+  /** Local executor capability and always-on desktop project orchestration. */
   getProjectOrchestrationSettings: (projectId: string) =>
     fetchJson<{ enabled: boolean; available: boolean; localOnly: true; reason?: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestration-settings`
@@ -658,6 +658,11 @@ export const apiService = {
     fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`,
       { method: 'POST', body: JSON.stringify({ expectedTaskRevision }) }
+    ),
+  startPlannedOrchestration: (projectId: string, runId: string, expectedRevision: number) =>
+    fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/start`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) }
     ),
   resumeOrchestration: (projectId: string, runId: string) =>
     fetchJson<{ runId: string; status: string; currentTaskId?: string }>(

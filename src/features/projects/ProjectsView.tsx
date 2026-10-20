@@ -1,4 +1,3 @@
-import { ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
@@ -15,7 +14,6 @@ import {
   Sparkles, 
   Flame, 
   Minus,
-  Bot,
   Kanban as KanbanIcon,
   List as ListIcon,
   ChevronLeft,
@@ -54,10 +52,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
 
     agents,
-    squads,
     can,
-    role,
-    showToast
+    role
   } = useApp();
 
   const canManageProjects = can('manage_projects');
@@ -76,7 +72,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const [resourcesModalOpen, setResourcesModalOpen] = useState<boolean>(false);
   const [orchestrationSettings, setOrchestrationSettings] = useState<ProjectOrchestrationSettings | null>(null);
   const [orchestrationSettingsLoading, setOrchestrationSettingsLoading] = useState(false);
-  const [orchestrationSettingsSaving, setOrchestrationSettingsSaving] = useState(false);
   const [repositoryFocus, setRepositoryFocus] = useState<{ projectId: string; repo: string } | null>(null);
   const clearRepositoryFocus = useCallback(() => setRepositoryFocus(null), []);
 
@@ -134,24 +129,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       .finally(() => { if (current) setOrchestrationSettingsLoading(false); });
     return () => { current = false; };
   }, [selectedProject?.id]);
-
-  const changeOrchestrationSetting = async (enabled: boolean) => {
-    if (!selectedProject || orchestrationSettingsSaving) return;
-    setOrchestrationSettingsSaving(true);
-    try {
-      const next = await apiService.setProjectOrchestrationEnabled(selectedProject.id, enabled);
-      setOrchestrationSettings(next);
-      showToast(enabled ? 'Task workflow enabled' : 'Task workflow disabled',
-        enabled
-          ? 'Build requests for this project will use the orchestrator.'
-          : 'New builds for this project will use the current standard build flow.',
-        'success');
-    } catch (error) {
-      showToast('Could not update build workflow', error instanceof Error ? error.message : String(error), 'error');
-    } finally {
-      setOrchestrationSettingsSaving(false);
-    }
-  };
 
   // GitHub repositories the API can read for this project. Given the attached
   // repositories so one created a moment ago shows up without a reload.
@@ -466,36 +443,22 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             <section aria-label="Orchestrated build workflow" className="space-y-2.5 rounded-xl border border-violet-400/15 bg-violet-500/[0.045] p-3">
               <div className="flex items-center gap-2">
                 <Workflow className="h-3.5 w-3.5 text-violet-300" aria-hidden="true" />
-                <h2 className="text-[11px] font-semibold text-gray-200">Orchestrated builds</h2>
-                {orchestrationSettings?.enabled && orchestrationSettings.available && <span className="ml-auto rounded-full border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">ON</span>}
+                <h2 className="text-[11px] font-semibold text-gray-200">Orchestrator builds</h2>
+                {orchestrationSettings?.available && <span className="ml-auto rounded-full border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">ALWAYS ON</span>}
               </div>
               <p className="text-[10px] leading-relaxed text-gray-400">
-                The orchestrator creates role-owned tasks and checks each handoff before the next specialist starts. Human review remains the final approval.
+                The Orchestrator leads every desktop product build. It shows its plan and specialist assignments first, then coordinates the selected codebases together. You review the finished change before it is sent to GitHub.
               </p>
-              <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] pt-2">
+              <div className="border-t border-white/[0.06] pt-2">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-medium text-gray-200">Use orchestrator for builds</div>
+                  <div className="text-[10px] font-medium text-gray-200">How builds work</div>
                   <div className="mt-0.5 text-[9px] leading-relaxed text-gray-500">
                     {orchestrationSettingsLoading ? 'Checking this desktop…'
-                      : orchestrationSettings?.available ? 'Local to this desktop and one repository per run.'
-                        : orchestrationSettings?.reason ?? 'The orchestrator is unavailable in this environment.'}
+                      : orchestrationSettings?.available ? 'Always enabled. One product plan can cover the frontend, backend, and other selected codebases.'
+                        : orchestrationSettings?.reason ?? 'The Orchestrator is unavailable in this environment.'}
                   </div>
                 </div>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-label="Use orchestrator for project builds"
-                  aria-checked={Boolean(orchestrationSettings?.enabled)}
-                  disabled={!canEditProjects || orchestrationSettingsLoading || orchestrationSettingsSaving || !orchestrationSettings?.available}
-                  onClick={() => void changeOrchestrationSetting(!orchestrationSettings?.enabled)}
-                  className={`relative h-5 w-9 shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/70 disabled:cursor-not-allowed disabled:opacity-40 ${orchestrationSettings?.enabled ? 'border-violet-300/50 bg-violet-500' : 'border-white/15 bg-white/10'}`}
-                >
-                  <span className={`absolute top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${orchestrationSettings?.enabled ? 'translate-x-[18px]' : 'translate-x-0.5'}`} />
-                </button>
               </div>
-              {orchestrationSettings?.enabled && !orchestrationSettings.available && (
-                <p className="text-[9px] leading-relaxed text-amber-300">This project is opted in, but the orchestrator is disabled on this desktop. No builds will be routed until it is enabled.</p>
-              )}
             </section>
 
             {/* 2. Metadata / Properties List */}
@@ -521,12 +484,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 <span className="font-mono text-gray-300 capitalize">{selectedProject.priority || 'Medium'}</span>
               </div>
 
-              {/* Project Lead */}
+              {/* The project build lead is consistent even when the project has
+                  legacy ownership metadata from the earlier squad workflow. */}
               <div className="flex items-center justify-between">
-                <span className="text-gray-500">Execution owner</span>
+                <span className="text-gray-500">Build lead</span>
                 <div className="flex items-center gap-1.5 text-gray-300">
-                  <Bot className="w-3.5 h-3.5 text-gray-400" />
-                  <span className="truncate max-w-[120px]">{selectedProject.leadSquadId ? squads.find(squad => squad.id === selectedProject.leadSquadId)?.name || selectedProject.leadName || 'Squad' : agents.find(agent => agent.id === selectedProject.leadAgentId)?.name || selectedProject.leadName || 'Unassigned'}</span>
+                  <Workflow className="w-3.5 h-3.5 text-violet-300" />
+                  <span className="truncate max-w-[140px]">Orchestrator</span>
                 </div>
               </div>
 
@@ -792,12 +756,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
               </div>
 
-              <div>
-                <ExecutionOwnerSelect label="Execution owner" required agents={agents} squads={squads}
-                  value={editingProject.leadSquadId ? { type: 'squad', id: editingProject.leadSquadId } : editingProject.leadAgentId ? { type: 'agent', id: editingProject.leadAgentId } : null}
-                  onChange={owner => setEditingProject({ ...editingProject, leadAgentId: owner?.type === 'agent' ? owner.id : '', leadSquadId: owner?.type === 'squad' ? owner.id : '', leadName: owner?.type === 'agent' ? agents.find(agent => agent.id === owner.id)?.name : squads.find(squad => squad.id === owner?.id)?.name })}
-                />
-              </div>
+              <div className="flex items-start gap-3 rounded-xl border border-violet-300/15 bg-violet-300/[0.045] p-3"><Workflow className="mt-0.5 h-4 w-4 shrink-0 text-violet-200" /><div><div className="text-xs font-medium text-violet-100">Orchestrator leads every product build</div><p className="mt-1 text-[11px] leading-5 text-gray-400">It prepares the work plan, chooses specialists, and shows the assignments before they start.</p></div></div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
