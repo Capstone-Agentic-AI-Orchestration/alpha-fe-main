@@ -659,6 +659,11 @@ export const apiService = {
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`,
       { method: 'POST', body: JSON.stringify({ expectedTaskRevision }) }
     ),
+  startPlannedOrchestration: (projectId: string, runId: string, expectedRevision: number) =>
+    fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/start`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) }
+    ),
   resumeOrchestration: (projectId: string, runId: string) =>
     fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/resume`,

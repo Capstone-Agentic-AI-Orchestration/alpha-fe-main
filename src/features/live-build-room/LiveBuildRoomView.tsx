@@ -16,7 +16,6 @@ import {
   Globe2,
   MessageSquare,
   Layers3,
-  Play,
   RadioTower,
   RefreshCw,
   ScrollText,
@@ -24,6 +23,7 @@ import {
   Square,
   TerminalSquare,
   Users,
+  Workflow,
   X
 } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
@@ -402,14 +402,16 @@ const ActivityPanel: React.FC<{
 export const LiveBuildRoomView: React.FC = () => {
   const {
     projects,
-    issues,
     role,
     can,
     isActiveTab,
     showToast,
-    triggerSquadRun,
     setActiveTab,
-    setActiveThreadId
+    setActiveThreadId,
+    activeTabId,
+    setTabSessionState,
+    chatThreads,
+    createNewThread
   } = useApp();
   const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string>('liveBuildProjectId', '');
   const [selectedBuildRunId, setSelectedBuildRunId] = useTabSessionState<string>('liveBuildRunId', '');
@@ -428,7 +430,6 @@ export const LiveBuildRoomView: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
   const [stoppingRun, setStoppingRun] = useState(false);
   const [orchestrationBusyAction, setOrchestrationBusyAction] = useState<string | null>(null);
   const [orchestrationActionError, setOrchestrationActionError] = useState<string | null>(null);
@@ -448,7 +449,7 @@ export const LiveBuildRoomView: React.FC = () => {
   const requestIdRef = useRef(0);
   const refreshTimerRef = useRef<number | null>(null);
 
-  const eligibleRole = role !== 'client' && can('view_squads');
+  const eligibleRole = role !== 'client' && (can('view_squads') || can('run_squads') || can('run_agents'));
   const buildRepository = snapshot?.orchestration ? null : snapshot?.issue?.githubRepo ?? null;
   const buildBranch = snapshot?.orchestration ? null : snapshot?.activeRun?.branchName ?? snapshot?.issue?.branchName ?? null;
   const canOfferPreviewHosting = Boolean(
@@ -687,8 +688,6 @@ export const LiveBuildRoomView: React.FC = () => {
     if (card.isStale) counts.stale += 1;
     return counts;
   }, { all: snapshot?.agentCards.length ?? 0, running: 0, waiting: 0, review: 0, failed: 0, completed: 0, idle: 0, stale: 0 });
-  const fallbackIssue = issues.find(issue => issue.projectId === selectedProjectId && issue.assignedSquadId === snapshot?.squad?.id)
-    ?? issues.find(issue => issue.projectId === selectedProjectId);
 
   const handleProjectChange = (projectId: string) => {
     requestIdRef.current += 1;
@@ -706,26 +705,13 @@ export const LiveBuildRoomView: React.FC = () => {
     setLoading(true);
   };
 
-  const handleRunBuild = async () => {
-    if (!snapshot || !snapshot.squad || starting || !snapshot.canRun) return;
-    const issue = snapshot.issue ?? fallbackIssue;
-    if (!issue) {
-      showToast('Add an issue first', 'A squad run needs a project issue as its build target.', 'info');
-      return;
-    }
-    if (snapshot.activeRun?.status === 'awaiting_approval' && !window.confirm(
-      'This build is finished and waiting for review. Start another full squad build for this issue?'
-    )) return;
-    if ((snapshot.activeRun?.status === 'failed' || snapshot.activeRun?.status === 'cancelled') && !window.confirm(
-      'The previous build stopped. Start a new squad build attempt for this issue?'
-    )) return;
-    setStarting(true);
-    try {
-      await triggerSquadRun(snapshot.squad.id, issue.id, undefined, issue.title);
-      await loadRoom(true);
-    } finally {
-      setStarting(false);
-    }
+  const openOrchestratorBuild = () => {
+    if (!selectedProjectId) return;
+    const existingThread = chatThreads.find(thread => thread.projectId === selectedProjectId);
+    const threadId = existingThread?.id ?? createNewThread('New product build', selectedProjectId);
+    setActiveThreadId(threadId);
+    setTabSessionState(activeTabId, 'chatIntent', 'build');
+    setActiveTab('chat');
   };
 
   const handleStopBuild = async () => {
@@ -759,6 +745,25 @@ export const LiveBuildRoomView: React.FC = () => {
     }
   };
 
+  const handleStartPlannedOrchestration = async () => {
+    if (!snapshot?.orchestration || !selectedProjectId || orchestrationBusyAction) return;
+    setOrchestrationBusyAction('start-plan');
+    setOrchestrationActionError(null);
+    try {
+      await apiService.startPlannedOrchestration(
+        selectedProjectId,
+        snapshot.orchestration.run.id,
+        snapshot.orchestration.run.revision
+      );
+      await loadRoom(true);
+    } catch (error: any) {
+      setOrchestrationActionError(error?.message ?? 'The plan could not be started. Refresh the room and review its current state.');
+      await loadRoom(true);
+    } finally {
+      setOrchestrationBusyAction(null);
+    }
+  };
+
   const handleResumeOrchestration = async () => {
     if (!snapshot?.orchestration || !selectedProjectId || orchestrationBusyAction) return;
     setOrchestrationBusyAction('resume');
@@ -780,10 +785,10 @@ export const LiveBuildRoomView: React.FC = () => {
     setOrchestrationActionError(null);
     try {
       await apiService.cancelOrchestration(selectedProjectId, snapshot.orchestration.run.id);
-      showToast('Task build stopped', 'The orchestrator stopped future work and preserved the current branch for review.', 'success');
+      showToast('Orchestrator build stopped', 'The Orchestrator stopped the remaining steps and kept the current branch for review.', 'success');
       await loadRoom(true);
     } catch (error: any) {
-      setOrchestrationActionError(error?.message ?? 'The task build could not be stopped safely. Refresh the room to reconcile its status.');
+      setOrchestrationActionError(error?.message ?? 'The Orchestrator build could not be stopped safely. Refresh the Build Room to check its status.');
       await loadRoom(true);
     } finally {
       setOrchestrationBusyAction(null);
@@ -903,9 +908,10 @@ export const LiveBuildRoomView: React.FC = () => {
     snapshot.issue?.branchName === snapshot.orchestration.run.publication.branchName &&
     snapshot.issue.comments?.some(comment => comment.id === `comm-${snapshot.orchestration!.run.id}-orchestration-published`));
   const roomStatus = snapshot.orchestration
-    ? snapshot.orchestration.run.status === 'awaiting_approval' ? 'Review required'
-      : snapshot.orchestration.run.status === 'publishing' ? 'Publishing pull request'
-      : snapshot.orchestration.run.status === 'completed' ? !snapshot.orchestration.run.publication ? 'Build complete' : publicationSynced ? 'Ready for review' : 'Publication syncing'
+    ? snapshot.orchestration.run.status === 'awaiting_plan_approval' ? 'Plan ready to review'
+      : snapshot.orchestration.run.status === 'awaiting_approval' ? 'Review required'
+      : snapshot.orchestration.run.status === 'publishing' ? 'Opening pull requests'
+      : snapshot.orchestration.run.status === 'completed' ? !snapshot.orchestration.run.publication ? 'Build complete' : publicationSynced ? 'Ready for review' : 'Pull request update pending'
       : ['blocked', 'recovery_required', 'failed'].includes(snapshot.orchestration.run.status) ? 'Needs attention'
         : snapshot.orchestration.run.status === 'planning' ? 'Preparing task plan'
           : snapshot.orchestration.run.status === 'cancelling' ? 'Stopping specialist'
@@ -926,7 +932,7 @@ export const LiveBuildRoomView: React.FC = () => {
     ? 'text-rose-300 bg-rose-400/10 border-rose-400/25'
     : roomStatus === 'Review required'
       ? 'text-amber-200 bg-amber-400/10 border-amber-400/25'
-      : roomStatus === 'Publication syncing' || roomStatus === 'Publishing pull request'
+      : roomStatus === 'Pull request update pending' || roomStatus === 'Opening pull requests'
         ? 'text-amber-200 bg-amber-400/10 border-amber-400/25'
       : roomStatus === 'Ready for review' || roomStatus === 'Build complete'
           ? 'text-emerald-200 bg-emerald-400/10 border-emerald-400/25'
@@ -944,7 +950,7 @@ export const LiveBuildRoomView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"><span>Workspace</span><span>/</span><span className="text-slate-300">{activeProject?.name || snapshot.project.name}</span><span>/</span><span>Automation</span></div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-200"><RadioTower className="h-5 w-5" /></div>
-              <div><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">{snapshot.planningRecoveries?.some(recovery => recovery.state !== 'retained') ? 'Review the preserved planning workspace before starting another build.' : snapshot.orchestration ? 'Follow the approved task sequence, owners, checks, and recovery state.' : 'See which agents are working across this project and inspect their live activity.'}</p></div>
+              <div><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">{snapshot.planningRecoveries?.some(recovery => recovery.state !== 'retained') ? 'Review the preserved work before starting another build.' : snapshot.orchestration ? 'Follow the Orchestrator’s plan, specialist assignments, checks, and progress.' : 'See Orchestrator builds and direct agent work across this project.'}</p></div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -958,11 +964,11 @@ export const LiveBuildRoomView: React.FC = () => {
             {snapshot.buildRuns.length > 1 && <label className="relative flex min-w-[220px] items-center rounded-xl border border-violet-400/20 bg-violet-500/[0.06] px-3 py-2">
               <span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-400">Build</span>
               <select aria-label="Choose project build" value={selectedBuildRunId || snapshot.orchestration?.run.id || snapshot.activeRun?.id || ''} onChange={event => setSelectedBuildRunId(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-violet-200">
-                {snapshot.buildRuns.map(run => <option key={run.id} value={run.id} className="bg-surface-100 text-white">{[run.kind === 'orchestration' ? 'Task workflow' : 'Squad build', run.repository, run.issueIdentifier, run.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') || 'Project build'}</option>)}
+                {snapshot.buildRuns.map(run => <option key={run.id} value={run.id} className="bg-surface-100 text-white">{[run.kind === 'orchestration' ? 'Orchestrator build' : 'Earlier build', run.repository, run.issueIdentifier, run.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') || 'Project build'}</option>)}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-400" />
             </label>}
-            <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 text-xs">{snapshot.orchestration ? <Activity className="h-3.5 w-3.5 text-violet-300" /> : <Users className="h-3.5 w-3.5 text-violet-300" />}<span className="text-slate-400">{snapshot.orchestration ? 'Workflow' : 'Squad'}</span><span className="font-semibold text-white">{snapshot.orchestration ? `${snapshot.orchestration.tasks.length} tasks` : snapshot.squad?.name ?? 'None assigned'}</span>{!snapshot.orchestration && snapshot.squad && <span className="text-slate-500">· {snapshot.squad.memberCount}</span>}</div>
+            <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 text-xs">{snapshot.orchestration ? <Activity className="h-3.5 w-3.5 text-violet-300" /> : <Workflow className="h-3.5 w-3.5 text-violet-300" />}<span className="text-slate-400">{snapshot.orchestration ? 'Orchestrator' : 'Build lead'}</span><span className="font-semibold text-white">{snapshot.orchestration ? `${snapshot.orchestration.tasks.length} planned tasks` : 'Orchestrator'}</span></div>
             {!snapshot.orchestration && <button type="button" onClick={() => { setDetailOpen(true); setDetailTab('activity'); }} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.10] px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-white/[0.06] hover:text-white"><TerminalSquare className="h-3.5 w-3.5" />View logs</button>}
             <button type="button" onClick={() => void loadRoom(true)} className="rounded-xl border border-white/[0.10] p-2.5 text-slate-400 hover:bg-white/[0.06] hover:text-white" title="Refresh room" aria-label="Refresh room"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button>
             <span className="w-full text-right text-[10px] text-slate-500 xl:w-auto">{lastSyncedAt ? `Synced ${timeAgo(lastSyncedAt)}` : 'Waiting for first sync'}</span>
@@ -987,6 +993,7 @@ export const LiveBuildRoomView: React.FC = () => {
           busyAction={orchestrationBusyAction}
           actionError={orchestrationActionError}
           onRetry={(taskId, revision) => void handleRetryOrchestrationTask(taskId, revision)}
+          onStartPlan={() => void handleStartPlannedOrchestration()}
           onResume={() => void handleResumeOrchestration()}
           onCancel={() => void handleCancelOrchestration()}
           onApprove={() => void handleApproveOrchestration()}
@@ -1031,8 +1038,8 @@ export const LiveBuildRoomView: React.FC = () => {
         </section>
 
         <div className={`order-1 flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4 lg:flex-row lg:items-center lg:justify-between ${snapshot.orchestration ? 'hidden' : ''}`}>
-          <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-slate-300"><TerminalSquare className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.issue ? `${snapshot.issue.identifier} · ${snapshot.issue.title}` : snapshot.squad ? 'Ready for the next project issue' : 'No squad assigned to this project'}</div><div className="mt-1 text-xs text-slate-500">{snapshot.activeRun?.mission || (snapshot.squad ? 'Run a squad against a project issue to start a live build.' : 'Assign a squad before starting a squad build.')}</div></div></div>
-          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.squad ? snapshot.activeRun?.status === 'running' ? <button type="button" onClick={() => void handleStopBuild()} disabled={!snapshot.canRun || stoppingRun} title="Stop the active squad agent and leave the build branch available for review." className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-45"><Square className={`h-3.5 w-3.5 ${stoppingRun ? 'animate-pulse' : 'fill-current'}`} />{stoppingRun ? 'Stopping…' : 'Stop build'}</button> : <button type="button" onClick={() => void handleRunBuild()} disabled={!snapshot.canRun || starting || stoppingRun || !snapshot.issue && !fallbackIssue} title={!snapshot.issue && !fallbackIssue ? 'Create a project issue before starting a squad run.' : snapshot.activeRun?.status === 'awaiting_approval' ? 'Start another build after confirming.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-3.5 w-3.5 fill-current" />{starting ? 'Starting…' : snapshot.activeRun?.status === 'awaiting_approval' ? 'Run again' : snapshot.activeRun?.status === 'failed' || snapshot.activeRun?.status === 'cancelled' ? 'Retry build' : 'Run Build'}</button> : <button type="button" onClick={() => setActiveTab('squads')} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400"><Users className="h-3.5 w-3.5" />Set up a squad</button>}</div>
+          <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-violet-200"><Workflow className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.activeRun?.status === 'running' ? 'Earlier build in progress' : 'Start a coordinated product build'}</div><div className="mt-1 text-xs text-slate-400">{snapshot.activeRun?.status === 'running' ? 'This build is using the previous workflow. Stop it before starting a new Orchestrator build.' : 'Describe the change in Project chat. The Orchestrator will plan work across selected codebases and show its assignments before anyone starts.'}</div></div></div>
+          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.activeRun?.status === 'running' ? <button type="button" onClick={() => void handleStopBuild()} disabled={!snapshot.canRun || stoppingRun} title="Stop the earlier build." className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-45"><Square className={`h-3.5 w-3.5 ${stoppingRun ? 'animate-pulse' : 'fill-current'}`} />{stoppingRun ? 'Stopping…' : 'Stop earlier build'}</button> : <button type="button" onClick={openOrchestratorBuild} disabled={!can('run_agents')} title={!can('run_agents') ? 'You do not have permission to start project builds.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-violet-400 px-3.5 py-2.5 text-xs font-semibold text-[#171224] shadow-lg shadow-violet-500/15 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-45"><Workflow className="h-3.5 w-3.5" />Start Orchestrator build</button>}</div>
         </div>
 
         {buildRepository && buildBranch && <section className="order-2 flex flex-col gap-4 rounded-2xl border border-sky-400/20 bg-gradient-to-r from-sky-500/[0.07] to-surface-100/50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-live="polite">
@@ -1115,7 +1122,7 @@ export const LiveBuildRoomView: React.FC = () => {
             <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/45 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <div className="text-sm font-semibold text-white">Project agents</div>
-                <div className="mt-1 text-xs text-slate-500">Live squad, direct-run, and project-chat executions for {activeProject?.name || snapshot.project.name}.</div>
+                <div className="mt-1 text-xs text-slate-500">Orchestrator builds and direct agent work for {activeProject?.name || snapshot.project.name}.</div>
               </div>
               {snapshot.agentCards.length > 0 && <label className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 sm:w-72">
                 <span className="sr-only">Search project agents</span>
@@ -1142,8 +1149,8 @@ export const LiveBuildRoomView: React.FC = () => {
             </div> : <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] text-slate-400"><Users className="h-5 w-5" /></div>
               <div className="mt-3 text-sm font-medium text-slate-200">No visible agent activity</div>
-              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">When a squad, direct run, or project chat agent starts work, its live status and activity will appear here.{snapshot.squad?.memberCount ? ' This project squad is ready for a build.' : ' Add an agent to a squad or start a project agent to begin.'}</p>
-              {(!snapshot.squad || snapshot.squad.memberCount === 0) && <button type="button" onClick={() => setActiveTab('squads')} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]"><Users className="h-3.5 w-3.5" />Open squads</button>}
+              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">Orchestrator build activity and direct agent work appear here. Start a product change from Project chat to see the plan, specialist assignments, and progress.</p>
+              <button type="button" onClick={openOrchestratorBuild} disabled={!can('run_agents')} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-violet-300/20 bg-violet-300/[0.05] px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-300/[0.1] disabled:cursor-not-allowed disabled:opacity-45"><Workflow className="h-3.5 w-3.5" />Start Orchestrator build</button>
             </div>}
             <div className="rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4">
               <div className="flex items-center justify-between gap-3">

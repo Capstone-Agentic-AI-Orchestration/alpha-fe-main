@@ -1,4 +1,3 @@
-import { ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
@@ -15,7 +14,6 @@ import {
   Sparkles, 
   Flame, 
   Minus,
-  Bot,
   Kanban as KanbanIcon,
   List as ListIcon,
   ChevronLeft,
@@ -54,7 +52,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
 
     agents,
-    squads,
     can,
     role
   } = useApp();
@@ -450,15 +447,15 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 {orchestrationSettings?.available && <span className="ml-auto rounded-full border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">ALWAYS ON</span>}
               </div>
               <p className="text-[10px] leading-relaxed text-gray-400">
-                Desktop project builds go through the orchestrator. It plans and checks handoffs while the assigned specialist agents implement the work. Human review remains the final approval.
+                The Orchestrator leads every desktop product build. It shows its plan and specialist assignments first, then coordinates the selected codebases together. You review the finished change before it is sent to GitHub.
               </p>
               <div className="border-t border-white/[0.06] pt-2">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-medium text-gray-200">Build routing</div>
+                  <div className="text-[10px] font-medium text-gray-200">How builds work</div>
                   <div className="mt-0.5 text-[9px] leading-relaxed text-gray-500">
                     {orchestrationSettingsLoading ? 'Checking this desktop…'
-                      : orchestrationSettings?.available ? 'Always enabled on this desktop. One repository per build plan.'
-                        : orchestrationSettings?.reason ?? 'The orchestrator is unavailable in this environment.'}
+                      : orchestrationSettings?.available ? 'Always enabled. One product plan can cover the frontend, backend, and other selected codebases.'
+                        : orchestrationSettings?.reason ?? 'The Orchestrator is unavailable in this environment.'}
                   </div>
                 </div>
               </div>
@@ -487,12 +484,13 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 <span className="font-mono text-gray-300 capitalize">{selectedProject.priority || 'Medium'}</span>
               </div>
 
-              {/* Project Lead */}
+              {/* The project build lead is consistent even when the project has
+                  legacy ownership metadata from the earlier squad workflow. */}
               <div className="flex items-center justify-between">
-                <span className="text-gray-500">Execution owner</span>
+                <span className="text-gray-500">Build lead</span>
                 <div className="flex items-center gap-1.5 text-gray-300">
-                  <Bot className="w-3.5 h-3.5 text-gray-400" />
-                  <span className="truncate max-w-[120px]">{selectedProject.leadSquadId ? squads.find(squad => squad.id === selectedProject.leadSquadId)?.name || selectedProject.leadName || 'Squad' : agents.find(agent => agent.id === selectedProject.leadAgentId)?.name || selectedProject.leadName || 'Unassigned'}</span>
+                  <Workflow className="w-3.5 h-3.5 text-violet-300" />
+                  <span className="truncate max-w-[140px]">Orchestrator</span>
                 </div>
               </div>
 
@@ -758,12 +756,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
               </div>
 
-              <div>
-                <ExecutionOwnerSelect label="Execution owner" required agents={agents} squads={squads}
-                  value={editingProject.leadSquadId ? { type: 'squad', id: editingProject.leadSquadId } : editingProject.leadAgentId ? { type: 'agent', id: editingProject.leadAgentId } : null}
-                  onChange={owner => setEditingProject({ ...editingProject, leadAgentId: owner?.type === 'agent' ? owner.id : '', leadSquadId: owner?.type === 'squad' ? owner.id : '', leadName: owner?.type === 'agent' ? agents.find(agent => agent.id === owner.id)?.name : squads.find(squad => squad.id === owner?.id)?.name })}
-                />
-              </div>
+              <div className="flex items-start gap-3 rounded-xl border border-violet-300/15 bg-violet-300/[0.045] p-3"><Workflow className="mt-0.5 h-4 w-4 shrink-0 text-violet-200" /><div><div className="text-xs font-medium text-violet-100">Orchestrator leads every product build</div><p className="mt-1 text-[11px] leading-5 text-gray-400">It prepares the work plan, chooses specialists, and shows the assignments before they start.</p></div></div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

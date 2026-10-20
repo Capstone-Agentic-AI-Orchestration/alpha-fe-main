@@ -1,12 +1,11 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useApp } from '@/app/AppContext';
 import { Modal } from '@/shared/components/Modal';
-import { ExecutionOwner, ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
 import { ProjectResourcesPanel } from './ProjectResourcesPanel';
 import { deriveProjectKey } from './useProjectsViewModel';
 import { normalizeProjectRepositoryUrl } from './projectRepositoryUrl';
 import { Project, ProjectPriority, ProjectResource } from '@/shared/types';
-import { AlertCircle, ChevronDown, FolderOpen, GitBranch, Loader2, Plus, Trash2 } from 'lucide-react';
+import { AlertCircle, ChevronDown, FolderOpen, GitBranch, Loader2, Plus, Sparkles, Trash2, Workflow } from 'lucide-react';
 
 interface CreateProjectModalProps {
   isOpen: boolean;
@@ -18,7 +17,7 @@ const ICONS = ['⚡', '🎨', '🚀', '🛡️', '💳', '🧠', '📦', '🌐',
 const inputClass = 'w-full min-w-0 rounded-xl border border-white/10 bg-surface px-3.5 py-2.5 text-sm text-white placeholder-gray-600 outline-none transition-colors focus:border-brand-400';
 
 export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose, onCreated }) => {
-  const { createProject, updateProject, projects, agents, squads, can } = useApp();
+  const { createProject, updateProject, projects, can } = useApp();
   const [createdProject, setCreatedProject] = useState<Project | null>(null);
   const [setupRepository, setSetupRepository] = useState(true);
   const [repositoryProvisioning, setRepositoryProvisioning] = useState(false);
@@ -26,7 +25,6 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
   const [name, setName] = useState('');
   const [icon, setIcon] = useState('⚡');
   const [description, setDescription] = useState('');
-  const [owner, setOwner] = useState<ExecutionOwner | null>(null);
   const [priority, setPriority] = useState<ProjectPriority>('medium');
   const [targetDate, setTargetDate] = useState('');
   const [resources, setResources] = useState<ProjectResource[]>([]);
@@ -38,12 +36,11 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
   const [showIcons, setShowIcons] = useState(false);
   const folderRef = useRef<HTMLInputElement>(null);
   const key = useMemo(() => deriveProjectKey(name, projects), [name, projects]);
-  const eligibleOwner = !!owner && (owner.type === 'agent' ? agents.some(agent => agent.id === owner.id && !agent.isArchived) : squads.some(squad => squad.id === owner.id));
 
   useEffect(() => {
     if (!isOpen) return;
     setCreatedProject(null); setSetupRepository(true); setRepositoryProvisioning(false);
-    setName(''); setIcon('⚡'); setDescription(''); setOwner(null); setPriority('medium');
+    setName(''); setIcon('⚡'); setDescription(''); setPriority('medium');
     setTargetDate(''); setResources([]); setRepoUrl(''); setError(null); setRepoError(null); setShowIcons(false);
   }, [isOpen]);
 
@@ -78,16 +75,14 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (submittingRef.current || !name.trim() || !eligibleOwner) return;
+    if (submittingRef.current || !name.trim()) return;
     let pending: ProjectResource | null;
     try { pending = pendingRepository(); }
     catch (err) { setRepoError((err as Error).message); return; }
     submittingRef.current = true; setSubmitting(true); setError(null); setRepoError(null);
-    const leadName = owner?.type === 'agent' ? agents.find(agent => agent.id === owner.id)?.name : squads.find(squad => squad.id === owner?.id)?.name;
     try {
       const project = await createProject({ name: name.trim(), key, description: description.trim(), icon, color: '#6366f1', status: 'planned', priority, targetDate,
-        leadType: 'agent', leadName, leadAgentId: owner?.type === 'agent' ? owner.id : undefined,
-        leadSquadId: owner?.type === 'squad' ? owner.id : undefined, resources: pending ? [...resources, pending] : resources });
+        leadType: 'agent', leadName: 'Orchestrator', resources: pending ? [...resources, pending] : resources });
       if (setupRepository) setCreatedProject(project);
       else { onCreated?.(project); onClose(); }
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not create the project. Please try again.'); }
@@ -111,8 +106,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
     </Modal>;
   }
 
-  return <Modal isOpen={isOpen} onClose={() => { if (!submittingRef.current) onClose(); }} title="New project" subtitle="Set the direction, choose who will execute, and bring your code." maxWidth="max-w-3xl"
-    footer={<div className="flex items-center justify-between gap-4"><span className="hidden text-[11px] text-gray-500 sm:block">You can refine the project after creating it.</span><div className="ml-auto flex items-center gap-2"><button type="button" onClick={onClose} disabled={submitting} className="rounded-lg px-4 py-2.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50">Cancel</button><button type="submit" form={formId} disabled={submitting || !name.trim() || !eligibleOwner} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-brand-400 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">{submitting && <Loader2 className="h-4 w-4 animate-spin" />}{submitting ? 'Creating project…' : 'Create project'}</button></div></div>}>
+  return <Modal isOpen={isOpen} onClose={() => { if (!submittingRef.current) onClose(); }} title="New project" subtitle="Set the direction and connect the code. The Orchestrator leads every build." maxWidth="max-w-3xl"
+    footer={<div className="flex items-center justify-between gap-4"><span className="hidden text-[11px] text-gray-500 sm:block">You can refine the project after creating it.</span><div className="ml-auto flex items-center gap-2"><button type="button" onClick={onClose} disabled={submitting} className="rounded-lg px-4 py-2.5 text-xs font-medium text-gray-400 transition-colors hover:bg-white/5 hover:text-white disabled:opacity-50">Cancel</button><button type="submit" form={formId} disabled={submitting || !name.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-500 px-5 py-2.5 text-sm font-semibold text-on-accent transition-colors hover:bg-brand-400 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">{submitting && <Loader2 className="h-4 w-4 animate-spin" />}{submitting ? 'Creating project…' : 'Create project'}</button></div></div>}>
     <form id={formId} onSubmit={submit} className="space-y-6">
       <fieldset disabled={submitting} className="space-y-6 min-w-0">
         <div className="space-y-2">
@@ -125,7 +120,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
           </div>
         </div>
         <div className="space-y-2"><label htmlFor={`${formId}-description`} className="block text-xs font-medium text-gray-300">Goal & ground rules <span className="ml-1 font-normal text-gray-500">Optional</span></label><textarea id={`${formId}-description`} rows={3} value={description} onChange={event => setDescription(event.target.value)} placeholder="What are we building? Include the stack, constraints, and what success looks like." className={`${inputClass} resize-y leading-relaxed`} /><p className="text-[11px] text-gray-500">Shared with agents as context for every issue in this project.</p></div>
-        <div className="border-t border-white/5 pt-5"><ExecutionOwnerSelect label="Execution owner" required value={owner} onChange={setOwner} agents={agents} squads={squads} /></div>
+        <div className="flex items-start gap-3 rounded-xl border border-violet-300/15 bg-violet-300/[0.045] p-3.5"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-violet-300/15 bg-violet-300/[0.08] text-violet-200"><Workflow className="h-4 w-4" /></div><div><div className="flex items-center gap-1.5 text-xs font-semibold text-violet-100"><Sparkles className="h-3.5 w-3.5" />Build lead: Orchestrator</div><p className="mt-1 text-[11px] leading-5 text-gray-400">No team setup is needed. For each build, the Orchestrator shows its plan and specialist assignments for you to review before work starts.</p></div></div>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><label htmlFor={`${formId}-priority`} className="text-xs font-medium text-gray-300">Priority</label><select id={`${formId}-priority`} value={priority} onChange={event => setPriority(event.target.value as ProjectPriority)} className={inputClass}><option value="none">No priority</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div className="space-y-2"><label htmlFor={`${formId}-date`} className="text-xs font-medium text-gray-300">Target date <span className="ml-1 font-normal text-gray-500">Optional</span></label><input id={`${formId}-date`} type="date" value={targetDate} onChange={event => setTargetDate(event.target.value)} className={`${inputClass} [color-scheme:dark]`} /></div></div>
         <section className="space-y-3 border-t border-white/5 pt-5" aria-label="Project repositories">
           <label className="flex items-start gap-3 text-sm text-gray-200"><input type="checkbox" checked={setupRepository} onChange={event => setSetupRepository(event.target.checked)} className="mt-1 accent-brand-500" /><span>Set up repositories next<span className="mt-1 block text-xs text-gray-500">Create a GitHub repository or connect existing code after saving this project.</span></span></label>
