@@ -5,9 +5,9 @@ import { useGSAP } from '@gsap/react';
 
 const stages: { title: string; short: string; description: string; icon: LucideIcon }[] = [
   { title: 'Share your idea', short: 'Start with the outcome.', description: 'Describe what you want to build, who it is for, and what needs to change. An Alpha account is not needed to send an inquiry.', icon: FileText },
-  { title: 'Talk with your PM', short: 'Make the next step clear.', description: 'A project manager reviews your inquiry and follows up to understand your goals, constraints, and timing before any work is scheduled.', icon: MessageSquare },
-  { title: 'Receive an invitation', short: 'Access, when it is ready.', description: 'When your project manager grants client access, you get an email invitation. Open it to verify your email and choose a password. It opens only the tickets shared with you.', icon: Mail },
-  { title: 'Follow your tickets', short: 'Keep the conversation together.', description: 'Sign in with your email and password to follow your tickets, message your project manager, attach documents, and review the finished work. Forgot your password? You can request a fresh link any time.', icon: Check },
+  { title: 'Talk with your project manager', short: 'Make the next step clear.', description: 'A project manager reviews your inquiry and follows up to understand your goals, constraints, and timing before any work is scheduled.', icon: MessageSquare },
+  { title: 'Receive an invitation', short: 'Access, when it is ready.', description: 'When your project manager invites you, follow the email to verify your access and finish setup. If you already have a password, keep using it. You will see only the requests shared with you.', icon: Mail },
+  { title: 'Follow your requests', short: 'Keep the conversation together.', description: 'Sign in with your email and password to follow your requests, message your project manager, attach documents, and review the shared result. Forgot your password? You can request a password link any time.', icon: Check },
 ];
 
 export function InquiryWorkflow() {
@@ -26,7 +26,7 @@ export function InquiryWorkflow() {
   }, { scope: ref, dependencies: [selected], revertOnUpdate: true });
   const Icon = stages[selected].icon;
   return <section id="alpha-workflow" ref={ref} className="public-workflow public-container" aria-labelledby="workflow-heading">
-    <div className="public-section-intro"><h2 id="workflow-heading">A clear next step.<br /><span>At every stage.</span></h2><p>From the first conversation to your shared tickets, here’s how client access works in Alpha.</p></div>
+    <div className="public-section-intro"><h2 id="workflow-heading">A clear next step.<br /><span>At every stage.</span></h2><p>From the first conversation to your shared requests, here’s how client access works in Alpha.</p></div>
     <div className="public-workflow-track">
       <svg className="public-workflow-connector" viewBox="0 0 1000 20" preserveAspectRatio="none" aria-hidden="true"><path d="M0 10H1000" /><path className="public-workflow-active-line" d={`M0 10H${Math.max(16, selected * 333)}`} pathLength="1" strokeDasharray="1" /></svg>
       {stages.map((stage, index) => <button key={stage.title} type="button" className={`public-workflow-step ${selected === index ? 'is-selected' : ''}`} aria-pressed={selected === index} aria-controls={detailId} onClick={() => setSelected(index)}>

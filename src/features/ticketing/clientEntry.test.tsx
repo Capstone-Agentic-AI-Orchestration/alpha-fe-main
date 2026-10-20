@@ -18,7 +18,9 @@ describe('client landing and password entry', () => {
     expect(html).toContain('href="/#/team"');
     expect(html).toContain('class="public-hero public-container"');
     expect(html).toContain('A clear start for');
-    expect(html).toContain('Your PM must invite you first');
+    expect(html).toContain('If your project manager invites you');
+    expect(html).toContain('Sign in to your requests');
+    expect(html).toContain('aria-current="page">Home</a>');
     expect(html).not.toContain('Send sign-in link');
     expect(html).not.toContain('TBD');
     expect(html).not.toContain('<form');
@@ -36,7 +38,8 @@ describe('client landing and password entry', () => {
   it('explains password recovery without sending another inquiry or promising account existence', () => {
     const html = renderToStaticMarkup(<ClientPasswordRecovery />);
     expect(html).toContain('Your account and existing requests will stay together');
-    expect(html).toContain('Your PM must first invite you');
+    expect(html).toContain('Your project manager must first invite you');
+    expect(html).toContain('Reset your password');
   });
   it('recognizes recovery links and removes credentials before navigation', () => {
     const location = { pathname: '/', search: '', hash: `#/client/activate?providerTokenHash=${'a'.repeat(32)}&providerTokenType=recovery` };

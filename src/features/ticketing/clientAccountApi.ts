@@ -30,7 +30,7 @@ export const clientAccountApi = {
       method: 'POST', csrf: false, body: JSON.stringify({ email, password }),
     }); } catch (error) {
       if (error instanceof ClientTicketApiError && error.status === 401) {
-        throw new Error('The email or password is incorrect, or client access is not active.');
+        throw new Error('We could not sign you in. Check your email and password, or ask your project manager to confirm your access.');
       }
       throw error;
     }

@@ -4,11 +4,13 @@ import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientCreateTicketForm } from './ClientCreateTicketForm';
 import { PublicInquiryForm } from './PublicInquiryForm';
 import PublicInquiryUnavailable from './PublicInquiryUnavailable';
+import { ClientPublicShell } from './publicClient/ClientPublicShell';
 import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
 import { invitationButtonLabel, invitationStatusMessage, PmContactVerification, PmTicketsView, safeError } from './PmTicketsView';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { activationFailureMessage, activationLink, scrubbedActivationUrl } from './ClientActivationUnavailable';
 import { ClientTicketApiError } from './clientApi';
+import { ClientPasswordSignIn } from './ClientPasswordSignIn';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -59,6 +61,20 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).not.toContain('verification');
     expect(html).not.toContain('UI-only');
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*>.*Submit inquiry/);
+    expect(html).toContain('min-h-[44px]');
+    expect(html).toContain('This sends your request for review. It does not start work or create an account.');
+  });
+  it('marks the inquiry page and provides clear links back home and to client sign-in', () => {
+    const html = renderToStaticMarkup(<ClientPublicShell page="inquiry"><h1>Tell us what you need</h1></ClientPublicShell>);
+    expect(html).toContain('href="/#/"');
+    expect(html).toContain('href="/#/client"');
+    expect(html).toContain('aria-current="page">Inquiry form</span>');
+  });
+  it('shows the landing page as the active home page', () => {
+    const html = renderToStaticMarkup(<ClientPublicShell><h1>Start here</h1></ClientPublicShell>);
+    expect(html).toContain('aria-current="page">Home</a>');
+    expect(html).toContain('Client sign in');
+    expect(html).toContain('Start an inquiry');
   });
   it('shows a neutral planned-unavailable Tickets interface with controls disabled', () => {
     const html = renderToStaticMarkup(<PmTicketsView intakeEnabled={false} />);
@@ -75,7 +91,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
   it('opens the shared inquiry form directly without workspace selection or New Request', () => {
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
     expect(html).toContain('Tell us what you need');
-    expect(html).toContain('shared inbox and accepts it into their workspace');
+    expect(html).toContain('A project manager will review it and let you know what happens next.');
     expect(html).not.toContain('Inquiry code from your project manager');
     expect(html).not.toContain('New request');
     expect(html).toContain('href="/#/client"');
@@ -95,7 +111,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
     vi.stubGlobal('window', { location: { hash: '#/request?intake=workspace-a', search: '' } });
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
     expect(html).toContain('Tell us what you need');
-    expect(html).toContain('Checking whether this inquiry link');
+    expect(html).toContain('Checking whether you can send this inquiry');
     expect(html).toContain('href="/#/client?intake=workspace-a"');
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
     expect(html).not.toContain('UI-only');
@@ -122,7 +138,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
   it('shows the invitation-only sign-in interface without offering open account creation', () => {
     const html = renderToStaticMarkup(<ClientAccessPanel unavailable={false} error="" signInError=""
       signInSent={false} signingIn={false} onRetry={() => undefined} onRequestSignIn={() => undefined} />);
-    expect(html).toContain('Access your tickets');
+    expect(html).toContain('See your shared requests');
     expect(html).toContain('Send sign-in link');
     expect(html).toMatch(/<input[^>]*type="email"[^>]*required=""/);
     expect(html).toContain('Your project manager must review it and invite you before you can sign in');
@@ -142,11 +158,19 @@ describe('real ticketing interfaces in the Alpha app', () => {
   it('keeps sign-in disabled while checking access, with the inquiry journey available', () => {
     const html = renderToStaticMarkup(<ClientAccessPanel checking unavailable={false} error="" signInError=""
       signInSent={false} signingIn={false} onRetry={() => undefined} onRequestSignIn={() => undefined} />);
-    expect(html).toContain('Access your tickets');
-    expect(html).toContain('Checking secure client access…');
+    expect(html).toContain('See your shared requests');
+    expect(html).toContain('Checking your sign-in…');
     expect(html.match(/<input\b[^>]*type="email"[^>]*>/)?.[0]).toContain('disabled=""');
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
     expect(html).toContain('href="/#/request"');
+  });
+
+  it('explains how an invited client signs in with their chosen password', () => {
+    const html = renderToStaticMarkup(<ClientPasswordSignIn unavailable={false} error="" onRetry={() => undefined} onSignedIn={() => undefined} />);
+    expect(html).toContain('Sign in to your requests');
+    expect(html).toContain('Use the email your project manager invited');
+    expect(html).toContain('Forgot password?');
+    expect(html).toContain('Set up your password');
   });
 
   it('parses invitation and returning-sign-in links without accepting duplicate credentials', () => {
@@ -167,8 +191,8 @@ describe('real ticketing interfaces in the Alpha app', () => {
   });
 
   it('distinguishes unavailable activation from an expired link without exposing provider errors', () => {
-    expect(activationFailureMessage(new ClientTicketApiError(503, 'private provider error'))).toContain('not configured');
-    expect(activationFailureMessage(new ClientTicketApiError(null, 'private network error'))).toContain('fresh sign-in link');
+    expect(activationFailureMessage(new ClientTicketApiError(503, 'private provider error'))).toContain('We could not verify this link');
+    expect(activationFailureMessage(new ClientTicketApiError(null, 'private network error'))).toContain('request a password link');
     expect(activationFailureMessage(new ClientTicketApiError(404, 'private provider error'))).toContain('expired');
     expect(activationFailureMessage(new ClientTicketApiError(429, 'private provider error'))).toContain('Too many attempts');
     expect(activationFailureMessage(new Error('private secret'))).not.toContain('private secret');

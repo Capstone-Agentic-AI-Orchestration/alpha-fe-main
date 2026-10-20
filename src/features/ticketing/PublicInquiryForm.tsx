@@ -61,7 +61,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
   return <div ref={motionRef} className="public-inquiry-body">
     <button type="button" onClick={cancel} disabled={locked} className="public-text-link public-back-link"><ArrowLeft size={15} />Back to Alpha entry</button>
     <div className="public-inquiry-intro" data-public-arrival><h1>Tell us what you need<span>.</span></h1><p>A good project starts with a conversation. Share your idea, the outcome you’re after, and what matters most. Your project manager will take it from here.</p></div>
-    <form aria-label="Project inquiry" aria-busy={isSubmitting} className="public-inquiry-form" onInvalidCapture={() => setValidationError('Please complete the required fields and use a valid email address.')} onInput={() => setValidationError('')} onSubmit={event => {
+    <form aria-label="Project inquiry" aria-busy={isSubmitting} className="public-inquiry-form" onInvalidCapture={() => setValidationError('Please complete the required fields and use a valid email address.')} onInput={() => { setValidationError(''); setError(''); }} onSubmit={event => {
       event.preventDefault();
       if (!submissionEnabled || submissionInFlight.current || submitted) return;
       submissionInFlight.current = true;
@@ -112,19 +112,19 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
       </div>
       <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Links to reference material <span className="text-gray-500">(optional)</span></span>
         <textarea className={`${input} min-h-20 resize-y`} maxLength={INQUIRY_LINKS_MAX_LENGTH} disabled={fieldsDisabled} value={links} onChange={event => { setLinks(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="One per line: your current website, a shared folder, a design or example you like." />
-        <span className="block text-[11px] text-gray-500">Files can be attached to your ticket once your project manager invites you and you sign in.</span></label>
+        <span className="block text-xs leading-relaxed text-gray-400">Files can be added to your request after your project manager invites you and you sign in.</span></label>
       <label className="block max-w-xs space-y-2"><span className="text-xs font-medium text-gray-300">Requested target date <span className="text-gray-500">(optional, not guaranteed)</span></span>
         <input className={input} type="date" disabled={fieldsDisabled} value={requestedDeadline} onChange={event => { setRequestedDeadline(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
       <div className="flex items-start gap-2 rounded-lg bg-white/[0.03] p-3 text-xs leading-relaxed text-gray-400"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-gray-500" />
-        <p>This starts a review, not development or an account. The email is unverified and cannot be used to access a ticket. Do not include passwords or sensitive files.</p></div>
-      {error && <p role="alert" className="text-sm text-rose-300">{error}</p>}
-      {validationError && <p role="alert" className="text-xs text-amber-200">{validationError}</p>}
-      {outcomeUnknown && <p role="status" className="rounded-lg border border-amber-400/20 bg-amber-500/[0.05] p-3 text-xs leading-relaxed text-amber-100">Keep this page open and check the same submission. Alpha will retry the exact saved-in-memory payload with the same operation ID; it will not start a second inquiry.</p>}
-      {submitted && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-emerald-200">Inquiry received{publicReference ? <> · reference <span className="font-mono">{publicReference}</span></> : ''}. The project manager will review it. This does not create an account or grant access to a ticket.</p>}
-      {submitted && <p className="text-xs leading-relaxed text-gray-400">If your PM invites you, open the email to verify this address and choose your password. After setup, return through client sign-in whenever you need to follow up.</p>}
+        <p>This sends your request for review. It does not start work or create an account. You can sign in after your project manager invites you and you verify this email. Do not include passwords or sensitive files.</p></div>
+      {error && <p role="alert" className="text-sm leading-relaxed text-rose-200">{error}</p>}
+      {validationError && <p role="alert" className="text-sm leading-relaxed text-amber-100">{validationError}</p>}
+      {outcomeUnknown && <p role="status" className="rounded-lg border border-amber-400/20 bg-amber-500/[0.05] p-3 text-sm leading-relaxed text-amber-100">We could not confirm whether your inquiry was received. Choose “Check inquiry status” below before trying again; this avoids sending a duplicate.</p>}
+      {submitted && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-emerald-200">Inquiry received{publicReference ? <> · reference <span className="font-mono">{publicReference}</span></> : ''}. Your project manager will review it. This does not create an account or give you portal access yet.</p>}
+      {submitted && <p className="text-xs leading-relaxed text-gray-400">If your project manager invites you, follow the email to verify your access. If this is your first time, you can choose a password; otherwise, keep using your current one.</p>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-5">
-        <p className="max-w-xs text-[11px] text-gray-500">{submitted ? 'Email ownership must be verified through a client invitation before ticket access is granted.' : !submissionEnabled ? unavailableMessage : 'Your inquiry will be sent for review. Submitting an email address does not grant ticket access.'}</p>
-        <div className="flex gap-2"><button type="button" onClick={onCancel} className={secondary} disabled={isSubmitting || outcomeUnknown}>Cancel</button><button className={primary} type="submit" disabled={!submissionEnabled || isSubmitting || submitted}><Send size={14} />{isSubmitting ? 'Submitting…' : submitted ? 'Inquiry received' : outcomeUnknown ? 'Check same submission' : 'Submit inquiry'}</button></div>
+        <p className="max-w-xs text-xs leading-relaxed text-gray-400">{submitted ? 'You must verify your email from your project manager’s invitation before you can sign in.' : !submissionEnabled ? unavailableMessage : 'Your project manager will review this request. An email address alone does not create portal access.'}</p>
+        <div className="flex flex-wrap gap-2"><button type="button" onClick={cancel} className={`${secondary} min-h-[44px] min-w-24`} disabled={locked}>Cancel</button><button className={`${primary} min-h-[44px]`} type="submit" disabled={!submissionEnabled || isSubmitting || submitted}><Send size={14} />{isSubmitting ? 'Submitting…' : submitted ? 'Inquiry received' : outcomeUnknown ? 'Check inquiry status' : 'Submit inquiry'}</button></div>
       </div>
     </form>
   </div>;

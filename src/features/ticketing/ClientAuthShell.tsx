@@ -13,7 +13,7 @@ export function ClientAuthShell({ children }: { children: ReactNode }) {
       <div className="ca-journey" aria-label="How client access works">
         <div className="ca-journey-head"><span>CLIENT ACCESS</span><span>INVITATION → PORTAL</span></div>
         <div className="ca-journey-grid"><span>INQUIRY</span><span>REVIEW</span><span>INVITE</span><span>PORTAL</span></div>
-        <div className="ca-journey-lines"><p><i /> Your PM reviews your request.</p><p><i /> You verify the invited email.</p><p><i /> Your account opens the shared ticket.</p></div>
+        <div className="ca-journey-lines"><p><i /> Your project manager reviews your request.</p><p><i /> You verify the invited email.</p><p><i /> Your account shows requests shared with you.</p></div>
         <p className="ca-journey-note"><ShieldCheck size={13} /> Only requests shared with your account appear here.</p>
       </div>
     </aside>

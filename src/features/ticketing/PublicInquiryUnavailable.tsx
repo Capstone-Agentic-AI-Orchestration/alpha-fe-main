@@ -57,12 +57,12 @@ export default function PublicInquiryUnavailable() {
   const clientHref = clientPortalHref(slug);
   const message = configuration === 'enabled'
     ? context.kind === 'workspace'
-      ? 'Your inquiry goes to the workspace that shared this link. A PM will review it before it becomes a ticket.'
-      : 'Your inquiry goes to Alpha’s shared PM inbox. A PM will accept it into their workspace before it becomes a ticket.'
+      ? 'Your request will go to the project manager for the team that shared this link.'
+      : 'Your request will go to a project manager for review.'
     : configuration === 'checking'
-      ? 'Checking whether this inquiry link can accept submissions…'
+      ? 'Checking whether you can send this inquiry…'
       : context.kind === 'invalid'
-        ? 'This inquiry link has conflicting or invalid workspace details. Nothing has been submitted. Open the link your project manager shared.'
+        ? 'This inquiry link is incomplete or invalid. Nothing has been sent. Ask your project manager for a new link.'
         : 'This inquiry link is unavailable or could not be checked. Nothing has been submitted. Try again or contact your project manager.';
 
   return <ClientPublicShell page="inquiry" slug={slug} navigationLocked={navigation.locked} hasDraft={navigation.dirty}>
@@ -74,7 +74,7 @@ export default function PublicInquiryUnavailable() {
         </p>
         {context.kind === 'central' && <p className="public-notice mt-3">
           <ShieldCheck size={17} aria-hidden="true" />
-          <span>No workspace choice or inquiry code is needed. A PM reviews your inquiry in the shared inbox and accepts it into their workspace before it becomes a ticket.</span>
+          <span>No account or team selection is needed to send this inquiry. A project manager will review it and let you know what happens next.</span>
         </p>}
         {configuration === 'unavailable' && <button type="button" className="public-button public-button-secondary public-recheck mt-3" onClick={() => setRetryVersion(value => value + 1)}>
           Check inquiry availability again
@@ -102,16 +102,16 @@ export default function PublicInquiryUnavailable() {
             <h2>{context.kind === 'workspace' ? 'Your request reaches the right team.' : 'A real person reviews your request.'}</h2>
           </div>
           <p>{context.kind === 'workspace'
-            ? 'This link is tied to a specific workspace. Its PM will review your inquiry.'
+            ? 'This link was shared by a specific team. That team’s project manager will review your inquiry.'
             : 'Send your inquiry once. You do not need to choose a workspace or create an account first.'}</p>
           <ul className="public-guide-prompts">
-            <li><span>01</span><span>You send your inquiry using the existing secure form.</span></li>
-            <li><span>02</span><span>A PM reviews it before accepting it into a workspace.</span></li>
-            <li><span>03</span><span>Only after acceptance does it become a regular ticket.</span></li>
+            <li><span>01</span><span>You send your inquiry using this form.</span></li>
+            <li><span>02</span><span>A project manager reviews your request.</span></li>
+            <li><span>03</span><span>If they accept it and invite you, follow the email to access your account and updates.</span></li>
           </ul>
           <div className="public-guide-next">
             <h3>Already have client access?</h3>
-            <p><a href={clientHref}>Sign in to your client portal</a>. This public inquiry is separate from any ticket already in your account.</p>
+            <p><a href={clientHref}>Sign in to your client portal</a>. This inquiry will be reviewed separately from requests already shared with you.</p>
           </div>
         </div>
       </aside>

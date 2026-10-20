@@ -10,7 +10,7 @@ function barClass(step: ClientProgressStep): string {
 
 function labelClass(step: ClientProgressStep): string {
   if (step.state === 'done') return 'text-gray-300';
-  if (step.state === 'upcoming') return 'text-gray-600';
+  if (step.state === 'upcoming') return 'text-gray-400';
   return step.needsYou ? 'font-medium text-amber-100' : 'font-medium text-white';
 }
 

@@ -1,7 +1,7 @@
 import { useRef, type ReactNode } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import alphaMarkUrl from '@/assets/alpha-mark.png';
-import { clientPortalHref, publicInquiryHref } from '../publicIntakeApi';
+import { clientLandingHref, clientPortalHref, publicInquiryHref } from '../publicIntakeApi';
 import { InteractiveBackdrop } from './InteractiveBackdrop';
 import './clientPublic.css';
 
@@ -13,6 +13,7 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
   hasDraft?: boolean;
 }) {
   const mainRef = useRef<HTMLElement>(null);
+  const homeHref = clientLandingHref(slug);
   const clientHref = clientPortalHref(slug);
   return <div className="alpha-public" onClickCapture={event => {
     if (!(event.target instanceof Element)) return;
@@ -30,22 +31,27 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
     <InteractiveBackdrop />
     <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
     <header className="public-header public-container">
-      <a className="public-brand" href={clientHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>
+      <a className="public-brand" href={homeHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>
         <img src={alphaMarkUrl} alt="" width="36" height="36" />
-        <span>Alpha<span className="public-brand-label">{page === 'inquiry' ? 'Project inquiry' : 'Client portal'}</span></span>
+        <span>Alpha<span className="public-brand-label">{page === 'inquiry' ? 'Project inquiry' : 'Client home'}</span></span>
       </a>
-      <nav aria-label="Client navigation">
+      <nav className={`public-header-nav public-header-nav-${page}`} aria-label="Client navigation">
         {page === 'landing' ? <>
+          <a className="public-current-page" href={homeHref} aria-current="page">Home</a>
           <a className="public-text-link" href={clientHref}>Client sign in</a>
           <button className="public-text-link public-how-link" onClick={() => document.getElementById('alpha-workflow')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })}>How it works</button>
           <a className="public-nav-action" href={publicInquiryHref(slug)}>Start an inquiry <ArrowUpRight size={15} /></a>
-        </> : <a className="public-text-link" href={clientHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>Client access <ArrowUpRight size={15} /></a>}
+        </> : <>
+          <a className="public-text-link" href={homeHref}>Home</a>
+          <a className="public-text-link" href={clientHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>Client sign in</a>
+          <span className="public-current-page" aria-current="page">Inquiry form</span>
+        </>}
       </nav>
     </header>
     <main ref={mainRef} tabIndex={-1} className="public-main">{children}</main>
     <footer className="public-footer public-container">
       <span className="public-footer-brand">Alpha <span>AI work, orchestrated.</span></span>
-      <p>Client access is limited to tickets shared with your account.</p>
+      <p>Only requests your project manager shares with you appear in your account.</p>
     </footer>
   </div>;
 }

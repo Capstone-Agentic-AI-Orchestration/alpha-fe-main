@@ -46,10 +46,10 @@ export function scrubbedActivationUrl(location: { pathname: string; search: stri
 
 export function activationFailureMessage(error: unknown): string {
   if (error instanceof ClientTicketApiError && (error.status === null || error.status >= 500)) {
-    return 'Client access could not be reached or is not configured. Contact your project manager. If activation succeeded before the connection ended, a fresh sign-in link will let you continue.';
+    return 'We could not verify this link. Check your connection and reload. If the problem continues, request a password link if you already have an account, or ask your project manager for a new invitation.';
   }
-  if (error instanceof ClientTicketApiError && error.status === 429) return 'Too many attempts. Wait before requesting a fresh link.';
-  return 'The link may have expired or already been used. Request a new sign-in link, or ask your project manager to reissue the invitation.';
+  if (error instanceof ClientTicketApiError && error.status === 429) return 'Too many attempts. Wait a little, then try again.';
+  return 'This link may have expired or already been used. If you already have an account, request a password link. Otherwise, ask your project manager for a new invitation.';
 }
 
 /** Existing invitation URLs now enter the resumable password setup flow. */
