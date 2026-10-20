@@ -198,12 +198,12 @@ function OrchestratorBuildActivityRow({
   onOpenRoom: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [autoExpanded, setAutoExpanded] = useState(false);
   const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (!expanded) return undefined;
     let cancelled = false;
     let timer: number | undefined;
     setLoading(true);
@@ -218,13 +218,22 @@ function OrchestratorBuildActivityRow({
         }
         setError('');
         const status = next.orchestration?.run.status;
-        if (status && !['completed', 'failed', 'cancelled', 'blocked'].includes(status)) {
-          timer = window.setTimeout(() => void sync(), 2_500);
+        const shouldSurface = Boolean(status && [
+          'planning', 'executing', 'validating', 'publishing', 'cancelling',
+          'awaiting_plan_approval', 'awaiting_approval', 'paused', 'blocked', 'recovery_required', 'failed'
+        ].includes(status));
+        if (shouldSurface && !autoExpanded) {
+          setAutoExpanded(true);
+          setExpanded(true);
+        }
+        if (status && !['completed', 'failed', 'cancelled'].includes(status)) {
+          const active = ['planning', 'executing', 'validating', 'publishing', 'cancelling'].includes(status);
+          timer = window.setTimeout(() => void sync(), active ? 2_500 : expanded ? 6_000 : 15_000);
         }
       } catch (syncError: any) {
         if (cancelled) return;
         setError(syncError?.message ?? 'Run details could not be loaded.');
-        timer = window.setTimeout(() => void sync(), 5_000);
+        timer = window.setTimeout(() => void sync(), expanded ? 5_000 : 15_000);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -234,7 +243,7 @@ function OrchestratorBuildActivityRow({
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [expanded, projectId, runId]);
+  }, [autoExpanded, expanded, projectId, runId]);
 
   const orchestration = snapshot?.orchestration;
   const tasks = orchestration?.tasks ?? [];
@@ -251,11 +260,20 @@ function OrchestratorBuildActivityRow({
   ])].sort((a, b) => a.localeCompare(b));
   const status = orchestration?.run.status;
   const working = Boolean(status && ['planning', 'executing', 'validating', 'publishing', 'cancelling'].includes(status));
+  const currentTask = tasks.find(task => task.id === orchestration?.run.currentTaskId)
+    ?? tasks.find(task => ['running', 'submitted', 'blocked', 'failed'].includes(task.status));
+  const currentAttempt = currentTask
+    ? [...attempts].reverse().find(attempt => attempt.taskId === currentTask.id)
+    : undefined;
+  const currentAgent = snapshot?.agentCards.find(card => card.runId === currentAttempt?.prototypeRunId)
+    ?? snapshot?.agentCards.find(card => card.status === 'running');
+  const failedAttempt = [...attempts].reverse().find(attempt => ['failed', 'recovery_required'].includes(attempt.status));
   const activity = (snapshot?.agentCards ?? []).flatMap(card => card.activity
-    .filter(item => ['tool', 'tool_result', 'file_change', 'handoff', 'error'].includes(item.kind))
+    .filter(item => ['status', 'stage', 'assistant', 'tool', 'tool_result', 'file_change', 'handoff', 'error', 'summary'].includes(item.kind))
     .map(item => ({ ...item, agentName: card.agentName })))
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
-    .slice(0, 12);
+    .slice(0, 8);
+  const statusLabel = status?.replace(/_/g, ' ') ?? (loading ? 'connecting' : 'activity unavailable');
 
   return <div className="mt-2 overflow-hidden rounded-xl border border-violet-300/15 bg-surface-100/75 text-left">
     <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.035]">
@@ -264,34 +282,51 @@ function OrchestratorBuildActivityRow({
           : status === 'awaiting_approval' || status === 'awaiting_plan_approval' ? <Circle className="h-3 w-3 shrink-0 text-amber-300" />
             : status ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-300" />
               : <Activity className="h-3.5 w-3.5 shrink-0 text-violet-200" />}
-      <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-violet-100">Orchestrator activity{status ? ` · ${status.replace(/_/g, ' ')}` : ''}</span>
-      <span className="shrink-0 text-[10px] text-gray-500">{tasks.length} tasks · {changedFiles.length} files changed</span>
+      <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-violet-100">{currentAgent?.agentName ?? currentTask?.ownerName ?? 'Orchestrator activity'}{currentTask ? ` · ${currentTask.title}` : ` · ${statusLabel}`}</span>
+      <span className="hidden shrink-0 text-[10px] text-gray-500 sm:inline">{changedFiles.length} {changedFiles.length === 1 ? 'file changed' : 'files changed'}</span>
       <span className="shrink-0 text-[10px] text-violet-200">{expanded ? 'Hide details' : 'View details'}</span>
       {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />}
     </button>
+    {!expanded && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-white/[0.06] px-3 py-2 text-[10px] text-gray-400">
+      <span className="capitalize text-violet-200">{statusLabel}</span>
+      {activity[0] && <><span className="text-gray-600">·</span><span className="min-w-0 truncate">{activity[0].toolName ? `${activity[0].toolName}: ` : ''}{activity[0].message}</span></>}
+      {!activity.length && <span>{currentTask ? `${currentTask.ownerName} is assigned and activity will appear here.` : 'Open to see task assignments and live work.'}</span>}
+    </div>}
     {expanded && <div className="space-y-4 border-t border-white/[0.07] px-3 py-3">
       {loading && !snapshot && <div className="flex items-center gap-2 text-[10px] text-gray-500"><Loader2 className="h-3 w-3 animate-spin" />Loading run details…</div>}
       {error && <p role="alert" className="text-[10px] text-rose-300">{error}</p>}
+      {currentTask && <section className="rounded-lg border border-violet-300/15 bg-violet-300/[0.045] px-3 py-2.5">
+        <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3 w-3" />{working ? 'Working now' : 'Current assignment'}<span className="normal-case tracking-normal text-gray-500">· {currentAgent?.agentName ?? currentTask.ownerName}</span>{currentAgent?.status === 'running' && <span className="inline-flex items-center gap-1 rounded border border-violet-300/20 px-1.5 py-0.5 normal-case tracking-normal text-violet-100"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}</div>
+        <div className="mt-1 text-[11px] font-medium text-gray-100">{currentTask.title}</div>
+        {currentAgent?.currentStage && <div className="mt-1 text-[10px] text-gray-400">{currentAgent.currentStage}</div>}
+      </section>}
       {tasks.length > 0 && <section className="space-y-2">
-        <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Assignments</div>
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Orchestrator assignments</div>
         {tasks.map(task => <div key={task.id} className="flex items-start justify-between gap-3 rounded-lg bg-black/15 px-2.5 py-2">
-          <div className="min-w-0"><div className="text-[10px] font-medium text-gray-200">{task.title}</div><div className="mt-0.5 text-[9px] text-gray-500">{task.ownerName}</div></div>
+          <div className="min-w-0"><div className="text-[10px] font-medium text-gray-200">{task.title}</div><div className="mt-0.5 text-[9px] text-gray-500">{task.ownerName}{task.assignmentReason ? ` · ${task.assignmentReason}` : ''}</div></div>
           <span className="shrink-0 text-[9px] capitalize text-violet-200">{task.status.replace(/_/g, ' ')}</span>
         </div>)}
+      </section>}
+      {(failedAttempt?.failureReason || (['blocked', 'failed', 'recovery_required'].includes(status ?? '') && orchestration?.run.stoppedReason)) && <section role="alert" className="rounded-lg border border-amber-300/20 bg-amber-300/[0.05] px-3 py-2.5">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-amber-200">Why the build stopped</div>
+        <p className="mt-1 whitespace-pre-wrap break-words text-[10px] leading-4 text-gray-300">{failedAttempt?.failureReason || orchestration?.run.stoppedReason}</p>
+        {failedAttempt?.verification?.commands?.length ? <ul className="mt-2 space-y-1 border-t border-amber-200/10 pt-2">{failedAttempt.verification.commands.map((command, index) => <li key={`${command.script ?? command.display ?? 'check'}-${index}`} className="flex flex-wrap items-center gap-x-1.5 text-[9px] text-gray-400"><code>{command.display ?? command.script ?? 'Verification check'}</code><span>·</span><span className={command.exitCode === 0 ? 'text-emerald-300' : command.exitCode === null ? 'text-amber-200' : 'text-rose-300'}>{command.exitCode === 0 ? 'passed' : command.exitCode === null ? command.signal ?? 'stopped' : `failed (exit ${command.exitCode})`}</span></li>)}</ul> : null}
       </section>}
       <section className="space-y-2">
         <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Files changed</div>
         {changedFiles.length ? <div className="flex flex-wrap gap-1.5">{changedFiles.map(file => <code key={file} className="max-w-full truncate rounded-md bg-black/20 px-2 py-1 font-mono text-[9px] text-emerald-200">{file}</code>)}</div>
           : <p className="text-[10px] text-gray-500">No files changed yet. File updates will appear here as specialists work.</p>}
       </section>
-      {activity.length > 0 && <section className="space-y-2">
-        <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Recent work</div>
-        <ol className="space-y-2 border-l border-white/10 pl-3">{activity.map(item => <li key={`${item.id}-${item.agentName}`} className="relative text-[10px] leading-4 text-gray-300">
+      <section className="space-y-2">
+        <div className="flex items-center justify-between gap-2"><div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Agent actions and updates</div>{working && <span className="inline-flex items-center gap-1 text-[9px] text-violet-200"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300" />Refreshing live</span>}</div>
+        {activity.length > 0 ? <ol className="space-y-2 border-l border-white/10 pl-3">{activity.map(item => <li key={`${item.id}-${item.agentName}`} className="relative text-[10px] leading-4 text-gray-300">
           <span className={`absolute -left-[17px] top-1.5 h-1.5 w-1.5 rounded-full ${item.kind === 'error' ? 'bg-rose-400' : item.kind === 'file_change' ? 'bg-emerald-400' : 'bg-violet-300'}`} />
-          <span className="font-medium text-gray-200">{item.agentName}</span><span className="text-gray-500"> · {item.toolName ? `${item.toolName} · ` : ''}{item.message}</span>
-          {item.detail && <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-black/20 px-2 py-1.5 font-mono text-[9px] text-gray-400">{item.detail}</pre>}
-        </li>)}</ol>
-      </section>}
+          <div className="flex flex-wrap items-center gap-x-1.5"><span className="font-medium text-gray-200">{item.agentName}</span><span className="text-gray-600">·</span><span className="text-gray-500">{item.toolName ?? item.kind.replace(/_/g, ' ')}</span>{item.isStreaming && <span className="inline-flex items-center gap-1 rounded border border-violet-300/20 px-1 py-0.5 text-[8px] text-violet-100"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}<time className="text-gray-600">{new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></div>
+          <div className="mt-0.5 whitespace-pre-wrap break-words text-gray-300">{item.message}</div>
+          {item.detail && <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/20 px-2 py-1.5 font-mono text-[9px] text-gray-400">{item.detail}</pre>}
+          {!!item.paths?.length && <div className="mt-1 flex flex-wrap gap-1">{item.paths.map(file => <code key={file} className="max-w-full truncate rounded bg-white/[0.05] px-1.5 py-1 font-mono text-[9px] text-emerald-200">{file}</code>)}</div>}
+        </li>)}</ol> : <p className="text-[10px] text-gray-500">{working ? 'The agent is starting. Its conversation, tool calls, and file edits will appear here.' : 'No agent actions were recorded for this build.'}</p>}
+      </section>
       <button type="button" onClick={onOpenRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/20 px-2.5 py-1.5 text-[10px] font-medium text-violet-200 hover:bg-violet-400/10"><Activity className="h-3 w-3" />Open this build in Live Build Room</button>
     </div>}
   </div>;
