@@ -14,6 +14,7 @@ import {
   ListChecks,
   LoaderCircle,
   LockKeyhole,
+  Pause,
   RotateCcw,
   ShieldCheck,
   Square,
@@ -32,6 +33,7 @@ interface OrchestrationWorkflowPanelProps {
   onRetry: (taskId: string, expectedRevision: number) => void;
   onStartPlan: () => void;
   onResume: () => void;
+  onPause: () => void;
   onCancel: () => void;
   onApprove: () => void;
   canApprove?: boolean;
@@ -42,6 +44,7 @@ const runStatusMeta: Record<LiveBuildRoomOrchestration['run']['status'], { label
   planning: { label: 'Preparing plan', tone: 'border-sky-300/20 bg-sky-300/[0.07] text-sky-100', icon: <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> },
   awaiting_plan_approval: { label: 'Plan ready to review', tone: 'border-sky-300/20 bg-sky-300/[0.07] text-sky-100', icon: <ListChecks className="h-3.5 w-3.5" /> },
   executing: { label: 'In progress', tone: 'border-violet-300/25 bg-violet-300/[0.08] text-violet-100', icon: <CircleDot className="h-3.5 w-3.5" /> },
+  paused: { label: 'Paused', tone: 'border-amber-300/25 bg-amber-300/[0.08] text-amber-100', icon: <Pause className="h-3.5 w-3.5" /> },
   cancelling: { label: 'Stopping build', tone: 'border-amber-300/25 bg-amber-300/[0.08] text-amber-100', icon: <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> },
   validating: { label: 'Final checks', tone: 'border-sky-300/20 bg-sky-300/[0.07] text-sky-100', icon: <ShieldCheck className="h-3.5 w-3.5" /> },
   awaiting_approval: { label: 'Ready for review', tone: 'border-emerald-300/25 bg-emerald-300/[0.08] text-emerald-100', icon: <CheckCircle2 className="h-3.5 w-3.5" /> },
@@ -97,7 +100,10 @@ function TaskEvidence({ workflow, taskId, taskById }: {
         <span className="text-[10px] text-slate-500">{attempt.status.replace(/_/g, ' ')}</span>
       </div>
       {attempt.summary && <p className="mt-2 max-w-prose text-xs leading-5 text-slate-300">{attempt.summary}</p>}
-      {attempt.failureReason && <p className="mt-2 text-xs leading-5 text-amber-100/80">{attempt.failureReason}</p>}
+      {attempt.failureReason && <details className="mt-2 rounded-md border border-amber-300/10 bg-amber-300/[0.025] px-2.5 py-2">
+        <summary className="cursor-pointer text-[10px] font-medium text-amber-100/80">Why this attempt stopped</summary>
+        <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-amber-100/65">{attempt.failureReason}</pre>
+      </details>}
       {attempt.report && <div className="mt-3 space-y-2.5 border-t border-white/[0.05] pt-3">
         {!!attempt.report.requirementCoverage.length && <div><div className="text-[10px] font-medium text-slate-400">Requirement evidence</div><div className="mt-1.5 space-y-1.5">{attempt.report.requirementCoverage.map((item, index) => <div key={`${item.requirementId}-${index}`} className="text-[10px] leading-4 text-slate-500"><span className="font-mono text-violet-100/65">{item.requirementId || 'Requirement'}</span>{item.evidence && <span className="ml-2">{item.evidence}</span>}</div>)}</div></div>}
         {!!attempt.report.criteriaEvidence.length && <div><div className="text-[10px] font-medium text-slate-400">Acceptance evidence</div><div className="mt-1.5 space-y-1.5">{attempt.report.criteriaEvidence.map((item, index) => <div key={`${item.criterion}-${index}`} className="text-[10px] leading-4 text-slate-500"><span className="text-slate-300">{item.criterion || 'Criterion'}</span>{item.evidence && <span className="ml-2">{item.evidence}</span>}</div>)}</div></div>}
@@ -165,7 +171,10 @@ function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration })
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-500"><span>{task?.repository || workflow.run.repository}</span><span className="text-slate-700">·</span><span>{eventTime}</span>{attempt.attemptNumber > 1 && <><span className="text-slate-700">·</span><span>Attempt {attempt.attemptNumber}</span></>}</div>
             {task?.assignmentReason && <p className="mt-2 border-t border-white/[0.05] pt-2 text-[10px] leading-4 text-slate-400"><span className="font-medium text-violet-100/75">Why assigned:</span> {task.assignmentReason}</p>}
             {attempt.summary && <p className="mt-2 text-[10px] leading-4 text-slate-400">{attempt.summary}</p>}
-            {attempt.failureReason && <p className="mt-2 text-[10px] leading-4 text-amber-100/80">{attempt.failureReason}</p>}
+            {attempt.failureReason && <details className="mt-2 rounded-md border border-amber-300/10 bg-amber-300/[0.025] px-2.5 py-2">
+              <summary className="cursor-pointer text-[10px] font-medium text-amber-100/80">Why this handoff stopped</summary>
+              <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-amber-100/65">{attempt.failureReason}</pre>
+            </details>}
           </div>
         </li>;
       })}
@@ -255,7 +264,7 @@ const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: stri
 };
 
 export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProps> = ({
-  projectId, workflow, canManage, canResume = false, canApprove = false, publicationSynced = false, busyAction, actionError, onRetry, onStartPlan, onResume, onCancel, onApprove
+  projectId, workflow, canManage, canResume = false, canApprove = false, publicationSynced = false, busyAction, actionError, onRetry, onStartPlan, onResume, onPause, onCancel, onApprove
 }) => {
   const firstActionableTask = workflow.tasks.find(task => ['failed', 'blocked'].includes(task.status));
   const [expandedTaskId, setExpandedTaskId] = useState(workflow.run.currentTaskId ?? firstActionableTask?.id ?? workflow.tasks[0]?.id ?? '');
@@ -272,9 +281,11 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
   const approvalActionAvailable = workflow.run.status === 'awaiting_approval' || workflow.run.status === 'publishing' ||
     (workflow.run.status === 'completed' && Boolean(workflow.run.publication) && !publicationSynced);
   const resumable = canManage && canResume && (
+    workflow.run.status === 'paused' ||
     workflow.run.status === 'recovery_required' ||
     (workflow.run.status === 'blocked' && /orchestrator is unavailable/i.test(workflow.run.stoppedReason || ''))
   );
+  const pausable = canManage && workflow.run.status === 'executing';
   const cancellable = canManage && !['publishing', 'completed', 'failed', 'cancelled'].includes(workflow.run.status);
   const ownerCount = new Set(workflow.tasks.map(task => task.ownerName).filter(name => name !== 'Project specialist')).size;
 
@@ -306,6 +317,9 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
           {approvalActionAvailable && canApprove && <button type="button" onClick={onApprove} disabled={Boolean(busyAction)} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-300 px-3.5 text-xs font-semibold text-[#10201b] transition duration-200 hover:bg-emerald-200 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-100 disabled:cursor-wait disabled:opacity-55">
             {busyAction === 'approve' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}{busyAction === 'approve' ? workflow.run.status === 'publishing' ? 'Publishing…' : 'Preparing pull requests…' : workflow.run.status === 'completed' ? 'Retry issue sync' : workflow.run.status === 'publishing' ? 'Retry opening pull requests' : `Approve & open ${workflow.run.repositories && workflow.run.repositories.length > 1 ? 'pull requests' : 'pull request'}`}
           </button>}
+          {pausable && <button type="button" onClick={onPause} disabled={Boolean(busyAction) || Boolean(workflow.run.pauseRequestedAt)} title={workflow.run.currentTaskId ? 'The current specialist will finish this step before the build pauses.' : 'Pause the build before another step starts.'} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-amber-300/25 bg-amber-300/[0.07] px-3.5 text-xs font-semibold text-amber-100 transition hover:bg-amber-300/[0.12] active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:cursor-wait disabled:opacity-55">
+            {busyAction === 'pause' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Pause className="h-3.5 w-3.5" />}{workflow.run.pauseRequestedAt ? 'Pausing after this step…' : busyAction === 'pause' ? 'Pausing…' : 'Pause'}
+          </button>}
           {resumable && <button type="button" onClick={onResume} disabled={Boolean(busyAction)} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-violet-400 px-3.5 text-xs font-semibold text-[#171224] transition duration-200 hover:bg-violet-300 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:cursor-wait disabled:opacity-55">
             {busyAction === 'resume' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}{workflow.run.status === 'recovery_required' ? 'Resume after review' : 'Resume build'}
           </button>}
@@ -321,6 +335,8 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
       </div>}
       {workflow.run.status === 'awaiting_plan_approval' && <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-sky-300/15 bg-sky-300/[0.04] px-3.5 py-3 text-xs leading-5 text-sky-100/85"><ListChecks className="mt-0.5 h-4 w-4 shrink-0" /><div><span className="font-semibold text-sky-100">Review the plan before work begins.</span> Check each task, its specialist, and why that person was chosen. No specialist has started changing code.</div></div>}
       {workflow.run.status === 'cancelling' && <div role="status" className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.04] px-3.5 py-3 text-xs leading-5 text-amber-100/80">Alpha is waiting for the specialist process to exit. The repository stays reserved, and this build will not dispatch more work while it stops.</div>}
+      {workflow.run.pauseRequestedAt && workflow.run.status === 'executing' && <div role="status" className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.04] px-3.5 py-3 text-xs leading-5 text-amber-100/80">The current specialist is finishing its assigned step. Alpha will pause before handing work to the next specialist.</div>}
+      {workflow.run.status === 'paused' && <div role="status" className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.04] px-3.5 py-3 text-xs leading-5 text-amber-100/80">The build is paused. Its branch and saved work are preserved. Resume when you’re ready for the Orchestrator to continue.</div>}
       {actionError && <div role="alert" className="mt-3 rounded-lg border border-rose-300/20 bg-rose-300/[0.06] px-3.5 py-2.5 text-xs text-rose-100">{actionError}</div>}
       {workflow.run.status === 'awaiting_approval' && <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.045] px-3.5 py-3 text-xs leading-5 text-emerald-100/85"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><div><span className="font-semibold text-emerald-100">Ready for your final review.</span> The Orchestrator completed its checks; a person still decides whether this work is approved.</div></div>}
       {workflow.run.status === 'awaiting_approval' && <div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.035] px-3.5 py-3 text-xs leading-5 text-amber-100/80">Approving sends each checked branch to GitHub and opens {workflow.run.repositories && workflow.run.repositories.length > 1 ? 'a pull request in each selected codebase' : 'a pull request'} for review. It does not merge or deploy the change.</div>}

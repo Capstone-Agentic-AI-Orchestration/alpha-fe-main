@@ -940,6 +940,7 @@ export interface LiveBuildRoomActivity {
   message: string;
   toolName?: string;
   detail?: string;
+  isStreaming?: boolean;
   paths?: string[];
   createdAt: string;
 }
@@ -1023,6 +1024,7 @@ export type LiveBuildOrchestrationStatus =
   | 'planning'
   | 'awaiting_plan_approval'
   | 'executing'
+  | 'paused'
   | 'validating'
   | 'awaiting_approval'
   | 'publishing'
@@ -1101,6 +1103,7 @@ export interface LiveBuildRoomOrchestration {
     branchName?: string;
     repositories?: Array<{ repository: string; branchName: string }>;
     currentTaskId?: string;
+    pauseRequestedAt?: string;
     stoppedReason?: string;
     publication?: {
       repository?: string;
