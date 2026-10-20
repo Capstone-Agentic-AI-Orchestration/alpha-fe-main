@@ -93,6 +93,12 @@ const TARGET_LABELS: Record<string, string> = {
 const MAX_CHAT_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_CHAT_FILES = 8;
 
+interface ChatMentionQuery {
+  start: number;
+  end: number;
+  query: string;
+}
+
 function formatDate(value?: string): string {
   if (!value) return '';
   const date = new Date(value);
@@ -122,8 +128,11 @@ function statusTone(status: AgentCall['status']): string {
   }
 }
 
-function isDirectMention(value: string): boolean {
-  return /(?:^|\s)@[a-zA-Z0-9_-]+/.test(value);
+function getMentionQueryAtCursor(value: string, cursor: number): ChatMentionQuery | null {
+  const match = /(?:^|[\s(\[{])@([a-zA-Z0-9_-]*)$/.exec(value.slice(0, cursor));
+  if (!match) return null;
+  const mentionStart = cursor - match[0].length + (match[0][0] === '@' ? 0 : 1);
+  return { start: mentionStart, end: cursor, query: match[1] };
 }
 
 function ChatTurnActivityRow({
@@ -356,6 +365,9 @@ export const ChatView: React.FC = () => {
   const [copiedCallId, setCopiedCallId] = useState<string | null>(null);
   const [expandedCallPanel, setExpandedCallPanel] = useState<Record<string, boolean>>({});
   const callsRef = useRef<Record<string, AgentCall>>({});
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const [mentionQuery, setMentionQuery] = useState<ChatMentionQuery | null>(null);
+  const [activeMentionIndex, setActiveMentionIndex] = useState(0);
 
 
   const activeThread = useMemo(
@@ -451,6 +463,13 @@ export const ChatView: React.FC = () => {
   const latestUserMessage = [...currentMessages].reverse().find(message => message.senderType === 'user');
   const activeTurnMessageId = activeChatTurnCall?.messageId
     ?? (isAgentTyping && chatIntent !== 'build' ? latestUserMessage?.id : undefined);
+  const mentionSuggestions = useMemo(() => {
+    if (!mentionQuery || isClient || activeTurnMessageId || chatIntent === 'build') return [];
+    const query = mentionQuery.query.trim().toLowerCase();
+    return (snapshot?.agents ?? [])
+      .filter(agent => !query || `${agent.name} ${agent.role}`.toLowerCase().includes(query))
+      .slice(0, 8);
+  }, [activeTurnMessageId, chatIntent, isClient, mentionQuery, snapshot?.agents]);
   useEffect(() => {
     const views = pendingFiles.map(file => ({
       file,
@@ -473,6 +492,11 @@ export const ChatView: React.FC = () => {
   useEffect(() => {
     if (isActiveTab && activeThreadId) setActiveThreadId(activeThreadId);
   }, [activeThreadId, isActiveTab, setActiveThreadId]);
+
+  useEffect(() => {
+    setMentionQuery(null);
+    setActiveMentionIndex(0);
+  }, [activeThreadId]);
 
   useEffect(() => {
     if (!isActiveTab) return undefined;
@@ -834,12 +858,9 @@ export const ChatView: React.FC = () => {
     if (chatIntent === 'build' && (latestProjectBuildRun?.status === 'failed' || latestProjectBuildRun?.status === 'cancelled') && !window.confirm(
       'The previous build stopped. Start a new orchestrated build attempt for this project?'
     )) return;
-    if (!isClient && isDirectMention(message)) {
-      showToast('Use Call Agent', 'Choose an authorized project agent from the explicit Call Agent control, or remove the @mention.', 'info');
-      return;
-    }
     followNextMessage();
     setInput('');
+    setMentionQuery(null);
     const buildRepositories = validBuildRepositories;
     const uploadedAttachments: ChatAttachmentReference[] = [];
     try {
@@ -906,6 +927,71 @@ export const ChatView: React.FC = () => {
     setTabSessionState(activeTabId, 'liveBuildProjectId', activeThread.projectId);
     setTabSessionState(activeTabId, 'liveBuildRunId', runId);
     setActiveTab('live_build_room');
+  };
+
+  const updateMessageInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const next = event.target.value;
+    setInput(next);
+    const nextMention = getMentionQueryAtCursor(next, event.target.selectionStart ?? next.length);
+    setMentionQuery(nextMention);
+    if (nextMention) setActiveMentionIndex(0);
+  };
+
+  const insertAgentMention = (agent: ProjectChatAgent) => {
+    if (!mentionQuery) return;
+    const agents = snapshot?.agents ?? [];
+    const firstName = agent.name.trim().split(/\s+/)[0] ?? agent.name;
+    const compactName = agent.name.replace(/\s+/g, '');
+    const firstNameIsUnique = agents.filter(item => item.name.trim().split(/\s+/)[0]?.toLowerCase() === firstName.toLowerCase()).length === 1;
+    const compactNameIsUnique = agents.filter(item => item.name.replace(/\s+/g, '').toLowerCase() === compactName.toLowerCase()).length === 1;
+    const token = /^[a-zA-Z0-9_-]+$/.test(firstName) && firstNameIsUnique
+      ? firstName
+      : /^[a-zA-Z0-9_-]+$/.test(compactName) && compactNameIsUnique
+        ? compactName
+        : agent.id;
+    const before = input.slice(0, mentionQuery.start);
+    const after = input.slice(mentionQuery.end);
+    const mention = `@${token}`;
+    const replacement = `${mention}${after && !/^\s/.test(after) ? ' ' : after ? '' : ' '}`;
+    const next = `${before}${replacement}${after}`;
+    const cursor = before.length + replacement.length;
+    setInput(next);
+    setMentionQuery(null);
+    setActiveMentionIndex(0);
+    window.requestAnimationFrame(() => {
+      const textarea = messageInputRef.current;
+      textarea?.focus();
+      textarea?.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  const handleMessageInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionQuery && mentionSuggestions.length) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setActiveMentionIndex(index => (index + 1) % mentionSuggestions.length);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setActiveMentionIndex(index => (index - 1 + mentionSuggestions.length) % mentionSuggestions.length);
+        return;
+      }
+      if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
+        event.preventDefault();
+        insertAgentMention(mentionSuggestions[activeMentionIndex] ?? mentionSuggestions[0]);
+        return;
+      }
+    }
+    if (event.key === 'Escape' && mentionQuery) {
+      event.preventDefault();
+      setMentionQuery(null);
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      event.currentTarget.form?.requestSubmit();
+    }
   };
 
   const openProjectSetup = () => {
@@ -1020,7 +1106,7 @@ export const ChatView: React.FC = () => {
                     return <button key={intent} type="button" aria-pressed={chatIntent === intent} disabled={buildBlocked} title={buildBlocked ? buildBlockReason : undefined} onClick={() => setChatIntent(intent)} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition-colors ${chatIntent === intent ? intent === 'build' ? 'bg-violet-500/25 text-violet-100' : 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-200'} disabled:cursor-not-allowed disabled:opacity-40`}><Icon className="h-3 w-3" />{label}</button>;
                   })}
                 </div>
-                <span className={`text-[10px] ${chatIntent === 'build' && requiresRepositorySelection ? 'text-amber-200' : 'text-gray-600'}`}>{chatIntent === 'auto' ? 'Questions stay with Alpha. Product changes go to the Orchestrator.' : chatIntent === 'build' ? repositorySelectionMessage : 'Discuss the project without changing code.'}</span>
+                <span className={`text-[10px] ${chatIntent === 'build' && requiresRepositorySelection ? 'text-amber-200' : 'text-gray-600'}`}>{chatIntent === 'auto' ? 'Questions go to Alpha. Type @ to ask a project agent; product changes go to the Orchestrator.' : chatIntent === 'build' ? repositorySelectionMessage : 'Ask Alpha or @mention a project agent without changing code.'}</span>
                 {activeProjectBuildRuns.length > 0 && can('run_squads') && <button type="button" onClick={() => void stopProjectBuild()} disabled={Boolean(stoppingProjectRunId)} title={`Stop ${activeProjectBuildRuns.length === 1 ? 'the active build' : `all ${activeProjectBuildRuns.length} active builds`} for this project.`} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/25 bg-rose-500/[0.08] px-2.5 py-1.5 text-[10px] font-semibold text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"><Square className={`h-3 w-3 ${stoppingProjectRunId ? 'animate-pulse' : 'fill-current'}`} />{stoppingProjectRunId ? 'Stopping…' : activeProjectBuildRuns.length > 1 ? `Stop ${activeProjectBuildRuns.length} builds` : 'Stop build'}</button>}
               </div>}
               {!isClient && project && (projectRepositories.length > 1 ? <div ref={repositoryMenuRef} className="relative">
@@ -1057,7 +1143,16 @@ export const ChatView: React.FC = () => {
             <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-2 rounded-2xl ${isDraggingFiles ? 'ring-2 ring-violet-300/70' : ''}`}>
               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
               <button type="button" aria-label="Attach files" title={activeTurnMessageId ? 'Finish this response before attaching files.' : 'Attach images or files'} disabled={Boolean(activeTurnMessageId) || pendingFiles.length >= MAX_CHAT_FILES} onClick={() => fileInputRef.current?.click()} className="h-11 w-11 shrink-0 rounded-xl border border-white/10 bg-surface-100 flex items-center justify-center text-gray-400 hover:text-white disabled:opacity-30"><Paperclip className="h-4 w-4" /></button>
-              <textarea value={input} onChange={event => setInput(event.target.value)} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void handleSend(event); } }} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : chatIntent === 'build' ? 'Describe the product change to build across the selected codebases…' : chatIntent === 'ask' ? 'Ask Alpha a project question…' : 'Describe what you want to build, or ask Alpha…'} className="min-h-12 max-h-32 flex-1 resize-none rounded-2xl border border-white/10 bg-surface-100 px-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-brand-400" />
+              {mentionQuery && !isClient && !activeTurnMessageId && chatIntent !== 'build' && <div id="chat-mention-suggestions" role="listbox" aria-label="Project agent suggestions" className="absolute bottom-full left-14 z-50 mb-2 w-[min(22rem,calc(100vw-5rem))] overflow-hidden rounded-xl border border-white/15 bg-[#17171f] p-1.5 shadow-2xl shadow-black/50">
+                <div className="px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Mention a project agent</div>
+                {!snapshot ? <div className="px-2.5 py-3 text-xs text-gray-400">Open a project conversation to see its agents.</div> : mentionSuggestions.length ? mentionSuggestions.map((agent, index) => <button key={agent.id} type="button" role="option" aria-selected={index === activeMentionIndex} onMouseDown={event => event.preventDefault()} onMouseEnter={() => setActiveMentionIndex(index)} onClick={() => insertAgentMention(agent)} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${index === activeMentionIndex ? 'bg-violet-500/15 text-white' : 'text-gray-300 hover:bg-white/[0.06]'}`}>
+                  <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md text-[10px] font-semibold text-white" style={{ backgroundColor: agent.color || '#6d28d9' }}>{agent.avatar ? <img src={agent.avatar} alt="" className="h-full w-full object-cover" /> : agent.name.charAt(0)}</span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{agent.name}</span><span className="block truncate text-[10px] text-gray-500">{agent.role}</span></span>
+                  <span className="text-[10px] text-violet-200">@</span>
+                </button>) : <div className="px-2.5 py-3 text-xs text-gray-400">No matching project agents.</div>}
+                <div className="border-t border-white/[0.08] px-2.5 py-2 text-[10px] text-gray-600">Use ↑ and ↓ to choose, Enter to add, or Esc to close.</div>
+              </div>}
+              <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : undefined} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : chatIntent === 'build' ? 'Describe the product change to build across the selected codebases…' : chatIntent === 'ask' ? 'Ask Alpha or type @ to call a project agent…' : 'Ask Alpha, type @ to call an agent, or describe a build…'} className="min-h-12 max-h-32 flex-1 resize-none rounded-2xl border border-white/10 bg-surface-100 px-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-brand-400" />
               <button type="submit" aria-label={activeTurnMessageId ? 'Queue direction for current agent' : chatIntent === 'build' ? 'Start Orchestrator build' : 'Send message'} disabled={(!input.trim() && (!pendingFiles.length || Boolean(activeTurnMessageId) || chatIntent === 'build')) || Boolean(chatTurnActionBusy) || isAgentTyping && !activeTurnMessageId || !activeTurnMessageId && chatIntent === 'build' && (!can('run_agents') || activeProjectBuildRuns.length > 0 || requiresRepositorySelection)} title={activeTurnMessageId ? 'Queue this direction for the current response.' : chatIntent === 'build' && !can('run_agents') ? 'Your workspace role cannot start product builds.' : chatIntent === 'build' && activeProjectBuildRuns.length > 0 ? 'Stop the earlier build before starting another.' : chatIntent === 'build' && projectRepositories.length === 0 ? 'Connect a codebase before building.' : chatIntent === 'build' && requiresRepositorySelection ? 'Select at least one codebase to build.' : undefined} className="h-11 w-11 shrink-0 rounded-xl bg-brand-500 flex items-center justify-center text-on-accent hover:bg-brand-400 disabled:opacity-30"><Send className="h-4 w-4" /></button>
               {activeTurnMessageId && <button type="button" onClick={() => void stopChatTurn()} disabled={chatTurnActionBusy} className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-rose-400/25 bg-rose-500/[0.08] px-3 text-xs font-semibold text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"><Square className={`h-3 w-3 ${chatTurnActionBusy ? 'animate-pulse fill-current' : 'fill-current'}`} />{chatTurnActionBusy ? 'Stopping…' : 'Stop response'}</button>}
               {!isClient && <button type="button" onClick={openCallPanel} className="h-11 shrink-0 rounded-xl border border-brand-400/25 bg-brand-500/10 px-3 text-xs font-semibold text-brand-200 hover:bg-brand-500/20 sm:hidden"><Bot className="h-4 w-4" /></button>}

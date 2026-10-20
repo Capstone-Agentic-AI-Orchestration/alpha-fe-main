@@ -3023,10 +3023,18 @@ ${e.detail}`;
      * only when the message names someone unambiguously. Everything after the
      * response comes from the response.
      */
-    const mentionedAgent = agents.find(a => {
-      const first = a.name.split(' ')[0].toLowerCase();
-      return new RegExp(`@${first}\b`, 'i').test(content);
-    });
+    const mentionedAgent = [...content.matchAll(/@([a-zA-Z0-9_-]+)/g)]
+      .map(match => {
+        const token = match[1].toLowerCase();
+        return agents.find(agent => {
+          const name = agent.name.trim().toLowerCase();
+          const compactName = name.replace(/\s+/g, '');
+          const firstName = name.split(/\s+/)[0];
+          const role = agent.role.trim().toLowerCase().replace(/\s+/g, '');
+          return agent.id.toLowerCase() === token || compactName === token || firstName === token || role === token;
+        });
+      })
+      .find((agent): agent is Agent => Boolean(agent));
 
     // Streaming placeholder
     const streamingMsgId = `msg-${Date.now() + 1}`;
