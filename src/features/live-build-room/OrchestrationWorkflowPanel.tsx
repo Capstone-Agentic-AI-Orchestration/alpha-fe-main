@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
   ArrowDown,
+  ArrowRight,
   Code2,
   Check,
   CheckCircle2,
@@ -119,6 +120,74 @@ function TaskEvidence({ workflow, taskId, taskById }: {
       {attempt.completedAt && <div className="mt-2 text-[10px] text-slate-600">Finished {formatTime(attempt.completedAt)}{attempt.resultCommit ? ` · ${attempt.resultCommit.slice(0, 7)}` : ''}</div>}
     </div>)}
   </div>;
+}
+
+const attemptStatusMeta: Record<LiveBuildRoomOrchestration['attempts'][number]['status'], { label: string; tone: string }> = {
+  starting: { label: 'Sending assignment', tone: 'border-sky-300/20 bg-sky-300/[0.06] text-sky-100' },
+  running: { label: 'Working', tone: 'border-violet-300/25 bg-violet-300/[0.08] text-violet-100' },
+  submitted: { label: 'Checking result', tone: 'border-sky-300/20 bg-sky-300/[0.06] text-sky-100' },
+  accepted: { label: 'Accepted', tone: 'border-emerald-300/20 bg-emerald-300/[0.06] text-emerald-100' },
+  rejected: { label: 'Correction needed', tone: 'border-amber-300/20 bg-amber-300/[0.06] text-amber-100' },
+  failed: { label: 'Stopped', tone: 'border-rose-300/20 bg-rose-300/[0.06] text-rose-100' },
+  cancelled: { label: 'Cancelled', tone: 'border-white/10 bg-white/[0.03] text-slate-400' },
+  recovery_required: { label: 'Saved for review', tone: 'border-amber-300/20 bg-amber-300/[0.06] text-amber-100' }
+};
+
+function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration }) {
+  const taskById = new Map(workflow.tasks.map(task => [task.id, task]));
+  const entries = workflow.attempts.map((attempt, index) => ({ attempt, index })).sort((left, right) => {
+    const leftTime = Date.parse(left.attempt.startedAt ?? left.attempt.completedAt ?? '');
+    const rightTime = Date.parse(right.attempt.startedAt ?? right.attempt.completedAt ?? '');
+    return Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime
+      ? leftTime - rightTime
+      : left.index - right.index;
+  });
+
+  return <section aria-label="Orchestrator handoff timeline" className="overflow-hidden rounded-xl border border-violet-300/[0.14] bg-black/[0.12]">
+    <div className="flex flex-wrap items-start justify-between gap-3 border-b border-white/[0.06] px-4 py-3.5 sm:px-5">
+      <div><div className="flex items-center gap-2 text-xs font-semibold text-white"><Workflow className="h-3.5 w-3.5 text-violet-200" /> Handoff timeline</div><p className="mt-1 text-[11px] leading-4 text-slate-500">Follow each assignment from the Orchestrator to its specialist and see what happened next.</p></div>
+      <span className="rounded-md border border-white/[0.08] bg-white/[0.025] px-2 py-1 text-[10px] text-slate-400">{entries.length ? `${entries.length} ${entries.length === 1 ? 'handoff' : 'handoffs'}` : workflow.tasks.length ? 'Planned route' : 'No handoffs yet'}</span>
+    </div>
+    {entries.length ? <ol className="max-h-[26rem] space-y-2 overflow-y-auto px-4 py-3.5 sm:px-5" aria-label="Recorded agent handoffs">
+      {entries.map(({ attempt, index }, position) => {
+        const task = taskById.get(attempt.taskId);
+        const meta = attemptStatusMeta[attempt.status];
+        const active = attempt.status === 'starting' || attempt.status === 'running' || attempt.status === 'submitted';
+        const eventTime = attempt.completedAt ? `Finished ${formatTime(attempt.completedAt)}` : attempt.startedAt ? `Started ${formatTime(attempt.startedAt)}` : `Handoff ${position + 1}`;
+        return <li key={attempt.id || `${attempt.taskId}-${attempt.attemptNumber}-${index}`} className="grid grid-cols-[18px_minmax(0,1fr)] gap-3">
+          <span className="relative flex justify-center" aria-hidden="true"><span className={`relative z-[1] mt-3 h-2.5 w-2.5 rounded-full border ${active ? 'animate-pulse border-violet-200 bg-violet-300 shadow-[0_0_12px_rgba(167,139,250,0.45)]' : attempt.status === 'accepted' ? 'border-emerald-200 bg-emerald-300' : attempt.status === 'failed' || attempt.status === 'rejected' ? 'border-amber-200 bg-amber-300' : 'border-slate-500 bg-slate-600'}`} />{position < entries.length - 1 && <span className="absolute bottom-[-0.65rem] top-5 w-px bg-white/[0.08]" />}</span>
+          <div className={`rounded-lg border px-3 py-2.5 ${active ? 'border-violet-300/18 bg-violet-300/[0.035]' : 'border-white/[0.06] bg-white/[0.015]'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold text-slate-200"><span className="text-violet-200">Orchestrator</span><ArrowRight className="h-3 w-3 shrink-0 text-slate-500" /><span className="truncate">{attempt.agentName}</span></div>
+              <span className={`rounded border px-1.5 py-0.5 text-[9px] font-medium ${meta.tone}`}>{meta.label}</span>
+            </div>
+            <div className="mt-1 text-xs font-medium text-white">{task?.title || 'Assigned specialist task'}</div>
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-500"><span>{task?.repository || workflow.run.repository}</span><span className="text-slate-700">·</span><span>{eventTime}</span>{attempt.attemptNumber > 1 && <><span className="text-slate-700">·</span><span>Attempt {attempt.attemptNumber}</span></>}</div>
+            {task?.assignmentReason && <p className="mt-2 border-t border-white/[0.05] pt-2 text-[10px] leading-4 text-slate-400"><span className="font-medium text-violet-100/75">Why assigned:</span> {task.assignmentReason}</p>}
+            {attempt.summary && <p className="mt-2 text-[10px] leading-4 text-slate-400">{attempt.summary}</p>}
+            {attempt.failureReason && <p className="mt-2 text-[10px] leading-4 text-amber-100/80">{attempt.failureReason}</p>}
+          </div>
+        </li>;
+      })}
+    </ol> : workflow.tasks.length ? <div className="px-4 py-3.5 sm:px-5">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><div className="text-[11px] font-medium text-slate-200">Planned assignments</div><div className="text-[10px] text-slate-500">The first handoff appears when planned work starts.</div></div>
+      <ol className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3" aria-label="Planned specialist assignments">
+        {workflow.tasks.map((task, index) => {
+          const meta = taskStatusMeta[task.status];
+          return <li key={task.id} className={`min-w-0 rounded-lg border px-3 py-2.5 ${task.status === 'ready' || task.status === 'running' ? 'border-violet-300/18 bg-violet-300/[0.035]' : 'border-white/[0.06] bg-white/[0.015]'}`}>
+            <div className="flex items-center justify-between gap-2"><span className="text-[9px] font-mono text-slate-500">STEP {String(index + 1).padStart(2, '0')}</span><span className={`rounded border px-1.5 py-0.5 text-[9px] ${meta.tone}`}>{meta.label}</span></div>
+            <div className="mt-1.5 truncate text-[11px] font-semibold text-white">{task.title}</div>
+            <div className="mt-1 flex items-center gap-1.5 text-[10px] text-violet-100/75"><Workflow className="h-3 w-3 shrink-0" /><span className="truncate">{task.ownerName}</span></div>
+            <div className="mt-1 truncate text-[9px] text-slate-600">{task.repository}</div>
+            <p className="mt-2 border-t border-white/[0.05] pt-2 text-[10px] leading-4 text-slate-500">{task.assignmentReason}</p>
+          </li>;
+        })}
+      </ol>
+    </div> : <div className="px-4 py-4 sm:px-5">
+      <div className="text-xs font-medium text-slate-200">No specialist has started</div>
+      <p className="mt-1 max-w-3xl text-[11px] leading-5 text-slate-500">{workflow.run.status === 'blocked' || workflow.run.status === 'failed' ? 'Planning stopped before the Orchestrator could hand work to an agent.' : 'Assignments will appear here when the Orchestrator finishes preparing the plan.'}</p>
+    </div>}
+  </section>;
 }
 
 const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string }> = ({ projectId, runId, branchName }) => {
@@ -260,6 +329,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
     </div>
 
     <div className="grid gap-5 px-4 py-5 sm:px-6 sm:py-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(270px,0.8fr)]">
+      <div className="xl:col-span-2"><HandoffTimeline workflow={workflow} /></div>
       <div className="min-w-0">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><SectionLabel>{workflow.run.status === 'awaiting_plan_approval' ? 'Proposed plan' : 'Work plan'}</SectionLabel><p className="mt-1 text-xs text-slate-500">See what needs to happen, who the Orchestrator chose, and why. Each step waits for earlier work to finish.</p></div>
