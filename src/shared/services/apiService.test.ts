@@ -70,9 +70,9 @@ describe('multi-repository project builds', () => {
   });
 });
 
-describe('project orchestration opt-in', () => {
+describe('always-on desktop project orchestration', () => {
   it('reads local orchestrator availability for a selected project', async () => {
-    const settings = { enabled: false, available: true, localOnly: true as const };
+    const settings = { enabled: true, available: true, localOnly: true as const };
     const fetchMock = vi.fn().mockResolvedValue(json(settings));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -80,7 +80,7 @@ describe('project orchestration opt-in', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/projects/project%2F1/orchestration-settings');
   });
 
-  it('writes an explicit project opt-in', async () => {
+  it('keeps the compatibility write endpoint enabled', async () => {
     const settings = { enabled: true, available: true, localOnly: true as const };
     const fetchMock = vi.fn().mockResolvedValue(json(settings));
     vi.stubGlobal('fetch', fetchMock);

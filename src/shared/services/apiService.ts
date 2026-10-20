@@ -485,7 +485,7 @@ export const apiService = {
     return fetchJson<Project[]>('/projects');
   },
 
-  /** Local executor capability and per-project orchestration opt-in. */
+  /** Local executor capability and always-on desktop project orchestration. */
   getProjectOrchestrationSettings: (projectId: string) =>
     fetchJson<{ enabled: boolean; available: boolean; localOnly: true; reason?: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestration-settings`
