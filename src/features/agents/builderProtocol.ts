@@ -30,6 +30,7 @@ const AGENT_ROLES: AgentRole[] = [
   'Research Agent',
   'Architecture Agent',
   'Manager Agent',
+  'Orchestrator Agent',
   'Database Agent',
   'Backend Agent',
   'Frontend Agent',

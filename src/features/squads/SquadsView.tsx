@@ -667,7 +667,7 @@ export const SquadsView: React.FC = () => {
             {/* Modal Footer */}
             <div className="p-4 border-t border-white/5 bg-surface flex items-center justify-between text-xs">
               <span className="text-gray-500 font-mono text-[11px]">
-                {selectedSquad.memberAgentIds.length} agents coordinated
+                {selectedSquad.memberAgentIds.length} agents in the squad
               </span>
               {canRunSquads && (
                 <button

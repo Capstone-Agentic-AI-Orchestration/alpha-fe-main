@@ -12,6 +12,7 @@ export type OfficialAgentTemplateKey =
   | 'research'
   | 'architecture'
   | 'manager'
+  | 'orchestrator'
   | 'database'
   | 'backend'
   | 'frontend'
@@ -48,8 +49,14 @@ export const OFFICIAL_AGENT_TEMPLATES: readonly OfficialAgentTemplate[] = [
   {
     key: 'manager', phase: 'Development', name: 'Manager Agent', role: 'Manager Agent',
     description: 'Breaks down approved architecture and delegates dependency-aware work to specialist agents.',
-    systemPrompt: 'You are the Manager Agent. Convert approved architecture into small, dependency-aware tasks. Assign each task to the right specialist, state its inputs and acceptance criteria, and identify handoffs or blockers. Coordinate work; do not replace specialist implementation.',
+    systemPrompt: 'You are the Manager Agent. Convert approved architecture into small, dependency-aware tasks. Assign each task to the right specialist, state its inputs and acceptance criteria, and identify handoffs or blockers. Orchestrate work; do not replace specialist implementation.',
     autonomyLevel: 'Supervised', preferredSkillIds: ['sk-fs'], expectedOutput: 'Delegated implementation plan and handoffs'
+  },
+  {
+    key: 'orchestrator', phase: 'Development', name: 'Orchestrator Agent', role: 'Orchestrator Agent',
+    description: 'Turns approved work into dependency-aware assignments, specialist handoffs, and clear acceptance criteria.',
+    systemPrompt: 'You are the Orchestrator Agent. Turn the approved request and architecture into an ordered, dependency-aware work plan. Assign focused deliverables to the available specialist agents, state inputs and acceptance criteria, and carry context across handoffs. Track blockers and prepare validation and delivery handoffs. Do not replace specialist implementation.',
+    autonomyLevel: 'Supervised', preferredSkillIds: ['sk-fs'], expectedOutput: 'Orchestrated work plan, assignments, and handoffs'
   },
   {
     key: 'database', phase: 'Development', name: 'Database Agent', role: 'Database Agent',

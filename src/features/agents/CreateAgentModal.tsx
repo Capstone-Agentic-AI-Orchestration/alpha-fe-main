@@ -423,6 +423,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                 <option value="Research Agent">Research Agent</option>
                 <option value="Architecture Agent">Architecture Agent</option>
                 <option value="Manager Agent">Manager Agent</option>
+                <option value="Orchestrator Agent">Orchestrator Agent</option>
                 <option value="Database Agent">Database Agent</option>
                 <option value="Backend Agent">Backend Agent</option>
                 <option value="Frontend Agent">Frontend Agent</option>

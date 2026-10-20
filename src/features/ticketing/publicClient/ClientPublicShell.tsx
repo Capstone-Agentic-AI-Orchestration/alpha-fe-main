@@ -44,7 +44,7 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
     </header>
     <main ref={mainRef} tabIndex={-1} className="public-main">{children}</main>
     <footer className="public-footer public-container">
-      <span className="public-footer-brand">Alpha <span>AI work, coordinated.</span></span>
+      <span className="public-footer-brand">Alpha <span>AI work, orchestrated.</span></span>
       <p>Client access is limited to tickets shared with your account.</p>
     </footer>
   </div>;
