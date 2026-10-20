@@ -150,7 +150,7 @@ interface AppContextType {
   // Projects
   projects: Project[];
   createProject: (project: Omit<Project, 'id' | 'totalIssues' | 'completedIssues' | 'progressPercentage' | 'milestones'>) => Promise<Project>;
-  updateProject: (id: string, updates: Partial<Project>) => void;
+  updateProject: (id: string, updates: Partial<Project>) => Promise<boolean>;
   deleteProject: (id: string) => void;
   
   // Agents
@@ -558,6 +558,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [syncing, setSyncing] = useState(false);
   /** Guards against overlapping syncs without waiting for a re-render. */
   const syncingRef = useRef(false);
+  const projectWriteQueuesRef = useRef(new Map<string, Promise<unknown>>());
   /** A sync was asked for while one ran; run it again when that one ends. */
   const resyncRef = useRef(false);
   /** Sync warnings already shown this session. */
@@ -2238,19 +2239,50 @@ ${e.detail}`;
     }
   };
 
-  const updateProject = (id: string, updates: Partial<Project>) => {
+  const updateProject = async (id: string, updates: Partial<Project>): Promise<boolean> => {
     // Developers run projects too; starting and removing one stays a PM's.
-    if (!requireCapability('edit_projects')) return;
+    if (!requireCapability('edit_projects')) return false;
     const before = projects.find(project => project.id === id);
     setProjects(prev => prev.map(p => p.id === id ? { ...p, ...updates } : p));
-    persist(
-      () => apiService.updateProject(id, updates),
-      saved => setProjects(prev => prev.map(project => project.id === id ? { ...project, ...saved } : project)),
-      msg => {
-        if (before) setProjects(prev => prev.map(project => project.id === id ? before : project));
-        showToast('Project not saved', msg, 'error');
-      }
-    );
+    // Serialize writes to one project. Two quick edits used to race: an older
+    // response could replace a newer optimistic edit, or a full project form
+    // could overwrite a context change that was saved at the same time.
+    const previousWrite = projectWriteQueuesRef.current.get(id);
+    const request = (previousWrite ? previousWrite.catch(() => undefined) : Promise.resolve())
+      .then(() => apiService.updateProject(id, updates));
+    projectWriteQueuesRef.current.set(id, request);
+    const fields = Object.keys(updates) as (keyof Project)[];
+    try {
+      const saved = await request;
+      setProjects(prev => prev.map(project => {
+        if (project.id !== id) return project;
+        const next = { ...project };
+        // Only reconcile fields this request saved, so a later optimistic edit
+        // remains visible until its own queued response arrives.
+        for (const field of fields) {
+          if (Object.is(project[field], updates[field])) (next as any)[field] = saved[field];
+        }
+        return next;
+      }));
+      if (projectWriteQueuesRef.current.get(id) === request) projectWriteQueuesRef.current.delete(id);
+      return true;
+    } catch (err) {
+      const message = describeWriteError(err);
+      console.warn('[sync] project update failed:', err);
+      if (before) setProjects(prev => prev.map(project => {
+        if (project.id !== id) return project;
+        const restored = { ...project };
+        // Roll back only this failed edit. Preserve newer values that arrived
+        // while its request was in flight.
+        for (const field of fields) {
+          if (Object.is(project[field], updates[field])) (restored as any)[field] = before[field];
+        }
+        return restored;
+      }));
+      if (projectWriteQueuesRef.current.get(id) === request) projectWriteQueuesRef.current.delete(id);
+      showToast('Project not saved', message, 'error');
+      return false;
+    }
   };
 
   const deleteProject = (id: string) => {

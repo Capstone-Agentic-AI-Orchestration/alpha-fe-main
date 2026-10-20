@@ -9,6 +9,8 @@ interface ModalProps {
   children: React.ReactNode;
   maxWidth?: string;
   footer?: React.ReactNode;
+  /** Keep the dialog open while a save or other blocking operation is running. */
+  closeDisabled?: boolean;
 }
 
 export const Modal: React.FC<ModalProps> = ({
@@ -18,7 +20,8 @@ export const Modal: React.FC<ModalProps> = ({
   subtitle,
   children,
   maxWidth = 'max-w-2xl',
-  footer
+  footer,
+  closeDisabled = false
 }) => {
   const titleId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -33,7 +36,7 @@ export const Modal: React.FC<ModalProps> = ({
 
     const previouslyFocused = document.activeElement as HTMLElement | null;
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCloseRef.current();
+      if (e.key === 'Escape' && !closeDisabled) onCloseRef.current();
       if (e.key === 'Tab') {
         const items = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]') ?? []).filter(item => item.getClientRects().length);
         const first = items[0];
@@ -57,7 +60,7 @@ export const Modal: React.FC<ModalProps> = ({
       window.removeEventListener('keydown', handleEscape);
       previouslyFocused?.focus({ preventScroll: true });
     };
-  }, [isOpen]);
+  }, [isOpen, closeDisabled]);
 
   if (!isOpen) return null;
 
@@ -66,7 +69,7 @@ export const Modal: React.FC<ModalProps> = ({
       {/* Backdrop */}
       <div 
         className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity animate-fade-in"
-        onClick={onClose}
+        onClick={closeDisabled ? undefined : onClose}
         aria-hidden="true"
       />
 
@@ -88,6 +91,7 @@ export const Modal: React.FC<ModalProps> = ({
           </div>
           <button
             onClick={onClose}
+            disabled={closeDisabled}
             className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
             aria-label="Close dialog"
           >
