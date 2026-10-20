@@ -780,7 +780,7 @@ export const LiveBuildRoomView: React.FC = () => {
     setOrchestrationActionError(null);
     try {
       await apiService.cancelOrchestration(selectedProjectId, snapshot.orchestration.run.id);
-      showToast('Task build stopped', 'The coordinator stopped future work and preserved the current branch for review.', 'success');
+      showToast('Task build stopped', 'The orchestrator stopped future work and preserved the current branch for review.', 'success');
       await loadRoom(true);
     } catch (error: any) {
       setOrchestrationActionError(error?.message ?? 'The task build could not be stopped safely. Refresh the room to reconcile its status.');
@@ -990,7 +990,6 @@ export const LiveBuildRoomView: React.FC = () => {
           onResume={() => void handleResumeOrchestration()}
           onCancel={() => void handleCancelOrchestration()}
           onApprove={() => void handleApproveOrchestration()}
-          onOpenProjectSettings={() => setActiveTab('projects')}
         />}
 
         <section className={`order-5 rounded-2xl border border-violet-400/20 bg-surface-100/60 p-4 sm:p-5 ${snapshot.orchestration ? 'hidden' : ''}`}>

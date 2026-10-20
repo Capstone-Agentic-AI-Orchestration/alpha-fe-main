@@ -34,7 +34,6 @@ interface OrchestrationWorkflowPanelProps {
   onApprove: () => void;
   canApprove?: boolean;
   publicationSynced?: boolean;
-  onOpenProjectSettings?: () => void;
 }
 
 const runStatusMeta: Record<LiveBuildRoomOrchestration['run']['status'], { label: string; tone: string; icon: React.ReactNode }> = {
@@ -174,7 +173,7 @@ const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: stri
 };
 
 export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProps> = ({
-  projectId, workflow, canManage, canResume = false, canApprove = false, publicationSynced = false, busyAction, actionError, onRetry, onResume, onCancel, onApprove, onOpenProjectSettings
+  projectId, workflow, canManage, canResume = false, canApprove = false, publicationSynced = false, busyAction, actionError, onRetry, onResume, onCancel, onApprove
 }) => {
   const firstActionableTask = workflow.tasks.find(task => ['failed', 'blocked'].includes(task.status));
   const [expandedTaskId, setExpandedTaskId] = useState(workflow.run.currentTaskId ?? firstActionableTask?.id ?? workflow.tasks[0]?.id ?? '');
@@ -192,7 +191,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
     (workflow.run.status === 'completed' && Boolean(workflow.run.publication) && !publicationSynced);
   const resumable = canManage && canResume && (
     workflow.run.status === 'recovery_required' ||
-    (workflow.run.status === 'blocked' && /kill switch is off/i.test(workflow.run.stoppedReason || ''))
+    (workflow.run.status === 'blocked' && /orchestrator is disabled/i.test(workflow.run.stoppedReason || ''))
   );
   const cancellable = canManage && !['publishing', 'completed', 'failed', 'cancelled'].includes(workflow.run.status);
   const ownerCount = new Set(workflow.tasks.map(task => task.ownerName).filter(name => name !== 'Project specialist')).size;
@@ -209,7 +208,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
             <Workflow className="h-3.5 w-3.5" /> Task workflow <span className="text-slate-600">·</span> Plan v{workflow.run.planVersion}
           </div>
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <h2 id="orchestration-title" className="text-lg font-semibold tracking-[-0.025em] text-white sm:text-xl">Coordinated build</h2>
+            <h2 id="orchestration-title" className="text-lg font-semibold tracking-[-0.025em] text-white sm:text-xl">Orchestrated build</h2>
             <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[10px] font-semibold ${status.tone}`}>{status.icon}{status.label}</span>
           </div>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300 [text-wrap:pretty]">{workflow.run.goal || (workflow.run.status === 'planning' ? 'Alpha is preparing a bounded task plan for this repository.' : 'The build goal is not available in this snapshot.')}</p>
@@ -238,7 +237,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
       </div>}
       {workflow.run.status === 'cancelling' && <div role="status" className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.04] px-3.5 py-3 text-xs leading-5 text-amber-100/80">Alpha is waiting for the specialist process to exit. The repository stays reserved, and this build will not dispatch more work while it stops.</div>}
       {actionError && <div role="alert" className="mt-3 rounded-lg border border-rose-300/20 bg-rose-300/[0.06] px-3.5 py-2.5 text-xs text-rose-100">{actionError}</div>}
-      {workflow.run.status === 'awaiting_approval' && <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.045] px-3.5 py-3 text-xs leading-5 text-emerald-100/85"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><div><span className="font-semibold text-emerald-100">Ready for your final review.</span> The coordinator completed its checks; a person still decides whether this work is approved.</div></div>}
+      {workflow.run.status === 'awaiting_approval' && <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.045] px-3.5 py-3 text-xs leading-5 text-emerald-100/85"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><div><span className="font-semibold text-emerald-100">Ready for your final review.</span> The orchestrator completed its checks; a person still decides whether this work is approved.</div></div>}
       {workflow.run.status === 'awaiting_approval' && <div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.035] px-3.5 py-3 text-xs leading-5 text-amber-100/80">Approving sends the validated branch to GitHub and opens a pull request for review. It does not merge or deploy the change.</div>}
       {workflow.run.status === 'publishing' && <div role="status" className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.035] px-3.5 py-3 text-xs leading-5 text-amber-100/80">Your approval is saved. Alpha is reconciling the branch push and pull request; retrying is safe if this step was interrupted.</div>}
       {['awaiting_approval', 'publishing', 'completed'].includes(workflow.run.status) && <div className="mt-4"><ReviewDiff projectId={projectId} runId={workflow.run.id} branchName={workflow.run.branchName} /></div>}
@@ -313,7 +312,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
               : workflow.run.status === 'publishing' ? <><div className="mt-2 text-sm font-semibold text-amber-100">Pull request is being reconciled</div><p className="mt-1 text-xs leading-5 text-slate-400">The approval is durable. Alpha checks GitHub before retrying each publication step to avoid duplicate pull requests.</p></>
               : workflow.run.status === 'validating' ? <><div className="mt-2 text-sm font-semibold text-white">Final validation is running</div><p className="mt-1 text-xs leading-5 text-slate-400">Alpha is checking the accepted work together before asking for human review.</p></>
                 : workflow.run.status === 'recovery_required' ? <><div className="mt-2 text-sm font-semibold text-amber-100">Review saved work before continuing</div><p className="mt-1 text-xs leading-5 text-slate-400">Alpha preserved the last checkpoint. Resume starts only after you choose to continue.</p></>
-                  : <><div className="mt-2 text-sm font-semibold text-slate-200">No specialist is running</div><p className="mt-1 text-xs leading-5 text-slate-500">{workflow.run.status === 'planning' ? 'The plan is being validated before any specialist starts.' : 'The coordinator is waiting for a clear next action.'}</p></>}
+                  : <><div className="mt-2 text-sm font-semibold text-slate-200">No specialist is running</div><p className="mt-1 text-xs leading-5 text-slate-500">{workflow.run.status === 'planning' ? 'The plan is being validated before any specialist starts.' : 'The orchestrator is waiting for a clear next action.'}</p></>}
         </div>
 
         <details className="group rounded-xl border border-white/[0.07] bg-black/[0.1] p-4">
@@ -328,16 +327,16 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
 
         {workflow.run.status === 'completed' && workflow.run.publication && <div className="rounded-xl border border-emerald-300/12 bg-emerald-300/[0.025] px-4 py-3 text-[10px] leading-4 text-emerald-100/75"><div>The validated branch is published and the project issue is ready for review.</div><a href={workflow.run.publication.pullRequestUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex items-center gap-1.5 font-semibold text-emerald-100 underline decoration-emerald-100/30 underline-offset-2 hover:decoration-emerald-100">Open pull request <ExternalLink className="h-3 w-3" /></a><div className="mt-1.5 text-emerald-100/55">{workflow.run.publication.branchName} → {workflow.run.publication.baseBranch}</div></div>}
         {workflow.run.status === 'completed' && workflow.run.publication && !publicationSynced && <div className="rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-4 py-3 text-[10px] leading-4 text-amber-100/75">The pull request is open; the linked issue still needs its review status synchronized. Retry the issue sync when ready.</div>}
-        {workflow.run.status === 'completed' && !workflow.run.publication && <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] px-4 py-3 text-[10px] leading-4 text-slate-400">This build was completed before pull request publishing was enabled. Its branch has no linked pull request. Review the local diff or start a new coordinated build to publish a reviewable change.</div>}
+        {workflow.run.status === 'completed' && !workflow.run.publication && <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] px-4 py-3 text-[10px] leading-4 text-slate-400">This build was completed before pull request publishing was enabled. Its branch has no linked pull request. Review the local diff or start a new orchestrated build to publish a reviewable change.</div>}
         {workflow.run.status === 'recovery_required' && <div className="rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-4 py-3 text-[10px] leading-4 text-amber-100/65">A saved task may need a retry. Inspect its attempt evidence and changed files above before choosing Resume.</div>}
-        {['recovery_required', 'blocked'].includes(workflow.run.status) && !canResume && /kill switch is off|restarted|recovery/i.test(workflow.run.stoppedReason || '') && <div className="rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-4 py-3 text-[10px] leading-4 text-amber-100/65"><div>The local task workflow is disabled on this desktop. Enable the pilot in project settings before resuming.</div>{onOpenProjectSettings && <button type="button" onClick={onOpenProjectSettings} className="mt-2 font-semibold text-amber-100 underline decoration-amber-100/30 underline-offset-2 hover:decoration-amber-100">Open project settings</button>}</div>}
+        {['recovery_required', 'blocked'].includes(workflow.run.status) && !canResume && /orchestrator is disabled|restarted|recovery/i.test(workflow.run.stoppedReason || '') && <div className="rounded-xl border border-amber-300/12 bg-amber-300/[0.025] px-4 py-3 text-[10px] leading-4 text-amber-100/65"><div>The orchestrator is disabled on this desktop. Enable it in desktop configuration before resuming.</div></div>}
         {workflow.finalValidation && <div className="rounded-xl border border-white/[0.07] bg-black/[0.08] p-4">
           <div className="flex flex-wrap items-center justify-between gap-2"><SectionLabel>Final repository checks</SectionLabel><span className={`rounded-md border px-1.5 py-0.5 text-[9px] ${workflow.finalValidation.status === 'passed' ? 'border-emerald-300/20 bg-emerald-300/[0.06] text-emerald-100' : 'border-amber-300/20 bg-amber-300/[0.06] text-amber-100'}`}>{workflow.finalValidation.status || 'not recorded'}</span></div>
           {workflow.finalValidation.commands.length ? <div className="mt-2 space-y-1.5">{workflow.finalValidation.commands.map((command, index) => <div key={`${command.script}-${index}`} className="flex flex-wrap items-center justify-between gap-x-3 text-[10px] text-slate-400"><span>{command.script || command.display || 'Command'}</span><span className={command.exitCode === 0 && command.signal === null ? 'text-emerald-200' : 'text-rose-200'}>{command.exitCode === 0 && command.signal === null ? 'passed' : command.signal ? `stopped · ${command.signal}` : command.exitCode === null ? 'unknown' : `exit ${command.exitCode}`}</span></div>)}</div> : <p className="mt-2 text-[10px] leading-4 text-slate-500">No final command evidence was recorded.</p>}
           {!!workflow.finalValidation.missingScripts.length && <p className="mt-2 text-[10px] text-amber-200">Not available: {workflow.finalValidation.missingScripts.join(', ')}</p>}
           {workflow.finalValidation.resultCommit && <div className="mt-2 font-mono text-[9px] text-slate-600">Checked commit {workflow.finalValidation.resultCommit.slice(0, 7)}</div>}
         </div>}
-        {workflow.tasks.length > 0 && !activeTask && !liveTask && workflow.run.status === 'executing' && <p className="text-[10px] leading-4 text-slate-600">{workflow.run.stoppedReason || 'The coordinator has not selected another task yet.'}</p>}
+        {workflow.tasks.length > 0 && !activeTask && !liveTask && workflow.run.status === 'executing' && <p className="text-[10px] leading-4 text-slate-600">{workflow.run.stoppedReason || 'The orchestrator has not selected another task yet.'}</p>}
       </aside>
     </div>
   </section>;

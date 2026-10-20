@@ -246,7 +246,7 @@ export const CreateSquadModal: React.FC<CreateSquadModalProps> = ({ isOpen, onCl
             {/* Squad Leader Agent */}
             <div className="space-y-1.5 pt-1">
               <label className="block text-[11px] font-medium text-gray-400">
-                Designated Squad Leader (Coordinator)
+                Designated Squad Leader (Orchestrator)
               </label>
               <select
                 value={leaderAgentId}

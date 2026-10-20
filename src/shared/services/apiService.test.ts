@@ -71,7 +71,7 @@ describe('multi-repository project builds', () => {
 });
 
 describe('project orchestration opt-in', () => {
-  it('reads local pilot availability for a selected project', async () => {
+  it('reads local orchestrator availability for a selected project', async () => {
     const settings = { enabled: false, available: true, localOnly: true as const };
     const fetchMock = vi.fn().mockResolvedValue(json(settings));
     vi.stubGlobal('fetch', fetchMock);

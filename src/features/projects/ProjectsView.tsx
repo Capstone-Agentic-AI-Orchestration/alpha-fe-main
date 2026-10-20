@@ -143,7 +143,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       setOrchestrationSettings(next);
       showToast(enabled ? 'Task workflow enabled' : 'Task workflow disabled',
         enabled
-          ? 'Build requests for this project will use the coordinator while the desktop pilot switch is enabled.'
+          ? 'Build requests for this project will use the orchestrator.'
           : 'New builds for this project will use the current standard build flow.',
         'success');
     } catch (error) {
@@ -463,28 +463,28 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               <span className="text-emerald-400 tabular-nums">{doneCount}/{totalCount} done ({progressPercent}%)</span>
             </div>
 
-            <section aria-label="Task-driven build workflow" className="space-y-2.5 rounded-xl border border-violet-400/15 bg-violet-500/[0.045] p-3">
+            <section aria-label="Orchestrated build workflow" className="space-y-2.5 rounded-xl border border-violet-400/15 bg-violet-500/[0.045] p-3">
               <div className="flex items-center gap-2">
                 <Workflow className="h-3.5 w-3.5 text-violet-300" aria-hidden="true" />
-                <h2 className="text-[11px] font-semibold text-gray-200">Task-driven builds</h2>
+                <h2 className="text-[11px] font-semibold text-gray-200">Orchestrated builds</h2>
                 {orchestrationSettings?.enabled && orchestrationSettings.available && <span className="ml-auto rounded-full border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">ON</span>}
               </div>
               <p className="text-[10px] leading-relaxed text-gray-400">
-                A coordinator creates role-owned tasks and checks each handoff before the next specialist starts. Human review remains the final approval.
+                The orchestrator creates role-owned tasks and checks each handoff before the next specialist starts. Human review remains the final approval.
               </p>
               <div className="flex items-center justify-between gap-3 border-t border-white/[0.06] pt-2">
                 <div className="min-w-0">
-                  <div className="text-[10px] font-medium text-gray-200">Use coordinator for Build</div>
+                  <div className="text-[10px] font-medium text-gray-200">Use orchestrator for builds</div>
                   <div className="mt-0.5 text-[9px] leading-relaxed text-gray-500">
                     {orchestrationSettingsLoading ? 'Checking this desktop…'
                       : orchestrationSettings?.available ? 'Local to this desktop and one repository per run.'
-                        : orchestrationSettings?.reason ?? 'The local orchestration pilot is unavailable.'}
+                        : orchestrationSettings?.reason ?? 'The orchestrator is unavailable in this environment.'}
                   </div>
                 </div>
                 <button
                   type="button"
                   role="switch"
-                  aria-label="Use coordinator for project builds"
+                  aria-label="Use orchestrator for project builds"
                   aria-checked={Boolean(orchestrationSettings?.enabled)}
                   disabled={!canEditProjects || orchestrationSettingsLoading || orchestrationSettingsSaving || !orchestrationSettings?.available}
                   onClick={() => void changeOrchestrationSetting(!orchestrationSettings?.enabled)}
@@ -494,7 +494,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </button>
               </div>
               {orchestrationSettings?.enabled && !orchestrationSettings.available && (
-                <p className="text-[9px] leading-relaxed text-amber-300">This project is opted in, but the desktop kill switch is off. No builds will be routed until it is enabled.</p>
+                <p className="text-[9px] leading-relaxed text-amber-300">This project is opted in, but the orchestrator is disabled on this desktop. No builds will be routed until it is enabled.</p>
               )}
             </section>
 
