@@ -18,8 +18,29 @@ describe('client ticket detail', () => {
       onCorrection={async () => undefined}
     />);
     expect(html).toContain('Review the proposed work');
-    expect(html).toContain('Development cannot start until the scope is agreed and the work is authorized.');
-    expect(html).toContain('Agree to scope');
+    expect(html).toContain('Your project manager will confirm the work is approved before it begins.');
+    expect(html).toContain('Agree to proposed work');
     expect(html).toContain('Request changes');
+  });
+
+  it('still explains the current stage when optional workflow actions are disabled', () => {
+    const html = renderToStaticMarkup(<ClientTicketDetail
+      workspaceId="workspace-a"
+      workflowActionsDisabled
+      ticket={{ id: 'ticket-a', reference: 'TKT-1', title: 'Example request', status: 'in_progress',
+        createdAt: '2026-10-17T00:00:00Z', updatedAt: '2026-10-17T00:00:00Z', closedAt: null,
+        readOnly: false, writesAvailable: true, requestedAction: null, description: 'Request details',
+        companyLabel: 'Example Co.', version: 2, sharedProjectName: null, relatedTicket: null,
+        scope: null, delivery: null, request: null }}
+      messages={[]} messageCursor={null} historyLoading={false} historyError="" busy={false} error=""
+      replyResetVersion={0} onBack={() => undefined} onLoadMore={() => undefined}
+      onReply={async () => undefined} onDecision={() => undefined} onAdditionalWork={() => undefined}
+      onCorrection={async () => undefined}
+    />);
+    expect(html).toContain('The agreed work is underway');
+    expect(html).toContain('You do not need to do anything right now');
+    expect(html).toContain('Work underway (current step)');
+    expect(html).not.toContain('Action needed:');
+    expect(html).not.toContain('Agree to proposed work');
   });
 });

@@ -103,7 +103,7 @@ describe('client browser transport', () => {
 
     await expect(clientTicketApi.getSession()).rejects.toMatchObject({
       status: null,
-      message: 'Client access is available only in a secure web browser or on local development.',
+      message: 'For your safety, open Alpha in its secure website to access your requests.',
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

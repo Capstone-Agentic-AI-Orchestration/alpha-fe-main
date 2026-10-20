@@ -33,7 +33,7 @@ describe('client progress steps', () => {
 
   it('marks only the current step as needing the client, and only when something is asked of them', () => {
     const asked = clientProgressSteps({ status: 'awaiting_client', requestedAction: 'agree_scope', scope: scope(false), delivery: null });
-    expect(asked.filter(step => step.needsYou).map(step => step.label)).toEqual(['Agree scope']);
+    expect(asked.filter(step => step.needsYou).map(step => step.label)).toEqual(['Review proposed work']);
     const quiet = clientProgressSteps({ status: 'in_progress', requestedAction: null, scope: scope(true), delivery: null });
     expect(quiet.some(step => step.needsYou)).toBe(false);
   });
@@ -42,8 +42,8 @@ describe('client progress steps', () => {
     const html = renderToStaticMarkup(<ClientProgressStrip steps={clientProgressSteps({ status: 'awaiting_client', requestedAction: 'agree_scope', scope: scope(false), delivery: null })} />);
     expect(html).toContain('aria-label="Request progress"');
     expect(html).toContain('aria-current="step"');
-    expect(html).toContain('Agree scope · you');
-    expect(html).toContain('Step 3 of 5: Agree scope · you');
+    expect(html).toContain('Review proposed work · you');
+    expect(html).toContain('Step 3 of 5: Review proposed work · you');
     expect(html).toContain('(current step)');
     expect(html).toContain('(done)');
     expect(renderToStaticMarkup(<ClientProgressStrip steps={[]} />)).toBe('');
