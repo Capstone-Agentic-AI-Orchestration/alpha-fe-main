@@ -3134,6 +3134,7 @@ ${e.detail}`;
           content: reply.content,
           timestamp: reply.timestamp || new Date().toISOString(),
           messageType: reply.messageType,
+          orchestrationRunId: reply.orchestrationRunId,
           isStreaming: false,
           thinkingProcess: reply.thinkingProcess,
           toolsExecuted: (reply.toolsExecuted || []).map((t: any) => ({
