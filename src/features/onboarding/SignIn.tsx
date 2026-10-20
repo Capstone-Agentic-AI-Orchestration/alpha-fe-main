@@ -186,7 +186,7 @@ const Showcase: React.FC = () => (
     >
       AI work,{' '}
       <span className="bg-gradient-to-r from-violet-300 to-indigo-200 bg-clip-text text-violet-300 [-webkit-text-fill-color:transparent]">
-        coordinated.
+        orchestrated.
       </span>
     </p>
     <p
@@ -327,7 +327,7 @@ export const SignIn: React.FC<Props> = ({ identity, error }) => {
                   <span aria-hidden="true" className="text-gray-600">
                     ·
                   </span>{' '}
-                  AI work, coordinated.
+                  AI work, orchestrated.
                 </span>
               </div>
 

@@ -134,6 +134,7 @@ export const RoleBadge: React.FC<{ role: AgentRole; className?: string }> = ({
     'Research Agent': 'bg-cyan-400',
     'Architecture Agent': 'bg-indigo-400',
     'Manager Agent': 'bg-violet-400',
+    'Orchestrator Agent': 'bg-purple-400',
     'Database Agent': 'bg-teal-400',
     'Backend Agent': 'bg-emerald-400',
     'Frontend Agent': 'bg-blue-400',

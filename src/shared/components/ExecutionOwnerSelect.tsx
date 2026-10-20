@@ -26,6 +26,6 @@ export function ExecutionOwnerSelect({ value, onChange, agents, squads, required
       <optgroup label="Squads">{squads.map(squad => <option key={squad.id} value={`squad:${squad.id}`}>{squad.name} · {squad.memberAgentIds.length} {squad.memberAgentIds.length === 1 ? 'agent' : 'agents'}</option>)}</optgroup>
       <optgroup label="Agents">{eligibleAgents.map(agent => <option key={agent.id} value={`agent:${agent.id}`}>{agent.name} · {agent.role}</option>)}</optgroup>
     </select>
-    <p id={`${id}-hint`} className="text-[11px] leading-relaxed text-gray-500">{!eligibleAgents.length && !squads.length ? 'Create an agent or squad in this workspace to continue.' : 'Choose one agent for focused work or a squad for coordinated execution.'}</p>
+    <p id={`${id}-hint`} className="text-[11px] leading-relaxed text-gray-500">{!eligibleAgents.length && !squads.length ? 'Create an agent or squad in this workspace to continue.' : 'Choose one agent for focused work or a squad for orchestrated execution.'}</p>
   </div>;
 }
