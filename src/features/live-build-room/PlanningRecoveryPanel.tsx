@@ -84,7 +84,7 @@ export const PlanningRecoveryPanel: React.FC<PlanningRecoveryPanelProps> = ({ pr
                 <span>{new Date(recovery.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</span>
               </div>
               {recovery.state === 'interrupted' && <p className="mt-3 text-[10px] leading-4 text-slate-400">No task plan was activated, so no specialist started. Alpha will remove the workspace only if its branch and contents still match the clean reservation.</p>}
-              {recovery.state === 'manual_review' && <p className="mt-3 flex items-start gap-1.5 text-[10px] leading-4 text-amber-100/80"><ShieldAlert className="mt-0.5 h-3 w-3 shrink-0" />Alpha could not verify this workspace’s identity, so it remains preserved and locked. Reconnect this repository in project settings and recheck; if verification still fails, a developer must inspect it before the lock can be released.</p>}
+              {recovery.state === 'manual_review' && <p className="mt-3 flex items-start gap-1.5 text-[10px] leading-4 text-amber-100/80"><ShieldAlert className="mt-0.5 h-3 w-3 shrink-0" />Alpha kept this folder unchanged while it checks that it belongs to this build. Reconnect the same repository and recheck; any issue found will be explained above.</p>}
               {recovery.state === 'retained' && <p className="mt-3 text-[10px] leading-4 text-emerald-100/70">The saved workspace remains on this desktop. New work can use the repository; it will not include these saved changes automatically.</p>}
               {recovery.state === 'cleaned' && <p className="mt-3 text-[10px] leading-4 text-emerald-100/70">Alpha verified the interrupted planning workspace was clean, removed it safely, and released the repository lock.</p>}
             </div>

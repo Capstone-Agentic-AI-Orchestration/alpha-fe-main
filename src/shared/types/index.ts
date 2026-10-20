@@ -1447,6 +1447,7 @@ export interface ChatMessage {
   isStreaming?: boolean;
   messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build';
   agentCallId?: string;
+  orchestrationRunId?: string;
   operationMode?: AgentCallMode;
   agentCallStatus?: AgentCallStatus;
   revisionTarget?: AgentCallTarget;

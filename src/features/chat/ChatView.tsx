@@ -43,6 +43,7 @@ import {
   ChatAttachmentReference,
   ProjectChatAgent,
   ProjectChatSnapshot,
+  LiveBuildRoomSnapshot,
   ChatIntent,
   ChatSyncStatus
 } from '@/shared/types';
@@ -176,6 +177,115 @@ function ChatTurnActivityRow({
       </div>}
     </div>
   );
+}
+
+function OrchestratorBuildActivityRow({
+  projectId,
+  runId,
+  onOpenRoom
+}: {
+  projectId: string;
+  runId: string;
+  onOpenRoom: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!expanded) return undefined;
+    let cancelled = false;
+    let timer: number | undefined;
+    setLoading(true);
+    const sync = async () => {
+      try {
+        const next = await apiService.getLiveBuildRoom(projectId, runId);
+        if (cancelled) return;
+        setSnapshot(next);
+        if (next.orchestration?.run.id !== runId) {
+          setError('Run details could not be matched to this chat update. Open the Live Build Room to review the saved build.');
+          return;
+        }
+        setError('');
+        const status = next.orchestration?.run.status;
+        if (status && !['completed', 'failed', 'cancelled', 'blocked'].includes(status)) {
+          timer = window.setTimeout(() => void sync(), 2_500);
+        }
+      } catch (syncError: any) {
+        if (cancelled) return;
+        setError(syncError?.message ?? 'Run details could not be loaded.');
+        timer = window.setTimeout(() => void sync(), 5_000);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+    void sync();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [expanded, projectId, runId]);
+
+  const orchestration = snapshot?.orchestration;
+  const tasks = orchestration?.tasks ?? [];
+  const attempts = orchestration?.attempts ?? [];
+  const changedFiles = [...new Set([
+    ...attempts.flatMap(attempt => [
+      ...attempt.changedPaths,
+      ...(attempt.report?.deliverables ?? []).flatMap(deliverable => deliverable.paths)
+    ]),
+    ...(snapshot?.agentCards ?? []).flatMap(card => [
+      ...(card.filePaths ?? []),
+      ...card.activity.filter(item => item.kind === 'file_change').flatMap(item => item.paths ?? [])
+    ])
+  ])].sort((a, b) => a.localeCompare(b));
+  const status = orchestration?.run.status;
+  const working = Boolean(status && ['planning', 'executing', 'validating', 'publishing', 'cancelling'].includes(status));
+  const activity = (snapshot?.agentCards ?? []).flatMap(card => card.activity
+    .filter(item => ['tool', 'tool_result', 'file_change', 'handoff', 'error'].includes(item.kind))
+    .map(item => ({ ...item, agentName: card.agentName })))
+    .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
+    .slice(0, 12);
+
+  return <div className="mt-2 overflow-hidden rounded-xl border border-violet-300/15 bg-surface-100/75 text-left">
+    <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.035]">
+      {working ? <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-violet-300" />
+        : status === 'completed' ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-300" />
+          : status === 'awaiting_approval' || status === 'awaiting_plan_approval' ? <Circle className="h-3 w-3 shrink-0 text-amber-300" />
+            : status ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+              : <Activity className="h-3.5 w-3.5 shrink-0 text-violet-200" />}
+      <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-violet-100">Orchestrator activity{status ? ` · ${status.replace(/_/g, ' ')}` : ''}</span>
+      <span className="shrink-0 text-[10px] text-gray-500">{tasks.length} tasks · {changedFiles.length} files changed</span>
+      <span className="shrink-0 text-[10px] text-violet-200">{expanded ? 'Hide details' : 'View details'}</span>
+      {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />}
+    </button>
+    {expanded && <div className="space-y-4 border-t border-white/[0.07] px-3 py-3">
+      {loading && !snapshot && <div className="flex items-center gap-2 text-[10px] text-gray-500"><Loader2 className="h-3 w-3 animate-spin" />Loading run details…</div>}
+      {error && <p role="alert" className="text-[10px] text-rose-300">{error}</p>}
+      {tasks.length > 0 && <section className="space-y-2">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Assignments</div>
+        {tasks.map(task => <div key={task.id} className="flex items-start justify-between gap-3 rounded-lg bg-black/15 px-2.5 py-2">
+          <div className="min-w-0"><div className="text-[10px] font-medium text-gray-200">{task.title}</div><div className="mt-0.5 text-[9px] text-gray-500">{task.ownerName}</div></div>
+          <span className="shrink-0 text-[9px] capitalize text-violet-200">{task.status.replace(/_/g, ' ')}</span>
+        </div>)}
+      </section>}
+      <section className="space-y-2">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Files changed</div>
+        {changedFiles.length ? <div className="flex flex-wrap gap-1.5">{changedFiles.map(file => <code key={file} className="max-w-full truncate rounded-md bg-black/20 px-2 py-1 font-mono text-[9px] text-emerald-200">{file}</code>)}</div>
+          : <p className="text-[10px] text-gray-500">No files changed yet. File updates will appear here as specialists work.</p>}
+      </section>
+      {activity.length > 0 && <section className="space-y-2">
+        <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Recent work</div>
+        <ol className="space-y-2 border-l border-white/10 pl-3">{activity.map(item => <li key={`${item.id}-${item.agentName}`} className="relative text-[10px] leading-4 text-gray-300">
+          <span className={`absolute -left-[17px] top-1.5 h-1.5 w-1.5 rounded-full ${item.kind === 'error' ? 'bg-rose-400' : item.kind === 'file_change' ? 'bg-emerald-400' : 'bg-violet-300'}`} />
+          <span className="font-medium text-gray-200">{item.agentName}</span><span className="text-gray-500"> · {item.toolName ? `${item.toolName} · ` : ''}{item.message}</span>
+          {item.detail && <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-black/20 px-2 py-1.5 font-mono text-[9px] text-gray-400">{item.detail}</pre>}
+        </li>)}</ol>
+      </section>}
+      <button type="button" onClick={onOpenRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/20 px-2.5 py-1.5 text-[10px] font-medium text-violet-200 hover:bg-violet-400/10"><Activity className="h-3 w-3" />Open this build in Live Build Room</button>
+    </div>}
+  </div>;
 }
 
 function formatFileSize(bytes: number): string {
@@ -791,6 +901,13 @@ export const ChatView: React.FC = () => {
     setActiveTab('live_build_room');
   };
 
+  const openLiveBuildRun = (runId: string) => {
+    if (!activeThread?.projectId) return;
+    setTabSessionState(activeTabId, 'liveBuildProjectId', activeThread.projectId);
+    setTabSessionState(activeTabId, 'liveBuildRunId', runId);
+    setActiveTab('live_build_room');
+  };
+
   const openProjectSetup = () => {
     if (activeThread?.projectId) {
       setTabSessionState(activeTabId, 'projects.selectedProject', activeThread.projectId);
@@ -885,7 +1002,7 @@ export const ChatView: React.FC = () => {
     return <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/30 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/20"><Activity className="h-3.5 w-3.5" /> {label}</button>;
   }
   return <button type="button" onClick={openProjectSetup} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-300 hover:bg-white/[0.06]">Review project setup</button>;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}</div></div>; })}</div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} onOpenRoom={() => openLiveBuildRun(message.orchestrationRunId!)} />}</div></div>; })}</div>
 
           {showLatest && <div className="shrink-0 flex justify-center py-2 border-t border-white/5"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-surface-raised px-4 py-2 text-xs font-medium text-brand-200 hover:bg-brand-500/15">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
           <div className="shrink-0 px-5 py-2.5 bg-surface/80 border-t border-white/5 flex items-center gap-2.5 overflow-x-auto"><span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 whitespace-nowrap">Try</span>{(isClient ? ['Clarify the current scope', 'Ask about timing'] : ['Summarize this project', 'What should I review next?']).map(prompt => <button key={prompt} type="button" onClick={() => setInput(prompt)} className="whitespace-nowrap rounded-full border border-white/10 bg-surface-100 px-3 py-1.5 text-[11px] text-gray-400 hover:border-brand-400/40 hover:text-white">{prompt}</button>)}</div>
