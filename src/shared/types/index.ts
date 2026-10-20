@@ -929,7 +929,9 @@ export type LiveBuildRoomActivityKind =
   | 'file_change'
   | 'handoff'
   | 'error'
-  | 'summary';
+  | 'summary'
+  | 'attachment'
+  | 'steering';
 
 export interface LiveBuildRoomActivity {
   id: string;
@@ -985,7 +987,7 @@ export interface LiveBuildRoomHandoff {
 export interface AgentCallActivity {
   id: string;
   sequence: number;
-  kind: 'status' | 'stage' | 'tool' | 'tool_result' | 'file_change' | 'handoff' | 'error' | 'summary';
+  kind: 'status' | 'stage' | 'tool' | 'tool_result' | 'file_change' | 'handoff' | 'error' | 'summary' | 'attachment' | 'steering';
   message: string;
   toolName?: string;
   detail?: string;
@@ -1173,6 +1175,7 @@ export interface LiveBuildRoomOrchestration {
     verification?: {
       status?: string;
       missingScripts: string[];
+      preparation?: { display?: string; exitCode: number | null; signal: string | null };
       commands: Array<{ script?: string; display?: string; exitCode: number | null; signal: string | null }>;
     };
     changedPaths: string[];
@@ -1447,6 +1450,16 @@ export interface ChatMessage {
   operationMode?: AgentCallMode;
   agentCallStatus?: AgentCallStatus;
   revisionTarget?: AgentCallTarget;
+  /** Attachment details are local metadata only; file bytes stay on this device. */
+  attachments?: ChatAttachmentReference[];
+}
+
+export interface ChatAttachmentReference {
+  id: string;
+  name: string;
+  contentType: string;
+  byteLength: number;
+  inspection: 'included_text' | 'available_to_runtime' | 'stored_only';
 }
 
 export interface ChatThread {

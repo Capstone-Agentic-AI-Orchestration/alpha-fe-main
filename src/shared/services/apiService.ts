@@ -14,6 +14,7 @@ import {
   SquadRun,
   ChatThread,
   ChatMessage,
+  ChatAttachmentReference,
   ChatSyncStatus,
   McpServer,
   McpServerInput,
@@ -756,7 +757,27 @@ export const apiService = {
       method: 'DELETE'
     }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
-  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string }) =>
+  uploadChatAttachment: async (threadId: string, file: File) => {
+    const headers = new Headers({
+      'Content-Type': 'application/octet-stream',
+      'X-Chat-File-Name': encodeURIComponent(file.name),
+      'X-Chat-File-Type': file.type || 'application/octet-stream',
+      ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
+      ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {}),
+    });
+    const res = await fetch(`${API_BASE}/chat/threads/${encodeURIComponent(threadId)}/attachments`, {
+      method: 'POST', body: file, credentials: 'include', headers,
+    });
+    if (!res.ok) throw await ticketApiError(res, await res.text().catch(() => res.statusText));
+    return res.json() as Promise<{ attachment: ChatAttachmentReference }>;
+  },
+  deleteChatAttachment: (threadId: string, attachmentId: string) =>
+    fetchJson<{ success: boolean }>(`/chat/threads/${encodeURIComponent(threadId)}/attachments/${encodeURIComponent(attachmentId)}`, { method: 'DELETE' }),
+  stopChatTurn: (threadId: string, messageId: string) =>
+    fetchJson<{ status: 'stopping' | 'stopped' }>(`/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/stop`, { method: 'POST', body: JSON.stringify({}) }),
+  steerChatTurn: (threadId: string, messageId: string, instruction: string) =>
+    fetchJson<{ status: 'queued'; position: number }>(`/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/steer`, { method: 'POST', body: JSON.stringify({ instruction }) }),
+  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string; attachmentIds?: string[] }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;

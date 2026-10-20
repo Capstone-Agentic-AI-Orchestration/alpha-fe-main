@@ -12,11 +12,14 @@ import {
   Code2,
   Copy,
   FileCode2,
+  FileText,
   FolderGit2,
   GitBranch,
   Loader2,
   MessageSquare,
   PencilLine,
+  Paperclip,
+  Image as ImageIcon,
   Play,
   Plus,
   RefreshCw,
@@ -37,6 +40,7 @@ import {
   AgentCallMode,
   AgentCallTarget,
   ChatMessage,
+  ChatAttachmentReference,
   ProjectChatAgent,
   ProjectChatSnapshot,
   ChatIntent,
@@ -85,6 +89,8 @@ const TARGET_LABELS: Record<string, string> = {
   pull_request: 'Pull request',
   diff: 'Diff'
 };
+const MAX_CHAT_FILE_BYTES = 10 * 1024 * 1024;
+const MAX_CHAT_FILES = 8;
 
 function formatDate(value?: string): string {
   if (!value) return '';
@@ -119,6 +125,72 @@ function isDirectMention(value: string): boolean {
   return /(?:^|\s)@[a-zA-Z0-9_-]+/.test(value);
 }
 
+function ChatTurnActivityRow({
+  calls,
+  agents,
+  onOpenRoom
+}: {
+  calls: AgentCall[];
+  agents: ProjectChatAgent[];
+  onOpenRoom: () => void;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  if (!calls.length) return null;
+  const ordered = [...calls].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const current = ordered.find(call => call.status === 'running' || call.status === 'queued') ?? ordered.at(-1)!;
+  const currentAgent = agents.find(agent => agent.id === current.agentId);
+  const latestActivity = current.activities.at(-1);
+  const changedFiles = [...new Set(ordered.flatMap(call => call.activities
+    .filter(activity => activity.kind === 'file_change')
+    .flatMap(activity => activity.paths ?? [])))];
+  const working = current.status === 'running' || current.status === 'queued';
+  const summary = latestActivity?.message ?? (working ? 'Starting work' : statusLabel(current.status));
+  return (
+    <div className="mt-2 overflow-hidden rounded-xl border border-violet-300/15 bg-surface-100/75 text-left">
+      <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-white/[0.035]">
+        {working ? <span className="h-2 w-2 shrink-0 rounded-full bg-violet-300 animate-pulse" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-300" />}
+        <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-violet-100">{currentAgent?.name ?? (current.squadId === 'alpha-chat' ? 'Alpha' : current.agentId)} · {summary}</span>
+        <span className="shrink-0 text-[10px] text-gray-500">{changedFiles.length} changed</span>
+        <span className="shrink-0 text-[10px] text-violet-200">{expanded ? 'Hide activity' : 'View activity'}</span>
+        {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-gray-500" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-500" />}
+      </button>
+      {expanded && <div className="space-y-3 border-t border-white/[0.07] px-3 py-3">
+        {ordered.map(call => {
+          const agent = agents.find(item => item.id === call.agentId);
+          return <section key={call.id} className="space-y-2">
+            <div className="flex items-center justify-between gap-2 text-[10px]">
+              <span className="font-semibold text-gray-200">{agent?.name ?? (call.squadId === 'alpha-chat' ? 'Alpha' : call.agentId)}</span>
+              <span className={call.status === 'running' ? 'text-violet-200' : call.status === 'completed' ? 'text-emerald-300' : call.status === 'failed' ? 'text-rose-300' : 'text-gray-500'}>{statusLabel(call.status)}</span>
+            </div>
+            {call.activities.length ? <ol className="space-y-2 border-l border-white/10 pl-3">
+              {[...call.activities].reverse().map(activity => <li key={activity.id} className="relative text-[10px] leading-4 text-gray-300">
+                <span className={`absolute -left-[17px] top-1.5 h-1.5 w-1.5 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'handoff' ? 'bg-amber-300' : 'bg-violet-300'}`} />
+                <span>{activity.toolName ? `${activity.toolName} · ` : ''}{activity.message}</span>
+                {activity.detail && <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-black/20 px-2 py-1.5 font-mono text-[9px] text-gray-400">{activity.detail}</pre>}
+                {!!activity.paths?.length && <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <button key={file} type="button" onClick={onOpenRoom} className="inline-flex items-center gap-1 rounded bg-white/[0.05] px-1.5 py-1 text-left font-mono text-[9px] text-emerald-200 hover:bg-white/10"><FileCode2 className="h-3 w-3" />{file}</button>)}</div>}
+              </li>)}
+            </ol> : <p className="text-[10px] text-gray-500">Waiting for the first visible work update.</p>}
+          </section>;
+        })}
+        <button type="button" onClick={onOpenRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/20 px-2.5 py-1.5 text-[10px] font-medium text-violet-200 hover:bg-violet-400/10"><Activity className="h-3 w-3" />Open Live Build Room</button>
+      </div>}
+    </div>
+  );
+}
+
+function formatFileSize(bytes: number): string {
+  return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function MessageAttachments({ attachments }: { attachments?: ChatAttachmentReference[] }) {
+  if (!attachments?.length) return null;
+  return <div className="mt-2 flex flex-wrap gap-1.5">{attachments.map(attachment => <span key={attachment.id} title={`${attachment.contentType} · ${attachment.inspection === 'included_text' ? 'Text included with the request' : attachment.inspection === 'available_to_runtime' ? 'Local file available to the selected runtime' : 'Stored locally; not analyzed'}`} className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-white/15 bg-black/10 px-2 py-1 text-[10px] text-current">
+    {attachment.contentType.startsWith('image/') ? <ImageIcon className="h-3 w-3 shrink-0" /> : <FileText className="h-3 w-3 shrink-0" />}
+    <span className="max-w-48 truncate">{attachment.name}</span><span className="shrink-0 opacity-60">{formatFileSize(attachment.byteLength)}</span>
+    {attachment.inspection === 'stored_only' && <span className="shrink-0 opacity-70">· not analyzed</span>}
+  </span>)}</div>;
+}
+
 export const ChatView: React.FC = () => {
   const {
     chatThreads,
@@ -146,6 +218,11 @@ export const ChatView: React.FC = () => {
   } = useApp();
 
   const [input, setInput] = useTabSessionState<string>('chatDraft', '');
+  const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  const [pendingFileViews, setPendingFileViews] = useState<Array<{ file: File; previewUrl?: string }>>([]);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
+  const [chatTurnActionBusy, setChatTurnActionBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [callInstruction, setCallInstruction] = useTabSessionState<string>('chatCallInstruction', '');
   const [showCallPanel, setShowCallPanel] = useState(false);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
@@ -260,6 +337,20 @@ export const ChatView: React.FC = () => {
   );
   const highlightedCall = callList[0];
   const activeCall = callList.find(call => ['queued', 'running', 'awaiting_confirmation'].includes(call.status));
+  const activeChatTurnCall = callList.find(call => call.origin === 'chat_turn' && ['queued', 'running'].includes(call.status));
+  const latestUserMessage = [...currentMessages].reverse().find(message => message.senderType === 'user');
+  const activeTurnMessageId = activeChatTurnCall?.messageId
+    ?? (isAgentTyping && chatIntent !== 'build' ? latestUserMessage?.id : undefined);
+  useEffect(() => {
+    const views = pendingFiles.map(file => ({
+      file,
+      previewUrl: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+    }));
+    setPendingFileViews(views);
+    return () => views.forEach(item => { if (item.previewUrl) URL.revokeObjectURL(item.previewUrl); });
+  }, [pendingFiles]);
+
+  useEffect(() => setPendingFiles([]), [activeThread?.id]);
 
   useEffect(() => {
     callsRef.current = calls;
@@ -385,6 +476,25 @@ export const ChatView: React.FC = () => {
       window.clearInterval(timer);
     };
   }, [activeCall?.id, activeCall?.status, activeThread?.id, activeThread?.projectId, isActiveTab, isClient, refreshChatThread]);
+
+  useEffect(() => {
+    if (!isActiveTab || isClient || !activeThread?.projectId || !activeThread.id || (!isAgentTyping && !activeChatTurnCall)) return undefined;
+    let cancelled = false;
+    const refreshTurnActivity = async () => {
+      try {
+        const result = await apiService.getThreadAgentCalls(activeThread.projectId!, activeThread.id);
+        if (cancelled) return;
+        const next = Object.fromEntries(result.calls.map(call => [call.id, call]));
+        callsRef.current = { ...callsRef.current, ...next };
+        setCalls(previous => ({ ...previous, ...next }));
+      } catch {
+        // Live room updates may be delayed while workspace access refreshes.
+      }
+    };
+    void refreshTurnActivity();
+    const timer = window.setInterval(() => void refreshTurnActivity(), 1500);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [activeChatTurnCall?.id, activeChatTurnCall?.status, activeThread?.id, activeThread?.projectId, isActiveTab, isAgentTyping, isClient]);
 
   const selectSquad = (squadId: string) => {
     setSelectedSquadId(squadId);
@@ -537,10 +647,60 @@ export const ChatView: React.FC = () => {
     }
   };
 
+  const addFiles = (files: FileList | File[]) => {
+    const incoming = Array.from(files);
+    if (!incoming.length) return;
+    const accepted: File[] = [];
+    let oversized = 0;
+    let limitReached = false;
+    for (const file of incoming) {
+      if (file.size > MAX_CHAT_FILE_BYTES) { oversized += 1; continue; }
+      if (pendingFiles.length + accepted.length >= MAX_CHAT_FILES) { limitReached = true; break; }
+      if (!pendingFiles.some(item => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)
+        && !accepted.some(item => item.name === file.name && item.size === file.size && item.lastModified === file.lastModified)) accepted.push(file);
+    }
+    if (accepted.length) setPendingFiles(current => [...current, ...accepted]);
+    if (oversized) showToast('Some files are too large', `${oversized} file(s) exceeded the 10 MB limit.`, 'info');
+    if (limitReached) showToast('Attachment limit reached', `Attach up to ${MAX_CHAT_FILES} files to one message.`, 'info');
+  };
+
+  const removePendingFile = (index: number) => setPendingFiles(current => current.filter((_, fileIndex) => fileIndex !== index));
+
+  const stopChatTurn = async () => {
+    if (!activeThread?.id || !activeTurnMessageId || chatTurnActionBusy) return;
+    setChatTurnActionBusy(true);
+    try {
+      await apiService.stopChatTurn(activeThread.id, activeTurnMessageId);
+      showToast('Stopping response', 'Alpha is waiting for the current tool to stop before ending this turn.', 'info');
+    } catch (error: any) {
+      showToast('Could not stop response', error?.message ?? 'This chat turn could not be stopped.', 'error');
+    } finally {
+      setChatTurnActionBusy(false);
+    }
+  };
+
   const handleSend = async (event: React.FormEvent) => {
     event.preventDefault();
-    const message = input.trim();
-    if (!message || isAgentTyping) return;
+    const typedMessage = input.trim();
+    if (activeTurnMessageId) {
+      if (!typedMessage || !activeThread?.id || chatTurnActionBusy) return;
+      setChatTurnActionBusy(true);
+      try {
+        const result = await apiService.steerChatTurn(activeThread.id, activeTurnMessageId, typedMessage);
+        setInput('');
+        showToast('Direction queued', `Alpha will apply it at the next safe point in this turn (direction ${result.position}).`, 'success');
+      } catch (error: any) {
+        showToast('Direction not queued', error?.message ?? 'Alpha could not accept this direction.', 'error');
+      } finally {
+        setChatTurnActionBusy(false);
+      }
+      return;
+    }
+    if (isAgentTyping) return;
+    const message = typedMessage || (pendingFiles.length && chatIntent !== 'build'
+      ? 'Please inspect the attached files and summarize the relevant information.'
+      : '');
+    if (!message) return;
     if (chatIntent === 'build' && !can('run_agents')) {
       showToast('Build access needed', 'Your workspace role cannot start Orchestrator builds.', 'info');
       return;
@@ -571,7 +731,23 @@ export const ChatView: React.FC = () => {
     followNextMessage();
     setInput('');
     const buildRepositories = validBuildRepositories;
-    await sendChatMessage(message, activeThread?.id, buildRepositories, chatIntent);
+    const uploadedAttachments: ChatAttachmentReference[] = [];
+    try {
+      if (pendingFiles.length && !activeThread?.id) throw new Error('Open or create a conversation before attaching files.');
+      for (const file of pendingFiles) {
+        const result = await apiService.uploadChatAttachment(activeThread!.id, file);
+        uploadedAttachments.push(result.attachment);
+      }
+    } catch (error: any) {
+      if (activeThread?.id && uploadedAttachments.length) {
+        await Promise.allSettled(uploadedAttachments.map(item => apiService.deleteChatAttachment(activeThread.id, item.id)));
+      }
+      showToast('Attachments not sent', error?.message ?? 'Alpha could not save the selected files locally.', 'error');
+      setInput(typedMessage);
+      return;
+    }
+    setPendingFiles([]);
+    await sendChatMessage(message, activeThread?.id, buildRepositories, chatIntent, uploadedAttachments);
     if (activeThread?.id) {
       void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
     }
@@ -697,7 +873,7 @@ export const ChatView: React.FC = () => {
 
           {showCallPanel && !isClient && <section className="shrink-0 max-h-[45%] overflow-y-auto overscroll-contain mx-5 mt-4 rounded-2xl border border-white/10 bg-surface-100/80 p-4 lg:p-5 shadow-xl"><div className="flex items-start justify-between gap-4 mb-4"><div><div className="flex items-center gap-2"><Bot className="h-4 w-4 text-brand-300" /><h3 className="text-sm font-semibold text-white">Call an assigned agent</h3></div><p className="mt-1 text-[11px] text-gray-500">Use this for a focused question or review with one agent. For product changes, describe the work and the Orchestrator will choose the right specialists.</p></div><button type="button" onClick={() => setShowCallPanel(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.06]"><X className="h-4 w-4" /></button></div>{loadingSnapshot ? <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading project agents…</div> : snapshotError ? <div className="flex items-center gap-2 text-xs text-rose-300"><AlertTriangle className="h-4 w-4" /> {snapshotError}</div> : !snapshot?.squads.length ? <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs text-gray-500">No project specialist is ready for a direct call yet. Product builds can still start with the Orchestrator.</div> : <form onSubmit={callAgent} className="space-y-4"><div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]"><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Agent group</label><div className="flex gap-2 overflow-x-auto pb-1">{snapshot.squads.map(squad => <button type="button" key={squad.id} onClick={() => selectSquad(squad.id)} className={`shrink-0 rounded-lg border px-3 py-2 text-left text-xs ${selectedSquadId === squad.id ? 'border-brand-400/50 bg-brand-500/15 text-white' : 'border-white/10 bg-white/[0.03] text-gray-400 hover:text-white'}`}><span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{squad.name}</span><span className="mt-1 block text-[10px] text-gray-500">{squad.agents.length} ready</span></button>)}</div></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Agent</label><div className="grid gap-2 sm:grid-cols-2">{(snapshot.squads.find(squad => squad.id === selectedSquadId)?.agents ?? []).map(agent => <button type="button" key={agent.id} onClick={() => setSelectedAgentId(agent.id)} className={`rounded-lg border p-2.5 text-left ${selectedAgentId === agent.id ? 'border-brand-400/50 bg-brand-500/15' : 'border-white/10 bg-white/[0.03] hover:border-white/20'}`}><span className="flex items-center gap-2"><span className="h-6 w-6 rounded-md flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: agent.color || '#6d28d9' }}>{agent.avatar ? <img src={agent.avatar} alt="" className="h-6 w-6 rounded-md object-cover" /> : agent.name.charAt(0)}</span><span className="min-w-0"><span className="block truncate text-xs font-medium text-white">{agent.name}</span><span className="block truncate text-[10px] text-gray-500">{agent.role}</span></span></span></button>)}</div></div></div><div className="grid gap-3 sm:grid-cols-[150px_1fr]"><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Mode</label><select value={mode} onChange={event => setMode(event.target.value as AgentCallMode)} className="w-full rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400">{visibleModes.map(value => <option key={value} value={value}>{MODE_META[value].label}</option>)}</select><p className="text-[10px] leading-relaxed text-gray-600">{MODE_META[mode].description}</p></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Target <span className="normal-case text-gray-600">{mode === 'ask' ? 'optional' : 'required'}</span></label><div className="flex gap-2"><select value={targetType} onChange={event => { setTargetType(event.target.value as AgentCallTarget['type']); setTargetId(''); }} className="w-36 shrink-0 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400">{Object.entries(TARGET_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{targetOptions.length > 0 ? <select value={targetId} onChange={event => setTargetId(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400"><option value="">Select target…</option>{targetOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : <input value={targetId} onChange={event => setTargetId(event.target.value)} placeholder={targetType === 'file' ? 'src/features/example.tsx' : 'Enter target id or relative path'} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 placeholder-gray-600 outline-none focus:border-brand-400" />}</div>{targetType === 'file' && <p className="text-[10px] text-gray-600">Repository-relative only. Alpha resolves the working copy server-side.</p>}</div></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Instruction</label><textarea value={callInstruction} onChange={event => setCallInstruction(event.target.value)} rows={3} placeholder={selectedAgent ? `What should ${selectedAgent.name} look at?` : 'Choose an agent first…'} className="w-full resize-none rounded-xl border border-white/10 bg-surface-200 px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-brand-400" /></div>{mode === 'implement' && <div className="flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200"><ShieldCheck className="h-3.5 w-3.5 mt-0.5 shrink-0" /><span>Implementation is two-step. This request creates a reviewable call first; you must confirm before the agent generates a patch, and applying the patch is a separate action.</span></div>}<div className="flex items-center justify-end gap-2"><button type="button" onClick={() => setShowCallPanel(false)} className="rounded-lg px-3 py-2 text-xs text-gray-500 hover:text-white">Cancel</button><button type="submit" disabled={busyCallId === 'new' || !selectedAgentId || !callInstruction.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-xs font-semibold text-on-accent hover:bg-brand-400 disabled:opacity-40">{busyCallId === 'new' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />} Call {selectedAgent?.name ?? 'agent'}</button></div></form>}</section>}
 
-          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 space-y-5 [overflow-anchor:none]">{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Describe a product change. The Orchestrator will plan it, assign the right specialists, and coordinate work across the selected codebases. Use Ask Alpha for a conversation without code changes.' : 'Choose a project above to build in its codebases or ask Alpha a project question.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; if (message.agentCallId && !isUser && call) return <div key={message.id} className="max-w-3xl mr-auto">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="max-w-3xl mr-auto rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className={`flex gap-3.5 max-w-3xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}><div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${isUser ? 'bg-gradient-to-tr from-indigo-500 to-purple-600 text-on-accent' : 'bg-white/[0.08] border border-white/10 text-gray-200'}`}>{isUser ? 'U' : (message.senderName?.[0] ?? 'A')}</div><div className={`min-w-0 flex-1 space-y-2 ${isUser ? 'items-end' : 'items-start'}`}><div className={`flex items-center gap-2 ${isUser ? 'justify-end' : ''}`}><span className="text-xs font-semibold text-gray-300">{message.senderName}</span><span className="text-[10px] text-gray-600">{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div><div className={`rounded-2xl p-4 text-sm leading-relaxed ${isUser ? 'bg-brand-500 text-on-accent rounded-tr-none' : 'bg-surface-100 border border-white/10 text-gray-100 rounded-tl-none'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
+          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 space-y-5 [overflow-anchor:none]">{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Describe a product change. The Orchestrator will plan it, assign the right specialists, and coordinate work across the selected codebases. Use Ask Alpha for a conversation without code changes.' : 'Choose a project above to build in its codebases or ask Alpha a project question.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="max-w-3xl mr-auto">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="max-w-3xl mr-auto rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className={`flex gap-3.5 max-w-3xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}><div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${isUser ? 'bg-gradient-to-tr from-indigo-500 to-purple-600 text-on-accent' : 'bg-white/[0.08] border border-white/10 text-gray-200'}`}>{isUser ? 'U' : (message.senderName?.[0] ?? 'A')}</div><div className={`min-w-0 flex-1 space-y-2 ${isUser ? 'items-end' : 'items-start'}`}><div className={`flex items-center gap-2 ${isUser ? 'justify-end' : ''}`}><span className="text-xs font-semibold text-gray-300">{message.senderName}</span><span className="text-[10px] text-gray-600">{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div><div className={`rounded-2xl p-4 text-sm leading-relaxed ${isUser ? 'bg-brand-500 text-on-accent rounded-tr-none' : 'bg-surface-100 border border-white/10 text-gray-100 rounded-tl-none'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
   const needsLiveRoom = /live build room|product build is already/i.test(message.content);
   const buildNotStarted = message.content.includes('**Build not started');
   if (message.content.includes('Choose a codebase') || message.content.includes('Choose one repository')) {
@@ -709,7 +885,7 @@ export const ChatView: React.FC = () => {
     return <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/30 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/20"><Activity className="h-3.5 w-3.5" /> {label}</button>;
   }
   return <button type="button" onClick={openProjectSetup} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-300 hover:bg-white/[0.06]">Review project setup</button>;
-})()}</div> : <MessageMarkdown content={message.content} />}</div></div></div>; })}</div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}</div></div>; })}</div>
 
           {showLatest && <div className="shrink-0 flex justify-center py-2 border-t border-white/5"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-surface-raised px-4 py-2 text-xs font-medium text-brand-200 hover:bg-brand-500/15">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
           <div className="shrink-0 px-5 py-2.5 bg-surface/80 border-t border-white/5 flex items-center gap-2.5 overflow-x-auto"><span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 whitespace-nowrap">Try</span>{(isClient ? ['Clarify the current scope', 'Ask about timing'] : ['Summarize this project', 'What should I review next?']).map(prompt => <button key={prompt} type="button" onClick={() => setInput(prompt)} className="whitespace-nowrap rounded-full border border-white/10 bg-surface-100 px-3 py-1.5 text-[11px] text-gray-400 hover:border-brand-400/40 hover:text-white">{prompt}</button>)}</div>
@@ -756,12 +932,20 @@ export const ChatView: React.FC = () => {
                 </div>}
               </div> : projectRepositories.length === 1 ? <div className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] ${projectRepositories[0].connected ? 'border-emerald-400/15 bg-emerald-500/[0.05] text-emerald-200' : 'border-sky-400/15 bg-sky-500/[0.05] text-sky-200'}`}><FolderGit2 className="h-3.5 w-3.5" /><span>{projectRepositories[0].repo}</span><span>· {projectRepositories[0].connected ? 'ready here' : 'will clone at start'}</span></div> : snapshot ? <span className="inline-flex items-center gap-1.5 text-[10px] text-amber-200"><FolderGit2 className="h-3.5 w-3.5" />Connect a repository to build project files</span> : null)}
             </div>
-            <form onSubmit={handleSend} className="flex items-end gap-2">
-              <textarea value={input} onChange={event => setInput(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void handleSend(event); } }} rows={1} placeholder={isClient ? `Write a message to ${pmName}…` : chatIntent === 'build' ? 'Describe the product change to build across the selected codebases…' : chatIntent === 'ask' ? 'Ask Alpha a project question…' : 'Describe what you want to build, or ask Alpha…'} disabled={isAgentTyping} className="min-h-12 max-h-32 flex-1 resize-none rounded-2xl border border-white/10 bg-surface-100 px-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-brand-400 disabled:opacity-50" />
-                      <button type="submit" aria-label={chatIntent === 'build' ? 'Start Orchestrator build' : 'Send message'} disabled={!input.trim() || isAgentTyping || chatIntent === 'build' && (!can('run_agents') || activeProjectBuildRuns.length > 0 || requiresRepositorySelection)} title={chatIntent === 'build' && !can('run_agents') ? 'Your workspace role cannot start product builds.' : chatIntent === 'build' && activeProjectBuildRuns.length > 0 ? 'Stop the earlier build before starting another.' : chatIntent === 'build' && projectRepositories.length === 0 ? 'Connect a codebase before building.' : chatIntent === 'build' && requiresRepositorySelection ? 'Select at least one codebase to build.' : undefined} className="h-11 w-11 shrink-0 rounded-xl bg-brand-500 flex items-center justify-center text-on-accent hover:bg-brand-400 disabled:opacity-30"><Send className="h-4 w-4" /></button>
+            {pendingFileViews.length > 0 && <div className="flex flex-wrap gap-2">{pendingFileViews.map(({ file, previewUrl }, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex max-w-full items-center gap-2 rounded-xl border border-white/10 bg-surface-100 px-2 py-1.5 text-[10px] text-gray-300">
+              {previewUrl ? <img src={previewUrl} alt={`Preview of ${file.name}`} className="h-8 w-8 rounded-md object-cover" /> : <FileText className="ml-1 h-4 w-4 shrink-0 text-violet-200" />}
+              <span className="max-w-48 truncate">{file.name}</span><span className="shrink-0 text-gray-500">{formatFileSize(file.size)}</span>
+              <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removePendingFile(index)} className="rounded-md p-1 text-gray-500 hover:bg-white/10 hover:text-white"><X className="h-3.5 w-3.5" /></button>
+            </div>)}</div>}
+            <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-2 rounded-2xl ${isDraggingFiles ? 'ring-2 ring-violet-300/70' : ''}`}>
+              <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
+              <button type="button" aria-label="Attach files" title={activeTurnMessageId ? 'Finish this response before attaching files.' : 'Attach images or files'} disabled={Boolean(activeTurnMessageId) || pendingFiles.length >= MAX_CHAT_FILES} onClick={() => fileInputRef.current?.click()} className="h-11 w-11 shrink-0 rounded-xl border border-white/10 bg-surface-100 flex items-center justify-center text-gray-400 hover:text-white disabled:opacity-30"><Paperclip className="h-4 w-4" /></button>
+              <textarea value={input} onChange={event => setInput(event.target.value)} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void handleSend(event); } }} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : chatIntent === 'build' ? 'Describe the product change to build across the selected codebases…' : chatIntent === 'ask' ? 'Ask Alpha a project question…' : 'Describe what you want to build, or ask Alpha…'} className="min-h-12 max-h-32 flex-1 resize-none rounded-2xl border border-white/10 bg-surface-100 px-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-brand-400" />
+              <button type="submit" aria-label={activeTurnMessageId ? 'Queue direction for current agent' : chatIntent === 'build' ? 'Start Orchestrator build' : 'Send message'} disabled={(!input.trim() && (!pendingFiles.length || Boolean(activeTurnMessageId) || chatIntent === 'build')) || Boolean(chatTurnActionBusy) || isAgentTyping && !activeTurnMessageId || !activeTurnMessageId && chatIntent === 'build' && (!can('run_agents') || activeProjectBuildRuns.length > 0 || requiresRepositorySelection)} title={activeTurnMessageId ? 'Queue this direction for the current response.' : chatIntent === 'build' && !can('run_agents') ? 'Your workspace role cannot start product builds.' : chatIntent === 'build' && activeProjectBuildRuns.length > 0 ? 'Stop the earlier build before starting another.' : chatIntent === 'build' && projectRepositories.length === 0 ? 'Connect a codebase before building.' : chatIntent === 'build' && requiresRepositorySelection ? 'Select at least one codebase to build.' : undefined} className="h-11 w-11 shrink-0 rounded-xl bg-brand-500 flex items-center justify-center text-on-accent hover:bg-brand-400 disabled:opacity-30"><Send className="h-4 w-4" /></button>
+              {activeTurnMessageId && <button type="button" onClick={() => void stopChatTurn()} disabled={chatTurnActionBusy} className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-rose-400/25 bg-rose-500/[0.08] px-3 text-xs font-semibold text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"><Square className={`h-3 w-3 ${chatTurnActionBusy ? 'animate-pulse fill-current' : 'fill-current'}`} />{chatTurnActionBusy ? 'Stopping…' : 'Stop response'}</button>}
               {!isClient && <button type="button" onClick={openCallPanel} className="h-11 shrink-0 rounded-xl border border-brand-400/25 bg-brand-500/10 px-3 text-xs font-semibold text-brand-200 hover:bg-brand-500/20 sm:hidden"><Bot className="h-4 w-4" /></button>}
             </form>
-            <div className="flex items-center justify-between text-[10px] text-gray-600"><span>Shift + Enter for a new line</span><span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3 text-emerald-400" /> Project boundary enforced</span></div>
+            <div className="flex items-center justify-between gap-3 text-[10px] text-gray-600"><span>{pendingFiles.length ? `Files stay in this device’s private Alpha storage. ${chatIntent === 'build' ? 'Project builds store attachments but do not inspect them yet.' : 'Unsupported file types are marked as not analyzed.'}` : activeTurnMessageId ? 'Directions are queued and picked up at the next safe point.' : 'Shift + Enter for a new line'}</span><span className="inline-flex shrink-0 items-center gap-1"><ShieldCheck className="h-3 w-3 text-emerald-400" /> Project boundary enforced</span></div>
           </div>
         </> : <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"><MessageSquare className="h-12 w-12 text-gray-700" /><p className="text-sm text-gray-500">Pick a project conversation, or start a new one with +.</p></div>}
       </main>

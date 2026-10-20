@@ -16,6 +16,7 @@ import {
   AnalyticsData,
   WorkspaceSettings,
   ChatMessage,
+  ChatAttachmentReference,
   ChatThread,
   PrototypeRun,
   RunActivity,
@@ -234,7 +235,7 @@ interface AppContextType {
   setActiveChatAgentId: (id: string | null) => void;
   activeChatSquadId: string | null;
   setActiveChatSquadId: (id: string | null) => void;
-  sendChatMessage: (content: string, threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask') => Promise<void>;
+  sendChatMessage: (content: string, threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments?: ChatAttachmentReference[]) => Promise<void>;
   clearChat: (threadId?: string | null) => void;
   
   // Settings
@@ -2950,7 +2951,7 @@ ${e.detail}`;
     );
   };
 
-  const sendChatMessage = async (content: string, threadIdOverride?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask') => {
+  const sendChatMessage = async (content: string, threadIdOverride?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments: ChatAttachmentReference[] = []) => {
     if (!requireCapability('manage_chat')) return;
     let targetThreadId = threadIdOverride ?? activeThreadId;
     if (!targetThreadId) {
@@ -2962,6 +2963,7 @@ ${e.detail}`;
       senderType: 'user',
       senderName: currentUser.name,
       content,
+      attachments: attachments.length ? attachments : undefined,
       timestamp: new Date().toISOString()
     };
 
@@ -3064,7 +3066,8 @@ ${e.detail}`;
         repositories,
         projectId: chatThreads.find(thread => thread.id === targetThreadId)?.projectId,
         intent,
-        clientMessageId: userMsg.id
+        clientMessageId: userMsg.id,
+        attachmentIds: attachments.map(attachment => attachment.id)
       });
 
       /**
@@ -3861,10 +3864,10 @@ export const useApp = () => {
       setSessionValue('activeThreadId', id);
     },
     createNewThread: createScopedThread,
-    sendChatMessage: async (content: string, _threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask') => {
+    sendChatMessage: async (content: string, _threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments?: ChatAttachmentReference[]) => {
       let threadId = activeThreadId;
       if (!threadId) threadId = createScopedThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
-      if (threadId) await context.sendChatMessage(content, threadId, repositories, intent);
+      if (threadId) await context.sendChatMessage(content, threadId, repositories, intent, attachments);
     },
     clearChat: () => context.clearChat(activeThreadId),
     chatMessages: activeThreadId

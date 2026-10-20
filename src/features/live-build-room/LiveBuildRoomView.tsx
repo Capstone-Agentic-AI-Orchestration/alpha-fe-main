@@ -130,6 +130,8 @@ function activityLabel(activity: LiveBuildRoomActivity): string {
   if (activity.kind === 'error') return 'Attention';
   if (activity.kind === 'summary') return 'Summary';
   if (activity.kind === 'stage') return 'Stage update';
+  if (activity.kind === 'attachment') return 'Attachment';
+  if (activity.kind === 'steering') return 'Direction queued';
   return 'Agent update';
 }
 
