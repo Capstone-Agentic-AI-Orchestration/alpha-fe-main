@@ -633,8 +633,19 @@ export const apiService = {
       `/squads/${encodeURIComponent(squadId)}/projects/${encodeURIComponent(projectId)}`,
       { method: 'DELETE' }
     ),
-  getLiveBuildRoom: (projectId: string, runId?: string) =>
-    fetchJson<LiveBuildRoomSnapshot>(`/projects/${encodeURIComponent(projectId)}/live-build-room${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`),
+  getLiveBuildRoom: async (projectId: string, runId?: string) => {
+    const snapshot = await fetchJson<LiveBuildRoomSnapshot>(
+      `/projects/${encodeURIComponent(projectId)}/live-build-room${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`,
+      { cache: 'no-store' },
+    );
+    if (!snapshot || typeof snapshot !== 'object' || !snapshot.summary
+      || typeof snapshot.summary.review !== 'number'
+      || typeof snapshot.summary.failed !== 'number'
+      || typeof snapshot.summary.stale !== 'number') {
+      throw new Error('The project room returned incomplete data. Retry to load a fresh snapshot.');
+    }
+    return snapshot;
+  },
   getLiveBuildRoomProjects: () =>
     fetchJson<Array<Pick<Project, 'id' | 'key' | 'name' | 'color'>>>('/live-build-room/projects'),
   getOrchestrationDiffPreview: (projectId: string, runId: string) =>

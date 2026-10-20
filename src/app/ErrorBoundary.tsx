@@ -116,9 +116,8 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
           <div className="rounded-lg border border-white/10 bg-surface-200 p-4 space-y-3">
             <p className="text-sm text-gray-300">
-              Most crashes here come from cached data written by an older version of Alpha.
-              Clearing it keeps your projects and agents — those live in the local daemon,
-              not the browser.
+              Reloading retries the page. If this started after an update, you can reset Alpha's
+              saved browser state. Your projects and agents remain in the local daemon.
             </p>
             <div className="flex flex-wrap gap-2">
               <button
@@ -126,7 +125,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
                 onClick={this.clearLocalState}
                 className="px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent text-xs font-medium transition-colors"
               >
-                Clear cached data and reload
+                Reset saved app data and reload
               </button>
               <button
                 type="button"

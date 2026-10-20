@@ -429,7 +429,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
       {/* Header & Jira-like Control Bar */}
       <div className="space-y-2 border-b border-white/[0.06] bg-shell px-5 py-3">
         {/* Top Row: Title, Filters & Controls */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className={`flex flex-col justify-between gap-4 ${embedded ? 'xl:flex-row xl:flex-wrap xl:items-center' : 'sm:flex-row sm:items-center'}`}>
           {/* Left: Issues title & category pills */}
           <div className="flex items-center gap-4">
             {/*
@@ -507,7 +507,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
           </div>
 
           {/* Right: Actions, Status telemetry & View switches */}
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* Active work remains visible as plain status text. */}
             <div className="flex items-center gap-1.5 px-1 py-1.5 text-xs text-gray-500">
               {runningAgentsCount > 0 ? (

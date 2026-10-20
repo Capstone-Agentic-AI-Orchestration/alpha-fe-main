@@ -740,16 +740,24 @@ ${e.detail}`;
    * an explanation instead of a workspace. Falling through to `pm` there gave
    * an unrecognised member the most powerful role in the product.
    */
-  const initialDefaultTabs: TabItem[] = [{ id: 'tab-default', view: roleTabs[0], sessionState: {} }];
+  const defaultTab: NavigationTab = isDesktop && roleTabs.includes('chat') ? 'chat' : roleTabs[0];
+  const initialDefaultTabs: TabItem[] = [{ id: 'tab-default', view: defaultTab, sessionState: {} }];
 
   const [tabs, setTabs] = useState<TabItem[]>(() => {
     // Storage checks the fallback shape; null would reject every saved array.
     const savedCurrent = loadFromStorage<unknown[]>('workspace_tabs_v3', []);
     const savedLegacy = loadFromStorage<unknown[]>('workspace_tabs_v2', []);
-    return normalizeTabs(savedCurrent.length ? savedCurrent : savedLegacy, initialDefaultTabs[0], roleTabs);
+    const restored = normalizeTabs(savedCurrent.length ? savedCurrent : savedLegacy, initialDefaultTabs[0], roleTabs);
+    // Desktop opens on Chat, keeping every restored tab and its drafts intact.
+    if (isDesktop && defaultTab === 'chat' && !restored.some(tab => tab.view === 'chat')) {
+      return [{ id: createTabId(), view: 'chat', sessionState: {} }, ...restored];
+    }
+    return restored;
   });
 
   const [activeTabId, setActiveTabId] = useState<string>(() => {
+    const startupChat = isDesktop ? tabs.find(tab => tab.view === 'chat') : undefined;
+    if (startupChat) return startupChat.id;
     const saved = loadFromStorage<string>('active_tab_id_v3', loadFromStorage<string>('active_tab_id_v2', 'tab-default'));
     return tabs.some(tab => tab.id === saved) ? saved : tabs[0].id;
   });
@@ -759,8 +767,8 @@ ${e.detail}`;
   // surface. Hiding it from the sidebar is not enough on its own — persisted
   // tabs, deep links, and the command palette can all point somewhere else.
   const currentTab = tabs.find(t => t.id === activeTabId) || tabs[0] || initialDefaultTabs[0];
-  const requestedTab: NavigationTab = currentTab ? currentTab.view : roleTabs[0];
-  const activeTab: NavigationTab = roleTabs.includes(requestedTab) ? requestedTab : roleTabs[0];
+  const requestedTab: NavigationTab = currentTab ? currentTab.view : defaultTab;
+  const activeTab: NavigationTab = roleTabs.includes(requestedTab) ? requestedTab : defaultTab;
 
   const setTabView = useCallback<AppContextType['setTabView']>((tabId, view) => {
     setTabs(prev => {
@@ -792,7 +800,7 @@ ${e.detail}`;
 
   // Only when user presses + (and selects a destination):
   // Creates a brand new tab and activates it!
-  const openNewTab = (view: NavigationTab = roleTabs[0]) => {
+  const openNewTab = (view: NavigationTab = defaultTab) => {
     const newTabId = createTabId();
     const newTab: TabItem = { id: newTabId, view, sessionState: {} };
     setTabs(prev => [...prev, newTab]);
@@ -804,7 +812,7 @@ ${e.detail}`;
     setTabs(prev => {
       const filtered = prev.filter(t => t.id !== tabIdToClose);
       if (filtered.length === 0) {
-        const fallbackTab: TabItem = { id: createTabId(), view: roleTabs[0], sessionState: {} };
+        const fallbackTab: TabItem = { id: createTabId(), view: defaultTab, sessionState: {} };
         setActiveTabId(fallbackTab.id);
         return [fallbackTab];
       }
@@ -1291,7 +1299,8 @@ ${e.detail}`;
       }
       setServerStatus('online');
       const nextTabId = createTabId();
-      setTabs([{ id: nextTabId, view: ROLE_TABS[target.role][0], sessionState: {} }]);
+      const nextView = isDesktop && ROLE_TABS[target.role].includes('chat') ? 'chat' : ROLE_TABS[target.role][0];
+      setTabs([{ id: nextTabId, view: nextView, sessionState: {} }]);
       setActiveTabId(nextTabId);
       showToast('Workspace switched', `Now viewing ${target.name}.`, 'success');
     } catch (error) {
@@ -3857,7 +3866,7 @@ export const useApp = () => {
   const activeThreadId = typeof selectedThread === 'string'
     && context.chatThreads.some(thread => thread.id === selectedThread)
     ? selectedThread
-    : null;
+    : isDesktop && tab.view === 'chat' ? context.chatThreads[0]?.id ?? null : null;
   const setSessionValue = (key: string, value: unknown) =>
     context.setTabSessionState(tab.id, key, value);
   const createScopedThread = (title?: string, projectId?: string) => {
@@ -3870,6 +3879,7 @@ export const useApp = () => {
     ...context,
     activeTab: visibleView,
     activeTabId: tab.id,
+    activeThreadId,
     isActiveTab: context.activeTabId === tab.id,
     setActiveTab: (view: NavigationTab) => context.setTabView(tab.id, view),
     runSetupIssueId: typeof sessionState.runSetupIssueId === 'string' ? sessionState.runSetupIssueId : null,

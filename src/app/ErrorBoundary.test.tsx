@@ -7,7 +7,7 @@ describe('error recovery identity boundary', () => {
     const boundary = new ErrorBoundary({ children: null });
     boundary.state = { error: new Error('Synthetic diagnostic'), info: '' };
     const html = renderToStaticMarkup(boundary.render());
-    expect(html).toContain('Clear cached data and reload');
+    expect(html).toContain('Reset saved app data and reload');
     expect(html).toContain('Synthetic diagnostic');
   });
   it('shows a safe client error without internal cache controls or raw diagnostics', () => {
@@ -15,7 +15,7 @@ describe('error recovery identity boundary', () => {
     boundary.state = { error: new Error('Internal diagnostic not for client'), info: 'Internal stack' };
     const html = renderToStaticMarkup(boundary.render());
     expect(html).toContain('Reload page');
-    expect(html).not.toContain('Clear cached data');
+    expect(html).not.toContain('Reset saved app data');
     expect(html).not.toContain('Internal diagnostic');
     expect(html).not.toContain('Internal stack');
   });
