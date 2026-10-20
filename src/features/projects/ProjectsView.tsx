@@ -49,6 +49,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     issues, 
     updateProject, 
     deleteProject, 
+    showToast,
 
 
     agents,
@@ -69,6 +70,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [savingProject, setSavingProject] = useState(false);
   const [resourcesModalOpen, setResourcesModalOpen] = useState<boolean>(false);
   const [orchestrationSettings, setOrchestrationSettings] = useState<ProjectOrchestrationSettings | null>(null);
   const [orchestrationSettingsLoading, setOrchestrationSettingsLoading] = useState(false);
@@ -639,18 +641,27 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
           <Modal
             isOpen={true}
             onClose={() => setEditingProject(null)}
+            closeDisabled={savingProject}
             title="Edit Project"
             subtitle="Update project details, priority, or target dates."
           >
             <form
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
                 // An empty key would break every issue identifier in the
                 // project (`<KEY>-101`), so fall back to a derived one.
                 const key = editingProject.key.trim().toUpperCase()
                   || deriveProjectKey(editingProject.name, projects, editingProject.id);
-                updateProject(editingProject.id, { ...editingProject, key });
-                setEditingProject(null);
+                setSavingProject(true);
+                try {
+                  const saved = await updateProject(editingProject.id, { ...editingProject, key });
+                  if (saved) {
+                    setEditingProject(null);
+                    showToast('Project saved', 'Ground rules are ready for future Orchestrator builds.', 'success');
+                  }
+                } finally {
+                  setSavingProject(false);
+                }
               }}
               className="space-y-4 text-xs"
             >
@@ -718,10 +729,12 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </label>
                 <textarea
                   rows={3}
-                  value={editingProject.description}
+                  maxLength={8000}
+                  value={editingProject.description ?? ''}
                   onChange={(e) => setEditingProject({ ...editingProject, description: e.target.value })}
                   className="w-full bg-surface-raised border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-brand-500 font-mono text-[11px]"
                 />
+                <p className="mt-1 text-right text-[10px] text-gray-500">{(editingProject.description ?? '').length.toLocaleString()} / 8,000 characters</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -783,6 +796,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               <div className="flex items-center justify-between pt-4 border-t border-white/10">
                 <button
                   type="button"
+                  disabled={savingProject}
                   onClick={() => {
                     deleteProject(editingProject.id);
                     setSelectedProjectId(null);
@@ -798,15 +812,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   <button
                     type="button"
                     onClick={() => setEditingProject(null)}
+                    disabled={savingProject}
                     className="px-3 py-1.5 rounded-xl text-gray-400 hover:text-white"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
+                    disabled={savingProject || keyCollision}
                     className="px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-medium"
                   >
-                    Save
+                    {savingProject ? 'Saving…' : 'Save'}
                   </button>
                 </div>
               </div>
