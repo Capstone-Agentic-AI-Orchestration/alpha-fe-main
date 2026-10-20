@@ -141,11 +141,19 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'runtimes', label: 'Runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Monitor },
   { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
 
-  { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket },
-
   { id: 'analytics', label: 'Analytics', labels: { pm: 'Delivery Health', admin: 'Delivery Health' }, title: 'Operational Analytics', subtitle: 'Run health, delivery activity, and performance', group: 'workspace', section: 'insights', icon: BarChart3 },
 
   { id: 'settings', label: 'Settings', labels: { admin: 'Workspace Settings' }, title: 'Workspace Settings', subtitle: 'Preferences, keys, and autonomy governance', group: 'configure', section: 'settings', sectionByRole: { pm: 'workspace', admin: 'administration' }, icon: Settings }
+];
+
+/**
+ * Reversible archive: keep the destination metadata and view implementation
+ * available while removing Deployments from active menus and the tab picker.
+ * Restore it by moving this entry back into NAV_ITEMS and re-adding it to the
+ * desired roles in ROLE_NAV.
+ */
+export const ARCHIVED_NAV_ITEMS: NavItem[] = [
+  { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket }
 ];
 
 const BY_ID = new Map(NAV_ITEMS.map(item => [item.id, item]));
@@ -185,14 +193,14 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  */
 export const ROLE_NAV: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'squads', 'live_build_room', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
   pm: [
     'issues', 'projects', 'tickets', 'documents', 'inbox', 'chat',
-    'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
+    'agents', 'squads', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
   ],
   admin: [
     'issues', 'projects', 'documents', 'inbox', 'chat',
-    'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
+    'agents', 'squads', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
   ]
 };
 

@@ -61,13 +61,23 @@ describe('multi-repository project builds', () => {
   });
 
   it('requests the selected repository run in the Live Build Room', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json({}));
+    const snapshot = { summary: { review: 0, failed: 0, stale: 0 } };
+    const fetchMock = vi.fn().mockResolvedValue(json(snapshot));
     vi.stubGlobal('fetch', fetchMock);
 
-    await apiService.getLiveBuildRoom('project-1', 'run/with space');
+    await expect(apiService.getLiveBuildRoom('project-1', 'run/with space')).resolves.toEqual(snapshot);
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('runId=run%2Fwith%20space');
+    expect((fetchMock.mock.calls[0][1] as RequestInit).cache).toBe('no-store');
   });
+
+  it.each([{}, { summary: {} }, { summary: { review: '0', failed: 0, stale: 0 } }])(
+    'rejects an incomplete Live Build Room snapshot before rendering: %j', async snapshot => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(snapshot)));
+
+      await expect(apiService.getLiveBuildRoom('project-1')).rejects.toThrow('incomplete data');
+    }
+  );
 });
 
 describe('always-on desktop project orchestration', () => {
