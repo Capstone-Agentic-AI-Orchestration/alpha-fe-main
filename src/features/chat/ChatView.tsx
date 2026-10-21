@@ -56,6 +56,7 @@ import { MessageMarkdown } from './MessageMarkdown';
 import { OrchestratorFlow, isOrchestratorCall } from './OrchestratorFlow';
 import { AgentActivityPanel } from './AgentActivityPanel';
 import { BuildAgentActivityPanel } from './BuildAgentActivityPanel';
+import { ChatBuildDecisionCard } from './ChatBuildDecisionCard';
 import { buildStatusLabel, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { inferRecoveryAction, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
@@ -465,6 +466,9 @@ export const ChatView: React.FC = () => {
   const [showCallPanel, setShowCallPanel] = useState(false);
   const [inspectedCallId, setInspectedCallId] = useState<string | null>(null);
   const [inspectedBuildAgentId, setInspectedBuildAgentId] = useState<string | null>(null);
+  const [buildDecisionBusy, setBuildDecisionBusy] = useState<'start' | 'approve' | null>(null);
+  const [buildDecisionError, setBuildDecisionError] = useState<string | null>(null);
+  const [publishedBuild, setPublishedBuild] = useState<{ projectId: string; links: Array<{ repository: string; url: string }> } | null>(null);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
@@ -549,7 +553,43 @@ export const ChatView: React.FC = () => {
   const { build: liveBuild, refresh: refreshLiveBuild } = useProjectLiveBuild(project?.id, !isClient && Boolean(project) && isActiveTab);
   const inspectedBuildAgent = liveBuild?.agents.find(agent => agent.agentId === inspectedBuildAgentId) ?? null;
   const buildIsOpen = Boolean(liveBuild) || activeProjectBuildRuns.length > 0;
-  const canStopBuild = !isClient && can('run_builds') && buildIsOpen && liveBuild?.status !== 'cancelling';
+  const canStopBuild = !isClient && can('run_builds') && buildIsOpen && liveBuild?.status !== 'cancelling' && liveBuild?.status !== 'publishing';
+  // Plan approval and final review are answered in the chat itself.
+  const buildDecision = !isClient && liveBuild && ['awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(liveBuild.status) ? liveBuild : null;
+  const buildDecisionKey = liveBuild ? liveBuild.runId + ':' + liveBuild.status : '';
+  useEffect(() => { setBuildDecisionError(null); }, [buildDecisionKey]);
+  const startPlannedBuild = async () => {
+    if (!liveBuild || !project?.id || buildDecisionBusy) return;
+    setBuildDecisionBusy('start');
+    setBuildDecisionError(null);
+    try {
+      await apiService.startPlannedOrchestration(project.id, liveBuild.runId, liveBuild.revision);
+      showToast('Build started', 'The first agent is starting. Follow each agent in the bar above.', 'success');
+    } catch (error: any) {
+      setBuildDecisionError(error?.message ?? 'The plan could not be started. It may have changed; check it and try again.');
+    } finally {
+      setBuildDecisionBusy(null);
+      void refreshLiveBuild();
+    }
+  };
+  const approveBuild = async () => {
+    if (!liveBuild || !project?.id || buildDecisionBusy || !can('approve_runs')) return;
+    setBuildDecisionBusy('approve');
+    setBuildDecisionError(null);
+    try {
+      const result = await apiService.approveOrchestration(project.id, liveBuild.runId, liveBuild.revision);
+      const publication = result.publication;
+      if (publication?.pullRequestUrl) {
+        setPublishedBuild({ projectId: project.id, links: [{ repository: publication.repository ?? liveBuild.repository, url: publication.pullRequestUrl }] });
+      }
+      showToast('Pull request ready', 'The checked branch was pushed and its pull request is open for review.', 'success');
+    } catch (error: any) {
+      setBuildDecisionError(error?.message ?? 'The pull request could not be opened. Check the build and try again.');
+    } finally {
+      setBuildDecisionBusy(null);
+      void refreshLiveBuild();
+    }
+  };
   const selectCall = (callId: string | null) => {
     setInspectedCallId(callId);
     if (callId) setInspectedBuildAgentId(null);
@@ -1423,7 +1463,7 @@ export const ChatView: React.FC = () => {
   else if (activeProjectBuildRuns.length + (liveBuild ? 1 : 0) > 1) stopBuildLabel = `Stop ${activeProjectBuildRuns.length + (liveBuild ? 1 : 0)} builds`;
   else stopBuildLabel = liveBuild?.status === 'awaiting_plan_approval' ? 'Stop plan' : 'Stop build';
   // Builds that are waiting on a person get a notice above the composer; running ones show in the flow bar.
-  const buildNotice = liveBuild && ['awaiting_plan_approval', 'awaiting_approval', 'paused', 'blocked', 'recovery_required'].includes(liveBuild.status) ? liveBuild : null;
+  const buildNotice = liveBuild && ['paused', 'blocked', 'recovery_required'].includes(liveBuild.status) ? liveBuild : null;
   const stopBuildIconClass = stoppingProjectRunId ? 'h-4 w-4 shrink-0 animate-pulse' : 'h-4 w-4 shrink-0 fill-current';
 
   return (
@@ -1498,6 +1538,13 @@ export const ChatView: React.FC = () => {
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-4 lg:px-8 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-3xl space-y-2">
               {showLatest && <div className="flex justify-center"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-surface-raised px-4 py-2 text-xs font-medium text-brand-200 shadow-lg shadow-black/40 hover:bg-brand-500/15">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
+              {publishedBuild && publishedBuild.projectId === project?.id && !buildDecision && <div role="status" className="flex items-center gap-3 rounded-2xl border border-emerald-300/25 bg-surface-raised/95 px-4 py-2.5 text-[11px] text-emerald-100 shadow-lg shadow-black/40">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-200" aria-hidden="true" />
+                <span className="min-w-0 flex-1 font-semibold">Pull request opened</span>
+                {publishedBuild.links.map(link => <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200/30 px-3 py-1 font-medium text-emerald-50 hover:bg-emerald-300/10">{publishedBuild.links.length > 1 ? link.repository : 'Open on GitHub'}</a>)}
+                <button type="button" onClick={() => setPublishedBuild(null)} aria-label="Dismiss" className="rounded-full p-1 text-emerald-200/70 hover:bg-white/[0.06] hover:text-white"><X className="h-3.5 w-3.5" /></button>
+              </div>}
+              {buildDecision && project && <ChatBuildDecisionCard key={buildDecision.runId + ':' + buildDecision.status} projectId={project.id} build={buildDecision} canStart={buildDecision.canControl && can('run_builds')} canApprove={can('approve_runs')} busy={buildDecisionBusy} error={buildDecisionError} onStart={() => void startPlannedBuild()} onApprove={() => void approveBuild()} onOpenRoom={() => openLiveBuildRun(buildDecision.runId)} />}
               {buildNotice && !isClient && <div role="status" className="flex items-center gap-3 rounded-2xl border border-amber-300/20 bg-surface-raised/95 px-4 py-2.5 text-[11px] text-amber-100 shadow-lg shadow-black/40">
                 <Activity className="h-3.5 w-3.5 shrink-0 text-amber-200" aria-hidden="true" />
                 <span className="min-w-0 flex-1"><span className="font-semibold">{buildStatusLabel(buildNotice)}</span><span className="text-amber-100/70"> · {buildNotice.repository}. {buildNotice.status === 'awaiting_plan_approval' ? 'It holds this codebase until you start or stop it.' : 'Open the build to continue.'}</span></span>

@@ -239,7 +239,7 @@ function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration })
   </section>;
 }
 
-const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string; savedCheckpoint?: boolean }> = ({ projectId, runId, branchName, savedCheckpoint = false }) => {
+export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string; savedCheckpoint?: boolean }> = ({ projectId, runId, branchName, savedCheckpoint = false }) => {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<LiveBuildRoomDiffPreview | null>(null);
   const [loading, setLoading] = useState(false);

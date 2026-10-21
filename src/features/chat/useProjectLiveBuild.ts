@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
-import type { LiveBuildOrchestrationStatus, LiveBuildRoomAgentCard, LiveBuildRoomSnapshot } from '@/shared/types';
+import type { LiveBuildOrchestrationStatus, LiveBuildRoomAgentCard, LiveBuildRoomOrchestration, LiveBuildRoomSnapshot } from '@/shared/types';
 
 /** Builds that still hold the project's repositories, so the chat bar keeps showing them. */
 export const OPEN_BUILD_STATUSES: LiveBuildOrchestrationStatus[] = [
@@ -35,6 +35,8 @@ export interface ProjectLiveBuild {
   running: boolean;
   canControl: boolean;
   agents: BuildAgentNode[];
+  /** The full plan, checks and findings, for decisions made from the chat. */
+  orchestration: LiveBuildRoomOrchestration;
 }
 
 const EVENTS = [
@@ -151,7 +153,8 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
       goal: orchestration.run.goal,
       running,
       canControl: Boolean(snapshot.canControlOrchestration ?? snapshot.canRun),
-      agents: buildAgentNodes(snapshot)
+      agents: buildAgentNodes(snapshot),
+      orchestration
     };
   }, [open, running, snapshot]);
 
