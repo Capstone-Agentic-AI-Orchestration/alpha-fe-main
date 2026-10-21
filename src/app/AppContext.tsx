@@ -3048,6 +3048,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
           timestamp: reply.timestamp || new Date().toISOString(),
           messageType: reply.messageType,
           orchestrationRunId: reply.orchestrationRunId,
+          routeProposal: reply.routeProposal,
           isStreaming: false,
           thinkingProcess: reply.thinkingProcess,
           toolsExecuted: (reply.toolsExecuted || []).map((t: any) => ({
@@ -3135,7 +3136,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
     setChatThreads(prev =>
       prev.map(t => (t.id === id ? { ...t, messages: [], lastMessageSnippet: '' } : t))
     );
-    setChatMessages([]);
+    if (activeThreadId === id) setChatMessages([]);
 
     // Emptied on the daemon too, session rows included — a resumed CLI session
     // would otherwise answer from the history that was just cleared.
@@ -3839,13 +3840,21 @@ export function useTabSessionState<T>(
   const tab = app.tabs.find(item => item.id === tabId);
   const hasStoredValue = Boolean(tab?.sessionState && Object.prototype.hasOwnProperty.call(tab.sessionState, key));
   const fallback = typeof initialValue === 'function' ? (initialValue as () => T)() : initialValue;
-  const value = hasStoredValue ? tab!.sessionState![key] as T : fallback;
+  const storedValue = hasStoredValue ? tab!.sessionState![key] as unknown : undefined;
+  const isArrayState = Array.isArray(fallback);
+  // Saved tabs can outlive UI versions. Keep stale/malformed array values from
+  // reaching consumers that use array methods such as filter() and includes().
+  const value = hasStoredValue
+    ? (isArrayState && !Array.isArray(storedValue) ? fallback : storedValue as T)
+    : fallback;
 
   const setValue = useCallback<React.Dispatch<React.SetStateAction<T>>>(next => {
     app.setTabSessionState(tabId, key, (current: unknown) =>
-      typeof next === 'function' ? (next as (previous: T) => T)(current as T) : next
+      typeof next === 'function'
+        ? (next as (previous: T) => T)(isArrayState && !Array.isArray(current) ? [] as T : current as T)
+        : next
     );
-  }, [app.setTabSessionState, key, tabId]);
+  }, [app.setTabSessionState, isArrayState, key, tabId]);
 
   return [value, setValue];
 }

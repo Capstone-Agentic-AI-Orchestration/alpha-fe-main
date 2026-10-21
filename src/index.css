@@ -233,24 +233,26 @@ input[type='radio']:disabled {
  * The navigation rail expands over the workspace. A longer, eased width
  * transition gives the panel time to settle before its labels finish fading
  * in, so the reveal reads as one movement instead of a layout jump.
+ *
+ * Kept cheap on purpose. The panel used to carry a full-height backdrop blur
+ * while its width animated, so every frame re-blurred the whole window behind
+ * it, and every label animated its own max-width (one layout per label per
+ * frame). On a large high-DPI screen that measured up to 200 ms frames on
+ * hover. The panel is now opaque, and labels only fade and slide.
  */
 .sidebar-flyout {
   transition:
-    width 280ms cubic-bezier(0.22, 1, 0.36, 1),
-    box-shadow 280ms ease,
-    background-color 280ms ease;
-  will-change: width;
+    width 200ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 200ms ease;
 }
 
 .sidebar-label {
   display: inline-block;
   overflow: hidden;
   white-space: nowrap;
-  will-change: max-width, opacity, transform;
   transition:
-    max-width 220ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 160ms ease,
-    transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
+    opacity 140ms ease,
+    transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .sidebar-label--visible {
@@ -271,6 +273,23 @@ input[type='radio']:disabled {
   .sidebar-label {
     transition: none;
   }
+}
+
+/*
+ * Desktop window dragging (Windows hides the native title bar). Electron reads
+ * these regions to decide which pixels move the window; anything clickable that
+ * can sit over a drag region must opt out, or clicks there would move the
+ * window instead. Ignored by browsers.
+ */
+.app-drag-region {
+  -webkit-app-region: drag;
+}
+
+.app-no-drag,
+[role='dialog'],
+[role='menu'],
+[role='listbox'] {
+  -webkit-app-region: no-drag;
 }
 
 /* Keep the tab strip intrinsically sized so the add-tab affordance stays next

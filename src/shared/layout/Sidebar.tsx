@@ -59,6 +59,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const [isPointerInside, setIsPointerInside] = useState(false);
   const [isFocusWithin, setIsFocusWithin] = useState(false);
+  /**
+   * Hover intent. The rail opens after a short dwell and closes after a short
+   * grace period, so brushing past it on the way to the left edge of the
+   * content does not open and close the panel over the page.
+   */
+  const hoverTimer = useRef<number | undefined>(undefined);
+  const setPointerInsideAfter = (inside: boolean, delayMs: number) => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setIsPointerInside(inside), delayMs);
+  };
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
   // Creating is the only way into a workspace from here. Nobody joins one:
   // a project manager puts people in theirs, straight away, as they make it.
   const [createOpen, setCreateOpen] = useState(false);
@@ -188,8 +199,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <aside
         aria-label="Application sidebar"
         aria-expanded={expanded}
-        onPointerEnter={() => setIsPointerInside(true)}
-        onPointerLeave={() => setIsPointerInside(false)}
+        onPointerEnter={() => setPointerInsideAfter(true, 90)}
+        onPointerLeave={() => setPointerInsideAfter(false, 140)}
         onFocusCapture={() => setIsFocusWithin(true)}
         onBlurCapture={event => {
           const nextTarget = event.relatedTarget as Node | null;
@@ -197,7 +208,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             setIsFocusWithin(false);
           }
         }}
-        className={`sidebar-flyout absolute inset-y-0 left-0 flex h-full flex-col border-r border-white/[0.08] bg-shell/95 font-sans text-sm text-gray-300 backdrop-blur-xl ${
+        className={`sidebar-flyout app-no-drag absolute inset-y-0 left-0 flex h-full flex-col border-r border-white/[0.08] bg-shell font-sans text-sm text-gray-300 ${
           expanded
             ? 'w-64 shadow-[14px_0_36px_-28px_rgba(0,0,0,0.9)]'
             : 'w-[4.5rem] shadow-none'
