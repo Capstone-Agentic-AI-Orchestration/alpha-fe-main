@@ -21,7 +21,6 @@ import { ChatView } from '@/features/chat/ChatView';
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectsView } from '@/features/projects/ProjectsView';
 import { AgentsView } from '@/features/agents/AgentsView';
-import { SquadsView } from '@/features/squads/SquadsView';
 import { AnalyticsView } from '@/features/analytics/AnalyticsView';
 import { RuntimesView } from '@/features/runtimes/RuntimesView';
 import { SkillsView } from '@/features/skills/SkillsView';
@@ -62,7 +61,6 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
     case 'issues': content = <IssuesView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'projects': content = <ProjectsView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'agents': content = <AgentsView />; break;
-    case 'squads': content = <SquadsView />; break;
     case 'live_build_room': content = <LiveBuildRoomView />; break;
     case 'analytics': content = <AnalyticsView />; break;
     case 'runtimes': content = <RuntimesView />; break;
@@ -104,7 +102,7 @@ const desktopDownloadUrl = `${API_BASE}/download/desktop`;
 export const App: React.FC = () => {
   const {
     tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role, setTabSessionState,
-    projects, chatThreads, issues, agents, squads, runtimes, skills, deployments, requirementDocs,
+    projects, chatThreads, issues, agents, runtimes, skills, deployments, requirementDocs,
     identity,
     identityStatus,
     refreshIdentity,
@@ -161,7 +159,6 @@ export const App: React.FC = () => {
       return contextualTitle(selectedIssue?.identifier ?? projectTitle(session['issues.project']));
     }
     if (view === 'agents') return contextualTitle(agents.find(item => item.id === session['agents.selectedAgent'])?.name);
-    if (view === 'squads') return contextualTitle(squads.find(item => item.id === session['squads.selectedSquad'])?.name);
     if (view === 'runtimes') return contextualTitle(runtimes.find(item => item.id === session['runtimes.selectedRuntime'])?.name);
     if (view === 'skills') return contextualTitle(skills.find(item => item.id === session['skills.selectedSkill'])?.name);
     if (view === 'deployments') return contextualTitle(deployments.find(item => item.id === session['deployments.selectedDeployment'])?.name);

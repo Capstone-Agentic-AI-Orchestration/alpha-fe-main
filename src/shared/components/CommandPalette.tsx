@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '@/app/AppContext';
 import { NAV_ITEMS, navIcon } from '@/config/navigation';
-import { Search, Bot, Users, FolderKanban, CheckSquare, Cpu, Rocket, ArrowRight, Sparkles } from 'lucide-react';
+import { Search, Bot, FolderKanban, CheckSquare, Cpu, Rocket, ArrowRight, Sparkles } from 'lucide-react';
 import { NavigationTab } from '@/shared/types';
 
 export const CommandPalette: React.FC = () => {
@@ -11,7 +11,6 @@ export const CommandPalette: React.FC = () => {
     setActiveTab, 
     issues, 
     agents, 
-    squads, 
     projects, 
     scanLocalRuntimes,
     triggerDeployment,
@@ -106,23 +105,6 @@ export const CommandPalette: React.FC = () => {
       }
     });
 
-    // Search squads
-    if (visibleTabs.includes('squads')) squads.forEach(sq => {
-      if (sq.name.toLowerCase().includes(q) || sq.mission.toLowerCase().includes(q)) {
-        results.push({
-          id: `sq-${sq.id}`,
-          title: `Squad: ${sq.name}`,
-          subtitle: `Topology: ${sq.topology.toUpperCase()} • ${sq.memberAgentIds.length} members`,
-          icon: <Users className="w-4 h-4 text-emerald-400" />,
-          type: 'Squad',
-          action: () => {
-            setActiveTab('squads');
-            setCommandPaletteOpen(false);
-          }
-        });
-      }
-    });
-
     // Search projects
     if (visibleTabs.includes('projects')) projects.forEach(proj => {
       if (proj.name.toLowerCase().includes(q) || proj.key.toLowerCase().includes(q)) {
@@ -172,7 +154,7 @@ export const CommandPalette: React.FC = () => {
     }
 
     return results;
-  }, [query, navigationItems, visibleTabs, issues, agents, squads, projects, setActiveTab, setCommandPaletteOpen, scanLocalRuntimes, triggerDeployment, can]);
+  }, [query, navigationItems, visibleTabs, issues, agents, projects, setActiveTab, setCommandPaletteOpen, scanLocalRuntimes, triggerDeployment, can]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -218,7 +200,7 @@ export const CommandPalette: React.FC = () => {
               setQuery(e.target.value);
               setSelectedIndex(0);
             }}
-            placeholder="Type a command, search issues, agents, or squads..."
+            placeholder="Type a command, search issues, agents, or projects..."
             className="w-full bg-transparent text-white placeholder-gray-500 text-sm focus:outline-none font-medium"
             autoFocus
           />

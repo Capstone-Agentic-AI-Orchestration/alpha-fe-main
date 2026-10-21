@@ -8,7 +8,6 @@ import {
   IssueStatus,
   Project,
   Agent,
-  Squad,
   RuntimeEngine,
   Skill,
   Deployment,
@@ -174,17 +173,13 @@ interface AppContextType {
   bulkUpdateAgents: (ids: string[], updates: Partial<Agent>) => void;
   bulkArchiveAgents: (ids: string[]) => void;
   
-  // Squads
-  squads: Squad[];
-  createSquad: (squad: Omit<Squad, 'id' | 'activeRunsCount' | 'completedRunsCount'>) => Squad | null;
-  updateSquad: (id: string, updates: Partial<Squad>) => void;
-  deleteSquad: (id: string) => void;
+  /** Builds from before squads were removed; read-only history and stop controls. */
   squadRuns: SquadRun[];
   /**
-   * A squad works on an issue. `issueId` is required because there is no
-   * longer a way to run a squad against nothing — that was the old timer.
+   * Start an Orchestrator build for a board issue. Opens a project chat thread
+   * for it and returns that thread's id, or null when the build cannot start.
    */
-  triggerSquadRun: (squadId: string, issueId: string, plan?: string[], missionGoal?: string) => Promise<void>;
+  startIssueBuild: (issueId: string) => Promise<string | null>;
   
   // Runtimes
   runtimes: RuntimeEngine[];
@@ -233,9 +228,7 @@ interface AppContextType {
   chatTypingByThread: Record<string, boolean>;
   activeChatAgentId: string | null;
   setActiveChatAgentId: (id: string | null) => void;
-  activeChatSquadId: string | null;
-  setActiveChatSquadId: (id: string | null) => void;
-  sendChatMessage: (content: string, threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments?: ChatAttachmentReference[]) => Promise<void>;
+  sendChatMessage: (content: string, threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments?: ChatAttachmentReference[], options?: ChatSendOptions) => Promise<void>;
   clearChat: (threadId?: string | null) => void;
   
   // Settings
@@ -312,9 +305,8 @@ export type Capability =
   | 'manage_issues'
   | 'view_agents'
   | 'manage_agents'
-  | 'view_squads'
-  | 'manage_squads'
-  | 'run_squads'
+  /** Start, follow, and stop Orchestrator builds. */
+  | 'run_builds'
   | 'view_skills'
   | 'manage_skills'
   | 'view_runtimes'
@@ -357,11 +349,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     // Developers can create and maintain the local personas they run.
     'manage_agents',
     'run_agents',
-    'view_squads',
-    // The daemon grants developers squad.manage for squads they own. Keep the
-    // UI capability map aligned so they can create and assign those squads.
-    'manage_squads',
-    'run_squads',
+    'run_builds',
     'view_skills',
     'view_runtimes',
     'manage_runtimes',
@@ -385,8 +373,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'view_agents',
     // Project managers staff the agents used by their PM-owned projects.
     'manage_agents',
-    'view_squads',
-    'run_squads',
+    'run_builds',
     'view_skills',
     'manage_skills',
     'view_runtimes',
@@ -421,9 +408,7 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'manage_issues',
     'view_agents',
     'manage_agents',
-    'view_squads',
-    'manage_squads',
-    'run_squads',
+    'run_builds',
     'view_skills',
     'manage_skills',
     'view_runtimes',
@@ -457,12 +442,20 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
  */
 const ROLE_TABS = ROLE_NAV;
 
+/** Extra fields for a chat message that starts a build. */
+export interface ChatSendOptions {
+  /** Board issue the build is for; the Orchestrator builds it instead of filing a new one. */
+  issueId?: string;
+  /** Project of a thread created in the same tick, before it reaches `chatThreads`. */
+  projectId?: string;
+}
+
 const AppContext = createContext<AppContextType | undefined>(undefined);
 export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
   'portal', 'intake', 'documents', 'inbox', 'chat', 'issues', 'projects', 'tickets', 'agents',
-  'squads', 'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments',
+  'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments',
   'build_room', 'settings'
 ];
 
@@ -537,7 +530,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberRecord[]>([]);
-  /** Project ids for which the current role has an owned/assigned squad room. */
+  /** Project ids whose Live Build Room the current role may open. */
   const [liveBuildRoomProjectIds, setLiveBuildRoomProjectIds] = useState<string[]>([]);
 
   const activeWorkspace = workspaces.find(workspace => workspace.id === activeWorkspaceId) ?? null;
@@ -834,7 +827,6 @@ ${e.detail}`;
   const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(loadFromStorage<Issue[]>('issues', [])));
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage<Project[]>('projects', []));
   const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(loadFromStorage<Agent[]>('agents', [])));
-  const [squads, setSquads] = useState<Squad[]>(() => loadFromStorage<Squad[]>('squads', []));
   const [runtimes, setRuntimes] = useState<RuntimeEngine[]>(() => loadFromStorage<RuntimeEngine[]>('runtimes', []));
   const [skills, setSkills] = useState<Skill[]>(() => {
     const saved = loadFromStorage<unknown[]>('skills', []);
@@ -892,7 +884,6 @@ ${e.detail}`;
   const [chatTypingByThread, setChatTypingByThread] = useState<Record<string, boolean>>({});
   const isAgentTyping = activeThreadId ? Boolean(chatTypingByThread[activeThreadId]) : false;
   const [activeChatAgentId, setActiveChatAgentId] = useState<string | null>(null);
-  const [activeChatSquadId, setActiveChatSquadId] = useState<string | null>(null);
 
   /* ---------------------------------------------------------------------------
    * Daemon hydration
@@ -947,7 +938,6 @@ ${e.detail}`;
       if (snapshot.projects) setProjects(snapshot.projects as Project[]);
       if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
       if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
-      if (snapshot.squads) setSquads(snapshot.squads as Squad[]);
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       /**
@@ -1145,7 +1135,6 @@ ${e.detail}`;
   useEffect(() => { saveToStorage(workspaceStorageKey('issues'), issues); }, [issues, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('projects'), projects); }, [projects, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('agents'), agents); }, [agents, activeWorkspaceId]);
-  useEffect(() => { saveToStorage(workspaceStorageKey('squads'), squads); }, [squads, activeWorkspaceId]);
   useEffect(() => { saveToStorage('runtimes', runtimes); }, [runtimes]);
   useEffect(() => { saveToStorage('skills', skills); }, [skills]);
   useEffect(() => { saveToStorage(workspaceStorageKey('deployments_v2'), deployments); }, [deployments, activeWorkspaceId]);
@@ -1266,7 +1255,6 @@ ${e.detail}`;
     setProjects(loadFromStorage<Project[]>(`projects:${workspaceId}`, []));
     setIssues(normalizeLegacyIssues(loadFromStorage<Issue[]>(`issues:${workspaceId}`, [])));
     setAgents(normalizeLegacyAgents(loadFromStorage<Agent[]>(`agents:${workspaceId}`, [])));
-    setSquads(loadFromStorage<Squad[]>(`squads:${workspaceId}`, []));
     setChatThreads(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
     setChatMessages(loadFromStorage<ChatMessage[]>(`chat_messages:${workspaceId}`, []));
     setPrototypeRuns(normalizeLegacyPrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, [])));
@@ -1286,7 +1274,6 @@ ${e.detail}`;
       if (snapshot.projects) setProjects(snapshot.projects as Project[]);
       if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
       if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
-      if (snapshot.squads) setSquads(snapshot.squads as Squad[]);
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       if (snapshot.chatThreads) {
@@ -1509,45 +1496,36 @@ ${e.detail}`;
       setSquadRuns(prev => prev.map(sr => sr.id === squadRunId
         ? { ...sr, currentMemberIndex: memberIndex, status: 'running' as const, updatedAt: new Date().toISOString() }
         : sr));
-      // Handoffs only. triggerSquadRun already announced the first member.
+      // Handoffs only, for builds started before squads were removed.
       if (memberIndex > 0) {
-        showToast('Squad handoff', `${agentName} picked up member ${memberIndex + 1} of ${memberCount}.`, 'info');
+        showToast('Build handoff', `${agentName} picked up step ${memberIndex + 1} of ${memberCount}.`, 'info');
       }
     });
 
     const unsubSquadDone = runnerSocket.on('squad_run_completed', (squadRun) => {
       setSquadRuns(prev => prev.map(sr => sr.id === squadRun.id ? squadRun : sr));
-      setSquads(prev => prev.map(s => s.id === squadRun.squadId
-        ? { ...s, activeRunsCount: Math.max(0, s.activeRunsCount - 1) }
-        : s));
       setIssues(prev => prev.map(i => i.id === squadRun.issueId
         ? { ...i, status: 'review', updatedAt: new Date().toISOString() }
         : i));
       showToast(
-        'Squad run finished',
-        `${squadRun.memberAgentIds.length} member(s) worked on ${squadRun.branchName}.`,
+        'Build finished',
+        `${squadRun.memberAgentIds.length} agent(s) worked on ${squadRun.branchName}.`,
         'success'
       );
     });
 
     const unsubSquadFailed = runnerSocket.on('squad_run_failed', (squadRun) => {
       setSquadRuns(prev => prev.map(sr => sr.id === squadRun.id ? squadRun : sr));
-      setSquads(prev => prev.map(s => s.id === squadRun.squadId
-        ? { ...s, activeRunsCount: Math.max(0, s.activeRunsCount - 1) }
-        : s));
       setIssues(prev => prev.map(i => i.id === squadRun.issueId
         ? { ...i, status: 'in_progress', updatedAt: new Date().toISOString() }
         : i));
       // The daemon's reason names the member and the position. It is better
       // than anything this side could reconstruct.
-      showToast('Squad run stopped', squadRun.stoppedReason ?? 'A member did not finish.', 'error');
+      showToast('Build stopped', squadRun.stoppedReason ?? 'An agent did not finish.', 'error');
     });
 
     const unsubSquadCancelled = runnerSocket.on('squad_run_cancelled', (squadRun) => {
       setSquadRuns(prev => prev.map(sr => sr.id === squadRun.id ? squadRun : sr));
-      setSquads(prev => prev.map(s => s.id === squadRun.squadId
-        ? { ...s, activeRunsCount: Math.max(0, s.activeRunsCount - 1) }
-        : s));
       setIssues(prev => prev.map(issue => issue.id === squadRun.issueId
         ? { ...issue, status: 'in_progress', updatedAt: new Date().toISOString() }
         : issue));
@@ -2518,108 +2496,31 @@ ${e.detail}`;
     for (const id of ids) setAgentArchived(id, true);
   };
 
-  // Squads
-  const createSquad = (input: Omit<Squad, 'id' | 'activeRunsCount' | 'completedRunsCount'>): Squad | null => {
-    if (!requireCapability('manage_squads')) return null;
-    const newSquad: Squad = {
-      ...input,
-      id: `sq-${Date.now()}`,
-      ownerId: identity?.login,
-      activeRunsCount: 0,
-      completedRunsCount: 0
-    };
-    setSquads(prev => [...prev, newSquad]);
-    // `POST /squads` and `apiService.createSquad` both already existed; nothing
-    // called them, so a squad assembled in the UI lived in one tab and vanished
-    // on reload.
-    persist(
-      () => apiService.createSquad(newSquad),
-      saved => setSquads(prev => prev.map(s => (s.id === newSquad.id ? saved : s))),
-      msg => {
-        setSquads(prev => prev.filter(s => s.id !== newSquad.id));
-        showToast('Squad not saved', msg, 'error');
-      }
-    );
-    return newSquad;
-  };
-
-  const updateSquad = (id: string, updates: Partial<Squad>) => {
-    if (!requireCapability('manage_squads')) return;
-    setSquads(prev => prev.map(s => (s.id === id ? { ...s, ...updates } : s)));
-    persist(
-      () => apiService.updateSquad(id, updates),
-      saved => setSquads(prev => prev.map(s => (s.id === id ? saved : s))),
-      msg => showToast('Squad not saved', msg, 'error')
-    );
-  };
-
-  const deleteSquad = (id: string) => {
-    if (!requireCapability('manage_squads')) return;
-    const removed = squads.find(s => s.id === id);
-    setSquads(prev => prev.filter(s => s.id !== id));
-    persist(
-      () => apiService.deleteSquad(id),
-      () => {},
-      msg => {
-        // Put it back rather than leave the roster lying about what exists.
-        if (removed) setSquads(prev => [...prev, removed]);
-        showToast('Squad not deleted', msg, 'error');
-      }
-    );
-  };
-
   /**
-   * Run a squad over an issue.
+   * Build a board issue with the Orchestrator.
    *
-   * This used to be theatre: it incremented activeRunsCount, posted an inbox
-   * notification saying "N agents coordinating", and set a 4.5 second timer
-   * that moved the run into completedRunsCount. No endpoint was called, no
-   * process was spawned, and no agent was told anything — the daemon had no
-   * concept of more than one agent per run.
-   *
-   * It now starts a real sequential squad run: one shared branch, members in
-   * order, each one handed a summary of what the members before it did. The
-   * issue is required because a squad works on something; there is no longer a
-   * way to "run a squad" against nothing.
+   * The build runs through project chat so its plan approval, recovery panel,
+   * and Live Build Room link work exactly as they do for a chat request. The
+   * issue id goes with the message, so the Orchestrator builds this issue
+   * instead of filing a second one.
    */
-  const triggerSquadRun = async (squadId: string, issueId: string, plan?: string[], missionGoal?: string) => {
-    if (!requireCapability('run_squads')) return;
-    const squad = squads.find(s => s.id === squadId);
-    if (!squad) return;
-
-    try {
-      const squadRun = await apiService.runSquad(squadId, { issueId, plan, mission: missionGoal });
-
-      setSquadRuns(prev => [squadRun, ...prev.filter(r => r.id !== squadRun.id)]);
-      setSquads(prev => prev.map(s => s.id === squadId ? { ...s, activeRunsCount: s.activeRunsCount + 1 } : s));
-
-      const issue = issues.find(i => i.id === issueId);
-      setInbox(prev => [{
-        id: `notif-${Date.now()}`,
-        type: 'agent_completed',
-        title: `${squad.name} started on ${issue?.identifier ?? 'an issue'}`,
-        message:
-          `${squadRun.memberAgentIds.length} member(s) will work in sequence on \`${squadRun.branchName}\`. ` +
-          `Mission: "${squadRun.mission}".`,
-        read: false,
-        audience: 'internal',
-        timestamp: new Date().toISOString(),
-        entityType: 'squad',
-        entityId: squad.id
-      }, ...prev]);
-
-      showToast('Squad run started', `${squad.name} is working on ${issue?.identifier ?? 'the issue'}.`, 'success');
-    } catch (err) {
-      /**
-       * Say why it did not start.
-       *
-       * The daemon refuses a squad it cannot honestly run — an unimplemented
-       * topology, no members, members that were archived — and that reason is
-       * worth more to the user than a generic failure.
-       */
-      const detail = err instanceof Error ? err.message : String(err);
-      showToast('Squad run could not start', detail, 'error');
+  const startIssueBuild = async (issueId: string): Promise<string | null> => {
+    if (!requireCapability('run_builds')) return null;
+    const issue = issues.find(item => item.id === issueId);
+    if (!issue?.projectId) {
+      showToast('Build not started', 'Choose a project for this issue before building it.', 'error');
+      return null;
     }
+    const threadId = createNewThread(`Build ${issue.identifier}`, issue.projectId);
+    if (!threadId) return null;
+    const details = issue.description?.trim() ? `
+
+${issue.description.trim().slice(0, 3_500)}` : '';
+    void sendChatMessage(`/build ${issue.identifier}: ${issue.title}${details}`, threadId, undefined, 'build', [], {
+      issueId: issue.id,
+      projectId: issue.projectId
+    });
+    return threadId;
   };
 
   // Runtimes
@@ -2992,7 +2893,7 @@ ${e.detail}`;
     );
   };
 
-  const sendChatMessage = async (content: string, threadIdOverride?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments: ChatAttachmentReference[] = []) => {
+  const sendChatMessage = async (content: string, threadIdOverride?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments: ChatAttachmentReference[] = [], options: ChatSendOptions = {}) => {
     if (!requireCapability('manage_chat')) return;
     let targetThreadId = threadIdOverride ?? activeThreadId;
     if (!targetThreadId) {
@@ -3113,8 +3014,10 @@ ${e.detail}`;
         senderName: currentUser.name,
         repository: repositories?.length === 1 ? repositories[0] : undefined,
         repositories,
-        projectId: chatThreads.find(thread => thread.id === targetThreadId)?.projectId,
+        // A thread created in the same tick is not in `chatThreads` yet.
+        projectId: options.projectId ?? chatThreads.find(thread => thread.id === targetThreadId)?.projectId,
         intent,
+        issueId: options.issueId,
         clientMessageId: userMsg.id,
         attachmentIds: attachments.map(attachment => attachment.id)
       });
@@ -3122,11 +3025,11 @@ ${e.detail}`;
       /**
        * One reply, or several.
        *
-       * Addressing a squad expands to its members and each one answers in
-       * turn, so the daemon returns a list. `agentMessage` is the first of
+       * Naming several agents makes each one answer in turn, so the daemon
+       * returns a list. `agentMessage` is the first of
        * them and is still sent for callers that expect exactly one; the
        * placeholder becomes that first reply and the rest are appended after
-       * it, in the order the members spoke.
+       * it, in the order the agents spoke.
        */
       const replies = (res.agentMessages?.length ? res.agentMessages : [res.agentMessage]).map(
         (reply: any, index: number): ChatMessage => ({
@@ -3645,13 +3548,6 @@ ${e.detail}`;
     return agents;
   }, [agents, role]);
 
-  const scopedSquads = useMemo(() => {
-    if (role === 'client') return [];
-    // Squads are a workspace catalogue. Ownership controls who may change a
-    // squad; it does not hide that squad from fellow developers.
-    return squads;
-  }, [squads, role]);
-
   const scopedDeployments = useMemo(() => {
     if (role === 'admin') return deployments;
     if (role === 'client') return [];
@@ -3757,11 +3653,8 @@ ${e.detail}`;
       deleteAgent,
       bulkUpdateAgents,
       bulkArchiveAgents,
-      squads: scopedSquads,
-      createSquad,
-      updateSquad,
-      deleteSquad,
       squadRuns,
+      startIssueBuild,
       identity,
       identityStatus,
       localMode,
@@ -3784,7 +3677,6 @@ ${e.detail}`;
           setIdentityStatus(prev => (prev === 'ready' ? prev : 'unreachable'));
         }
       },
-      triggerSquadRun,
       runtimes,
       isScanningRuntimes,
       scanLocalRuntimes,
@@ -3814,8 +3706,6 @@ ${e.detail}`;
       chatTypingByThread,
       activeChatAgentId,
       setActiveChatAgentId,
-      activeChatSquadId,
-      setActiveChatSquadId,
       sendChatMessage,
       clearChat,
       settings: scopedSettings,
@@ -3915,10 +3805,18 @@ export const useApp = () => {
       setSessionValue('activeThreadId', id);
     },
     createNewThread: createScopedThread,
-    sendChatMessage: async (content: string, _threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments?: ChatAttachmentReference[]) => {
+    sendChatMessage: async (content: string, _threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments?: ChatAttachmentReference[], options?: ChatSendOptions) => {
       let threadId = activeThreadId;
       if (!threadId) threadId = createScopedThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
-      if (threadId) await context.sendChatMessage(content, threadId, repositories, intent, attachments);
+      if (threadId) await context.sendChatMessage(content, threadId, repositories, intent, attachments, options);
+    },
+    startIssueBuild: async (issueId: string) => {
+      const threadId = await context.startIssueBuild(issueId);
+      if (threadId) {
+        setSessionValue('activeThreadId', threadId);
+        context.setTabView(tab.id, 'chat');
+      }
+      return threadId;
     },
     clearChat: () => context.clearChat(activeThreadId),
     chatMessages: activeThreadId
@@ -3926,9 +3824,7 @@ export const useApp = () => {
       : [],
     isAgentTyping: activeThreadId ? Boolean(context.chatTypingByThread[activeThreadId]) : false,
     activeChatAgentId: typeof sessionState.activeChatAgentId === 'string' ? sessionState.activeChatAgentId : null,
-    setActiveChatAgentId: (id: string | null) => setSessionValue('activeChatAgentId', id),
-    activeChatSquadId: typeof sessionState.activeChatSquadId === 'string' ? sessionState.activeChatSquadId : null,
-    setActiveChatSquadId: (id: string | null) => setSessionValue('activeChatSquadId', id)
+    setActiveChatAgentId: (id: string | null) => setSessionValue('activeChatAgentId', id)
   };
 };
 

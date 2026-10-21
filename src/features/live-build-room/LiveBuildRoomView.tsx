@@ -410,7 +410,7 @@ export const LiveBuildRoomView: React.FC = () => {
 
   useEffect(() => setShowAllArtifacts(false), [selectedBuildRunId]);
 
-  const eligibleRole = role !== 'client' && (can('view_squads') || can('run_squads') || can('run_agents'));
+  const eligibleRole = role !== 'client' && (can('run_builds') || can('run_agents'));
   const buildRepository = snapshot?.orchestration ? null : snapshot?.issue?.githubRepo ?? null;
   const buildBranch = snapshot?.orchestration ? null : snapshot?.activeRun?.branchName ?? snapshot?.issue?.branchName ?? null;
   const canOfferPreviewHosting = Boolean(
@@ -795,7 +795,7 @@ export const LiveBuildRoomView: React.FC = () => {
       showToast('Build stopped', 'The active agent has stopped. Work already on the build branch remains available for review.', 'success');
       await loadRoom(true);
     } catch (error: any) {
-      showToast('Could not stop build', error?.message ?? 'The active squad build could not be stopped.', 'error');
+      showToast('Could not stop build', error?.message ?? 'The active build could not be stopped.', 'error');
       await loadRoom(true);
     } finally {
       setStoppingRun(false);

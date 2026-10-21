@@ -7,7 +7,6 @@ import {
   AgentPersonaFile,
   Issue,
   IssueComment,
-  Squad,
   Skill,
   RuntimeEngine,
   PrototypeRun,
@@ -25,7 +24,6 @@ import {
   AnalyticsData,
   WorkspaceSummary,
   WorkspaceProjectAssignment,
-  WorkspaceSquadProjectAssignment,
   LiveBuildRoomSnapshot,
   LiveBuildRoomDiffPreview,
   LiveBuildRoomOrchestration,
@@ -304,6 +302,15 @@ function ticketApiError(res: Response, detail: string): ApiRequestError {
   } catch { /* retain the bounded response text */ }
   return new ApiRequestError(res.status, `API Error [${res.status}]: ${message || res.statusText}`,
     code, reconciliationRequired);
+}
+
+/** Latest Orchestrator build for one issue, as the board shows it. */
+export interface IssueBuildStatus {
+  issueId: string;
+  projectId: string;
+  runId: string;
+  status: string;
+  updatedAt: string;
 }
 
 export const apiService = {
@@ -615,26 +622,8 @@ export const apiService = {
   addIssueComment: (issueId: string, comment: Partial<IssueComment>) =>
     fetchJson<IssueComment>(`/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify(comment) }),
 
-  // Squads
-  getSquads: () => fetchJson<Squad[]>('/squads'),
-  createSquad: (squad: Partial<Squad>) =>
-    fetchJson<Squad>('/squads', { method: 'POST', body: JSON.stringify(squad) }),
-  updateSquad: (id: string, updates: Partial<Squad>) =>
-    fetchJson<Squad>(`/squads/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
-  deleteSquad: (id: string) =>
-    fetchJson<{ success: boolean }>(`/squads/${id}`, { method: 'DELETE' }),
-  getSquadProjectAssignments: (squadId: string) =>
-    fetchJson<WorkspaceSquadProjectAssignment[]>(`/squads/${encodeURIComponent(squadId)}/projects`),
-  assignSquadToProject: (squadId: string, projectId: string, relationship: 'owned' | 'assigned' = 'assigned') =>
-    fetchJson<WorkspaceSquadProjectAssignment>(
-      `/squads/${encodeURIComponent(squadId)}/projects/${encodeURIComponent(projectId)}`,
-      { method: 'PUT', body: JSON.stringify({ relationship }) }
-    ),
-  removeSquadFromProject: (squadId: string, projectId: string) =>
-    fetchJson<{ success: boolean }>(
-      `/squads/${encodeURIComponent(squadId)}/projects/${encodeURIComponent(projectId)}`,
-      { method: 'DELETE' }
-    ),
+  /** The latest Orchestrator build per issue, for board status chips. Desktop only. */
+  getIssueBuildStatuses: () => fetchJson<IssueBuildStatus[]>('/issues/build-status'),
   getLiveBuildRoom: async (projectId: string, runId?: string) => {
     const snapshot = await fetchJson<LiveBuildRoomSnapshot>(
       `/projects/${encodeURIComponent(projectId)}/live-build-room${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`,
@@ -761,14 +750,12 @@ export const apiService = {
   retryRun: (id: string) =>
     fetchJson<PrototypeRun>(`/runs/${id}/retry`, { method: 'POST' }),
 
-  // Squad runs
+  // Builds from before squads were removed: history and stop only.
   getSquadRuns: () => fetchJson<SquadRun[]>('/squad-runs'),
   getSquadRun: (id: string) =>
     fetchJson<SquadRun & { runs: PrototypeRun[] }>(`/squad-runs/${id}`),
   cancelSquadRun: (id: string) =>
     fetchJson<SquadRun>(`/squad-runs/${id}/cancel`, { method: 'POST' }),
-  runSquad: (squadId: string, payload: { issueId: string; plan?: string[]; mission?: string }) =>
-    fetchJson<SquadRun>(`/squads/${squadId}/run`, { method: 'POST', body: JSON.stringify(payload) }),
 
   // Chat
   getChatThreads: () => fetchJson<ChatThread[]>('/chat/threads'),
@@ -822,12 +809,12 @@ export const apiService = {
     fetchJson<{ status: 'stopping' | 'stopped' }>(`/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/stop`, { method: 'POST', body: JSON.stringify({}) }),
   steerChatTurn: (threadId: string, messageId: string, instruction: string) =>
     fetchJson<{ status: 'queued'; position: number }>(`/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/steer`, { method: 'POST', body: JSON.stringify({ instruction }) }),
-  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string; attachmentIds?: string[] }) =>
+  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string; attachmentIds?: string[]; issueId?: string }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;
       /**
-       * Every reply. More than one when a squad was addressed — each member
+       * Every reply. More than one when several agents were named — each
        * answers in turn. `agentMessage` is the first of these.
        */
       agentMessages?: ChatMessage[];
@@ -838,9 +825,6 @@ export const apiService = {
         repository?: string;
         issueId?: string;
         issueIdentifier?: string;
-        squadId?: string;
-        squadName?: string;
-        squadRunId?: string;
         branchName?: string;
         reason?: string;
       }>;
@@ -851,9 +835,6 @@ export const apiService = {
         repository?: string;
         issueId?: string;
         issueIdentifier?: string;
-        squadId?: string;
-        squadName?: string;
-        squadRunId?: string;
         branchName?: string;
         reason?: string;
       };
@@ -867,7 +848,6 @@ export const apiService = {
     projectId: string,
     threadId: string,
     payload: {
-      squadId: string;
       agentId: string;
       mode: AgentCallMode;
       target?: AgentCallTarget;

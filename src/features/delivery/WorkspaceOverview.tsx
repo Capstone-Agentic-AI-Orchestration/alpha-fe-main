@@ -14,7 +14,6 @@ import {
   RefreshCw,
   Rocket,
   Sparkles,
-  Users,
 } from 'lucide-react';
 
 import { useApp } from '@/app/AppContext';
@@ -202,7 +201,6 @@ export const WorkspaceOverview: React.FC = () => {
     role,
     serverStatus,
     setActiveTab,
-    squads,
     syncBoard,
     syncing,
     settings,
@@ -349,7 +347,7 @@ export const WorkspaceOverview: React.FC = () => {
             </div>
             <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2">
               <PulseStat icon={Bot} label="Agents" value={agents.filter(agent => !agent.isArchived).length} />
-              <PulseStat icon={Users} label="Squads" value={squads.length} />
+              <PulseStat icon={Bot} label="Building" value={issues.filter(issue => issue.status === 'agent_running').length} />
               <PulseStat icon={Activity} label="Runs · 24h" value={analytics.totalRuns24h} />
               <PulseStat icon={CheckCircle2} label="Success rate" value={`${analytics.successRate}%`} />
             </div>

@@ -8,7 +8,6 @@ export type NavigationTab =
   | 'issues'
   | 'projects'
   | 'agents'
-  | 'squads'
   | 'live_build_room'
   | 'analytics'
   | 'runtimes'
@@ -65,8 +64,8 @@ export interface Issue {
   createdBy?: string;
   /** The project repository this issue/build is executing against, when scoped. */
   githubRepo?: string;
+  /** Legacy single-agent owner; the board no longer sets or shows it. */
   assignedAgentId?: string;
-  assignedSquadId?: string;
   assignedHuman?: string;
   labels: string[];
   subtasks: Subtask[];
@@ -608,7 +607,6 @@ export interface Project {
   leadType?: 'member' | 'agent';
   leadName?: string;
   leadAgentId?: string;
-  leadSquadId?: string;
   resources?: ProjectResource[];
   /**
    * GitHub organization every repository for this project is created under.
@@ -1529,8 +1527,6 @@ export interface ChatThread {
   agentIds: string[];
   /** The responder selected for this conversation, when it is not automatic Alpha. */
   targetAgentId?: string;
-  /** The squad selected for this conversation, when several agents should answer. */
-  targetSquadId?: string;
   /**
    * Which project this conversation is about, when it is about one.
    *
@@ -1634,8 +1630,6 @@ export interface ProjectChatAgent {
   description?: string;
   avatar?: string;
   color?: string;
-  squadId: string;
-  squadName: string;
   availability: 'ready';
   supportedModes: AgentCallMode[];
 }
@@ -1655,13 +1649,8 @@ export interface ProjectChatSnapshot {
     };
     /** Per-repository checkout state, used to route a build to the right working copy. */
     repositories?: Array<{ repo: string; connected: boolean }>;
-    assignedSquadNames: string[];
   };
-  squads: Array<{
-    id: string;
-    name: string;
-    agents: ProjectChatAgent[];
-  }>;
+  /** Every visible, ready agent; the Orchestrator picks from the same set. */
   agents: ProjectChatAgent[];
 }
 
