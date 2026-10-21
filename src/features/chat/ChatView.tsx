@@ -55,6 +55,8 @@ import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { MessageMarkdown } from './MessageMarkdown';
 import { OrchestratorFlow, isOrchestratorCall } from './OrchestratorFlow';
 import { AgentActivityPanel } from './AgentActivityPanel';
+import { BuildAgentActivityPanel } from './BuildAgentActivityPanel';
+import { buildStatusLabel, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { inferRecoveryAction, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
 import { useTranscriptScroll } from './useTranscriptScroll';
@@ -462,6 +464,7 @@ export const ChatView: React.FC = () => {
   const [callInstruction, setCallInstruction] = useTabSessionState<string>('chatCallInstruction', '');
   const [showCallPanel, setShowCallPanel] = useState(false);
   const [inspectedCallId, setInspectedCallId] = useState<string | null>(null);
+  const [inspectedBuildAgentId, setInspectedBuildAgentId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
@@ -541,8 +544,20 @@ export const ChatView: React.FC = () => {
     .filter(run => run.projectId === activeThread?.projectId)
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   const activeProjectBuildRuns = projectSquadRuns.filter(run => run.status === 'running');
-  const activeProjectBuildRun = activeProjectBuildRuns[0];
   const latestProjectBuildRun = projectSquadRuns[0];
+  // The project's Orchestrator build, wherever it was started. It holds the repositories until it ends.
+  const { build: liveBuild, refresh: refreshLiveBuild } = useProjectLiveBuild(project?.id, !isClient && Boolean(project) && isActiveTab);
+  const inspectedBuildAgent = liveBuild?.agents.find(agent => agent.agentId === inspectedBuildAgentId) ?? null;
+  const buildIsOpen = Boolean(liveBuild) || activeProjectBuildRuns.length > 0;
+  const canStopBuild = !isClient && can('run_builds') && buildIsOpen && liveBuild?.status !== 'cancelling';
+  const selectCall = (callId: string | null) => {
+    setInspectedCallId(callId);
+    if (callId) setInspectedBuildAgentId(null);
+  };
+  const selectBuildAgent = (agentId: string | null) => {
+    setInspectedBuildAgentId(agentId);
+    if (agentId) setInspectedCallId(null);
+  };
 
   useEffect(() => {
     if (isClient || !activeThreadId || !isActiveTab) {
@@ -1084,8 +1099,10 @@ export const ChatView: React.FC = () => {
       showToast('Choose a codebase', 'Select at least one project codebase for the Orchestrator to build.', 'info');
       return;
     }
-    if (sendsBuild && activeProjectBuildRun) {
-      showToast('Build already running', 'Stop the current build or wait for it to finish before starting another one.', 'info');
+    if (sendsBuild && buildIsOpen) {
+      showToast('Build already open', liveBuild?.status === 'awaiting_plan_approval'
+        ? 'A build plan is waiting for your approval. Review it, or stop it before starting another build.'
+        : 'Stop the current build or wait for it to finish before starting another one.', 'info');
       return;
     }
     if (sendsBuild && latestProjectBuildRun?.status === 'awaiting_approval' && !window.confirm(
@@ -1121,21 +1138,28 @@ export const ChatView: React.FC = () => {
   };
 
   const stopProjectBuild = async () => {
-    if (!activeProjectBuildRuns.length || stoppingProjectRunId) return;
+    const orchestrationRunId = liveBuild && liveBuild.status !== 'cancelling' ? liveBuild.runId : null;
+    const total = activeProjectBuildRuns.length + (orchestrationRunId ? 1 : 0);
+    if (!total || stoppingProjectRunId || !project?.id) return;
+    if (!window.confirm(liveBuild?.status === 'awaiting_plan_approval'
+      ? 'Stop this build plan? No agents have started, and the plan will not run.'
+      : 'Stop the current build? Running agents stop at the next safe point. Work already saved on the build branch stays available.')) return;
     setStoppingProjectRunId('all');
     try {
-      const results = await Promise.allSettled(activeProjectBuildRuns.map(run => apiService.cancelSquadRun(run.id)));
+      const results = await Promise.allSettled([
+        ...(orchestrationRunId ? [apiService.cancelOrchestration(project.id, orchestrationRunId)] : []),
+        ...activeProjectBuildRuns.map(run => apiService.cancelSquadRun(run.id))
+      ]);
       const stoppedCount = results.filter(result => result.status === 'fulfilled').length;
-      if (stoppedCount === activeProjectBuildRuns.length) {
-        showToast(stoppedCount > 1 ? 'Builds stopped' : 'Build stopped', 'The active agents have stopped. Work already on each build branch remains available for review.', 'success');
+      if (stoppedCount === total) {
+        showToast(stoppedCount > 1 ? 'Builds stopped' : 'Build stopped', 'The agents are stopping. Work already on the build branch remains available for review.', 'success');
       } else {
-        const failedCount = activeProjectBuildRuns.length - stoppedCount;
-        showToast('Some builds could not be stopped', `${stoppedCount} stopped; ${failedCount} could not be stopped. Check the Live Build Room for current status.`, 'error');
+        const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+        showToast(stoppedCount ? 'Some builds could not be stopped' : 'Could not stop build', failure?.reason?.message ?? 'Check the Live Build Room for current status.', 'error');
       }
-    } catch (error: any) {
-      showToast('Could not stop build', error?.message ?? 'The active build could not be stopped.', 'error');
     } finally {
       setStoppingProjectRunId(null);
+      void refreshLiveBuild();
     }
   };
 
@@ -1396,8 +1420,10 @@ export const ChatView: React.FC = () => {
 
   let stopBuildLabel: string;
   if (stoppingProjectRunId) stopBuildLabel = 'Stopping…';
-  else if (activeProjectBuildRuns.length > 1) stopBuildLabel = `Stop ${activeProjectBuildRuns.length} builds`;
-  else stopBuildLabel = 'Stop build';
+  else if (activeProjectBuildRuns.length + (liveBuild ? 1 : 0) > 1) stopBuildLabel = `Stop ${activeProjectBuildRuns.length + (liveBuild ? 1 : 0)} builds`;
+  else stopBuildLabel = liveBuild?.status === 'awaiting_plan_approval' ? 'Stop plan' : 'Stop build';
+  // Builds that are waiting on a person get a notice above the composer; running ones show in the flow bar.
+  const buildNotice = liveBuild && ['awaiting_plan_approval', 'awaiting_approval', 'paused', 'blocked', 'recovery_required'].includes(liveBuild.status) ? liveBuild : null;
   const stopBuildIconClass = stoppingProjectRunId ? 'h-4 w-4 shrink-0 animate-pulse' : 'h-4 w-4 shrink-0 fill-current';
 
   return (
@@ -1449,7 +1475,7 @@ export const ChatView: React.FC = () => {
 
           {showCallPanel && !isClient && <section className="shrink-0 max-h-[45%] overflow-y-auto overscroll-contain mx-5 mt-4 rounded-2xl border border-white/10 bg-surface-100/80 p-4 lg:p-5 shadow-xl"><div className="flex items-start justify-between gap-4 mb-4"><div><div className="flex items-center gap-2"><Bot className="h-4 w-4 text-brand-300" /><h3 className="text-sm font-semibold text-white">Call an assigned agent</h3></div><p className="mt-1 text-[11px] text-gray-500">Use this for a focused question or review with one agent. For product changes, describe the work and the Orchestrator will choose the right specialists.</p></div><button type="button" onClick={() => setShowCallPanel(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.06]"><X className="h-4 w-4" /></button></div>{callPanelBody}</section>}
 
-          {!isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={setInspectedCallId} /></div>}
+          {!isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={liveBuild ? { runId: liveBuild.runId, label: buildStatusLabel(liveBuild), running: liveBuild.running, agents: liveBuild.agents } : null} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} /></div>}
           <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 40 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 space-y-5 [overflow-anchor:none]">{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className="w-full"><div className={`min-w-0 space-y-2 ${isUser ? 'flex flex-col items-end' : ''}`}><div className={`text-sm leading-relaxed ${isUser ? 'max-w-[80%] rounded-2xl bg-white/[0.07] px-4 py-2.5 text-gray-100' : 'text-gray-200'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 rounded-xl border border-violet-300/15 bg-violet-300/[0.04] p-3 text-xs text-gray-200"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-200" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-violet-200">Build update</div><p className="whitespace-pre-wrap break-words text-[11px] leading-5">{message.content}</p></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
   const needsLiveRoom = /live build room|product build is already/i.test(message.content);
   const buildNotStarted = /\*\*Build not started(?: for any repository)?\.\*\*/i.test(message.content);
@@ -1472,6 +1498,11 @@ export const ChatView: React.FC = () => {
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-4 lg:px-8 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-3xl space-y-2">
               {showLatest && <div className="flex justify-center"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-surface-raised px-4 py-2 text-xs font-medium text-brand-200 shadow-lg shadow-black/40 hover:bg-brand-500/15">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
+              {buildNotice && !isClient && <div role="status" className="flex items-center gap-3 rounded-2xl border border-amber-300/20 bg-surface-raised/95 px-4 py-2.5 text-[11px] text-amber-100 shadow-lg shadow-black/40">
+                <Activity className="h-3.5 w-3.5 shrink-0 text-amber-200" aria-hidden="true" />
+                <span className="min-w-0 flex-1"><span className="font-semibold">{buildStatusLabel(buildNotice)}</span><span className="text-amber-100/70"> · {buildNotice.repository}. {buildNotice.status === 'awaiting_plan_approval' ? 'It holds this codebase until you start or stop it.' : 'Open the build to continue.'}</span></span>
+                <button type="button" onClick={() => openLiveBuildRun(buildNotice.runId)} className="shrink-0 rounded-full border border-amber-200/30 px-3 py-1 font-medium text-amber-50 hover:bg-amber-300/10">{buildNotice.status === 'awaiting_plan_approval' ? 'Review plan' : 'Open build'}</button>
+              </div>}
               {forcedBuild && !isClient && <div className={`px-4 text-[10px] ${requiresRepositorySelection ? 'text-amber-200' : 'text-gray-500'}`}>{repositorySelectionMessage}</div>}
               {pendingFileViews.length > 0 && <div className="flex flex-wrap gap-2 px-2">{pendingFileViews.map(({ file, previewUrl }, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex max-w-full items-center gap-2 rounded-xl border border-white/10 bg-surface-100 px-2 py-1.5 text-[10px] text-gray-300 shadow-lg shadow-black/30">
                 {previewUrl ? <img src={previewUrl} alt={`Preview of ${file.name}`} className="h-8 w-8 rounded-md object-cover" /> : <FileText className="ml-1 h-4 w-4 shrink-0 text-violet-200" />}
@@ -1483,13 +1514,13 @@ export const ChatView: React.FC = () => {
                 <div ref={repositoryMenuRef} className="relative shrink-0">
                   <button type="button" aria-label="Open message tools" aria-haspopup="menu" aria-expanded={repositoryMenuOpen} onClick={() => setRepositoryMenuOpen(value => !value)} className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${repositoryMenuOpen ? 'bg-white/[0.10] text-white' : 'text-gray-400 hover:bg-white/[0.06] hover:text-white'}`}>
                     <Plus className={`h-5 w-5 transition-transform duration-200 ${repositoryMenuOpen ? 'rotate-45' : ''}`} />
-                    {activeProjectBuildRuns.length > 0 && <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-400" />}
+                    {buildIsOpen && <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-400" />}
                   </button>
                   {repositoryMenuOpen && <div role="menu" aria-label="Message tools" className="absolute bottom-full left-0 z-40 mb-3 w-[min(22rem,calc(100vw-2rem))] animate-slide-up overflow-hidden rounded-2xl border border-white/15 bg-[#17171f] p-1.5 shadow-2xl shadow-black/60">
                     {!isClient && project && <button type="button" role="menuitem" onClick={() => { setRepositoryMenuOpen(false); openLiveBuildRoom(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-gray-200 transition hover:bg-white/[0.06]"><Activity className="h-4 w-4 shrink-0 text-violet-300" /><span className="text-xs font-medium">Build details</span></button>}
                     <button type="button" role="menuitem" disabled={Boolean(activeTurnMessageId) || pendingFiles.length >= MAX_CHAT_FILES} onClick={() => { setRepositoryMenuOpen(false); fileInputRef.current?.click(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-gray-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"><Paperclip className="h-4 w-4 shrink-0 text-gray-400" /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">Attach files</span><span className="block text-[10px] text-gray-500">{activeTurnMessageId ? 'Finish this response before attaching files.' : 'Images, documents, or code'}</span></span></button>
                     {!isClient && <button type="button" role="menuitem" onClick={() => { setRepositoryMenuOpen(false); openCallPanel(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-gray-200 transition hover:bg-white/[0.06]"><Bot className="h-4 w-4 shrink-0 text-gray-400" /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">Call an agent</span><span className="block text-[10px] text-gray-500">Ask a project agent to review or work on something</span></span></button>}
-                    {activeProjectBuildRuns.length > 0 && can('run_builds') && <button type="button" role="menuitem" onClick={() => { setRepositoryMenuOpen(false); void stopProjectBuild(); }} disabled={Boolean(stoppingProjectRunId)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-rose-200 transition hover:bg-rose-500/10 disabled:opacity-50"><Square className={stopBuildIconClass} /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">{stopBuildLabel}</span><span className="block text-[10px] text-rose-200/60">Work already on the build branch stays available</span></span></button>}
+                    {canStopBuild && <button type="button" role="menuitem" onClick={() => { setRepositoryMenuOpen(false); void stopProjectBuild(); }} disabled={Boolean(stoppingProjectRunId)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-rose-200 transition hover:bg-rose-500/10 disabled:opacity-50"><Square className={stopBuildIconClass} /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">{stopBuildLabel}</span><span className="block text-[10px] text-rose-200/60">Work already on the build branch stays available</span></span></button>}
                     {!isClient && project && <div className="mt-1 border-t border-white/[0.08] pt-1.5">
                       {projectRepositories.length > 1 ? <>
                         <div className="flex items-center justify-between px-3 py-1.5">
@@ -1521,8 +1552,11 @@ export const ChatView: React.FC = () => {
                   <div className="border-t border-white/[0.08] px-2.5 py-2 text-[10px] text-gray-600">Use ↑ and ↓ to choose, Enter to add, or Esc to close.</div>
                 </div>}
                 <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : undefined} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : 'Ask Alpha anything or describe what to build. Type @ to call an agent…'} className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-white placeholder-gray-500 outline-none" />
-                {activeTurnMessageId && <button type="button" onClick={() => void stopChatTurn()} disabled={chatTurnActionBusy} className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-rose-400/25 bg-rose-500/[0.08] px-3 text-xs font-semibold text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"><Square className={`h-3 w-3 ${chatTurnActionBusy ? 'animate-pulse fill-current' : 'fill-current'}`} />{chatTurnActionBusy ? 'Stopping…' : 'Stop'}</button>}
-                <button type="submit" aria-label={activeTurnMessageId ? 'Queue direction for current agent' : forcedBuild ? 'Start Orchestrator build' : 'Send message'} disabled={(!input.trim() && (!pendingFiles.length || Boolean(activeTurnMessageId) || forcedBuild)) || Boolean(chatTurnActionBusy) || isAgentTyping && !activeTurnMessageId || !activeTurnMessageId && forcedBuild && (!can('run_agents') || activeProjectBuildRuns.length > 0 || requiresRepositorySelection)} title={activeTurnMessageId ? 'Queue this direction for the current response.' : forcedBuild && !can('run_agents') ? 'Your workspace role cannot start product builds.' : forcedBuild && activeProjectBuildRuns.length > 0 ? 'Stop the earlier build before starting another.' : forcedBuild && projectRepositories.length === 0 ? 'Connect a codebase before building.' : forcedBuild && requiresRepositorySelection ? 'Select at least one codebase to build.' : undefined} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 text-on-accent hover:bg-brand-400 disabled:opacity-30"><Send className="h-4 w-4" /></button>
+                <div className="flex shrink-0 items-center gap-1">
+                {activeTurnMessageId ? <button type="button" onClick={() => void stopChatTurn()} disabled={chatTurnActionBusy} title="Stop this response" className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-rose-400/25 bg-rose-500/[0.08] px-3 text-xs font-semibold text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"><Square className={`h-3 w-3 ${chatTurnActionBusy ? 'animate-pulse fill-current' : 'fill-current'}`} />{chatTurnActionBusy ? 'Stopping…' : 'Stop'}</button>
+                  : canStopBuild && <button type="button" onClick={() => void stopProjectBuild()} disabled={Boolean(stoppingProjectRunId)} title="Work already saved on the build branch stays available." className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-rose-400/25 bg-rose-500/[0.08] px-3 text-xs font-semibold text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"><Square className={`h-3 w-3 ${stoppingProjectRunId ? 'animate-pulse fill-current' : 'fill-current'}`} />{stopBuildLabel}</button>}
+                <button type="submit" aria-label={activeTurnMessageId ? 'Queue direction for current agent' : forcedBuild ? 'Start Orchestrator build' : 'Send message'} disabled={(!input.trim() && (!pendingFiles.length || Boolean(activeTurnMessageId) || forcedBuild)) || Boolean(chatTurnActionBusy) || isAgentTyping && !activeTurnMessageId || !activeTurnMessageId && forcedBuild && (!can('run_agents') || buildIsOpen || requiresRepositorySelection)} title={activeTurnMessageId ? 'Queue this direction for the current response.' : forcedBuild && !can('run_agents') ? 'Your workspace role cannot start product builds.' : forcedBuild && buildIsOpen ? 'Stop the earlier build before starting another.' : forcedBuild && projectRepositories.length === 0 ? 'Connect a codebase before building.' : forcedBuild && requiresRepositorySelection ? 'Select at least one codebase to build.' : undefined} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 text-on-accent hover:bg-brand-400 disabled:opacity-30"><Send className="h-4 w-4" /></button>
+                </div>
               </form>
               {(pendingFiles.length > 0 || Boolean(activeTurnMessageId)) && <div className="px-4 text-center text-[10px] text-gray-500">{pendingFiles.length ? `Files stay in this device’s private Alpha storage. ${forcedBuild ? 'Project builds store attachments but do not inspect them yet.' : 'Unsupported file types are marked as not analyzed.'}` : 'Directions are queued and picked up at the next safe point.'}</div>}
             </div>
@@ -1530,7 +1564,8 @@ export const ChatView: React.FC = () => {
 
         </> : <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"><MessageSquare className="h-12 w-12 text-gray-700" /><p className="text-sm text-gray-500">Pick a project conversation, or start a new one with +.</p></div>}
       </main>
-      {!isClient && inspectedCall && <AgentActivityPanel call={inspectedCall} agent={agentForCall(inspectedCall)} name={isOrchestratorCall(inspectedCall) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(inspectedCall) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} onClose={() => setInspectedCallId(null)} />}
+      {!isClient && inspectedBuildAgent && liveBuild && <BuildAgentActivityPanel agent={inspectedBuildAgent} repository={liveBuild.repository} onOpenRoom={() => openLiveBuildRun(liveBuild.runId)} onClose={() => setInspectedBuildAgentId(null)} />}
+      {!isClient && !inspectedBuildAgent && inspectedCall && <AgentActivityPanel call={inspectedCall} agent={agentForCall(inspectedCall)} name={isOrchestratorCall(inspectedCall) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(inspectedCall) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} onClose={() => setInspectedCallId(null)} />}
     </div>
   );
 };

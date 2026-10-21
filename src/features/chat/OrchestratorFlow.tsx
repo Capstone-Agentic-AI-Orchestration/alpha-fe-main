@@ -2,6 +2,15 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Bot, ChevronDown } from 'lucide-react';
 
 import { AgentCall, ProjectChatAgent } from '@/shared/types';
+import type { BuildAgentNode, BuildAgentState } from './useProjectLiveBuild';
+
+/** The project's open Orchestrator build, drawn beside the chat's own agents. */
+export interface FlowBuild {
+  runId: string;
+  label: string;
+  running: boolean;
+  agents: BuildAgentNode[];
+}
 
 interface OrchestratorFlowProps {
   calls: AgentCall[];
@@ -11,12 +20,18 @@ interface OrchestratorFlowProps {
   title: string;
   selectedCallId?: string | null;
   onSelectCall?: (callId: string | null) => void;
+  build?: FlowBuild | null;
+  selectedBuildAgentId?: string | null;
+  onSelectBuildAgent?: (agentId: string | null) => void;
 }
 
 interface WaveAgent {
   id: string;
   initial: string;
-  status: AgentCall['status'];
+  /** Orb colour as "r, g, b". */
+  tone: string;
+  /** Working right now: brighter glow and a comet along its line. */
+  active: boolean;
 }
 
 interface WaveState {
@@ -39,6 +54,7 @@ interface NodePosition {
 
 const LIVE_STATUSES: AgentCall['status'][] = ['queued', 'running', 'awaiting_confirmation'];
 const HUB_ID = 'orchestrator-hub';
+const BUILD_PREFIX = 'build:';
 const SUCCESS_RGB = '52, 211, 153';
 const ERROR_RGB = '244, 63, 94';
 const FLASH_HOLD_MS = 1200;
@@ -114,6 +130,30 @@ function toneFor(status: AgentCall['status']): string {
   if (status === 'completed') return '110, 231, 183';
   if (status === 'awaiting_confirmation') return '252, 211, 77';
   return '167, 139, 250';
+}
+
+function buildTone(state: BuildAgentState): string {
+  if (state === 'failed') return '251, 113, 133';
+  if (state === 'completed') return '110, 231, 183';
+  if (state === 'review') return '252, 211, 77';
+  if (state === 'waiting') return '125, 211, 252';
+  return '167, 139, 250';
+}
+
+const BUILD_STATE_LABEL: Record<BuildAgentState, string> = {
+  running: 'Working',
+  waiting: 'Waiting',
+  review: 'Being checked',
+  completed: 'Done',
+  failed: 'Needs attention'
+};
+
+function buildStateTone(state: BuildAgentState): string {
+  if (state === 'running') return 'text-violet-100 bg-violet-400/15';
+  if (state === 'waiting') return 'text-sky-200 bg-sky-400/10';
+  if (state === 'review') return 'text-amber-200 bg-amber-400/10';
+  if (state === 'completed') return 'text-emerald-200 bg-emerald-400/10';
+  return 'text-rose-200 bg-rose-400/10';
 }
 
 /** A soft glass sphere: light from the upper left, colour toward the rim. */
@@ -215,8 +255,7 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
   // Connections first, so orbs sit on top of their lines.
   agents.forEach((agent, index) => {
     const node = positions[index];
-    const tone = toneFor(agent.status);
-    const active = agent.status === 'running' || agent.status === 'queued';
+    const { tone, active } = agent;
     const midX = (hub.x + node.x) / 2;
     const midY = Math.min(hub.y, node.y) - 26;
     const line = ctx.createLinearGradient(hub.x, hub.y, node.x, node.y);
@@ -245,8 +284,7 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
 
   agents.forEach((agent, index) => {
     const node = positions[index];
-    const tone = toneFor(agent.status);
-    const active = agent.status === 'running' || agent.status === 'queued';
+    const { tone, active } = agent;
     const hovered = agent.id === hoveredId;
     drawGlow(ctx, node.x, node.y, node.r * (active || hovered ? 2.6 : 2), tone, active || hovered ? 0.4 : 0.22);
     drawOrb(ctx, node.x, node.y, node.r, tone, 'rgba(245, 243, 255, 0.9)');
@@ -293,7 +331,7 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
   return positions;
 }
 
-export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, isWorking, title, selectedCallId = null, onSelectCall }) => {
+export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, isWorking, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent }) => {
   const [expanded, setExpanded] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -308,26 +346,56 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   const agentCalls = useMemo(() => turnCalls.filter(call => !isOrchestratorCall(call)), [turnCalls]);
   const activeAgentCall = agentCalls.find(call => ['queued', 'running'].includes(call.status));
   const orchestratorLive = Boolean(orchestratorCall && ['queued', 'running'].includes(orchestratorCall.status));
-  const working = isWorking || orchestratorLive || Boolean(activeAgentCall);
+  const working = isWorking || orchestratorLive || Boolean(activeAgentCall) || Boolean(build?.running);
+  const buildAgents = useMemo(() => build?.agents ?? [], [build]);
   const hubId = orchestratorCall?.id ?? HUB_ID;
   const agentById = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
   const agentName = (call: AgentCall) => agentById.get(call.agentId)?.name ?? call.agentId;
   const hoveredCall = agentCalls.find(call => call.id === hoveredId);
+  const hoveredBuildAgent = hoveredId?.startsWith(BUILD_PREFIX) ? buildAgents.find(agent => BUILD_PREFIX + agent.agentId === hoveredId) : undefined;
   const failedCount = agentCalls.filter(call => call.status === 'failed').length + (orchestratorCall?.status === 'failed' ? 1 : 0);
-  const waveAgents = useMemo<WaveAgent[]>(() => agentCalls.map(call => ({
-    id: call.id,
-    initial: (agentById.get(call.agentId)?.name ?? call.agentId).slice(0, 1).toUpperCase(),
-    status: call.status
-  })), [agentById, agentCalls]);
+  // Build agents come first so they keep the places closest to the Orchestrator.
+  const waveAgents = useMemo<WaveAgent[]>(() => [
+    ...buildAgents.map(agent => ({
+      id: BUILD_PREFIX + agent.agentId,
+      initial: agent.name.slice(0, 1).toUpperCase(),
+      tone: buildTone(agent.state),
+      active: agent.state === 'running'
+    })),
+    ...agentCalls.map(call => ({
+      id: call.id,
+      initial: (agentById.get(call.agentId)?.name ?? call.agentId).slice(0, 1).toUpperCase(),
+      tone: toneFor(call.status),
+      active: call.status === 'running' || call.status === 'queued'
+    }))
+  ].slice(0, AGENT_OFFSETS.length), [agentById, agentCalls, buildAgents]);
+  const selectedId = selectedCallId ?? (selectedBuildAgentId ? BUILD_PREFIX + selectedBuildAgentId : null);
   const select = (id: string) => {
     if (id === HUB_ID) return;
+    if (id.startsWith(BUILD_PREFIX)) {
+      const agentId = id.slice(BUILD_PREFIX.length);
+      onSelectBuildAgent?.(selectedBuildAgentId === agentId ? null : agentId);
+      return;
+    }
     onSelectCall?.(selectedCallId === id ? null : id);
   };
-  const statusText = activeAgentCall ? agentName(activeAgentCall) + ' is working' : working ? 'Working' : orchestratorCall?.status === 'failed' ? 'Needs attention' : 'Ready';
+  let statusText: string;
+  if (activeAgentCall) statusText = agentName(activeAgentCall) + ' is working';
+  else if (build) statusText = build.label;
+  else if (working) statusText = 'Working';
+  else statusText = orchestratorCall?.status === 'failed' ? 'Needs attention' : 'Ready';
+
+  // Open the flow once when a build starts working, so its agents are visible straight away.
+  const autoOpenedRunRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!build?.running || autoOpenedRunRef.current === build.runId) return;
+    autoOpenedRunRef.current = build.runId;
+    setExpanded(true);
+  }, [build?.runId, build?.running]);
 
   // The animation loop reads the latest state from a ref so it never restarts.
-  const stateRef = useRef({ expanded, working, agents: waveAgents, hoveredId, selectedId: selectedCallId, hubId });
-  stateRef.current = { expanded, working, agents: waveAgents, hoveredId, selectedId: selectedCallId, hubId };
+  const stateRef = useRef({ expanded, working, agents: waveAgents, hoveredId, selectedId, hubId });
+  stateRef.current = { expanded, working, agents: waveAgents, hoveredId, selectedId, hubId };
 
   // A finished run tints the wave green, a failed one red; both fade back to purple.
   useEffect(() => {
@@ -394,7 +462,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     if (canvas && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       positionsRef.current = drawWave(canvas, { ...stateRef.current, flashRgb: null, flashAmount: 0 }, 0);
     }
-  }, [expanded, working, waveAgents, hoveredId, selectedCallId, hubId]);
+  }, [expanded, working, waveAgents, hoveredId, selectedId, hubId]);
 
   useEffect(() => {
     if (!expanded) setHoveredId(null);
@@ -420,11 +488,14 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         onMouseMove={event => { const id = nodeAt(event); if (id !== hoveredId) setHoveredId(id); }}
         onMouseLeave={() => setHoveredId(null)}
         onClick={event => { const id = nodeAt(event); if (id) select(id); }}
-        className={'absolute inset-0 h-full w-full ' + (hoveredCall || (hubHovered && hubClickable) ? 'cursor-pointer' : '')}
+        className={'absolute inset-0 h-full w-full ' + (hoveredCall || hoveredBuildAgent || (hubHovered && hubClickable) ? 'cursor-pointer' : '')}
       />
       <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-72 bg-gradient-to-r from-shell via-shell/70 to-transparent" />
-      {expanded && (hoveredCall || hubHovered) && <div ref={tooltipRef} role="tooltip" style={{ visibility: 'hidden' }} className="pointer-events-none absolute left-0 top-0 z-20 whitespace-nowrap rounded-xl border border-violet-300/20 bg-surface-raised/95 px-3 py-2 shadow-xl shadow-black/40 backdrop-blur">
-        {hoveredCall ? <>
+      {expanded && (hoveredCall || hoveredBuildAgent || hubHovered) && <div ref={tooltipRef} role="tooltip" style={{ visibility: 'hidden' }} className="pointer-events-none absolute left-0 top-0 z-20 whitespace-nowrap rounded-xl border border-violet-300/20 bg-surface-raised/95 px-3 py-2 shadow-xl shadow-black/40 backdrop-blur">
+        {hoveredBuildAgent ? <>
+          <span className="block text-xs font-semibold text-white">{hoveredBuildAgent.name}</span>
+          <span className="block max-w-72 truncate text-[10px] text-gray-400">{[BUILD_STATE_LABEL[hoveredBuildAgent.state], hoveredBuildAgent.currentTaskTitle, 'Click to see live activity'].filter(Boolean).join(' · ')}</span>
+        </> : hoveredCall ? <>
           <span className="block text-xs font-semibold text-white">{agentName(hoveredCall)}</span>
           <span className="block text-[10px] text-gray-400">{[agentById.get(hoveredCall.agentId)?.role, callStatus(hoveredCall.status), 'Click to see activity'].filter(Boolean).join(' · ')}</span>
         </> : <>
@@ -450,8 +521,29 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
             <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}</span>
           </span>
         </button>
-        {expanded && agentCalls.length > 0 && <div id={panelId} className="hidden max-w-[50%] items-center gap-1.5 overflow-x-auto md:flex">
-          {agentCalls.map(call => <button
+        {(buildAgents.length > 0 || (expanded && agentCalls.length > 0)) && <div id={panelId} className="hidden max-w-[55%] items-center gap-1.5 overflow-x-auto md:flex">
+          {buildAgents.map(agent => {
+            const id = BUILD_PREFIX + agent.agentId;
+            const selected = selectedBuildAgentId === agent.agentId;
+            return <button
+              key={id}
+              type="button"
+              onClick={() => select(id)}
+              onMouseEnter={() => setHoveredId(id)}
+              onMouseLeave={() => setHoveredId(null)}
+              aria-pressed={selected}
+              title={agent.currentTaskTitle ? agent.name + ': ' + agent.currentTaskTitle : agent.name}
+              className={'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-left backdrop-blur transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60 ' + (selected || hoveredId === id ? 'border-violet-300/40 bg-violet-400/10' : 'border-white/10 bg-black/40 hover:border-violet-300/25')}
+            >
+              <span className="relative grid h-3 w-3 place-items-center" aria-hidden="true">
+                {agent.state === 'running' && <span className="absolute inset-0 rounded-full bg-violet-400/60 motion-safe:animate-ping" />}
+                <Bot className="relative h-3 w-3 text-violet-300" />
+              </span>
+              <span className="max-w-32 truncate text-[11px] font-medium text-gray-100">{agent.name}</span>
+              <span className={'rounded-full px-1.5 py-0.5 text-[9px] ' + buildStateTone(agent.state)}>{BUILD_STATE_LABEL[agent.state]}</span>
+            </button>;
+          })}
+          {expanded && agentCalls.map(call => <button
             key={call.id}
             type="button"
             onClick={() => select(call.id)}
@@ -465,7 +557,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
             <span className={'rounded-full px-1.5 py-0.5 text-[9px] ' + callStatusTone(call.status)}>{callStatus(call.status)}</span>
           </button>)}
         </div>}
-        {(failedCount > 0 || (!expanded && agentCalls.length > 0)) && <span className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (failedCount > 0 ? 'border-rose-300/30 text-rose-200' : 'border-violet-300/20 text-violet-200')}>{failedCount > 0 ? 'Needs attention' : agentCalls.length + (agentCalls.length === 1 ? ' agent' : ' agents')}</span>}
+        {(failedCount > 0 || (!expanded && agentCalls.length > 0 && buildAgents.length === 0)) && <span className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (failedCount > 0 ? 'border-rose-300/30 text-rose-200' : 'border-violet-300/20 text-violet-200')}>{failedCount > 0 ? 'Needs attention' : agentCalls.length + (agentCalls.length === 1 ? ' agent' : ' agents')}</span>}
         <button type="button" onClick={() => setExpanded(value => !value)} aria-label={expanded ? 'Collapse orchestrator' : 'Expand orchestrator'} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">
           <ChevronDown className={'h-4 w-4 transition-transform ' + (expanded ? 'rotate-180' : '')} aria-hidden="true" />
         </button>
