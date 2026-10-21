@@ -75,6 +75,11 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
       (action !== 'review_saved_changes' || Boolean(onOpenRoom)));
   const phaseLabel = recovery.phase === 'repairing' ? 'Recovery in progress'
     : recovery.phase === 'ready_to_continue' ? 'Ready to continue' : 'Waiting for your direction';
+  const recoveryUsage = recovery.category === 'project_code' && recovery.taskTitle
+    ? `${Math.min(2, Math.max(0, recovery.attemptsUsed - 1))} of 2 automatic repairs used${recovery.attemptsUsed > 3 ? ` · ${recovery.attemptsUsed - 3} guided retry used` : ''}`
+    : recovery.category === 'report' && recovery.taskTitle
+      ? `${recovery.reportCorrectionsUsed ?? 0} of ${recovery.reportCorrectionLimit ?? 3} report corrections used`
+      : undefined;
   const retryAction = async (action: LiveBuildRecoveryAction) => {
     if (busyAction || !recovery) return;
     if (action === 'provide_guidance' && !guidance.trim()) {
@@ -125,7 +130,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
         </div>
         <p className="mt-1.5 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-300">{recovery.summary}</p>
         {active && availabilityNote && <p className="mt-1 text-[10px] leading-4 text-slate-500">{availabilityNote}</p>}
-        {active && <p className="mt-1 text-[9px] text-slate-500">Recovery {recovery.episodeNumber}{recovery.taskTitle ? ` · ${recovery.attemptsUsed} of ${recovery.repairBudget} work attempts used` : ''}</p>}
+        {active && <p className="mt-1 text-[9px] text-slate-500">Recovery {recovery.episodeNumber}{recoveryUsage ? ` · ${recoveryUsage}` : ''}</p>}
         {explanation && <div role="status" className="mt-3 rounded-lg border border-violet-300/15 bg-violet-300/[0.045] p-3 text-[11px] leading-5 text-violet-50">{explanation}</div>}
         {message && <p role="status" className="mt-2 text-[10px] leading-4 text-emerald-200">{message}</p>}
         {error && <p role="alert" className="mt-2 text-[10px] leading-4 text-rose-200">{error}</p>}

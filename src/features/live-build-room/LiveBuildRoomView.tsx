@@ -43,6 +43,7 @@ import { normalizeLogsResponse } from '@/features/projects/repository/deployment
 import type { DeploymentLogsResponse } from '@/features/projects/repository/deploymentLogs/logTypes';
 import { OrchestrationWorkflowPanel } from './OrchestrationWorkflowPanel';
 import { PlanningRecoveryPanel } from './PlanningRecoveryPanel';
+import { AgentHandoffGraph } from './AgentHandoffGraph';
 import { OrchestrationRecoveryPanel } from '@/features/chat/OrchestrationRecoveryPanel';
 
 type DetailTab = 'activity' | 'handoff' | 'files' | 'tools';
@@ -174,71 +175,6 @@ function phaseClasses(phase: LiveBuildRoomPhase): string {
   if (phase.status === 'failed') return 'border-rose-400/30 bg-rose-400/[0.035]';
   return 'border-white/[0.08] bg-white/[0.015]';
 }
-
-const AgentCard: React.FC<{
-  card: LiveBuildRoomAgentCard;
-  selected: boolean;
-  onSelect: (trigger: HTMLButtonElement) => void;
-}> = ({ card, selected, onSelect }) => {
-  const meta = statusMeta[card.status];
-  const latestActivity = card.activity.at(-1);
-  const runLabel = card.runId
-    ? `Latest run${card.orchestrationAttemptNumber ? ` · attempt ${card.orchestrationAttemptNumber}` : ''}`
-    : 'Not started';
-  return (
-    <button
-      type="button"
-      onClick={event => onSelect(event.currentTarget)}
-      aria-pressed={selected}
-      className={`group min-w-0 rounded-xl border p-3.5 text-left transition-colors focus:outline-none focus:ring-2 focus:ring-violet-400/60 ${
-        selected
-          ? 'border-violet-400/70 bg-violet-400/[0.075] shadow-[0_0_34px_rgba(139,92,246,0.14)]'
-          : `${meta.border} bg-surface-100/70 hover:border-white/20 hover:bg-white/[0.035]`
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-2.5">
-          <div
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 text-sm font-semibold text-white"
-            style={{ backgroundColor: `${card.color || '#8b5cf6'}22` }}
-          >
-            {card.avatar ? (
-              <img src={card.avatar} alt="" className="h-7 w-7 rounded-md object-cover" />
-            ) : (
-              <Code2 className="h-4 w-4 text-violet-200" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-white">{card.agentName}</div>
-            <div className="truncate text-[11px] text-slate-400">{card.agentRole}{card.source === 'agent_run' && card.orchestrationTaskId ? ` · ${runLabel}` : ` · ${card.sourceLabel}`}</div>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-          {card.isStale && <span title="No execution activity has been recorded for five minutes" className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/[0.06] px-2 py-1 text-[10px] font-semibold text-amber-200"><Clock3 className="h-3 w-3" />No signal</span>}
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${card.status === 'running' && !card.isStale ? 'animate-pulse' : ''}`} />
-            {meta.label}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-3 border-t border-white/[0.07] pt-3">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-500">Assigned work</span>
-          {(card.orchestrationTaskCount ?? 0) > 0 && <span className="shrink-0 text-[10px] tabular-nums text-slate-500">{card.orchestrationTaskCount} {card.orchestrationTaskCount === 1 ? 'task' : 'tasks'}</span>}
-        </div>
-        <div className="mt-1 line-clamp-2 min-h-9 break-words text-xs font-medium leading-[18px] text-slate-200">{card.currentTask}</div>
-      </div>
-
-      <div className="mt-3 flex min-w-0 items-center justify-between gap-2 text-[10px] text-slate-500">
-        <span className="flex min-w-0 items-center gap-1.5">
-          {latestActivity ? <><span className={`h-1.5 w-1.5 shrink-0 rounded-full ${activityTone(latestActivity)}`} /><span className="truncate">{latestActivity.message}</span></> : <span>{card.runId ? 'No recent activity' : 'Waiting for this agent to start'}</span>}
-        </span>
-        <span className="shrink-0 tabular-nums">{card.updatedAt ? timeAgo(card.updatedAt) : ''}</span>
-      </div>
-    </button>
-  );
-};
 
 const PhaseTimeline: React.FC<{ phases: LiveBuildRoomPhase[] }> = ({ phases }) => (
   <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
@@ -1189,10 +1125,10 @@ export const LiveBuildRoomView: React.FC = () => {
 
         {snapshot.orchestration && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-surface-100/50 p-1.5" role="tablist" aria-label="Build room views">
           <button id={`${roomPanelId}-plan-tab`} type="button" role="tab" tabIndex={buildRoomPanel === 'plan' ? 0 : -1} aria-controls={`${roomPanelId}-plan-panel`} aria-selected={buildRoomPanel === 'plan'} onClick={() => setBuildRoomPanel('plan')} onKeyDown={handleRoomPanelKeyDown} className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${buildRoomPanel === 'plan' ? 'bg-violet-400/[0.12] text-violet-100 shadow-sm' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`}>
-            Build plan<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'plan' ? 'bg-violet-300/10 text-violet-100/80' : 'bg-white/[0.04] text-slate-500'}`}>{snapshot.orchestration.tasks.length}</span>
+            Orchestrator build<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'plan' ? 'bg-violet-300/10 text-violet-100/80' : 'bg-white/[0.04] text-slate-500'}`}>{snapshot.orchestration.tasks.length}</span>
           </button>
           <button id={`${roomPanelId}-live-tab`} type="button" role="tab" tabIndex={buildRoomPanel === 'live' ? 0 : -1} aria-controls={`${roomPanelId}-live-panel`} aria-selected={buildRoomPanel === 'live'} onClick={() => setBuildRoomPanel('live')} onKeyDown={handleRoomPanelKeyDown} className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${buildRoomPanel === 'live' ? 'bg-violet-400/[0.12] text-violet-100 shadow-sm' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`}>
-            Live work<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'live' ? 'bg-violet-300/10 text-violet-100/80' : 'bg-white/[0.04] text-slate-500'}`}>{agentCardsForBuild.length}</span>
+            Live agent workflows &amp; actions<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'live' ? 'bg-violet-300/10 text-violet-100/80' : 'bg-white/[0.04] text-slate-500'}`}>{agentCardsForBuild.length}</span>
           </button>
           <span className="ml-auto hidden pr-2 text-[10px] text-slate-500 sm:block">Switch views without losing this build</span>
         </div>}
@@ -1354,11 +1290,11 @@ export const LiveBuildRoomView: React.FC = () => {
           <div className="min-w-0 space-y-4">
             <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/45 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-sm font-semibold text-white">{snapshot.orchestration ? 'Build team' : 'Project agents'}</div>
-                <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{snapshot.orchestration ? `${agentCardsForBuild.length} assigned ${agentCardsForBuild.length === 1 ? 'specialist' : 'specialists'} · ${snapshot.orchestration.tasks.length} tasks. One card per specialist; earlier attempts stay in the build plan.` : `Orchestrator builds and direct agent work for ${activeProject?.name || snapshot.project.name}.`}</div>
+                <div className="text-sm font-semibold text-white">{snapshot.orchestration ? 'Agent handoffs' : 'Project agent activity'}</div>
+                <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{snapshot.orchestration ? `${agentCardsForBuild.length} assigned ${agentCardsForBuild.length === 1 ? 'specialist' : 'specialists'} · ${snapshot.orchestration.tasks.length} tasks. Arrows follow planned dependencies; review corrections loop back to their owner.` : `Agent activity and recorded handoffs for ${activeProject?.name || snapshot.project.name}.`}</div>
               </div>
               {agentCardsForBuild.length > 0 && <label className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 sm:w-72">
-                <span className="sr-only">Search project agents</span>
+                <span className="sr-only">Search live agents</span>
                 <Code2 className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                 <input value={agentSearch} onChange={event => setAgentSearch(event.target.value)} placeholder="Search agents or current work" className="min-w-0 flex-1 bg-transparent text-xs text-white placeholder:text-slate-500 outline-none" />
               </label>}
@@ -1372,14 +1308,15 @@ export const LiveBuildRoomView: React.FC = () => {
                 </button>;
               })}
             </div>}
-            {agentCardsForBuild.length > 0 ? <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 300px), 1fr))' }}>
-              {visibleAgentCards.map(card => <AgentCard key={card.executionId} card={card} selected={selectedRosterCard?.executionId === card.executionId} onSelect={trigger => { inspectorTriggerRef.current = trigger; setSelectedExecutionId(card.executionId); setInspectorRunOverrideId(null); setDetailTab('activity'); setDetailOpen(true); }} />)}
-              {!visibleAgentCards.length && <div className="col-span-full rounded-2xl border border-dashed border-white/10 px-5 py-8 text-center">
-                <div className="text-sm font-medium text-slate-300">No agents match these filters</div>
-                <p className="mt-1 text-xs text-slate-500">Clear the search or choose another status to see project activity.</p>
-                <button type="button" onClick={() => { setAgentSearch(''); setAgentStatusFilter('all'); }} className="mt-3 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]">Clear filters</button>
-              </div>}
-            </div> : <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
+            {agentCardsForBuild.length > 0 ? <AgentHandoffGraph
+              cards={visibleAgentCards}
+              allAgentCount={agentCardsForBuild.length}
+              workflow={snapshot.orchestration}
+              handoffs={snapshot.handoffs}
+              selectedExecutionId={selectedRosterCard?.executionId}
+              onSelect={(card, trigger) => { inspectorTriggerRef.current = trigger; setSelectedExecutionId(card.executionId); setInspectorRunOverrideId(null); setDetailTab('activity'); setDetailOpen(true); }}
+              onClearFilters={() => { setAgentSearch(''); setAgentStatusFilter('all'); }}
+            /> : <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] text-slate-400"><Users className="h-5 w-5" /></div>
               <div className="mt-3 text-sm font-medium text-slate-200">{snapshot.orchestration ? 'Waiting for the specialist to start' : 'No visible agent activity'}</div>
               <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">{snapshot.orchestration ? 'The assignment is recorded. Agent updates, commands, and changed files will appear here as the specialist works.' : 'Orchestrator build activity and direct agent work appear here. Start a product change from Project chat to see the plan, specialist assignments, and progress.'}</p>
@@ -1389,16 +1326,16 @@ export const LiveBuildRoomView: React.FC = () => {
               <div className="flex items-center justify-between gap-3">
                 <div><div className="text-sm font-semibold text-white">Build artifacts</div><div className="mt-1 text-xs text-slate-500">Recorded outputs for this build. Choose an item’s producer to inspect its files.</div></div>
               </div>
-              <div className="mt-3 space-y-2">
+              <div className="mt-3 max-h-[min(65vh,640px)] min-w-0 space-y-2 overflow-y-auto pr-1">
                 {snapshot.artifacts.length ? visibleArtifacts.map(artifact => {
                   const producingRun = snapshot.agentCards.find(card => card.runId === artifact.runId);
                   const producer = snapshot.orchestration && producingRun
                     ? agentCardsForBuild.find(card => card.agentId === producingRun.agentId) ?? producingRun
                     : producingRun;
-                  return <div key={artifact.id} className="flex min-w-0 flex-wrap items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
+                  return <div key={artifact.id} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-200">{artifact.kind === 'pull_request' ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}</div>
-                    <div className="min-w-0 flex-1"><div className="break-words text-xs font-medium text-slate-200">{artifact.name}</div><div className="mt-0.5 break-all text-[10px] leading-4 text-slate-500">{artifact.detail}</div></div>
-                    {producer ? <button type="button" aria-label={snapshot.orchestration ? `Inspect the run that produced ${artifact.name}` : `View ${producer.agentName}`} onClick={event => { inspectorTriggerRef.current = event.currentTarget; setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(producer.executionId); setInspectorRunOverrideId(snapshot.orchestration ? producingRun?.runId ?? null : null); setDetailTab('files'); setDetailOpen(true); }} className="inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-[10px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200">{snapshot.orchestration ? 'Inspect producing run' : `View ${producer.agentName}`}<ExternalLink className="h-3 w-3" /></button>
+                    <div className="min-w-0"><div className="break-words text-xs font-medium text-slate-200 [overflow-wrap:anywhere]">{artifact.name}</div><div className="mt-0.5 break-all text-[10px] leading-4 text-slate-500">{artifact.detail}</div></div>
+                    {producer ? <button type="button" aria-label={snapshot.orchestration ? `Inspect the run that produced ${artifact.name}` : `View ${producer.agentName}`} onClick={event => { inspectorTriggerRef.current = event.currentTarget; setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(producer.executionId); setInspectorRunOverrideId(snapshot.orchestration ? producingRun?.runId ?? null : null); setDetailTab('files'); setDetailOpen(true); }} className="col-span-2 inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-white/10 px-2.5 text-[10px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 sm:col-span-1 sm:justify-self-end">{snapshot.orchestration ? 'Inspect producing run' : `View ${producer.agentName}`}<ExternalLink className="h-3 w-3 shrink-0" /></button>
                       : <span className="text-[10px] text-slate-600">Producer unavailable in this view</span>}
                   </div>;
                 }) : <div className="rounded-xl border border-dashed border-white/10 px-3 py-5 text-center text-xs text-slate-500">Artifacts will appear as agents produce outputs.</div>}

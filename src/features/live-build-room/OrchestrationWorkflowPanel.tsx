@@ -226,7 +226,7 @@ function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration })
   </section>;
 }
 
-const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string }> = ({ projectId, runId, branchName }) => {
+const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string; savedCheckpoint?: boolean }> = ({ projectId, runId, branchName, savedCheckpoint = false }) => {
   const [open, setOpen] = useState(false);
   const [preview, setPreview] = useState<LiveBuildRoomDiffPreview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -259,29 +259,29 @@ const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: stri
 
   return <section className="overflow-hidden rounded-xl border border-violet-300/15 bg-violet-300/[0.025]">
     <button type="button" onClick={toggle} aria-expanded={open} className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-white/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-200">
-      <span className="flex min-w-0 items-center gap-2.5"><Code2 className="h-4 w-4 shrink-0 text-violet-200" /><span className="min-w-0"><span className="block text-xs font-semibold text-white">Review code changes</span><span className="mt-0.5 block text-[10px] leading-4 text-slate-400">Inspect the exact commit that passed final validation before approving.</span></span></span>
-      <span className="shrink-0 text-[10px] font-medium text-violet-100">{open ? 'Hide changes' : 'Open review'}</span>
+      <span className="flex min-w-0 items-center gap-2.5"><Code2 className="h-4 w-4 shrink-0 text-violet-200" /><span className="min-w-0"><span className="block text-xs font-semibold text-white">{savedCheckpoint ? 'Review saved changes' : 'Review code changes'}</span><span className="mt-0.5 block text-[10px] leading-4 text-slate-400">{savedCheckpoint ? 'Inspect the latest committed agent checkpoint and changed files while Alpha keeps the failure details in chat.' : 'Inspect the exact commit that passed final validation before approving.'}</span></span></span>
+      <span className="shrink-0 text-[10px] font-medium text-violet-100">{open ? 'Hide changes' : savedCheckpoint ? 'Review checkpoint' : 'Open review'}</span>
     </button>
     {open && <div className="border-t border-white/[0.06] px-4 py-3">
-      {loading && <div role="status" className="flex items-center gap-2 py-3 text-xs text-slate-400"><LoaderCircle className="h-3.5 w-3.5 animate-spin" />Loading the validated patch…</div>}
+      {loading && <div role="status" className="flex items-center gap-2 py-3 text-xs text-slate-400"><LoaderCircle className="h-3.5 w-3.5 animate-spin" />Loading {savedCheckpoint ? 'the saved checkpoint' : 'the validated patch'}…</div>}
       {error && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-rose-300/15 bg-rose-300/[0.04] p-3" role="alert"><p className="text-xs leading-5 text-rose-100/85">{error}</p><button type="button" onClick={() => void loadPreview()} disabled={loading} className="min-h-8 rounded-md border border-rose-200/20 px-2.5 text-[10px] font-semibold text-rose-100 hover:bg-rose-200/[0.07] disabled:opacity-50">Retry</button></div>}
       {preview?.repositories && preview.repositories.length > 1 ? preview.repositories.map(repository => <div key={repository.repository} className="border-t border-white/[0.06] py-4 first:border-0 first:pt-0 last:pb-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500"><span className="font-semibold text-slate-200">{repository.repository}</span><span>Branch <code className="ml-1 text-slate-300">{repository.branchName}</code></span><span>Checked change <code className="ml-1 text-slate-300">{repository.resultCommit.slice(0, 7)}</code></span></div>
-        <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`Changed files in ${repository.repository}`}>
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500"><span className="font-semibold text-slate-200">{repository.repository}</span><span>Branch <code className="ml-1 text-slate-300">{repository.branchName}</code></span><span>{repository.reviewType === 'saved_checkpoint' ? 'Saved checkpoint' : 'Checked change'} <code className="ml-1 text-slate-300">{repository.resultCommit.slice(0, 7)}</code></span></div>
+        <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`${repository.reviewType === 'saved_checkpoint' ? 'Saved checkpoint files' : 'Changed files'} in ${repository.repository}`}>
           {repository.changedPaths.map(file => <code key={file} className="max-w-full truncate rounded-md border border-white/[0.07] bg-black/[0.12] px-2 py-1 text-[10px] text-slate-300">{file}</code>)}
           {repository.pathsTruncated && <span className="text-[10px] text-slate-500">More changed files are omitted.</span>}
         </div>
-        {repository.diff ? <div className="mt-3 max-h-[30rem] overflow-auto rounded-lg border border-white/[0.07] bg-[#0b0d14] p-3 font-mono text-[10px] leading-[1.65]" aria-label={`Validated code changes in ${repository.repository}`}>
+        {repository.diff ? <div className="mt-3 max-h-[30rem] overflow-auto rounded-lg border border-white/[0.07] bg-[#0b0d14] p-3 font-mono text-[10px] leading-[1.65]" aria-label={`${repository.reviewType === 'saved_checkpoint' ? 'Saved checkpoint' : 'Validated'} code changes in ${repository.repository}`}>
           {repository.diff.split('\n').map((line, index) => <div key={index} className={`min-w-max whitespace-pre ${line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git') ? 'text-slate-400' : line.startsWith('+') ? 'bg-emerald-300/[0.055] text-emerald-200' : line.startsWith('-') ? 'bg-rose-300/[0.055] text-rose-200' : line.startsWith('@@') ? 'text-sky-200' : 'text-slate-300'}`}>{line || ' '}</div>)}
         </div> : <p className="mt-3 rounded-lg border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-xs text-slate-400">No file changes in this codebase.</p>}
         {repository.truncated && <p role="status" className="mt-2 text-[10px] leading-4 text-amber-100/75">This preview was shortened. Inspect the full branch diff before approving.</p>}
       </div>) : preview && <>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500"><span>Branch <code className="ml-1 text-slate-300">{preview.branchName || branchName}</code></span><span>Checked change <code className="ml-1 text-slate-300">{preview.resultCommit.slice(0, 7)}</code></span></div>
-        <div className="mt-3 flex flex-wrap gap-1.5" aria-label="Changed files in the validated commit">
+        <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-slate-500"><span>Branch <code className="ml-1 text-slate-300">{preview.branchName || branchName}</code></span><span>{preview.reviewType === 'saved_checkpoint' ? 'Saved checkpoint' : 'Checked change'} <code className="ml-1 text-slate-300">{preview.resultCommit.slice(0, 7)}</code></span></div>
+        <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`Changed files in the ${preview.reviewType === 'saved_checkpoint' ? 'saved checkpoint' : 'validated commit'}`}>
           {preview.changedPaths.map(file => <code key={file} className="max-w-full truncate rounded-md border border-white/[0.07] bg-black/[0.12] px-2 py-1 text-[10px] text-slate-300">{file}</code>)}
           {preview.pathsTruncated && <span className="text-[10px] text-slate-500">More changed files are omitted.</span>}
         </div>
-        {preview.diff ? <div className="mt-3 max-h-[30rem] overflow-auto rounded-lg border border-white/[0.07] bg-[#0b0d14] p-3 font-mono text-[10px] leading-[1.65]" aria-label="Validated code diff">
+        {preview.diff ? <div className="mt-3 max-h-[30rem] overflow-auto rounded-lg border border-white/[0.07] bg-[#0b0d14] p-3 font-mono text-[10px] leading-[1.65]" aria-label={`${preview.reviewType === 'saved_checkpoint' ? 'Saved checkpoint' : 'Validated'} code diff`}>
           {preview.diff.split('\n').map((line, index) => <div key={index} className={`min-w-max whitespace-pre ${line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git') ? 'text-slate-400' : line.startsWith('+') ? 'bg-emerald-300/[0.055] text-emerald-200' : line.startsWith('-') ? 'bg-rose-300/[0.055] text-rose-200' : line.startsWith('@@') ? 'text-sky-200' : 'text-slate-300'}`}>{line || ' '}</div>)}
         </div> : <p className="mt-3 rounded-lg border border-white/[0.06] bg-black/[0.08] px-3 py-3 text-xs text-slate-400">The validated commit contains no file changes.</p>}
         {preview.truncated && <p role="status" className="mt-2 text-[10px] leading-4 text-amber-100/75">The preview was shortened to keep this page responsive. Inspect the full branch diff in the local repository before approving.</p>}
@@ -371,7 +371,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
       {workflow.run.status === 'awaiting_approval' && <div className="mt-4 flex items-start gap-2.5 rounded-lg border border-emerald-300/15 bg-emerald-300/[0.045] px-3.5 py-3 text-xs leading-5 text-emerald-100/85"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" /><div><span className="font-semibold text-emerald-100">Ready for your final review.</span> The Orchestrator completed its checks; a person still decides whether this work is approved.</div></div>}
       {workflow.run.status === 'awaiting_approval' && <div className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.035] px-3.5 py-3 text-xs leading-5 text-amber-100/80">Approving sends each checked branch to GitHub and opens {workflow.run.repositories && workflow.run.repositories.length > 1 ? 'a pull request in each selected codebase' : 'a pull request'} for review. It does not merge or deploy the change.</div>}
       {workflow.run.status === 'publishing' && <div role="status" className="mt-3 rounded-lg border border-amber-300/15 bg-amber-300/[0.035] px-3.5 py-3 text-xs leading-5 text-amber-100/80">Your approval is recorded. Alpha is checking that each branch and pull request reached GitHub. Retry continues unfinished steps without opening duplicates.</div>}
-      {['awaiting_approval', 'publishing', 'completed'].includes(workflow.run.status) && <div className="mt-4"><ReviewDiff projectId={projectId} runId={workflow.run.id} branchName={workflow.run.branchName} /></div>}
+      {['awaiting_approval', 'publishing', 'completed', 'blocked', 'failed', 'recovery_required', 'paused', 'cancelled'].includes(workflow.run.status) && <div className="mt-4"><ReviewDiff projectId={projectId} runId={workflow.run.id} branchName={workflow.run.branchName} savedCheckpoint={!['awaiting_approval', 'publishing', 'completed'].includes(workflow.run.status)} /></div>}
     </div>
 
     <div className="grid gap-5 px-4 py-5 sm:px-6 sm:py-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(270px,0.8fr)]">

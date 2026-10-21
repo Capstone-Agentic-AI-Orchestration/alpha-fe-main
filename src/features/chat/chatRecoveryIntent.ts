@@ -1,4 +1,4 @@
-import type { LiveBuildRecoveryAction } from '@/shared/types';
+import type { LiveBuildRecoveryAction, LiveBuildRecoveryProjection } from '@/shared/types';
 
 export function isExplicitBuildRetry(message: string): boolean {
   const text = message.trim().toLowerCase();
@@ -19,10 +19,43 @@ export function inferRecoveryAction(message: string): LiveBuildRecoveryAction | 
   if (/\b(keep|leave)\b.*\b(paused|stopped)\b|\bdon't resume\b/.test(text)) return 'keep_paused';
   if (/\b(cancel|stop)\b.*\b(build|run)\b/.test(text)) return 'cancel_build';
   if (/\b(retry|correct|fix)\b.*\b(report|response|format|field)\b/.test(text)) return 'retry_report_format';
-  if (/\b(recheck|reconnect|reconnected|resume|continue from checkpoint)\b/.test(text)) return 'recheck_prerequisite';
   if (isExplicitBuildRetry(text)) return 'repair_and_continue';
   if (/\b(fix|repair|correct)\b.*\b(continue|build|failure|error|test|check|this|it)\b|\bfix and continue\b|\brepair and continue\b/.test(text)) {
     return 'repair_and_continue';
   }
+  if (/\b(recheck|reconnect|reconnected|resume)\b|\bcontinue\b.{0,48}\bcheckpoint\b/.test(text)) return 'recheck_prerequisite';
   return undefined;
+}
+
+export function resolveRecoveryAction(
+  requestedAction: LiveBuildRecoveryAction,
+  recovery: Pick<LiveBuildRecoveryProjection, 'category' | 'availableActions'>
+): LiveBuildRecoveryAction {
+  let action = requestedAction;
+  if (action === 'repair_and_continue') {
+    if (recovery.category === 'report') action = 'retry_report_format';
+    else if (['provider', 'configuration', 'review_input', 'final_validation', 'budget'].includes(recovery.category)) {
+      action = 'recheck_prerequisite';
+    } else if (['workspace', 'alpha'].includes(recovery.category)) {
+      action = recovery.availableActions.includes('resume_checkpoint') ? 'resume_checkpoint'
+        : recovery.availableActions.includes('recheck_prerequisite') ? 'recheck_prerequisite' : action;
+    }
+  } else if (action === 'recheck_prerequisite') {
+    if (recovery.category === 'project_code') action = 'repair_and_continue';
+    else if (recovery.category === 'report') action = 'retry_report_format';
+    else if (['workspace', 'alpha'].includes(recovery.category)) {
+      action = recovery.availableActions.includes('resume_checkpoint') ? 'resume_checkpoint'
+        : recovery.availableActions.includes('recheck_prerequisite') ? 'recheck_prerequisite' : action;
+    }
+  }
+
+  if (action === 'repair_and_continue' && !recovery.availableActions.includes(action) &&
+      recovery.availableActions.includes('provide_guidance')) {
+    return 'provide_guidance';
+  }
+  if (action === 'recheck_prerequisite' && !recovery.availableActions.includes(action) &&
+      recovery.availableActions.includes('resume_checkpoint')) {
+    return 'resume_checkpoint';
+  }
+  return action;
 }
