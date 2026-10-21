@@ -1,7 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { inferRecoveryAction, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
+import { inferRecoveryAction, isContinueRequest, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
 
 describe('chat recovery intent', () => {
+  it('treats everyday ways of saying carry on as a request to continue the build', () => {
+    for (const message of [
+      'continue', 'Continue.', 'continue with the plan', 'can you continue with the plan', 'Could you continue?',
+      'fix and continue', 'go ahead', 'keep going please', 'proceed', 'resume the build', 'start the planned work',
+      "ok let's go", 'yes, carry on'
+    ]) expect(isContinueRequest(message), message).toBe(true);
+  });
+
+  it('ignores questions, negations and requests to continue an answer', () => {
+    for (const message of [
+      'should we continue?', 'what happens if we continue', 'why did it stop, can it continue?', "don't continue yet",
+      'wait, do not proceed', 'hold off before you start the plan', 'continue explaining the login flow',
+      'continue to describe the architecture', 'add a dark mode toggle'
+    ]) expect(isContinueRequest(message), message).toBe(false);
+  });
+
   it('routes a direct build rerun request to build recovery', () => {
     expect(isExplicitBuildRetry('Can you rerun the build?')).toBe(true);
     expect(inferRecoveryAction('Can you rerun the build?')).toBe('repair_and_continue');

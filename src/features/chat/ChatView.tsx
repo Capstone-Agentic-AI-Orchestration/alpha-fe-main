@@ -59,7 +59,7 @@ import { BuildAgentActivityPanel } from './BuildAgentActivityPanel';
 import { ChatBuildDecisionCard } from './ChatBuildDecisionCard';
 import { buildStatusLabel, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
-import { inferRecoveryAction, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
+import { inferRecoveryAction, isContinueRequest, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
 import { useTranscriptScroll } from './useTranscriptScroll';
 
 const MODE_META: Record<AgentCallMode, {
@@ -572,6 +572,17 @@ export const ChatView: React.FC = () => {
       void refreshLiveBuild();
     }
   };
+  const resumePausedBuild = async () => {
+    if (!liveBuild || !project?.id) return;
+    try {
+      await apiService.resumeOrchestration(project.id, liveBuild.runId);
+      showToast('Build resumed', 'The Orchestrator picked the build up where it paused.', 'success');
+    } catch (error: any) {
+      showToast('Build not resumed', error?.message ?? 'Open the build to see what it is waiting for.', 'error');
+    } finally {
+      void refreshLiveBuild();
+    }
+  };
   const approveBuild = async () => {
     if (!liveBuild || !project?.id || buildDecisionBusy || !can('approve_runs')) return;
     setBuildDecisionBusy('approve');
@@ -1023,9 +1034,11 @@ export const ChatView: React.FC = () => {
   const dispatchRecoveryFollowUp = async (message: string, requestedAction: LiveBuildRecoveryAction): Promise<boolean> => {
     if (!activeThread?.id || !activeThread.projectId) return false;
     const explicitBuildRetry = isExplicitBuildRetry(message);
-    const runIds = [...new Set(currentMessages
-      .filter(item => item.messageType === 'build' && item.orchestrationRunId)
-      .map(item => item.orchestrationRunId!))];
+    // This conversation's builds, plus the project's open build when another conversation started it.
+    const runIds = [...new Set([
+      ...currentMessages.filter(item => item.messageType === 'build' && item.orchestrationRunId).map(item => item.orchestrationRunId!),
+      ...(liveBuild ? [liveBuild.runId] : [])
+    ])];
     if (!runIds.length) {
       const requestedRetry = explicitBuildRetry || requestedAction === 'retry_report_format';
       if (requestedRetry) showToast('No build to retry', 'Start a build with Build with Orchestrator, or open the build you want to continue.', 'info');
@@ -1124,7 +1137,24 @@ export const ChatView: React.FC = () => {
       ? 'Please inspect the attached files and summarize the relevant information.'
       : '');
     if (!message) return;
-    const requestedRecoveryAction = inferRecoveryAction(message);
+    // "Continue", "go ahead", "keep going": carry the open build to its next step.
+    const continueRequest = !sendsBuild && Boolean(liveBuild) && isContinueRequest(message);
+    if (continueRequest && liveBuild?.status === 'awaiting_plan_approval') {
+      if (!liveBuild.canControl || !can('run_builds')) {
+        showToast('Build access needed', 'Your workspace role cannot start builds.', 'info');
+        return;
+      }
+      setInput('');
+      await startPlannedBuild();
+      return;
+    }
+    if (continueRequest && liveBuild?.status === 'paused') {
+      setInput('');
+      await resumePausedBuild();
+      return;
+    }
+    const requestedRecoveryAction = inferRecoveryAction(message)
+      ?? (continueRequest && liveBuild && ['blocked', 'recovery_required'].includes(liveBuild.status) ? 'repair_and_continue' : undefined);
     if (requestedRecoveryAction && await dispatchRecoveryFollowUp(message, requestedRecoveryAction)) return;
     if (sendsBuild && !can('run_agents')) {
       showToast('Build access needed', 'Your workspace role cannot start Orchestrator builds.', 'info');
@@ -1547,7 +1577,7 @@ export const ChatView: React.FC = () => {
               {buildDecision && project && <ChatBuildDecisionCard key={buildDecision.runId + ':' + buildDecision.status} projectId={project.id} build={buildDecision} canStart={buildDecision.canControl && can('run_builds')} canApprove={can('approve_runs')} busy={buildDecisionBusy} error={buildDecisionError} onStart={() => void startPlannedBuild()} onApprove={() => void approveBuild()} onOpenRoom={() => openLiveBuildRun(buildDecision.runId)} />}
               {buildNotice && !isClient && <div role="status" className="flex items-center gap-3 rounded-2xl border border-amber-300/20 bg-surface-raised/95 px-4 py-2.5 text-[11px] text-amber-100 shadow-lg shadow-black/40">
                 <Activity className="h-3.5 w-3.5 shrink-0 text-amber-200" aria-hidden="true" />
-                <span className="min-w-0 flex-1"><span className="font-semibold">{buildStatusLabel(buildNotice)}</span><span className="text-amber-100/70"> · {buildNotice.repository}. {buildNotice.status === 'awaiting_plan_approval' ? 'It holds this codebase until you start or stop it.' : 'Open the build to continue.'}</span></span>
+                <span className="min-w-0 flex-1"><span className="font-semibold">{buildStatusLabel(buildNotice)}</span><span className="text-amber-100/70"> · {buildNotice.repository}. {buildNotice.status === 'paused' ? 'Reply “continue” to resume it, or open the build.' : 'Reply “continue” to fix and continue, or open the build.'}</span></span>
                 <button type="button" onClick={() => openLiveBuildRun(buildNotice.runId)} className="shrink-0 rounded-full border border-amber-200/30 px-3 py-1 font-medium text-amber-50 hover:bg-amber-300/10">{buildNotice.status === 'awaiting_plan_approval' ? 'Review plan' : 'Open build'}</button>
               </div>}
               {forcedBuild && !isClient && <div className={`px-4 text-[10px] ${requiresRepositorySelection ? 'text-amber-200' : 'text-gray-500'}`}>{repositorySelectionMessage}</div>}
