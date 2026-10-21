@@ -36,7 +36,7 @@ import { NavigationTab } from '@/shared/types';
 import { Plus, X } from 'lucide-react';
 // Whether this is the packaged desktop app rather than a browser tab, read from
 // the preload bridge. Shared with the settings panel rather than defined twice.
-import { isDesktop } from '@/shared/desktop';
+import { desktop, isDesktop } from '@/shared/desktop';
 
 /**
  * The new-tab picker's list, derived rather than declared.
@@ -204,6 +204,8 @@ export const App: React.FC = () => {
   const newTabButtonRef = useRef<HTMLButtonElement>(null);
   const newTabMenuContentRef = useRef<HTMLDivElement>(null);
   const workspaceFrameRef = useRef<HTMLDivElement>(null);
+  // The desktop app on Windows draws its own title bar area; see main.js.
+  const nativeWindowControls = isDesktop && desktop?.platform === 'win32';
   const [newTabMenuPosition, setNewTabMenuPosition] = useState<{
     top: number;
     left: number;
@@ -406,14 +408,18 @@ export const App: React.FC = () => {
 
       {/* Main Workspace Frame */}
       <div ref={workspaceFrameRef} className="relative flex-1 min-w-0 bg-shell overflow-hidden">
+        {/* On Windows the native title bar is hidden and its minimize, maximize
+            and close buttons are drawn over the top-right corner. The strip
+            above the toolbar and the toolbar's empty space move the window. */}
+        {nativeWindowControls && <div aria-hidden="true" className="app-drag-region absolute inset-x-0 top-0 z-20 h-3 sm:h-4" />}
         {/* Floating workspace toolbar */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4">
-          <div className="pointer-events-auto mx-auto flex w-full max-w-[1800px] items-center gap-1.5 rounded-2xl border border-white/[0.10] bg-surface-200/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/[0.04]">
+        <div className={`pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4 ${nativeWindowControls ? 'pr-[9.5rem] sm:pr-[9.5rem]' : ''}`}>
+          <div className={`pointer-events-auto mx-auto flex w-full max-w-[1800px] items-center gap-1.5 rounded-2xl border border-white/[0.10] bg-surface-200/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/[0.04] ${nativeWindowControls ? 'app-drag-region' : ''}`}>
             {/* Scrollable Open Tabs List */}
             <div
               role="tablist"
               aria-label="Open workspace tabs"
-              className="workspace-tab-strip flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar"
+              className="workspace-tab-strip app-no-drag flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar"
             >
             {tabs.map((tab) => {
               const isActive = activeTabId === tab.id;
@@ -467,7 +473,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* New Tab Button & Dropdown Picker */}
-            <div className="relative flex-shrink-0" ref={newTabMenuRef}>
+            <div className="app-no-drag relative flex-shrink-0" ref={newTabMenuRef}>
               <button
                 ref={newTabButtonRef}
                 onClick={() => setNewTabMenuOpen(prev => !prev)}

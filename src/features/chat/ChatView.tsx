@@ -14,9 +14,12 @@ import {
   FileCode2,
   FileText,
   FolderGit2,
+  FolderOpen,
   GitBranch,
   Loader2,
   MessageSquare,
+  MoreHorizontal,
+  PanelLeftClose,
   PencilLine,
   Paperclip,
   Image as ImageIcon,
@@ -33,6 +36,7 @@ import {
 } from 'lucide-react';
 
 import { useApp, useTabSessionState } from '@/app/AppContext';
+import { Modal } from '@/shared/components/Modal';
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import {
@@ -44,12 +48,13 @@ import {
   ProjectChatAgent,
   ProjectChatSnapshot,
   LiveBuildRoomSnapshot,
-  ChatIntent,
   ChatSyncStatus,
   LiveBuildRecoveryAction
 } from '@/shared/types';
-import { ThreadProjectPicker } from '@/features/chat/ThreadProjectPicker';
+import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { MessageMarkdown } from './MessageMarkdown';
+import { OrchestratorFlow, isOrchestratorCall } from './OrchestratorFlow';
+import { AgentActivityPanel } from './AgentActivityPanel';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { inferRecoveryAction, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
 import { useTranscriptScroll } from './useTranscriptScroll';
@@ -199,12 +204,17 @@ function OrchestratorBuildActivityRow({
   projectId,
   runId,
   threadId,
-  onOpenRoom
+  onOpenRoom,
+  onWithdraw,
+  withdrawing = false
 }: {
   projectId: string;
   runId: string;
   threadId: string;
   onOpenRoom: () => void;
+  /** Turn an unstarted plan back into a question for Alpha to answer. */
+  onWithdraw?: () => void;
+  withdrawing?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [autoExpanded, setAutoExpanded] = useState(false);
@@ -339,6 +349,10 @@ function OrchestratorBuildActivityRow({
       {activity[0] && <><span className="text-gray-600">·</span><span className="min-w-0 truncate">{activity[0].toolName ? `${activity[0].toolName}: ` : ''}{activity[0].message}</span></>}
       {!activity.length && <span>{currentTask ? `${currentTask.ownerName} is assigned and activity will appear here.` : 'Open to see task assignments and live work.'}</span>}
     </div>}
+    {onWithdraw && (status === 'planning' || status === 'awaiting_plan_approval') && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/[0.06] px-3 py-2 text-[10px] text-gray-400">
+      <span>No code has changed yet. Review the plan, or tell Alpha this was only a question.</span>
+      <button type="button" onClick={onWithdraw} disabled={withdrawing} className="rounded-md border border-white/10 px-2 py-1 font-medium text-gray-200 hover:bg-white/[0.06] disabled:opacity-50">{withdrawing ? 'Answering…' : 'This was just a question'}</button>
+    </div>}
     {activeRecovery && orchestration && snapshot && <div className="border-t border-white/[0.07] p-2.5">
       <OrchestrationRecoveryPanel
         projectId={projectId}
@@ -421,7 +435,6 @@ export const ChatView: React.FC = () => {
     setActiveThreadId,
     createNewThread,
     deleteThread,
-    clearChat,
     sendChatMessage,
     refreshChatThread,
     isAgentTyping,
@@ -448,6 +461,7 @@ export const ChatView: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [callInstruction, setCallInstruction] = useTabSessionState<string>('chatCallInstruction', '');
   const [showCallPanel, setShowCallPanel] = useState(false);
+  const [inspectedCallId, setInspectedCallId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
@@ -456,7 +470,27 @@ export const ChatView: React.FC = () => {
   const [selectedSquadId, setSelectedSquadId] = useTabSessionState<string>('chatSelectedSquadId', '');
   const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string>('chatSelectedAgentId', '');
   const [selectedBuildRepositories, setSelectedBuildRepositories] = useTabSessionState<string[]>('chatBuildRepositories', []);
-  const [chatIntent, setChatIntent] = useTabSessionState<ChatIntent>('chatIntent', 'auto');
+  const [routingMessageId, setRoutingMessageId] = useState<string | null>(null);
+  // The list stays docked; a collapsed rail expands only on click.
+  const [threadListCollapsed, setThreadListCollapsed] = useTabSessionState<boolean>('chatThreadListCollapsed', false);
+  const [expandedProjectIds, setExpandedProjectIds] = useTabSessionState<string[]>('chatExpandedProjectIds', []);
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [threadPendingDelete, setThreadPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [openThreadMenuId, setOpenThreadMenuId] = useState<string | null>(null);
+  const threadMenuRef = useRef<HTMLDivElement>(null);
+  const [openProjectMenuId, setOpenProjectMenuId] = useState<string | null>(null);
+  const [showAllProjects, setShowAllProjects] = useState(false);
+  const [showMoreThreads, setShowMoreThreads] = useState<Record<string, boolean>>({});
+  // The composer floats over the transcript; the transcript keeps room for it.
+  const composerRef = useRef<HTMLDivElement>(null);
+  const [composerHeight, setComposerHeight] = useState(96);
+  useEffect(() => {
+    const element = composerRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(([entry]) => setComposerHeight(Math.ceil(entry.contentRect.height)));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [activeThreadId]);
   const [mode, setMode] = useTabSessionState<AgentCallMode>('chatCallMode', 'ask');
   const [targetType, setTargetType] = useTabSessionState<AgentCallTarget['type']>('chatTargetType', 'issue');
   const [targetId, setTargetId] = useTabSessionState<string>('chatTargetId', '');
@@ -472,6 +506,28 @@ export const ChatView: React.FC = () => {
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const [mentionQuery, setMentionQuery] = useState<ChatMentionQuery | null>(null);
   const [activeMentionIndex, setActiveMentionIndex] = useState(0);
+
+  useEffect(() => {
+    if (!openThreadMenuId && !openProjectMenuId) return undefined;
+    const onPointerDown = (event: PointerEvent) => {
+      if (event.target instanceof Node && !threadMenuRef.current?.contains(event.target)) {
+        setOpenThreadMenuId(null);
+        setOpenProjectMenuId(null);
+      }
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setOpenThreadMenuId(null);
+        setOpenProjectMenuId(null);
+      }
+    };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [openThreadMenuId, openProjectMenuId]);
 
 
   const activeThread = useMemo(
@@ -520,6 +576,7 @@ export const ChatView: React.FC = () => {
     ? `All ${validBuildRepositories.length} codebases`
     : validBuildRepositories.length > 1 ? `${validBuildRepositories.length} codebases selected`
       : validBuildRepositories[0];
+  const forcedBuild = /^\/build(?:\s|$)/i.test(input.trim());
   const requiresRepositorySelection = projectRepositories.length === 0 || validBuildRepositories.length === 0;
   const repositorySelectionMessage = projectRepositories.length === 0
     ? 'Connect a repository before building.'
@@ -562,18 +619,20 @@ export const ChatView: React.FC = () => {
     [calls]
   );
   const highlightedCall = callList[0];
+  const inspectedCall = inspectedCallId ? calls[inspectedCallId] : undefined;
+  useEffect(() => setInspectedCallId(null), [activeThread?.id]);
   const activeCall = callList.find(call => ['queued', 'running', 'awaiting_confirmation'].includes(call.status));
   const activeChatTurnCall = callList.find(call => call.origin === 'chat_turn' && ['queued', 'running'].includes(call.status));
   const latestUserMessage = [...currentMessages].reverse().find(message => message.senderType === 'user');
   const activeTurnMessageId = activeChatTurnCall?.messageId
-    ?? (isAgentTyping && chatIntent !== 'build' ? latestUserMessage?.id : undefined);
+    ?? (isAgentTyping && !/^\/build(?:\s|$)/i.test(latestUserMessage?.content.trim() ?? '') ? latestUserMessage?.id : undefined);
   const mentionSuggestions = useMemo(() => {
-    if (!mentionQuery || isClient || activeTurnMessageId || chatIntent === 'build') return [];
+    if (!mentionQuery || isClient || activeTurnMessageId) return [];
     const query = mentionQuery.query.trim().toLowerCase();
     return (snapshot?.agents ?? [])
       .filter(agent => !query || `${agent.name} ${agent.role}`.toLowerCase().includes(query))
       .slice(0, 8);
-  }, [activeTurnMessageId, chatIntent, isClient, mentionQuery, snapshot?.agents]);
+  }, [activeTurnMessageId, isClient, mentionQuery, snapshot?.agents]);
   useEffect(() => {
     const views = pendingFiles.map(file => ({
       file,
@@ -1016,33 +1075,34 @@ export const ChatView: React.FC = () => {
       return;
     }
     if (isAgentTyping) return;
-    const message = typedMessage || (pendingFiles.length && chatIntent !== 'build'
+    const sendsBuild = /^\/build(?:\s|$)/i.test(typedMessage);
+    const message = typedMessage || (pendingFiles.length && !sendsBuild
       ? 'Please inspect the attached files and summarize the relevant information.'
       : '');
     if (!message) return;
     const requestedRecoveryAction = inferRecoveryAction(message);
     if (requestedRecoveryAction && await dispatchRecoveryFollowUp(message, requestedRecoveryAction)) return;
-    if (chatIntent === 'build' && !can('run_agents')) {
+    if (sendsBuild && !can('run_agents')) {
       showToast('Build access needed', 'Your workspace role cannot start Orchestrator builds.', 'info');
       return;
     }
-    if (chatIntent === 'build' && projectRepositories.length === 0) {
+    if (sendsBuild && projectRepositories.length === 0) {
       showToast('Connect a repository', 'Attach a repository to this project before starting an Orchestrator build.', 'info');
       return;
     }
-    if (chatIntent === 'build' && requiresRepositorySelection) {
+    if (sendsBuild && requiresRepositorySelection) {
       setRepositoryMenuOpen(true);
       showToast('Choose a codebase', 'Select at least one project codebase for the Orchestrator to build.', 'info');
       return;
     }
-    if (chatIntent === 'build' && activeProjectBuildRun) {
+    if (sendsBuild && activeProjectBuildRun) {
       showToast('Build already running', 'Stop the current build or wait for it to finish before starting another one.', 'info');
       return;
     }
-    if (chatIntent === 'build' && latestProjectBuildRun?.status === 'awaiting_approval' && !window.confirm(
+    if (sendsBuild && latestProjectBuildRun?.status === 'awaiting_approval' && !window.confirm(
       'The previous build is finished and waiting for review. Start another orchestrated project build?'
     )) return;
-    if (chatIntent === 'build' && (latestProjectBuildRun?.status === 'failed' || latestProjectBuildRun?.status === 'cancelled') && !window.confirm(
+    if (sendsBuild && (latestProjectBuildRun?.status === 'failed' || latestProjectBuildRun?.status === 'cancelled') && !window.confirm(
       'The previous build stopped. Start a new orchestrated build attempt for this project?'
     )) return;
     followNextMessage();
@@ -1065,7 +1125,7 @@ export const ChatView: React.FC = () => {
       return;
     }
     setPendingFiles([]);
-    await sendChatMessage(message, activeThread?.id, buildRepositories, chatIntent, uploadedAttachments);
+    await sendChatMessage(message, activeThread?.id, buildRepositories, 'auto', uploadedAttachments);
     if (activeThread?.id) {
       void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
     }
@@ -1108,6 +1168,67 @@ export const ChatView: React.FC = () => {
     setTabSessionState(activeTabId, 'liveBuildProjectId', activeThread.projectId);
     setActiveTab('live_build_room');
   };
+
+  const canRouteBuild = !isClient && can('run_agents');
+  /** The user message a reply answers: the proposal's source, else the nearest earlier user message. */
+  const sourceMessageIdFor = (message: ChatMessage): string | undefined => {
+    if (message.routeProposal?.sourceMessageId) return message.routeProposal.sourceMessageId;
+    const index = currentMessages.findIndex(item => item.id === message.id);
+    return currentMessages.slice(0, Math.max(index, 0)).reverse().find(item => item.senderType === 'user')?.id;
+  };
+  const latestAlphaAnswerId = [...currentMessages].reverse().find(item =>
+    item.senderType === 'agent' && !item.agentId && item.senderName === 'Alpha' && !item.isStreaming &&
+    (!item.messageType || item.messageType === 'agent' || item.messageType === 'assistant'))?.id;
+
+  /** Plan a message as a build, or have Alpha answer it instead. */
+  const routeChatMessage = async (sourceMessageId: string, action: 'build' | 'answer') => {
+    if (!activeThread || routingMessageId) return;
+    setRoutingMessageId(sourceMessageId);
+    try {
+      await apiService.routeChatMessage(activeThread.id, sourceMessageId, {
+        action,
+        repositories: validBuildRepositories.length ? validBuildRepositories : undefined,
+        projectId: activeThread.projectId
+      });
+      await refreshChatThread(activeThread.id);
+    } catch (error: any) {
+      showToast(
+        action === 'build' ? 'Build not planned' : 'Answer not started',
+        error?.message ?? 'Alpha could not update how this message is handled.',
+        'error'
+      );
+    } finally {
+      setRoutingMessageId(null);
+    }
+  };
+
+  const renderRouteProposal = (message: ChatMessage) => {
+    const proposal = message.routeProposal;
+    const needsProject = message.messageType === 'project_needed';
+    const source = sourceMessageIdFor(message);
+    const busy = Boolean(source && routingMessageId === source);
+    const open = proposal?.status === 'open' && Boolean(source);
+    const blockedReason = !canRouteBuild ? 'Your workspace role cannot start builds.' : !project ? 'Choose a project in the header first.' : undefined;
+    return <div className="space-y-3">
+      <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Sparkles className="h-3.5 w-3.5" /> {needsProject ? 'Project needed' : 'Build proposal'}</div>
+      <MessageMarkdown content={message.content} />
+      {proposal?.goal && <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-xs text-gray-300"><span className="text-gray-500">Proposed change: </span>{proposal.goal}</div>}
+      {open ? <div className="flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => void routeChatMessage(source!, 'build')} disabled={Boolean(routingMessageId) || Boolean(blockedReason)} title={blockedReason} className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-[11px] font-semibold text-on-accent hover:bg-brand-400 disabled:cursor-not-allowed disabled:opacity-40">{busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}Plan this build</button>
+        <button type="button" onClick={() => void routeChatMessage(source!, 'answer')} disabled={Boolean(routingMessageId)} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-1.5 text-[11px] font-medium text-gray-200 hover:bg-white/[0.06] disabled:opacity-40"><MessageSquare className="h-3 w-3" />Just answer</button>
+        {blockedReason && <span className="text-[10px] text-amber-200">{blockedReason}</span>}
+      </div> : proposal && <div className="text-[10px] text-gray-500">{proposal.status === 'accepted' ? 'Sent to the Orchestrator.' : 'Answered instead.'}</div>}
+    </div>;
+  };
+
+  /** A quiet way to turn Alpha's latest answer into a build. */
+  const renderBuildInstead = (message: ChatMessage) => {
+    if (!canRouteBuild || !project || message.id !== latestAlphaAnswerId) return null;
+    const source = sourceMessageIdFor(message);
+    if (!source || currentMessages.some(item => item.id === source + '-build')) return null;
+    return <button type="button" onClick={() => void routeChatMessage(source, 'build')} disabled={Boolean(routingMessageId)} className="inline-flex items-center gap-1.5 text-[10px] font-medium text-gray-500 hover:text-violet-200 disabled:opacity-50">{routingMessageId === source ? <Loader2 className="h-3 w-3 animate-spin" /> : <Play className="h-3 w-3" />}Build this instead</button>;
+  };
+
 
   const openLiveBuildRun = (runId: string) => {
     if (!activeThread?.projectId) return;
@@ -1189,27 +1310,56 @@ export const ChatView: React.FC = () => {
     setActiveTab('projects');
   };
 
-  /**
-   * Where a new conversation goes: the open thread's project, else the first
-   * project this person works in.
-   *
-   * `projects` is everything they can see, and a developer sees every
-   * PM-owned project but works only in the ones they are assigned to. Taking
-   * `projects[0]` picked whichever came first -- usually one they were not on
-   * -- and the daemon refused it: "Conversation not created: Project not found
-   * in the active workspace."
-   */
+  // Chat starts unscoped; project-specific chats are created from a project folder.
   const assignedProjects = projects.filter(project => project.assigned !== false);
-  const newThreadProject =
-    assignedProjects.find(project => project.id === activeThread?.projectId) ?? assignedProjects[0];
-  const canStartThread = isClient || Boolean(newThreadProject);
+  const chatProjects = useMemo(() => assignedProjects
+    .map(project => ({
+      project,
+      threads: chatThreads.filter(thread => thread.projectId === project.id)
+        .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt))
+    }))
+    .sort((a, b) => {
+      const aLatest = a.threads[0]?.lastMessageAt ?? '';
+      const bLatest = b.threads[0]?.lastMessageAt ?? '';
+      return bLatest.localeCompare(aLatest) || a.project.name.localeCompare(b.project.name);
+    }), [assignedProjects, chatThreads]);
+  const recentThreads = chatThreads
+    .filter(thread => !thread.projectId || !assignedProjects.some(project => project.id === thread.projectId))
+    .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt));
+  const visibleProjects = showAllProjects ? chatProjects : chatProjects.slice(0, 6);
+  useEffect(() => {
+    const projectId = activeThread?.projectId;
+    if (projectId && assignedProjects.some(project => project.id === projectId)) {
+      setExpandedProjectIds(current => current.includes(projectId) ? current : [...current, projectId]);
+    }
+  }, [activeThread?.projectId, projects]);
+  const canStartThread = isClient || can('manage_chat');
 
   const startNewThread = () => {
     if (!canStartThread) {
-      showToast('No project to chat in', 'You are not assigned to a project yet. Ask a project manager to add you.', 'info');
+      showToast('Chat unavailable', 'Your workspace role cannot create conversations.', 'info');
       return;
     }
-    createNewThread('New project conversation', isClient ? undefined : newThreadProject?.id);
+    createNewThread(isClient ? 'New project conversation' : 'New conversation');
+  };
+
+  const renderThreadRow = (thread: (typeof chatThreads)[number], nested = false) => {
+    const selected = activeThreadId === thread.id;
+    const threadProject = projects.find(item => item.id === thread.projectId);
+    const rowMenuOpen = openThreadMenuId === thread.id;
+    return <div key={thread.id} className="group relative">
+      <button type="button" onClick={() => { setActiveThreadId(thread.id); setOpenThreadMenuId(null); }} className={`w-full rounded-lg px-3 py-2 text-left transition-colors ${selected ? 'bg-white/[0.08]' : 'hover:bg-white/[0.04]'}`}>
+        <span className="flex items-center gap-2"><span className={`h-2 w-2 shrink-0 rounded-full ${thread.messages?.some(message => message.isStreaming) ? 'animate-pulse bg-violet-300' : selected ? 'bg-brand-400' : 'bg-gray-700'}`} /><span className={`min-w-0 flex-1 truncate text-xs font-medium ${selected ? 'text-white' : 'text-gray-200'}`}>{thread.title}</span><span className="shrink-0 text-[10px] text-gray-600">{formatDate(thread.lastMessageAt)}</span></span>
+        {thread.lastMessageSnippet && <span className="mt-1 block truncate pl-4 text-[10px] text-gray-500">{thread.lastMessageSnippet}</span>}
+        {!nested && thread.projectId && !assignedProjects.some(item => item.id === thread.projectId) && <span className="mt-1 block truncate pl-4 text-[10px] text-gray-600">{threadProject ? threadProject.key + ' · ' + threadProject.name : 'Project chat'}</span>}
+      </button>
+      {!isClient && <div className="absolute right-1 top-1">
+        <button type="button" onClick={() => setOpenThreadMenuId(value => value === thread.id ? null : thread.id)} aria-label={`More options for ${thread.title}`} aria-expanded={rowMenuOpen} className={`rounded-md p-1 text-gray-500 hover:bg-white/[0.08] hover:text-white focus:opacity-100 ${rowMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}><MoreHorizontal className="h-3.5 w-3.5" /></button>
+        {rowMenuOpen && <div ref={threadMenuRef} role="menu" aria-label={`Options for ${thread.title}`} className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-xl border border-white/10 bg-surface-raised p-1.5 shadow-xl">
+          <button type="button" role="menuitem" onClick={() => { setOpenThreadMenuId(null); setThreadPendingDelete({ id: thread.id, title: thread.title }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-rose-300 hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" />Delete chat</button>
+        </div>}
+      </div>}
+    </div>;
   };
 
   const agentForCall = (call: AgentCall): ProjectChatAgent | undefined =>
@@ -1249,21 +1399,56 @@ export const ChatView: React.FC = () => {
   };
 
   return (
-    <div className="h-full min-h-0 flex overflow-hidden bg-shell text-sm text-gray-200">
-      <aside className="flex w-72 shrink-0 flex-col border-r border-white/[0.06] bg-shell sm:w-80">
-        <div className="h-14 px-4 border-b border-white/[0.08] flex items-center justify-between"><div><h2 className="text-base font-semibold text-white">{isClient ? 'Messages' : 'Project chat'}</h2><p className="text-[10px] text-gray-500 mt-0.5">{activeWorkspace?.name ?? 'Workspace'}</p></div><button onClick={startNewThread} aria-disabled={!canStartThread} className={`p-1.5 rounded-lg hover:bg-white/[0.06] ${canStartThread ? 'text-gray-400 hover:text-white' : 'text-gray-600 cursor-not-allowed'}`} title={canStartThread ? (isClient ? 'Start new project chat' : `Start new chat in ${newThreadProject?.name ?? 'project'}`) : 'You are not assigned to a project yet'}><Plus className="w-4 h-4" /></button></div>
-        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.04]">{chatThreads.map(thread => { const selected = activeThreadId === thread.id; const threadProject = projects.find(item => item.id === thread.projectId); return <button key={thread.id} onClick={() => setActiveThreadId(thread.id)} className={`w-full text-left px-4 py-3.5 flex items-start gap-3 transition-colors ${selected ? 'bg-white/[0.08] border-l-2 border-brand-500 pl-3.5' : 'hover:bg-white/[0.04]'}`}><span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${selected ? 'bg-brand-400 shadow-[0_0_10px_rgba(124,58,237,0.8)]' : 'bg-gray-700'}`} /><span className="min-w-0 flex-1"><span className="flex items-center justify-between gap-2"><span className={`text-xs sm:text-sm font-semibold truncate ${selected ? 'text-white' : 'text-gray-200'}`}>{thread.title}</span><span className="text-[10px] text-gray-600 shrink-0">{formatDate(thread.lastMessageAt)}</span></span><span className="mt-1 flex items-center gap-1.5 text-[10px] text-gray-500 truncate">{threadProject ? <><FolderGit2 className="h-3 w-3 shrink-0" /> {threadProject.key}</> : 'General Alpha chat'}{thread.lastMessageSnippet && <><span>·</span><span className="truncate">{thread.lastMessageSnippet}</span></>}</span></span></button>; })}{chatThreads.length === 0 && <div className="p-6 text-xs text-gray-500">No conversations yet. Start one with +.</div>}</div>
-      </aside>
-
+    <div className="relative h-full min-h-0 flex overflow-hidden bg-shell text-sm text-gray-200">
+      <div className="relative w-12 shrink-0">
+      {threadListCollapsed ? <div className="group flex h-full items-center justify-center bg-shell">
+        <button type="button" onClick={() => setThreadListCollapsed(false)} aria-label="Show conversations" title="Show conversations" className="flex h-16 w-5 items-center justify-center rounded-full border border-white/10 bg-surface-raised/90 text-gray-400 opacity-0 shadow-lg shadow-black/40 transition-all duration-200 hover:border-violet-300/40 hover:text-white group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><ChevronRight className="h-3.5 w-3.5" /></button>
+      </div> : <aside className="absolute inset-y-0 left-0 z-30 flex w-72 flex-col bg-shell shadow-2xl shadow-black/40 sm:w-80">
+        <div className="flex items-start justify-between gap-2 border-b border-white/[0.08] px-4 py-3"><div className="min-w-0"><h2 className="text-base font-semibold text-white">{isClient ? 'Messages' : 'Project chat'}</h2><p className="mt-0.5 truncate text-[10px] text-gray-500">{activeWorkspace?.name ?? 'Workspace'}</p></div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={startNewThread} aria-label="New chat" title="New chat" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white"><Plus className="h-4 w-4" /></button><button type="button" onClick={() => setThreadListCollapsed(true)} aria-label="Collapse conversations" title="Collapse conversations" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white"><PanelLeftClose className="h-4 w-4" /></button></div></div>
+        <div className="flex-1 overflow-y-auto px-2 py-3">
+          {isClient ? <div className="space-y-1">{chatThreads.map(thread => renderThreadRow(thread))}</div> : <>
+            <div className="mb-2 flex items-center justify-between px-2"><h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Projects</h3>{can('create_project') && <button type="button" onClick={() => setShowCreateProject(true)} aria-label="Create project" title="Create project" className="rounded-md p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white"><Plus className="h-4 w-4" /></button>}</div>
+            <div className="space-y-1">{visibleProjects.map(({ project: item, threads }) => {
+              const expanded = expandedProjectIds.includes(item.id);
+              const more = showMoreThreads[item.id];
+              const projectMenuOpen = openProjectMenuId === item.id;
+              const visible = more ? threads : threads.slice(0, 5);
+              return <section key={item.id}>
+                <div className="group flex items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-white/[0.04]">
+                  <button type="button" aria-expanded={expanded} onClick={() => setExpandedProjectIds(current => expanded ? current.filter(id => id !== item.id) : [...current, item.id])} className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-medium text-gray-200"><ChevronRight className={'h-3.5 w-3.5 shrink-0 text-gray-500 transition-transform ' + (expanded ? 'rotate-90' : '')} /><FolderOpen className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{item.name}</span></button>
+                  <button type="button" onClick={() => createNewThread('New project conversation', item.id)} aria-label={'New chat in ' + item.name} title="New chat in this project" className="rounded p-1 text-gray-500 opacity-0 hover:bg-white/[0.08] hover:text-white group-hover:opacity-100 focus:opacity-100"><Plus className="h-3.5 w-3.5" /></button>
+                  <div className="relative"><button type="button" onClick={() => setOpenProjectMenuId(value => value === item.id ? null : item.id)} aria-label={'Options for ' + item.name} aria-expanded={projectMenuOpen} className={'rounded p-1 text-gray-500 hover:bg-white/[0.08] hover:text-white focus:opacity-100 ' + (projectMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}><MoreHorizontal className="h-3.5 w-3.5" /></button>
+                    {projectMenuOpen && <div role="menu" aria-label={'Options for ' + item.name} className="absolute right-0 top-full z-40 mt-1 w-44 rounded-xl border border-white/10 bg-surface-raised p-1.5 shadow-xl"><button type="button" role="menuitem" onClick={() => { setOpenProjectMenuId(null); createNewThread('New project conversation', item.id); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-gray-300 hover:bg-white/[0.06]"><Plus className="h-3.5 w-3.5" />New chat</button><button type="button" role="menuitem" onClick={() => { setOpenProjectMenuId(null); setTabSessionState(activeTabId, 'projects.boardView', 'repository'); setActiveTab('projects'); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-gray-300 hover:bg-white/[0.06]"><FolderGit2 className="h-3.5 w-3.5" />Open project</button></div>}</div>
+                </div>
+                {expanded && <div className="ml-3 border-l border-white/[0.06] pl-2">{threads.length ? <div className="space-y-0.5">{visible.map(thread => renderThreadRow(thread, true))}{threads.length > 5 && <button type="button" onClick={() => setShowMoreThreads(previous => ({ ...previous, [item.id]: !previous[item.id] }))} className="w-full rounded-md px-3 py-1.5 text-left text-[10px] text-gray-500 hover:bg-white/[0.04] hover:text-gray-300">{more ? 'Show less' : 'Show ' + (threads.length - 5) + ' more'}</button>}</div> : <div className="px-3 py-2 text-[10px] text-gray-600">No chats</div>}</div>}
+              </section>;
+            })}{!chatProjects.length && <div className="px-2 py-3 text-[11px] text-gray-500">No projects assigned yet.</div>}{chatProjects.length > 6 && <button type="button" onClick={() => setShowAllProjects(value => !value)} className="w-full px-2 py-2 text-left text-[11px] text-gray-500 hover:text-gray-300">{showAllProjects ? 'Show fewer projects' : 'Show ' + (chatProjects.length - 6) + ' more projects'}</button>}</div>
+            <div className="mb-2 mt-6 px-2"><h3 className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Recents</h3></div>
+            <div className="space-y-1">{recentThreads.map(thread => renderThreadRow(thread))}{!recentThreads.length && <div className="px-2 py-2 text-[10px] text-gray-600">No recent chats</div>}</div>
+          </>}
+          {!chatThreads.length && <div className="px-3 py-6 text-xs text-gray-500">No conversations yet. Start one with +.</div>}
+        </div>
+      </aside>}
+      </div>
+      <CreateProjectModal isOpen={showCreateProject} onClose={() => setShowCreateProject(false)} onCreated={created => { setExpandedProjectIds(current => current.includes(created.id) ? current : [...current, created.id]); createNewThread('New project conversation', created.id); }} />
+      <Modal
+        isOpen={Boolean(threadPendingDelete)}
+        onClose={() => setThreadPendingDelete(null)}
+        title="Delete chat?"
+        subtitle="This permanently removes the conversation and its messages."
+        maxWidth="max-w-md"
+        footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setThreadPendingDelete(null)} className="rounded-lg px-3 py-2 text-xs text-gray-300 hover:bg-white/[0.06]">Cancel</button><button type="button" onClick={() => { if (threadPendingDelete) deleteThread(threadPendingDelete.id); setThreadPendingDelete(null); }} className="rounded-lg bg-rose-500/15 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/25">Delete chat</button></div>}
+      >
+        <p className="text-sm text-gray-300">Are you sure you want to delete <span className="font-semibold text-white">{threadPendingDelete?.title}</span>?</p>
+      </Modal>
       <main className="relative flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden bg-shell">
         {activeThread ? <>
-          <header className="shrink-0 min-h-16 px-5 lg:px-7 border-b border-white/[0.06] bg-shell flex items-center justify-between gap-4"><div className="min-w-0 flex items-center gap-3"><div className="h-9 w-9 rounded-xl bg-brand-500/15 border border-brand-400/20 flex items-center justify-center shrink-0"><Sparkles className="h-4 w-4 text-brand-300" /></div><div className="min-w-0"><h2 className="text-sm font-semibold text-white truncate">{activeThread.title}</h2><div className="mt-1 flex items-center gap-2 flex-wrap text-[10px] text-gray-500"><span className="text-gray-300">{isClient ? `${pmName} · Project Manager` : activeWorkspace?.name ?? 'Workspace'}</span>{!isClient && project && <><span>·</span><span className="text-brand-300">{project.key} · {project.name}</span></>}<span>·</span><span>{currentMessages.length} messages</span>{!isClient && chatSyncStatus && <><span>·</span><span aria-live="polite" className={chatSyncStatus.state === 'failed' ? 'text-amber-300' : chatSyncStatus.state === 'synced' || chatSyncStatus.state === 'shared' ? 'text-emerald-400' : 'text-gray-500'}>{chatSyncStatus.state === 'synced' ? 'Synced' : chatSyncStatus.state === 'syncing' ? 'Syncing…' : chatSyncStatus.state === 'failed' ? 'Sync paused' : chatSyncStatus.state === 'local_only' ? 'Saved on this device' : 'Shared chat'}</span>{chatSyncStatus.state === 'failed' && <button type="button" onClick={() => void handleRetryChatSync()} disabled={syncRetrying} className="rounded-md border border-amber-400/20 px-1.5 py-0.5 text-[10px] text-amber-200 hover:bg-amber-400/10 disabled:opacity-50">{syncRetrying ? 'Retrying…' : 'Retry'}</button>}</>}</div>{!isClient && project && snapshot && <div className="mt-1.5 flex items-center gap-2 flex-wrap text-[10px] text-gray-600"><span className="inline-flex items-center gap-1 rounded-md border border-violet-300/10 bg-violet-300/[0.04] px-1.5 py-1 text-violet-200"><Sparkles className="h-3 w-3" /> Build lead: Orchestrator</span>{(() => { const { workingCopy } = snapshot.project; const total = workingCopy.repositories ?? 0; const here = Math.min(total, workingCopy.onMachine ?? (workingCopy.status === 'connected' ? total : 0)); const remote = total - here; const label = total === 0 ? 'Connect a codebase to build' : remote > 0 ? `${here} of ${total} on this device · ${remote} cloned when building` : `${total} ${total === 1 ? 'codebase' : 'codebases'} on this device`; return <span title={remote > 0 ? 'Selected codebases that are not on this device are cloned when the build starts.' : undefined} className={remote > 0 || total === 0 ? 'text-sky-200' : 'text-emerald-400'}>● {label}</span>; })()}</div>}</div></div><div className="flex items-center gap-2 shrink-0">{!isClient && <ThreadProjectPicker key={activeThread.id} threadId={activeThread.id} projectId={activeThread.projectId} />}{!isClient && project && <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/25 bg-violet-500/10 px-3 py-2 text-xs font-semibold text-violet-200 transition-colors hover:bg-violet-500/20"><Activity className="h-3.5 w-3.5" /> Build details</button>}{!isClient && <button type="button" onClick={openCallPanel} className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${showCallPanel ? 'bg-brand-500 text-on-accent' : 'border border-brand-400/25 bg-brand-500/10 text-brand-200 hover:bg-brand-500/20'}`}><Bot className="h-3.5 w-3.5" /> Call Agent</button>}<button type="button" onClick={() => clearChat()} className="p-2 rounded-lg text-gray-500 hover:text-rose-300 hover:bg-white/5" title="Clear conversation"><Trash2 className="h-4 w-4" /></button><button type="button" onClick={() => deleteThread(activeThread.id)} className="hidden md:inline-flex p-2 rounded-lg text-xs text-gray-500 hover:text-white hover:bg-white/5">Delete</button></div></header>
-
-          {!isClient && activeCall && <div className={`mx-5 mt-4 rounded-xl border px-4 py-3 flex items-center gap-3 ${statusTone(activeCall.status)} shadow-[0_0_22px_rgba(99,102,241,0.08)]`}><div className="relative h-8 w-8 rounded-lg bg-black/20 flex items-center justify-center shrink-0"><Bot className="h-4 w-4" />{(activeCall.status === 'running' || activeCall.status === 'queued') && <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-current animate-ping opacity-70" />}</div><div className="min-w-0 flex-1"><div className="flex items-center gap-2 text-xs font-semibold"><span>{agentForCall(activeCall)?.name ?? activeCall.agentId}</span><span className="opacity-60">·</span><span>{MODE_META[activeCall.operationMode].label}</span><span className="opacity-60">·</span><span>{statusLabel(activeCall.status)}</span></div><p className="mt-0.5 text-[10px] opacity-75 truncate">{activeCall.status === 'awaiting_confirmation' ? 'Waiting for your confirmation before the agent generates a patch.' : activeCall.status === 'running' ? 'Reading the selected project context and preparing a safe response…' : 'The call is queued for this project.'}</p></div>{activeCall.revisionTarget && <span className="hidden md:inline-flex items-center gap-1 text-[10px] opacity-75"><TargetIcon type={activeCall.revisionTarget.type} /> {activeCall.revisionTarget.label ?? activeCall.revisionTarget.id}</span>}</div>}
+          {!isClient && chatSyncStatus?.state === 'failed' && <div className="shrink-0 px-5 pt-3 lg:px-7"><div className="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-[11px] text-amber-200"><span>Chat sync paused</span><button type="button" onClick={() => void handleRetryChatSync()} disabled={syncRetrying} className="font-medium hover:text-white disabled:opacity-50">{syncRetrying ? 'Retrying…' : 'Retry'}</button></div></div>}
 
           {showCallPanel && !isClient && <section className="shrink-0 max-h-[45%] overflow-y-auto overscroll-contain mx-5 mt-4 rounded-2xl border border-white/10 bg-surface-100/80 p-4 lg:p-5 shadow-xl"><div className="flex items-start justify-between gap-4 mb-4"><div><div className="flex items-center gap-2"><Bot className="h-4 w-4 text-brand-300" /><h3 className="text-sm font-semibold text-white">Call an assigned agent</h3></div><p className="mt-1 text-[11px] text-gray-500">Use this for a focused question or review with one agent. For product changes, describe the work and the Orchestrator will choose the right specialists.</p></div><button type="button" onClick={() => setShowCallPanel(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.06]"><X className="h-4 w-4" /></button></div>{loadingSnapshot ? <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading project agents…</div> : snapshotError ? <div className="flex items-center gap-2 text-xs text-rose-300"><AlertTriangle className="h-4 w-4" /> {snapshotError}</div> : !snapshot?.squads.length ? <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs text-gray-500">No project specialist is ready for a direct call yet. Product builds can still start with the Orchestrator.</div> : <form onSubmit={callAgent} className="space-y-4"><div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]"><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Agent group</label><div className="flex gap-2 overflow-x-auto pb-1">{snapshot.squads.map(squad => <button type="button" key={squad.id} onClick={() => selectSquad(squad.id)} className={`shrink-0 rounded-lg border px-3 py-2 text-left text-xs ${selectedSquadId === squad.id ? 'border-brand-400/50 bg-brand-500/15 text-white' : 'border-white/10 bg-white/[0.03] text-gray-400 hover:text-white'}`}><span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{squad.name}</span><span className="mt-1 block text-[10px] text-gray-500">{squad.agents.length} ready</span></button>)}</div></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Agent</label><div className="grid gap-2 sm:grid-cols-2">{(snapshot.squads.find(squad => squad.id === selectedSquadId)?.agents ?? []).map(agent => <button type="button" key={agent.id} onClick={() => setSelectedAgentId(agent.id)} className={`rounded-lg border p-2.5 text-left ${selectedAgentId === agent.id ? 'border-brand-400/50 bg-brand-500/15' : 'border-white/10 bg-white/[0.03] hover:border-white/20'}`}><span className="flex items-center gap-2"><span className="h-6 w-6 rounded-md flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: agent.color || '#6d28d9' }}>{agent.avatar ? <img src={agent.avatar} alt="" className="h-6 w-6 rounded-md object-cover" /> : agent.name.charAt(0)}</span><span className="min-w-0"><span className="block truncate text-xs font-medium text-white">{agent.name}</span><span className="block truncate text-[10px] text-gray-500">{agent.role}</span></span></span></button>)}</div></div></div><div className="grid gap-3 sm:grid-cols-[150px_1fr]"><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Mode</label><select value={mode} onChange={event => setMode(event.target.value as AgentCallMode)} className="w-full rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400">{visibleModes.map(value => <option key={value} value={value}>{MODE_META[value].label}</option>)}</select><p className="text-[10px] leading-relaxed text-gray-600">{MODE_META[mode].description}</p></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Target <span className="normal-case text-gray-600">{mode === 'ask' ? 'optional' : 'required'}</span></label><div className="flex gap-2"><select value={targetType} onChange={event => { setTargetType(event.target.value as AgentCallTarget['type']); setTargetId(''); }} className="w-36 shrink-0 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400">{Object.entries(TARGET_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{targetOptions.length > 0 ? <select value={targetId} onChange={event => setTargetId(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400"><option value="">Select target…</option>{targetOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : <input value={targetId} onChange={event => setTargetId(event.target.value)} placeholder={targetType === 'file' ? 'src/features/example.tsx' : 'Enter target id or relative path'} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 placeholder-gray-600 outline-none focus:border-brand-400" />}</div>{targetType === 'file' && <p className="text-[10px] text-gray-600">Repository-relative only. Alpha resolves the working copy server-side.</p>}</div></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Instruction</label><textarea value={callInstruction} onChange={event => setCallInstruction(event.target.value)} rows={3} placeholder={selectedAgent ? `What should ${selectedAgent.name} look at?` : 'Choose an agent first…'} className="w-full resize-none rounded-xl border border-white/10 bg-surface-200 px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-brand-400" /></div>{mode === 'implement' && <div className="flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200"><ShieldCheck className="h-3.5 w-3.5 mt-0.5 shrink-0" /><span>Implementation is two-step. This request creates a reviewable call first; you must confirm before the agent generates a patch, and applying the patch is a separate action.</span></div>}<div className="flex items-center justify-end gap-2"><button type="button" onClick={() => setShowCallPanel(false)} className="rounded-lg px-3 py-2 text-xs text-gray-500 hover:text-white">Cancel</button><button type="submit" disabled={busyCallId === 'new' || !selectedAgentId || !callInstruction.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-xs font-semibold text-on-accent hover:bg-brand-400 disabled:opacity-40">{busyCallId === 'new' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />} Call {selectedAgent?.name ?? 'agent'}</button></div></form>}</section>}
 
-          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 space-y-5 [overflow-anchor:none]">{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Describe a product change. The Orchestrator will plan it, assign the right specialists, and coordinate work across the selected codebases. Use Ask Alpha for a conversation without code changes.' : 'Choose a project above to build in its codebases or ask Alpha a project question.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="max-w-3xl mr-auto">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="max-w-3xl mr-auto rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className={`flex gap-3.5 max-w-3xl ${isUser ? 'ml-auto flex-row-reverse' : 'mr-auto'}`}><div className={`h-9 w-9 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${isUser ? 'bg-gradient-to-tr from-indigo-500 to-purple-600 text-on-accent' : 'bg-white/[0.08] border border-white/10 text-gray-200'}`}>{isUser ? 'U' : (message.senderName?.[0] ?? 'A')}</div><div className={`min-w-0 flex-1 space-y-2 ${isUser ? 'items-end' : 'items-start'}`}><div className={`flex items-center gap-2 ${isUser ? 'justify-end' : ''}`}><span className="text-xs font-semibold text-gray-300">{message.senderName}</span><span className="text-[10px] text-gray-600">{new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></div><div className={`rounded-2xl p-4 text-sm leading-relaxed ${isUser ? 'bg-brand-500 text-on-accent rounded-tr-none' : 'bg-surface-100 border border-white/10 text-gray-100 rounded-tl-none'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 rounded-xl border border-violet-300/15 bg-violet-300/[0.04] p-3 text-xs text-gray-200"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-200" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-violet-200">Build update</div><p className="whitespace-pre-wrap break-words text-[11px] leading-5">{message.content}</p></div></div> : message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
+          {!isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={setInspectedCallId} /></div>}
+          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 40 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 space-y-5 [overflow-anchor:none]">{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className="w-full"><div className={`min-w-0 space-y-2 ${isUser ? 'flex flex-col items-end' : ''}`}><div className={`text-sm leading-relaxed ${isUser ? 'max-w-[80%] rounded-2xl bg-white/[0.07] px-4 py-2.5 text-gray-100' : 'text-gray-200'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 rounded-xl border border-violet-300/15 bg-violet-300/[0.04] p-3 text-xs text-gray-200"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-200" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-violet-200">Build update</div><p className="whitespace-pre-wrap break-words text-[11px] leading-5">{message.content}</p></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
   const needsLiveRoom = /live build room|product build is already/i.test(message.content);
   const buildNotStarted = /\*\*Build not started(?: for any repository)?\.\*\*/i.test(message.content);
   const setupRequired = /review the project setup|project needs setup|choose (?:a|one) codebase|configured model|available model|workspace identity|reconnect (?:this )?repository|repository admission remains paused/i.test(message.content);
@@ -1280,79 +1465,70 @@ export const ChatView: React.FC = () => {
     return <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/30 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/20"><Activity className="h-3.5 w-3.5" /> {label}</button>;
   }
   return <button type="button" onClick={openProjectSetup} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-300 hover:bg-white/[0.06]">Review project setup</button>;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenRoom={() => openLiveBuildRun(message.orchestrationRunId!)} />}</div></div>; })}</div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenRoom={() => openLiveBuildRun(message.orchestrationRunId!)} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}</div></div>; })}</div>
 
-          {showLatest && <div className="shrink-0 flex justify-center py-2 border-t border-white/5"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-surface-raised px-4 py-2 text-xs font-medium text-brand-200 hover:bg-brand-500/15">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
-          <div className="shrink-0 px-5 py-2.5 bg-surface/80 border-t border-white/5 flex items-center gap-2.5 overflow-x-auto"><span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600 whitespace-nowrap">Try</span>{(isClient ? ['Clarify the current scope', 'Ask about timing'] : ['Summarize this project', 'What should I review next?']).map(prompt => <button key={prompt} type="button" onClick={() => setInput(prompt)} className="whitespace-nowrap rounded-full border border-white/10 bg-surface-100 px-3 py-1.5 text-[11px] text-gray-400 hover:border-brand-400/40 hover:text-white">{prompt}</button>)}</div>
-          <div className="shrink-0 border-t border-white/[0.08] bg-surface p-4 space-y-3 lg:p-5">
-            {!isClient && !activeThread.projectId && <div className="flex items-center gap-2 rounded-lg border border-amber-400/15 bg-amber-500/[0.06] px-3 py-2 text-[11px] text-amber-200"><FolderGit2 className="h-3.5 w-3.5" /> Choose a project in the header to start a repository build or call its assigned agents.</div>}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              {!isClient && <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">Mode</span>
-                <div role="group" aria-label="Choose how Alpha handles this message" className="inline-flex rounded-lg border border-white/10 bg-surface-100 p-0.5">
-                  {(['auto', 'build', 'ask'] as ChatIntent[]).map(intent => {
-                    const label = intent === 'auto' ? 'Auto' : intent === 'build' ? 'Build with Orchestrator' : 'Ask Alpha';
-                    const Icon = intent === 'auto' ? Sparkles : intent === 'build' ? Play : MessageSquare;
-                    const buildBlocked = intent === 'build' && (!can('run_agents') || activeProjectBuildRuns.length > 0);
-                    const buildBlockReason = !can('run_agents') ? 'Your workspace role cannot start product builds.' : 'A legacy build is already running for this project.';
-                    return <button key={intent} type="button" aria-pressed={chatIntent === intent} disabled={buildBlocked} title={buildBlocked ? buildBlockReason : undefined} onClick={() => setChatIntent(intent)} className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[10px] font-semibold transition-colors ${chatIntent === intent ? intent === 'build' ? 'bg-violet-500/25 text-violet-100' : 'bg-white/10 text-white' : 'text-gray-500 hover:text-gray-200'} disabled:cursor-not-allowed disabled:opacity-40`}><Icon className="h-3 w-3" />{label}</button>;
-                  })}
+          <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-4 lg:px-8 lg:pb-6">
+            <div className="pointer-events-auto mx-auto w-full max-w-3xl space-y-2">
+              {showLatest && <div className="flex justify-center"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-surface-raised px-4 py-2 text-xs font-medium text-brand-200 shadow-lg shadow-black/40 hover:bg-brand-500/15">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
+              {forcedBuild && !isClient && <div className={`px-4 text-[10px] ${requiresRepositorySelection ? 'text-amber-200' : 'text-gray-500'}`}>{repositorySelectionMessage}</div>}
+              {pendingFileViews.length > 0 && <div className="flex flex-wrap gap-2 px-2">{pendingFileViews.map(({ file, previewUrl }, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex max-w-full items-center gap-2 rounded-xl border border-white/10 bg-surface-100 px-2 py-1.5 text-[10px] text-gray-300 shadow-lg shadow-black/30">
+                {previewUrl ? <img src={previewUrl} alt={`Preview of ${file.name}`} className="h-8 w-8 rounded-md object-cover" /> : <FileText className="ml-1 h-4 w-4 shrink-0 text-violet-200" />}
+                <span className="max-w-48 truncate">{file.name}</span><span className="shrink-0 text-gray-500">{formatFileSize(file.size)}</span>
+                <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removePendingFile(index)} className="rounded-md p-1 text-gray-500 hover:bg-white/10 hover:text-white"><X className="h-3.5 w-3.5" /></button>
+              </div>)}</div>}
+              <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-1.5 rounded-[1.75rem] border border-white/10 bg-surface-100/95 p-1.5 shadow-2xl shadow-black/50 transition-colors focus-within:border-brand-400/40 ${isDraggingFiles ? 'ring-2 ring-violet-300/70' : ''}`}>
+                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
+                <div ref={repositoryMenuRef} className="relative shrink-0">
+                  <button type="button" aria-label="Open message tools" aria-haspopup="menu" aria-expanded={repositoryMenuOpen} onClick={() => setRepositoryMenuOpen(value => !value)} className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${repositoryMenuOpen ? 'bg-white/[0.10] text-white' : 'text-gray-400 hover:bg-white/[0.06] hover:text-white'}`}>
+                    <Plus className={`h-5 w-5 transition-transform duration-200 ${repositoryMenuOpen ? 'rotate-45' : ''}`} />
+                    {activeProjectBuildRuns.length > 0 && <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-400" />}
+                  </button>
+                  {repositoryMenuOpen && <div role="menu" aria-label="Message tools" className="absolute bottom-full left-0 z-40 mb-3 w-[min(22rem,calc(100vw-2rem))] animate-slide-up overflow-hidden rounded-2xl border border-white/15 bg-[#17171f] p-1.5 shadow-2xl shadow-black/60">
+                    {!isClient && project && <button type="button" role="menuitem" onClick={() => { setRepositoryMenuOpen(false); openLiveBuildRoom(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-gray-200 transition hover:bg-white/[0.06]"><Activity className="h-4 w-4 shrink-0 text-violet-300" /><span className="text-xs font-medium">Build details</span></button>}
+                    <button type="button" role="menuitem" disabled={Boolean(activeTurnMessageId) || pendingFiles.length >= MAX_CHAT_FILES} onClick={() => { setRepositoryMenuOpen(false); fileInputRef.current?.click(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-gray-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"><Paperclip className="h-4 w-4 shrink-0 text-gray-400" /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">Attach files</span><span className="block text-[10px] text-gray-500">{activeTurnMessageId ? 'Finish this response before attaching files.' : 'Images, documents, or code'}</span></span></button>
+                    {!isClient && <button type="button" role="menuitem" onClick={() => { setRepositoryMenuOpen(false); openCallPanel(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-gray-200 transition hover:bg-white/[0.06]"><Bot className="h-4 w-4 shrink-0 text-gray-400" /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">Call an agent</span><span className="block text-[10px] text-gray-500">Ask a project agent to review or work on something</span></span></button>}
+                    {activeProjectBuildRuns.length > 0 && can('run_squads') && <button type="button" role="menuitem" onClick={() => { setRepositoryMenuOpen(false); void stopProjectBuild(); }} disabled={Boolean(stoppingProjectRunId)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-rose-200 transition hover:bg-rose-500/10 disabled:opacity-50"><Square className={`h-4 w-4 shrink-0 ${stoppingProjectRunId ? 'animate-pulse' : 'fill-current'}`} /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">{stoppingProjectRunId ? 'Stopping…' : activeProjectBuildRuns.length > 1 ? `Stop ${activeProjectBuildRuns.length} builds` : 'Stop build'}</span><span className="block text-[10px] text-rose-200/60">Work already on the build branch stays available</span></span></button>}
+                    {!isClient && project && <div className="mt-1 border-t border-white/[0.08] pt-1.5">
+                      {projectRepositories.length > 1 ? <>
+                        <div className="flex items-center justify-between px-3 py-1.5">
+                          <span className="flex items-center gap-2 text-[11px] font-semibold text-gray-200"><FolderGit2 className="h-3.5 w-3.5 text-violet-300" />Codebases<span className="font-normal text-gray-500">{selectedBuildRepositoryLabel ?? 'none selected'}</span></span>
+                          <span className="flex items-center gap-2 text-[10px]"><button type="button" onClick={() => setSelectedBuildRepositories(projectRepositories.map(item => item.repo))} className="text-violet-200 hover:text-white">All</button><button type="button" onClick={() => setSelectedBuildRepositories([])} className="text-gray-400 hover:text-white">Clear</button></span>
+                        </div>
+                        <div className="max-h-48 overflow-y-auto" role="group" aria-label="Select product codebases">
+                          {projectRepositories.map(item => {
+                            const selected = selectedBuildRepositories.includes(item.repo);
+                            return <button key={item.repo} type="button" aria-pressed={selected} onClick={() => setSelectedBuildRepositories(current => current.includes(item.repo) ? current.filter(repo => repo !== item.repo) : [...current, item.repo])} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition hover:bg-white/[0.06] focus:bg-white/[0.06] focus:outline-none">
+                              <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? 'border-violet-300 bg-violet-400/20 text-violet-100' : 'border-gray-500'}`}>{selected && <Check className="h-3 w-3" />}</span>
+                              <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-100">{item.repo}</span>
+                              <span className={`shrink-0 text-[10px] ${item.connected ? 'text-emerald-300' : 'text-sky-200'}`}>{item.connected ? 'Ready here' : 'Will clone'}</span>
+                            </button>;
+                          })}
+                        </div>
+                      </> : projectRepositories.length === 1 ? <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-gray-300"><FolderGit2 className="h-3.5 w-3.5 text-violet-300" /><span className="min-w-0 flex-1 truncate">{projectRepositories[0].repo}</span><span className={projectRepositories[0].connected ? 'text-[10px] text-emerald-300' : 'text-[10px] text-sky-200'}>{projectRepositories[0].connected ? 'Ready here' : 'Will clone'}</span></div>
+                        : snapshot ? <div className="flex items-center gap-2 px-3 py-2 text-[11px] text-amber-200"><FolderGit2 className="h-3.5 w-3.5" />Connect a repository to build project files</div> : null}
+                    </div>}
+                  </div>}
                 </div>
-                <span className={`text-[10px] ${chatIntent === 'build' && requiresRepositorySelection ? 'text-amber-200' : 'text-gray-600'}`}>{chatIntent === 'auto' ? 'Questions go to Alpha. Type @ to ask a project agent; product changes go to the Orchestrator.' : chatIntent === 'build' ? repositorySelectionMessage : 'Ask Alpha or @mention a project agent without changing code.'}</span>
-                {activeProjectBuildRuns.length > 0 && can('run_squads') && <button type="button" onClick={() => void stopProjectBuild()} disabled={Boolean(stoppingProjectRunId)} title={`Stop ${activeProjectBuildRuns.length === 1 ? 'the active build' : `all ${activeProjectBuildRuns.length} active builds`} for this project.`} className="inline-flex items-center gap-1.5 rounded-lg border border-rose-400/25 bg-rose-500/[0.08] px-2.5 py-1.5 text-[10px] font-semibold text-rose-200 transition hover:border-rose-300/40 hover:bg-rose-500/15 disabled:cursor-not-allowed disabled:opacity-50"><Square className={`h-3 w-3 ${stoppingProjectRunId ? 'animate-pulse' : 'fill-current'}`} />{stoppingProjectRunId ? 'Stopping…' : activeProjectBuildRuns.length > 1 ? `Stop ${activeProjectBuildRuns.length} builds` : 'Stop build'}</button>}
-              </div>}
-              {!isClient && project && (projectRepositories.length > 1 ? <div ref={repositoryMenuRef} className="relative">
-                <button type="button" aria-label="Choose codebases for this product build" aria-haspopup="true" aria-expanded={repositoryMenuOpen} aria-controls="chat-repositories-menu" onClick={() => setRepositoryMenuOpen(value => !value)} className="inline-flex max-w-full items-center gap-2 rounded-lg border border-white/10 bg-surface-100 px-3 py-2 text-left text-[11px] text-gray-200 transition hover:border-violet-300/40 hover:bg-white/[0.04]">
-                  <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-violet-300" />
-                  <span className="text-gray-400">Codebases</span>
-                  <span className="max-w-48 truncate font-medium text-gray-100">{selectedBuildRepositoryLabel ?? 'Choose codebases…'}</span>
-                  <ChevronDown className={`h-3 w-3 shrink-0 text-gray-400 transition-transform ${repositoryMenuOpen ? 'rotate-180' : ''}`} />
-                </button>
-                {repositoryMenuOpen && <div id="chat-repositories-menu" role="group" aria-label="Project repositories" className="absolute bottom-full right-0 z-40 mb-2 w-[min(24rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-white/15 bg-[#17171f] p-2 shadow-2xl shadow-black/50">
-                  <div className="flex items-center justify-between border-b border-white/[0.08] px-2 pb-2">
-                    <div><div className="text-xs font-semibold text-white">Choose codebases for this product</div><div className="mt-0.5 text-[10px] text-gray-400">The Orchestrator creates one shared plan and assigns work across these codebases.</div></div>
-                    <div className="flex items-center gap-2 text-[10px]"><button type="button" onClick={() => setSelectedBuildRepositories(projectRepositories.map(item => item.repo))} className="text-violet-200 hover:text-white">Select all</button><button type="button" onClick={() => setSelectedBuildRepositories([])} className="text-gray-400 hover:text-white">Clear</button></div>
-                  </div>
-                  <div className="mt-1 max-h-56 overflow-y-auto" role="group" aria-label="Select product codebases">
-                    {projectRepositories.map(item => {
-                      const selected = selectedBuildRepositories.includes(item.repo);
-                      return <button key={item.repo} type="button" aria-pressed={selected} onClick={() => setSelectedBuildRepositories(current => current.includes(item.repo) ? current.filter(repo => repo !== item.repo) : [...current, item.repo])} className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition hover:bg-white/[0.06] focus:bg-white/[0.06] focus:outline-none">
-                        <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${selected ? 'border-violet-300 bg-violet-400/20 text-violet-100' : 'border-gray-500'}`}>{selected && <Check className="h-3 w-3" />}</span>
-                        <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-gray-100">{item.repo}</span>
-                        <span className={`shrink-0 text-[10px] ${item.connected ? 'text-emerald-300' : 'text-sky-200'}`}>{item.connected ? 'Ready here' : 'Will clone at start'}</span>
-                      </button>;
-                    })}
-                  </div>
-                  <div className="border-t border-white/[0.08] px-2 py-2 text-[10px] leading-4 text-gray-500">Choose every codebase needed for the product. Alpha can clone selected codebases that are not on this machine when the build starts.</div>
+                {mentionQuery && !isClient && !activeTurnMessageId && <div id="chat-mention-suggestions" role="listbox" aria-label="Project agent suggestions" className="absolute bottom-full left-12 z-50 mb-3 w-[min(22rem,calc(100vw-5rem))] overflow-hidden rounded-xl border border-white/15 bg-[#17171f] p-1.5 shadow-2xl shadow-black/50">
+                  <div className="px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Mention a project agent</div>
+                  {!snapshot ? <div className="px-2.5 py-3 text-xs text-gray-400">Open a project conversation to see its agents.</div> : mentionSuggestions.length ? mentionSuggestions.map((agent, index) => <button key={agent.id} type="button" role="option" aria-selected={index === activeMentionIndex} onMouseDown={event => event.preventDefault()} onMouseEnter={() => setActiveMentionIndex(index)} onClick={() => insertAgentMention(agent)} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${index === activeMentionIndex ? 'bg-violet-500/15 text-white' : 'text-gray-300 hover:bg-white/[0.06]'}`}>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md text-[10px] font-semibold text-white" style={{ backgroundColor: agent.color || '#6d28d9' }}>{agent.avatar ? <img src={agent.avatar} alt="" className="h-full w-full object-cover" /> : agent.name.charAt(0)}</span>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{agent.name}</span><span className="block truncate text-[10px] text-gray-500">{agent.role}</span></span>
+                    <span className="text-[10px] text-violet-200">@</span>
+                  </button>) : <div className="px-2.5 py-3 text-xs text-gray-400">No matching project agents.</div>}
+                  <div className="border-t border-white/[0.08] px-2.5 py-2 text-[10px] text-gray-600">Use ↑ and ↓ to choose, Enter to add, or Esc to close.</div>
                 </div>}
-              </div> : projectRepositories.length === 1 ? <div className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] ${projectRepositories[0].connected ? 'border-emerald-400/15 bg-emerald-500/[0.05] text-emerald-200' : 'border-sky-400/15 bg-sky-500/[0.05] text-sky-200'}`}><FolderGit2 className="h-3.5 w-3.5" /><span>{projectRepositories[0].repo}</span><span>· {projectRepositories[0].connected ? 'ready here' : 'will clone at start'}</span></div> : snapshot ? <span className="inline-flex items-center gap-1.5 text-[10px] text-amber-200"><FolderGit2 className="h-3.5 w-3.5" />Connect a repository to build project files</span> : null)}
+                <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : undefined} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : 'Ask Alpha anything or describe what to build. Type @ to call an agent…'} className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-white placeholder-gray-500 outline-none" />
+                {activeTurnMessageId && <button type="button" onClick={() => void stopChatTurn()} disabled={chatTurnActionBusy} className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-full border border-rose-400/25 bg-rose-500/[0.08] px-3 text-xs font-semibold text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"><Square className={`h-3 w-3 ${chatTurnActionBusy ? 'animate-pulse fill-current' : 'fill-current'}`} />{chatTurnActionBusy ? 'Stopping…' : 'Stop'}</button>}
+                <button type="submit" aria-label={activeTurnMessageId ? 'Queue direction for current agent' : forcedBuild ? 'Start Orchestrator build' : 'Send message'} disabled={(!input.trim() && (!pendingFiles.length || Boolean(activeTurnMessageId) || forcedBuild)) || Boolean(chatTurnActionBusy) || isAgentTyping && !activeTurnMessageId || !activeTurnMessageId && forcedBuild && (!can('run_agents') || activeProjectBuildRuns.length > 0 || requiresRepositorySelection)} title={activeTurnMessageId ? 'Queue this direction for the current response.' : forcedBuild && !can('run_agents') ? 'Your workspace role cannot start product builds.' : forcedBuild && activeProjectBuildRuns.length > 0 ? 'Stop the earlier build before starting another.' : forcedBuild && projectRepositories.length === 0 ? 'Connect a codebase before building.' : forcedBuild && requiresRepositorySelection ? 'Select at least one codebase to build.' : undefined} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-500 text-on-accent hover:bg-brand-400 disabled:opacity-30"><Send className="h-4 w-4" /></button>
+              </form>
+              {(pendingFiles.length > 0 || Boolean(activeTurnMessageId)) && <div className="px-4 text-center text-[10px] text-gray-500">{pendingFiles.length ? `Files stay in this device’s private Alpha storage. ${forcedBuild ? 'Project builds store attachments but do not inspect them yet.' : 'Unsupported file types are marked as not analyzed.'}` : 'Directions are queued and picked up at the next safe point.'}</div>}
             </div>
-            {pendingFileViews.length > 0 && <div className="flex flex-wrap gap-2">{pendingFileViews.map(({ file, previewUrl }, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex max-w-full items-center gap-2 rounded-xl border border-white/10 bg-surface-100 px-2 py-1.5 text-[10px] text-gray-300">
-              {previewUrl ? <img src={previewUrl} alt={`Preview of ${file.name}`} className="h-8 w-8 rounded-md object-cover" /> : <FileText className="ml-1 h-4 w-4 shrink-0 text-violet-200" />}
-              <span className="max-w-48 truncate">{file.name}</span><span className="shrink-0 text-gray-500">{formatFileSize(file.size)}</span>
-              <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removePendingFile(index)} className="rounded-md p-1 text-gray-500 hover:bg-white/10 hover:text-white"><X className="h-3.5 w-3.5" /></button>
-            </div>)}</div>}
-            <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-2 rounded-2xl ${isDraggingFiles ? 'ring-2 ring-violet-300/70' : ''}`}>
-              <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
-              <button type="button" aria-label="Attach files" title={activeTurnMessageId ? 'Finish this response before attaching files.' : 'Attach images or files'} disabled={Boolean(activeTurnMessageId) || pendingFiles.length >= MAX_CHAT_FILES} onClick={() => fileInputRef.current?.click()} className="h-11 w-11 shrink-0 rounded-xl border border-white/10 bg-surface-100 flex items-center justify-center text-gray-400 hover:text-white disabled:opacity-30"><Paperclip className="h-4 w-4" /></button>
-              {mentionQuery && !isClient && !activeTurnMessageId && chatIntent !== 'build' && <div id="chat-mention-suggestions" role="listbox" aria-label="Project agent suggestions" className="absolute bottom-full left-14 z-50 mb-2 w-[min(22rem,calc(100vw-5rem))] overflow-hidden rounded-xl border border-white/15 bg-[#17171f] p-1.5 shadow-2xl shadow-black/50">
-                <div className="px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Mention a project agent</div>
-                {!snapshot ? <div className="px-2.5 py-3 text-xs text-gray-400">Open a project conversation to see its agents.</div> : mentionSuggestions.length ? mentionSuggestions.map((agent, index) => <button key={agent.id} type="button" role="option" aria-selected={index === activeMentionIndex} onMouseDown={event => event.preventDefault()} onMouseEnter={() => setActiveMentionIndex(index)} onClick={() => insertAgentMention(agent)} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${index === activeMentionIndex ? 'bg-violet-500/15 text-white' : 'text-gray-300 hover:bg-white/[0.06]'}`}>
-                  <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md text-[10px] font-semibold text-white" style={{ backgroundColor: agent.color || '#6d28d9' }}>{agent.avatar ? <img src={agent.avatar} alt="" className="h-full w-full object-cover" /> : agent.name.charAt(0)}</span>
-                  <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{agent.name}</span><span className="block truncate text-[10px] text-gray-500">{agent.role}</span></span>
-                  <span className="text-[10px] text-violet-200">@</span>
-                </button>) : <div className="px-2.5 py-3 text-xs text-gray-400">No matching project agents.</div>}
-                <div className="border-t border-white/[0.08] px-2.5 py-2 text-[10px] text-gray-600">Use ↑ and ↓ to choose, Enter to add, or Esc to close.</div>
-              </div>}
-              <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : undefined} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : chatIntent === 'build' ? 'Describe the product change to build across the selected codebases…' : chatIntent === 'ask' ? 'Ask Alpha or type @ to call a project agent…' : 'Ask Alpha, type @ to call an agent, or describe a build…'} className="min-h-12 max-h-32 flex-1 resize-none rounded-2xl border border-white/10 bg-surface-100 px-4 py-3 text-sm text-white placeholder-gray-600 outline-none focus:border-brand-400" />
-              <button type="submit" aria-label={activeTurnMessageId ? 'Queue direction for current agent' : chatIntent === 'build' ? 'Start Orchestrator build' : 'Send message'} disabled={(!input.trim() && (!pendingFiles.length || Boolean(activeTurnMessageId) || chatIntent === 'build')) || Boolean(chatTurnActionBusy) || isAgentTyping && !activeTurnMessageId || !activeTurnMessageId && chatIntent === 'build' && (!can('run_agents') || activeProjectBuildRuns.length > 0 || requiresRepositorySelection)} title={activeTurnMessageId ? 'Queue this direction for the current response.' : chatIntent === 'build' && !can('run_agents') ? 'Your workspace role cannot start product builds.' : chatIntent === 'build' && activeProjectBuildRuns.length > 0 ? 'Stop the earlier build before starting another.' : chatIntent === 'build' && projectRepositories.length === 0 ? 'Connect a codebase before building.' : chatIntent === 'build' && requiresRepositorySelection ? 'Select at least one codebase to build.' : undefined} className="h-11 w-11 shrink-0 rounded-xl bg-brand-500 flex items-center justify-center text-on-accent hover:bg-brand-400 disabled:opacity-30"><Send className="h-4 w-4" /></button>
-              {activeTurnMessageId && <button type="button" onClick={() => void stopChatTurn()} disabled={chatTurnActionBusy} className="inline-flex h-11 shrink-0 items-center gap-1.5 rounded-xl border border-rose-400/25 bg-rose-500/[0.08] px-3 text-xs font-semibold text-rose-200 hover:bg-rose-500/15 disabled:opacity-50"><Square className={`h-3 w-3 ${chatTurnActionBusy ? 'animate-pulse fill-current' : 'fill-current'}`} />{chatTurnActionBusy ? 'Stopping…' : 'Stop response'}</button>}
-              {!isClient && <button type="button" onClick={openCallPanel} className="h-11 shrink-0 rounded-xl border border-brand-400/25 bg-brand-500/10 px-3 text-xs font-semibold text-brand-200 hover:bg-brand-500/20 sm:hidden"><Bot className="h-4 w-4" /></button>}
-            </form>
-            <div className="flex items-center justify-between gap-3 text-[10px] text-gray-600"><span>{pendingFiles.length ? `Files stay in this device’s private Alpha storage. ${chatIntent === 'build' ? 'Project builds store attachments but do not inspect them yet.' : 'Unsupported file types are marked as not analyzed.'}` : activeTurnMessageId ? 'Directions are queued and picked up at the next safe point.' : 'Shift + Enter for a new line'}</span><span className="inline-flex shrink-0 items-center gap-1"><ShieldCheck className="h-3 w-3 text-emerald-400" /> Project boundary enforced</span></div>
           </div>
+
         </> : <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"><MessageSquare className="h-12 w-12 text-gray-700" /><p className="text-sm text-gray-500">Pick a project conversation, or start a new one with +.</p></div>}
       </main>
+      {!isClient && inspectedCall && <AgentActivityPanel call={inspectedCall} agent={agentForCall(inspectedCall)} name={isOrchestratorCall(inspectedCall) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(inspectedCall) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} onClose={() => setInspectedCallId(null)} />}
     </div>
   );
 };

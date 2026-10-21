@@ -1505,14 +1505,24 @@ export interface ChatMessage {
   thinkingProcess?: string;
   toolsExecuted?: ToolExecutionRecord[];
   isStreaming?: boolean;
-  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build' | 'build_milestone';
+  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build' | 'build_milestone' | 'build_proposal' | 'project_needed';
   agentCallId?: string;
   orchestrationRunId?: string;
+  /** A build Alpha proposed instead of starting, awaiting the user's answer. */
+  routeProposal?: ChatRouteProposal;
   operationMode?: AgentCallMode;
   agentCallStatus?: AgentCallStatus;
   revisionTarget?: AgentCallTarget;
   /** Attachment details are local metadata only; file bytes stay on this device. */
   attachments?: ChatAttachmentReference[];
+}
+
+/** A build Alpha proposed in chat. */
+export interface ChatRouteProposal {
+  sourceMessageId: string;
+  goal: string;
+  repositories: string[];
+  status: 'open' | 'accepted' | 'dismissed';
 }
 
 export interface ChatAttachmentReference {
