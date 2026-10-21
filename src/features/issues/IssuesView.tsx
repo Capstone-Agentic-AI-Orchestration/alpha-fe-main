@@ -46,19 +46,27 @@ const ACTIVE_BUILD_STATUSES = new Set([
   'awaiting_approval', 'publishing', 'cancelling', 'blocked', 'recovery_required'
 ]);
 
+const CHIP_INFO = 'border-sky-400/30 bg-sky-500/10 text-sky-200';
+const CHIP_REVIEW = 'border-violet-400/30 bg-violet-500/10 text-violet-200';
+const CHIP_ACTIVE = 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200';
+const CHIP_WAIT = 'border-amber-400/30 bg-amber-500/10 text-amber-200';
+const CHIP_MUTED = 'border-white/15 bg-white/[0.04] text-gray-300';
+const CHIP_ALERT = 'border-rose-400/30 bg-rose-500/10 text-rose-200';
+const CHIP_DONE = 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200';
+
 const BUILD_CHIPS: Record<string, { label: string; className: string }> = {
-  planning: { label: 'Planning', className: 'border-sky-400/30 bg-sky-500/10 text-sky-200' },
-  awaiting_plan_approval: { label: 'Plan ready', className: 'border-violet-400/30 bg-violet-500/10 text-violet-200' },
-  executing: { label: 'Building', className: 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200' },
-  validating: { label: 'Checking', className: 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200' },
-  publishing: { label: 'Publishing', className: 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200' },
-  paused: { label: 'Paused', className: 'border-amber-400/30 bg-amber-500/10 text-amber-200' },
-  cancelling: { label: 'Stopping', className: 'border-white/15 bg-white/[0.04] text-gray-300' },
-  blocked: { label: 'Needs you', className: 'border-rose-400/30 bg-rose-500/10 text-rose-200' },
-  recovery_required: { label: 'Needs you', className: 'border-rose-400/30 bg-rose-500/10 text-rose-200' },
-  awaiting_approval: { label: 'Ready for review', className: 'border-violet-400/30 bg-violet-500/10 text-violet-200' },
-  completed: { label: 'Built', className: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200' },
-  failed: { label: 'Build failed', className: 'border-rose-400/30 bg-rose-500/10 text-rose-200' }
+  planning: { label: 'Planning', className: CHIP_INFO },
+  awaiting_plan_approval: { label: 'Plan ready', className: CHIP_REVIEW },
+  executing: { label: 'Building', className: CHIP_ACTIVE },
+  validating: { label: 'Checking', className: CHIP_ACTIVE },
+  publishing: { label: 'Publishing', className: CHIP_ACTIVE },
+  paused: { label: 'Paused', className: CHIP_WAIT },
+  cancelling: { label: 'Stopping', className: CHIP_MUTED },
+  blocked: { label: 'Needs you', className: CHIP_ALERT },
+  recovery_required: { label: 'Needs you', className: CHIP_ALERT },
+  awaiting_approval: { label: 'Ready for review', className: CHIP_REVIEW },
+  completed: { label: 'Built', className: CHIP_DONE },
+  failed: { label: 'Build failed', className: CHIP_ALERT }
 };
 
 const BuildChip: React.FC<{ build?: IssueBuildStatus }> = ({ build }) => {
@@ -163,21 +171,23 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
    */
   const [issueBuilds, setIssueBuilds] = useState<Record<string, IssueBuildStatus>>({});
   useEffect(() => {
-    if (!isDesktop) return;
     let cancelled = false;
-    const load = async () => {
-      try {
-        const rows = await apiService.getIssueBuildStatuses();
-        if (!cancelled) setIssueBuilds(Object.fromEntries(rows.map(row => [row.issueId, row])));
-      } catch {
+    const load = () => {
+      apiService.getIssueBuildStatuses()
+        .then(rows => { if (!cancelled) setIssueBuilds(Object.fromEntries(rows.map(row => [row.issueId, row]))); })
         // An older daemon has no build-status route; cards simply show no chip.
-      }
+        .catch(() => undefined);
     };
-    void load();
-    const timer = window.setInterval(load, 10_000);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    const timer = isDesktop ? window.setInterval(load, 10_000) : undefined;
+    if (isDesktop) load();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearInterval(timer);
+    };
   }, []);
   const hasActiveBuild = (issue: Issue) => ACTIVE_BUILD_STATUSES.has(issueBuilds[issue.id]?.status ?? '');
+  const canStartBuild = (issue: Issue) =>
+    canRunBuilds && issue.status !== 'done' && issue.status !== 'agent_running' && !hasActiveBuild(issue);
   const boardColumnFor = (issue: Issue): IssueStatus =>
     issue.status !== 'done' && issue.status !== 'review' && hasActiveBuild(issue) ? 'agent_running' : issue.status;
   
@@ -806,7 +816,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                               {getAssigneeVisual(issue)}
                               <BuildChip build={issueBuilds[issue.id]} />
                             </div>
-                            {canRunBuilds && issue.status !== 'done' && issue.status !== 'agent_running' && !hasActiveBuild(issue) && (
+                            {canStartBuild(issue) && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

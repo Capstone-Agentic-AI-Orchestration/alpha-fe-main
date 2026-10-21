@@ -16,6 +16,7 @@ import {
   WorkspaceSettings,
   ChatMessage,
   ChatAttachmentReference,
+  ChatIntent,
   ChatThread,
   PrototypeRun,
   RunActivity,
@@ -228,7 +229,7 @@ interface AppContextType {
   chatTypingByThread: Record<string, boolean>;
   activeChatAgentId: string | null;
   setActiveChatAgentId: (id: string | null) => void;
-  sendChatMessage: (content: string, threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments?: ChatAttachmentReference[], options?: ChatSendOptions) => Promise<void>;
+  sendChatMessage: (content: string, threadId?: string | null, repositories?: string[], intent?: ChatIntent, attachments?: ChatAttachmentReference[], options?: ChatSendOptions) => Promise<void>;
   clearChat: (threadId?: string | null) => void;
   
   // Settings
@@ -2893,7 +2894,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
     );
   };
 
-  const sendChatMessage = async (content: string, threadIdOverride?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments: ChatAttachmentReference[] = [], options: ChatSendOptions = {}) => {
+  const sendChatMessage = async (content: string, threadIdOverride?: string | null, repositories?: string[], intent?: ChatIntent, attachments: ChatAttachmentReference[] = [], options: ChatSendOptions = {}) => {
     if (!requireCapability('manage_chat')) return;
     let targetThreadId = threadIdOverride ?? activeThreadId;
     if (!targetThreadId) {
@@ -3805,7 +3806,7 @@ export const useApp = () => {
       setSessionValue('activeThreadId', id);
     },
     createNewThread: createScopedThread,
-    sendChatMessage: async (content: string, _threadId?: string | null, repositories?: string[], intent?: 'auto' | 'build' | 'ask', attachments?: ChatAttachmentReference[], options?: ChatSendOptions) => {
+    sendChatMessage: async (content: string, _threadId?: string | null, repositories?: string[], intent?: ChatIntent, attachments?: ChatAttachmentReference[], options?: ChatSendOptions) => {
       let threadId = activeThreadId;
       if (!threadId) threadId = createScopedThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
       if (threadId) await context.sendChatMessage(content, threadId, repositories, intent, attachments, options);

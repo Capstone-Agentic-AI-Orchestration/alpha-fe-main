@@ -133,7 +133,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         description: promptText.trim(),
         projectId: selectedProjectId,
         priority: priority === 'none' ? 'medium' : priority,
-        // Keep the new card in Todo so the author can finish planning before
+        // New cards start unstarted so the author can finish planning before
         // starting an Orchestrator build from the card. The Orchestrator picks
         // the agents for each task when the build is planned.
         status: 'todo',
