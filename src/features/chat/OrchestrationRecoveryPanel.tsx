@@ -34,6 +34,7 @@ interface OrchestrationRecoveryPanelProps {
 
 const actionMeta: Record<LiveBuildRecoveryAction, { label: string; icon: React.ReactNode; tone: string }> = {
   explain_failure: { label: 'Explain issue', icon: <MessageSquareText className="h-3.5 w-3.5" />, tone: 'border-white/10 text-slate-200 hover:bg-white/[0.06]' },
+  retry_report_format: { label: 'Retry report format', icon: <ClipboardCheck className="h-3.5 w-3.5" />, tone: 'border-sky-300/25 bg-sky-300/[0.07] text-sky-100 hover:bg-sky-300/[0.12]' },
   repair_and_continue: { label: 'Fix and continue', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-violet-300/25 bg-violet-300/[0.08] text-violet-100 hover:bg-violet-300/[0.14]' },
   provide_guidance: { label: 'Provide direction', icon: <MessageSquareText className="h-3.5 w-3.5" />, tone: 'border-violet-300/25 bg-violet-300/[0.08] text-violet-100 hover:bg-violet-300/[0.14]' },
   recheck_prerequisite: { label: 'Recheck and resume', icon: <RefreshCw className="h-3.5 w-3.5" />, tone: 'border-sky-300/25 bg-sky-300/[0.07] text-sky-100 hover:bg-sky-300/[0.12]' },
@@ -64,9 +65,10 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
   const active = recovery.phase !== 'resolved' && recovery.phase !== 'cancelled';
   const availabilityNote = recovery.actionReasons.provide_guidance
     ?? recovery.actionReasons.recheck_prerequisite
+    ?? recovery.actionReasons.retry_report_format
     ?? recovery.actionReasons.repair_and_continue
     ?? recovery.actionReasons.resume_checkpoint;
-  const actions = (['explain_failure', 'repair_and_continue', 'provide_guidance', 'recheck_prerequisite',
+  const actions = (['explain_failure', 'retry_report_format', 'repair_and_continue', 'provide_guidance', 'recheck_prerequisite',
     'plan_final_validation_corrections', 'resume_checkpoint', 'review_saved_changes', 'keep_paused', 'cancel_build'] as LiveBuildRecoveryAction[])
     .filter(action => available.has(action) &&
       (canControl || action === 'explain_failure' || action === 'review_saved_changes') &&

@@ -109,7 +109,7 @@ function TaskEvidence({ workflow, taskId, taskById }: {
 
   return <div className="space-y-3">
     {findings.map(finding => <div key={finding.id} className="rounded-lg border border-amber-300/15 bg-amber-300/[0.045] px-3 py-2.5">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-amber-100"><AlertTriangle className="h-3.5 w-3.5" />{finding.title || `${finding.severity} finding`}{finding.check === 'agent_report' || finding.check === 'report_identity' || finding.check === 'review_findings_missing' ? <span className="rounded border border-sky-300/15 px-1.5 py-0.5 text-[9px] font-medium text-sky-100/80">Report format</span> : null}{finding.path && <code className="font-normal text-amber-100/60">{finding.path}</code>}<span className={`rounded border px-1.5 py-0.5 text-[9px] font-medium ${finding.status === 'resolved' ? 'border-emerald-300/15 text-emerald-100/70' : 'border-amber-300/15 text-amber-100/75'}`}>{finding.status === 'resolved' ? 'Resolved' : finding.severity}</span></div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-amber-100"><AlertTriangle className="h-3.5 w-3.5" />{finding.title || `${finding.severity} finding`}{['agent_report', 'report_identity', 'review_findings_missing', 'requirement_coverage', 'acceptance_criteria'].includes(finding.check ?? '') ? <span className="rounded border border-sky-300/15 px-1.5 py-0.5 text-[9px] font-medium text-sky-100/80">Report format</span> : null}{finding.path && <code className="font-normal text-amber-100/60">{finding.path}</code>}<span className={`rounded border px-1.5 py-0.5 text-[9px] font-medium ${finding.status === 'resolved' ? 'border-emerald-300/15 text-emerald-100/70' : 'border-amber-300/15 text-amber-100/75'}`}>{finding.status === 'resolved' ? 'Resolved' : finding.severity}</span></div>
       {finding.evidence && <p className="mt-1 text-[10px] leading-4 text-amber-100/60">Evidence: {finding.evidence}</p>}
       <p className="mt-1 text-xs leading-5 text-amber-100/75">{finding.instruction || 'This result needs a correction or review.'}</p>
       {finding.correctionTaskId && <p className="mt-1.5 text-[10px] text-slate-400">{finding.check === 'agent_report' || finding.check === 'report_identity' || finding.check === 'review_findings_missing' ? 'Format correction returned to' : 'Correction assigned to'} <span className="font-medium text-slate-200">{taskById.get(finding.correctionTaskId)?.ownerName || 'the same specialist'}</span></p>}
@@ -124,6 +124,7 @@ function TaskEvidence({ workflow, taskId, taskById }: {
         <summary className="cursor-pointer text-[10px] font-medium text-slate-400">Show original report response</summary>
         <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-4 text-slate-500">{attempt.summary}</pre>
       </details>}
+      {attempt.reportError && <div className="mt-2 rounded-md border border-sky-300/12 bg-sky-300/[0.035] px-2.5 py-2 text-[10px] leading-4 text-sky-100/80"><span className="font-semibold">Alpha’s report check:</span> <span className="break-words">{attempt.reportError}</span></div>}
       {attempt.failureReason && <div className="mt-2 rounded-md border border-amber-300/12 bg-amber-300/[0.035] px-2.5 py-2 text-[10px] leading-4 text-amber-100/80"><span className="font-semibold">Why it stopped:</span> <span className="break-words">{attempt.failureReason}</span></div>}
       <ReportResponseDisclosure response={attempt.reportResponse} truncated={attempt.reportResponseTruncated} />
       {attempt.report && <div className="mt-3 space-y-2.5 border-t border-white/[0.05] pt-3">
@@ -198,6 +199,7 @@ function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration })
               <summary className="cursor-pointer text-[10px] font-medium text-slate-400">Show original report response</summary>
               <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-4 text-slate-500">{attempt.summary}</pre>
             </details>}
+            {attempt.reportError && <div className="mt-2 rounded-md border border-sky-300/12 bg-sky-300/[0.035] px-2.5 py-2 text-[10px] leading-4 text-sky-100/80"><span className="font-semibold">Alpha’s report check:</span> <span className="break-words">{attempt.reportError}</span></div>}
             {attempt.failureReason && <div className="mt-2 rounded-md border border-amber-300/12 bg-amber-300/[0.035] px-2.5 py-2 text-[10px] leading-4 text-amber-100/80"><span className="font-semibold">Why it stopped:</span> <span className="break-words">{attempt.failureReason}</span></div>}
             <ReportResponseDisclosure response={attempt.reportResponse} truncated={attempt.reportResponseTruncated} />
           </div>
