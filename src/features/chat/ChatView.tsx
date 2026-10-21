@@ -51,6 +51,7 @@ import {
 import { ThreadProjectPicker } from '@/features/chat/ThreadProjectPicker';
 import { MessageMarkdown } from './MessageMarkdown';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
+import { inferRecoveryAction, isExplicitBuildRetry } from './chatRecoveryIntent';
 import { useTranscriptScroll } from './useTranscriptScroll';
 
 const MODE_META: Record<AgentCallMode, {
@@ -94,19 +95,6 @@ const TARGET_LABELS: Record<string, string> = {
 };
 const MAX_CHAT_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_CHAT_FILES = 8;
-
-function inferRecoveryAction(message: string): LiveBuildRecoveryAction | undefined {
-  const text = message.trim().toLowerCase();
-  if (/\b(explain|why did|what caused|what is the reason)\b/.test(text)) return 'explain_failure';
-  if (/\b(review|show|open)\b.*\b(saved changes|patch|diff)\b/.test(text)) return 'review_saved_changes';
-  if (/\b(keep|leave)\b.*\b(paused|stopped)\b|\bdon't resume\b/.test(text)) return 'keep_paused';
-  if (/\b(cancel|stop)\b.*\b(build|run)\b/.test(text)) return 'cancel_build';
-  if (/\b(recheck|reconnect|reconnected|resume|continue from checkpoint)\b/.test(text)) return 'recheck_prerequisite';
-  if (/\b(fix|repair|correct)\b.*\b(continue|build|failure|error|test|check|this|it)\b|\bfix and continue\b|\brepair and continue\b/.test(text)) {
-    return 'repair_and_continue';
-  }
-  return undefined;
-}
 
 function recoveryActionKey(): string {
   return globalThis.crypto?.randomUUID?.() ?? `chat-recovery-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
@@ -931,10 +919,15 @@ export const ChatView: React.FC = () => {
 
   const dispatchRecoveryFollowUp = async (message: string, requestedAction: LiveBuildRecoveryAction): Promise<boolean> => {
     if (!activeThread?.id || !activeThread.projectId) return false;
+    const explicitBuildRetry = isExplicitBuildRetry(message);
     const runIds = [...new Set(currentMessages
       .filter(item => item.messageType === 'build' && item.orchestrationRunId)
       .map(item => item.orchestrationRunId!))];
-    if (!runIds.length) return false;
+    if (!runIds.length) {
+      const requestedRetry = explicitBuildRetry || requestedAction === 'retry_report_format';
+      if (requestedRetry) showToast('No build to retry', 'Start a build with Build with Orchestrator, or open the build you want to continue.', 'info');
+      return requestedRetry;
+    }
 
     const states = await Promise.all(runIds.map(async runId => {
       try {
@@ -956,6 +949,10 @@ export const ChatView: React.FC = () => {
         showToast('Recovery details unavailable', 'Refresh Alpha or open the Live Build Room to load this build’s recovery controls.', 'error');
         return true;
       }
+      if (explicitBuildRetry && runIds.length > 1) {
+        showToast('Choose a build first', 'This conversation has more than one saved build. Open the one you want to retry so Alpha uses the right work and history.', 'info');
+        return true;
+      }
       return false;
     }
     const recovery = selected.state.recovery ?? (requestedAction === 'explain_failure' || requestedAction === 'review_saved_changes'
@@ -967,6 +964,11 @@ export const ChatView: React.FC = () => {
     }
 
     let action = requestedAction;
+    if (action === 'repair_and_continue') {
+      if (recovery.category === 'report') action = 'retry_report_format';
+      else if (['provider', 'configuration', 'review_input', 'final_validation', 'budget'].includes(recovery.category)) action = 'recheck_prerequisite';
+      else if (['workspace', 'alpha'].includes(recovery.category)) action = 'resume_checkpoint';
+    }
     if (action === 'repair_and_continue' && !recovery.availableActions.includes(action) && recovery.availableActions.includes('provide_guidance')) {
       action = 'provide_guidance';
     } else if (action === 'recheck_prerequisite' && !recovery.availableActions.includes(action) && recovery.availableActions.includes('resume_checkpoint')) {

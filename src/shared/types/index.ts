@@ -1168,6 +1168,7 @@ export interface LiveBuildRoomOrchestration {
     summary?: string;
     reportResponse?: string;
     reportResponseTruncated?: boolean;
+    reportError?: string;
     failureReason?: string;
     report?: {
       requirementCoverage: Array<{ requirementId?: string; evidence?: string }>;
@@ -1237,6 +1238,7 @@ export interface LiveBuildRoomOrchestration {
 
 export type LiveBuildRecoveryAction =
   | 'explain_failure'
+  | 'retry_report_format'
   | 'repair_and_continue'
   | 'provide_guidance'
   | 'recheck_prerequisite'
