@@ -29,6 +29,8 @@ import {
   LiveBuildRoomSnapshot,
   LiveBuildRoomDiffPreview,
   LiveBuildRoomOrchestration,
+  LiveBuildRecoveryState,
+  LiveBuildRecoveryAction,
   LiveBuildPlanningRecoveryPreview,
   UserRole,
   AgentCall,
@@ -652,6 +654,33 @@ export const apiService = {
     fetchJson<LiveBuildRoomDiffPreview>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/diff`
     ),
+  getOrchestrationRecovery: (projectId: string, runId: string) =>
+    fetchJson<LiveBuildRecoveryState>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/recovery`,
+      { cache: 'no-store' }
+    ),
+  performOrchestrationRecoveryAction: (projectId: string, runId: string, body: {
+    recoveryId: string;
+    expectedRunRevision: number;
+    expectedRecoveryRevision: number;
+    expectedTaskRevision?: number;
+    idempotencyKey: string;
+    action: LiveBuildRecoveryAction;
+    guidance?: string;
+    threadId?: string;
+  }) => fetchJson<{
+    accepted: boolean;
+    pending?: boolean;
+    actionId: string;
+    runStatus?: string;
+    currentTaskId?: string;
+    explanation?: string;
+    message?: string;
+    state?: LiveBuildRecoveryState;
+  }>(
+    `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/recovery/actions`,
+    { method: 'POST', body: JSON.stringify(body) }
+  ),
   inspectOrchestrationPlanningRecovery: (projectId: string, runId: string) =>
     fetchJson<{ runId: string; state: 'cleaned' | 'needs_review' | 'manual_review' | 'retained'; revision?: number; reason?: string }>(
       `/projects/${encodeURIComponent(projectId)}/planning-recoveries/${encodeURIComponent(runId)}/inspect`,

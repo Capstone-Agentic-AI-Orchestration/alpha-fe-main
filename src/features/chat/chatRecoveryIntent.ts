@@ -1,0 +1,61 @@
+import type { LiveBuildRecoveryAction, LiveBuildRecoveryProjection } from '@/shared/types';
+
+export function isExplicitBuildRetry(message: string): boolean {
+  const text = message.trim().toLowerCase();
+  const retryPattern = /\b(rerun|re-run|retry|run(?:\s+it)?\s+again|try again|restart)\b.*\b(build|run|task|agent|it)\b|\b(build|run|task)\b.*\b(again|rerun|re-run|retry)\b/;
+  const retryVerb = '(?:rerun|re-run|retry|run(?:\\s+it)?\\s+again|try again|restart)';
+  const negated = new RegExp(`\\b(?:don't|do not|never|not|can't|cannot|shouldn't|should not|wouldn't|would not)\\s+${retryVerb}\\b`).test(text)
+    || /\b(?:can't|cannot|shouldn't|should not|wouldn't|would not)\s+(?:i|we)\s+(?:rerun|re-run|retry|run again|restart)\b/.test(text)
+    || /\b(?:don't|do not)\s+want\b.{0,24}\b(?:rerun|re-run|retry|run again|restart)\b/.test(text)
+    || /\bwithout\s+(?:rerunning|retrying|restarting)\b/.test(text);
+  return retryPattern.test(text) && !negated;
+}
+
+export function inferRecoveryAction(message: string): LiveBuildRecoveryAction | undefined {
+  const text = message.trim().toLowerCase();
+  if (/\bwhy\b.*\b(can't|cannot|won't|isn't|not allowed)\b.*\b(rerun|re-run|retry|run again|restart)\b/.test(text)) return 'explain_failure';
+  if (/\b(explain|why did|what caused|what is the reason)\b/.test(text)) return 'explain_failure';
+  if (/\b(review|show|open)\b.*\b(saved changes|patch|diff)\b/.test(text)) return 'review_saved_changes';
+  if (/\b(keep|leave)\b.*\b(paused|stopped)\b|\bdon't resume\b/.test(text)) return 'keep_paused';
+  if (/\b(cancel|stop)\b.*\b(build|run)\b/.test(text)) return 'cancel_build';
+  if (/\b(retry|correct|fix)\b.*\b(report|response|format|field)\b/.test(text)) return 'retry_report_format';
+  if (isExplicitBuildRetry(text)) return 'repair_and_continue';
+  if (/\b(fix|repair|correct)\b.*\b(continue|build|failure|error|test|check|this|it)\b|\bfix and continue\b|\brepair and continue\b/.test(text)) {
+    return 'repair_and_continue';
+  }
+  if (/\b(recheck|reconnect|reconnected|resume)\b|\bcontinue\b.{0,48}\bcheckpoint\b/.test(text)) return 'recheck_prerequisite';
+  return undefined;
+}
+
+export function resolveRecoveryAction(
+  requestedAction: LiveBuildRecoveryAction,
+  recovery: Pick<LiveBuildRecoveryProjection, 'category' | 'availableActions'>
+): LiveBuildRecoveryAction {
+  let action = requestedAction;
+  if (action === 'repair_and_continue') {
+    if (recovery.category === 'report') action = 'retry_report_format';
+    else if (['provider', 'configuration', 'review_input', 'final_validation', 'budget'].includes(recovery.category)) {
+      action = 'recheck_prerequisite';
+    } else if (['workspace', 'alpha'].includes(recovery.category)) {
+      action = recovery.availableActions.includes('resume_checkpoint') ? 'resume_checkpoint'
+        : recovery.availableActions.includes('recheck_prerequisite') ? 'recheck_prerequisite' : action;
+    }
+  } else if (action === 'recheck_prerequisite') {
+    if (recovery.category === 'project_code') action = 'repair_and_continue';
+    else if (recovery.category === 'report') action = 'retry_report_format';
+    else if (['workspace', 'alpha'].includes(recovery.category)) {
+      action = recovery.availableActions.includes('resume_checkpoint') ? 'resume_checkpoint'
+        : recovery.availableActions.includes('recheck_prerequisite') ? 'recheck_prerequisite' : action;
+    }
+  }
+
+  if (action === 'repair_and_continue' && !recovery.availableActions.includes(action) &&
+      recovery.availableActions.includes('provide_guidance')) {
+    return 'provide_guidance';
+  }
+  if (action === 'recheck_prerequisite' && !recovery.availableActions.includes(action) &&
+      recovery.availableActions.includes('resume_checkpoint')) {
+    return 'resume_checkpoint';
+  }
+  return action;
+}

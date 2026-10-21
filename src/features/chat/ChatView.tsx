@@ -48,12 +48,15 @@ import {
   ProjectChatAgent,
   ProjectChatSnapshot,
   LiveBuildRoomSnapshot,
-  ChatSyncStatus
+  ChatSyncStatus,
+  LiveBuildRecoveryAction
 } from '@/shared/types';
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { MessageMarkdown } from './MessageMarkdown';
 import { OrchestratorFlow, isOrchestratorCall } from './OrchestratorFlow';
 import { AgentActivityPanel } from './AgentActivityPanel';
+import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
+import { inferRecoveryAction, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
 import { useTranscriptScroll } from './useTranscriptScroll';
 
 const MODE_META: Record<AgentCallMode, {
@@ -97,6 +100,10 @@ const TARGET_LABELS: Record<string, string> = {
 };
 const MAX_CHAT_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_CHAT_FILES = 8;
+
+function recoveryActionKey(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `chat-recovery-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
 
 interface ChatMentionQuery {
   start: number;
@@ -196,12 +203,14 @@ function ChatTurnActivityRow({
 function OrchestratorBuildActivityRow({
   projectId,
   runId,
+  threadId,
   onOpenRoom,
   onWithdraw,
   withdrawing = false
 }: {
   projectId: string;
   runId: string;
+  threadId: string;
   onOpenRoom: () => void;
   /** Turn an unstarted plan back into a question for Alpha to answer. */
   onWithdraw?: () => void;
@@ -212,6 +221,10 @@ function OrchestratorBuildActivityRow({
   const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [retryBusy, setRetryBusy] = useState(false);
+  const [retryError, setRetryError] = useState('');
+  const [retryNotice, setRetryNotice] = useState('');
+  const [retryNoticeTaskId, setRetryNoticeTaskId] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -271,13 +284,47 @@ function OrchestratorBuildActivityRow({
   const status = orchestration?.run.status;
   const working = Boolean(status && ['planning', 'executing', 'validating', 'publishing', 'cancelling'].includes(status));
   const currentTask = tasks.find(task => task.id === orchestration?.run.currentTaskId)
-    ?? tasks.find(task => ['running', 'submitted', 'blocked', 'failed'].includes(task.status));
+    ?? tasks.find(task => ['running', 'submitted'].includes(task.status));
   const currentAttempt = currentTask
     ? [...attempts].reverse().find(attempt => attempt.taskId === currentTask.id)
     : undefined;
   const currentAgent = snapshot?.agentCards.find(card => card.runId === currentAttempt?.prototypeRunId)
     ?? snapshot?.agentCards.find(card => card.status === 'running');
-  const failedAttempt = [...attempts].reverse().find(attempt => ['failed', 'recovery_required'].includes(attempt.status));
+  const failedAttempt = [...attempts].reverse().find(attempt =>
+    ['failed', 'recovery_required', 'rejected'].includes(attempt.status) &&
+    tasks.some(task => task.id === attempt.taskId && ['failed', 'blocked'].includes(task.status)));
+  const failedTask = failedAttempt ? tasks.find(task => task.id === failedAttempt.taskId) : undefined;
+  const recovery = orchestration?.recovery;
+  const activeRecovery = recovery && !['resolved', 'cancelled'].includes(recovery.phase) ? recovery : undefined;
+  const retryAvailable = Boolean(snapshot?.canControlOrchestration ?? snapshot?.canRun) &&
+    failedTask?.retryAvailable === true && !activeRecovery;
+  const refreshAfterRecovery = async () => {
+    const refreshed = await apiService.getLiveBuildRoom(projectId, runId);
+    setSnapshot(refreshed);
+  };
+  const retryFailedTask = async () => {
+    if (!retryAvailable || !failedTask || retryBusy) return;
+    setRetryBusy(true);
+    setRetryError('');
+    setRetryNotice('');
+    try {
+      await apiService.retryOrchestrationTask(projectId, runId, failedTask.id, failedTask.revision);
+      const refreshed = await apiService.getLiveBuildRoom(projectId, runId);
+      setSnapshot(refreshed);
+      if (refreshed.orchestration?.run.currentTaskId === failedTask.id) {
+        setRetryNotice('The task restarted. Alpha will check its new result before handing work to the next specialist.');
+        setRetryNoticeTaskId(failedTask.id);
+      } else {
+        setRetryError(refreshed.orchestration?.run.stoppedReason || 'Alpha could not start the retry. Open the Live Build Room to review the saved reason.');
+        setRetryNotice('');
+        setRetryNoticeTaskId('');
+      }
+    } catch (retryFailure: any) {
+      setRetryError(retryFailure?.message ?? 'The retry could not be started. Refresh the build and try again.');
+    } finally {
+      setRetryBusy(false);
+    }
+  };
   const activity = (snapshot?.agentCards ?? []).flatMap(card => card.activity
     .filter(item => ['status', 'stage', 'assistant', 'tool', 'tool_result', 'file_change', 'handoff', 'error', 'summary'].includes(item.kind))
     .map(item => ({ ...item, agentName: card.agentName })))
@@ -306,6 +353,20 @@ function OrchestratorBuildActivityRow({
       <span>No code has changed yet. Review the plan, or tell Alpha this was only a question.</span>
       <button type="button" onClick={onWithdraw} disabled={withdrawing} className="rounded-md border border-white/10 px-2 py-1 font-medium text-gray-200 hover:bg-white/[0.06] disabled:opacity-50">{withdrawing ? 'Answering…' : 'This was just a question'}</button>
     </div>}
+    {activeRecovery && orchestration && snapshot && <div className="border-t border-white/[0.07] p-2.5">
+      <OrchestrationRecoveryPanel
+        projectId={projectId}
+        runId={runId}
+        threadId={threadId}
+        runRevision={orchestration.run.revision}
+        taskRevision={activeRecovery.taskId ? tasks.find(task => task.id === activeRecovery.taskId)?.revision : undefined}
+        recovery={activeRecovery}
+        canControl={Boolean(snapshot.canControlOrchestration ?? snapshot.canRun)}
+        onOpenRoom={onOpenRoom}
+        onActionComplete={refreshAfterRecovery}
+        compact
+      />
+    </div>}
     {expanded && <div className="space-y-4 border-t border-white/[0.07] px-3 py-3">
       {loading && !snapshot && <div className="flex items-center gap-2 text-[10px] text-gray-500"><Loader2 className="h-3 w-3 animate-spin" />Loading run details…</div>}
       {error && <p role="alert" className="text-[10px] text-rose-300">{error}</p>}
@@ -321,10 +382,18 @@ function OrchestratorBuildActivityRow({
           <span className="shrink-0 text-[9px] capitalize text-violet-200">{task.status.replace(/_/g, ' ')}</span>
         </div>)}
       </section>}
-      {(failedAttempt?.failureReason || (['blocked', 'failed', 'recovery_required'].includes(status ?? '') && orchestration?.run.stoppedReason)) && <section role="alert" className="rounded-lg border border-amber-300/20 bg-amber-300/[0.05] px-3 py-2.5">
+      {(activeRecovery || ((!recovery || ['resolved', 'cancelled'].includes(recovery.phase)) && ['blocked', 'failed', 'recovery_required'].includes(status ?? '') && (failedAttempt?.failureReason || orchestration?.run.stoppedReason))) && <section role="alert" className="rounded-lg border border-amber-300/20 bg-amber-300/[0.05] px-3 py-2.5">
         <div className="text-[9px] font-semibold uppercase tracking-wider text-amber-200">Why the build stopped</div>
         <p className="mt-1 whitespace-pre-wrap break-words text-[10px] leading-4 text-gray-300">{failedAttempt?.failureReason || orchestration?.run.stoppedReason}</p>
         {failedAttempt?.verification?.commands?.length ? <ul className="mt-2 space-y-1 border-t border-amber-200/10 pt-2">{failedAttempt.verification.commands.map((command, index) => <li key={`${command.script ?? command.display ?? 'check'}-${index}`} className="flex flex-wrap items-center gap-x-1.5 text-[9px] text-gray-400"><code>{command.display ?? command.script ?? 'Verification check'}</code><span>·</span><span className={command.exitCode === 0 ? 'text-emerald-300' : command.exitCode === null ? 'text-amber-200' : 'text-rose-300'}>{command.exitCode === 0 ? 'passed' : command.exitCode === null ? command.signal ?? 'stopped' : `failed (exit ${command.exitCode})`}</span></li>)}</ul> : null}
+        {retryAvailable && failedTask && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-amber-200/10 pt-2">
+          <span className="text-[9px] leading-4 text-gray-400">Retry {failedTask.title} with {failedTask.ownerName}; Alpha checks the result before continuing.</span>
+          <button type="button" onClick={() => void retryFailedTask()} disabled={retryBusy} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-amber-200/20 bg-amber-100/[0.06] px-2.5 text-[10px] font-semibold text-amber-100 hover:bg-amber-100/[0.11] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:cursor-wait disabled:opacity-50">
+            {retryBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}{retryBusy ? 'Starting retry…' : 'Retry and continue'}
+          </button>
+        </div>}
+        {retryNotice && orchestration?.run.currentTaskId === retryNoticeTaskId && <p role="status" className="mt-2 text-[10px] leading-4 text-emerald-200">{retryNotice}</p>}
+        {retryError && <p role="alert" className="mt-2 text-[10px] leading-4 text-rose-200">{retryError}</p>}
       </section>}
       <section className="space-y-2">
         <div className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Files changed</div>
@@ -907,6 +976,87 @@ export const ChatView: React.FC = () => {
     }
   };
 
+  const dispatchRecoveryFollowUp = async (message: string, requestedAction: LiveBuildRecoveryAction): Promise<boolean> => {
+    if (!activeThread?.id || !activeThread.projectId) return false;
+    const explicitBuildRetry = isExplicitBuildRetry(message);
+    const runIds = [...new Set(currentMessages
+      .filter(item => item.messageType === 'build' && item.orchestrationRunId)
+      .map(item => item.orchestrationRunId!))];
+    if (!runIds.length) {
+      const requestedRetry = explicitBuildRetry || requestedAction === 'retry_report_format';
+      if (requestedRetry) showToast('No build to retry', 'Start a build with Build with Orchestrator, or open the build you want to continue.', 'info');
+      return requestedRetry;
+    }
+
+    const states = await Promise.all(runIds.map(async runId => {
+      try {
+        return { runId, state: await apiService.getOrchestrationRecovery(activeThread.projectId!, runId) };
+      } catch {
+        return { runId, state: undefined };
+      }
+    }));
+    const activeStates = states.filter(item => item.state?.recovery);
+    if (activeStates.length > 1) {
+      showToast('Choose a build first', 'More than one build is waiting for a decision. Use the recovery controls under the build you mean.', 'info');
+      return true;
+    }
+    const selected = activeStates[0] ?? (runIds.length === 1
+      ? states.find(item => item.state?.history.length)
+      : undefined);
+    if (!selected?.state) {
+      if (states.some(item => !item.state)) {
+        showToast('Recovery details unavailable', 'Refresh Alpha or open the Live Build Room to load this build’s recovery controls.', 'error');
+        return true;
+      }
+      if (explicitBuildRetry && runIds.length > 1) {
+        showToast('Choose a build first', 'This conversation has more than one saved build. Open the one you want to retry so Alpha uses the right work and history.', 'info');
+        return true;
+      }
+      return false;
+    }
+    const recovery = selected.state.recovery ?? (requestedAction === 'explain_failure' || requestedAction === 'review_saved_changes'
+      ? selected.state.history[0]
+      : undefined);
+    if (!recovery) {
+      showToast('No open recovery', 'This build has no saved recovery waiting for an action. Open the Live Build Room to review its current status.', 'info');
+      return true;
+    }
+
+    const action = resolveRecoveryAction(requestedAction, recovery);
+    if (!recovery.availableActions.includes(action)) {
+      const reason = recovery.actionReasons[action]
+        ?? recovery.actionReasons.provide_guidance
+        ?? Object.values(recovery.actionReasons).find(value => typeof value === 'string' && value.trim())
+        ?? 'This build has no eligible retry in its current state. Review the recovery panel for the saved failure and next available action.';
+      showToast('That recovery action is unavailable', reason, 'info');
+      return true;
+    }
+
+    try {
+      const result = await apiService.performOrchestrationRecoveryAction(activeThread.projectId, selected.runId, {
+        recoveryId: recovery.id,
+        expectedRunRevision: selected.state.runRevision,
+        expectedRecoveryRevision: recovery.revision,
+        expectedTaskRevision: recovery.taskRevision,
+        idempotencyKey: recoveryActionKey(),
+        action,
+        guidance: action === 'provide_guidance' || action === 'repair_and_continue' ? message : undefined,
+        threadId: activeThread.id
+      });
+      setInput('');
+      if (activeThread.id) await refreshChatThread(activeThread.id);
+      followNextMessage();
+      if (action === 'review_saved_changes') openLiveBuildRun(selected.runId);
+      showToast(action === 'explain_failure' ? 'Build explanation' : 'Build recovery updated',
+        result.explanation ?? result.message ?? 'Alpha saved the recovery action.',
+        action === 'explain_failure' ? 'info' : 'success');
+      return true;
+    } catch (error: any) {
+      showToast('Recovery action not completed', error?.message ?? 'Refresh the build and try again.', 'error');
+      return true;
+    }
+  };
+
   const handleSend = async (event: React.FormEvent) => {
     event.preventDefault();
     const typedMessage = input.trim();
@@ -930,6 +1080,8 @@ export const ChatView: React.FC = () => {
       ? 'Please inspect the attached files and summarize the relevant information.'
       : '');
     if (!message) return;
+    const requestedRecoveryAction = inferRecoveryAction(message);
+    if (requestedRecoveryAction && await dispatchRecoveryFollowUp(message, requestedRecoveryAction)) return;
     if (sendsBuild && !can('run_agents')) {
       showToast('Build access needed', 'Your workspace role cannot start Orchestrator builds.', 'info');
       return;
@@ -1296,7 +1448,7 @@ export const ChatView: React.FC = () => {
           {showCallPanel && !isClient && <section className="shrink-0 max-h-[45%] overflow-y-auto overscroll-contain mx-5 mt-4 rounded-2xl border border-white/10 bg-surface-100/80 p-4 lg:p-5 shadow-xl"><div className="flex items-start justify-between gap-4 mb-4"><div><div className="flex items-center gap-2"><Bot className="h-4 w-4 text-brand-300" /><h3 className="text-sm font-semibold text-white">Call an assigned agent</h3></div><p className="mt-1 text-[11px] text-gray-500">Use this for a focused question or review with one agent. For product changes, describe the work and the Orchestrator will choose the right specialists.</p></div><button type="button" onClick={() => setShowCallPanel(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.06]"><X className="h-4 w-4" /></button></div>{loadingSnapshot ? <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading project agents…</div> : snapshotError ? <div className="flex items-center gap-2 text-xs text-rose-300"><AlertTriangle className="h-4 w-4" /> {snapshotError}</div> : !snapshot?.squads.length ? <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs text-gray-500">No project specialist is ready for a direct call yet. Product builds can still start with the Orchestrator.</div> : <form onSubmit={callAgent} className="space-y-4"><div className="grid gap-3 lg:grid-cols-[0.9fr_1.1fr]"><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Agent group</label><div className="flex gap-2 overflow-x-auto pb-1">{snapshot.squads.map(squad => <button type="button" key={squad.id} onClick={() => selectSquad(squad.id)} className={`shrink-0 rounded-lg border px-3 py-2 text-left text-xs ${selectedSquadId === squad.id ? 'border-brand-400/50 bg-brand-500/15 text-white' : 'border-white/10 bg-white/[0.03] text-gray-400 hover:text-white'}`}><span className="flex items-center gap-1.5"><Users className="h-3.5 w-3.5" />{squad.name}</span><span className="mt-1 block text-[10px] text-gray-500">{squad.agents.length} ready</span></button>)}</div></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Agent</label><div className="grid gap-2 sm:grid-cols-2">{(snapshot.squads.find(squad => squad.id === selectedSquadId)?.agents ?? []).map(agent => <button type="button" key={agent.id} onClick={() => setSelectedAgentId(agent.id)} className={`rounded-lg border p-2.5 text-left ${selectedAgentId === agent.id ? 'border-brand-400/50 bg-brand-500/15' : 'border-white/10 bg-white/[0.03] hover:border-white/20'}`}><span className="flex items-center gap-2"><span className="h-6 w-6 rounded-md flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: agent.color || '#6d28d9' }}>{agent.avatar ? <img src={agent.avatar} alt="" className="h-6 w-6 rounded-md object-cover" /> : agent.name.charAt(0)}</span><span className="min-w-0"><span className="block truncate text-xs font-medium text-white">{agent.name}</span><span className="block truncate text-[10px] text-gray-500">{agent.role}</span></span></span></button>)}</div></div></div><div className="grid gap-3 sm:grid-cols-[150px_1fr]"><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Mode</label><select value={mode} onChange={event => setMode(event.target.value as AgentCallMode)} className="w-full rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400">{visibleModes.map(value => <option key={value} value={value}>{MODE_META[value].label}</option>)}</select><p className="text-[10px] leading-relaxed text-gray-600">{MODE_META[mode].description}</p></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Target <span className="normal-case text-gray-600">{mode === 'ask' ? 'optional' : 'required'}</span></label><div className="flex gap-2"><select value={targetType} onChange={event => { setTargetType(event.target.value as AgentCallTarget['type']); setTargetId(''); }} className="w-36 shrink-0 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400">{Object.entries(TARGET_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{targetOptions.length > 0 ? <select value={targetId} onChange={event => setTargetId(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400"><option value="">Select target…</option>{targetOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : <input value={targetId} onChange={event => setTargetId(event.target.value)} placeholder={targetType === 'file' ? 'src/features/example.tsx' : 'Enter target id or relative path'} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 placeholder-gray-600 outline-none focus:border-brand-400" />}</div>{targetType === 'file' && <p className="text-[10px] text-gray-600">Repository-relative only. Alpha resolves the working copy server-side.</p>}</div></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Instruction</label><textarea value={callInstruction} onChange={event => setCallInstruction(event.target.value)} rows={3} placeholder={selectedAgent ? `What should ${selectedAgent.name} look at?` : 'Choose an agent first…'} className="w-full resize-none rounded-xl border border-white/10 bg-surface-200 px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-brand-400" /></div>{mode === 'implement' && <div className="flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200"><ShieldCheck className="h-3.5 w-3.5 mt-0.5 shrink-0" /><span>Implementation is two-step. This request creates a reviewable call first; you must confirm before the agent generates a patch, and applying the patch is a separate action.</span></div>}<div className="flex items-center justify-end gap-2"><button type="button" onClick={() => setShowCallPanel(false)} className="rounded-lg px-3 py-2 text-xs text-gray-500 hover:text-white">Cancel</button><button type="submit" disabled={busyCallId === 'new' || !selectedAgentId || !callInstruction.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-xs font-semibold text-on-accent hover:bg-brand-400 disabled:opacity-40">{busyCallId === 'new' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />} Call {selectedAgent?.name ?? 'agent'}</button></div></form>}</section>}
 
           {!isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={setInspectedCallId} /></div>}
-          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 40 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 space-y-5 [overflow-anchor:none]">{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className="w-full"><div className={`min-w-0 space-y-2 ${isUser ? 'flex flex-col items-end' : ''}`}><div className={`text-sm leading-relaxed ${isUser ? 'max-w-[80%] rounded-2xl bg-white/[0.07] px-4 py-2.5 text-gray-100' : 'text-gray-200'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message) : message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
+          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 40 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 space-y-5 [overflow-anchor:none]">{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className="w-full"><div className={`min-w-0 space-y-2 ${isUser ? 'flex flex-col items-end' : ''}`}><div className={`text-sm leading-relaxed ${isUser ? 'max-w-[80%] rounded-2xl bg-white/[0.07] px-4 py-2.5 text-gray-100' : 'text-gray-200'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 rounded-xl border border-violet-300/15 bg-violet-300/[0.04] p-3 text-xs text-gray-200"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-200" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-violet-200">Build update</div><p className="whitespace-pre-wrap break-words text-[11px] leading-5">{message.content}</p></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
   const needsLiveRoom = /live build room|product build is already/i.test(message.content);
   const buildNotStarted = /\*\*Build not started(?: for any repository)?\.\*\*/i.test(message.content);
   const setupRequired = /review the project setup|project needs setup|choose (?:a|one) codebase|configured model|available model|workspace identity|reconnect (?:this )?repository|repository admission remains paused/i.test(message.content);
@@ -1313,7 +1465,7 @@ export const ChatView: React.FC = () => {
     return <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/30 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/20"><Activity className="h-3.5 w-3.5" /> {label}</button>;
   }
   return <button type="button" onClick={openProjectSetup} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-300 hover:bg-white/[0.06]">Review project setup</button>;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} onOpenRoom={() => openLiveBuildRun(message.orchestrationRunId!)} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}</div></div>; })}</div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenRoom={() => openLiveBuildRun(message.orchestrationRunId!)} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}</div></div>; })}</div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-4 lg:px-8 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-3xl space-y-2">
