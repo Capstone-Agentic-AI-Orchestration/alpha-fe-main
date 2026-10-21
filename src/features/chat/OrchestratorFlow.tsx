@@ -1,8 +1,22 @@
-import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Bot, ChevronDown } from 'lucide-react';
+import React, { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { ChevronDown, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
 
 import { AgentCall, ProjectChatAgent } from '@/shared/types';
 import type { BuildAgentNode, BuildAgentState } from './useProjectLiveBuild';
+import type { SceneAgent } from './OrchestratorScene3D';
+import { supportsWebGL } from './orchestratorSceneLayout';
+
+// three.js loads only when someone opens the flow, never with the chat itself.
+const OrchestratorScene3D = lazy(() => import('./OrchestratorScene3D'));
+
+/** Falls back to the 2D flow if the 3D view throws, for example when the GPU context is lost. */
+class SceneBoundary extends React.Component<{ onError: () => void; children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { this.props.onError(); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
 
 /** The project's open Orchestrator build, drawn beside the chat's own agents. */
 export interface FlowBuild {
@@ -80,14 +94,6 @@ function callStatus(status: AgentCall['status']): string {
   }
 }
 
-function callStatusTone(status: AgentCall['status']): string {
-  if (status === 'running') return 'text-violet-100 bg-violet-400/15';
-  if (status === 'queued') return 'text-sky-200 bg-sky-400/10';
-  if (status === 'awaiting_confirmation') return 'text-amber-200 bg-amber-400/10';
-  if (status === 'completed') return 'text-emerald-200 bg-emerald-400/10';
-  if (status === 'failed') return 'text-rose-200 bg-rose-400/10';
-  return 'text-gray-300 bg-white/[0.06]';
-}
 
 /**
  * Calls to show: every call from the newest request (an @mention chat turn or
@@ -148,13 +154,6 @@ const BUILD_STATE_LABEL: Record<BuildAgentState, string> = {
   failed: 'Needs attention'
 };
 
-function buildStateTone(state: BuildAgentState): string {
-  if (state === 'running') return 'text-violet-100 bg-violet-400/15';
-  if (state === 'waiting') return 'text-sky-200 bg-sky-400/10';
-  if (state === 'review') return 'text-amber-200 bg-amber-400/10';
-  if (state === 'completed') return 'text-emerald-200 bg-emerald-400/10';
-  return 'text-rose-200 bg-rose-400/10';
-}
 
 /** A soft glass sphere: light from the upper left, colour toward the rim. */
 function drawOrb(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, tone: string, highlight = 'rgba(255, 255, 255, 0.95)') {
@@ -370,6 +369,45 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     }))
   ].slice(0, AGENT_OFFSETS.length), [agentById, agentCalls, buildAgents]);
   const selectedId = selectedCallId ?? (selectedBuildAgentId ? BUILD_PREFIX + selectedBuildAgentId : null);
+  const nodeCount = buildAgents.length + agentCalls.length;
+  const failedNodes = failedCount + buildAgents.filter(agent => agent.state === 'failed').length;
+  const [webgl] = useState(() => supportsWebGL());
+  const [sceneFailed, setSceneFailed] = useState(false);
+  const [maximized, setMaximized] = useState(false);
+  const [resetToken, setResetToken] = useState(0);
+  const [pageVisible, setPageVisible] = useState(() => typeof document === 'undefined' || !document.hidden);
+  const reduceMotion = useMemo(() => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, []);
+  const show3D = expanded && webgl && !sceneFailed;
+  const sceneAgents = useMemo<SceneAgent[]>(() => [
+    ...buildAgents.map(agent => ({
+      id: BUILD_PREFIX + agent.agentId,
+      name: agent.name,
+      tone: buildTone(agent.state),
+      active: agent.state === 'running',
+      detail: [BUILD_STATE_LABEL[agent.state], agent.currentTaskTitle].filter(Boolean).join(' · ')
+    })),
+    ...agentCalls.map(call => ({
+      id: call.id,
+      name: agentById.get(call.agentId)?.name ?? call.agentId,
+      tone: toneFor(call.status),
+      active: call.status === 'running' || call.status === 'queued',
+      detail: [agentById.get(call.agentId)?.role, callStatus(call.status)].filter(Boolean).join(' · ')
+    }))
+  ], [agentById, agentCalls, buildAgents]);
+  useEffect(() => {
+    const onVisibility = () => setPageVisible(!document.hidden);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
+  useEffect(() => {
+    if (!expanded) setMaximized(false);
+  }, [expanded]);
+  useEffect(() => {
+    if (!maximized) return undefined;
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setMaximized(false); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [maximized]);
   const select = (id: string) => {
     if (id === HUB_ID) return;
     if (id.startsWith(BUILD_PREFIX)) {
@@ -394,8 +432,8 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   }, [build?.runId, build?.running]);
 
   // The animation loop reads the latest state from a ref so it never restarts.
-  const stateRef = useRef({ expanded, working, agents: waveAgents, hoveredId, selectedId, hubId });
-  stateRef.current = { expanded, working, agents: waveAgents, hoveredId, selectedId, hubId };
+  const stateRef = useRef({ expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: false });
+  stateRef.current = { expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: show3D };
 
   // A finished run tints the wave green, a failed one red; both fade back to purple.
   useEffect(() => {
@@ -442,7 +480,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       }
     };
     const render = (time: number) => {
-      if (!document.hidden) paint(reduceMotion ? 0 : time / 1000, time);
+      if (!document.hidden && !stateRef.current.covered) paint(reduceMotion ? 0 : time / 1000, time);
       if (!reduceMotion) frame = requestAnimationFrame(render);
     };
     frame = requestAnimationFrame(render);
@@ -478,20 +516,61 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   const hubHovered = expanded && hoveredId === hubId;
   const hubClickable = Boolean(orchestratorCall);
 
+  // One 3D view, shown inline or in the enlarged layer; only one is mounted at a time.
+  const sceneView = <>
+    <SceneBoundary onError={() => setSceneFailed(true)}>
+      <Suspense fallback={<div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-gray-500">Loading the 3D view…</div>}>
+        <OrchestratorScene3D
+          agents={sceneAgents}
+          hubId={hubId}
+          hubLabel="Orchestrator"
+          hubDetail={[title, statusText, hubClickable ? 'Click to see activity' : null].filter(Boolean).join(' · ')}
+          hubClickable={hubClickable}
+          working={working}
+          selectedId={selectedId}
+          onSelect={select}
+          reduceMotion={reduceMotion}
+          paused={!pageVisible}
+          resetToken={resetToken}
+        />
+      </Suspense>
+    </SceneBoundary>
+    <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[10px] text-gray-500">Drag to look around · scroll to zoom · right-drag to pan · drag an orb to move it · click an orb for its live activity</p>
+    {nodeCount > 0 && <div className="sr-only focus-within:not-sr-only focus-within:absolute focus-within:bottom-8 focus-within:right-4 focus-within:flex focus-within:gap-1.5">
+      {sceneAgents.map(agent => <button key={agent.id} type="button" onClick={() => select(agent.id)} aria-pressed={selectedId === agent.id} className="rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[11px] text-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{agent.name}</button>)}
+    </div>}
+  </>;
+
   return (
     // The slot keeps the collapsed height, so opening the panel overlays the chat instead of pushing it down.
     <div className="relative h-14 w-full">
-    <section className={'absolute inset-x-0 top-0 z-30 overflow-hidden rounded-2xl border border-white/[0.08] bg-shell transition-[height,box-shadow] duration-500 ease-out motion-reduce:transition-none ' + (expanded ? 'h-[184px] shadow-2xl shadow-black/60' : 'h-14')}>
+    {show3D && maximized && createPortal(<div className="fixed inset-0 z-[1000]">
+      <div aria-hidden="true" onClick={() => setMaximized(false)} className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div role="dialog" aria-label={title + ' agents in 3D'} className="absolute inset-6 overflow-hidden rounded-2xl border border-white/[0.08] bg-shell shadow-2xl shadow-black/70">
+        {sceneView}
+        <div className="absolute inset-x-0 top-0 flex h-14 items-center gap-3 bg-gradient-to-b from-shell to-transparent px-5">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-xs font-semibold text-white">{title}</span>
+            <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}</span>
+          </span>
+          <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" onClick={() => setMaximized(false)} aria-label="Restore the 3D view" title="Restore (Esc)" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><Minimize2 className="h-4 w-4" aria-hidden="true" /></button>
+        </div>
+      </div>
+    </div>, document.body)}
+    <section id={panelId} className={'absolute inset-x-0 top-0 z-30 overflow-hidden rounded-2xl border border-white/[0.08] bg-shell transition-[height,box-shadow] duration-500 ease-out motion-reduce:transition-none ' + (show3D ? 'h-[380px] shadow-2xl shadow-black/60' : expanded ? 'h-[184px] shadow-2xl shadow-black/60' : 'h-14')}>
+      {show3D && !maximized && <div className="absolute inset-0">{sceneView}</div>}
+      {show3D && maximized && <div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-gray-500">Showing in the enlarged view</div>}
       <canvas
         ref={canvasRef}
         aria-hidden="true"
         onMouseMove={event => { const id = nodeAt(event); if (id !== hoveredId) setHoveredId(id); }}
         onMouseLeave={() => setHoveredId(null)}
         onClick={event => { const id = nodeAt(event); if (id) select(id); }}
-        className={'absolute inset-0 h-full w-full ' + (hoveredCall || hoveredBuildAgent || (hubHovered && hubClickable) ? 'cursor-pointer' : '')}
+        className={(show3D ? 'hidden ' : '') + 'absolute inset-0 h-full w-full ' + (hoveredCall || hoveredBuildAgent || (hubHovered && hubClickable) ? 'cursor-pointer' : '')}
       />
-      <div aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-0 w-72 bg-gradient-to-r from-shell via-shell/70 to-transparent" />
-      {expanded && (hoveredCall || hoveredBuildAgent || hubHovered) && <div ref={tooltipRef} role="tooltip" style={{ visibility: 'hidden' }} className="pointer-events-none absolute left-0 top-0 z-20 whitespace-nowrap rounded-xl border border-violet-300/20 bg-surface-raised/95 px-3 py-2 shadow-xl shadow-black/40 backdrop-blur">
+      <div aria-hidden="true" className={'pointer-events-none absolute left-0 top-0 w-72 bg-gradient-to-r from-shell via-shell/70 to-transparent ' + (show3D ? 'h-14' : 'bottom-0')} />
+      {expanded && !show3D && (hoveredCall || hoveredBuildAgent || hubHovered) && <div ref={tooltipRef} role="tooltip" style={{ visibility: 'hidden' }} className="pointer-events-none absolute left-0 top-0 z-20 whitespace-nowrap rounded-xl border border-violet-300/20 bg-surface-raised/95 px-3 py-2 shadow-xl shadow-black/40 backdrop-blur">
         {hoveredBuildAgent ? <>
           <span className="block text-xs font-semibold text-white">{hoveredBuildAgent.name}</span>
           <span className="block max-w-72 truncate text-[10px] text-gray-400">{[BUILD_STATE_LABEL[hoveredBuildAgent.state], hoveredBuildAgent.currentTaskTitle, 'Click to see live activity'].filter(Boolean).join(' · ')}</span>
@@ -521,43 +600,11 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
             <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}</span>
           </span>
         </button>
-        {(buildAgents.length > 0 || (expanded && agentCalls.length > 0)) && <div id={panelId} className="hidden max-w-[55%] items-center gap-1.5 overflow-x-auto md:flex">
-          {buildAgents.map(agent => {
-            const id = BUILD_PREFIX + agent.agentId;
-            const selected = selectedBuildAgentId === agent.agentId;
-            return <button
-              key={id}
-              type="button"
-              onClick={() => select(id)}
-              onMouseEnter={() => setHoveredId(id)}
-              onMouseLeave={() => setHoveredId(null)}
-              aria-pressed={selected}
-              title={agent.currentTaskTitle ? agent.name + ': ' + agent.currentTaskTitle : agent.name}
-              className={'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-left backdrop-blur transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60 ' + (selected || hoveredId === id ? 'border-violet-300/40 bg-violet-400/10' : 'border-white/10 bg-black/40 hover:border-violet-300/25')}
-            >
-              <span className="relative grid h-3 w-3 place-items-center" aria-hidden="true">
-                {agent.state === 'running' && <span className="absolute inset-0 rounded-full bg-violet-400/60 motion-safe:animate-ping" />}
-                <Bot className="relative h-3 w-3 text-violet-300" />
-              </span>
-              <span className="max-w-32 truncate text-[11px] font-medium text-gray-100">{agent.name}</span>
-              <span className={'rounded-full px-1.5 py-0.5 text-[9px] ' + buildStateTone(agent.state)}>{BUILD_STATE_LABEL[agent.state]}</span>
-            </button>;
-          })}
-          {expanded && agentCalls.map(call => <button
-            key={call.id}
-            type="button"
-            onClick={() => select(call.id)}
-            onMouseEnter={() => setHoveredId(call.id)}
-            onMouseLeave={() => setHoveredId(null)}
-            aria-pressed={selectedCallId === call.id}
-            className={'flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-left backdrop-blur transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60 ' + (selectedCallId === call.id || hoveredId === call.id ? 'border-violet-300/40 bg-violet-400/10' : 'border-white/10 bg-black/40 hover:border-violet-300/25')}
-          >
-            <Bot className="h-3 w-3 text-violet-300" aria-hidden="true" />
-            <span className="max-w-32 truncate text-[11px] font-medium text-gray-100">{agentName(call)}</span>
-            <span className={'rounded-full px-1.5 py-0.5 text-[9px] ' + callStatusTone(call.status)}>{callStatus(call.status)}</span>
-          </button>)}
-        </div>}
-        {(failedCount > 0 || (!expanded && agentCalls.length > 0 && buildAgents.length === 0)) && <span className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (failedCount > 0 ? 'border-rose-300/30 text-rose-200' : 'border-violet-300/20 text-violet-200')}>{failedCount > 0 ? 'Needs attention' : agentCalls.length + (agentCalls.length === 1 ? ' agent' : ' agents')}</span>}
+        {(failedNodes > 0 || (!expanded && nodeCount > 0)) && <span className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (failedNodes > 0 ? 'border-rose-300/30 text-rose-200' : 'border-violet-300/20 text-violet-200')}>{failedNodes > 0 ? 'Needs attention' : nodeCount + (nodeCount === 1 ? ' agent' : ' agents')}</span>}
+        {show3D && <>
+          <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" onClick={() => setMaximized(value => !value)} aria-label={maximized ? 'Restore the 3D view' : 'Enlarge the 3D view'} title={maximized ? 'Restore' : 'Enlarge'} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{maximized ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}</button>
+        </>}
         <button type="button" onClick={() => setExpanded(value => !value)} aria-label={expanded ? 'Collapse orchestrator' : 'Expand orchestrator'} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">
           <ChevronDown className={'h-4 w-4 transition-transform ' + (expanded ? 'rotate-180' : '')} aria-hidden="true" />
         </button>
