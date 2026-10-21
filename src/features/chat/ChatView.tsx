@@ -51,7 +51,7 @@ import {
 import { ThreadProjectPicker } from '@/features/chat/ThreadProjectPicker';
 import { MessageMarkdown } from './MessageMarkdown';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
-import { inferRecoveryAction, isExplicitBuildRetry } from './chatRecoveryIntent';
+import { inferRecoveryAction, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
 import { useTranscriptScroll } from './useTranscriptScroll';
 
 const MODE_META: Record<AgentCallMode, {
@@ -963,19 +963,13 @@ export const ChatView: React.FC = () => {
       return true;
     }
 
-    let action = requestedAction;
-    if (action === 'repair_and_continue') {
-      if (recovery.category === 'report') action = 'retry_report_format';
-      else if (['provider', 'configuration', 'review_input', 'final_validation', 'budget'].includes(recovery.category)) action = 'recheck_prerequisite';
-      else if (['workspace', 'alpha'].includes(recovery.category)) action = 'resume_checkpoint';
-    }
-    if (action === 'repair_and_continue' && !recovery.availableActions.includes(action) && recovery.availableActions.includes('provide_guidance')) {
-      action = 'provide_guidance';
-    } else if (action === 'recheck_prerequisite' && !recovery.availableActions.includes(action) && recovery.availableActions.includes('resume_checkpoint')) {
-      action = 'resume_checkpoint';
-    }
+    const action = resolveRecoveryAction(requestedAction, recovery);
     if (!recovery.availableActions.includes(action)) {
-      showToast('That recovery action is unavailable', recovery.actionReasons[action] ?? 'Refresh the build and choose an available action from its recovery panel.', 'info');
+      const reason = recovery.actionReasons[action]
+        ?? recovery.actionReasons.provide_guidance
+        ?? Object.values(recovery.actionReasons).find(value => typeof value === 'string' && value.trim())
+        ?? 'This build has no eligible retry in its current state. Review the recovery panel for the saved failure and next available action.';
+      showToast('That recovery action is unavailable', reason, 'info');
       return true;
     }
 
