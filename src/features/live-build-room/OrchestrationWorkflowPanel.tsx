@@ -98,6 +98,18 @@ function ReportResponseDisclosure({ response, truncated }: { response?: string; 
   </details>;
 }
 
+function ReportContractVersion({ attempt }: { attempt: LiveBuildRoomOrchestration['attempts'][number] }) {
+  const expected = attempt.reportSchemaVersionExpected;
+  const received = attempt.reportSchemaVersionReceived;
+  if (expected === undefined || (!attempt.reportError && received === expected)) return null;
+  const label = received === undefined
+    ? `Report version missing · expected v${expected}`
+    : received === expected
+      ? `Report v${expected}`
+      : `Expected v${expected} · received v${received}`;
+  return <span className="ml-2 inline-flex rounded border border-sky-300/15 bg-sky-300/[0.035] px-1.5 py-0.5 text-[9px] text-sky-100/80" title={label}>{label}</span>;
+}
+
 function TaskEvidence({ workflow, taskId, taskById }: {
   workflow: LiveBuildRoomOrchestration;
   taskId: string;
@@ -116,7 +128,7 @@ function TaskEvidence({ workflow, taskId, taskById }: {
     </div>)}
     {attempts.map(attempt => <div key={attempt.id} className="rounded-lg border border-white/[0.07] bg-black/10 p-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <div className="text-[11px] font-medium text-slate-200">Attempt {attempt.attemptNumber} <span className="font-normal text-slate-500">· {attempt.agentName}</span>{attempt.reportFormatRetry && <span className="ml-2 rounded border border-sky-300/15 px-1.5 py-0.5 text-[9px] text-sky-100/80">Read-only report fix</span>}</div>
+        <div className="text-[11px] font-medium text-slate-200">Attempt {attempt.attemptNumber} <span className="font-normal text-slate-500">· {attempt.agentName}</span>{attempt.reportFormatRetry && <span className="ml-2 rounded border border-sky-300/15 px-1.5 py-0.5 text-[9px] text-sky-100/80">Read-only report fix</span>}<ReportContractVersion attempt={attempt} /></div>
         <span className="text-[10px] text-slate-500">{attempt.status.replace(/_/g, ' ')}</span>
       </div>
       {attempt.summary && !isRawReport(attempt.summary) && <p className="mt-2 max-w-prose break-words text-xs leading-5 text-slate-300">{attempt.summary}</p>}
@@ -192,6 +204,7 @@ function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration })
             </div>
             <div className="mt-1 text-xs font-medium text-white">{task?.title || 'Assigned specialist task'}</div>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-500"><span>{task?.repository || workflow.run.repository}</span><span className="text-slate-700">·</span><span>{eventTime}</span>{attempt.attemptNumber > 1 && <><span className="text-slate-700">·</span><span>Attempt {attempt.attemptNumber}</span></>}</div>
+            <ReportContractVersion attempt={attempt} />
             {task?.assignmentReason && <p className="mt-2 border-t border-white/[0.05] pt-2 text-[10px] leading-4 text-slate-400"><span className="font-medium text-violet-100/75">Why assigned:</span> {task.assignmentReason}</p>}
             {attempt.reportFormatRetry && <div className="mt-2 inline-flex rounded border border-sky-300/15 bg-sky-300/[0.04] px-2 py-1 text-[9px] text-sky-100/80">Read-only report-format correction</div>}
             {attempt.summary && !isRawReport(attempt.summary) && <p className="mt-2 break-words text-[10px] leading-4 text-slate-400">{attempt.summary}</p>}

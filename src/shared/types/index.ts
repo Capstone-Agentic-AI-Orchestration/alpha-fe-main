@@ -1171,6 +1171,8 @@ export interface LiveBuildRoomOrchestration {
     reportResponse?: string;
     reportResponseTruncated?: boolean;
     reportError?: string;
+    reportSchemaVersionExpected?: number;
+    reportSchemaVersionReceived?: number;
     failureReason?: string;
     report?: {
       requirementCoverage: Array<{ requirementId?: string; evidence?: string }>;
