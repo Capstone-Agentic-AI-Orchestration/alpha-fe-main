@@ -410,8 +410,6 @@ export const LiveBuildRoomView: React.FC = () => {
     showToast,
     setActiveTab,
     setActiveThreadId,
-    activeTabId,
-    setTabSessionState,
     chatThreads,
     createNewThread
   } = useApp();
@@ -734,7 +732,6 @@ export const LiveBuildRoomView: React.FC = () => {
     const existingThread = chatThreads.find(thread => thread.projectId === selectedProjectId);
     const threadId = existingThread?.id ?? createNewThread('New product build', selectedProjectId);
     setActiveThreadId(threadId);
-    setTabSessionState(activeTabId, 'chatIntent', 'build');
     setActiveTab('chat');
   };
 

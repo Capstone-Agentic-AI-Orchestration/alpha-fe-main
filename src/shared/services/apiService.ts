@@ -793,6 +793,12 @@ export const apiService = {
     fetchJson<{ status: 'stopping' | 'stopped' }>(`/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/stop`, { method: 'POST', body: JSON.stringify({}) }),
   steerChatTurn: (threadId: string, messageId: string, instruction: string) =>
     fetchJson<{ status: 'queued'; position: number }>(`/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/steer`, { method: 'POST', body: JSON.stringify({ instruction }) }),
+  /** Plan a user message as a build, or have Alpha answer it instead. */
+  routeChatMessage: (threadId: string, messageId: string, payload: { action: 'build' | 'answer'; repositories?: string[]; projectId?: string }) =>
+    fetchJson<{ userMessage: ChatMessage; agentMessage: ChatMessage; agentMessages: ChatMessage[] }>(
+      `/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/route`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
   sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string; attachmentIds?: string[] }) =>
     fetchJson<{
       userMessage: ChatMessage;
