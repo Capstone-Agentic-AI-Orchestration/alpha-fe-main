@@ -98,7 +98,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, ag
         <span className={'grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-300 to-violet-700 text-sm font-semibold text-white ' + (live ? 'shadow-[0_0_18px_rgba(167,139,250,0.55)]' : '')}>{name.slice(0, 1).toUpperCase()}</span>
         <div className="min-w-0 flex-1">
           <h2 className="truncate text-sm font-semibold text-white">{name}</h2>
-          <p className="truncate text-[11px] text-gray-500">{subtitle ?? ([agent?.role, agent?.squadName].filter(Boolean).join(' · ') || 'Project agent')}</p>
+          <p className="truncate text-[11px] text-gray-500">{subtitle ?? (agent?.role || 'Project agent')}</p>
           <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px]">
             <span className={'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 ' + status.tone}>{live && <span className="h-1.5 w-1.5 rounded-full bg-current motion-safe:animate-pulse" />}{status.label}</span>
             <span className="text-gray-500">{MODE_LABEL[call.operationMode] ?? call.operationMode}</span>

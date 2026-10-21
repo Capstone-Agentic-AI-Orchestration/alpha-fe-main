@@ -18,7 +18,6 @@ export interface ServerSnapshot {
   projects: unknown[];
   agents: unknown[];
   issues: unknown[];
-  squads: unknown[];
   skills: unknown[];
   runtimes: unknown[];
   chatThreads: unknown[];
@@ -41,14 +40,12 @@ export async function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>> {
     projects: apiService.getProjects(),
     agents: apiService.getAgents(),
     issues: apiService.getIssues(),
-    squads: apiService.getSquads(),
     skills: apiService.getSkills(),
     runtimes: apiService.getRuntimes(),
     chatThreads: apiService.getChatThreads(),
     runs: apiService.getRuns(),
     analytics: apiService.getAnalytics(),
-    // Squad run history was read from localStorage only, so it was invisible
-    // after a restart and never matched what the daemon actually recorded.
+    // History for builds started before squads were removed.
     squadRuns: apiService.getSquadRuns()
   } as const;
 

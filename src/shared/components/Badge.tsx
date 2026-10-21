@@ -55,7 +55,7 @@ export const StatusBadge: React.FC<{ status: IssueStatus; className?: string }> 
       icon: <PlayCircle className="h-3 w-3 text-amber-400" />,
     },
     agent_running: {
-      label: 'Agent running',
+      label: 'Building',
       className: 'text-cyan-300',
       icon: <Bot className="h-3.5 w-3.5 text-cyan-400" />,
     },

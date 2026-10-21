@@ -2,7 +2,7 @@ import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, PenLine, FileText, Inbox, MessageSquare,
-  CheckSquare, FolderKanban, Rocket, Bot, Users, BarChart3, Monitor, BookOpen, Settings,
+  CheckSquare, FolderKanban, Rocket, Bot, BarChart3, Monitor, BookOpen, Settings,
   RadioTower, Ticket
 } from 'lucide-react';
 
@@ -126,7 +126,7 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
   { id: 'inbox', label: 'Inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: Inbox },
-  { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: MessageSquare },
+  { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Chat with Alpha and your agents', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: MessageSquare },
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
   { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
@@ -136,7 +136,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
 
   { id: 'agents', label: 'Agents', labels: { dev: 'Agent Directory' }, title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'workspace', section: 'automation', icon: Bot },
-  { id: 'squads', label: 'Squads', labels: { dev: 'Workspace Squads', pm: 'Project Squads', admin: 'All Squads' }, title: 'Agent Squads', subtitle: 'Shared agent teams for this workspace', group: 'workspace', section: 'automation', icon: Users },
   { id: 'live_build_room', label: 'Live Build Room', labels: { pm: 'Build Rooms', admin: 'Build Rooms' }, title: 'Live Build Room', subtitle: 'Watch project chat agents work in real time', group: 'workspace', section: 'automation', icon: RadioTower },
   { id: 'runtimes', label: 'Runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Monitor },
   { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
@@ -193,14 +192,14 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  */
 export const ROLE_NAV: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'squads', 'live_build_room', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
   pm: [
     'issues', 'projects', 'tickets', 'documents', 'inbox', 'chat',
-    'agents', 'squads', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
+    'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
   ],
   admin: [
     'issues', 'projects', 'documents', 'inbox', 'chat',
-    'agents', 'squads', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
+    'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
   ]
 };
 

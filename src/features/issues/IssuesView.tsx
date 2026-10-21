@@ -1,20 +1,20 @@
-import { ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
 import React, { useState, useMemo, useEffect } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IssueStatus, IssuePriority, Issue
 } from '@/shared/types';
 import { StatusBadge, PriorityBadge } from '@/shared/components/Badge';
 import { AgentRunProgress } from '@/features/runs/AgentRunProgress';
-import { SquadRunFlow } from '@/features/runs/SquadRunFlow';
+import { apiService, type IssueBuildStatus } from '@/shared/services/apiService';
+import { isDesktop } from '@/shared/desktop';
 import { 
-  Users,
   Kanban, 
   List, 
   Plus, 
   Search, 
   Bot, 
   CheckCircle2, 
-  Play, 
+  Sparkles,
+  Radio,
   ExternalLink,
   GitBranch,
   X,
@@ -28,8 +28,6 @@ import {
   Minus,
   BarChart2,
   Flame,
-  Star,
-  Asterisk,
   CheckSquare,
   RefreshCw
 } from 'lucide-react';
@@ -42,6 +40,46 @@ function syncAgo(iso: string): string {
   return `${Math.round(seconds / 3600)}h ago`;
 }
 
+/** Builds that still occupy the Building column, whatever the issue's stored status. */
+const ACTIVE_BUILD_STATUSES = new Set([
+  'planning', 'awaiting_plan_approval', 'executing', 'paused', 'validating',
+  'awaiting_approval', 'publishing', 'cancelling', 'blocked', 'recovery_required'
+]);
+
+const CHIP_INFO = 'border-sky-400/30 bg-sky-500/10 text-sky-200';
+const CHIP_REVIEW = 'border-violet-400/30 bg-violet-500/10 text-violet-200';
+const CHIP_ACTIVE = 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200';
+const CHIP_WAIT = 'border-amber-400/30 bg-amber-500/10 text-amber-200';
+const CHIP_MUTED = 'border-white/15 bg-white/[0.04] text-gray-300';
+const CHIP_ALERT = 'border-rose-400/30 bg-rose-500/10 text-rose-200';
+const CHIP_DONE = 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200';
+
+const BUILD_CHIPS: Record<string, { label: string; className: string }> = {
+  planning: { label: 'Planning', className: CHIP_INFO },
+  awaiting_plan_approval: { label: 'Plan ready', className: CHIP_REVIEW },
+  executing: { label: 'Building', className: CHIP_ACTIVE },
+  validating: { label: 'Checking', className: CHIP_ACTIVE },
+  publishing: { label: 'Publishing', className: CHIP_ACTIVE },
+  paused: { label: 'Paused', className: CHIP_WAIT },
+  cancelling: { label: 'Stopping', className: CHIP_MUTED },
+  blocked: { label: 'Needs you', className: CHIP_ALERT },
+  recovery_required: { label: 'Needs you', className: CHIP_ALERT },
+  awaiting_approval: { label: 'Ready for review', className: CHIP_REVIEW },
+  completed: { label: 'Built', className: CHIP_DONE },
+  failed: { label: 'Build failed', className: CHIP_ALERT }
+};
+
+const BuildChip: React.FC<{ build?: IssueBuildStatus }> = ({ build }) => {
+  const chip = build ? BUILD_CHIPS[build.status] : undefined;
+  if (!chip) return null;
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${chip.className}`} title={`Orchestrator build: ${chip.label}`}>
+      <Sparkles className="h-3 w-3" />
+      {chip.label}
+    </span>
+  );
+};
+
 interface IssuesViewProps {
   onOpenNewIssue: () => void;
   onlyMyIssues?: boolean;
@@ -50,7 +88,7 @@ interface IssuesViewProps {
    *
    * The project page used to render its own kanban — four columns to this
    * one's five, cards that looked clickable and opened nothing, no comments, no
-   * squad assignment, no approval. Two boards over one dataset, drifting.
+   * builds, no approval. Two boards over one dataset, drifting.
    * Embedding this one instead means there is a single board and the project
    * page stops being a lesser copy of it.
    */
@@ -70,12 +108,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     updateIssueStatus, 
     updateIssue,
     addIssueComment, 
-    runAgentOnIssue, 
-    prototypeRuns,
     projects, 
-    agents, 
-    squads,
-    triggerSquadRun,
+    startIssueBuild,
     identity,
     localMode,
     createIssue,
@@ -83,24 +117,26 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     syncing,
     lastSyncedAt,
     can,
-    role
+    role,
+    setActiveTab,
+    activeTabId,
+    setTabSessionState
   } = useApp();
 
   const sessionPrefix = embedded ? `projectIssues:${lockedProjectId ?? 'project'}` : 'issues';
 
   const canManageIssues = can('manage_issues');
-  const canRunAgents = can('run_agents');
-  const canRunSquads = can('run_squads');
+  const canRunBuilds = can('run_builds');
 
   const [viewMode, setViewMode] = useTabSessionState<'board' | 'list'>(`${sessionPrefix}.viewMode`, 'list');
   /**
    * `mine` is issues you created, which is what My Issues always claimed to be.
    *
-   * It used to preset this to `members` — "has a squad or a human assigned" —
+   * It used to preset this to `members` — "has someone assigned" —
    * which is neither yours nor created by you, and which one click on the All
    * chip undid. Issues now record `createdBy`, so the question is answerable.
    */
-  const [filterCategory, setFilterCategory] = useTabSessionState<'all' | 'mine' | 'members' | 'agents'>(
+  const [filterCategory, setFilterCategory] = useTabSessionState<'all' | 'mine' | 'members'>(
     `${sessionPrefix}.filterCategory`,
     onlyMyIssues ? 'mine' : 'all'
   );
@@ -122,11 +158,38 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const [quickAddStatus, setQuickAddStatus] = useState<IssueStatus | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useTabSessionState<string>(`${sessionPrefix}.quickAddTitle`, '');
   const [selectedPriority, setSelectedPriority] = useTabSessionState<string>(`${sessionPrefix}.priority`, 'all');
-  const [selectedAgent, setSelectedAgent] = useTabSessionState<string>(`${sessionPrefix}.agent`, 'all');
   const [showFilterBar, setShowFilterBar] = useState(false);
   const [draggedIssueId, setDraggedIssueId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<IssueStatus | null>(null);
   const [pendingDoneIssueId, setPendingDoneIssueId] = useState<string | null>(null);
+  const [pendingBuildIssueId, setPendingBuildIssueId] = useState<string | null>(null);
+
+  /**
+   * The latest Orchestrator build for each issue. Builds do not change an
+   * issue's stored status, so the board reads them to place cards in Building
+   * and to label each card. Desktop only: the cloud does not run builds.
+   */
+  const [issueBuilds, setIssueBuilds] = useState<Record<string, IssueBuildStatus>>({});
+  useEffect(() => {
+    let cancelled = false;
+    const load = () => {
+      apiService.getIssueBuildStatuses()
+        .then(rows => { if (!cancelled) setIssueBuilds(Object.fromEntries(rows.map(row => [row.issueId, row]))); })
+        // An older daemon has no build-status route; cards simply show no chip.
+        .catch(() => undefined);
+    };
+    const timer = isDesktop ? window.setInterval(load, 10_000) : undefined;
+    if (isDesktop) load();
+    return () => {
+      cancelled = true;
+      if (timer !== undefined) window.clearInterval(timer);
+    };
+  }, []);
+  const hasActiveBuild = (issue: Issue) => ACTIVE_BUILD_STATUSES.has(issueBuilds[issue.id]?.status ?? '');
+  const canStartBuild = (issue: Issue) =>
+    canRunBuilds && issue.status !== 'done' && issue.status !== 'agent_running' && !hasActiveBuild(issue);
+  const boardColumnFor = (issue: Issue): IssueStatus =>
+    issue.status !== 'done' && issue.status !== 'review' && hasActiveBuild(issue) ? 'agent_running' : issue.status;
   
   // Collapsed status sections state (Jira style)
   const [collapsedSections, setCollapsedSections] = useTabSessionState<Record<string, boolean>>(`${sessionPrefix}.collapsedSections`, {});
@@ -147,7 +210,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     { id: 'backlog', title: 'Backlog', color: 'border-gray-700' },
     { id: 'todo', title: 'Todo', color: 'border-slate-600' },
     { id: 'in_progress', title: 'In Progress', color: 'border-amber-500/50' },
-    { id: 'agent_running', title: 'Agent Running', color: 'border-cyan-500/50' },
+    { id: 'agent_running', title: 'Building', color: 'border-cyan-500/50' },
     { id: 'review', title: 'In Review', color: 'border-purple-500/50' },
     { id: 'done', title: 'Done', color: 'border-emerald-500/50' },
   ];
@@ -205,11 +268,9 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
         issue.assignedHuman !== identity.login &&
         issue.assignedHuman !== identity.name
       ))) return false;
-      if (filterCategory === 'agents' && !issue.assignedAgentId) return false;
-      if (filterCategory === 'members' && !issue.assignedSquadId && !issue.assignedHuman) return false;
+      if (filterCategory === 'members' && !issue.assignedHuman) return false;
       if (selectedProject !== 'all' && issue.projectId !== selectedProject) return false;
       if (selectedPriority !== 'all' && issue.priority !== selectedPriority) return false;
-      if (selectedAgent !== 'all' && issue.assignedAgentId !== selectedAgent) return false;
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         return (
@@ -221,7 +282,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
       }
       return true;
     });
-  }, [issues, filterCategory, selectedProject, selectedPriority, selectedAgent, searchQuery, identity]);
+  }, [issues, filterCategory, selectedProject, selectedPriority, searchQuery, identity]);
 
   /** Only when one project is named, because a create needs one. */
   const canQuickAdd = selectedProject !== 'all' && canManageIssues;
@@ -256,7 +317,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   };
 
   const runningAgentsCount = useMemo(() => {
-    return issues.filter(i => i.status === 'agent_running').length;
+    return issues.filter(i => i.status === 'agent_running' || hasActiveBuild(i)).length;
   }, [issues]);
 
   const clearDragState = () => {
@@ -271,16 +332,16 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   };
 
   /**
-   * Keep board movement aligned with the execution lifecycle. Agent Running
-   * is a real run, not a label, so it must go through the same preparation
-   * dialog as the Run button. Done is a human checkpoint, so direct moves ask
-   * for confirmation instead of silently bypassing review.
+   * Keep board movement aligned with the execution lifecycle. Building is a
+   * real Orchestrator build, not a label, so dropping a card there asks to
+   * start one. Done is a human checkpoint, so direct moves ask for
+   * confirmation instead of silently bypassing review.
    */
   const requestIssueStatusChange = (issue: Issue, nextStatus: IssueStatus) => {
     if (issue.status === nextStatus) return;
 
     if (nextStatus === 'agent_running') {
-      runAgentOnIssue(issue.id);
+      if (canRunBuilds && !hasActiveBuild(issue) && issue.status !== 'done') setPendingBuildIssueId(issue.id);
       return;
     }
 
@@ -377,51 +438,29 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     }
   };
 
+  /** The person working the issue. Agents are chosen per task by the Orchestrator, not assigned here. */
   const getAssigneeVisual = (issue: Issue) => {
-    const agent = agents.find(a => a.id === issue.assignedAgentId);
-    const squad = squads.find(s => s.id === issue.assignedSquadId);
+    const person = issue.assignedHuman?.trim();
+    if (!person) return null;
+    const initials = person.replace(/[^a-zA-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
+    return (
+      <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-[10px] font-semibold text-gray-200" title={`Assignee: ${person}`}>
+        {initials}
+      </div>
+    );
+  };
 
-    if (agent) {
-      if (agent.role === 'Architect') {
-        return (
-          <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-white" title={`Agent: ${agent.name}`}>
-            <Asterisk className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-          </div>
-        );
-      }
-      if (agent.role === 'Coder') {
-        return (
-          <img src={agent.avatar} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10" title={`Agent: ${agent.name}`} />
-        );
-      }
-      if (agent.role === 'Reviewer') {
-        return (
-          <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-amber-400" title={`Agent: ${agent.name}`}>
-            <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-          </div>
-        );
-      }
-      if (agent.role === 'QA Tester') {
-        return (
-          <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-orange-400" title={`Agent: ${agent.name}`}>
-            <Flame className="w-3.5 h-3.5 fill-orange-400/20 text-orange-400" />
-          </div>
-        );
-      }
-      return (
-        <img src={agent.avatar} alt="" className="w-5 h-5 rounded-full object-cover ring-1 ring-white/10" title={`Agent: ${agent.name}`} />
-      );
-    }
-
-    if (squad) {
-      return (
-        <div className="w-6 h-6 rounded-full bg-surface-100 border border-white/10 flex items-center justify-center text-xs" title={`Squad: ${squad.name}`}>
-          👥
-        </div>
-      );
-    }
-
-    return null;
+  const pendingBuildIssue = pendingBuildIssueId ? issues.find(issue => issue.id === pendingBuildIssueId) : undefined;
+  const confirmIssueBuild = () => {
+    if (!pendingBuildIssue) return;
+    setPendingBuildIssueId(null);
+    void startIssueBuild(pendingBuildIssue.id);
+  };
+  const openBuildRoom = (issue: Issue) => {
+    const build = issueBuilds[issue.id];
+    setTabSessionState(activeTabId, 'liveBuildProjectId', issue.projectId);
+    if (build) setTabSessionState(activeTabId, 'liveBuildRunId', build.runId);
+    setActiveTab('live_build_room');
   };
 
   return (
@@ -485,16 +524,6 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 >
                   Members
                 </button>
-                <button
-                  onClick={() => setFilterCategory('agents')}
-                  className={`px-2 py-1 border-b font-medium transition-colors ${
-                    filterCategory === 'agents'
-                      ? 'border-brand-400 text-white'
-                      : 'border-transparent text-gray-500 hover:text-white'
-                  }`}
-                >
-                  Agents
-                </button>
               </>}
               <button
                 onClick={() => setFilterCategory('all')}
@@ -513,10 +542,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               {runningAgentsCount > 0 ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                  <span className="text-cyan-300 font-medium">{runningAgentsCount} agents working</span>
+                  <span className="text-cyan-300 font-medium">{runningAgentsCount} building</span>
                 </>
               ) : (
-                <span>0 agents working</span>
+                <span>Nothing building</span>
               )}
             </div>
 
@@ -652,16 +681,6 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <option value="low">Low</option>
             </select>
 
-            <select
-              value={selectedAgent}
-              onChange={(e) => setSelectedAgent(e.target.value)}
-              className="bg-surface-100 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-brand-500"
-            >
-              <option value="all">All Agents</option>
-              {agents.map(a => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
           </div>
         )}
       </div>
@@ -672,7 +691,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
           /* Kanban Board Mode */
           <div className="flex-1 overflow-x-auto p-4 sm:p-6 flex gap-5">
             {columns.map(column => {
-              const colIssues = filteredIssues.filter(i => i.status === column.id);
+              const colIssues = filteredIssues.filter(i => boardColumnFor(i) === column.id);
 
               return (
                 <div
@@ -690,7 +709,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   }`}
                   aria-label={
                     column.id === 'agent_running'
-                      ? 'Drop issues here to prepare an agent run'
+                      ? 'Drop issues here to start an Orchestrator build'
                       : column.id === 'done'
                         ? 'Drop issues here to request confirmation before marking done'
                         : `Drop issues here to move them to ${column.title}`
@@ -793,17 +812,20 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                           )}
 
                           <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs text-gray-400">
-                            <div>{getAssigneeVisual(issue)}</div>
-                            {canRunAgents && issue.status !== 'done' && issue.status !== 'agent_running' && (
+                            <div className="flex min-w-0 items-center gap-2">
+                              {getAssigneeVisual(issue)}
+                              <BuildChip build={issueBuilds[issue.id]} />
+                            </div>
+                            {canStartBuild(issue) && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  runAgentOnIssue(issue.id);
+                                  setPendingBuildIssueId(issue.id);
                                 }}
                                 className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500/20 hover:bg-brand-500/40 text-brand-300 text-xs font-semibold border border-brand-500/30 transition-all opacity-80 group-hover:opacity-100"
                               >
-                                <Play className="w-3 h-3 text-brand-400 fill-brand-400" />
-                                <span>Run</span>
+                                <Sparkles className="w-3 h-3 text-brand-400" />
+                                <span>Build</span>
                               </button>
                             )}
                           </div>
@@ -920,7 +942,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                                   </div>
                                 )}
 
-                                <div className="flex items-center">
+                                <div className="flex items-center gap-2">
+                                  <BuildChip build={issueBuilds[issue.id]} />
                                   {getAssigneeVisual(issue)}
                                 </div>
                               </div>
@@ -1070,50 +1093,32 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
               {/* Right Sidebar Metadata */}
               <div className="w-full md:w-80 bg-surface-200/40 p-6 space-y-6 flex-shrink-0 text-xs">
-                {/* Trigger Action */}
-                {canRunAgents && selectedIssue.status !== 'done' && !prototypeRuns.some(run => run.issueId === selectedIssue.id) && (
+                {/* Orchestrator build: the Orchestrator picks an agent for each task. */}
+                {canRunBuilds && selectedIssue.status !== 'done' && !hasActiveBuild(selectedIssue) && (
                   <button
-                    onClick={() => runAgentOnIssue(selectedIssue.id)}
-                    disabled={selectedIssue.status === 'agent_running'}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-on-accent font-bold text-sm shadow-glow-brand transition-all"
+                    onClick={() => setPendingBuildIssueId(selectedIssue.id)}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-bold text-sm shadow-glow-brand transition-all"
                   >
-                    <Play className="w-4 h-4 fill-white" />
-                    <span>{selectedIssue.status === 'agent_running' ? 'Agent Running...' : 'Launch Autonomous Agent'}</span>
+                    <Sparkles className="w-4 h-4" />
+                    <span>Build with Orchestrator</span>
                   </button>
                 )}
 
-                {/*
-                  Launching a squad was only possible from the Squads page, so
-                  the multi-agent path could not be started from the board where
-                  the work actually lives. Shown only when a squad is assigned,
-                  and only while a single-agent run is not already underway.
-                */}
-                {canRunSquads && selectedIssue.assignedSquadId &&
-                  selectedIssue.status !== 'done' &&
-                  !prototypeRuns.some(run => run.issueId === selectedIssue.id) && (
+                {issueBuilds[selectedIssue.id] && (
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-surface-100 px-3.5 py-2.5">
+                    <BuildChip build={issueBuilds[selectedIssue.id]} />
                     <button
-                      onClick={() =>
-                        void triggerSquadRun(
-                          selectedIssue.assignedSquadId!,
-                          selectedIssue.id,
-                          [],
-                          selectedIssue.title
-                        )
-                      }
-                      disabled={selectedIssue.status === 'agent_running'}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-50 border border-white/10 text-white font-medium text-sm transition-colors"
+                      type="button"
+                      onClick={() => openBuildRoom(selectedIssue)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-medium text-brand-300 hover:text-brand-200"
                     >
-                      <Users className="w-4 h-4" />
-                      <span>
-                        Launch {squads.find(sq => sq.id === selectedIssue.assignedSquadId)?.name ?? 'Squad'}
-                      </span>
+                      <Radio className="h-3.5 w-3.5" />
+                      Open Live Build Room
                     </button>
-                  )}
+                  </div>
+                )}
 
                 <AgentRunProgress issueId={selectedIssue.id} />
-
-                {/* The squad's own shape: who ran, who is running, who is next. */}
-                <SquadRunFlow issueId={selectedIssue.id} />
 
                 {/* Status Picker */}
                 <div className="space-y-1.5">
@@ -1126,7 +1131,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     <option value="backlog">Backlog</option>
                     <option value="todo">Todo</option>
                     <option value="in_progress">In Progress</option>
-                    <option value="agent_running">Agent Running</option>
+                    <option value="agent_running">Building</option>
                     <option value="review">In Review</option>
                     <option value="done">Done</option>
                   </select>
@@ -1148,14 +1153,19 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   </select>
                 </div>
 
-                <ExecutionOwnerSelect
-                  agents={agents} squads={squads}
-                  value={selectedIssue.assignedSquadId ? { type: 'squad', id: selectedIssue.assignedSquadId } : selectedIssue.assignedAgentId ? { type: 'agent', id: selectedIssue.assignedAgentId } : null}
-                  onChange={owner => updateIssue(selectedIssue.id, {
-                    assignedAgentId: owner?.type === 'agent' ? owner.id : '',
-                    assignedSquadId: owner?.type === 'squad' ? owner.id : ''
-                  })}
-                />
+                <div className="space-y-1.5">
+                  <label className="text-gray-400 font-medium">Assignee</label>
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-surface-100 px-3.5 py-2">
+                    <span className="truncate text-gray-200">{selectedIssue.assignedHuman || 'Unassigned'}</span>
+                    {canManageIssues && identity && (
+                      selectedIssue.assignedHuman === identity.login ? (
+                        <button type="button" onClick={() => updateIssue(selectedIssue.id, { assignedHuman: '' })} className="shrink-0 text-[11px] font-medium text-gray-400 hover:text-white">Unassign</button>
+                      ) : (
+                        <button type="button" onClick={() => updateIssue(selectedIssue.id, { assignedHuman: identity.login })} className="shrink-0 text-[11px] font-medium text-brand-300 hover:text-brand-200">Assign to me</button>
+                      )
+                    )}
+                  </div>
+                </div>
                 <div className="border-t border-white/5 pt-4 text-xs text-gray-500">
                   <span className="block text-[11px] mb-1">Project</span>
                   <span className="text-gray-300">{projects.find(project => project.id === selectedIssue.projectId)?.name ?? selectedIssue.projectId}</span>
@@ -1187,6 +1197,35 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
           </div>
         )}
       </div>
+
+      {pendingBuildIssue && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPendingBuildIssueId(null)} />
+          <div role="dialog" aria-modal="true" aria-labelledby="confirm-build-title" className="relative w-full max-w-md rounded-2xl border border-white/10 bg-surface-100 p-6 shadow-2xl">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-brand-300">
+                <Sparkles className="h-5 w-5" />
+              </div>
+              <div className="space-y-1.5">
+                <h2 id="confirm-build-title" className="text-base font-semibold text-white">
+                  Build {pendingBuildIssue.identifier} with the Orchestrator?
+                </h2>
+                <p className="text-sm leading-relaxed text-gray-400">
+                  Alpha opens a project chat for this issue and plans the work, choosing an agent for each task by role. Nothing changes in the code until you review the plan and choose <span className="font-semibold text-gray-200">Start planned work</span>.
+                </p>
+              </div>
+            </div>
+            <div className="mt-6 flex justify-end gap-2">
+              <button type="button" onClick={() => setPendingBuildIssueId(null)} className="rounded-lg border border-white/10 px-3.5 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white">
+                Cancel
+              </button>
+              <button type="button" onClick={confirmIssueBuild} className="rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-semibold text-on-accent transition-colors hover:bg-brand-400">
+                Plan the build
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingDoneIssue && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
