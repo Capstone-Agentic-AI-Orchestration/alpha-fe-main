@@ -37,12 +37,16 @@ export function resolveRecoveryAction(
     else if (['provider', 'configuration', 'review_input', 'final_validation', 'budget'].includes(recovery.category)) {
       action = 'recheck_prerequisite';
     } else if (['workspace', 'alpha'].includes(recovery.category)) {
-      action = 'resume_checkpoint';
+      action = recovery.availableActions.includes('resume_checkpoint') ? 'resume_checkpoint'
+        : recovery.availableActions.includes('recheck_prerequisite') ? 'recheck_prerequisite' : action;
     }
   } else if (action === 'recheck_prerequisite') {
     if (recovery.category === 'project_code') action = 'repair_and_continue';
     else if (recovery.category === 'report') action = 'retry_report_format';
-    else if (['workspace', 'alpha'].includes(recovery.category)) action = 'resume_checkpoint';
+    else if (['workspace', 'alpha'].includes(recovery.category)) {
+      action = recovery.availableActions.includes('resume_checkpoint') ? 'resume_checkpoint'
+        : recovery.availableActions.includes('recheck_prerequisite') ? 'recheck_prerequisite' : action;
+    }
   }
 
   if (action === 'repair_and_continue' && !recovery.availableActions.includes(action) &&

@@ -40,4 +40,13 @@ describe('chat recovery intent', () => {
       category: 'report', availableActions: ['retry_report_format']
     })).toBe('retry_report_format');
   });
+
+  it('uses the available workspace prerequisite retry instead of an unavailable checkpoint resume', () => {
+    expect(resolveRecoveryAction('repair_and_continue', {
+      category: 'workspace', availableActions: ['recheck_prerequisite', 'review_saved_changes']
+    })).toBe('recheck_prerequisite');
+    expect(resolveRecoveryAction('recheck_prerequisite', {
+      category: 'workspace', availableActions: ['resume_checkpoint', 'review_saved_changes']
+    })).toBe('resume_checkpoint');
+  });
 });

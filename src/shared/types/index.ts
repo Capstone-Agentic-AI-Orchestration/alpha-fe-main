@@ -1050,6 +1050,7 @@ export type LiveBuildTaskStatus =
   | 'superseded';
 
 export interface LiveBuildRoomDiffPreview {
+  reviewType?: 'validated' | 'saved_checkpoint';
   repository?: string;
   baseCommit: string;
   resultCommit: string;
@@ -1059,6 +1060,7 @@ export interface LiveBuildRoomDiffPreview {
   diff: string;
   truncated: boolean;
   repositories?: Array<{
+    reviewType?: 'validated' | 'saved_checkpoint';
     repository: string;
     baseCommit: string;
     resultCommit: string;
@@ -1260,6 +1262,8 @@ export interface LiveBuildRecoveryProjection {
   taskRevision?: number;
   attemptsUsed: number;
   repairBudget: number;
+  reportCorrectionsUsed?: number;
+  reportCorrectionLimit?: number;
   episodeNumber: number;
   revision: number;
   createdAt: string;
