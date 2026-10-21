@@ -962,6 +962,9 @@ export interface LiveBuildRoomAgentCard {
   runId?: string;
   agentCallId?: string;
   squadRunId?: string;
+  orchestrationTaskId?: string;
+  orchestrationAttemptNumber?: number;
+  orchestrationTaskCount?: number;
   activity: LiveBuildRoomActivity[];
   filePaths?: string[];
   branchName?: string;
@@ -1143,6 +1146,10 @@ export interface LiveBuildRoomOrchestration {
     status: LiveBuildTaskStatus;
     revision: number;
     attemptCount: number;
+    /** Count of work attempts, excluding the one read-only report-format retry. */
+    executionAttemptCount?: number;
+    /** Server-approved task retry action; the server remains the source of retry eligibility. */
+    retryAvailable?: boolean;
     correctionOfTaskId?: string;
     correctionCycle?: number;
   }>;
@@ -1150,6 +1157,7 @@ export interface LiveBuildRoomOrchestration {
     id: string;
     taskId: string;
     attemptNumber: number;
+    reportFormatRetry?: boolean;
     prototypeRunId?: string;
     agentId?: string;
     agentName: string;
@@ -1158,6 +1166,8 @@ export interface LiveBuildRoomOrchestration {
     completedAt?: string;
     resultCommit?: string;
     summary?: string;
+    reportResponse?: string;
+    reportResponseTruncated?: boolean;
     failureReason?: string;
     report?: {
       requirementCoverage: Array<{ requirementId?: string; evidence?: string }>;
@@ -1197,6 +1207,7 @@ export interface LiveBuildRoomOrchestration {
       resultCommit?: string;
     }>;
   };
+  recovery?: LiveBuildRecoveryProjection;
   artifacts: Array<{
     id: string;
     taskId: string;
@@ -1222,6 +1233,44 @@ export interface LiveBuildRoomOrchestration {
     createdAt: string;
     resolvedAt?: string;
   }>;
+}
+
+export type LiveBuildRecoveryAction =
+  | 'explain_failure'
+  | 'repair_and_continue'
+  | 'provide_guidance'
+  | 'recheck_prerequisite'
+  | 'plan_final_validation_corrections'
+  | 'resume_checkpoint'
+  | 'review_saved_changes'
+  | 'keep_paused'
+  | 'cancel_build';
+
+export interface LiveBuildRecoveryProjection {
+  id: string;
+  runId: string;
+  phase: 'repairing' | 'waiting_for_user' | 'ready_to_continue' | 'resolved' | 'cancelled';
+  category: 'project_code' | 'report' | 'review_input' | 'provider' | 'configuration' | 'workspace' | 'final_validation' | 'budget' | 'alpha' | 'unknown';
+  code: string;
+  summary: string;
+  taskId?: string;
+  taskTitle?: string;
+  taskRevision?: number;
+  attemptsUsed: number;
+  repairBudget: number;
+  episodeNumber: number;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+  availableActions: LiveBuildRecoveryAction[];
+  actionReasons: Partial<Record<LiveBuildRecoveryAction, string>>;
+}
+
+export interface LiveBuildRecoveryState {
+  runId: string;
+  runRevision: number;
+  recovery?: LiveBuildRecoveryProjection;
+  history: LiveBuildRecoveryProjection[];
 }
 
 export interface LiveBuildRoomSnapshot {
@@ -1448,7 +1497,7 @@ export interface ChatMessage {
   thinkingProcess?: string;
   toolsExecuted?: ToolExecutionRecord[];
   isStreaming?: boolean;
-  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build';
+  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build' | 'build_milestone';
   agentCallId?: string;
   orchestrationRunId?: string;
   operationMode?: AgentCallMode;

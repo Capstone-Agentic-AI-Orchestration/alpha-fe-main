@@ -36,6 +36,8 @@ interface OrchestrationWorkflowPanelProps {
   onPause: () => void;
   onCancel: () => void;
   onApprove: () => void;
+  onViewAgentActivity?: (taskId: string, prototypeRunId: string) => void;
+  focusTaskId?: string | null;
   canApprove?: boolean;
   publicationSynced?: boolean;
 }
@@ -78,6 +80,24 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   return <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">{children}</div>;
 }
 
+function isRawReport(value?: string): boolean {
+  if (!value) return false;
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Boolean(parsed && typeof parsed === 'object');
+  } catch {
+    return false;
+  }
+}
+
+function ReportResponseDisclosure({ response, truncated }: { response?: string; truncated?: boolean }) {
+  if (!response) return null;
+  return <details className="mt-2 rounded-md border border-white/[0.07] bg-black/10 px-2.5 py-2">
+    <summary className="cursor-pointer text-[10px] font-medium text-slate-400">Show original report response</summary>
+    <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-4 text-slate-500">{response}{truncated ? '\n[The saved response was cut off at Alpha’s safe display limit.]' : ''}</pre>
+  </details>;
+}
+
 function TaskEvidence({ workflow, taskId, taskById }: {
   workflow: LiveBuildRoomOrchestration;
   taskId: string;
@@ -89,21 +109,23 @@ function TaskEvidence({ workflow, taskId, taskById }: {
 
   return <div className="space-y-3">
     {findings.map(finding => <div key={finding.id} className="rounded-lg border border-amber-300/15 bg-amber-300/[0.045] px-3 py-2.5">
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-amber-100"><AlertTriangle className="h-3.5 w-3.5" />{finding.title || `${finding.severity} finding`}{finding.path && <code className="font-normal text-amber-100/60">{finding.path}</code>}<span className={`rounded border px-1.5 py-0.5 text-[9px] font-medium ${finding.status === 'resolved' ? 'border-emerald-300/15 text-emerald-100/70' : 'border-amber-300/15 text-amber-100/75'}`}>{finding.status === 'resolved' ? 'Resolved' : finding.severity}</span></div>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] font-semibold text-amber-100"><AlertTriangle className="h-3.5 w-3.5" />{finding.title || `${finding.severity} finding`}{finding.check === 'agent_report' || finding.check === 'report_identity' || finding.check === 'review_findings_missing' ? <span className="rounded border border-sky-300/15 px-1.5 py-0.5 text-[9px] font-medium text-sky-100/80">Report format</span> : null}{finding.path && <code className="font-normal text-amber-100/60">{finding.path}</code>}<span className={`rounded border px-1.5 py-0.5 text-[9px] font-medium ${finding.status === 'resolved' ? 'border-emerald-300/15 text-emerald-100/70' : 'border-amber-300/15 text-amber-100/75'}`}>{finding.status === 'resolved' ? 'Resolved' : finding.severity}</span></div>
       {finding.evidence && <p className="mt-1 text-[10px] leading-4 text-amber-100/60">Evidence: {finding.evidence}</p>}
       <p className="mt-1 text-xs leading-5 text-amber-100/75">{finding.instruction || 'This result needs a correction or review.'}</p>
-      {finding.correctionTaskId && <p className="mt-1.5 text-[10px] text-slate-400">Correction assigned to <span className="font-medium text-slate-200">{taskById.get(finding.correctionTaskId)?.title || 'the task owner'}</span></p>}
+      {finding.correctionTaskId && <p className="mt-1.5 text-[10px] text-slate-400">{finding.check === 'agent_report' || finding.check === 'report_identity' || finding.check === 'review_findings_missing' ? 'Format correction returned to' : 'Correction assigned to'} <span className="font-medium text-slate-200">{taskById.get(finding.correctionTaskId)?.ownerName || 'the same specialist'}</span></p>}
     </div>)}
     {attempts.map(attempt => <div key={attempt.id} className="rounded-lg border border-white/[0.07] bg-black/10 p-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-        <div className="text-[11px] font-medium text-slate-200">Attempt {attempt.attemptNumber} <span className="font-normal text-slate-500">· {attempt.agentName}</span></div>
+        <div className="text-[11px] font-medium text-slate-200">Attempt {attempt.attemptNumber} <span className="font-normal text-slate-500">· {attempt.agentName}</span>{attempt.reportFormatRetry && <span className="ml-2 rounded border border-sky-300/15 px-1.5 py-0.5 text-[9px] text-sky-100/80">Read-only report fix</span>}</div>
         <span className="text-[10px] text-slate-500">{attempt.status.replace(/_/g, ' ')}</span>
       </div>
-      {attempt.summary && <p className="mt-2 max-w-prose text-xs leading-5 text-slate-300">{attempt.summary}</p>}
-      {attempt.failureReason && <details className="mt-2 rounded-md border border-amber-300/10 bg-amber-300/[0.025] px-2.5 py-2">
-        <summary className="cursor-pointer text-[10px] font-medium text-amber-100/80">Why this attempt stopped</summary>
-        <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-amber-100/65">{attempt.failureReason}</pre>
+      {attempt.summary && !isRawReport(attempt.summary) && <p className="mt-2 max-w-prose break-words text-xs leading-5 text-slate-300">{attempt.summary}</p>}
+      {attempt.summary && isRawReport(attempt.summary) && <details className="mt-2 rounded-md border border-white/[0.07] bg-black/10 px-2.5 py-2">
+        <summary className="cursor-pointer text-[10px] font-medium text-slate-400">Show original report response</summary>
+        <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-4 text-slate-500">{attempt.summary}</pre>
       </details>}
+      {attempt.failureReason && <div className="mt-2 rounded-md border border-amber-300/12 bg-amber-300/[0.035] px-2.5 py-2 text-[10px] leading-4 text-amber-100/80"><span className="font-semibold">Why it stopped:</span> <span className="break-words">{attempt.failureReason}</span></div>}
+      <ReportResponseDisclosure response={attempt.reportResponse} truncated={attempt.reportResponseTruncated} />
       {attempt.report && <div className="mt-3 space-y-2.5 border-t border-white/[0.05] pt-3">
         {!!attempt.report.requirementCoverage.length && <div><div className="text-[10px] font-medium text-slate-400">Requirement evidence</div><div className="mt-1.5 space-y-1.5">{attempt.report.requirementCoverage.map((item, index) => <div key={`${item.requirementId}-${index}`} className="text-[10px] leading-4 text-slate-500"><span className="font-mono text-violet-100/65">{item.requirementId || 'Requirement'}</span>{item.evidence && <span className="ml-2">{item.evidence}</span>}</div>)}</div></div>}
         {!!attempt.report.criteriaEvidence.length && <div><div className="text-[10px] font-medium text-slate-400">Acceptance evidence</div><div className="mt-1.5 space-y-1.5">{attempt.report.criteriaEvidence.map((item, index) => <div key={`${item.criterion}-${index}`} className="text-[10px] leading-4 text-slate-500"><span className="text-slate-300">{item.criterion || 'Criterion'}</span>{item.evidence && <span className="ml-2">{item.evidence}</span>}</div>)}</div></div>}
@@ -170,11 +192,14 @@ function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration })
             <div className="mt-1 text-xs font-medium text-white">{task?.title || 'Assigned specialist task'}</div>
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[10px] text-slate-500"><span>{task?.repository || workflow.run.repository}</span><span className="text-slate-700">·</span><span>{eventTime}</span>{attempt.attemptNumber > 1 && <><span className="text-slate-700">·</span><span>Attempt {attempt.attemptNumber}</span></>}</div>
             {task?.assignmentReason && <p className="mt-2 border-t border-white/[0.05] pt-2 text-[10px] leading-4 text-slate-400"><span className="font-medium text-violet-100/75">Why assigned:</span> {task.assignmentReason}</p>}
-            {attempt.summary && <p className="mt-2 text-[10px] leading-4 text-slate-400">{attempt.summary}</p>}
-            {attempt.failureReason && <details className="mt-2 rounded-md border border-amber-300/10 bg-amber-300/[0.025] px-2.5 py-2">
-              <summary className="cursor-pointer text-[10px] font-medium text-amber-100/80">Why this handoff stopped</summary>
-              <pre className="mt-2 max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-amber-100/65">{attempt.failureReason}</pre>
+            {attempt.reportFormatRetry && <div className="mt-2 inline-flex rounded border border-sky-300/15 bg-sky-300/[0.04] px-2 py-1 text-[9px] text-sky-100/80">Read-only report-format correction</div>}
+            {attempt.summary && !isRawReport(attempt.summary) && <p className="mt-2 break-words text-[10px] leading-4 text-slate-400">{attempt.summary}</p>}
+            {attempt.summary && isRawReport(attempt.summary) && <details className="mt-2 rounded-md border border-white/[0.07] bg-black/10 px-2.5 py-2">
+              <summary className="cursor-pointer text-[10px] font-medium text-slate-400">Show original report response</summary>
+              <pre className="mt-2 max-h-44 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-4 text-slate-500">{attempt.summary}</pre>
             </details>}
+            {attempt.failureReason && <div className="mt-2 rounded-md border border-amber-300/12 bg-amber-300/[0.035] px-2.5 py-2 text-[10px] leading-4 text-amber-100/80"><span className="font-semibold">Why it stopped:</span> <span className="break-words">{attempt.failureReason}</span></div>}
+            <ReportResponseDisclosure response={attempt.reportResponse} truncated={attempt.reportResponseTruncated} />
           </div>
         </li>;
       })}
@@ -264,11 +289,14 @@ const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: stri
 };
 
 export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProps> = ({
-  projectId, workflow, canManage, canResume = false, canApprove = false, publicationSynced = false, busyAction, actionError, onRetry, onStartPlan, onResume, onPause, onCancel, onApprove
+  projectId, workflow, canManage, canResume = false, canApprove = false, publicationSynced = false, busyAction, actionError, onRetry, onStartPlan, onResume, onPause, onCancel, onApprove, onViewAgentActivity, focusTaskId
 }) => {
   const firstActionableTask = workflow.tasks.find(task => ['failed', 'blocked'].includes(task.status));
   const [expandedTaskId, setExpandedTaskId] = useState(workflow.run.currentTaskId ?? firstActionableTask?.id ?? workflow.tasks[0]?.id ?? '');
   const [confirmStop, setConfirmStop] = useState(false);
+  useEffect(() => {
+    if (focusTaskId && workflow.tasks.some(task => task.id === focusTaskId)) setExpandedTaskId(focusTaskId);
+  }, [focusTaskId, workflow.tasks]);
   const taskById = useMemo(() => new Map(workflow.tasks.map(task => [task.id, task])), [workflow.tasks]);
   const requiredTasks = workflow.tasks.filter(task => task.required);
   const completedRequired = requiredTasks.filter(task => task.status === 'accepted').length;
@@ -365,7 +393,10 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
             const correctionParent = task.correctionOfTaskId ? taskById.get(task.correctionOfTaskId) : undefined;
             const correctionFindings = workflow.findings.filter(finding => finding.correctionTaskId === task.id);
             const taskRequirements = workflow.requirements.filter(requirement => task.requirementIds.includes(requirement.id));
-            const retryable = canManage && ['executing', 'blocked'].includes(workflow.run.status) && ['failed', 'blocked'].includes(task.status) && task.attemptCount < 2;
+            const executionAttemptCount = task.executionAttemptCount ?? task.attemptCount;
+            const reportFormatRetryUsed = taskAttempts.some(attempt => attempt.reportFormatRetry);
+            const latestExecution = [...taskAttempts].reverse().find(attempt => attempt.prototypeRunId);
+            const retryable = canManage && task.retryAvailable === true;
             const taskBusy = busyAction === `retry:${task.id}`;
             return <article key={task.id} className={`relative overflow-hidden rounded-xl border transition-colors ${task.id === workflow.run.currentTaskId ? 'border-violet-300/25 bg-violet-300/[0.045]' : task.status === 'accepted' ? 'border-emerald-300/[0.11] bg-emerald-300/[0.018]' : 'border-white/[0.07] bg-black/[0.08]'}`}>
               {index < workflow.tasks.length - 1 && <span aria-hidden="true" className="absolute left-[19px] top-11 bottom-[-15px] w-px bg-white/[0.07]" />}
@@ -373,7 +404,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
                 <span className={`relative z-[1] mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border text-[10px] font-semibold tabular-nums ${task.status === 'accepted' ? 'border-emerald-300/20 bg-[#12231f] text-emerald-100' : task.id === workflow.run.currentTaskId ? 'border-violet-300/25 bg-[#211a35] text-violet-100' : 'border-white/[0.08] bg-[#181b26] text-slate-400'}`}>{task.status === 'accepted' ? <Check className="h-3.5 w-3.5" /> : String(index + 1).padStart(2, '0')}</span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold text-white sm:text-[13px]">{task.title}</span><span className={`inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[9px] font-medium ${meta.tone}`}>{meta.icon}{meta.label}</span>{!task.required && <span className="text-[9px] text-slate-600">Optional</span>}{correctionParent && <span className="rounded-md border border-amber-300/15 bg-amber-300/[0.04] px-1.5 py-0.5 text-[9px] text-amber-100/80">Follow-up to {correctionParent.title}</span>}{correctionFindings.length > 0 && <span className="rounded-md border border-amber-300/10 px-1.5 py-0.5 text-[9px] text-amber-100/65">{correctionFindings.length} review note{correctionFindings.length === 1 ? '' : 's'}</span>}</span>
-                  <span className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-slate-500"><span>{task.ownerName}</span><span className="text-slate-700">·</span><span className="capitalize">{task.kind}</span><span className="text-slate-700">·</span><span>{task.repository}</span>{taskAttempts.length > 0 && <><span className="text-slate-700">·</span><span>{taskAttempts.length} attempt{taskAttempts.length === 1 ? '' : 's'}</span></>}</span>
+                  <span className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] text-slate-500"><span>{task.ownerName}</span><span className="text-slate-700">·</span><span className="capitalize">{task.kind}</span><span className="text-slate-700">·</span><span>{task.repository}</span>{taskAttempts.length > 0 && <><span className="text-slate-700">·</span><span>{executionAttemptCount} work attempt{executionAttemptCount === 1 ? '' : 's'}{reportFormatRetryUsed ? ' · separate report-only retry' : ''}</span></>}</span>
                   {dependencies.length > 0 && <span className="mt-2 flex flex-wrap items-center gap-1.5">{dependencies.map(dependency => <span key={dependency.id} className={`rounded border px-1.5 py-0.5 text-[9px] ${dependency.status === 'accepted' ? 'border-emerald-300/10 text-emerald-100/70' : 'border-amber-300/15 text-amber-100/75'}`}>{dependency.status === 'accepted' ? 'After' : 'Waiting for'} {dependency.title}</span>)}</span>}
                   {unresolvedDependencies.length > 0 && <span className="mt-1.5 block text-[10px] text-amber-100/65">This task becomes eligible after its dependencies are accepted.</span>}
                 </span>
@@ -382,11 +413,12 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
               {expanded && <div className="border-t border-white/[0.06] px-3.5 pb-4 pt-3.5 sm:ml-[3.9rem] sm:px-4 sm:pt-3">
                 <p className="max-w-3xl text-xs leading-5 text-slate-400">{task.description}</p>
                 <div className="mt-3 rounded-lg border border-violet-300/10 bg-violet-300/[0.035] px-3 py-2.5"><SectionLabel>Why this specialist</SectionLabel><p className="mt-1 text-xs leading-5 text-slate-300">{task.assignmentReason}</p></div>
+                {latestExecution?.prototypeRunId && <button type="button" onClick={() => onViewAgentActivity?.(task.id, latestExecution.prototypeRunId!)} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-violet-300/20 bg-violet-300/[0.04] px-3 text-[11px] font-semibold text-violet-100 transition hover:bg-violet-300/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><ExternalLink className="h-3.5 w-3.5" />View agent activity</button>}
                 <div className="mt-4"><SectionLabel>How we’ll know this is done</SectionLabel><ul className="mt-2 space-y-2">{task.acceptanceCriteria.map((criterion, criterionIndex) => <li key={`${criterion}-${criterionIndex}`} className="flex gap-2 text-xs leading-5 text-slate-300"><span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-violet-300/70" />{criterion}</li>)}</ul></div>
                 {(taskRequirements.length > 0 || task.requiredChecks.length > 0 || task.scope.includePaths.length > 0) && <details className="group mt-4 rounded-lg border border-white/[0.06] bg-black/[0.08] px-3 py-2.5"><summary className="flex cursor-pointer list-none items-center justify-between gap-2 text-[11px] font-medium text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><span>More build details</span><ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" /></summary><div className="mt-3 space-y-3 border-t border-white/[0.06] pt-3">{taskRequirements.length > 0 && <div><SectionLabel>Project needs covered</SectionLabel><ul className="mt-2 space-y-1.5">{taskRequirements.map(requirement => <li key={requirement.id} className="text-[11px] leading-4 text-slate-400">{requirement.description}</li>)}</ul></div>}{task.requiredChecks.length > 0 && <div><SectionLabel>Checks after this work</SectionLabel><div className="mt-2 flex flex-wrap gap-1.5">{task.requiredChecks.map(check => <code key={check} className="rounded-md border border-white/[0.08] px-1.5 py-1 text-[9px] text-slate-400">{check}</code>)}</div></div>}{!!task.scope.includePaths.length && <div><SectionLabel>Files this specialist may change</SectionLabel><div className="mt-2 flex flex-wrap gap-1.5">{task.scope.includePaths.map(file => <code key={file} className="max-w-full truncate rounded-md bg-white/[0.035] px-1.5 py-1 text-[9px] text-slate-400">{file}</code>)}</div></div>}</div></details>}
                 {(taskAttempts.length > 0 || taskFindings.length > 0) && <div className="mt-4 border-t border-white/[0.06] pt-3.5"><SectionLabel>Result and verification</SectionLabel><div className="mt-2.5"><TaskEvidence workflow={workflow} taskId={task.id} taskById={taskById} /></div></div>}
-                {retryable && <button type="button" onClick={() => onRetry(task.id, task.revision)} disabled={Boolean(busyAction)} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.045] px-3 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-300/[0.09] active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:cursor-wait disabled:opacity-50">{taskBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}{taskBusy ? 'Preparing retry…' : task.attemptCount >= 1 ? 'Retry this task' : 'Try this task again'}</button>}
-                {task.status === 'failed' && task.attemptCount >= 2 && <p className="mt-3 text-[10px] leading-4 text-amber-100/70">The retry limit was reached. This task needs a reviewed plan change or a human decision.</p>}
+                {retryable && <button type="button" onClick={() => onRetry(task.id, task.revision)} disabled={Boolean(busyAction)} className="mt-3 inline-flex min-h-9 items-center gap-2 rounded-lg border border-amber-300/20 bg-amber-300/[0.045] px-3 text-[11px] font-semibold text-amber-100 transition hover:bg-amber-300/[0.09] active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:cursor-wait disabled:opacity-50">{taskBusy ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}{taskBusy ? 'Preparing retry…' : executionAttemptCount >= 1 ? 'Retry this task' : 'Try this task again'}</button>}
+                {task.status === 'failed' && executionAttemptCount >= 2 && <p className="mt-3 text-[10px] leading-4 text-amber-100/70">The two-work-attempt limit was reached. {reportFormatRetryUsed ? 'A report-only retry is tracked separately and does not change that count.' : 'A separate report-only correction may still be available.'}</p>}
               </div>}
             </article>;
           })}
