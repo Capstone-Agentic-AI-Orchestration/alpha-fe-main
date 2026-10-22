@@ -59,3 +59,24 @@ export function resolveRecoveryAction(
   }
   return action;
 }
+
+const CONTINUE_PHRASE = /\b(continue|carry on|keep going|go ahead|proceed|resume|move forward|pick (?:it|this|that) (?:back )?up|start (?:the )?(?:planned work|plan|build|work)|run the plan|let'?s go|do it)\b/;
+const QUESTION_START = /^(?:what|why|how|when|where|who|which|is|are|was|were|does|did|will|would|should|shall|do you|do we)\b/;
+const NEGATED = /\b(?:don't|dont|do not|never|not|no need to|stop|wait|hold off|hold on|before you)\b.{0,24}\b(?:continue|carry on|keep going|go ahead|proceed|resume|start)\b/;
+const CHAT_CONTINUATION = /\bcontinue\s+(?:to\s+(?!work\b|build\b)\w+|explaining|your|the (?:explanation|answer|story|list|summary))\b/;
+
+/**
+ * A short instruction to carry an open build forward: "continue", "continue with
+ * the plan", "can you continue", "go ahead", "keep going", "fix and continue".
+ * Questions about continuing, negations and requests to continue an answer are
+ * not, so asking "should we continue?" never starts work.
+ */
+export function isContinueRequest(message: string): boolean {
+  const text = message.trim().toLowerCase().replace(/[.!]+$/, '');
+  if (!text || text.length > 120) return false;
+  if (text.endsWith('?') && !/^(?:can|could|would) you\b/.test(text)) return false;
+  if (QUESTION_START.test(text)) return false;
+  if (NEGATED.test(text) || CHAT_CONTINUATION.test(text)) return false;
+  return CONTINUE_PHRASE.test(text);
+}
+
