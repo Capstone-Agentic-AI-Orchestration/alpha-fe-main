@@ -433,7 +433,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         tone: inBuild ? buildTone(inBuild.state) : call ? toneFor(call.status) : IDLE_RGB,
         active: inBuild?.state === 'running' || (call ? ['running', 'queued'].includes(call.status) : false),
         engaged: Boolean(inBuild || call),
-        detail: [agent.role, state, agent.modelName].filter(Boolean).join(' · ')
+        detail: [agent.role, state, inBuild?.changedFiles.length ? inBuild.changedFiles.length + (inBuild.changedFiles.length === 1 ? ' file changed' : ' files changed') : null, agent.modelName].filter(Boolean).join(' · ')
       };
     });
   }, [agentById, agentCalls, buildAgents, rosterAgents]);
@@ -615,6 +615,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         canEdit={canEditAgents && Boolean(onUpdateAgent)}
         onUpdate={(id, updates) => onUpdateAgent?.(id, updates)}
         onViewActivity={activityFor(panelAgent.id)}
+        changedFiles={buildAgents.find(node => node.agentId === panelAgent.id)?.changedFiles}
         onClose={() => setPanelAgentId(null)}
       />
     </div>}

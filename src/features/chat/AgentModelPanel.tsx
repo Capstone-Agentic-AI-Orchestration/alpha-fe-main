@@ -16,6 +16,8 @@ export interface AgentModelPanelProps {
   onUpdate: (id: string, updates: Partial<Agent>) => void;
   /** Opens the agent's live activity, when it has some in this chat or build. */
   onViewActivity?: () => void;
+  /** Files this agent changed in the open build; omitted when it has no part in one. */
+  changedFiles?: string[];
   onClose: () => void;
 }
 
@@ -26,7 +28,7 @@ const fieldClass = 'w-full rounded-lg border border-white/10 bg-black/40 px-2.5 
  * Changes save straight to the agent, exactly as in the Agent Directory, and
  * apply from the agent's next task.
  */
-export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, onViewActivity, onClose }: AgentModelPanelProps) {
+export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, onViewActivity, changedFiles, onClose }: AgentModelPanelProps) {
   const managed = new Set(agent.managedByFile ?? []);
   const providers = providerOptions(runtimes);
   const models = modelsForProvider(runtimes, agent.modelProvider);
@@ -48,6 +50,21 @@ export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, on
     </div>
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3.5 py-2.5">
       <p className="line-clamp-2 text-[11px] leading-4 text-violet-200">{status}</p>
+
+      {changedFiles && <section aria-label="Files changed in this build" className="rounded-lg border border-white/[0.06] bg-black/30 px-2.5 py-2">
+        <div className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-gray-500">
+          <span>Files changed</span>
+          <span className="font-mono normal-case tracking-normal text-emerald-200">{changedFiles.length}</span>
+        </div>
+        {changedFiles.length
+          ? <ul className="max-h-24 space-y-0.5 overflow-y-auto pr-1">{changedFiles.map(file => {
+              const slash = file.lastIndexOf('/');
+              return <li key={file} title={file} className="truncate font-mono text-[10px] leading-4">
+                {slash > 0 && <span className="text-gray-500">{file.slice(0, slash + 1)}</span>}<span className="text-emerald-200">{file.slice(slash + 1)}</span>
+              </li>;
+            })}</ul>
+          : <p className="text-[10px] text-gray-500">No files changed yet.</p>}
+      </section>}
 
       <label className="block space-y-0.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Provider</span>

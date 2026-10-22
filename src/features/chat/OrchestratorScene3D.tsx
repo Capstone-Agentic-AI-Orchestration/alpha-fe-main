@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Billboard, Html, Line, OrbitControls, QuadraticBezierLine, Sparkles } from '@react-three/drei';
 
-import { atomPositions, CAMERA_START, orbitPath, ORBIT_COUNT, waveAt, type Vec3 } from './orchestratorSceneLayout';
+import { atomPositions, CAMERA_FOV, CAMERA_START, orbitPath, ORBIT_COUNT, waveAt, type Vec3 } from './orchestratorSceneLayout';
 
 export interface SceneAgent {
   id: string;
@@ -127,7 +127,7 @@ function Hub({ glow, working, selected, clickable, onOver, onOut, onClick }: {
     </Billboard>
     {/* The name sits on the orb itself, so it never collides with an agent placed just below. */}
     <Html center position={[0, 0, 0.7]} zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
-      <div className={'whitespace-nowrap rounded-full px-1.5 py-0.5 text-[10px] font-semibold text-white ' + (selected ? 'bg-violet-500/50' : 'bg-violet-950/50')}>Orchestrator</div>
+      <div className={'whitespace-nowrap rounded-full px-1.5 py-px text-[9px] font-semibold leading-3 text-white ' + (selected ? 'bg-violet-500/50' : 'bg-violet-950/50')}>Orchestrator</div>
     </Html>
   </group>;
 }
@@ -169,8 +169,8 @@ function AgentOrb({ agent, position, glow, selected, hovered, onOver, onOut, onC
       <meshPhysicalMaterial color={color} emissive={color} emissiveIntensity={agent.active ? 0.95 : lit ? 0.6 : 0.3} roughness={0.2} clearcoat={1} />
     </mesh>
     {selected && <Billboard><mesh><ringGeometry args={[0.4, 0.44, 48]} /><meshBasicMaterial color="#ede9fe" transparent opacity={0.9} depthWrite={false} /></mesh></Billboard>}
-    <Html center position={[0, -0.52, 0]} zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
-      <div className={'whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium ' + (selected ? 'bg-violet-400/30 text-white' : lit ? 'bg-black/60 text-gray-100' : 'bg-black/40 text-gray-400')}>{agent.name}</div>
+    <Html center position={[0, -0.46, 0]} zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
+      <div className={'whitespace-nowrap rounded-full px-1.5 py-px text-[8.5px] font-medium leading-3 ' + (selected ? 'bg-violet-400/30 text-white' : lit ? 'bg-black/60 text-gray-100' : 'bg-black/40 text-gray-400')}>{agent.name}</div>
     </Html>
     {hovered && agent.detail && <Html center position={[0, 0.72, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
       <div className="max-w-64 rounded-xl border border-violet-300/20 bg-[#16161d]/95 px-3 py-2 text-left shadow-xl shadow-black/40">
@@ -221,7 +221,7 @@ function Scene({ agents, hubId, hubLabel, hubDetail, hubClickable, working, sele
       onOver={event => { event.stopPropagation(); setHoveredId(agent.id); }}
       onOut={() => setHoveredId(previous => (previous === agent.id ? null : previous))}
       onClick={event => { event.stopPropagation(); onSelect(agent.id); }} />)}
-    <OrbitControls makeDefault enableDamping dampingFactor={0.08} enablePan minDistance={4} maxDistance={20}
+    <OrbitControls makeDefault enableDamping dampingFactor={0.08} enablePan minDistance={5} maxDistance={26}
       maxPolarAngle={Math.PI * 0.85} />
   </>;
 }
@@ -236,7 +236,7 @@ function Scene({ agents, hubId, hubLabel, hubDetail, hubClickable, working, sele
 export default function OrchestratorScene3D(props: OrchestratorSceneProps) {
   return <Canvas
     dpr={[1, 2]}
-    camera={{ position: CAMERA_START, fov: 45 }}
+    camera={{ position: CAMERA_START, fov: CAMERA_FOV }}
     gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
     frameloop={props.paused ? 'never' : props.reduceMotion ? 'demand' : 'always'}
     onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}

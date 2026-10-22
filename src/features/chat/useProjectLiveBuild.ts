@@ -24,6 +24,8 @@ export interface BuildAgentNode {
   tasks: Array<{ id: string; title: string; status: string }>;
   /** Live execution for this agent in this build, once it has started. */
   card?: LiveBuildRoomAgentCard;
+  /** Every file this agent changed in this build, across its tasks and attempts. */
+  changedFiles: string[];
 }
 
 export interface ProjectLiveBuild {
@@ -60,7 +62,7 @@ export function buildAgentNodes(snapshot: LiveBuildRoomSnapshot): BuildAgentNode
   const byAgent = new Map<string, BuildAgentNode>();
   for (const task of orchestration.tasks) {
     const agentId = task.ownerAgentId ?? task.ownerName;
-    const node = byAgent.get(agentId) ?? { agentId, name: task.ownerName, role: '', state: 'waiting' as BuildAgentState, tasks: [] };
+    const node = byAgent.get(agentId) ?? { agentId, name: task.ownerName, role: '', state: 'waiting' as BuildAgentState, tasks: [], changedFiles: [] };
     node.tasks.push({ id: task.id, title: task.title, status: task.status });
     byAgent.set(agentId, node);
   }
@@ -71,13 +73,27 @@ export function buildAgentNodes(snapshot: LiveBuildRoomSnapshot): BuildAgentNode
     const card = cards.find(item => item.status === 'running') ?? cards[0];
     const active = node.tasks.find(task => task.status === 'running' || task.status === 'submitted')
       ?? node.tasks.find(task => ['pending', 'ready', 'blocked', 'failed'].includes(task.status));
+    const taskIds = new Set(node.tasks.map(task => task.id));
+    const changedFiles = [...new Set([
+      ...orchestration.attempts
+        .filter(attempt => taskIds.has(attempt.taskId) && attempt.status !== 'cancelled')
+        .flatMap(attempt => [
+          ...(attempt.changedPaths ?? []),
+          ...(attempt.report?.deliverables ?? []).flatMap(deliverable => deliverable.paths ?? [])
+        ]),
+      ...cards.flatMap(item => [
+        ...(item.filePaths ?? []),
+        ...item.activity.filter(entry => entry.kind === 'file_change').flatMap(entry => entry.paths ?? [])
+      ])
+    ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
     return {
       ...node,
       name: card?.agentName ?? node.name,
       role: card?.agentRole ?? '',
       state: stateFor(node.tasks.map(task => task.status)),
       currentTaskTitle: active?.title,
-      card
+      card,
+      changedFiles
     };
   });
 }
