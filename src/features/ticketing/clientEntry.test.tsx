@@ -27,6 +27,9 @@ describe('client landing and password entry', () => {
   });
   it('shows password sign-in and existing-account migration without open signup or client GitHub login', () => {
     browser(); const html = renderToStaticMarkup(<ClientPasswordSignIn unavailable={false} error="" onRetry={() => {}} onSignedIn={() => {}} />);
+    expect(html).toContain('class="alpha-public"');
+    expect(html).toContain('Alphaexplora');
+    expect(html).toContain('aria-current="page">Client sign in</span>');
     expect(html).toContain('type="password"');
     expect(html).toContain('autoComplete="current-password"');
     expect(html).toContain('/#/client/forgot');

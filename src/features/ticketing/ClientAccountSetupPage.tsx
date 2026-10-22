@@ -46,7 +46,7 @@ export function ClientAccountSetupPage({ readLink, cleanUrl, failureMessage = de
       void clientAccountApi.complete(password).then(() => setComplete(true)).catch(err => {
         // A previous client's cookie cannot prove this invitation was completed.
         setError(err instanceof TypeError
-          ? 'We could not connect to Alpha. Check your internet connection and try again.'
+          ? 'We could not connect to Alphaexplora. Check your internet connection and try again.'
           : err instanceof Error ? err.message : 'Could not save your password. Try again, or return to sign in.');
       }).finally(() => { setBusy(false); setPassword(''); setConfirm(''); });
     }}>

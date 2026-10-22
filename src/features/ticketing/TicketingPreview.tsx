@@ -49,8 +49,8 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
               <span className={`flex items-center ${expanded ? 'gap-3' : ''}`}><Search className="h-4 w-4" /><span className={expanded ? 'block text-gray-400' : 'hidden'}>Search…</span></span>
               {expanded && <kbd className="text-[11px] text-gray-600">⌘ K</kbd>}
             </button>
-            <button type="button" disabled aria-label="New Issue" title="Create an Issue in Alpha · unavailable in preview" className={`flex rounded-lg text-gray-500 opacity-70 ${expanded ? 'w-full items-center justify-between px-3 py-2' : 'h-9 w-9 items-center justify-center'}`}>
-              <span className={`flex items-center ${expanded ? 'gap-3' : ''}`}><Edit3 className="h-4 w-4" /><span className={expanded ? 'block' : 'hidden'}>New Issue</span></span>
+            <button type="button" disabled aria-label="New task" title="Create a task in Alpha · unavailable in preview" className={`flex rounded-lg text-gray-500 opacity-70 ${expanded ? 'w-full items-center justify-between px-3 py-2' : 'h-9 w-9 items-center justify-center'}`}>
+              <span className={`flex items-center ${expanded ? 'gap-3' : ''}`}><Edit3 className="h-4 w-4" /><span className={expanded ? 'block' : 'hidden'}>New Task</span></span>
               {expanded && <kbd className="text-[11px] text-gray-600">C</kbd>}
             </button>
           </div>

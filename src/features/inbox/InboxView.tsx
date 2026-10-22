@@ -310,7 +310,7 @@ export const InboxView: React.FC = () => {
                   onClick={() => setActiveTab('issues')}
                   className="flex items-center gap-2 text-sm text-brand-400 hover:text-brand-300 font-semibold transition-colors"
                 >
-                  <span>Go to related issue tracker</span>
+                  <span>Go to related task tracker</span>
                   <ExternalLink className="w-4 h-4" />
                 </button>
               </div>

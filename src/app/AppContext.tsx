@@ -1461,7 +1461,7 @@ ${e.detail}`;
         prUrl: finalRun.prUrl,
         updatedAt: new Date().toISOString()
       } : i));
-      showToast('Run completed', `Agent finished work on issue. ${finalRun.insertions || 0} insertions, ${finalRun.deletions || 0} deletions.`, 'success');
+      showToast('Run completed', `Agent finished work on task. ${finalRun.insertions || 0} insertions, ${finalRun.deletions || 0} deletions.`, 'success');
     });
 
     const unsubFailed = runnerSocket.on('run_failed', (failedRun) => {
@@ -1591,7 +1591,7 @@ ${e.detail}`;
     const newNotification: InboxNotification = {
       id: `notif-${Date.now()}`,
       type: 'issue_assigned',
-      title: 'New issue created',
+      title: 'New task created',
       message: `${newIssue.title} was created in project ${project ? project.name : 'Alpha'}.`,
       read: false,
       audience: 'internal',
@@ -1607,7 +1607,7 @@ ${e.detail}`;
     persist(
       () => apiService.createIssue(newIssue),
       saved => setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i))),
-      msg => showToast('Issue not saved', msg, 'error')
+      msg => showToast('Task not saved', msg, 'error')
     );
 
     return newIssue;
@@ -1640,7 +1640,7 @@ ${e.detail}`;
       saved => setIssues(prev => prev.map(issue => issue.id === id ? saved : issue)),
       msg => {
         if (before) setIssues(prev => prev.map(issue => issue.id === id ? before : issue));
-        showToast('Issue not saved', msg, 'error');
+        showToast('Task not saved', msg, 'error');
       }
     );
   };
@@ -1693,7 +1693,7 @@ ${e.detail}`;
       () => {},
       msg => {
         if (removed) setIssues(prev => [removed, ...prev]);
-        showToast('Issue not deleted', msg, 'error');
+        showToast('Task not deleted', msg, 'error');
       }
     );
   };
@@ -1708,7 +1708,7 @@ ${e.detail}`;
       run.issueId === issueId && ['queued', 'running', 'awaiting_approval', 'validating'].includes(run.status)
     );
     if (blockingRun) {
-      showToast('Run already in progress', 'Open the issue to view its current status.', 'info');
+      showToast('Run already in progress', 'Open the task to view its current status.', 'info');
       return;
     }
 
@@ -1963,7 +1963,7 @@ ${e.detail}`;
         id: `comm-${run.id}-cancelled`,
         authorType: 'system' as const,
         authorName: 'Prototype runner',
-        content: 'Run cancelled. The issue remains in progress and can be started again.',
+        content: 'Run cancelled. The task remains in progress and can be started again.',
         createdAt: now
       }],
       updatedAt: now
@@ -1981,7 +1981,7 @@ ${e.detail}`;
     if (!requireCapability('run_agents')) return;
     const run = prototypeRuns.find(item => item.id === runId);
     if (!run || !['failed', 'changes_requested', 'cancelled'].includes(run.status)) {
-      showToast('Retry unavailable', 'The failed run is no longer available. Refresh the issue and try again.', 'error');
+      showToast('Retry unavailable', 'The failed run is no longer available. Refresh the task and try again.', 'error');
       return;
     }
     // The daemon creates a new run when retrying. Keep the failed run in
@@ -2089,7 +2089,7 @@ ${e.detail}`;
             issueIdentifier: targetIssue.identifier
           }
         }, ...prev]);
-        showToast('Run needs attention', run.testSummary || 'The agent run failed. Open the issue to retry.', 'error');
+        showToast('Run needs attention', run.testSummary || 'The agent run failed. Open the task to retry.', 'error');
         return;
       }
 
@@ -2126,7 +2126,7 @@ ${e.detail}`;
                * This read `${run.changedFiles || 4} files changed and
                * ${run.testSummary || 'all tests passed'}` — so a run that
                * changed nothing announced four files and passing tests, in the
-               * agent's own voice, on the issue. The backend verifier now
+               * agent's own voice, on the task. The backend verifier now
                * records the repository checks and their exit status; the
                * daemon's testSummary is used verbatim when present.
                */
@@ -2509,7 +2509,7 @@ ${e.detail}`;
     if (!requireCapability('run_builds')) return null;
     const issue = issues.find(item => item.id === issueId);
     if (!issue?.projectId) {
-      showToast('Build not started', 'Choose a project for this issue before building it.', 'error');
+      showToast('Build not started', 'Choose a project for this task before building it.', 'error');
       return null;
     }
     const threadId = createNewThread(`Build ${issue.identifier}`, issue.projectId);
@@ -2753,12 +2753,12 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
         id: `comm-${run.id}-rejected`,
         authorType: 'system' as const,
         authorName: 'Prototype runner',
-        content: 'Changes requested during review. The run can be retried from the issue.',
+        content: 'Changes requested during review. The run can be retried from the task.',
         createdAt: now
       }],
       updatedAt: now
     } : issue));
-    showToast('Changes requested', 'Return to the issue when you are ready to retry.', 'info');
+    showToast('Changes requested', 'Return to the task when you are ready to retry.', 'info');
   };
 
   // Chat & Threads
@@ -3451,7 +3451,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
         id: `notif-${Date.now()}`,
         type: 'agent_completed',
         title: `${doc.identifier} approved — project created`,
-        message: `${doc.clientName} approved the specification. ${newIssues.length} issues created in ${project.name}.`,
+        message: `${doc.clientName} approved the specification. ${newIssues.length} tasks created in ${project.name}.`,
         read: false,
         audience: 'internal',
         timestamp: now,

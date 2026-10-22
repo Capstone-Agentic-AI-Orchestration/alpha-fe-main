@@ -59,7 +59,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
   };
 
   return <div ref={motionRef} className="public-inquiry-body">
-    <button type="button" onClick={cancel} disabled={locked} className="public-text-link public-back-link"><ArrowLeft size={15} />Back to Alpha entry</button>
+    <button type="button" onClick={cancel} disabled={locked} className="public-text-link public-back-link"><ArrowLeft size={15} />Back to Alphaexplora entry</button>
     <div className="public-inquiry-intro" data-public-arrival><h1>Tell us what you need<span>.</span></h1><p>A good project starts with a conversation. Share your idea, the outcome you’re after, and what matters most. Your project manager will take it from here.</p></div>
     <form aria-label="Project inquiry" aria-busy={isSubmitting} className="public-inquiry-form" onInvalidCapture={() => setValidationError('Please complete the required fields and use a valid email address.')} onInput={() => { setValidationError(''); setError(''); }} onSubmit={event => {
       event.preventDefault();

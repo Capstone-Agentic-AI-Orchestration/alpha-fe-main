@@ -26,9 +26,10 @@ describe('client ticket detail layout', () => {
     expect(html).toContain('Action needed: ');
     expect(html).toContain('Decision needed');
     expect(html).toContain('Review proposed work');
-    expect(html).toContain('Write a message to your project manager…');
-    expect(html).toContain('Messages appear from oldest to newest.');
-    expect(html).toContain('Send reply');
+    expect(html).toContain('Write a message…');
+    expect(html).toContain('Private messages between you and your project manager');
+    expect(html).toContain('class="client-reply-form"');
+    expect(html).toContain('aria-label="Send reply"');
     expect(html).toContain('Hello there');
     expect(html).toContain('Copy request reference');
     expect(html).toContain('min-h-[44px]');

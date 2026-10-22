@@ -345,15 +345,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={`flex rounded-lg text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
                 compact ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
               }`}
-              title={compact ? 'New issue' : undefined}
-              aria-label="New issue"
+              title={compact ? 'New task' : undefined}
+              aria-label="New task"
             >
               <span className={`flex items-center ${compact ? 'justify-center' : 'gap-3'}`}>
                 <Edit3 className="h-4 w-4 text-gray-500" />
                 <span
                   className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
                 >
-                  New Issue
+                  New Task
                 </span>
               </span>
               {!compact && <kbd className="px-2 py-0.5 text-[11px] text-gray-500">C</kbd>}

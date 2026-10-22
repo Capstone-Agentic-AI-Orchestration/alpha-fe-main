@@ -253,7 +253,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Issue title"
+                  placeholder="Task title"
                   className="w-full bg-transparent text-lg sm:text-xl font-bold text-white placeholder-gray-500 focus:outline-none border-none"
                 />
 
@@ -501,7 +501,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                   type="button"
                   role="switch"
                   aria-checked={createAnother}
-                  aria-label="Create another issue after this one"
+                  aria-label="Create another task after this one"
                   onClick={() => setCreateAnother(!createAnother)}
                   className={`flex h-5 w-9 items-center rounded-full border p-0.5 transition-colors ${
                     createAnother
@@ -522,9 +522,9 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                 onClick={handleSubmit}
                 disabled={mode === 'agent' ? !promptText.trim() : (!title.trim() && !promptText.trim())}
                 className="inline-flex min-w-[112px] items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2.5 text-xs font-semibold text-gray-900 shadow-sm transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-white"
-                title="Create issue (Ctrl/Cmd + Enter)"
+                title="Create task (Ctrl/Cmd + Enter)"
               >
-                <span>Create issue</span>
+                <span>Create task</span>
               </button>
             </div>
           </div>

@@ -210,10 +210,11 @@
   .public-inquiry-guide .public-notice { padding: 11px 14px; }
   .public-back-link { margin-bottom: 17px; }
 }
-@media (max-width: 480px) {
+@media (max-width: 560px) {
   .public-container { width: calc(100% - 40px); }
   .public-header { align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; padding-block: 10px; }
   .public-header nav { width: 100%; justify-content: space-between; gap: 6px; }
+  .public-header-nav-access > .public-text-link { display: none; }
   .public-header .public-header-nav-landing { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
   .public-header-nav-landing > * { min-width: 0; }
   .public-header-nav-landing .public-nav-action { min-height: 44px; padding-inline: 8px; font-size: 11px; }

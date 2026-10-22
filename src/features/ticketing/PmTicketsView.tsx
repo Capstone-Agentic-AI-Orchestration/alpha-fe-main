@@ -720,7 +720,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                     {detail.internal.authorizedScopeVersionId && <span className="text-[10px] text-gray-500">Scope locked after work authorization · new work needs a linked ticket</span>}
                     {workflowActions === 'all' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <button className={secondary} disabled={writing || Boolean(pending)}
                       onClick={() => { setWriteError(''); setScopeComposerOpen(false); setHandoffOpen(false); setReviewAction(value => value === 'correction' ? null : 'correction'); }}>
-                      {reviewAction === 'correction' ? 'Close correction editor' : detail.internal.correctionRequestedFor ? 'Review client correction' : 'Return affected Issues'}
+                      {reviewAction === 'correction' ? 'Close correction editor' : detail.internal.correctionRequestedFor ? 'Review client correction' : 'Return affected tasks'}
                     </button>}
                     {workflowActions === 'all' && canCloseAcceptedTicket(detail, selectedQueueItem.internal.clientAccessActive) && <button className={primary} disabled={writing || Boolean(pending)}
                       onClick={() => { setWriteError(''); setReviewAction('close'); }}>Close accepted ticket</button>}
@@ -754,7 +754,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                     </div>}
                     <p className="mt-3 text-[10px] text-gray-500">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : selectedInvitation?.status === 'pending' ? 'Invitation pending · no access until verified' : 'Client account not active'}</p>
                     <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectId ? `Project: ${detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? 'linked'}` : 'No project linked yet'}</p>
-                    {detail.internal.projectId && <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectClientVisible ? 'Project name preview is visible to this ticket’s client; project and Issue access remain private.' : 'Project link is PM-only.'}</p>}
+                    {detail.internal.projectId && <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectClientVisible ? 'Project name preview is visible to this ticket’s client; project and task access remain private.' : 'Project link is PM-only.'}</p>}
                   </div>
                 </div>
 
