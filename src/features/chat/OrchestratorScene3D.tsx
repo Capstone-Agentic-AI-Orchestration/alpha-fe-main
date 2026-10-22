@@ -125,10 +125,6 @@ function Hub({ glow, working, selected, clickable, onOver, onOut, onClick }: {
       </group>
       {selected && <mesh><ringGeometry args={[0.9, 0.95, 64]} /><meshBasicMaterial color="#ede9fe" transparent opacity={0.9} depthWrite={false} /></mesh>}
     </Billboard>
-    {/* The name sits on the orb itself, so it never collides with an agent placed just below. */}
-    <Html center position={[0, 0, 0.7]} zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
-      <div className={'whitespace-nowrap rounded-full px-1.5 py-px text-[9px] font-semibold leading-3 text-white ' + (selected ? 'bg-violet-500/50' : 'bg-violet-950/50')}>Orchestrator</div>
-    </Html>
   </group>;
 }
 
