@@ -10,7 +10,7 @@ import { AI_FEATURES_BY_ROLE, AI_NAV_TABS } from './features';
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
   dev: ['issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
-  pm: ['issues', 'projects', 'documents', 'inbox', 'chat', 'analytics', 'settings'],
+  pm: ['issues', 'projects', 'documents', 'inbox', 'analytics', 'settings'],
   admin: ['issues', 'projects', 'documents', 'inbox', 'chat', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
 };
 /**
@@ -22,7 +22,7 @@ const existingVisible: Record<UserRole, NavigationTab[]> = {
   dev: ['chat', 'issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'documents', 'settings'],
   // Existing PM/admin grouping omits Specifications despite allowing its route.
   // That unrelated baseline gap is not introduced or silently fixed by ticketing.
-  pm: ['chat', 'projects', 'issues', 'inbox', 'analytics', 'settings'],
+  pm: ['projects', 'issues', 'inbox', 'analytics', 'settings'],
   admin: ['chat', 'projects', 'issues', 'inbox', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
 };
 describe('existing navigation compatibility', () => {

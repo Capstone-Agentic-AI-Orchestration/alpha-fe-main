@@ -128,7 +128,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const canManageIssues = can('manage_issues');
   const canRunBuilds = can('run_builds');
 
-  const [viewMode, setViewMode] = useTabSessionState<'board' | 'list'>(`${sessionPrefix}.viewMode`, 'list');
+  // Project managers plan on the kanban board, so it is where they land; everyone else starts on the list.
+  const [viewMode, setViewMode] = useTabSessionState<'board' | 'list'>(`${sessionPrefix}.viewMode`, role === 'pm' ? 'board' : 'list');
   /**
    * `mine` is issues you created, which is what My Issues always claimed to be.
    *
