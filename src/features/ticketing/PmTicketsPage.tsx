@@ -12,8 +12,8 @@ const intakeEnabled = import.meta.env.VITE_TICKETING_ENABLED !== '0';
 
 // Development samples are a separate lazy module, never a production fallback.
 const SampleTickets = import.meta.env.DEV
-  ? lazy(() => import('./ticketingPreviewFixtures').then(({ pmPreviewApi }) => ({
-    default: () => <PmTicketsView api={pmPreviewApi} />,
+  ? lazy(() => import('./ticketingPreviewFixtures').then(({ pmPreviewApi, pmPreviewDocumentsApi }) => ({
+    default: () => <PmTicketsView api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} communicationEnabled />,
   }))) : null;
 
 /** The real PM page: keep Alpha's surrounding sidebar, tabs and auth intact. */

@@ -51,9 +51,11 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(invitationButtonLabel(failed)).toBe('Retry invitation email');
     expect(invitationStatusMessage(failed)).toContain('issue a fresh link');
   });
-  it('offers the PM a database-backed inquiry code action, without a sample code in the UI', () => {
+  it('keeps workspace inquiry codes out of the PM ticket inbox', () => {
     const html = renderToStaticMarkup(<PmTicketsView intakeEnabled />);
-    expect(html).toContain('Share inquiry code');
+    expect(html).not.toContain('Share inquiry code');
+    expect(html).not.toContain('Share inquiry link');
+    expect(html).not.toContain('Workspace inquiry code');
     expect(html).not.toContain('workspace-intake');
   });
   it('lets an enabled inquiry form submit without an external verification widget', () => {
@@ -86,7 +88,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).not.toContain('Ticket counters');
     expect(html).not.toContain('Client-provided documents');
     expect(html).toMatch(/<input[^>]*disabled=""[^>]*placeholder="Search tickets…"/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>[\s\S]*?Refresh<\/button>/);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*class="pm-tickets__refresh"[^>]*>/);
   });
   it('opens the shared inquiry form directly without workspace selection or New Request', () => {
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
