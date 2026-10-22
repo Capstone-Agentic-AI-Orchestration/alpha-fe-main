@@ -307,84 +307,9 @@ input[type='radio']:disabled {
   display: none;
 }
 
-/* Live Build Room agent workflow canvas */
-@property --agent-flow-angle {
-  syntax: '<angle>';
-  inherits: false;
-  initial-value: 0deg;
-}
-
-.agent-flow-stage::before {
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  content: '';
-  background-image: radial-gradient(rgb(148 163 184 / 0.17) 0.8px, transparent 0.8px);
-  background-size: 24px 24px;
-  mask-image: linear-gradient(to bottom, transparent, black 12%, black 88%, transparent);
-  pointer-events: none;
-}
-
-.agent-flow-node--running {
-  animation: agent-flow-node-pulse 3.2s ease-in-out infinite;
-}
-
-.agent-flow-node--running::after {
-  position: absolute;
-  z-index: 2;
-  inset: 0;
-  padding: 1.5px;
-  border-radius: inherit;
-  background: conic-gradient(
-    from var(--agent-flow-angle),
-    transparent 0deg 286deg,
-    rgb(139 92 246 / 0.18) 306deg,
-    #8b5cf6 326deg,
-    #67e8f9 345deg,
-    transparent 360deg
-  );
-  content: '';
-  pointer-events: none;
-  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: agent-flow-border-travel 2.5s linear infinite;
-}
-
-.agent-flow-edge--active {
-  stroke-dasharray: 7 9;
-  animation: agent-flow-edge-travel 1.25s linear infinite;
-}
-
-@keyframes agent-flow-node-pulse {
-  0%,
-  100% {
-    box-shadow: 0 0 20px rgb(139 92 246 / 0.1);
-  }
-  50% {
-    box-shadow: 0 0 32px rgb(139 92 246 / 0.24), 0 0 56px rgb(34 211 238 / 0.07);
-  }
-}
-
-@keyframes agent-flow-edge-travel {
-  to {
-    stroke-dashoffset: -32;
-  }
-}
-
-@keyframes agent-flow-border-travel {
-  to {
-    --agent-flow-angle: 360deg;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .agent-flow-node--running,
-  .agent-flow-edge--active {
-    animation: none;
-  }
-
-  .agent-flow-node--running::after {
-    animation: none;
-  }
+/* The WebGL field is painted only inside the workflow stage. */
+.agent-flow-stage {
+  contain: paint;
+  background: radial-gradient(ellipse at 50% 26%, rgb(73 42 126 / 0.24), transparent 42%),
+    radial-gradient(ellipse at 50% 90%, rgb(30 31 77 / 0.25), transparent 54%), #080b14;
 }

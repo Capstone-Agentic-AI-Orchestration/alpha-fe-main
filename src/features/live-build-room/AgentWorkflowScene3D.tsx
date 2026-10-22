@@ -1,4 +1,4 @@
-import { useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Html, Line } from '@react-three/drei';
@@ -14,7 +14,33 @@ export interface WorkflowCurveConnection {
   selected?: boolean;
   muted: boolean;
   feedback?: boolean;
-  indicator?: 'PLAN' | 'CTX';
+  indicator?: 'PLAN' | 'CTX' | 'TASK';
+}
+
+export interface WorkflowSceneNode {
+  id: string;
+  center: [number, number];
+  color: string;
+  active: boolean;
+  selected: boolean;
+  kind?: 'task';
+}
+
+function useGlowTexture(): THREE.Texture {
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    const context = canvas.getContext('2d')!;
+    const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+    gradient.addColorStop(0, 'rgba(255,255,255,0.95)');
+    gradient.addColorStop(0.22, 'rgba(255,255,255,0.45)');
+    gradient.addColorStop(1, 'rgba(255,255,255,0)');
+    context.fillStyle = gradient;
+    context.fillRect(0, 0, 128, 128);
+    return new THREE.CanvasTexture(canvas);
+  }, []);
+  useEffect(() => () => texture.dispose(), [texture]);
+  return texture;
 }
 
 function toWorld(point: [number, number], width: number, height: number, z = 0): THREE.Vector3 {
@@ -76,8 +102,8 @@ function FlowConnection({ connection, width, height, reduceMotion, onSelect }: {
 }
 
 function DottedField({ width, height, active }: { width: number; height: number; active: boolean }) {
-  const columns = 92;
-  const rows = 24;
+  const columns = 110;
+  const rows = 52;
   const { geometry, base } = useMemo(() => {
     const positions = new Float32Array(columns * rows * 3);
     const basePositions = new Float32Array(columns * rows * 3);
@@ -86,9 +112,12 @@ function DottedField({ width, height, active }: { width: number; height: number;
       const depth = row / (rows - 1);
       for (let column = 0; column < columns; column += 1) {
         const across = column / (columns - 1);
-        const x = (across - 0.5) * width;
-        const y = height * 0.62 + Math.sin(across * Math.PI * 2.1 + depth * 2.5) * 22 + (depth - 0.5) * Math.min(150, height * 0.3);
-        const z = -8 - depth * 30;
+        // Overscan keeps the rows continuous as the viewport pans and zooms.
+        const x = (across - 0.5) * width * 1.35;
+        const y = (depth * 1.25 - 0.125) * height
+          + Math.sin(across * Math.PI * 2.2 + depth * 3.1) * 28
+          + Math.sin(across * Math.PI * 4.3 - depth * 2.4) * 11;
+        const z = -32 - depth * 24;
         positions[cursor] = x;
         positions[cursor + 1] = height / 2 - y;
         positions[cursor + 2] = z;
@@ -108,74 +137,83 @@ function DottedField({ width, height, active }: { width: number; height: number;
     const time = clock.getElapsedTime() * (active ? 0.6 : 0.22);
     for (let index = 0; index < base.length / 3; index += 1) {
       const offset = index * 3;
-      positions.array[offset + 1] = base[offset + 1] + Math.sin(base[offset] * 0.02 + time + Math.floor(index / columns) * 0.16) * (active ? 2.2 : 0.8);
+      positions.array[offset + 1] = base[offset + 1] + Math.sin(base[offset] * 0.012 + time + Math.floor(index / columns) * 0.2) * (active ? 3.2 : 1.3);
     }
     positions.needsUpdate = true;
   });
 
   return <points geometry={geometry} frustumCulled={false}>
-    <pointsMaterial color={active ? '#a78bfa' : '#7054b5'} size={1.75} sizeAttenuation={false} transparent opacity={0.42} depthWrite={false} blending={THREE.AdditiveBlending} />
+    <pointsMaterial color={active ? '#a78bfa' : '#7054b5'} size={1.45} sizeAttenuation={false} transparent opacity={0.31} depthWrite={false} blending={THREE.AdditiveBlending} />
   </points>;
 }
 
-function OrchestratorCore({ height, active, reduceMotion }: { height: number; active: boolean; reduceMotion: boolean }) {
+function NodeOrb({ node, width, height, root = false, reduceMotion, glow, onSelect }: {
+  node: WorkflowSceneNode; width: number; height: number; root?: boolean; reduceMotion: boolean;
+  glow: THREE.Texture; onSelect: (id: string) => void;
+}) {
   const core = useRef<THREE.Mesh>(null);
   const rings = useRef<THREE.Group>(null);
-  const center: [number, number, number] = [0, height / 2 - 72, 2];
+  const radius = root ? 29 : node.kind === 'task' ? 11 : 23;
+  const center = toWorld(node.center, width, height, 3);
   useFrame(({ clock }) => {
     if (reduceMotion) return;
     const elapsed = clock.getElapsedTime();
-    core.current?.scale.setScalar(1 + Math.sin(elapsed * (active ? 2.3 : 1.2)) * (active ? 0.035 : 0.018));
-    if (rings.current) rings.current.rotation.z = elapsed * 0.16;
+    core.current?.scale.setScalar(1 + Math.sin(elapsed * (node.active ? 2.3 : 1.2)) * (node.active ? 0.055 : 0.023));
+    if (rings.current) rings.current.rotation.z = elapsed * (root ? 0.2 : -0.14);
   });
   return <group position={center}>
-    <mesh>
-      <sphereGeometry args={[36, 32, 28]} />
-      <meshBasicMaterial color="#8b5cf6" transparent opacity={0.12} blending={THREE.AdditiveBlending} depthWrite={false} />
-    </mesh>
-    <mesh ref={core}>
-      <sphereGeometry args={[22, 40, 32]} />
-      <meshPhysicalMaterial color="#a78bfa" emissive="#6d28d9" emissiveIntensity={active ? 1.15 : 0.75} roughness={0.16} clearcoat={1} clearcoatRoughness={0.12} metalness={0.28} />
+    <sprite scale={[radius * 5, radius * 5, 1]}>
+      <spriteMaterial map={glow} color={node.color} transparent opacity={node.active ? 0.65 : 0.4} depthWrite={false} blending={THREE.AdditiveBlending} />
+    </sprite>
+    <mesh ref={core} onClick={event => { event.stopPropagation(); onSelect(node.id); }} onPointerOver={event => { event.stopPropagation(); document.body.style.cursor = 'pointer'; }} onPointerOut={() => { document.body.style.cursor = ''; }}>
+      <sphereGeometry args={[radius, 40, 32]} />
+      <meshPhysicalMaterial color={node.color} emissive={node.color} emissiveIntensity={node.active ? 1.1 : 0.68} roughness={0.16} clearcoat={1} clearcoatRoughness={0.12} metalness={0.22} />
     </mesh>
     <group ref={rings}>
       <mesh rotation={[0.1, 0.28, 0]}>
-        <torusGeometry args={[30, 1.2, 8, 72]} />
-        <meshStandardMaterial color="#ddd6fe" emissive="#8b5cf6" emissiveIntensity={0.95} metalness={0.6} roughness={0.22} transparent opacity={0.72} />
+        <torusGeometry args={[radius + 9, root ? 1.2 : 0.9, 8, 72]} />
+        <meshStandardMaterial color={node.color} emissive={node.color} emissiveIntensity={0.95} metalness={0.6} roughness={0.22} transparent opacity={0.7} />
       </mesh>
       <mesh rotation={[0.52, -0.24, 0.28]}>
-        <torusGeometry args={[35, 0.8, 7, 72]} />
-        <meshStandardMaterial color="#c4b5fd" emissive="#7c3aed" emissiveIntensity={0.62} transparent opacity={0.38} />
+        <torusGeometry args={[radius + 15, 0.75, 7, 72]} />
+        <meshStandardMaterial color={node.color} emissive={node.color} emissiveIntensity={0.62} transparent opacity={0.37} />
       </mesh>
     </group>
+    {node.selected && <mesh><ringGeometry args={[radius + 20, radius + 21, 72]} /><meshBasicMaterial color="#f5f3ff" transparent opacity={0.75} side={THREE.DoubleSide} /></mesh>}
   </group>;
 }
 
-function Scene({ width, height, connections, active, reduceMotion, onSelect }: {
+function Scene({ width, height, connections, nodes, active, reduceMotion, onSelect, onSelectNode }: {
   width: number;
   height: number;
   connections: WorkflowCurveConnection[];
+  nodes: WorkflowSceneNode[];
   active: boolean;
   reduceMotion: boolean;
   onSelect: (id: string) => void;
+  onSelectNode: (id: string) => void;
 }) {
+  const glow = useGlowTexture();
   return <>
     <ambientLight intensity={0.62} color="#ddd6fe" />
     <hemisphereLight args={['#e9d5ff', '#080b14', 0.85]} />
     <directionalLight position={[-width * 0.22, height * 0.18, 80]} intensity={1.3} color="#f5f3ff" />
     <pointLight position={[0, height * 0.25, 18]} intensity={active ? 260 : 140} distance={width * 0.72} color="#8b5cf6" />
     <DottedField width={width} height={height} active={active} />
-    <OrchestratorCore height={height} active={active} reduceMotion={reduceMotion} />
     {connections.map(connection => <FlowConnection key={connection.id} connection={connection} width={width} height={height} reduceMotion={reduceMotion} onSelect={onSelect} />)}
+    {nodes.map(node => <NodeOrb key={node.id} node={node} width={width} height={height} root={node.id === 'orchestrator'} reduceMotion={reduceMotion} glow={glow} onSelect={onSelectNode} />)}
   </>;
 }
 
-export function AgentWorkflowScene3D({ width, height, connections, active, reduceMotion, onSelect }: {
+export function AgentWorkflowScene3D({ width, height, connections, nodes, active, reduceMotion, onSelect, onSelectNode }: {
   width: number;
   height: number;
   connections: WorkflowCurveConnection[];
+  nodes: WorkflowSceneNode[];
   active: boolean;
   reduceMotion: boolean;
   onSelect: (id: string) => void;
+  onSelectNode: (id: string) => void;
 }) {
   return <Canvas
     className="absolute inset-0 z-0 h-full w-full"
@@ -187,6 +225,6 @@ export function AgentWorkflowScene3D({ width, height, connections, active, reduc
     onCreated={({ gl }) => gl.setClearColor('#080a13', 0)}
     aria-label="Interactive 3D agent workflow connections"
   >
-    <Scene width={width} height={height} connections={connections} active={active} reduceMotion={reduceMotion} onSelect={onSelect} />
+    <Scene width={width} height={height} connections={connections} nodes={nodes} active={active} reduceMotion={reduceMotion} onSelect={onSelect} onSelectNode={onSelectNode} />
   </Canvas>;
 }
