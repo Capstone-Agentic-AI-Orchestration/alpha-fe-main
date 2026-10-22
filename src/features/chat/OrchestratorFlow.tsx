@@ -2,7 +2,8 @@ import React, { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom';
 import { ChevronDown, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
 
-import { AgentCall, ProjectChatAgent } from '@/shared/types';
+import { Agent, AgentCall, ProjectChatAgent, RuntimeEngine } from '@/shared/types';
+import { AgentModelPanel } from './AgentModelPanel';
 import type { BuildAgentNode, BuildAgentState } from './useProjectLiveBuild';
 import type { SceneAgent } from './OrchestratorScene3D';
 import { supportsWebGL } from './orchestratorSceneLayout';
@@ -37,6 +38,11 @@ interface OrchestratorFlowProps {
   build?: FlowBuild | null;
   selectedBuildAgentId?: string | null;
   onSelectBuildAgent?: (agentId: string | null) => void;
+  /** Every agent in the workspace. The 3D view shows them all around the Orchestrator. */
+  roster?: Agent[];
+  runtimes?: RuntimeEngine[];
+  canEditAgents?: boolean;
+  onUpdateAgent?: (id: string, updates: Partial<Agent>) => void;
 }
 
 interface WaveAgent {
@@ -69,6 +75,12 @@ interface NodePosition {
 const LIVE_STATUSES: AgentCall['status'][] = ['queued', 'running', 'awaiting_confirmation'];
 const HUB_ID = 'orchestrator-hub';
 const BUILD_PREFIX = 'build:';
+const ROSTER_PREFIX = 'agent:';
+const IDLE_RGB = '150, 140, 200';
+
+function isOrchestratorAgent(agent: Agent): boolean {
+  return agent.templateKey === 'orchestrator' || /orchestrator/i.test(agent.role);
+}
 const SUCCESS_RGB = '52, 211, 153';
 const ERROR_RGB = '244, 63, 94';
 const FLASH_HOLD_MS = 1200;
@@ -330,7 +342,7 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
   return positions;
 }
 
-export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, isWorking, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent }) => {
+export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, isWorking, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent, roster = [], runtimes = [], canEditAgents = false, onUpdateAgent }) => {
   const [expanded, setExpanded] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -378,22 +390,66 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   const [pageVisible, setPageVisible] = useState(() => typeof document === 'undefined' || !document.hidden);
   const reduceMotion = useMemo(() => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, []);
   const show3D = expanded && webgl && !sceneFailed;
-  const sceneAgents = useMemo<SceneAgent[]>(() => [
-    ...buildAgents.map(agent => ({
-      id: BUILD_PREFIX + agent.agentId,
-      name: agent.name,
-      tone: buildTone(agent.state),
-      active: agent.state === 'running',
-      detail: [BUILD_STATE_LABEL[agent.state], agent.currentTaskTitle].filter(Boolean).join(' · ')
-    })),
-    ...agentCalls.map(call => ({
-      id: call.id,
-      name: agentById.get(call.agentId)?.name ?? call.agentId,
-      tone: toneFor(call.status),
-      active: call.status === 'running' || call.status === 'queued',
-      detail: [agentById.get(call.agentId)?.role, callStatus(call.status)].filter(Boolean).join(' · ')
-    }))
-  ], [agentById, agentCalls, buildAgents]);
+  const orchestratorAgent = useMemo(() => roster.find(agent => !agent.isArchived && isOrchestratorAgent(agent)), [roster]);
+  // Every active agent sits on the atom, official ones first, whether or not it is working.
+  const rosterAgents = useMemo(() => {
+    const visible = roster.filter(agent => !agent.isArchived && agent.id !== orchestratorAgent?.id);
+    const official = visible.filter(agent => agent.isSeeded || agent.templateKey);
+    const others = visible.filter(agent => !(agent.isSeeded || agent.templateKey)).sort((a, b) => a.name.localeCompare(b.name));
+    return [...official, ...others];
+  }, [orchestratorAgent?.id, roster]);
+  const [panelAgentId, setPanelAgentId] = useState<string | null>(null);
+  const panelAgent = panelAgentId ? roster.find(agent => agent.id === panelAgentId) : undefined;
+  const sceneAgents = useMemo<SceneAgent[]>(() => {
+    if (!rosterAgents.length) {
+      // No roster (for example a client view): show only the agents at work, as before.
+      return [
+        ...buildAgents.map(agent => ({
+          id: BUILD_PREFIX + agent.agentId,
+          name: agent.name,
+          tone: buildTone(agent.state),
+          active: agent.state === 'running',
+          engaged: true,
+          detail: [BUILD_STATE_LABEL[agent.state], agent.currentTaskTitle].filter(Boolean).join(' · ')
+        })),
+        ...agentCalls.map(call => ({
+          id: call.id,
+          name: agentById.get(call.agentId)?.name ?? call.agentId,
+          tone: toneFor(call.status),
+          active: call.status === 'running' || call.status === 'queued',
+          engaged: true,
+          detail: [agentById.get(call.agentId)?.role, callStatus(call.status)].filter(Boolean).join(' · ')
+        }))
+      ];
+    }
+    return rosterAgents.map(agent => {
+      const inBuild = buildAgents.find(node => node.agentId === agent.id);
+      const call = agentCalls.find(item => item.agentId === agent.id);
+      const state = inBuild ? [BUILD_STATE_LABEL[inBuild.state], inBuild.currentTaskTitle].filter(Boolean).join(' · ')
+        : call ? callStatus(call.status) : 'Idle';
+      return {
+        id: ROSTER_PREFIX + agent.id,
+        name: agent.name,
+        tone: inBuild ? buildTone(inBuild.state) : call ? toneFor(call.status) : IDLE_RGB,
+        active: inBuild?.state === 'running' || (call ? ['running', 'queued'].includes(call.status) : false),
+        engaged: Boolean(inBuild || call),
+        detail: [agent.role, state, agent.modelName].filter(Boolean).join(' · ')
+      };
+    });
+  }, [agentById, agentCalls, buildAgents, rosterAgents]);
+  const agentStatus = (agentId: string): string => {
+    if (agentId === orchestratorAgent?.id) return 'Orchestrator · ' + statusText;
+    const inBuild = buildAgents.find(node => node.agentId === agentId);
+    if (inBuild) return [BUILD_STATE_LABEL[inBuild.state], inBuild.currentTaskTitle].filter(Boolean).join(' · ');
+    const call = agentCalls.find(item => item.agentId === agentId);
+    return call ? callStatus(call.status) : 'Idle · not part of the current work';
+  };
+  const activityFor = (agentId: string): (() => void) | undefined => {
+    if (agentId === orchestratorAgent?.id) return orchestratorCall && onSelectCall ? () => onSelectCall(orchestratorCall.id) : undefined;
+    if (buildAgents.some(node => node.agentId === agentId) && onSelectBuildAgent) return () => onSelectBuildAgent(agentId);
+    const call = agentCalls.find(item => item.agentId === agentId);
+    return call && onSelectCall ? () => onSelectCall(call.id) : undefined;
+  };
   useEffect(() => {
     const onVisibility = () => setPageVisible(!document.hidden);
     document.addEventListener('visibilitychange', onVisibility);
@@ -408,7 +464,19 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [maximized]);
+  useEffect(() => {
+    if (!expanded) setPanelAgentId(null);
+  }, [expanded]);
   const select = (id: string) => {
+    if (id === hubId && orchestratorAgent) {
+      setPanelAgentId(previous => (previous === orchestratorAgent.id ? null : orchestratorAgent.id));
+      return;
+    }
+    if (id.startsWith(ROSTER_PREFIX)) {
+      const agentId = id.slice(ROSTER_PREFIX.length);
+      setPanelAgentId(previous => (previous === agentId ? null : agentId));
+      return;
+    }
     if (id === HUB_ID) return;
     if (id.startsWith(BUILD_PREFIX)) {
       const agentId = id.slice(BUILD_PREFIX.length);
@@ -514,7 +582,10 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   };
 
   const hubHovered = expanded && hoveredId === hubId;
-  const hubClickable = Boolean(orchestratorCall);
+  const hubClickable = Boolean(orchestratorAgent || orchestratorCall);
+  const sceneSelectedId = rosterAgents.length
+    ? (panelAgentId ? (panelAgentId === orchestratorAgent?.id ? hubId : ROSTER_PREFIX + panelAgentId) : null)
+    : selectedId;
 
   // One 3D view, shown inline or in the enlarged layer; only one is mounted at a time.
   const sceneView = <>
@@ -524,10 +595,10 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
           agents={sceneAgents}
           hubId={hubId}
           hubLabel="Orchestrator"
-          hubDetail={[title, statusText, hubClickable ? 'Click to see activity' : null].filter(Boolean).join(' · ')}
+          hubDetail={[title, statusText, orchestratorAgent ? orchestratorAgent.modelName : null, orchestratorAgent ? 'Click to see and change its model' : hubClickable ? 'Click to see activity' : null].filter(Boolean).join(' · ')}
           hubClickable={hubClickable}
           working={working}
-          selectedId={selectedId}
+          selectedId={sceneSelectedId}
           onSelect={select}
           reduceMotion={reduceMotion}
           paused={!pageVisible}
@@ -535,9 +606,20 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         />
       </Suspense>
     </SceneBoundary>
-    <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[10px] text-gray-500">Drag to look around · scroll to zoom · right-drag to pan · drag an orb to move it · click an orb for its live activity</p>
+    <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[10px] text-gray-500">Drag to look around · scroll to zoom · right-drag to pan · {rosterAgents.length ? 'click an agent to see and change its model' : 'click an orb for its live activity'}</p>
+    {panelAgent && <div className="absolute bottom-9 left-3 top-16 z-10 flex items-start">
+      <AgentModelPanel
+        agent={panelAgent}
+        status={agentStatus(panelAgent.id)}
+        runtimes={runtimes}
+        canEdit={canEditAgents && Boolean(onUpdateAgent)}
+        onUpdate={(id, updates) => onUpdateAgent?.(id, updates)}
+        onViewActivity={activityFor(panelAgent.id)}
+        onClose={() => setPanelAgentId(null)}
+      />
+    </div>}
     {nodeCount > 0 && <div className="sr-only focus-within:not-sr-only focus-within:absolute focus-within:bottom-8 focus-within:right-4 focus-within:flex focus-within:gap-1.5">
-      {sceneAgents.map(agent => <button key={agent.id} type="button" onClick={() => select(agent.id)} aria-pressed={selectedId === agent.id} className="rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[11px] text-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{agent.name}</button>)}
+      {sceneAgents.map(agent => <button key={agent.id} type="button" onClick={() => select(agent.id)} aria-pressed={sceneSelectedId === agent.id} className="rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[11px] text-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{agent.name}</button>)}
     </div>}
   </>;
 
@@ -546,7 +628,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     <div className="relative h-14 w-full">
     {show3D && maximized && createPortal(<div className="fixed inset-0 z-[1000]">
       <div aria-hidden="true" onClick={() => setMaximized(false)} className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div role="dialog" aria-label={title + ' agents in 3D'} className="absolute inset-6 overflow-hidden rounded-2xl border border-white/[0.08] bg-shell shadow-2xl shadow-black/70">
+      <div role="dialog" aria-label={title + ' agents in 3D'} className="absolute inset-6 select-none overflow-hidden rounded-2xl border border-white/[0.08] bg-shell shadow-2xl shadow-black/70">
         {sceneView}
         <div className="absolute inset-x-0 top-0 flex h-14 items-center gap-3 bg-gradient-to-b from-shell to-transparent px-5">
           <span className="min-w-0 flex-1">
@@ -558,8 +640,8 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         </div>
       </div>
     </div>, document.body)}
-    <section id={panelId} className={'absolute inset-x-0 top-0 z-30 overflow-hidden rounded-2xl border border-white/[0.08] bg-shell transition-[height,box-shadow] duration-500 ease-out motion-reduce:transition-none ' + (show3D ? 'h-[380px] shadow-2xl shadow-black/60' : expanded ? 'h-[184px] shadow-2xl shadow-black/60' : 'h-14')}>
-      {show3D && !maximized && <div className="absolute inset-0">{sceneView}</div>}
+    <section id={panelId} className={'absolute inset-x-0 top-0 z-30 overflow-hidden rounded-2xl border border-white/[0.08] bg-shell transition-[height,box-shadow] duration-500 ease-out motion-reduce:transition-none ' + (show3D ? 'h-[460px] shadow-2xl shadow-black/60' : expanded ? 'h-[184px] shadow-2xl shadow-black/60' : 'h-14')}>
+      {show3D && !maximized && <div className="absolute inset-0 select-none">{sceneView}</div>}
       {show3D && maximized && <div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-gray-500">Showing in the enlarged view</div>}
       <canvas
         ref={canvasRef}
