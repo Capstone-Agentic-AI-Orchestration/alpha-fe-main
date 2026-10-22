@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { ArrowUp, FolderOpen, MessageSquare } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ArrowUp, Check, ChevronDown, FolderOpen, MessageSquare } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 
@@ -34,6 +34,50 @@ export function greetingName(name: string): string {
   // A joined-up login such as "LloydLim" keeps only its first word.
   const first = token.split(/(?<=[a-z])(?=[A-Z])/)[0] ?? '';
   return first ? first.charAt(0).toUpperCase() + first.slice(1) : '';
+}
+
+/** A dark project menu; the native select opened as a white system list that clashed with the app. */
+function ProjectPicker({ projects, projectId, onChange }: {
+  projects: Array<{ id: string; name: string }>;
+  projectId: string | null;
+  onChange: (projectId: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const options: Array<{ id: string | null; name: string }> = [{ id: null, name: 'No project' }, ...projects];
+  const selected = options.find(option => option.id === projectId) ?? options[0];
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointer = (event: PointerEvent) => { if (!rootRef.current?.contains(event.target as Node)) setOpen(false); };
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onPointer);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onPointer); document.removeEventListener('keydown', onKey); };
+  }, [open]);
+  const choose = (id: string | null) => { onChange(id); setOpen(false); };
+
+  return <div ref={rootRef} className="relative">
+    <button type="button" onClick={() => setOpen(value => !value)} aria-haspopup="listbox" aria-expanded={open} aria-label={'Project: ' + selected.name}
+      className={'flex max-w-60 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50 '
+        + (projectId ? 'border-violet-300/30 bg-violet-400/10 text-violet-100 hover:bg-violet-400/15' : 'border-white/10 bg-white/[0.03] text-gray-300 hover:bg-white/[0.06]')}>
+      <FolderOpen className={'h-3.5 w-3.5 shrink-0 ' + (projectId ? 'text-violet-200' : 'text-gray-400')} aria-hidden="true" />
+      <span className="truncate">{selected.name}</span>
+      <ChevronDown className={'h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ' + (open ? 'rotate-180' : '')} aria-hidden="true" />
+    </button>
+    {open && <ul role="listbox" aria-label="Project" className="absolute left-0 top-full z-40 mt-1.5 max-h-64 w-60 overflow-y-auto rounded-xl border border-white/10 bg-[#17171f] p-1 shadow-2xl shadow-black/60">
+      {options.map(option => {
+        const active = option.id === selected.id;
+        return <li key={option.id ?? 'none'} role="option" aria-selected={active}>
+          <button type="button" onClick={() => choose(option.id)}
+            className={'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ' + (active ? 'bg-violet-400/15 text-white' : 'text-gray-300 hover:bg-white/[0.06] hover:text-white')}>
+            <FolderOpen className={'h-3.5 w-3.5 shrink-0 ' + (option.id ? 'text-gray-400' : 'text-gray-600')} aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">{option.name}</span>
+            {active && <Check className="h-3.5 w-3.5 shrink-0 text-violet-200" aria-hidden="true" />}
+          </button>
+        </li>;
+      })}
+    </ul>}
+  </div>;
 }
 
 function timeAgo(iso: string, now = Date.now()): string {
@@ -90,15 +134,8 @@ export function ChatHome({
           className="max-h-56 min-h-14 w-full resize-none bg-transparent px-1.5 py-1 text-sm text-white placeholder-gray-500 outline-none"
         />
         <div className="mt-2 flex items-center gap-2">
-          <label className="flex min-w-0 items-center gap-1.5 rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-[11px] text-gray-300 focus-within:border-brand-400/40">
-            <FolderOpen className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden="true" />
-            <span className="sr-only">Project</span>
-            <select value={projectId ?? ''} onChange={event => onProjectChange(event.target.value || null)} className="min-w-0 max-w-56 truncate bg-transparent text-[11px] text-gray-200 outline-none">
-              <option value="">No project</option>
-              {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
-            </select>
-          </label>
-          <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">{blockedReason ?? (projectId ? 'Builds run in this project’s codebases.' : 'Pick a project when you want Alpha to build.')}</span>
+          <ProjectPicker projects={projects} projectId={projectId} onChange={onProjectChange} />
+          <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">{blockedReason ?? (projectId ? 'Builds run in this project’s codebases.' : 'Not connected to a project. Pick one when you want Alpha to build.')}</span>
           <button type="submit" disabled={!ready} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-on-accent hover:bg-brand-400 disabled:opacity-30">
             <ArrowUp className="h-4 w-4" />
           </button>

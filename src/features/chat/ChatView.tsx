@@ -1423,17 +1423,12 @@ export const ChatView: React.FC = () => {
   }, [activeThread?.projectId, projects]);
   const canStartThread = isClient || can('manage_chat');
 
-  // A new chat is a draft until its first message: '' follows the most recent project, 'none' means no project.
+  // A new chat is a draft until its first message, and is connected to no project until one is picked.
   const [draftProjectChoice, setDraftProjectChoice] = useTabSessionState<string>('chatDraftProject', '');
-  const latestProjectId = useMemo(() => [...chatThreads]
-    .filter(thread => thread.projectId && assignedProjects.some(item => item.id === thread.projectId))
-    .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt))[0]?.projectId ?? null, [assignedProjects, chatThreads]);
-  const draftProjectId = draftProjectChoice === 'none' ? null
-    : draftProjectChoice && assignedProjects.some(item => item.id === draftProjectChoice) ? draftProjectChoice
-      : latestProjectId;
+  const draftProjectId = draftProjectChoice && assignedProjects.some(item => item.id === draftProjectChoice) ? draftProjectChoice : null;
   const startDraft = (projectId?: string | null) => {
     setActiveThreadId(null);
-    setDraftProjectChoice(projectId === undefined ? '' : projectId === null ? 'none' : projectId);
+    setDraftProjectChoice(projectId ?? '');
   };
   const sendFromHome = async () => {
     const message = input.trim();
@@ -1683,7 +1678,7 @@ export const ChatView: React.FC = () => {
               userName={currentUser?.name ?? ''}
               projects={assignedProjects.map(item => ({ id: item.id, name: item.name }))}
               projectId={draftProjectId}
-              onProjectChange={projectId => setDraftProjectChoice(projectId ?? 'none')}
+              onProjectChange={projectId => setDraftProjectChoice(projectId ?? '')}
               message={input}
               onMessageChange={setInput}
               onSend={() => void sendFromHome()}
