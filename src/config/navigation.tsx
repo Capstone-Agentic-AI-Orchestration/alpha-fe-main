@@ -32,6 +32,7 @@ import { NavigationTab, UserRole } from '@/shared/types';
  */
 
 export type SectionId =
+  | 'build'
   | 'portal'
   | 'my_work'
   | 'requests'
@@ -60,6 +61,7 @@ export interface NavSection {
  * assigned work, automation, resources, and communication.
  */
 export const NAV_SECTIONS: NavSection[] = [
+  { id: 'build', label: 'Build' },
   { id: 'portal', label: 'Portal', labels: { pm: 'Overview', admin: 'Overview' } },
   { id: 'my_work', label: 'My Work' },
   { id: 'requests', label: 'Requests' },
@@ -79,9 +81,9 @@ export const NAV_SECTIONS: NavSection[] = [
 
 const ROLE_SECTION_ORDER: Record<UserRole, SectionId[]> = {
   client: ['portal', 'requests', 'communication', 'documents', 'settings'],
-  dev: ['my_work', 'automation', 'resources', 'communication', 'settings'],
-  pm: ['portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'workspace'],
-  admin: ['portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'administration']
+  dev: ['build', 'my_work', 'automation', 'resources', 'communication', 'settings'],
+  pm: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'workspace'],
+  admin: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'administration']
 };
 
 export interface NavItem {
@@ -126,7 +128,9 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
   { id: 'inbox', label: 'Inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: Inbox },
-  { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Chat with Alpha and your agents', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: MessageSquare },
+  // Chat is where work is planned and built with the Orchestrator, so internal roles find it
+  // first, under Build. A client's chat is still a conversation with their project manager.
+  { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Plan and build with Alpha and your agents', group: 'primary', section: 'build', sectionByRole: { client: 'communication' }, icon: MessageSquare },
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
   { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
