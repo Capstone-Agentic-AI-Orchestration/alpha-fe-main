@@ -60,6 +60,7 @@ import { ChatBuildDecisionCard } from './ChatBuildDecisionCard';
 import { buildStatusLabel, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { inferRecoveryAction, isContinueRequest, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
+import { ChatHome } from './ChatHome';
 import { useTranscriptScroll } from './useTranscriptScroll';
 
 const MODE_META: Record<AgentCallMode, {
@@ -456,7 +457,8 @@ export const ChatView: React.FC = () => {
     squadRuns,
     agents: workspaceAgents,
     runtimes,
-    updateAgent
+    updateAgent,
+    currentUser
   } = useApp();
 
   const [input, setInput] = useTabSessionState<string>('chatDraft', '');
@@ -1421,12 +1423,40 @@ export const ChatView: React.FC = () => {
   }, [activeThread?.projectId, projects]);
   const canStartThread = isClient || can('manage_chat');
 
+  // A new chat is a draft until its first message: '' follows the most recent project, 'none' means no project.
+  const [draftProjectChoice, setDraftProjectChoice] = useTabSessionState<string>('chatDraftProject', '');
+  const latestProjectId = useMemo(() => [...chatThreads]
+    .filter(thread => thread.projectId && assignedProjects.some(item => item.id === thread.projectId))
+    .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt))[0]?.projectId ?? null, [assignedProjects, chatThreads]);
+  const draftProjectId = draftProjectChoice === 'none' ? null
+    : draftProjectChoice && assignedProjects.some(item => item.id === draftProjectChoice) ? draftProjectChoice
+      : latestProjectId;
+  const startDraft = (projectId?: string | null) => {
+    setActiveThreadId(null);
+    setDraftProjectChoice(projectId === undefined ? '' : projectId === null ? 'none' : projectId);
+  };
+  const sendFromHome = async () => {
+    const message = input.trim();
+    if (!message) return;
+    if (!canStartThread) {
+      showToast('Chat unavailable', 'Your workspace role cannot create conversations.', 'info');
+      return;
+    }
+    const threadId = createNewThread(message.slice(0, 32) + (message.length > 32 ? '...' : ''), draftProjectId ?? undefined);
+    if (!threadId) return;
+    setInput('');
+    setDraftProjectChoice('');
+    followNextMessage();
+    await sendChatMessage(message, threadId, undefined, 'auto');
+  };
+
   const startNewThread = () => {
     if (!canStartThread) {
       showToast('Chat unavailable', 'Your workspace role cannot create conversations.', 'info');
       return;
     }
-    createNewThread(isClient ? 'New project conversation' : 'New conversation');
+    if (isClient) createNewThread('New project conversation');
+    else startDraft();
   };
 
   const renderThreadRow = (thread: (typeof chatThreads)[number], nested = false) => {
@@ -1518,9 +1548,9 @@ export const ChatView: React.FC = () => {
               return <section key={item.id}>
                 <div className="group flex items-center gap-1 rounded-lg px-2 py-1.5 hover:bg-white/[0.04]">
                   <button type="button" aria-expanded={expanded} onClick={() => setExpandedProjectIds(current => expanded ? current.filter(id => id !== item.id) : [...current, item.id])} className="flex min-w-0 flex-1 items-center gap-2 text-left text-xs font-medium text-gray-200"><ChevronRight className={'h-3.5 w-3.5 shrink-0 text-gray-500 transition-transform ' + (expanded ? 'rotate-90' : '')} /><FolderOpen className="h-4 w-4 shrink-0 text-gray-400" /><span className="truncate">{item.name}</span></button>
-                  <button type="button" onClick={() => createNewThread('New project conversation', item.id)} aria-label={'New chat in ' + item.name} title="New chat in this project" className="rounded p-1 text-gray-500 opacity-0 hover:bg-white/[0.08] hover:text-white group-hover:opacity-100 focus:opacity-100"><Plus className="h-3.5 w-3.5" /></button>
+                  <button type="button" onClick={() => startDraft(item.id)} aria-label={'New chat in ' + item.name} title="New chat in this project" className="rounded p-1 text-gray-500 opacity-0 hover:bg-white/[0.08] hover:text-white group-hover:opacity-100 focus:opacity-100"><Plus className="h-3.5 w-3.5" /></button>
                   <div className="relative"><button type="button" onClick={() => setOpenProjectMenuId(value => value === item.id ? null : item.id)} aria-label={'Options for ' + item.name} aria-expanded={projectMenuOpen} className={'rounded p-1 text-gray-500 hover:bg-white/[0.08] hover:text-white focus:opacity-100 ' + (projectMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}><MoreHorizontal className="h-3.5 w-3.5" /></button>
-                    {projectMenuOpen && <div role="menu" aria-label={'Options for ' + item.name} className="absolute right-0 top-full z-40 mt-1 w-44 rounded-xl border border-white/10 bg-surface-raised p-1.5 shadow-xl"><button type="button" role="menuitem" onClick={() => { setOpenProjectMenuId(null); createNewThread('New project conversation', item.id); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-gray-300 hover:bg-white/[0.06]"><Plus className="h-3.5 w-3.5" />New chat</button><button type="button" role="menuitem" onClick={() => { setOpenProjectMenuId(null); setTabSessionState(activeTabId, 'projects.boardView', 'repository'); setActiveTab('projects'); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-gray-300 hover:bg-white/[0.06]"><FolderGit2 className="h-3.5 w-3.5" />Open project</button></div>}</div>
+                    {projectMenuOpen && <div role="menu" aria-label={'Options for ' + item.name} className="absolute right-0 top-full z-40 mt-1 w-44 rounded-xl border border-white/10 bg-surface-raised p-1.5 shadow-xl"><button type="button" role="menuitem" onClick={() => { setOpenProjectMenuId(null); startDraft(item.id); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-gray-300 hover:bg-white/[0.06]"><Plus className="h-3.5 w-3.5" />New chat</button><button type="button" role="menuitem" onClick={() => { setOpenProjectMenuId(null); setTabSessionState(activeTabId, 'projects.boardView', 'repository'); setActiveTab('projects'); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-gray-300 hover:bg-white/[0.06]"><FolderGit2 className="h-3.5 w-3.5" />Open project</button></div>}</div>
                 </div>
                 {expanded && <div className="ml-3 border-l border-white/[0.06] pl-2">{threads.length ? <div className="space-y-0.5">{visible.map(thread => renderThreadRow(thread, true))}{threads.length > 5 && <button type="button" onClick={() => setShowMoreThreads(previous => ({ ...previous, [item.id]: !previous[item.id] }))} className="w-full rounded-md px-3 py-1.5 text-left text-[10px] text-gray-500 hover:bg-white/[0.04] hover:text-gray-300">{more ? 'Show less' : 'Show ' + (threads.length - 5) + ' more'}</button>}</div> : <div className="px-3 py-2 text-[10px] text-gray-600">No chats</div>}</div>}
               </section>;
@@ -1532,7 +1562,7 @@ export const ChatView: React.FC = () => {
         </div>
       </aside>}
       </div>
-      <CreateProjectModal isOpen={showCreateProject} onClose={() => setShowCreateProject(false)} onCreated={created => { setExpandedProjectIds(current => current.includes(created.id) ? current : [...current, created.id]); createNewThread('New project conversation', created.id); }} />
+      <CreateProjectModal isOpen={showCreateProject} onClose={() => setShowCreateProject(false)} onCreated={created => { setExpandedProjectIds(current => current.includes(created.id) ? current : [...current, created.id]); startDraft(created.id); }} />
       <Modal
         isOpen={Boolean(threadPendingDelete)}
         onClose={() => setThreadPendingDelete(null)}
@@ -1648,7 +1678,24 @@ export const ChatView: React.FC = () => {
             </div>
           </div>
 
-        </> : <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"><MessageSquare className="h-12 w-12 text-gray-700" /><p className="text-sm text-gray-500">Pick a project conversation, or start a new one with +.</p></div>}
+        </> : isClient ? <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"><MessageSquare className="h-12 w-12 text-gray-700" /><p className="text-sm text-gray-500">Pick a project conversation, or start a new one with +.</p></div>
+          : <ChatHome
+              userName={currentUser?.name ?? ''}
+              projects={assignedProjects.map(item => ({ id: item.id, name: item.name }))}
+              projectId={draftProjectId}
+              onProjectChange={projectId => setDraftProjectChoice(projectId ?? 'none')}
+              message={input}
+              onMessageChange={setInput}
+              onSend={() => void sendFromHome()}
+              canSend={canStartThread}
+              blockedReason={canStartThread ? undefined : 'Your workspace role cannot start conversations.'}
+              recent={[...chatThreads]
+                .filter(thread => (thread.messages?.length ?? 0) > 0 || thread.lastMessageSnippet !== 'Ready for instructions...')
+                .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt))
+                .slice(0, 5)
+                .map(thread => ({ id: thread.id, title: thread.title, projectName: projects.find(item => item.id === thread.projectId)?.name, lastMessageAt: thread.lastMessageAt }))}
+              onOpenRecent={threadId => setActiveThreadId(threadId)}
+            />}
       </main>
       {!isClient && inspectedBuildAgent && liveBuild && <BuildAgentActivityPanel agent={inspectedBuildAgent} repository={liveBuild.repository} onOpenRoom={() => openLiveBuildRun(liveBuild.runId)} onClose={() => setInspectedBuildAgentId(null)} />}
       {!isClient && !inspectedBuildAgent && inspectedCall && <AgentActivityPanel call={inspectedCall} agent={agentForCall(inspectedCall)} name={isOrchestratorCall(inspectedCall) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(inspectedCall) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} onClose={() => setInspectedCallId(null)} />}

@@ -9,14 +9,17 @@ const existing: Record<UserRole, NavigationTab[]> = {
   pm: ['issues', 'projects', 'documents', 'inbox', 'chat', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
   admin: ['issues', 'projects', 'documents', 'inbox', 'chat', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
 };
-/** Existing sidebar ordering differs from ROLE_NAV; preserve it independently. */
+/**
+ * Existing sidebar ordering differs from ROLE_NAV; preserve it independently.
+ * Internal roles find Chat first, under Build, since it is where work is planned and built.
+ */
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'inbox', 'chat', 'documents', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
+  dev: ['chat', 'issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'documents', 'settings'],
   // Existing PM/admin grouping omits Specifications despite allowing its route.
   // That unrelated baseline gap is not introduced or silently fixed by ticketing.
-  pm: ['projects', 'issues', 'inbox', 'chat', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
-  admin: ['projects', 'issues', 'inbox', 'chat', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
+  pm: ['chat', 'projects', 'issues', 'inbox', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
+  admin: ['chat', 'projects', 'issues', 'inbox', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
 };
 describe('existing navigation compatibility', () => {
   it.each(Object.keys(existing) as UserRole[])('preserves every existing %s destination and landing page', role => {

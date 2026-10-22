@@ -746,6 +746,12 @@ ${e.detail}`;
     if (isDesktop && defaultTab === 'chat' && !restored.some(tab => tab.view === 'chat')) {
       return [{ id: createTabId(), view: 'chat', sessionState: {} }, ...restored];
     }
+    // The chat tab Alpha opens on starts as a fresh chat. Earlier conversations stay in the list.
+    const startupChatIndex = isDesktop ? restored.findIndex(tab => tab.view === 'chat') : -1;
+    if (startupChatIndex >= 0) {
+      const { activeThreadId: _previous, ...rest } = restored[startupChatIndex].sessionState ?? {};
+      return restored.map((tab, index) => (index === startupChatIndex ? { ...tab, sessionState: rest } : tab));
+    }
     return restored;
   });
 
@@ -3756,10 +3762,11 @@ export const useApp = () => {
   const visibleView = context.visibleTabs.includes(tab.view) ? tab.view : context.visibleTabs[0];
   const sessionState = tab.sessionState ?? {};
   const selectedThread = sessionState.activeThreadId;
+  // No selected conversation means a fresh chat: nothing is created until the first message is sent.
   const activeThreadId = typeof selectedThread === 'string'
     && context.chatThreads.some(thread => thread.id === selectedThread)
     ? selectedThread
-    : isDesktop && tab.view === 'chat' ? context.chatThreads[0]?.id ?? null : null;
+    : null;
   const setSessionValue = (key: string, value: unknown) =>
     context.setTabSessionState(tab.id, key, value);
   const createScopedThread = (title?: string, projectId?: string) => {
@@ -3807,8 +3814,9 @@ export const useApp = () => {
       setSessionValue('activeThreadId', id);
     },
     createNewThread: createScopedThread,
-    sendChatMessage: async (content: string, _threadId?: string | null, repositories?: string[], intent?: ChatIntent, attachments?: ChatAttachmentReference[], options?: ChatSendOptions) => {
-      let threadId = activeThreadId;
+    sendChatMessage: async (content: string, threadIdOverride?: string | null, repositories?: string[], intent?: ChatIntent, attachments?: ChatAttachmentReference[], options?: ChatSendOptions) => {
+      // The fresh-chat screen creates the conversation (with its project) and passes its id here.
+      let threadId = threadIdOverride ?? activeThreadId;
       if (!threadId) threadId = createScopedThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
       if (threadId) await context.sendChatMessage(content, threadId, repositories, intent, attachments, options);
     },
