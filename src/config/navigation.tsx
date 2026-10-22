@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
+import { AI_NAV_TABS, aiFeaturesEnabled } from './features';
 
 /**
  * Every fact about a navigation destination, in one place.
@@ -194,7 +195,7 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  * tab is not a permission, and a role that can open Analytics is not
  * necessarily one that can change workspace settings.
  */
-export const ROLE_NAV: Record<UserRole, NavigationTab[]> = {
+const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
   dev: ['issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
   pm: [
@@ -206,6 +207,18 @@ export const ROLE_NAV: Record<UserRole, NavigationTab[]> = {
     'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
   ]
 };
+
+/**
+ * What each role may actually reach: ROLE_NAV_ALL without the AI destinations
+ * for a role whose AI features are switched off in `config/features.ts`.
+ * Filtering here also stops saved tabs and deep links from opening them.
+ */
+export const ROLE_NAV: Record<UserRole, NavigationTab[]> = Object.fromEntries(
+  (Object.entries(ROLE_NAV_ALL) as Array<[UserRole, NavigationTab[]]>).map(([role, tabs]) => [
+    role,
+    aiFeaturesEnabled(role) ? tabs : tabs.filter(tab => !AI_NAV_TABS.includes(tab))
+  ])
+) as Record<UserRole, NavigationTab[]>;
 
 /** The view a role lands on, and falls back to when it opens one it may not. */
 export const landingTab = (role: UserRole): NavigationTab => ROLE_NAV[role][0];
