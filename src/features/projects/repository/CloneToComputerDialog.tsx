@@ -7,8 +7,12 @@ import { apiService, type FolderCloneResult } from '@/shared/services/apiService
 const shortName = (repo: string) => repo.split('/').pop() ?? repo;
 
 interface DesktopBridge { selectFolder?: () => Promise<string | null> }
-const desktopBridge = (): DesktopBridge | undefined =>
-  typeof window === 'undefined' ? undefined : (window as unknown as { alphaAPI?: DesktopBridge }).alphaAPI;
+/** The desktop app's native folder picker (alphaDesktop.selectFolder), or the older alphaAPI one. */
+const desktopBridge = (): DesktopBridge | undefined => {
+  if (typeof window === 'undefined') return undefined;
+  const bridges = window as unknown as { alphaDesktop?: DesktopBridge; alphaAPI?: DesktopBridge };
+  return bridges.alphaDesktop?.selectFolder ? bridges.alphaDesktop : bridges.alphaAPI;
+};
 
 /** Cloning needs a disk and a folder picker, which only the desktop app has. */
 export const canCloneToComputer = (): boolean => Boolean(desktopBridge()?.selectFolder);
