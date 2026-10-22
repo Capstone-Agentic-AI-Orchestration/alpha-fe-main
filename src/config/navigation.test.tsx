@@ -1,12 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { NavigationTab, UserRole } from '@/shared/types';
 import { landingTab, NAV_ITEMS, ROLE_NAV, sectionsFor } from './navigation';
+import { AI_FEATURES_BY_ROLE, AI_NAV_TABS } from './features';
 
-/** Navigation destinations retained after archiving the PM/admin Overview entry. */
+/**
+ * Navigation destinations retained after archiving the PM/admin Overview entry.
+ * Project managers do not see the AI destinations while their AI features are off (config/features.ts).
+ */
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
   dev: ['issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
-  pm: ['issues', 'projects', 'documents', 'inbox', 'chat', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
+  pm: ['issues', 'projects', 'documents', 'inbox', 'chat', 'analytics', 'settings'],
   admin: ['issues', 'projects', 'documents', 'inbox', 'chat', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
 };
 /**
@@ -18,7 +22,7 @@ const existingVisible: Record<UserRole, NavigationTab[]> = {
   dev: ['chat', 'issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'documents', 'settings'],
   // Existing PM/admin grouping omits Specifications despite allowing its route.
   // That unrelated baseline gap is not introduced or silently fixed by ticketing.
-  pm: ['chat', 'projects', 'issues', 'inbox', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
+  pm: ['chat', 'projects', 'issues', 'inbox', 'analytics', 'settings'],
   admin: ['chat', 'projects', 'issues', 'inbox', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
 };
 describe('existing navigation compatibility', () => {
@@ -37,5 +41,15 @@ describe('existing navigation compatibility', () => {
   });
   it('has no squads page; the Orchestrator assigns agents per task', () => {
     expect(NAV_ITEMS.some(item => (item.id as string) === 'squads')).toBe(false);
+  });
+  it('hides the AI destinations only for roles whose AI features are off', () => {
+    expect(AI_FEATURES_BY_ROLE.pm).toBe(false);
+    for (const tab of AI_NAV_TABS) {
+      expect(ROLE_NAV.pm).not.toContain(tab);
+      expect(ROLE_NAV.dev).toContain(tab);
+      expect(ROLE_NAV.admin).toContain(tab);
+    }
+    expect(sectionsFor('pm').map(group => group.section.id)).not.toEqual(expect.arrayContaining(['automation']));
+    expect(sectionsFor('pm').map(group => group.section.id)).not.toContain('operations');
   });
 });
