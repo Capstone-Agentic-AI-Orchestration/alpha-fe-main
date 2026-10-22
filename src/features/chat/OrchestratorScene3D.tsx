@@ -173,10 +173,10 @@ function AgentOrb({ agent, position, glow, selected, hovered, onOver, onOut, onC
       <div className={'whitespace-nowrap rounded-full px-1.5 py-px text-[8.5px] font-medium leading-3 ' + (selected ? 'bg-violet-400/30 text-white' : lit ? 'bg-black/60 text-gray-100' : 'bg-black/40 text-gray-400')}>{agent.name}</div>
     </Html>
     {hovered && agent.detail && <Html center position={[0, 0.72, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
-      <div className="max-w-64 rounded-xl border border-violet-300/20 bg-[#16161d]/95 px-3 py-2 text-left shadow-xl shadow-black/40">
-        <div className="text-xs font-semibold text-white">{agent.name}</div>
-        <div className="mt-0.5 text-[10px] leading-4 text-gray-400">{agent.detail}</div>
-        <div className="mt-1 text-[10px] text-violet-200">Click to see and change its model</div>
+      <div className="w-max min-w-44 max-w-80 rounded-xl border border-violet-300/20 bg-[#16161d]/95 px-3 py-2 text-left shadow-xl shadow-black/40">
+        <div className="whitespace-nowrap text-xs font-semibold text-white">{agent.name}</div>
+        {agent.detail.split(' · ').map(line => <div key={line} className="whitespace-nowrap text-[10px] leading-4 text-gray-400">{line}</div>)}
+        <div className="mt-1 whitespace-nowrap text-[10px] text-violet-200">Click to see and change its model</div>
       </div>
     </Html>}
   </group>;
@@ -211,9 +211,9 @@ function Scene({ agents, hubId, hubLabel, hubDetail, hubClickable, working, sele
       onOver={() => setHoveredId(hubId)} onOut={() => setHoveredId(previous => (previous === hubId ? null : previous))}
       onClick={() => onSelect(hubId)} />
     {hoveredId === hubId && <Html center position={[0, 1.15, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
-      <div className="whitespace-nowrap rounded-xl border border-violet-300/20 bg-[#16161d]/95 px-3 py-2 shadow-xl shadow-black/40">
-        <div className="text-xs font-semibold text-white">{hubLabel}</div>
-        <div className="text-[10px] text-gray-400">{hubDetail}</div>
+      <div className="w-max min-w-44 max-w-80 rounded-xl border border-violet-300/20 bg-[#16161d]/95 px-3 py-2 shadow-xl shadow-black/40">
+        <div className="whitespace-nowrap text-xs font-semibold text-white">{hubLabel}</div>
+        {hubDetail.split(' · ').map(line => <div key={line} className="whitespace-nowrap text-[10px] leading-4 text-gray-400">{line}</div>)}
       </div>
     </Html>}
     {agents.map((agent, index) => <AgentOrb key={agent.id} agent={agent} position={positions[index]} glow={glow}

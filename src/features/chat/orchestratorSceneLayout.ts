@@ -6,9 +6,9 @@ export type Vec3 = [number, number, number];
  * turned 60 degrees from the next, so from the front they read as the three
  * crossing ellipses of an atom and still have real depth when the camera turns.
  */
-export const ORBIT_RADIUS = 3.3;
-/** Stretches the atom sideways to fill the wide, short chat panel. */
-export const ORBIT_WIDTH = 3.1;
+export const ORBIT_RADIUS = 3.4;
+/** 1 keeps the orbits true circles, so the atom reads round from the front. */
+export const ORBIT_WIDTH = 1;
 const ORBIT_TILT = Math.acos(0.34);
 // One orbit lies flat and the other two cross it at 60 degrees, so the long axes run sideways.
 const ORBIT_SPINS = [0, Math.PI / 3, (2 * Math.PI) / 3];
@@ -44,8 +44,9 @@ function placeAll(count: number, phases: number[]): Vec3[] {
 
 /** Name labels are wider than tall, so side-by-side agents need more room than stacked ones. */
 const LABEL_ASPECT = 1.6;
+const HUB_CLEARANCE = 0.5;
 /** Where the 3D view's camera starts; the layout is spaced for this view. */
-export const CAMERA_START: Vec3 = [0, 0.5, 11.5];
+export const CAMERA_START: Vec3 = [0, 0.5, 12.5];
 /** A narrow lens from further back keeps near and far agents a similar size. */
 export const CAMERA_FOV = 34;
 
@@ -61,7 +62,8 @@ function crowding(points: Vec3[]): number {
   const hub = onScreen([0, 0, 0]);
   let gap = Infinity;
   for (let i = 0; i < projected.length; i++) {
-    gap = Math.min(gap, Math.hypot(projected[i][0] - hub[0], projected[i][1] - hub[1]));
+    // The Orchestrator orb is more than twice an agent's size, so it needs extra clearance.
+    gap = Math.min(gap, Math.hypot(projected[i][0] - hub[0], projected[i][1] - hub[1]) - HUB_CLEARANCE);
     for (let j = i + 1; j < projected.length; j++) {
       gap = Math.min(gap, Math.hypot((projected[i][0] - projected[j][0]) / LABEL_ASPECT, projected[i][1] - projected[j][1]));
     }

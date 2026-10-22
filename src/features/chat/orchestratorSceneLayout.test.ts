@@ -16,10 +16,10 @@ describe('atomPositions', () => {
     const hub = onScreen([0, 0, 0]);
     for (const count of [3, 6, 11, 16, 20]) {
       const seen = atomPositions(count).map(onScreen);
-      // Orbs are 0.56 across, so 0.9 leaves clear space between any two.
+      // Orbs are 0.56 across, so 0.6 keeps any two from touching, and the larger Orchestrator gets more.
       for (let a = 0; a < count; a += 1) {
-        expect(gap(seen[a], hub)).toBeGreaterThan(1);
-        for (let b = a + 1; b < count; b += 1) expect(gap(seen[a], seen[b])).toBeGreaterThan(0.9);
+        expect(gap(seen[a], hub)).toBeGreaterThan(1.1);
+        for (let b = a + 1; b < count; b += 1) expect(gap(seen[a], seen[b])).toBeGreaterThan(0.6);
       }
     }
   });
