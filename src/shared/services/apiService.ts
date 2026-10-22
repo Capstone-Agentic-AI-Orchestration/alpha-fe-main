@@ -5,6 +5,7 @@ import {
   RepositoryCheckout,
   Agent,
   AgentPersonaFile,
+  AgentPerformance,
   Issue,
   IssueComment,
   Skill,
@@ -570,6 +571,15 @@ export const apiService = {
    * over the database row, which is the only place that answer exists.
    */
   getAgentPersona: (id: string) => fetchJson<AgentPersonaFile>(`/agents/${id}/persona`),
+
+  /** Build scorecard and lessons suggested from the agent's rejections and review findings. */
+  getAgentPerformance: (id: string) => fetchJson<AgentPerformance>(`/agents/${encodeURIComponent(id)}/performance`, { cache: 'no-store' }),
+
+  decideAgentLesson: (id: string, lessonId: string, action: 'accept' | 'dismiss') =>
+    fetchJson<{ accepted: string[] }>(`/agents/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lessonId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ action })
+    }),
 
   saveAgentPersona: (id: string, content: string) =>
     fetchJson<AgentPersonaFile>(`/agents/${id}/persona`, {
