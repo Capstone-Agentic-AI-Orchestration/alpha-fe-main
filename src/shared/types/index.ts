@@ -1915,3 +1915,31 @@ export interface RequirementDoc {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface AgentScorecard {
+  tasks: number;
+  acceptedFirstTry: number;
+  acceptedAfterRetry: number;
+  attempts: number;
+  reportFormatRejections: number;
+  blockersReported: number;
+  scopeRejections: number;
+  checkFailures: number;
+  reviewFindings: number;
+  lastWorkedAt?: string;
+}
+
+export interface AgentLesson {
+  id: string;
+  kind: 'report_format' | 'deliverables' | 'scope' | 'checks' | 'read_only' | 'coverage' | 'review';
+  text: string;
+  occurrences: number;
+  lastSeenAt: string;
+}
+
+export interface AgentPerformance {
+  scorecard: AgentScorecard;
+  lessons: AgentLesson[];
+  accepted: string[];
+}
+

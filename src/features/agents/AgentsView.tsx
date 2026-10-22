@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { CreateAgentModal } from '@/features/agents/CreateAgentModal';
 import { PersonaFileEditor } from '@/features/agents/PersonaFileEditor';
+import { AgentPerformancePanel } from '@/features/agents/AgentPerformancePanel';
 import {
   FileManagedBadge,
   isManagedByFile,
@@ -117,7 +118,7 @@ export const AgentsView: React.FC = () => {
   };
 
   // Pop-up Sub-tabs
-  const [profileTab, setProfileTab] = useTabSessionState<'instructions' | 'persona' | 'skills' | 'env' | 'mcp' | 'history'>('agents.profileTab', 'instructions');
+  const [profileTab, setProfileTab] = useTabSessionState<'instructions' | 'persona' | 'skills' | 'env' | 'mcp' | 'history' | 'performance'>('agents.profileTab', 'instructions');
   const [revealedEnvKeys, setRevealedEnvKeys] = useState<Record<string, boolean>>({});
   const [newEnvKey, setNewEnvKey] = useState<string>('');
   const [newEnvValue, setNewEnvValue] = useState<string>('');
@@ -667,7 +668,8 @@ export const AgentsView: React.FC = () => {
                 { id: 'skills', label: 'Skills & Tools' },
                 { id: 'env', label: 'Secrets & Env' },
                 { id: 'mcp', label: 'MCP & CLI' },
-                { id: 'history', label: 'Run History' }
+                { id: 'history', label: 'Run History' },
+                { id: 'performance', label: 'Performance' }
               ].map((tab) => (
                 <button
                   key={tab.id}
@@ -895,6 +897,8 @@ export const AgentsView: React.FC = () => {
 
               {/* Tab 2: The persona file itself — overrides the fields above */}
               {profileTab === 'persona' && <PersonaFileEditor agentId={selectedAgent.id} readOnly={!canManageAgents} />}
+
+              {profileTab === 'performance' && <AgentPerformancePanel agentId={selectedAgent.id} canManage={canManageAgents} />}
 
               {/* Tab 3: Skills & MCP Tools */}
               {profileTab === 'skills' && (
