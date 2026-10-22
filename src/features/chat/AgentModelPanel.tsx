@@ -29,7 +29,6 @@ const fieldClass = 'w-full rounded-lg border border-white/10 bg-black/40 px-2.5 
  * apply from the agent's next task.
  */
 export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, onViewActivity, changedFiles, onClose }: AgentModelPanelProps) {
-  const managed = new Set(agent.managedByFile ?? []);
   const providers = providerOptions(runtimes);
   const models = modelsForProvider(runtimes, agent.modelProvider);
   const efforts = reasoningEffortsForProviderModel(agent.modelProvider, agent.modelName);
@@ -68,7 +67,7 @@ export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, on
 
       <label className="block space-y-0.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Provider</span>
-        <select value={agent.modelProvider} disabled={!canEdit || managed.has('modelProvider')} className={fieldClass}
+        <select value={agent.modelProvider} disabled={!canEdit} className={fieldClass}
           onChange={event => {
             const provider = event.target.value as ModelProvider;
             const modelName = defaultModelFor(runtimes, provider) || agent.modelName;
@@ -82,18 +81,18 @@ export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, on
       <label className="block space-y-0.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Model</span>
         {models.length
-          ? <select value={agent.modelName} disabled={!canEdit || managed.has('modelName')} className={fieldClass + ' font-mono'}
+          ? <select value={agent.modelName} disabled={!canEdit} className={fieldClass + ' font-mono'}
               onChange={event => onUpdate(agent.id, { modelName: event.target.value, reasoningEffort: keepEffort(agent.modelProvider, event.target.value) })}>
               {agent.modelName && !models.includes(agent.modelName) && <option value={agent.modelName}>{agent.modelName} (not detected)</option>}
               {models.map(model => <option key={model} value={model}>{model}</option>)}
             </select>
-          : <input value={agent.modelName} disabled={!canEdit || managed.has('modelName')} placeholder="No models detected; type a model id" className={fieldClass + ' font-mono'}
+          : <input value={agent.modelName} disabled={!canEdit} placeholder="No models detected; type a model id" className={fieldClass + ' font-mono'}
               onChange={event => onUpdate(agent.id, { modelName: event.target.value })} />}
       </label>
 
       <label className="block space-y-0.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Reasoning effort</span>
-        <select value={agent.reasoningEffort ?? ''} disabled={!canEdit || managed.has('reasoningEffort') || !efforts.length} className={fieldClass}
+        <select value={agent.reasoningEffort ?? ''} disabled={!canEdit || !efforts.length} className={fieldClass}
           onChange={event => onUpdate(agent.id, { reasoningEffort: (event.target.value || null) as ReasoningEffort | null })}>
           <option value="">Auto</option>
           {efforts.map(effort => <option key={effort} value={effort}>{EFFORT_LABEL[effort] ?? effort}</option>)}
@@ -101,9 +100,9 @@ export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, on
       </label>
 
       <p className="text-[10px] leading-4 text-gray-500">
-        {!canEdit ? 'Your project role can see this agent’s model but cannot change it.'
-          : managed.size ? 'Fields set in the agent’s persona file can only be changed there.'
-          : 'Saved right away. A task that is already running keeps its model; the change applies from the agent’s next task.'}
+        {canEdit
+          ? 'Saved right away, to the agent and its persona file. A task already running keeps its model; the change applies from the agent’s next task.'
+          : 'Your project role can see this agent’s model but cannot change it.'}
       </p>
     </div>
     {onViewActivity && <div className="border-t border-white/[0.06] px-3.5 py-2">
