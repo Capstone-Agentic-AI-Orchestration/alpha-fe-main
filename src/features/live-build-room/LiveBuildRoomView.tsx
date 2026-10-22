@@ -43,7 +43,7 @@ import { normalizeLogsResponse } from '@/features/projects/repository/deployment
 import type { DeploymentLogsResponse } from '@/features/projects/repository/deploymentLogs/logTypes';
 import { OrchestrationWorkflowPanel } from './OrchestrationWorkflowPanel';
 import { PlanningRecoveryPanel } from './PlanningRecoveryPanel';
-import { AgentHandoffGraph } from './AgentHandoffGraph';
+import { AgentHandoffGraph, type WorkflowConnectionSelection } from './AgentHandoffGraph';
 import { OrchestrationRecoveryPanel } from '@/features/chat/OrchestrationRecoveryPanel';
 
 type DetailTab = 'activity' | 'handoff' | 'files' | 'tools';
@@ -168,6 +168,112 @@ function toolDetail(activity: LiveBuildRoomActivity): string | undefined {
   return activity.detail;
 }
 
+interface ExecutionTimelineEvent {
+  id: string;
+  category: 'activity' | 'handoff' | 'invocation' | 'completion';
+  label: string;
+  message: string;
+  tone: string;
+  detail?: string;
+  createdAt: string;
+  isStreaming?: boolean;
+}
+
+function handoffMatchesCard(handoff: LiveBuildRoomHandoff, card: LiveBuildRoomAgentCard): boolean {
+  if (card.squadRunId) {
+    return handoff.squadRunId === card.squadRunId && (handoff.fromAgentId === card.agentId || handoff.toAgentId === card.agentId);
+  }
+  if (card.agentCallId) return handoff.agentCallId === card.agentCallId;
+  return handoff.executionId === card.executionId;
+}
+
+function executionTimeline(snapshot: LiveBuildRoomSnapshot, card: LiveBuildRoomAgentCard): ExecutionTimelineEvent[] {
+  const events: ExecutionTimelineEvent[] = card.activity.map(activity => ({
+    id: `activity-${activity.id}`,
+    category: 'activity',
+    label: activityLabel(activity),
+    message: activity.message,
+    tone: activityTone(activity),
+    detail: activity.detail,
+    createdAt: activity.createdAt,
+    isStreaming: activity.isStreaming,
+  }));
+
+  const relatedHandoffs = snapshot.handoffs.filter(handoff => handoffMatchesCard(handoff, card));
+  relatedHandoffs.forEach(handoff => {
+    const alreadyInActivity = card.activity.some(activity =>
+      activity.kind === 'handoff' && Date.parse(activity.createdAt) === Date.parse(handoff.createdAt) &&
+      (activity.detail === handoff.summary || activity.message === `Handoff received from ${handoff.from}`)
+    );
+    if (alreadyInActivity) return;
+    events.push({
+      id: `handoff-${handoff.id}`,
+      category: 'handoff',
+      label: 'Context handoff',
+      message: `${handoff.from} → ${handoff.to}`,
+      tone: 'bg-cyan-300',
+      detail: handoff.summary,
+      createdAt: handoff.createdAt,
+    });
+  });
+
+  const workflow = snapshot.orchestration;
+  if (workflow) {
+    const attempts = workflow.attempts.filter(attempt =>
+      (card.runId && attempt.prototypeRunId === card.runId) || attempt.agentId === card.agentId
+    );
+    for (const attempt of attempts) {
+      const task = workflow.tasks.find(candidate => candidate.id === attempt.taskId);
+      const taskTitle = task?.title || card.currentTask;
+      if (attempt.startedAt) events.push({
+        id: `invocation-${attempt.id}`,
+        category: 'invocation',
+        label: 'Agent invocation',
+        message: `${attempt.agentName} assigned to ${taskTitle}`,
+        tone: 'bg-violet-300',
+        detail: `Attempt ${attempt.attemptNumber}`,
+        createdAt: attempt.startedAt,
+      });
+      if (attempt.completedAt) {
+        const completionLabel = attempt.status === 'accepted' ? 'Task completed'
+          : attempt.status === 'submitted' ? 'Output submitted'
+            : attempt.status === 'rejected' ? 'Task returned for revision'
+              : attempt.status === 'failed' || attempt.status === 'recovery_required' ? 'Attempt failed'
+                : attempt.status === 'cancelled' ? 'Attempt cancelled' : 'Attempt updated';
+        events.push({
+          id: `completion-${attempt.id}`,
+          category: attempt.status === 'failed' || attempt.status === 'recovery_required' ? 'activity' : 'completion',
+          label: completionLabel,
+          message: `${taskTitle}${attempt.summary ? ` · ${attempt.summary}` : ''}`,
+          tone: attempt.status === 'failed' || attempt.status === 'recovery_required' ? 'bg-rose-300' : attempt.status === 'accepted' ? 'bg-emerald-300' : 'bg-sky-300',
+          detail: attempt.failureReason || attempt.reportResponse || (attempt.changedPaths.length ? `${attempt.changedPaths.length} changed file${attempt.changedPaths.length === 1 ? '' : 's'}` : undefined),
+          createdAt: attempt.completedAt,
+        });
+      }
+    }
+  }
+
+  const call = snapshot.chatCalls.find(candidate => candidate.id === card.agentCallId);
+  if (call?.startedAt) events.push({
+    id: `call-start-${call.id}`,
+    category: 'invocation',
+    label: 'Agent invocation',
+    message: `${call.agentName} started from ${call.chatLabel}`,
+    tone: 'bg-violet-300',
+    createdAt: call.startedAt,
+  });
+  if (call?.completedAt) events.push({
+    id: `call-end-${call.id}`,
+    category: call.status === 'failed' ? 'activity' : 'completion',
+    label: call.status === 'failed' ? 'Agent call failed' : call.status === 'completed' ? 'Agent call completed' : 'Agent call ended',
+    message: call.agentName,
+    tone: call.status === 'failed' ? 'bg-rose-300' : 'bg-emerald-300',
+    createdAt: call.completedAt,
+  });
+
+  return events.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
+}
+
 function phaseClasses(phase: LiveBuildRoomPhase): string {
   if (phase.status === 'completed') return 'border-emerald-400/30 bg-emerald-400/[0.035]';
   if (phase.status === 'running') return 'border-violet-400/50 bg-violet-400/[0.07] shadow-[0_0_28px_rgba(139,92,246,0.12)]';
@@ -222,13 +328,8 @@ const ActivityPanel: React.FC<{
     { id: 'tools', label: 'Tools' }
   ];
   const activities = card.activity;
-  const handoffs = snapshot.handoffs.filter(handoff =>
-    card.squadRunId
-      ? handoff.squadRunId === card.squadRunId && (handoff.fromAgentId === card.agentId || handoff.toAgentId === card.agentId)
-      : card.agentCallId
-        ? handoff.agentCallId === card.agentCallId
-        : handoff.executionId === card.executionId
-  );
+  const timeline = executionTimeline(snapshot, card);
+  const handoffs = snapshot.handoffs.filter(handoff => handoffMatchesCard(handoff, card));
   const filePaths = [...new Set([...(card.filePaths ?? []), ...activities.flatMap(activity => activity.paths ?? [])])];
   const toolActivities = activities.filter(activity => activity.kind === 'tool' || activity.kind === 'tool_result' || Boolean(activity.toolName));
   const latestRunTaskId = snapshot.orchestration?.attempts.find(attempt => attempt.prototypeRunId === card.runId)?.taskId;
@@ -287,16 +388,17 @@ const ActivityPanel: React.FC<{
             </div>}
             {card.progress > 0 ? <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-violet-400" style={{ width: `${card.progress}%` }} /></div> : card.status === 'running' ? <div className="text-[11px] text-slate-500">Progress will appear after Alpha confirms a completed stage.</div> : null}
             <div className="space-y-3 border-t border-white/[0.08] pt-4">
-              {activities.length ? activities.slice().reverse().map(activity => (
-                <div key={activity.id} className="flex gap-3">
-                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${activityTone(activity)}`} />
+              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Execution timeline</div>
+              {timeline.length ? timeline.map(event => (
+                <div key={event.id} className="flex gap-3">
+                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${event.tone}`} />
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] text-slate-500">{activityLabel(activity)}{activity.isStreaming && <span className="inline-flex items-center gap-1 rounded border border-violet-300/20 bg-violet-300/[0.06] px-1.5 py-0.5 font-medium text-violet-100"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}<span>· {timeAgo(activity.createdAt)}</span></div>
-                    <div className="mt-1 break-words text-xs leading-5 text-slate-300">{activity.message}</div>
-                    {activity.detail && <div className="mt-1 break-all text-[11px] leading-4 text-slate-500">{activity.detail}</div>}
+                    <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] text-slate-500">{event.label}{event.isStreaming && <span className="inline-flex items-center gap-1 rounded border border-violet-300/20 bg-violet-300/[0.06] px-1.5 py-0.5 font-medium text-violet-100"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}<span>· {timeAgo(event.createdAt)}</span></div>
+                    <div className="mt-1 break-words text-xs leading-5 text-slate-300">{event.message}</div>
+                    {event.detail && <div className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-4 text-slate-500">{event.detail}</div>}
                   </div>
                 </div>
-              )) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">Activity will appear here once this agent begins working.</div>}
+              )) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">Invocations, handoffs, tool calls, and completions will appear here as the build runs.</div>}
             </div>
           </div>
         )}
@@ -351,6 +453,90 @@ const ActivityPanel: React.FC<{
   );
 };
 
+const ContextBlock: React.FC<{ title: string; empty: string; children?: React.ReactNode }> = ({ title, empty, children }) => {
+  const content = React.Children.toArray(children);
+  return <section className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5">
+    <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">{title}</div>
+    <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-300">{content.length ? content : <span className="text-slate-500">{empty}</span>}</div>
+  </section>;
+};
+
+const HandoffContextPanel: React.FC<{
+  snapshot: LiveBuildRoomSnapshot;
+  selection: WorkflowConnectionSelection;
+  onClose: () => void;
+  onViewAssignedTask?: (taskId: string) => void;
+}> = ({ snapshot, selection, onClose, onViewAssignedTask }) => {
+  const source = selection.fromExecutionId
+    ? snapshot.agentCards.find(card => card.executionId === selection.fromExecutionId)
+    : undefined;
+  const destination = snapshot.agentCards.find(card => card.executionId === selection.toExecutionId);
+  const handoff = selection.handoffId ? snapshot.handoffs.find(item => item.id === selection.handoffId) : undefined;
+  const task = selection.taskId ? snapshot.orchestration?.tasks.find(item => item.id === selection.taskId) : undefined;
+  const sourceAttempts = snapshot.orchestration?.attempts.filter(attempt =>
+    source && (source.runId ? attempt.prototypeRunId === source.runId : attempt.agentId === source.agentId)
+  ).sort((left, right) => Date.parse(right.completedAt || right.startedAt || '') - Date.parse(left.completedAt || left.startedAt || '')) ?? [];
+  const targetAttempts = snapshot.orchestration?.attempts.filter(attempt =>
+    destination && (destination.runId ? attempt.prototypeRunId === destination.runId : attempt.agentId === destination.agentId)
+  ).sort((left, right) => Date.parse(right.completedAt || right.startedAt || '') - Date.parse(left.completedAt || left.startedAt || '')) ?? [];
+  const sourceLatest = source?.activity.slice().sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).find(activity => activity.kind === 'summary' || activity.kind === 'assistant');
+  const destinationLatest = destination?.activity.slice().sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).find(activity => activity.kind === 'summary' || activity.kind === 'assistant');
+  const incomingActivity = handoff
+    ? undefined
+    : destination?.activity.slice().sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).find(activity => activity.kind === 'handoff');
+  const previousOutput = source?.output?.value || sourceAttempts.find(attempt => attempt.summary || attempt.reportResponse)?.summary || sourceAttempts.find(attempt => attempt.reportResponse)?.reportResponse || sourceLatest?.message;
+  const destinationOutput = destination?.output?.value || targetAttempts.find(attempt => attempt.summary || attempt.reportResponse)?.summary || targetAttempts.find(attempt => attempt.reportResponse)?.reportResponse || destinationLatest?.message;
+  const outgoingFiles = [...new Set([...(source?.filePaths ?? []), ...(source?.activity.flatMap(activity => activity.paths ?? []) ?? []), ...(sourceAttempts[0]?.changedPaths ?? [])])];
+  const sourceName = source?.agentName || handoff?.from || 'Alpha Orchestrator';
+  const destinationName = destination?.agentName || handoff?.to || 'Specialist agent';
+  const incomingContext = handoff?.summary || task?.description || snapshot.orchestration?.run.goal;
+  const routingReason = task?.assignmentReason;
+
+  return <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-violet-300/20 bg-surface-100/90 shadow-2xl shadow-black/25 xl:sticky xl:top-0 xl:h-[calc(100vh-8.5rem)]" aria-labelledby="handoff-context-title">
+    <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] p-4">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-violet-200"><Layers3 className="h-3.5 w-3.5" />Context transfer</div>
+        <h3 id="handoff-context-title" className="mt-1 truncate text-base font-semibold text-white">{handoff ? 'Handoff details' : selection.kind === 'orchestrator' ? 'Orchestrator route' : 'Dependency context'}</h3>
+        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-400"><span className="truncate">{sourceName}</span><ArrowRight className="h-3 w-3 shrink-0 text-violet-300" /><span className="truncate font-medium text-slate-200">{destinationName}</span></div>
+      </div>
+      <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200" aria-label="Close context inspector"><X className="h-4 w-4" /></button>
+    </div>
+
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full border px-2 py-1 text-[9px] font-semibold ${handoff ? 'border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100' : 'border-violet-300/25 bg-violet-300/[0.06] text-violet-100'}`}>{handoff ? 'Recorded handoff' : selection.kind === 'orchestrator' ? 'Root assignment' : 'Planned dependency'}</span>
+        {handoff && <time className="text-[10px] text-slate-500">{timeAgo(handoff.createdAt)}</time>}
+        {task && <span className="ml-auto text-[10px] text-slate-500">Task · {task.status.replace(/_/g, ' ')}</span>}
+      </div>
+
+      {task && <section className="rounded-xl border border-violet-300/15 bg-violet-300/[0.035] p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0"><div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-violet-200/75">Orchestrator routing</div><div className="mt-1 break-words text-xs font-semibold text-white">{task.title}</div></div>
+          <button type="button" onClick={() => onViewAssignedTask?.(task.id)} className="min-h-8 shrink-0 rounded-lg border border-white/10 px-2 text-[9px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><Workflow className="mr-1 inline h-3 w-3" />Plan</button>
+        </div>
+        <div className="mt-2 text-[10px] leading-4 text-slate-400">Selected {task.ownerName} · {task.assignmentReason || 'No separate assignment reason was recorded.'}</div>
+      </section>}
+
+      <ContextBlock title={handoff ? 'Handoff reason' : 'Routing reason'} empty={handoff ? 'A separate handoff reason was not recorded. The transfer summary and context are shown below.' : 'A separate routing reason was not recorded for this connection.'}>{routingReason}</ContextBlock>
+      <ContextBlock title="Incoming context" empty="No task description or handoff summary was recorded for this connection.">{incomingContext}</ContextBlock>
+      <ContextBlock title="Inherited conversation state" empty="No separate conversation transcript was recorded. The handoff summary above is the context available in this snapshot.">{handoff ? `Received from ${handoff.from}\n${handoff.summary}` : incomingActivity ? `${incomingActivity.message}${incomingActivity.detail ? `\n${incomingActivity.detail}` : ''}` : undefined}</ContextBlock>
+      <ContextBlock title="Previous agent output" empty={source ? 'The previous agent has not recorded a summary or output yet.' : 'This route starts at the Orchestrator, so there is no previous agent output.'}>{previousOutput}</ContextBlock>
+      <ContextBlock title="Outgoing payload" empty="No structured payload is exposed on the handoff record.">
+        {handoff?.summary ? `Recorded transfer: ${handoff.summary}` : undefined}
+        {selection.kind === 'orchestrator' && task && <div className="space-y-2">
+          <div className="font-medium text-violet-100">Assignment package · {task.title}</div>
+          {task.acceptanceCriteria.length > 0 && <div><div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">Acceptance criteria</div><ul className="list-disc space-y-1 pl-4">{task.acceptanceCriteria.map((criterion, index) => <li key={`${task.id}-criterion-${index}`}>{criterion}</li>)}</ul></div>}
+          {task.requiredChecks.length > 0 && <div><div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">Required checks</div><ul className="list-disc space-y-1 pl-4">{task.requiredChecks.map(check => <li key={check}>{check}</li>)}</ul></div>}
+        </div>}
+        {Boolean(outgoingFiles.length) && <div className="mt-2 space-y-1.5">{outgoingFiles.map(path => <div key={path} className="flex min-w-0 items-start gap-1.5 text-[10px] text-slate-400"><FileCode2 className="mt-0.5 h-3 w-3 shrink-0 text-violet-300" /><code className="break-all">{path}</code></div>)}</div>}
+        {source?.branchName && <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500"><GitBranch className="h-3 w-3 shrink-0" /><span className="break-all">{source.branchName}</span></div>}
+      </ContextBlock>
+      <ContextBlock title="Receiving agent output" empty={destination ? 'The receiving agent has not recorded an output yet.' : 'The receiving agent is not available in the current snapshot.'}>{destinationOutput}</ContextBlock>
+      {handoff?.branchName && <div className="flex min-w-0 items-center gap-2 rounded-lg border border-white/[0.07] px-3 py-2 text-[10px] text-slate-500"><GitBranch className="h-3.5 w-3.5 shrink-0" /><span className="break-all">Shared branch · {handoff.branchName}</span></div>}
+    </div>
+  </aside>;
+};
+
 export const LiveBuildRoomView: React.FC = () => {
   const roomPanelId = useId();
   const {
@@ -370,6 +556,7 @@ export const LiveBuildRoomView: React.FC = () => {
   const [focusPlanTaskId, setFocusPlanTaskId] = useTabSessionState<string | null>('liveBuildPlanTaskId', null);
   const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
   const [selectedExecutionId, setSelectedExecutionId] = useTabSessionState<string | null>('liveBuildExecutionId', null);
+  const [selectedConnection, setSelectedConnection] = useState<WorkflowConnectionSelection | null>(null);
   const [inspectorRunOverrideId, setInspectorRunOverrideId] = useTabSessionState<string | null>('liveBuildInspectorRunId', null);
   const [agentSearch, setAgentSearch] = useTabSessionState<string>('liveBuildAgentSearch', '');
   const [agentStatusFilter, setAgentStatusFilter] = useTabSessionState<AgentStatusFilter>('liveBuildAgentStatusFilter', 'all');
@@ -762,6 +949,7 @@ export const LiveBuildRoomView: React.FC = () => {
     requestIdRef.current += 1;
     setSelectedProjectId(projectId);
     setSelectedBuildRunId('');
+    setSelectedConnection(null);
     setSelectedExecutionId(null);
     setInspectorRunOverrideId(null);
     setSelectedChatCallId(null);
@@ -1089,7 +1277,7 @@ export const LiveBuildRoomView: React.FC = () => {
             </label>
             {snapshot.buildRuns.length > 1 && <label className="relative flex min-w-[220px] items-center rounded-xl border border-violet-400/20 bg-violet-500/[0.06] px-3 py-2">
               <span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-400">Build</span>
-              <select aria-label="Choose project build" value={selectedBuildRunId || snapshot.orchestration?.run.id || snapshot.activeRun?.id || ''} onChange={event => setSelectedBuildRunId(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-violet-200">
+              <select aria-label="Choose project build" value={selectedBuildRunId || snapshot.orchestration?.run.id || snapshot.activeRun?.id || ''} onChange={event => { setSelectedConnection(null); setSelectedBuildRunId(event.target.value); }} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-violet-200">
                 {snapshot.buildRuns.map(run => <option key={run.id} value={run.id} className="bg-surface-100 text-white">{[run.kind === 'orchestration' ? 'Orchestrator build' : 'Earlier build', run.repository, run.issueIdentifier, run.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') || 'Project build'}</option>)}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-400" />
@@ -1283,7 +1471,7 @@ export const LiveBuildRoomView: React.FC = () => {
           </div>
         </section>}
 
-        <div className={`order-2 grid gap-4 ${detailOpen && selectedCard ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'xl:grid-cols-1'}`}>
+        <div className={`order-2 grid gap-4 ${detailOpen && (selectedCard || selectedConnection) ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'xl:grid-cols-1'}`}>
           <div className="min-w-0 space-y-4">
             <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/45 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1311,7 +1499,11 @@ export const LiveBuildRoomView: React.FC = () => {
               workflow={snapshot.orchestration}
               handoffs={snapshot.handoffs}
               selectedExecutionId={selectedRosterCard?.executionId}
-              onSelect={(card, trigger) => { inspectorTriggerRef.current = trigger; setSelectedExecutionId(card.executionId); setInspectorRunOverrideId(null); setDetailTab('activity'); setDetailOpen(true); }}
+              selectedConnectionId={selectedConnection?.id}
+              visible={!snapshot.orchestration || buildRoomPanel === 'live'}
+              onSelect={(card, trigger) => { inspectorTriggerRef.current = trigger; setSelectedConnection(null); setSelectedExecutionId(card.executionId); setInspectorRunOverrideId(null); setDetailTab('activity'); setDetailOpen(true); }}
+              onSelectConnection={(selection, trigger) => { inspectorTriggerRef.current = trigger; setSelectedConnection(selection); setSelectedExecutionId(selection.toExecutionId); setInspectorRunOverrideId(null); setDetailOpen(true); }}
+              onSelectOrchestrator={snapshot.orchestration ? trigger => { inspectorTriggerRef.current = trigger; setSelectedConnection(null); setBuildRoomPanel('plan'); } : undefined}
               onClearFilters={() => { setAgentSearch(''); setAgentStatusFilter('all'); }}
             /> : <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] text-slate-400"><Users className="h-5 w-5" /></div>
@@ -1332,7 +1524,7 @@ export const LiveBuildRoomView: React.FC = () => {
                   return <div key={artifact.id} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-200">{artifact.kind === 'pull_request' ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}</div>
                     <div className="min-w-0"><div className="break-words text-xs font-medium text-slate-200 [overflow-wrap:anywhere]">{artifact.name}</div><div className="mt-0.5 break-all text-[10px] leading-4 text-slate-500">{artifact.detail}</div></div>
-                    {producer ? <button type="button" aria-label={snapshot.orchestration ? `Inspect the run that produced ${artifact.name}` : `View ${producer.agentName}`} onClick={event => { inspectorTriggerRef.current = event.currentTarget; setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(producer.executionId); setInspectorRunOverrideId(snapshot.orchestration ? producingRun?.runId ?? null : null); setDetailTab('files'); setDetailOpen(true); }} className="col-span-2 inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-white/10 px-2.5 text-[10px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 sm:col-span-1 sm:justify-self-end">{snapshot.orchestration ? 'Inspect producing run' : `View ${producer.agentName}`}<ExternalLink className="h-3 w-3 shrink-0" /></button>
+                    {producer ? <button type="button" aria-label={snapshot.orchestration ? `Inspect the run that produced ${artifact.name}` : `View ${producer.agentName}`} onClick={event => { inspectorTriggerRef.current = event.currentTarget; setSelectedConnection(null); setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(producer.executionId); setInspectorRunOverrideId(snapshot.orchestration ? producingRun?.runId ?? null : null); setDetailTab('files'); setDetailOpen(true); }} className="col-span-2 inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-white/10 px-2.5 text-[10px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 sm:col-span-1 sm:justify-self-end">{snapshot.orchestration ? 'Inspect producing run' : `View ${producer.agentName}`}<ExternalLink className="h-3 w-3 shrink-0" /></button>
                       : <span className="text-[10px] text-slate-600">Producer unavailable in this view</span>}
                   </div>;
                 }) : <div className="rounded-xl border border-dashed border-white/10 px-3 py-5 text-center text-xs text-slate-500">Artifacts will appear as agents produce outputs.</div>}
@@ -1340,7 +1532,8 @@ export const LiveBuildRoomView: React.FC = () => {
               </div>
             </div>
           </div>
-          {detailOpen && selectedCard && <ActivityPanel snapshot={snapshot} card={selectedCard} tab={detailTab} setTab={setDetailTab} onClose={() => { setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewAssignedTask={handleViewAssignedTask} />}
+          {detailOpen && selectedConnection && <HandoffContextPanel snapshot={snapshot} selection={selectedConnection} onClose={() => { setSelectedConnection(null); setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewAssignedTask={handleViewAssignedTask} />}
+          {detailOpen && !selectedConnection && selectedCard && <ActivityPanel snapshot={snapshot} card={selectedCard} tab={detailTab} setTab={setDetailTab} onClose={() => { setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewAssignedTask={handleViewAssignedTask} />}
         </div>
         </div>}
       </div>

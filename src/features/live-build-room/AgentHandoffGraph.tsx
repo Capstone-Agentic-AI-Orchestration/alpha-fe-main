@@ -1,10 +1,14 @@
-import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, Clock3, Code2, Minus, Plus, RadioTower, Scan, ShieldAlert } from 'lucide-react';
 import type {
   LiveBuildRoomAgentCard,
   LiveBuildRoomHandoff,
   LiveBuildRoomOrchestration,
 } from '@/shared/types';
+import type { WorkflowCurveConnection } from './AgentWorkflowScene3D';
+import { supportsWebGL } from '@/features/chat/orchestratorSceneLayout';
+
+const AgentWorkflowScene3D = lazy(() => import('./AgentWorkflowScene3D').then(module => ({ default: module.AgentWorkflowScene3D })));
 
 type WorkflowTask = LiveBuildRoomOrchestration['tasks'][number];
 type EdgeState = 'complete' | 'active' | 'pending' | 'attention';
@@ -15,7 +19,11 @@ interface AgentHandoffGraphProps {
   workflow?: LiveBuildRoomOrchestration | null;
   handoffs: LiveBuildRoomHandoff[];
   selectedExecutionId?: string | null;
+  selectedConnectionId?: string | null;
+  visible?: boolean;
   onSelect: (card: LiveBuildRoomAgentCard, trigger: HTMLButtonElement) => void;
+  onSelectConnection?: (selection: WorkflowConnectionSelection, trigger: HTMLElement) => void;
+  onSelectOrchestrator?: (trigger: HTMLButtonElement) => void;
   onClearFilters?: () => void;
 }
 
@@ -25,35 +33,99 @@ interface WorkflowEdge {
   toExecutionId: string;
   state: EdgeState;
   feedback?: boolean;
-  label?: string;
+  handoffId?: string;
+  taskId?: string;
 }
 
 interface EdgeGeometry {
   id: string;
-  path: string;
-  labelX?: number;
-  labelY?: number;
+  start: [number, number];
+  control1: [number, number];
+  control2: [number, number];
+  end: [number, number];
 }
 
-const edgeTone: Record<EdgeState, { stroke: string; marker: string }> = {
-  complete: { stroke: '#34d399', marker: '#34d399' },
-  active: { stroke: '#a78bfa', marker: '#a78bfa' },
-  pending: { stroke: '#64748b', marker: '#64748b' },
-  attention: { stroke: '#fbbf24', marker: '#fbbf24' },
+export interface WorkflowConnectionSelection {
+  id: string;
+  kind: 'orchestrator' | 'handoff' | 'dependency';
+  fromExecutionId?: string;
+  toExecutionId: string;
+  handoffId?: string;
+  taskId?: string;
+  feedback?: boolean;
+}
+
+const edgeTone: Record<EdgeState, { stroke: string }> = {
+  complete: { stroke: '#34d399' },
+  active: { stroke: '#a78bfa' },
+  pending: { stroke: '#64748b' },
+  attention: { stroke: '#fbbf24' },
 };
+
+class WorkflowSceneBoundary extends React.Component<{ onError: () => void; children: React.ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() { return { failed: true }; }
+  componentDidCatch() { this.props.onError(); }
+  render() { return this.state.failed ? null : this.props.children; }
+}
+
+const Workflow2DFallback: React.FC<{
+  graphId: string;
+  width: number;
+  height: number;
+  connections: WorkflowCurveConnection[];
+  reduceMotion: boolean;
+  onSelect: (id: string) => void;
+}> = ({ graphId, width, height, connections, reduceMotion, onSelect }) => (
+  <>
+    <svg className="pointer-events-none absolute inset-0 z-0 h-full w-full" viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+      <defs>{connections.map((connection, index) => <marker key={connection.id} id={`${graphId}-arrow-${index}`} markerWidth="8" markerHeight="8" refX="6" refY="4" orient="auto" markerUnits="userSpaceOnUse">
+        <path d="M 0 0 L 8 4 L 0 8 Z" fill={connection.color} />
+      </marker>)}</defs>
+      {connections.map((connection, index) => {
+        const d = `M ${connection.start[0]} ${connection.start[1]} C ${connection.control1[0]} ${connection.control1[1]}, ${connection.control2[0]} ${connection.control2[1]}, ${connection.end[0]} ${connection.end[1]}`;
+        return <g key={connection.id}>
+          <path d={d} fill="none" stroke={connection.color} strokeWidth={connection.selected ? 2.5 : connection.active ? 2 : 1.3} strokeDasharray={connection.feedback || connection.muted ? '5 7' : undefined} opacity={connection.muted ? 0.45 : connection.active || connection.selected ? 0.9 : 0.62} markerEnd={`url(#${graphId}-arrow-${index})`} />
+          <path d={d} fill="none" stroke="transparent" strokeWidth="16" pointerEvents="stroke" className="pointer-events-auto cursor-pointer" onClick={event => { event.stopPropagation(); onSelect(connection.id); }} />
+          {connection.active && !reduceMotion && <circle r="3.2" fill="#f5f3ff">
+            <animateMotion dur="2.4s" repeatCount="indefinite" path={d} />
+          </circle>}
+        </g>;
+      })}
+    </svg>
+    <div className="sr-only" role="status">3D graphics are unavailable. Use the workflow connection list to inspect handoffs.</div>
+  </>
+);
+
+function cardToneColor(card: LiveBuildRoomAgentCard): string {
+  if (card.status === 'completed') return '#34d399';
+  if (card.status === 'running') return '#a78bfa';
+  if (card.status === 'review') return '#fbbf24';
+  if (card.status === 'failed') return '#fb7185';
+  if (card.status === 'waiting') return '#60a5fa';
+  return '#94a3b8';
+}
 
 function dependencyState(fromTask: WorkflowTask, toTask: WorkflowTask, toCard: LiveBuildRoomAgentCard): EdgeState {
   if (['failed', 'blocked'].includes(fromTask.status) || ['failed', 'blocked'].includes(toTask.status)) return 'attention';
-  if (toCard.status === 'running' || toTask.status === 'running' || toTask.status === 'submitted') return 'active';
+  if (!toCard.isStale && (toCard.status === 'running' || toTask.status === 'running' || toTask.status === 'submitted')) return 'active';
   if (fromTask.status === 'accepted' && toTask.status === 'accepted') return 'complete';
   return 'pending';
 }
 
 function taskState(task: WorkflowTask, card: LiveBuildRoomAgentCard): EdgeState {
   if (['failed', 'blocked'].includes(task.status) || card.status === 'failed') return 'attention';
-  if (card.status === 'running' || task.status === 'running' || task.status === 'submitted') return 'active';
+  if (!card.isStale && (card.status === 'running' || task.status === 'running' || task.status === 'submitted')) return 'active';
   if (task.status === 'accepted') return 'complete';
   return 'pending';
+}
+
+function handoffMatchesCards(handoff: LiveBuildRoomHandoff, cards: LiveBuildRoomAgentCard[]): boolean {
+  return cards.some(card =>
+    card.executionId === handoff.executionId ||
+    Boolean(handoff.agentCallId && card.agentCallId === handoff.agentCallId) ||
+    Boolean(handoff.squadRunId && card.squadRunId === handoff.squadRunId)
+  );
 }
 
 function buildEdges(
@@ -69,10 +141,27 @@ function buildEdges(
   const add = (edge: WorkflowEdge) => {
     if (edge.fromExecutionId === edge.toExecutionId) return;
     const key = `${edge.fromExecutionId}->${edge.toExecutionId}:${edge.feedback ? 'feedback' : 'handoff'}`;
-    if (seen.has(key)) return;
+    if (seen.has(key)) {
+      const previous = edges.find(item => item.fromExecutionId === edge.fromExecutionId && item.toExecutionId === edge.toExecutionId && Boolean(item.feedback) === Boolean(edge.feedback));
+      if (previous && edge.handoffId) previous.handoffId = edge.handoffId;
+      if (previous && edge.taskId && !previous.taskId) previous.taskId = edge.taskId;
+      return;
+    }
     seen.add(key);
     edges.push(edge);
   };
+
+  const latestHandoffByPair = new Map<string, LiveBuildRoomHandoff>();
+  const cardByAgent = new Map(cards.map(card => [card.agentId, card]));
+  for (const handoff of handoffs) {
+    if (!handoff.fromAgentId || !handoff.toAgentId) continue;
+    const fromCard = cardByAgent.get(handoff.fromAgentId);
+    const toCard = cardByAgent.get(handoff.toAgentId);
+    if (!fromCard || !toCard) continue;
+    const key = `${fromCard.executionId}->${toCard.executionId}`;
+    const previous = latestHandoffByPair.get(key);
+    if (!previous || Date.parse(handoff.createdAt) > Date.parse(previous.createdAt)) latestHandoffByPair.set(key, handoff);
+  }
 
   if (workflow) {
     const taskById = new Map(workflow.tasks.map(task => [task.id, task]));
@@ -89,6 +178,8 @@ function buildEdges(
           fromExecutionId: fromCard.executionId,
           toExecutionId: toCard.executionId,
           state: dependencyState(dependency, task, toCard),
+          handoffId: latestHandoffByPair.get(`${fromCard.executionId}->${toCard.executionId}`)?.id,
+          taskId: task.id,
         });
       }
     }
@@ -110,31 +201,23 @@ function buildEdges(
         toExecutionId: correctionCard.executionId,
         state: taskState(correction, correctionCard),
         feedback: true,
-        label: 'correction',
+        handoffId: latestHandoffByPair.get(`${reviewerCard.executionId}->${correctionCard.executionId}`)?.id,
+        taskId: correction.id,
       });
     }
-  } else {
-    const latestByPair = new Map<string, LiveBuildRoomHandoff>();
-    const byAgent = new Map(cards.map(card => [card.agentId, card]));
-    for (const handoff of handoffs) {
-      if (!handoff.fromAgentId || !handoff.toAgentId) continue;
-      const fromCard = byAgent.get(handoff.fromAgentId);
-      const toCard = byAgent.get(handoff.toAgentId);
-      if (!fromCard || !toCard) continue;
-      const key = `${fromCard.executionId}->${toCard.executionId}`;
-      const previous = latestByPair.get(key);
-      if (!previous || Date.parse(handoff.createdAt) > Date.parse(previous.createdAt)) latestByPair.set(key, handoff);
-    }
-    for (const [key] of latestByPair) {
-      const [fromExecutionId, toExecutionId] = key.split('->');
-      const target = cards.find(card => card.executionId === toExecutionId);
-      add({
-        id: `handoff-${key}`,
-        fromExecutionId,
-        toExecutionId,
-        state: target?.status === 'running' ? 'active' : target?.status === 'failed' ? 'attention' : 'complete',
-      });
-    }
+  }
+
+  for (const [key, handoff] of latestHandoffByPair) {
+    const [fromExecutionId, toExecutionId] = key.split('->');
+    const target = cards.find(card => card.executionId === toExecutionId);
+    add({
+      id: `handoff-${handoff.id}`,
+      fromExecutionId,
+      toExecutionId,
+      state: target?.status === 'running' && !target.isStale ? 'active' : target?.status === 'failed' ? 'attention' : target?.status === 'waiting' || target?.status === 'idle' || target?.isStale ? 'pending' : 'complete',
+      handoffId: handoff.id,
+      taskId: target?.orchestrationTaskId,
+    });
   }
 
   return edges;
@@ -170,9 +253,6 @@ function buildLayers(cards: LiveBuildRoomAgentCard[], edges: WorkflowEdge[], wor
   workflow?.tasks.forEach((task, index) => {
     if (task.ownerAgentId && !planOrder.has(task.ownerAgentId)) planOrder.set(task.ownerAgentId, index);
   });
-  const unconnected = normalEdges.length === 0;
-  if (unconnected && cards.length > 1) cards.forEach((card, index) => level.set(card.executionId, index));
-
   const maxLevel = Math.max(0, ...cards.map(card => level.get(card.executionId) ?? 0));
   const layers = Array.from({ length: maxLevel + 1 }, () => [] as LiveBuildRoomAgentCard[]);
   for (const card of cards) layers[level.get(card.executionId) ?? 0].push(card);
@@ -185,10 +265,12 @@ function buildLayers(cards: LiveBuildRoomAgentCard[], edges: WorkflowEdge[], wor
 
 const AgentNode: React.FC<{
   card: LiveBuildRoomAgentCard;
+  handoffs: LiveBuildRoomHandoff[];
   selected: boolean;
   onSelect: (trigger: HTMLButtonElement) => void;
   setNodeRef: (executionId: string, node: HTMLButtonElement | null) => void;
-}> = ({ card, selected, onSelect, setNodeRef }) => {
+  style?: React.CSSProperties;
+}> = ({ card, handoffs, selected, onSelect, setNodeRef, style }) => {
   const latestActivity = card.activity.at(-1);
   const tone = card.status === 'completed'
     ? { border: 'border-emerald-400/35', text: 'text-emerald-200', dot: 'bg-emerald-300', icon: <CheckCircle2 className="h-3.5 w-3.5" />, label: 'Complete' }
@@ -197,10 +279,22 @@ const AgentNode: React.FC<{
       : card.status === 'review'
         ? { border: 'border-amber-300/40', text: 'text-amber-100', dot: 'bg-amber-300', icon: <ShieldAlert className="h-3.5 w-3.5" />, label: 'Review' }
         : card.status === 'failed'
-          ? { border: 'border-rose-300/40', text: 'text-rose-100', dot: 'bg-rose-300', icon: <ShieldAlert className="h-3.5 w-3.5" />, label: 'Stopped' }
+          ? { border: 'border-rose-300/40', text: 'text-rose-100', dot: 'bg-rose-300', icon: <ShieldAlert className="h-3.5 w-3.5" />, label: 'Failed' }
           : card.status === 'waiting'
             ? { border: 'border-sky-300/30', text: 'text-sky-100', dot: 'bg-sky-300', icon: <Clock3 className="h-3.5 w-3.5" />, label: 'Waiting' }
             : { border: 'border-white/10', text: 'text-slate-300', dot: 'bg-slate-500', icon: <Clock3 className="h-3.5 w-3.5" />, label: 'Ready' };
+  const latestInbound = handoffs.filter(handoff => handoff.toAgentId === card.agentId).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  const latestOutbound = handoffs.filter(handoff => handoff.fromAgentId === card.agentId).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0];
+  const inboundAt = Date.parse(latestInbound?.createdAt ?? '') || 0;
+  const outboundAt = Date.parse(latestOutbound?.createdAt ?? '') || 0;
+  const latestActivityAt = Date.parse(latestActivity?.createdAt ?? '') || 0;
+  const receivingContext = inboundAt > 0 && inboundAt >= outboundAt && inboundAt >= latestActivityAt && (card.status === 'running' || card.status === 'waiting');
+  const handingOff = outboundAt > 0 && outboundAt > inboundAt && outboundAt >= latestActivityAt && (card.status === 'running' || card.status === 'waiting');
+  const stateTone = receivingContext
+    ? { ...tone, border: 'border-sky-300/40', text: 'text-sky-100', dot: 'bg-sky-300', label: 'Receiving context' }
+    : handingOff
+      ? { ...tone, border: 'border-cyan-300/40', text: 'text-cyan-100', dot: 'bg-cyan-300', label: 'Handing off' }
+      : tone;
 
   return (
     <button
@@ -209,7 +303,8 @@ const AgentNode: React.FC<{
       onClick={event => onSelect(event.currentTarget)}
       aria-pressed={selected}
       title={`Inspect ${card.agentName} · ${card.currentTask}`}
-      className={`agent-flow-node group relative z-10 flex min-h-[174px] min-w-0 w-full flex-col rounded-2xl border bg-surface-100/95 p-3.5 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${tone.border} ${selected ? 'border-violet-300/80 bg-[#211a32] shadow-[0_0_30px_rgba(139,92,246,0.2)] ring-1 ring-violet-300/50' : 'hover:bg-surface-100'} ${card.status === 'running' && !card.isStale ? 'agent-flow-node--running' : ''}`}
+      style={style}
+      className={`agent-flow-node group absolute z-20 flex min-h-[174px] min-w-0 flex-col rounded-2xl border bg-surface-100/95 p-3.5 text-left transition-[border-color,background-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${stateTone.border} ${selected ? 'border-violet-300/80 bg-[#211a32] shadow-[0_0_30px_rgba(139,92,246,0.2)] ring-1 ring-violet-300/50' : 'hover:bg-surface-100'} ${card.status === 'running' && !card.isStale ? 'agent-flow-node--running' : ''}`}
     >
       <span className="flex min-w-0 items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2.5">
@@ -224,9 +319,9 @@ const AgentNode: React.FC<{
         {card.isStale && <span title="No execution activity has been recorded for five minutes" className="shrink-0 rounded-full border border-amber-300/30 bg-amber-300/[0.06] px-1.5 py-1 text-[9px] font-semibold text-amber-100">No signal</span>}
       </span>
 
-      <span className={`mt-3 inline-flex w-fit items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${tone.border} ${tone.text}`}>
-        <span className={`h-1.5 w-1.5 rounded-full ${tone.dot} ${card.status === 'running' && !card.isStale ? 'animate-pulse' : ''}`} />
-        {tone.label}{card.progress > 0 && card.status === 'running' ? ` · ${Math.round(card.progress)}%` : ''}
+      <span className={`mt-3 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${stateTone.border} ${stateTone.text}`}>
+        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${stateTone.dot} ${(card.status === 'running' || receivingContext || handingOff) && !card.isStale ? 'animate-pulse' : ''}`} />
+        {stateTone.label}{card.progress > 0 && card.status === 'running' && !receivingContext && !handingOff ? ` · ${Math.round(card.progress)}%` : ''}
       </span>
 
       <span className="mt-2.5 min-w-0 flex-1">
@@ -252,26 +347,52 @@ export const AgentHandoffGraph: React.FC<AgentHandoffGraphProps> = ({
   workflow,
   handoffs,
   selectedExecutionId,
+  selectedConnectionId,
+  visible = true,
   onSelect,
+  onSelectConnection,
+  onSelectOrchestrator,
   onClearFilters,
 }) => {
   const graphId = useId().replace(/:/g, '');
-  const arrowId = `${graphId}-arrow`;
+  const [webglAvailable] = useState(() => supportsWebGL());
+  const [sceneFailed, setSceneFailed] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
+  const rootNodeRef = useRef<HTMLButtonElement>(null);
   const nodeRefs = useRef(new Map<string, HTMLButtonElement>());
   const [viewportWidth, setViewportWidth] = useState(0);
   const [zoom, setZoom] = useState(1);
   const [stageSize, setStageSize] = useState({ width: 0, height: 360 });
   const [edgeGeometry, setEdgeGeometry] = useState<{ signature: string; items: EdgeGeometry[] }>({ signature: '', items: [] });
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
+  const hasManualZoom = useRef(false);
 
-  const edges = useMemo(() => buildEdges(cards, workflow, handoffs), [cards, handoffs, workflow]);
+  const visibleHandoffs = useMemo(() => handoffs.filter(handoff => handoffMatchesCards(handoff, cards)), [cards, handoffs]);
+  const edges = useMemo(() => buildEdges(cards, workflow, visibleHandoffs), [cards, visibleHandoffs, workflow]);
   const layers = useMemo(() => buildLayers(cards, edges, workflow), [cards, edges, workflow]);
   const nodeByExecution = useMemo(() => new Map(cards.map(card => [card.executionId, card])), [cards]);
-  const handoffCount = edges.length;
-  const minimumWidth = Math.max(1, layers.length) * 228 + Math.max(0, layers.length - 1) * 48 + 48;
-  const stageWidth = Math.max(viewportWidth, minimumWidth);
+  const handoffCount = edges.filter(edge => Boolean(edge.handoffId)).length;
+  const maxLayerSize = Math.max(1, ...layers.map(layer => layer.length));
+  const stageWidth = Math.max(viewportWidth, maxLayerSize * 232 + 272, 820);
+  const stageHeight = Math.max(590, 212 + layers.length * 238 + (edges.some(edge => edge.feedback) ? 64 : 0));
+  const positionedCards = useMemo(() => layers.flatMap((layer, depth) => layer.map((card, index) => ({
+    card,
+    x: stageWidth * (index + 1) / (layer.length + 1),
+    y: 240 + depth * 238,
+  }))), [layers, stageWidth]);
+  const incomingExecutions = useMemo(() => new Set(edges.filter(edge => !edge.feedback).map(edge => edge.toExecutionId)), [edges]);
+  const rootTargets = useMemo(() => {
+    const rootCards = positionedCards.filter(position => !incomingExecutions.has(position.card.executionId));
+    return rootCards.length ? rootCards : positionedCards.slice(0, 1);
+  }, [incomingExecutions, positionedCards]);
+  const connectionCount = edges.length + rootTargets.length;
+  const currentTask = workflow ? workflow.tasks.find(task => task.id === workflow.run.currentTaskId) : undefined;
+
+  useEffect(() => {
+    if (!viewportWidth || hasManualZoom.current) return;
+    setZoom(Math.max(0.62, Math.min(1, (viewportWidth - 24) / stageWidth)));
+  }, [stageWidth, viewportWidth]);
 
   useLayoutEffect(() => {
     const viewport = viewportRef.current;
@@ -293,34 +414,50 @@ export const AgentHandoffGraph: React.FC<AgentHandoffGraphProps> = ({
       const width = stage.offsetWidth;
       const height = Math.max(stage.offsetHeight, 360);
       const nextGeometry: EdgeGeometry[] = [];
+      const point = (x: number, y: number): [number, number] => [(x - stageRect.left) / zoom, (y - stageRect.top) / zoom];
+      const centerX = (rect: DOMRect) => rect.left + rect.width / 2;
+      const root = rootNodeRef.current?.getBoundingClientRect();
+      if (root) {
+        const start = point(centerX(root), root.bottom);
+        for (const position of rootTargets) {
+          const targetNode = nodeRefs.current.get(position.card.executionId);
+          if (!targetNode) continue;
+          const target = targetNode.getBoundingClientRect();
+          const end = point(centerX(target), target.top);
+          const distance = Math.max(30, (end[1] - start[1]) * 0.42);
+          const control1: [number, number] = [start[0], start[1] + distance];
+          const control2: [number, number] = [end[0], end[1] - distance * 0.4];
+          nextGeometry.push({ id: `root-${position.card.executionId}`, start, control1, control2, end });
+        }
+      }
       for (const edge of edges) {
         const from = nodeRefs.current.get(edge.fromExecutionId);
         const to = nodeRefs.current.get(edge.toExecutionId);
         if (!from || !to) continue;
         const fromRect = from.getBoundingClientRect();
         const toRect = to.getBoundingClientRect();
-        const x1 = (fromRect.left + fromRect.width - stageRect.left) / zoom;
-        const y1 = (fromRect.top + fromRect.height / 2 - stageRect.top) / zoom;
-        const x2 = (toRect.left - stageRect.left) / zoom;
-        const y2 = (toRect.top + toRect.height / 2 - stageRect.top) / zoom;
+        const start = point(centerX(fromRect), fromRect.bottom);
+        const end = edge.feedback ? point(centerX(toRect), toRect.bottom) : point(centerX(toRect), toRect.top);
+        let control1: [number, number];
+        let control2: [number, number];
         if (edge.feedback) {
-          const fromX = (fromRect.left + fromRect.width / 2 - stageRect.left) / zoom;
-          const toX = (toRect.left + toRect.width / 2 - stageRect.left) / zoom;
-          const fromY = (fromRect.bottom - stageRect.top) / zoom - 3;
-          const toY = (toRect.bottom - stageRect.top) / zoom - 3;
-          const laneY = Math.max(fromY, toY) + 38;
-          nextGeometry.push({
-            id: edge.id,
-            path: `M ${fromX} ${fromY} C ${fromX} ${laneY}, ${toX} ${laneY}, ${toX} ${toY}`,
-            labelX: (fromX + toX) / 2,
-            labelY: laneY - 5,
-          });
+          const laneY = Math.max(start[1], end[1]) + 36;
+          control1 = [start[0], laneY];
+          control2 = [end[0], laneY];
         } else {
-          const bend = Math.max(26, Math.min(82, Math.abs(x2 - x1) * 0.45));
-          nextGeometry.push({ id: edge.id, path: `M ${x1} ${y1} C ${x1 + bend} ${y1}, ${x2 - bend} ${y2}, ${x2} ${y2}` });
+          const vertical = Math.max(36, (end[1] - start[1]) * 0.42);
+          control1 = [start[0], start[1] + vertical];
+          control2 = [end[0], end[1] - vertical * 0.4];
         }
+        nextGeometry.push({
+          id: edge.id,
+          start,
+          control1,
+          control2,
+          end,
+        });
       }
-      const signature = `${width}:${height}:${zoom}:${nextGeometry.map(item => `${item.id}:${item.path}`).join('|')}`;
+      const signature = `${width}:${height}:${zoom}:${nextGeometry.map(item => `${item.id}:${item.start.join(',')}:${item.control1.join(',')}:${item.control2.join(',')}:${item.end.join(',')}`).join('|')}`;
       setStageSize(current => current.width === width && current.height === height ? current : { width, height });
       setEdgeGeometry(current => current.signature === signature ? current : { signature, items: nextGeometry });
     };
@@ -330,6 +467,7 @@ export const AgentHandoffGraph: React.FC<AgentHandoffGraphProps> = ({
     };
     const observer = new ResizeObserver(schedule);
     observer.observe(stage);
+    if (rootNodeRef.current) observer.observe(rootNodeRef.current);
     nodeRefs.current.forEach(node => observer.observe(node));
     window.addEventListener('resize', schedule);
     measure();
@@ -338,12 +476,13 @@ export const AgentHandoffGraph: React.FC<AgentHandoffGraphProps> = ({
       window.removeEventListener('resize', schedule);
       window.cancelAnimationFrame(frame);
     };
-  }, [cards, edges, layers, stageWidth, zoom]);
+  }, [cards, edges, layers, rootTargets, stageHeight, stageWidth, zoom]);
 
   const fitGraph = () => {
     const availableWidth = viewportRef.current?.clientWidth ?? viewportWidth;
     if (!availableWidth || !stageSize.width) return setZoom(1);
-    setZoom(Math.max(0.7, Math.min(1, (availableWidth - 20) / stageSize.width)));
+    hasManualZoom.current = true;
+    setZoom(Math.max(0.5, Math.min(1, (availableWidth - 20) / stageSize.width)));
     viewportRef.current?.scrollTo({ left: 0, top: 0, behavior: 'smooth' });
   };
 
@@ -353,6 +492,68 @@ export const AgentHandoffGraph: React.FC<AgentHandoffGraphProps> = ({
   };
 
   const activeEdges = edges.filter(edge => edge.state === 'active').length;
+  const activeRootConnections = rootTargets.filter(position => position.card.status === 'running' && !position.card.isStale).length;
+  const activeConnectionCount = activeEdges + activeRootConnections;
+  const selectionByConnectionId = useMemo(() => {
+    const result = new Map<string, WorkflowConnectionSelection>();
+    for (const position of rootTargets) result.set(`root-${position.card.executionId}`, {
+      id: `root-${position.card.executionId}`,
+      kind: 'orchestrator',
+      toExecutionId: position.card.executionId,
+      taskId: position.card.orchestrationTaskId || workflow?.run.currentTaskId,
+    });
+    for (const edge of edges) result.set(edge.id, {
+      id: edge.id,
+      kind: edge.handoffId ? 'handoff' : 'dependency',
+      fromExecutionId: edge.fromExecutionId,
+      toExecutionId: edge.toExecutionId,
+      handoffId: edge.handoffId,
+      taskId: edge.taskId,
+      feedback: edge.feedback,
+    });
+    return result;
+  }, [edges, rootTargets, workflow?.run.currentTaskId]);
+  const sceneConnections = useMemo<WorkflowCurveConnection[]>(() => {
+    const geometryById = new Map(edgeGeometry.items.map(item => [item.id, item]));
+    const connections: WorkflowCurveConnection[] = [];
+    for (const position of rootTargets) {
+      const id = `root-${position.card.executionId}`;
+      const geometry = geometryById.get(id);
+      if (!geometry) continue;
+      const active = position.card.status === 'running' && !position.card.isStale;
+      connections.push({ id, start: geometry.start, control1: geometry.control1, control2: geometry.control2, end: geometry.end, color: cardToneColor(position.card), active, muted: position.card.status === 'waiting' || position.card.status === 'idle', indicator: 'PLAN', selected: selectedConnectionId === id });
+    }
+    for (const edge of edges) {
+      const geometry = geometryById.get(edge.id);
+      if (!geometry) continue;
+      connections.push({
+        id: edge.id,
+        start: geometry.start,
+        control1: geometry.control1,
+        control2: geometry.control2,
+        end: geometry.end,
+        color: edgeTone[edge.state].stroke,
+        active: edge.state === 'active',
+        muted: edge.state === 'pending',
+        feedback: edge.feedback,
+        indicator: edge.handoffId ? 'CTX' : undefined,
+        selected: selectedConnectionId === edge.id,
+      });
+    }
+    return connections;
+  }, [edgeGeometry, edges, rootTargets, selectedConnectionId]);
+
+  const selectConnection = (id: string, trigger: HTMLElement) => {
+    const selection = selectionByConnectionId.get(id);
+    if (selection) onSelectConnection?.(selection, trigger);
+  };
+  const connectionDescriptions = [
+    ...rootTargets.map(({ card }) => ({ id: `root-${card.executionId}`, label: `Orchestrator routes work to ${card.agentName}.` })),
+    ...edges.map(edge => ({
+      id: edge.id,
+      label: `${nodeByExecution.get(edge.fromExecutionId)?.agentName || 'An agent'} ${edge.feedback ? 'returns a correction to' : 'hands work to'} ${nodeByExecution.get(edge.toExecutionId)?.agentName || 'another agent'}; ${edge.state}.`,
+    })),
+  ];
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -363,25 +564,25 @@ export const AgentHandoffGraph: React.FC<AgentHandoffGraphProps> = ({
   }, []);
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0c111a] shadow-[0_18px_60px_rgba(0,0,0,0.18)]" aria-labelledby={`${graphId}-title`} aria-describedby={handoffCount ? `${graphId}-connections` : undefined}>
+    <section className="min-w-0 overflow-hidden rounded-2xl border border-white/[0.09] bg-[#0c111a] shadow-[0_18px_60px_rgba(0,0,0,0.18)]" aria-labelledby={`${graphId}-title`} aria-describedby={cards.length ? `${graphId}-connections` : undefined}>
       <div className="flex flex-col gap-3 border-b border-white/[0.07] px-4 py-3.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             <h2 id={`${graphId}-title`} className="text-sm font-semibold text-white">Live agent workflow</h2>
             <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/20 bg-emerald-300/[0.06] px-2 py-1 text-[9px] font-semibold uppercase tracking-[0.08em] text-emerald-100"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />Live</span>
           </div>
-          <p className="mt-1 text-[11px] leading-4 text-slate-500">Select an agent to inspect its activity, handoff, files, and tools.</p>
+          <p className="mt-1 text-[11px] leading-4 text-slate-500">Follow work and context through the tree. Select a node or connection to inspect its history.</p>
         </div>
         <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
-          <div className="flex items-center gap-3 text-[10px] text-slate-400" aria-label={`${cards.length} of ${allAgentCount} agents shown, ${handoffCount} handoffs` }>
+          <div className="flex items-center gap-3 text-[10px] text-slate-400" aria-label={`${cards.length} of ${allAgentCount} agents shown, ${connectionCount} connections and ${handoffCount} recorded handoffs`}>
             <span><strong className="font-semibold text-slate-200">{cards.length}</strong>/{allAgentCount} agents</span>
             <span className="h-3 w-px bg-white/10" />
-            <span><strong className="font-semibold text-violet-100">{handoffCount}</strong> handoffs{activeEdges > 0 ? ` · ${activeEdges} active` : ''}</span>
+            <span><strong className="font-semibold text-violet-100">{connectionCount}</strong> connections · {handoffCount} handoffs{activeConnectionCount > 0 ? ` · ${activeConnectionCount} active` : ''}</span>
           </div>
           <div className="flex items-center gap-1 rounded-lg border border-white/[0.09] bg-white/[0.025] p-1" role="group" aria-label="Workflow zoom controls">
-            <button type="button" onClick={() => setZoom(value => Math.max(0.7, Math.round((value - 0.1) * 10) / 10))} disabled={zoom <= 0.7} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:opacity-35" aria-label="Zoom out"><Minus className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => { hasManualZoom.current = true; setZoom(value => Math.max(0.5, Math.round((value - 0.1) * 10) / 10)); }} disabled={zoom <= 0.5} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:opacity-35" aria-label="Zoom out"><Minus className="h-3.5 w-3.5" /></button>
             <span className="w-10 text-center text-[10px] tabular-nums text-slate-300" aria-live="polite">{Math.round(zoom * 100)}%</span>
-            <button type="button" onClick={() => setZoom(value => Math.min(1.3, Math.round((value + 0.1) * 10) / 10))} disabled={zoom >= 1.3} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:opacity-35" aria-label="Zoom in"><Plus className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => { hasManualZoom.current = true; setZoom(value => Math.min(1.3, Math.round((value + 0.1) * 10) / 10)); }} disabled={zoom >= 1.3} className="flex h-9 w-9 items-center justify-center rounded-md text-slate-400 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:opacity-35" aria-label="Zoom in"><Plus className="h-3.5 w-3.5" /></button>
             <span className="mx-1 h-4 w-px bg-white/10" />
             <button type="button" onClick={fitGraph} className="inline-flex min-h-9 items-center gap-1.5 rounded-md px-2 text-[10px] font-medium text-slate-300 hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><Scan className="h-3 w-3" />Fit</button>
           </div>
@@ -390,59 +591,60 @@ export const AgentHandoffGraph: React.FC<AgentHandoffGraphProps> = ({
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-white/[0.055] px-4 py-2 text-[9px] text-slate-500" aria-label="Handoff legend">
         <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-300" />Complete</span>
-        <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300" />Active handoff</span>
+        <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300" />Active · moving context</span>
         <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-slate-500" />Waiting</span>
         {edges.some(edge => edge.state === 'attention') && <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-300" />Needs attention</span>}
         {edges.some(edge => edge.feedback) && <span className="inline-flex items-center gap-1.5"><span className="h-px w-4 border-t border-dashed border-violet-300" />Review correction</span>}
       </div>
 
       <div ref={viewportRef} className="relative max-h-[min(72vh,760px)] min-h-[320px] max-w-full overflow-auto overscroll-contain" tabIndex={0} aria-label="Scrollable agent workflow canvas">
-        {cards.length ? <div className="relative" style={{ width: stageSize.width ? stageSize.width * zoom : stageWidth * zoom, height: stageSize.height * zoom }}>
+        {cards.length ? <div className="relative" style={{ width: stageWidth * zoom, height: stageHeight * zoom }}>
           <div
             ref={stageRef}
-            className="agent-flow-stage relative isolate grid min-h-[360px] items-stretch gap-12 px-6 py-8"
-            style={{
-              width: stageWidth,
-              minHeight: stageSize.height,
-              gridTemplateColumns: `repeat(${Math.max(1, layers.length)}, minmax(0, 1fr))`,
-              paddingBottom: edges.some(edge => edge.feedback) ? 76 : undefined,
-              transform: `scale(${zoom})`,
-              transformOrigin: 'top left',
-            }}
+            className="agent-flow-stage relative isolate overflow-hidden"
+            tabIndex={-1}
+            style={{ width: stageWidth, height: stageHeight, transform: `scale(${zoom})`, transformOrigin: 'top left' }}
           >
-            <svg className="pointer-events-none absolute inset-0 z-0 h-full w-full overflow-visible" viewBox={`0 0 ${Math.max(stageSize.width, stageWidth)} ${Math.max(stageSize.height, 360)}`} preserveAspectRatio="none" aria-hidden="true">
-              <defs>
-                {Object.entries(edgeTone).map(([state, tone]) => <marker key={state} id={`${arrowId}-${state}`} markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto" markerUnits="strokeWidth"><path d="M1,1 L7,4.5 L1,8" fill="none" stroke={tone.marker} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></marker>)}
-                <linearGradient id={`${graphId}-active`} x1="0" x2="1" y1="0" y2="0"><stop offset="0%" stopColor="#8b5cf6" /><stop offset="100%" stopColor="#67e8f9" /></linearGradient>
-              </defs>
-              {edges.map(edge => {
-                const geometry = edgeGeometry.items.find(item => item.id === edge.id);
-                if (!geometry) return null;
-                const tone = edgeTone[edge.state];
-                return <g key={edge.id}>
-                  <path d={geometry.path} fill="none" stroke={edge.state === 'active' ? `url(#${graphId}-active)` : tone.stroke} strokeWidth={edge.state === 'active' ? 2.2 : 1.7} strokeDasharray={edge.feedback || edge.state === 'pending' ? '6 7' : undefined} strokeLinecap="round" markerEnd={`url(#${arrowId}-${edge.state})`} opacity={edge.state === 'pending' ? 0.62 : 0.9} className={edge.state === 'active' ? 'agent-flow-edge--active' : ''} />
-                  {edge.state === 'active' && !prefersReducedMotion && <circle r="3.3" fill="#a5f3fc" className="agent-flow-particle"><animateMotion dur="1.65s" repeatCount="indefinite" path={geometry.path} /></circle>}
-                  {geometry.labelX !== undefined && geometry.labelY !== undefined && <text x={geometry.labelX} y={geometry.labelY} textAnchor="middle" className="fill-violet-200" fontSize="9" fontWeight="600">{edge.label}</text>}
-                </g>;
-              })}
-            </svg>
-            {layers.map((layer, layerIndex) => (
-              <div key={`layer-${layerIndex}`} className="relative z-10 flex min-w-0 flex-col justify-center gap-4">
-                {layer.map(card => <AgentNode
-                  key={card.executionId}
-                  card={card}
-                  selected={selectedExecutionId === card.executionId}
-                  setNodeRef={setNodeRef}
-                  onSelect={trigger => onSelect(card, trigger)}
-                />)}
-              </div>
-            ))}
+            {visible && webglAvailable && !sceneFailed ? <WorkflowSceneBoundary onError={() => setSceneFailed(true)}>
+              <Suspense fallback={<div className="absolute inset-0 z-0 bg-[radial-gradient(ellipse_at_50%_18%,rgba(124,58,237,0.14),transparent_52%)]" />}>
+                <AgentWorkflowScene3D width={stageWidth} height={stageHeight} connections={sceneConnections} active={activeConnectionCount > 0 || cards.some(card => card.status === 'running' && !card.isStale)} reduceMotion={prefersReducedMotion} onSelect={id => selectConnection(id, stageRef.current ?? document.body)} />
+              </Suspense>
+            </WorkflowSceneBoundary> : visible && <Workflow2DFallback graphId={graphId} width={stageWidth} height={stageHeight} connections={sceneConnections} reduceMotion={prefersReducedMotion} onSelect={id => selectConnection(id, stageRef.current ?? document.body)} />}
+
+            <button
+              ref={rootNodeRef}
+              type="button"
+              onClick={event => onSelectOrchestrator?.(event.currentTarget)}
+              disabled={!onSelectOrchestrator}
+              title={currentTask?.assignmentReason || workflow?.run.goal || 'Alpha routes tasks and coordinates specialist agents'}
+              style={{ left: stageWidth / 2, top: 28, width: Math.min(370, stageWidth - 48), transform: 'translateX(-50%)' }}
+              className="absolute z-20 flex min-h-[88px] items-center gap-3 rounded-2xl border border-violet-300/30 bg-[#11101c]/90 px-4 py-3 text-left shadow-[0_0_42px_rgba(139,92,246,0.18)] backdrop-blur-md transition hover:border-violet-200/55 hover:bg-[#171326]/95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:cursor-default"
+              aria-label={`Alpha Orchestrator. ${currentTask ? `Routing ${currentTask.title} to ${currentTask.ownerName}.` : `Run status ${workflow?.run.status || 'live'}.`}${onSelectOrchestrator ? ' Open orchestration plan.' : ''}`}
+            >
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-violet-200/35 bg-violet-500/20 text-lg font-bold text-violet-50 shadow-[0_0_22px_rgba(139,92,246,0.42)]">A</span>
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2 text-[12px] font-semibold text-white">Alpha Orchestrator<span className="rounded-full border border-violet-200/20 bg-violet-300/[0.08] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.12em] text-violet-100">Root</span></span>
+                <span className="mt-1 block truncate text-[10px] text-slate-400">{currentTask ? `Routing · ${currentTask.ownerName} · ${currentTask.title}` : `${cards.length} specialists · ${workflow?.run.status.replace(/_/g, ' ') || 'coordinating live work'}`}</span>
+                <span className="mt-1 block text-[9px] text-violet-200/70">Run {workflow?.run.status.replace(/_/g, ' ') || 'live'} · selects next agent · passes context</span>
+              </span>
+            </button>
+
+            {positionedCards.map(({ card, x, y }) => <AgentNode
+              key={card.executionId}
+              card={card}
+              handoffs={visibleHandoffs}
+              selected={selectedExecutionId === card.executionId}
+              setNodeRef={setNodeRef}
+              style={{ left: x, top: y, width: Math.min(232, stageWidth - 32), transform: 'translateX(-50%)' }}
+              onSelect={trigger => onSelect(card, trigger)}
+            />)}
+
+            <ol id={`${graphId}-connections`} className="sr-only" aria-label="Interactive agent workflow connections">
+              {connectionDescriptions.map(connection => <li key={connection.id}>
+                <button type="button" onClick={event => selectConnection(connection.id, event.currentTarget)}>{connection.label} Inspect connection details.</button>
+              </li>)}
+            </ol>
           </div>
-          <ol id={`${graphId}-connections`} className="sr-only" aria-label="Agent handoff connections">
-            {edges.map(edge => <li key={`description-${edge.id}`}>
-              {nodeByExecution.get(edge.fromExecutionId)?.agentName || 'An agent'} {edge.feedback ? 'returns a correction to' : 'hands work to'} {nodeByExecution.get(edge.toExecutionId)?.agentName || 'another agent'}; {edge.state}.
-            </li>)}
-          </ol>
         </div> : (
           <div className="flex min-h-[320px] flex-col items-center justify-center px-5 py-10 text-center">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.035] text-slate-400"><Code2 className="h-5 w-5" /></div>
@@ -452,7 +654,7 @@ export const AgentHandoffGraph: React.FC<AgentHandoffGraphProps> = ({
           </div>
         )}
       </div>
-      {!handoffCount && cards.length > 0 && <div className="border-t border-white/[0.055] px-4 py-2.5 text-[10px] leading-4 text-slate-500">No connections are visible for these agents yet. Arrows follow task dependencies or recorded handoffs.</div>}
+      {!connectionCount && cards.length > 0 && <div className="border-t border-white/[0.055] px-4 py-2.5 text-[10px] leading-4 text-slate-500">The Orchestrator is connected to each root agent. Dependency and handoff paths appear as work moves between specialists.</div>}
     </section>
   );
 };
