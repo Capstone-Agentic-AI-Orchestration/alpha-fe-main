@@ -31,6 +31,7 @@ import { runnerSocket } from '@/shared/services/runnerSocket';
 import type {
   LiveBuildRoomAgentCard,
   LiveBuildRoomCardStatus,
+  LiveBuildRoomHandoff,
   LiveBuildRoomPhase,
   LiveBuildRoomActivity,
   LiveBuildRoomChatCall,
