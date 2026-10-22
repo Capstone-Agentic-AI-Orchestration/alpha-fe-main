@@ -21,6 +21,7 @@ export function activationLink(location: { hash: string; pathname: string; searc
     || !/^[A-Za-z0-9_-]{20,256}$/.test(providerHash[0])
     || !['invite', 'magiclink', 'recovery'].includes(providerType[0])) return null;
   if (invitation.length === 1 && !/^[A-Za-z0-9_-]{43}$/.test(invitation[0])) return null;
+  if ((providerType[0] === 'recovery') !== (invitation.length === 0)) return null;
   return {
     invitationToken: invitation[0] ?? null,
     providerTokenHash: providerHash[0],
@@ -46,10 +47,10 @@ export function scrubbedActivationUrl(location: { pathname: string; search: stri
 
 export function activationFailureMessage(error: unknown): string {
   if (error instanceof ClientTicketApiError && (error.status === null || error.status >= 500)) {
-    return 'We could not verify this link. Check your connection and reload. If the problem continues, request a password link if you already have an account, or ask your project manager for a new invitation.';
+    return 'We could not verify this link. Check your connection and reload. If the problem continues, use password recovery or ask your project manager for a new invitation.';
   }
   if (error instanceof ClientTicketApiError && error.status === 429) return 'Too many attempts. Wait a little, then try again.';
-  return 'This link may have expired or already been used. If you already have an account, request a password link. Otherwise, ask your project manager for a new invitation.';
+  return 'This link may have expired or already been used. If you already have an account, use password recovery. Otherwise, ask your project manager for a new invitation.';
 }
 
 /** Existing invitation URLs now enter the resumable password setup flow. */

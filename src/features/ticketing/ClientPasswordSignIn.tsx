@@ -26,7 +26,7 @@ export function ClientPasswordSignIn({ unavailable, error, onRetry, onSignedIn }
       <button className="ca-submit" type="submit" disabled={busy || unavailable || !email.trim() || !password}><span className="ca-submit-text">{busy ? 'Signing in…' : 'Sign in'}</span><span className="ca-submit-icon"><ArrowUpRight size={16} /></span></button>
     </form>
     {(failure || error) && <p role="alert" className="ca-error">{failure || error}</p>}
-    <p className="ca-notice">First time here? Open your project manager’s invitation to finish account setup. Already used Alphaexplora with an email link? <a href="/#/client/forgot">Set up your password</a> using your existing email. Your requests stay with the same account.</p>
+    <p className="ca-notice">First time here? Open your project manager’s invitation to finish account setup. If you already have client access but have not set a password, <a href="/#/client/forgot">use password recovery to set one</a>. Your requests stay with the same account.</p>
     <button className="ca-link" type="button" onClick={onRetry} disabled={busy}><RefreshCw size={12} />Check access again</button>
   </ClientAuthShell>;
 }

@@ -221,21 +221,10 @@ export const clientTicketApi = {
   getWorkflowCapabilities() {
     return requestJson<{ phaseWorkflowEnabled: boolean }>('/workflow-capabilities');
   },
-  requestSignInLink(email: string) {
-    return requestJson<{ accepted: true; message: string }>('/auth/sign-in-link', {
-      method: 'POST', csrf: false, body: JSON.stringify({ email }),
-    });
-  },
   activateInvitation(invitationToken: string, providerTokenHash: string, providerTokenType: ClientEmailLinkType) {
     return requestJson<{ activated: true }>('/auth/activate', {
       method: 'POST', csrf: false,
       body: JSON.stringify({ invitationToken, providerTokenHash, providerTokenType }),
-    });
-  },
-  createSessionFromEmailLink(providerTokenHash: string, providerTokenType: ClientEmailLinkType) {
-    return requestJson<{ authenticated: true; expiresAt: string }>('/auth/session', {
-      method: 'POST', csrf: false,
-      body: JSON.stringify({ providerTokenHash, providerTokenType }),
     });
   },
   getSession() { return requestJson<ClientSession>('/session'); },

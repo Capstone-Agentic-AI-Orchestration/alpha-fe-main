@@ -1,22 +1,17 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, Check, LockKeyhole, Mail, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ArrowUpRight, Check, LockKeyhole, RefreshCw, ShieldCheck } from 'lucide-react';
 import { publicInquiryHref, publicInquirySlug } from './publicIntakeApi';
 import { ClientPublicShell } from './publicClient/ClientPublicShell';
 import { InquiryWorkflow } from './publicClient/InquiryWorkflow';
 import { useClientPageMotion } from './publicClient/useClientPageMotion';
 
-/** Email-link sign-in for previously activated, ticket-scoped client accounts. */
-export function ClientAccessPanel({ checking = false, unavailable, error, signInError, signInSent, signingIn, onRetry, onRequestSignIn }: {
+/** Static access guidance for the fictional ticket preview; real clients use password sign-in. */
+export function ClientAccessPanel({ checking = false, unavailable, error, onRetry }: {
   checking?: boolean;
   unavailable: boolean;
   error: string;
-  signInError: string;
-  signInSent: boolean;
-  signingIn: boolean;
   onRetry: () => void;
-  onRequestSignIn: (email: string) => void;
 }) {
-  const [email, setEmail] = useState('');
   const motionRef = useClientPageMotion();
   const [slug, setSlug] = useState(() => typeof window === 'undefined' ? '' : publicInquirySlug(window.location));
   useEffect(() => {
@@ -28,7 +23,7 @@ export function ClientAccessPanel({ checking = false, unavailable, error, signIn
       window.removeEventListener('popstate', updateSlug);
     };
   }, []);
-  const disabled = checking || unavailable || signingIn;
+  const disabled = checking;
   return <ClientPublicShell slug={slug} page="access">
     <div ref={motionRef}>
       <section className="public-hero public-container">
@@ -41,16 +36,14 @@ export function ClientAccessPanel({ checking = false, unavailable, error, signIn
         </div>
         <section aria-label="Client sign-in" className="public-access-card" data-public-arrival>
           <div className="public-card-heading"><span className="public-icon-tile"><LockKeyhole size={22} /></span><span>Already invited?</span></div>
-          <h2>See your shared requests</h2>
-          <p>Use the email your project manager invited to view requests and updates shared with you.</p>
-          <form className="public-signin-form" onSubmit={event => { event.preventDefault(); if (!disabled) onRequestSignIn(email.trim()); }} aria-busy={checking || signingIn}>
-            <label className="public-field"><span>Email address</span><span className="public-input-icon"><Mail size={17} /><input className="public-input" type="email" required maxLength={254} autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} disabled={disabled} placeholder="you@example.com" aria-describedby="client-access-availability" /></span></label>
-            <button type="submit" disabled={disabled || !email.trim()} className="public-button public-button-primary">{checking ? 'Checking secure access…' : signingIn ? 'Sending…' : 'Send sign-in link'}<ArrowUpRight size={17} /></button>
-          </form>
-          <div id="client-access-availability" role="status" className={`public-notice ${unavailable ? 'public-notice-warning' : signInSent ? 'public-notice-success' : ''}`}><ShieldCheck size={17} /><p>{checking ? 'Checking your sign-in…' : unavailable ? 'Client sign-in is temporarily unavailable. Try again or contact your project manager.' : signInSent ? 'If this email has active client access, Alphaexplora will attempt to send a one-time link. If it does not arrive, contact your project manager.' : 'Already sent an inquiry? Your project manager must review it and invite you before you can sign in. A sign-in link will not create access.'}</p></div>
-          {signInError && <p role="alert" className="public-error">{signInError}</p>}
-          {error && <p className="public-small-copy">{error}</p>}
-          <button type="button" onClick={onRetry} disabled={checking || signingIn} className="public-recheck"><RefreshCw size={14} />Check access again</button>
+          <h2>Sign in with your password</h2>
+          <p>A project manager must review your inquiry and invite you first. Open the invitation email to verify your email and choose a password. After setup, use that email and password whenever you return.</p>
+          <a className="public-button public-button-primary" href="/#/client">Go to client sign in <ArrowUpRight size={17} /></a>
+          <div role="status" className={`public-notice ${unavailable ? 'public-notice-warning' : ''}`}>
+            <ShieldCheck size={17} />
+            <p>{checking ? 'Checking client access…' : unavailable ? error || 'Client access is temporarily unavailable. Try again or contact your project manager.' : 'This is a sample preview. Real client access uses an invited email address and password—not a sign-in email link.'}</p>
+          </div>
+          <button type="button" onClick={onRetry} disabled={disabled} className="public-recheck"><RefreshCw size={14} />Check access again</button>
           {import.meta.env.DEV && <a href="/?ticketing-preview=client" className="public-preview-link">Preview with fictional sample tickets <ArrowUpRight size={12} /></a>}
         </section>
       </section>
@@ -60,8 +53,8 @@ export function ClientAccessPanel({ checking = false, unavailable, error, signIn
         <div><h2 id="client-questions-heading">Before you begin.</h2><p>A few things to know about your client space.</p></div>
         <div className="public-question-list">
           <details><summary>Do I need an account to send an inquiry?</summary><p>No. Send an inquiry for a project manager to review. It does not create an account or start work.</p></details>
+          <details><summary>When can I sign in?</summary><p>After a project manager reviews your inquiry and invites the same email address, open the invitation, verify your email, and choose a password. Then sign in with that email and password.</p></details>
           <details><summary>What can I see after I’m invited?</summary><p>Only the requests and project preview your project manager shares with you. Private project work and notes stay private.</p></details>
-          <details><summary>My sign-in link hasn’t arrived. What next?</summary><p>Check that you used your invited email address and look in your spam folder. If the link still doesn’t arrive, contact your project manager to check your client access.</p></details>
         </div>
       </section>
     </div>

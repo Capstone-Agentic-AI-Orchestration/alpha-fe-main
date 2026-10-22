@@ -33,7 +33,7 @@ describe('client landing and password entry', () => {
     expect(html).toContain('type="password"');
     expect(html).toContain('autoComplete="current-password"');
     expect(html).toContain('/#/client/forgot');
-    expect(html).toContain('Set up your password');
+    expect(html).toContain('use password recovery to set one');
     expect(html).not.toContain('Continue with GitHub');
     expect(html).not.toContain('30 days');
     expect(html).not.toContain('/sign-up');
@@ -49,6 +49,7 @@ describe('client landing and password entry', () => {
     expect(activationLink(location)?.providerTokenType).toBe('recovery');
     expect(scrubbedActivationUrl(location)).toBe('/#/client/activate');
     expect(activationLink({ ...location, hash: `${location.hash}&providerTokenType=invite` })).toBeNull();
+    expect(activationLink({ ...location, hash: `#/client/activate?providerTokenHash=${'a'.repeat(32)}&providerTokenType=magiclink` })).toBeNull();
   });
   it('uses same-origin password transport without attaching the internal token or requiring a prior client CSRF cookie', async () => {
     browser();
@@ -67,7 +68,7 @@ describe('client landing and password entry', () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(view), { status: 200 }));
     vi.stubGlobal('fetch', fetch);
     const proof = 'a'.repeat(32);
-    expect(await clientAccountApi.begin({ invitationToken: null, providerTokenHash: proof, providerTokenType: 'magiclink' })).toEqual(view);
+    expect(await clientAccountApi.begin({ invitationToken: 'i'.repeat(43), providerTokenHash: proof, providerTokenType: 'magiclink' })).toEqual(view);
     expect((fetch.mock.calls[0] as unknown as [string, RequestInit])[0]).not.toContain(proof);
     expect(await clientAccountApi.setup()).toEqual(view);
   });

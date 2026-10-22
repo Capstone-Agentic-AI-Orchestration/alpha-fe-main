@@ -11,7 +11,7 @@ const defaultFailureMessage = (error: unknown) => {
     return 'We could not verify this link. Check your connection and reload. If the problem continues, ask your project manager for help.';
   }
   if (error instanceof ClientTicketApiError && error.status === 429) return 'Too many attempts. Wait a little, then try again.';
-  return 'This link is incomplete, expired, or already used. Request a password link if your account is active, or ask your project manager for a fresh invitation.';
+  return 'This link is incomplete, expired, or already used. Use password recovery if you already have client access, or ask your project manager for a fresh invitation.';
 };
 
 export function ClientAccountSetupPage({ readLink, cleanUrl, failureMessage = defaultFailureMessage }: {

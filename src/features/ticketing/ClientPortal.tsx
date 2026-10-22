@@ -92,9 +92,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [replyResetVersion, setReplyResetVersion] = useState(0);
   const [sessionCheckVersion, setSessionCheckVersion] = useState(0);
-  const [signInPending, setSignInPending] = useState(false);
-  const [signInSent, setSignInSent] = useState(false);
-  const [signInError, setSignInError] = useState('');
   const queueGeneration = useRef(0);
   const historyGeneration = useRef(0);
   const writeLock = useRef(false);
@@ -135,19 +132,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     if (!(error instanceof ClientTicketApiError) || error.status !== 401) return false;
     clearExpiredClientSession();
     return true;
-  }
-
-  async function requestSignInLink(email: string): Promise<void> {
-    if (signInPending || portalState !== 'signed_out') return;
-    setSignInPending(true); setSignInSent(false); setSignInError('');
-    try {
-      await api.requestSignInLink(email);
-      setSignInSent(true);
-    } catch (error) {
-      setSignInError(friendlyError(error, 'session'));
-    } finally {
-      setSignInPending(false);
-    }
   }
 
   useEffect(() => {
@@ -406,8 +390,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     onSignedIn={() => setSessionCheckVersion(value => value + 1)} />;
   if (portalState === 'signed_out' || portalState === 'unavailable') return <ClientAccessPanel
     unavailable={portalState === 'unavailable'} error={pageError}
-    signInError={signInError} signInSent={signInSent} signingIn={signInPending}
-    onRequestSignIn={email => void requestSignInLink(email)}
     onRetry={() => setSessionCheckVersion(value => value + 1)}
   />;
 
