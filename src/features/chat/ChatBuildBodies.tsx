@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, ExternalLink, ListChecks, LoaderCircle, Workflow } from 'lucide-react';
+import React from 'react';
+import { AlertTriangle } from 'lucide-react';
 
 import { ReviewDiff } from '@/features/live-build-room/OrchestrationWorkflowPanel';
 import type { LiveBuildRoomOrchestration } from '@/shared/types';
-import type { ProjectLiveBuild } from './useProjectLiveBuild';
 
 type Command = { script?: string; display?: string; exitCode: number | null; signal: string | null };
 
@@ -24,7 +23,7 @@ function finalChecks(orchestration: LiveBuildRoomOrchestration): Array<{ reposit
   return [{ commands: validation.commands, missingScripts: validation.missingScripts }];
 }
 
-const PlanBody: React.FC<{ orchestration: LiveBuildRoomOrchestration }> = ({ orchestration }) => {
+export const PlanBody: React.FC<{ orchestration: LiveBuildRoomOrchestration }> = ({ orchestration }) => {
   const order = new Map(orchestration.tasks.map((task, index) => [task.id, index + 1]));
   return <>
     {orchestration.run.goal && <p className="text-xs leading-5 text-gray-300">{orchestration.run.goal}</p>}
@@ -56,7 +55,7 @@ const PlanBody: React.FC<{ orchestration: LiveBuildRoomOrchestration }> = ({ orc
   </>;
 };
 
-const ReviewBody: React.FC<{ projectId: string; orchestration: LiveBuildRoomOrchestration }> = ({ projectId, orchestration }) => {
+export const ReviewBody: React.FC<{ projectId: string; orchestration: LiveBuildRoomOrchestration }> = ({ projectId, orchestration }) => {
   const checks = finalChecks(orchestration);
   const openFindings = orchestration.findings.filter(finding => finding.status === 'open');
   return <>
@@ -83,57 +82,3 @@ const ReviewBody: React.FC<{ projectId: string; orchestration: LiveBuildRoomOrch
     <ReviewDiff projectId={projectId} runId={orchestration.run.id} branchName={orchestration.run.branchName} />
   </>;
 };
-
-/**
- * The two decisions a build needs from a person, made inside the chat: start
- * the planned work, and approve the finished work into a pull request.
- */
-export const ChatBuildDecisionCard: React.FC<{
-  projectId: string;
-  build: ProjectLiveBuild;
-  canStart: boolean;
-  canApprove: boolean;
-  busy: 'start' | 'approve' | null;
-  error: string | null;
-  onStart: () => void;
-  onApprove: () => void;
-  onOpenRoom: () => void;
-}> = ({ projectId, build, canStart, canApprove, busy, error, onStart, onApprove, onOpenRoom }) => {
-  const [collapsed, setCollapsed] = useState(false);
-  const orchestration = build.orchestration;
-  const planning = build.status === 'awaiting_plan_approval';
-  const publishing = build.status === 'publishing';
-  const owners = new Set(orchestration.tasks.map(task => task.ownerName)).size;
-  const required = orchestration.tasks.filter(task => task.required);
-  const done = required.filter(task => task.status === 'accepted').length;
-  const multiRepo = (orchestration.run.repositories?.length ?? 0) > 1;
-  const title = planning ? 'Plan ready for your approval' : publishing ? 'Opening the pull request' : 'Build ready for your review';
-  const subtitle = planning
-    ? orchestration.tasks.length + (orchestration.tasks.length === 1 ? ' task · ' : ' tasks · ') + owners + (owners === 1 ? ' agent · ' : ' agents · ') + build.repository + '. No code has changed yet.'
-    : done + ' of ' + required.length + ' tasks done · final checks ' + (orchestration.finalValidation?.status ?? 'not recorded') + ' · ' + build.repository;
-
-  return <section aria-label={title} className={'overflow-hidden rounded-2xl border bg-surface-raised/95 shadow-xl shadow-black/50 backdrop-blur ' + (planning ? 'border-violet-300/25' : 'border-emerald-300/25')}>
-    <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} className="flex w-full items-center gap-3 px-4 py-3 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-300/60">
-      {planning ? <ListChecks className="h-4 w-4 shrink-0 text-violet-200" /> : <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-200" />}
-      <span className="min-w-0 flex-1"><span className="block text-xs font-semibold text-white">{title}</span><span className="block truncate text-[11px] text-gray-400">{subtitle}</span></span>
-      <ChevronDown className={'h-4 w-4 shrink-0 text-gray-400 transition-transform ' + (collapsed ? '' : 'rotate-180')} aria-hidden="true" />
-    </button>
-    {!collapsed && <>
-      <div className="max-h-[40vh] space-y-3 overflow-y-auto border-t border-white/[0.07] px-4 py-3">
-        {planning ? <PlanBody orchestration={orchestration} /> : <ReviewBody projectId={projectId} orchestration={orchestration} />}
-      </div>
-      <div className="flex flex-wrap items-center gap-2 border-t border-white/[0.07] px-4 py-3">
-        {planning && (canStart
-          ? <button type="button" onClick={onStart} disabled={Boolean(busy)} className="inline-flex min-h-9 items-center gap-2 rounded-full bg-violet-400 px-4 text-xs font-semibold text-[#171224] hover:bg-violet-300 disabled:cursor-wait disabled:opacity-60">{busy === 'start' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Workflow className="h-3.5 w-3.5" />}{busy === 'start' ? 'Starting…' : 'Start planned work'}</button>
-          : <span className="text-[11px] text-gray-500">Your workspace role cannot start builds.</span>)}
-        {!planning && (canApprove
-          ? <button type="button" onClick={onApprove} disabled={Boolean(busy)} className="inline-flex min-h-9 items-center gap-2 rounded-full bg-emerald-300 px-4 text-xs font-semibold text-[#10201b] hover:bg-emerald-200 disabled:cursor-wait disabled:opacity-60">{busy === 'approve' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}{busy === 'approve' ? 'Opening pull request…' : publishing ? 'Retry opening the pull request' : multiRepo ? 'Approve & open pull requests' : 'Approve & open pull request'}</button>
-          : <span className="text-[11px] text-gray-500">A project manager or admin approves builds.</span>)}
-        <button type="button" onClick={onOpenRoom} className="inline-flex min-h-9 items-center gap-1.5 rounded-full px-3 text-[11px] font-medium text-gray-300 hover:bg-white/[0.06] hover:text-white"><ExternalLink className="h-3.5 w-3.5" />{planning ? 'Open full plan' : 'Open full review'}</button>
-        <span className="ml-auto text-[10px] text-gray-500">{planning ? 'To change the plan, stop it and describe what you want instead.' : 'Approving pushes the branch and opens a pull request on GitHub.'}</span>
-      </div>
-      {error && <p role="alert" className="border-t border-rose-300/15 bg-rose-500/[0.06] px-4 py-2 text-[11px] text-rose-100">{error}</p>}
-    </>}
-  </section>;
-};
-

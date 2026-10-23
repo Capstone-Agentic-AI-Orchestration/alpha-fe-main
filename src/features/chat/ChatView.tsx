@@ -56,7 +56,7 @@ import { MessageMarkdown } from './MessageMarkdown';
 import { OrchestratorFlow, isOrchestratorCall } from './OrchestratorFlow';
 import { AgentActivityPanel } from './AgentActivityPanel';
 import { BuildAgentActivityPanel } from './BuildAgentActivityPanel';
-import { ChatBuildDecisionCard } from './ChatBuildDecisionCard';
+import { ChatBuildWizard, planningFailureReason, type BuildPlanningFailure } from './ChatBuildWizard';
 import { buildStatusLabel, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { inferRecoveryAction, isContinueRequest, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
@@ -472,8 +472,10 @@ export const ChatView: React.FC = () => {
   const [showCallPanel, setShowCallPanel] = useState(false);
   const [inspectedCallId, setInspectedCallId] = useState<string | null>(null);
   const [inspectedBuildAgentId, setInspectedBuildAgentId] = useState<string | null>(null);
-  const [buildDecisionBusy, setBuildDecisionBusy] = useState<'start' | 'approve' | null>(null);
+  const [buildDecisionBusy, setBuildDecisionBusy] = useState<'start' | 'approve' | 'stop' | 'continue' | 'retry' | null>(null);
   const [buildDecisionError, setBuildDecisionError] = useState<string | null>(null);
+  /** Planning failures someone closed in the build panel, by message id. */
+  const [dismissedBuildFailures, setDismissedBuildFailures] = useTabSessionState<string[]>('chat.dismissedBuildFailures', []);
   const [publishedBuild, setPublishedBuild] = useState<{ projectId: string; links: Array<{ repository: string; url: string }> } | null>(null);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
@@ -1239,6 +1241,58 @@ export const ChatView: React.FC = () => {
     }
   };
 
+  /**
+   * The last planning attempt in this conversation that ended before a build
+   * existed, unless the person has since sent something else or closed it.
+   */
+  const buildFailure = useMemo<BuildPlanningFailure | null>(() => {
+    if (isClient || liveBuild) return null;
+    for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
+      const message = currentMessages[index];
+      if (message.senderType === 'user') return null;
+      if (message.messageType !== 'build' || !/\*\*Build not started(?: for any repository)?\.\*\*/i.test(message.content)) continue;
+      if (dismissedBuildFailures.includes(message.id)) return null;
+      const request = [...currentMessages.slice(0, index)].reverse().find(item => item.senderType === 'user')?.content;
+      return { messageId: message.id, reason: planningFailureReason(message.content), request };
+    }
+    return null;
+  }, [currentMessages, dismissedBuildFailures, isClient, liveBuild]);
+
+  const dismissBuildFailure = () => {
+    if (buildFailure) setDismissedBuildFailures(previous => [...previous.slice(-19), buildFailure.messageId]);
+  };
+  const replyInComposer = (prefill?: string) => {
+    if (prefill) setInput(prefill);
+    window.requestAnimationFrame(() => messageInputRef.current?.focus());
+  };
+  const continueBuild = async () => {
+    if (!liveBuild || buildDecisionBusy) return;
+    if (liveBuild.status === 'paused') {
+      await resumePausedBuild();
+      return;
+    }
+    setBuildDecisionBusy('continue');
+    try {
+      if (!await dispatchRecoveryFollowUp('continue', 'repair_and_continue')) {
+        showToast('Nothing to continue', 'Open the build to see what it is waiting for.', 'info');
+      }
+    } finally {
+      setBuildDecisionBusy(null);
+      void refreshLiveBuild();
+    }
+  };
+  const retryPlanning = async () => {
+    if (!buildFailure?.request || !activeThread?.id || buildDecisionBusy) return;
+    setBuildDecisionBusy('retry');
+    try {
+      dismissBuildFailure();
+      followNextMessage();
+      await sendChatMessage(buildFailure.request, activeThread.id, validBuildRepositories, 'build', [], { approvalMode });
+    } finally {
+      setBuildDecisionBusy(null);
+    }
+  };
+
   const handleRetryChatSync = async () => {
     if (!activeThread?.id || syncRetrying) return;
     setSyncRetrying(true);
@@ -1521,8 +1575,6 @@ export const ChatView: React.FC = () => {
   if (stoppingProjectRunId) stopBuildLabel = 'Stopping…';
   else if (activeProjectBuildRuns.length + (liveBuild ? 1 : 0) > 1) stopBuildLabel = `Stop ${activeProjectBuildRuns.length + (liveBuild ? 1 : 0)} builds`;
   else stopBuildLabel = liveBuild?.status === 'awaiting_plan_approval' ? 'Stop plan' : 'Stop build';
-  // Builds that are waiting on a person get a notice above the composer; running ones show in the flow bar.
-  const buildNotice = liveBuild && ['paused', 'blocked', 'recovery_required'].includes(liveBuild.status) ? liveBuild : null;
   const composerHasContent = Boolean(input.trim()) || pendingFiles.length > 0;
   const composerStop: 'turn' | 'build' | null = composerHasContent ? null : activeTurnMessageId ? 'turn' : canStopBuild ? 'build' : null;
 
@@ -1604,12 +1656,25 @@ export const ChatView: React.FC = () => {
                 {publishedBuild.links.map(link => <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200/30 px-3 py-1 font-medium text-emerald-50 hover:bg-emerald-300/10">{publishedBuild.links.length > 1 ? link.repository : 'Open on GitHub'}</a>)}
                 <button type="button" onClick={() => setPublishedBuild(null)} aria-label="Dismiss" className="rounded-full p-1 text-emerald-200/70 hover:bg-white/[0.06] hover:text-white"><X className="h-3.5 w-3.5" /></button>
               </div>}
-              {buildDecision && project && <ChatBuildDecisionCard key={buildDecision.runId + ':' + buildDecision.status} projectId={project.id} build={buildDecision} canStart={buildDecision.canControl && can('run_builds')} canApprove={can('approve_runs')} busy={buildDecisionBusy} error={buildDecisionError} onStart={() => void startPlannedBuild()} onApprove={() => void approveBuild()} onOpenRoom={() => openLiveBuildRun(buildDecision.runId)} />}
-              {buildNotice && !isClient && <div role="status" className="flex items-center gap-3 rounded-2xl border border-amber-300/20 bg-surface-raised/95 px-4 py-2.5 text-[11px] text-amber-100 shadow-lg shadow-black/40">
-                <Activity className="h-3.5 w-3.5 shrink-0 text-amber-200" aria-hidden="true" />
-                <span className="min-w-0 flex-1"><span className="font-semibold">{buildStatusLabel(buildNotice)}</span><span className="text-amber-100/70"> · {buildNotice.repository}. {buildNotice.status === 'paused' ? 'Reply “continue” to resume it, or open the build.' : 'Reply “continue” to fix and continue, or open the build.'}</span></span>
-                <button type="button" onClick={() => openLiveBuildRun(buildNotice.runId)} className="shrink-0 rounded-full border border-amber-200/30 px-3 py-1 font-medium text-amber-50 hover:bg-amber-300/10">{buildNotice.status === 'awaiting_plan_approval' ? 'Review plan' : 'Open build'}</button>
-              </div>}
+              {/* The build, step by step, with the choices it is waiting on. */}
+              {!isClient && project && (liveBuild || buildFailure) && <ChatBuildWizard
+                key={liveBuild ? liveBuild.runId : buildFailure?.messageId}
+                projectId={project.id}
+                build={liveBuild}
+                failure={buildFailure}
+                canStart={Boolean(liveBuild?.canControl) && can('run_builds')}
+                canApprove={can('approve_runs')}
+                canStop={canStopBuild}
+                busy={stoppingProjectRunId ? 'stop' : buildDecisionBusy}
+                error={buildDecisionError}
+                onStart={() => void startPlannedBuild()}
+                onApprove={() => void approveBuild()}
+                onStop={() => void stopProjectBuild()}
+                onContinue={() => void continueBuild()}
+                onReply={replyInComposer}
+                onRetry={() => void retryPlanning()}
+                onDismiss={dismissBuildFailure}
+                onOpenRoom={() => liveBuild ? openLiveBuildRun(liveBuild.runId) : openLiveBuildRoom()} />}
               {forcedBuild && !isClient && <div className={`px-4 text-[10px] ${requiresRepositorySelection ? 'text-amber-200' : 'text-gray-500'}`}>{repositorySelectionMessage}</div>}
               {pendingFileViews.length > 0 && <div className="flex flex-wrap gap-2 px-2">{pendingFileViews.map(({ file, previewUrl }, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex max-w-full items-center gap-2 rounded-xl border border-white/10 bg-surface-100 px-2 py-1.5 text-[10px] text-gray-300 shadow-lg shadow-black/30">
                 {previewUrl ? <img src={previewUrl} alt={`Preview of ${file.name}`} className="h-8 w-8 rounded-md object-cover" /> : <FileText className="ml-1 h-4 w-4 shrink-0 text-violet-200" />}
