@@ -18,8 +18,18 @@ export interface SceneAgent {
   detail?: string;
 }
 
+/** Work passed from one agent to another, drawn as an arc between their orbs. */
+export interface SceneLink {
+  from: string;
+  to: string;
+  /** active: the receiver is working on it now (a spark travels along it); done: delivered. */
+  state: 'pending' | 'active' | 'done';
+}
+
 export interface OrchestratorSceneProps {
   agents: SceneAgent[];
+  /** Agent-to-agent handoffs in the open build. */
+  links?: SceneLink[];
   hubId: string;
   hubLabel: string;
   hubDetail: string;
@@ -145,6 +155,37 @@ function Link({ end, tone, active }: { end: Vec3; tone: string; active: boolean 
   </>;
 }
 
+const HANDOFF_COLOR: Record<SceneLink['state'], string> = { active: '#c4b5fd', done: '#6ee7b7', pending: '#9ca3af' };
+
+/**
+ * One agent handing work to another: an arc lifted above the orbits so it reads
+ * apart from the Orchestrator's links. While the receiver works on what it was
+ * given, a spark runs from the sender to the receiver.
+ */
+function HandoffLink({ start, end, state, reduceMotion }: { start: Vec3; end: Vec3; state: SceneLink['state']; reduceMotion: boolean }) {
+  const line = useRef<any>(null);
+  const spark = useRef<THREE.Mesh>(null);
+  const mid = useMemo<Vec3>(() => {
+    const span = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2]);
+    return [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.5 + span * 0.18, (start[2] + end[2]) / 2];
+  }, [start, end]);
+  const curve = useMemo(() => new THREE.QuadraticBezierCurve3(new THREE.Vector3(...start), new THREE.Vector3(...mid), new THREE.Vector3(...end)), [start, mid, end]);
+  const active = state === 'active';
+  useFrame(({ clock }, delta) => {
+    if (!active || reduceMotion) return;
+    if (line.current?.material) line.current.material.dashOffset -= delta * 1.2;
+    if (spark.current) spark.current.position.copy(curve.getPoint((clock.getElapsedTime() * 0.35) % 1));
+  });
+  return <>
+    <QuadraticBezierLine ref={line} start={start} end={end} mid={mid} color={HANDOFF_COLOR[state]}
+      lineWidth={active ? 2 : 1.2} transparent opacity={active ? 0.95 : state === 'done' ? 0.55 : 0.3}
+      dashed={state !== 'done'} dashSize={active ? 0.28 : 0.12} gapSize={active ? 0.16 : 0.14} depthWrite={false} />
+    {active && <mesh ref={spark} position={start}><sphereGeometry args={[0.07, 12, 12]} /><meshBasicMaterial color="#ffffff" /></mesh>}
+    {/* A small head at the receiving end shows which way the work went. */}
+    <mesh position={curve.getPoint(0.92)}><sphereGeometry args={[0.045, 10, 10]} /><meshBasicMaterial color={HANDOFF_COLOR[state]} transparent opacity={state === 'pending' ? 0.5 : 0.9} /></mesh>
+  </>;
+}
+
 function AgentOrb({ agent, position, glow, selected, hovered, onOver, onOut, onClick }: {
   agent: SceneAgent; position: Vec3; glow: THREE.Texture; selected: boolean; hovered: boolean;
   onOver: (event: ThreeEvent<PointerEvent>) => void; onOut: () => void; onClick: (event: ThreeEvent<MouseEvent>) => void;
@@ -178,11 +219,12 @@ function AgentOrb({ agent, position, glow, selected, hovered, onOver, onOut, onC
   </group>;
 }
 
-function Scene({ agents, hubId, hubLabel, hubDetail, hubClickable, working, selectedId, onSelect, reduceMotion, resetToken }: OrchestratorSceneProps) {
+function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, working, selectedId, onSelect, reduceMotion, resetToken }: OrchestratorSceneProps) {
   const glow = useGlowTexture();
   const { gl } = useThree();
   const controls = useThree(state => state.controls) as unknown as { reset?: () => void } | null;
   const positions = useMemo(() => atomPositions(agents.length), [agents.length]);
+  const indexById = useMemo(() => new Map(agents.map((agent, index) => [agent.id, index])), [agents]);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -203,6 +245,12 @@ function Scene({ agents, hubId, hubLabel, hubDetail, hubClickable, working, sele
     <Orbits working={working} />
     {agents.map((agent, index) => (agent.active || agent.engaged) &&
       <Link key={'link-' + agent.id} end={positions[index]} tone={agent.tone} active={agent.active} />)}
+    {links.map(link => {
+      const from = indexById.get(link.from);
+      const to = indexById.get(link.to);
+      return from === undefined || to === undefined ? null
+        : <HandoffLink key={'handoff-' + link.from + '-' + link.to} start={positions[from]} end={positions[to]} state={link.state} reduceMotion={reduceMotion} />;
+    })}
     <Hub glow={glow} working={working} selected={selectedId === hubId} clickable={hubClickable}
       onOver={() => setHoveredId(hubId)} onOut={() => setHoveredId(previous => (previous === hubId ? null : previous))}
       onClick={() => onSelect(hubId)} />
