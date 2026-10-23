@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertCircle, ChevronRight, FileText, LogOut, Plus, RefreshCw, Search, Ticket } from 'lucide-react';
+import { AlertCircle, Check, ChevronRight, FileText, LogOut, Plus, RefreshCw, Search, Ticket } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import type {
@@ -13,7 +13,8 @@ import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientPasswordSignIn } from './ClientPasswordSignIn';
 import { clientTicketProgress } from './clientTicketProgress';
 import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink';
-import { input, primary, secondary, time } from './ticketUi';
+import { secondary, time } from './ticketUi';
+import './clientPortal.css';
 
 type Filter = NonNullable<Parameters<typeof clientTicketApi.listTickets>[1]>['filter'];
 type PortalState = 'checking' | 'signed_out' | 'unavailable' | 'ready';
@@ -91,9 +92,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [refreshVersion, setRefreshVersion] = useState(0);
   const [replyResetVersion, setReplyResetVersion] = useState(0);
   const [sessionCheckVersion, setSessionCheckVersion] = useState(0);
-  const [signInPending, setSignInPending] = useState(false);
-  const [signInSent, setSignInSent] = useState(false);
-  const [signInError, setSignInError] = useState('');
   const queueGeneration = useRef(0);
   const historyGeneration = useRef(0);
   const writeLock = useRef(false);
@@ -134,19 +132,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     if (!(error instanceof ClientTicketApiError) || error.status !== 401) return false;
     clearExpiredClientSession();
     return true;
-  }
-
-  async function requestSignInLink(email: string): Promise<void> {
-    if (signInPending || portalState !== 'signed_out') return;
-    setSignInPending(true); setSignInSent(false); setSignInError('');
-    try {
-      await api.requestSignInLink(email);
-      setSignInSent(true);
-    } catch (error) {
-      setSignInError(friendlyError(error, 'session'));
-    } finally {
-      setSignInPending(false);
-    }
   }
 
   useEffect(() => {
@@ -405,8 +390,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     onSignedIn={() => setSessionCheckVersion(value => value + 1)} />;
   if (portalState === 'signed_out' || portalState === 'unavailable') return <ClientAccessPanel
     unavailable={portalState === 'unavailable'} error={pageError}
-    signInError={signInError} signInSent={signInSent} signingIn={signInPending}
-    onRequestSignIn={email => void requestSignInLink(email)}
     onRetry={() => setSessionCheckVersion(value => value + 1)}
   />;
 
@@ -415,80 +398,72 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     ? queue?.items.find(item => item.id === createRelatedId) ?? null
     : null;
 
-  return <main className="flex h-dvh flex-col overflow-hidden bg-canvas font-sans text-gray-300">
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/[0.07] bg-shell px-4 py-3 md:px-6">
-      <div className="flex min-w-0 items-center gap-3"><img src={alphaMarkUrl} alt="" className="h-8 w-8 object-contain" /><div className="min-w-0"><p className="text-sm font-semibold text-white">Alpha Client Portal</p><p className="truncate text-xs text-gray-400">{selectedWorkspace?.displayName ?? 'Your shared requests'}</p></div></div>
-      <div className="flex items-center gap-2">
-        {workspaceOptions.length > 1 && <label><span className="sr-only">Choose which team’s requests to view</span><select aria-label="Choose which team’s requests to view" value={workspaceId} disabled={Boolean(pending)} onChange={event => { queueGeneration.current += 1; historyGeneration.current += 1; setQueueLoading(false); setQueueMoreLoading(false); setHistoryLoading(false); setWorkspaceId(event.target.value); setQueue(null); setSelectedId(null); setDetail(null); }} className={`${input} w-auto min-w-40 py-2 text-xs`}>
+  return <main className="client-portal-shell">
+    <header className="client-portal-header">
+      <div className="client-portal-brand"><img src={alphaMarkUrl} alt="" /><div><p>Alphaexplora</p><span>Client portal{selectedWorkspace ? ` · ${selectedWorkspace.displayName}` : ''}</span></div></div>
+      <div className="client-portal-header-actions">
+        {workspaceOptions.length > 1 && <label className="client-workspace-select"><span className="sr-only">Choose which team’s requests to view</span><select aria-label="Choose which team’s requests to view" value={workspaceId} disabled={Boolean(pending)} onChange={event => { queueGeneration.current += 1; historyGeneration.current += 1; setQueueLoading(false); setQueueMoreLoading(false); setHistoryLoading(false); setWorkspaceId(event.target.value); setQueue(null); setSelectedId(null); setDetail(null); }}>
           {workspaceOptions.map(option => <option key={option.workspaceId} value={option.workspaceId}>{option.displayName}</option>)}
         </select></label>}
         <button aria-label={workspaceOptions.length === 0 ? 'Try loading your requests again' : 'Refresh requests'} onClick={() => workspaceOptions.length === 0
-          ? setSessionCheckVersion(value => value + 1) : setRefreshVersion(value => value + 1)} disabled={queueLoading || Boolean(pending)} className={`${secondary} min-h-[44px] min-w-[44px]`}><RefreshCw size={15} className={queueLoading ? 'animate-spin' : ''} /><span className="hidden sm:inline">{workspaceOptions.length === 0 ? 'Try again' : 'Refresh'}</span></button>
-        <button aria-label={signingOut ? 'Signing out' : 'Sign out'} onClick={() => void signOut()} disabled={inspectionOnly || signingOut || Boolean(pending)} className={`${secondary} min-h-[44px] min-w-[44px]`}><LogOut size={15} /><span className="hidden sm:inline">{signingOut ? 'Signing out…' : 'Sign out'}</span></button>
+          ? setSessionCheckVersion(value => value + 1) : setRefreshVersion(value => value + 1)} disabled={queueLoading || Boolean(pending)} className="client-control-button"><RefreshCw size={16} className={queueLoading ? 'animate-spin' : ''} /><span>{workspaceOptions.length === 0 ? 'Try again' : 'Refresh'}</span></button>
+        <button aria-label={signingOut ? 'Signing out' : 'Sign out'} onClick={() => void signOut()} disabled={inspectionOnly || signingOut || Boolean(pending)} className="client-control-button"><LogOut size={16} /><span>{signingOut ? 'Signing out…' : 'Sign out'}</span></button>
       </div>
     </header>
-    <h1 className="sr-only">Your requests</h1>
 
-    {inspectionOnly && <p role="status" className="mx-4 mt-3 rounded-lg border border-amber-400/15 bg-amber-500/[0.04] px-3 py-2 text-xs text-amber-100/80 md:mx-6">Fictional sample requests · the same client interface used by Alpha. Submissions, replies, sign-in, uploads and downloads are disabled.</p>}
-    {pageError && <div role="alert" className="mx-4 mt-3 flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-3 text-xs text-rose-200 md:mx-6"><AlertCircle size={14} className="mt-0.5 shrink-0" />{pageError}</div>}
+    <div className="client-portal-main">
+      {inspectionOnly && <p role="status" className="client-portal-notice">Fictional sample requests · the same client interface used by Alphaexplora. Submissions, replies, sign-in, uploads and downloads are disabled.</p>}
+      {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
 
-    {workspaceOptions.length === 0 ? <section className="mx-auto min-h-0 w-full max-w-2xl flex-1 overflow-y-auto p-6 md:p-12">
-      <EmptyState title={pageError ? 'We could not load your requests' : 'No requests shared yet'} body={pageError ? 'Try again using the button above. If the problem continues, contact your project manager.' : 'Your project manager will share your requests here. If you expected to see one, contact them for help.'} />
-    </section> : canCreateRequests && view === 'create' && createContext ? <div className="min-h-0 flex-1 overflow-y-auto"><ClientCreateTicketForm
-      context={createContext}
-      submissionEnabled={!inspectionOnly}
-      relatedTicket={relatedTicket ? { id: relatedTicket.id, reference: relatedTicket.reference, title: relatedTicket.title } : null}
-      busy={writing || Boolean(pending)} error={writeError}
-      onCreate={submitNewTicket}
-      onCancel={() => { if (!pending) { setView('tickets'); setCreateContext(null); setCreateRelatedId(null); setWriteError(''); } }}
-    /></div> : <div className="flex min-h-0 flex-1 flex-col gap-3 p-4 md:p-6">
-      {queue && <section className={`${selectedId ? 'hidden xl:block' : 'block'} shrink-0`} aria-label="Request overview">
-        <div className="mb-2"><h2 className="text-lg font-semibold text-white">Your requests</h2><p className="text-xs text-gray-400">See what needs your attention and what happens next.</p></div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <button type="button" onClick={() => { setFilter(workflowActionsDisabled ? 'all' : 'needs_client'); setSearchInput(''); setSearch(''); }} aria-label={workflowActionsDisabled ? 'View your requests and updates' : queue.counters.needsClient ? `${queue.counters.needsClient} ${queue.counters.needsClient === 1 ? 'request needs' : 'requests need'} your attention. Show them.` : 'You are all caught up. Show your requests.'} className="min-h-20 rounded-xl border border-white/[0.08] bg-surface p-3 text-left transition-colors hover:border-brand-400/30 hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300">
-            <span className="block text-xs text-gray-400">{workflowActionsDisabled ? 'Stay up to date' : 'Needs your attention'}</span>
-            <span className="mt-1 block text-lg font-semibold text-white">{workflowActionsDisabled ? 'View your requests' : queue.counters.needsClient ? `${queue.counters.needsClient} ${queue.counters.needsClient === 1 ? 'request' : 'requests'}` : 'You’re all caught up'}</span>
-            <span className="block text-xs leading-relaxed text-gray-400">{workflowActionsDisabled ? 'Open a request to read updates or message your project manager.' : queue.counters.needsClient ? 'A reply, decision, or review is needed.' : 'Nothing needs your reply right now.'}</span>
-          </button>
-          <button type="button" onClick={() => { setFilter('open'); setSearchInput(''); setSearch(''); }} aria-label={`${queue.counters.open} active ${queue.counters.open === 1 ? 'request' : 'requests'}. Show them.`} className="min-h-20 rounded-xl border border-white/[0.08] bg-surface p-3 text-left transition-colors hover:border-brand-400/30 hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300">
-            <span className="block text-xs text-gray-400">Active requests</span><span className="mt-1 block text-lg font-semibold text-white">{queue.counters.open}</span><span className="block text-xs text-gray-400">Requests that are not closed yet.</span>
-          </button>
-          {queue.items[0] ? <button type="button" aria-label={`Open most recently updated request: ${queue.items[0].title}`} onClick={() => { historyGeneration.current += 1; setSelectedId(queue.items[0].id); setView('tickets'); setWriteError(''); }} className="col-span-2 min-h-20 min-w-0 rounded-xl border border-white/[0.08] bg-surface p-3 text-left transition-colors hover:border-brand-400/30 hover:bg-white/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-300 sm:col-span-1">
-            <span className="block text-xs text-gray-400">Latest update in this view</span><span className="mt-1 block truncate text-sm font-medium text-white">{queue.items[0].title}</span><time dateTime={queue.items[0].updatedAt} className="mt-0.5 block text-xs text-gray-400">Updated {time(queue.items[0].updatedAt)}</time>
-          </button> : <div className="col-span-2 min-h-20 rounded-xl border border-white/[0.08] bg-surface p-3 sm:col-span-1"><span className="block text-xs text-gray-400">Latest update</span><span className="mt-1 block text-sm font-medium text-white">No matching requests</span><span className="block text-xs text-gray-400">Choose All requests or clear your search.</span></div>}
-        </div>
-      </section>}
-      <section className="grid min-h-0 flex-1 grid-rows-[minmax(0,1fr)] gap-3 xl:grid-cols-[minmax(280px,0.72fr)_minmax(0,1.6fr)] 2xl:grid-cols-[minmax(300px,22rem)_minmax(0,1fr)]">
-      <div className={`${selectedId ? 'hidden xl:flex' : 'flex'} min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-surface`}>
-        <div className="space-y-3 border-b border-white/[0.07] p-3">
-          <div className="flex items-center justify-between gap-2"><div><h2 className="text-sm font-semibold text-gray-100">Request list</h2><p className="mt-0.5 text-xs text-gray-400">Choose a request to see its status and conversation.</p></div>
-            {canCreateRequests && <button onClick={() => void openCreateForm()} disabled={!workspaceId || createLoading || Boolean(pending)} className={primary}><Plus size={14} />{createLoading ? 'Loading…' : 'New request'}</button>}</div>
-          <label className="relative block"><Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-gray-500" /><span className="sr-only">Search requests</span>
-            <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search your requests…" className={`${input} py-2 pl-9`} /></label>
-          <div className="flex flex-wrap gap-1.5">{filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => {
-            const count = queue?.counters.kind !== 'client' ? null : option.id === 'open' ? queue.counters.open : option.id === 'needs_client' ? queue.counters.needsClient : null;
-            const active = filter === option.id;
-            return <button key={option.id} aria-pressed={active} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-3 text-xs font-medium ${active ? 'bg-brand-600 text-on-accent' : 'text-gray-400 hover:bg-white/[0.05] hover:text-gray-200'}`}>{option.label}{count !== null && <span className={`rounded-full px-1.5 text-[10px] tabular-nums ${active ? 'bg-white/20' : 'bg-white/[0.07]'}`}>{count}</span>}</button>;
-          })}</div>
-        </div>
-        {queueError && <p role="alert" className="m-3 rounded-md border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{queueError}</p>}
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {queueLoading && !queue ? <p role="status" className="p-6 text-center text-sm text-gray-400">Loading your requests…</p>
-            : queue?.items.length ? queue.items.map(item => <button key={item.id} aria-pressed={selectedId === item.id} disabled={Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setView('tickets'); setWriteError(''); }} className={`flex w-full items-center gap-3 border-b border-white/[0.05] p-4 text-left transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-brand-300 disabled:opacity-50 ${selectedId === item.id ? 'bg-brand-500/[0.10] shadow-[inset_2px_0_0_0_#a78bfa]' : 'hover:bg-white/[0.025]'}`}>
-              <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-white/[0.05] text-brand-300"><FileText size={18} /></span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm font-medium text-gray-100">{item.title}</span>
-                <span className="mt-1 flex items-center justify-between gap-2"><span className="truncate font-mono text-[10px] text-gray-400">{item.reference}</span><StatusPill status={item.status} /></span>
-                <span className="mt-1.5 flex items-center justify-between gap-2 text-xs text-gray-400"><span className={`truncate ${item.requestedAction && !workflowActionsDisabled ? 'font-medium text-amber-100' : ''}`}>{clientTicketProgress(item.status, workflowActionsDisabled ? null : item.requestedAction).label}</span><time dateTime={item.updatedAt} className="shrink-0">Updated {time(item.updatedAt)}</time></span>
-              </span>
-              <ChevronRight size={16} aria-hidden="true" className="shrink-0 text-gray-600" />
-            </button>)
-              : !queueError && <EmptyState title={search ? 'No requests match your search' : filter === 'all' ? 'No requests here yet' : 'No requests match this view'} body={search ? 'Try a shorter search or clear the search field.' : filter === 'all' ? canCreateRequests ? 'Choose New request above to tell your project manager what you need.' : 'Your project manager will share requests here. If you expected to see one, contact them for help.' : 'Choose All requests to see your full request list.'} />}
-        </div>
-        {queue && <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-3 py-2 text-xs text-gray-400"><span>{queue.items.length} shown</span>{queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading} className="min-h-[44px] px-2 text-brand-300 hover:text-brand-200 disabled:opacity-50">{queueMoreLoading ? 'Loading…' : 'Load more'}</button>}</div>}
-      </div>
+      {workspaceOptions.length === 0 ? <section className="client-portal-empty"><EmptyState title={pageError ? 'We could not load your requests' : 'No requests shared yet'} body={pageError ? 'Try again using the button above. If the problem continues, contact your project manager.' : 'Your project manager will share your requests here. If you expected to see one, contact them for help.'} /></section>
+        : canCreateRequests && view === 'create' && createContext ? <div className="client-create-view"><ClientCreateTicketForm
+          context={createContext}
+          submissionEnabled={!inspectionOnly}
+          relatedTicket={relatedTicket ? { id: relatedTicket.id, reference: relatedTicket.reference, title: relatedTicket.title } : null}
+          busy={writing || Boolean(pending)} error={writeError}
+          onCreate={submitNewTicket}
+          onCancel={() => { if (!pending) { setView('tickets'); setCreateContext(null); setCreateRelatedId(null); setWriteError(''); } }}
+        /></div> : <div className="client-portal-body">
+          <section className={`client-portal-page-heading ${selectedId ? 'client-mobile-heading-hidden' : ''}`} aria-label="Request overview">
+            <div><p className="client-eyebrow">CLIENT PORTAL</p><h1>Your requests</h1><p className="client-page-description">Follow updates and keep in touch with your project manager.</p></div>
+            {!workflowActionsDisabled && queue && queue.counters.needsClient > 0 && <button type="button" className="client-attention-link" onClick={() => { setFilter('needs_client'); setSearchInput(''); setSearch(''); }}>
+              <span className="client-attention-dot" /><span><strong>{queue.counters.needsClient} {queue.counters.needsClient === 1 ? 'request needs' : 'requests need'} your attention</strong><small>Open to see what your project manager is waiting for.</small></span><ChevronRight size={17} />
+            </button>}
+            {!workflowActionsDisabled && queue && queue.counters.needsClient === 0 && <p className="client-all-caught-up"><Check size={15} />Nothing needs your reply right now</p>}
+          </section>
 
-      <div className={`${selectedId ? 'flex' : 'hidden xl:flex'} min-h-0 min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-surface`}>
+          <section className="client-portal-workspace" aria-label="Your requests and updates">
+            <aside className={`client-request-list ${selectedId ? 'client-mobile-hidden' : ''}`} aria-label="Request list">
+              <div className="client-list-header">
+                <div className="client-list-title"><h2>Requests</h2></div>
+                {canCreateRequests && <button onClick={() => void openCreateForm()} disabled={!workspaceId || createLoading || Boolean(pending)} className="client-new-request"><Plus size={15} />{createLoading ? 'Loading…' : 'New request'}</button>}
+              </div>
+              <label className="client-search"><Search size={16} /><span className="sr-only">Search requests</span>
+                <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search requests" /></label>
+              <div className="client-request-filters" aria-label="Filter requests">{filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => {
+                const count = queue?.counters.kind !== 'client' ? null : option.id === 'open' ? queue.counters.open : option.id === 'needs_client' ? queue.counters.needsClient : null;
+                const active = filter === option.id;
+                return <button key={option.id} aria-pressed={active} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`client-request-filter ${active ? 'is-active' : ''}`}>{option.label}{count !== null && <span>{count}</span>}</button>;
+              })}</div>
+              {queueError && <p role="alert" className="client-inline-error">{queueError}</p>}
+              <div className="client-request-items">
+                {queueLoading && !queue ? <p role="status" className="client-list-loading">Loading your requests…</p>
+                  : queue?.items.length ? queue.items.map(item => <button key={item.id} aria-pressed={selectedId === item.id} disabled={Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setView('tickets'); setWriteError(''); }} className={`client-request-row ${selectedId === item.id ? 'is-selected' : ''}`}>
+                    <span className="client-request-icon" aria-hidden="true"><FileText size={18} /></span>
+                    <span className="client-request-copy">
+                      <span className="client-request-title">{item.title}</span>
+                      <span className="client-request-meta"><span className="client-request-reference">{item.reference}</span><StatusPill status={item.status} /></span>
+                      <span className={`client-request-progress ${item.requestedAction && !workflowActionsDisabled ? 'needs-action' : ''}`}>{clientTicketProgress(item.status, workflowActionsDisabled ? null : item.requestedAction).label}</span>
+                      <time dateTime={item.updatedAt}>Updated {time(item.updatedAt)}</time>
+                    </span>
+                    <ChevronRight size={17} className="client-request-chevron" aria-hidden="true" />
+                  </button>)
+                    : !queueError && <EmptyState title={search ? 'No requests match your search' : filter === 'all' ? 'No requests here yet' : 'No requests match this view'} body={search ? 'Try a shorter search or clear the search field.' : filter === 'all' ? canCreateRequests ? 'Choose New request above to tell your project manager what you need.' : 'Your project manager will share requests here. If you expected to see one, contact them for help.' : 'Choose All requests to see your full request list.'} />}
+              </div>
+              {queue && <div className="client-list-footer"><span>{queue.items.length} shown</span>{queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading}>{queueMoreLoading ? 'Loading…' : 'Load more'}</button>}</div>}
+            </aside>
+
+            <section className={`client-request-detail-pane ${selectedId ? '' : 'client-mobile-hidden'}`} aria-label="Selected request">
         {!selectedId || !selectedQueueItem ? <EmptyState title="Choose a request" body={workflowActionsDisabled ? 'Select a request to see its latest status.' : 'Select a request to see its status, messages, and any action your project manager needs from you.'} />
           : detailLoading ? <p role="status" className="p-8 text-center text-sm text-gray-400">Loading request…</p>
             : detailError ? <div role="alert" className="m-4 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-4 text-xs text-rose-200">{detailError}</div>
@@ -514,14 +489,16 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                 onDecision={makeDecision}
                 onAdditionalWork={() => void openCreateForm(detail.id)}
               />}
-      </div>
-    </section></div>}
+            </section>
+          </section>
+        </div>}
 
     {pending && <div role="status" className="fixed bottom-4 left-4 right-4 z-40 flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/20 bg-shell p-4 text-sm text-amber-100 shadow-xl sm:left-auto sm:right-4">
       <span>We’re checking whether your update was saved. Please don’t send it again yet.</span>
       <button onClick={() => void performWrite(pending).catch(() => undefined)} disabled={writing} className={`${secondary} min-h-[44px]`}>{writing ? 'Checking…' : 'Check update status'}</button>
     </div>}
     {session?.expiresAt && <span className="sr-only">Session expires {session.expiresAt}</span>}
+    </div>
   </main>;
 }
 
@@ -530,14 +507,13 @@ function FullPageState({ title }: { title: string }) {
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
-  return <div className="flex min-h-48 flex-col items-center justify-center px-6 py-10 text-center"><Ticket aria-hidden="true" size={22} className="text-gray-400" /><p className="mt-3 text-sm font-medium text-gray-200">{title}</p><p className="mt-1 max-w-md text-sm leading-relaxed text-gray-400">{body}</p></div>;
+  return <div className="client-empty-state"><Ticket aria-hidden="true" size={22} /><p>{title}</p><p>{body}</p></div>;
 }
 
 function StatusPill({ status }: { status: ClientTicketQueueItem['status'] }) {
-  const color = status === 'closed' ? 'text-emerald-300 bg-emerald-500/10'
-    : status === 'ready_for_review' || status === 'awaiting_client' ? 'text-amber-300 bg-amber-500/10'
-      : status === 'in_progress' ? 'text-brand-300 bg-brand-500/10'
-        : status === 'declined' || status === 'cancelled' ? 'text-rose-300 bg-rose-500/10'
-          : 'text-gray-300 bg-white/[0.06]';
-  return <span className={`shrink-0 whitespace-nowrap rounded px-2 py-1 text-xs font-medium ${color}`}>{clientTicketProgress(status, null).statusLabel}</span>;
+  const tone = status === 'closed' ? 'is-complete'
+    : status === 'ready_for_review' || status === 'awaiting_client' ? 'is-waiting'
+      : status === 'in_progress' ? 'is-active'
+        : status === 'declined' || status === 'cancelled' ? 'is-ended' : 'is-neutral';
+  return <span className={`client-status ${tone}`}>{clientTicketProgress(status, null).statusLabel}</span>;
 }

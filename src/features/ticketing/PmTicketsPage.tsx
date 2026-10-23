@@ -12,8 +12,8 @@ const intakeEnabled = import.meta.env.VITE_TICKETING_ENABLED !== '0';
 
 // Development samples are a separate lazy module, never a production fallback.
 const SampleTickets = import.meta.env.DEV
-  ? lazy(() => import('./ticketingPreviewFixtures').then(({ pmPreviewApi }) => ({
-    default: () => <PmTicketsView api={pmPreviewApi} />,
+  ? lazy(() => import('./ticketingPreviewFixtures').then(({ pmPreviewApi, pmPreviewDocumentsApi }) => ({
+    default: () => <PmTicketsView api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} communicationEnabled />,
   }))) : null;
 
 /** The real PM page: keep Alpha's surrounding sidebar, tabs and auth intact. */
@@ -34,21 +34,21 @@ export function PmTicketsPage() {
     });
     return () => { current = false; };
   }, [activeWorkspace?.id]);
-  return <div className="flex h-full min-h-0 flex-col">
-    {SampleTickets && <div className="mx-4 mt-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/15 bg-amber-500/[0.04] px-3 py-2 text-[11px] md:mx-6">
-      <p className="flex items-center gap-2 text-amber-100/80"><FlaskConical size={14} className="shrink-0" />
+  return <div className="pm-ticket-page">
+    {SampleTickets && <div className="pm-ticket-page__sample">
+      <p><FlaskConical size={15} aria-hidden="true" />
         {samples ? 'Sample data — not real tickets. Read-only; no messages, uploads, assignments or agent execution.' : 'Local development · inspect the interface with optional fictional tickets.'}</p>
-      <button type="button" aria-pressed={samples} onClick={() => { setSamples(value => !value); setSection('tickets'); }} className="shrink-0 rounded-md border border-white/10 px-2.5 py-1 text-gray-200 hover:bg-white/[0.06]">
+      <button type="button" aria-pressed={samples} onClick={() => { setSamples(value => !value); setSection('tickets'); }}>
         {samples ? 'Hide sample data' : 'Show sample data'}
       </button>
     </div>}
-    {!samples && <nav aria-label="Ticket work queues" className="mx-4 mt-3 flex gap-2 border-b border-white/[0.08] px-2 md:mx-6">
+    {!samples && <nav aria-label="Ticket work queues" className="pm-ticket-page__tabs">
       <button type="button" aria-pressed={section === 'tickets'} onClick={() => setSection('tickets')}
-        className={`border-b-2 px-3 py-2 text-xs ${section === 'tickets' ? 'border-brand-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}>Tickets</button>
+        className={section === 'tickets' ? 'is-active' : ''}>Tickets</button>
       <button type="button" aria-pressed={section === 'inquiries'} onClick={() => setSection('inquiries')}
-        className={`border-b-2 px-3 py-2 text-xs ${section === 'inquiries' ? 'border-brand-400 text-white' : 'border-transparent text-gray-400 hover:text-white'}`}>New inquiries</button>
+        className={section === 'inquiries' ? 'is-active' : ''}>New inquiries</button>
     </nav>}
-    <div className="min-h-0 flex-1">
+    <div className="pm-ticket-page__content">
       {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-gray-400">Loading sample tickets…</p>}><SampleTickets /></Suspense>
         : section === 'inquiries' ? <PmCentralIntakeInbox workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? null}
           workspaceCanReview={activeWorkspace?.role === 'pm'}

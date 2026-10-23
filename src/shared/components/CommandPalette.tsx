@@ -79,7 +79,7 @@ export const CommandPalette: React.FC = () => {
           title: `${iss.identifier}: ${iss.title}`,
           subtitle: `Status: ${iss.status.toUpperCase()} • Priority: ${iss.priority.toUpperCase()}`,
           icon: <CheckSquare className="w-4 h-4 text-indigo-400" />,
-          type: 'Issue',
+          type: 'Task',
           action: () => {
             setActiveTab('issues');
             setCommandPaletteOpen(false);
@@ -200,7 +200,7 @@ export const CommandPalette: React.FC = () => {
               setQuery(e.target.value);
               setSelectedIndex(0);
             }}
-            placeholder="Type a command, search issues, agents, or projects..."
+            placeholder="Type a command, search tasks, agents, or projects..."
             className="w-full bg-transparent text-white placeholder-gray-500 text-sm focus:outline-none font-medium"
             autoFocus
           />

@@ -470,11 +470,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
       <div className="space-y-2 border-b border-white/[0.06] bg-shell px-5 py-3">
         {/* Top Row: Title, Filters & Controls */}
         <div className={`flex flex-col justify-between gap-4 ${embedded ? 'xl:flex-row xl:flex-wrap xl:items-center' : 'sm:flex-row sm:items-center'}`}>
-          {/* Left: Issues title & category pills */}
+          {/* Left: Tasks title & category pills */}
           <div className="flex items-center gap-4">
             {/*
               The project page has its own title, and two headings stacked with
-              the project name above "Issues" reads as a mistake. Only the
+               the project name above "Tasks" reads as a mistake. Only the
               heading goes — the filters and the view switcher are as useful
               inside a project as outside one.
             */}
@@ -482,13 +482,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <div className="flex items-center gap-2">
                 <CheckSquare className="w-4 h-4 text-gray-400" />
                 <h1 className="text-base font-semibold text-white">
-                  Issues
+                  Tasks
                 </h1>
               </div>
             )}
 
             {/* Scope is a compact text control, not a second container inside the header. */}
-            <div className={`flex items-center gap-1 text-xs ${role === 'dev' ? 'rounded-lg border border-white/[0.08] bg-white/[0.025] p-1' : ''}`} role={role === 'dev' ? 'tablist' : undefined} aria-label={role === 'dev' ? 'Issue scope' : undefined}>
+            <div className={`flex items-center gap-1 text-xs ${role === 'dev' ? 'rounded-lg border border-white/[0.08] bg-white/[0.025] p-1' : ''}`} role={role === 'dev' ? 'tablist' : undefined} aria-label={role === 'dev' ? 'Task scope' : undefined}>
               <button
                 onClick={() => setFilterCategory('all')}
                 role={role === 'dev' ? 'tab' : undefined}
@@ -499,11 +499,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     : 'border-transparent text-gray-500 hover:text-white'
                 }`}
               >
-                {role === 'dev' ? 'Assigned project issues' : 'All'}
+                {role === 'dev' ? 'Assigned project tasks' : 'All'}
               </button>
               <button
                 onClick={() => setFilterCategory('mine')}
-                title={identity ? `Issues assigned to ${identity.login}` : 'Waiting for your identity'}
+                title={identity ? `Tasks assigned to ${identity.login}` : 'Waiting for your identity'}
                 role={role === 'dev' ? 'tab' : undefined}
                 aria-selected={role === 'dev' ? filterCategory === 'mine' : undefined}
                 className={`${role === 'dev' ? 'rounded-md px-3 py-1.5' : 'px-2 py-1 border-b'} font-medium transition-colors ${
@@ -627,13 +627,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               </button>
             )}
 
-            {/* New Issue Button */}
+            {/* New Task Button */}
             <button
               onClick={onOpenNewIssue}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>New Issue</span>
+              <span>New Task</span>
             </button>
           </div>
         </div>
@@ -647,7 +647,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search issues, identifiers, labels..."
+                placeholder="Search tasks, identifiers, labels..."
                 className="w-full bg-surface-100 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
               />
             </div>
@@ -710,10 +710,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   }`}
                   aria-label={
                     column.id === 'agent_running'
-                      ? 'Drop issues here to start an Orchestrator build'
+                      ? 'Drop tasks here to start an Orchestrator build'
                       : column.id === 'done'
-                        ? 'Drop issues here to request confirmation before marking done'
-                        : `Drop issues here to move them to ${column.title}`
+                        ? 'Drop tasks here to request confirmation before marking done'
+                        : `Drop tasks here to move them to ${column.title}`
                   }
                 >
                   <div className={`p-3.5 border-b border-white/5 flex items-center justify-between bg-surface-100/60 ${column.color}`}>
@@ -735,7 +735,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                             : onOpenNewIssue()
                         }
                         className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/5"
-                        title={canQuickAdd ? 'Add an issue to this column' : 'New issue'}
+                        title={canQuickAdd ? 'Add a task to this column' : 'New task'}
                       >
                         <Plus className="w-4 h-4" />
                       </button>
@@ -754,7 +754,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                             if (e.key === 'Escape') setQuickAddStatus(null);
                           }}
                           onBlur={() => !quickAddTitle.trim() && setQuickAddStatus(null)}
-                          placeholder="Issue title, then Enter"
+                          placeholder="Task title, then Enter"
                           className="w-full bg-transparent text-xs text-white placeholder:text-gray-600 focus:outline-none"
                         />
                         <div className="mt-1.5 flex items-center justify-between">
@@ -785,7 +785,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                           draggable
                           onDragStart={event => handleIssueDragStart(event, issue.id)}
                           onDragEnd={clearDragState}
-                          aria-label={`Drag ${issue.identifier} to move its status`}
+                          aria-label={`Drag task ${issue.identifier} to move its status`}
                           className={`p-4 rounded-xl bg-surface-100 border transition-all cursor-grab active:cursor-grabbing space-y-3 group shadow-sm hover:shadow-glow-brand ${
                             draggedIssueId === issue.id ? 'opacity-50' : ''
                           } ${
@@ -878,13 +878,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     </div>
                   </div>
 
-                  {/* Section Content: Issues or "No issues" */}
+                  {/* Section Content: Tasks or "No tasks" */}
                   {!isCollapsed && (
                     <div className="space-y-0.5 pl-2">
                       {groupIssues.length === 0 ? (
                         /* Empty state placeholder for section */
                         <div className="py-2.5 text-center font-mono text-xs text-gray-500">
-                          No issues
+                          No tasks
                         </div>
                       ) : (
                         groupIssues.map(issue => {
@@ -967,7 +967,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <div className="flex items-center gap-3 font-mono text-sm text-gray-400">
                 <span className="text-brand-400 font-bold">{selectedIssue.identifier}</span>
                 <span>/</span>
-                <span>Issue Details & Execution Pipeline</span>
+                <span>Task Details & Execution Pipeline</span>
               </div>
               <button
                 onClick={() => setSelectedIssueId(null)}
@@ -1209,10 +1209,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               </div>
               <div className="space-y-1.5">
                 <h2 id="confirm-build-title" className="text-base font-semibold text-white">
-                  Build {pendingBuildIssue.identifier} with the Orchestrator?
+                  Build task {pendingBuildIssue.identifier} with the Orchestrator?
                 </h2>
                 <p className="text-sm leading-relaxed text-gray-400">
-                  Alpha opens a project chat for this issue and plans the work, choosing an agent for each task by role. Nothing changes in the code until you review the plan and choose <span className="font-semibold text-gray-200">Start planned work</span>.
+                  Alpha opens a project chat for this task and plans the work, choosing an agent for each task by role. Nothing changes in the code until you review the plan and choose <span className="font-semibold text-gray-200">Start planned work</span>.
                 </p>
               </div>
             </div>
@@ -1246,7 +1246,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               </div>
               <div className="space-y-1.5">
                 <h2 id="confirm-done-title" className="text-base font-semibold text-white">
-                  Mark issue as done?
+                  Mark task as done?
                 </h2>
                 <p className="text-sm leading-relaxed text-gray-400">
                   This skips the normal review checkpoint for <span className="font-semibold text-gray-200">{pendingDoneIssue.identifier}</span>. Continue only if the work has already been reviewed.

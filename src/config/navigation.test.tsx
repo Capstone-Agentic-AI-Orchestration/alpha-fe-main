@@ -26,6 +26,11 @@ const existingVisible: Record<UserRole, NavigationTab[]> = {
   admin: ['chat', 'projects', 'issues', 'inbox', 'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'],
 };
 describe('existing navigation compatibility', () => {
+  it('shows Tasks while preserving the existing issues route identifier', () => {
+    const tasks = NAV_ITEMS.find(item => item.id === 'issues');
+    expect(tasks).toMatchObject({ id: 'issues', label: 'Tasks', title: 'Tasks' });
+    expect(tasks?.labels).toMatchObject({ pm: 'All Tasks', admin: 'All Tasks' });
+  });
   it.each(Object.keys(existing) as UserRole[])('preserves every existing %s destination and landing page', role => {
     expect(ROLE_NAV[role].filter(tab => tab !== 'tickets')).toEqual(existing[role]);
     expect(landingTab(role)).toBe(existing[role][0]);
@@ -34,7 +39,7 @@ describe('existing navigation compatibility', () => {
     expect(visible.every(tab => ROLE_NAV[role].includes(tab))).toBe(true);
     expect(visible.length).toBe(new Set(visible).size);
   });
-  it('adds Tickets only to PM navigation without replacing Issues, Chat or Documents', () => {
+  it('adds Tickets only to PM navigation without replacing Tasks, Chat or Documents', () => {
     expect(ROLE_NAV.pm).toContain('tickets');
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('tickets');
     for (const role of ['client', 'dev', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('tickets');

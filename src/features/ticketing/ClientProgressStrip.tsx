@@ -19,7 +19,7 @@ export function ClientProgressStrip({ steps }: { steps: ClientProgressStep[] }) 
   if (steps.length === 0) return null;
   const index = steps.findIndex(step => step.state === 'current');
   const current = steps[index];
-  return <div className="mt-3 w-full">
+  return <div className="client-progress-strip">
     <ol aria-label="Request progress" className="flex w-full items-start gap-1.5">
       {steps.map(step => {
         return <li key={step.label} aria-current={step.state === 'current' ? 'step' : undefined} className="min-w-0 flex-1">

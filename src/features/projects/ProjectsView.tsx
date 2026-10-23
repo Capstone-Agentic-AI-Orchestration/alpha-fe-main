@@ -621,7 +621,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             <h1 className="text-base font-semibold text-white">Projects</h1>
             <span className="text-xs tabular-nums text-gray-500">{projects.length}</span>
           </div>
-          <p className="mt-1 text-xs text-gray-500">Choose a project, then open an issue to prepare an agent run.</p>
+          <p className="mt-1 text-xs text-gray-500">Choose a project, then open a task to prepare an agent run.</p>
         </div>
 
         {/* + New project button */}
@@ -780,7 +780,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
           <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-gray-500">
             {projects.length === 0
               ? (canManageProjects
-                ? 'Projects keep issues, agents, and connected resources organized in one place.'
+                ? 'Projects keep tasks, agents, and connected resources organized in one place.'
                 : 'Projects and repositories will appear here when a project manager initiates them for this workspace.')
               : 'Try a different search or clear the active filters to see more projects.'}
           </p>

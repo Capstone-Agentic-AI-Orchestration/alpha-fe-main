@@ -155,7 +155,7 @@ describe('public inquiry browser transport', () => {
 
     await expect(publicTicketIntakeApi.submit('acme-client', request)).rejects.toMatchObject({
       status: null,
-      message: 'Open Alpha in its secure website to send an inquiry.',
+      message: 'Open Alphaexplora in its secure website to send an inquiry.',
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

@@ -7,7 +7,7 @@ import './clientPublic.css';
 
 export function ClientPublicShell({ children, page = 'landing', slug = '', navigationLocked = false, hasDraft = false }: {
   children: ReactNode;
-  page?: 'landing' | 'inquiry';
+  page?: 'landing' | 'inquiry' | 'access';
   slug?: string;
   navigationLocked?: boolean;
   hasDraft?: boolean;
@@ -33,13 +33,17 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
     <header className="public-header public-container">
       <a className="public-brand" href={homeHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>
         <img src={alphaMarkUrl} alt="" width="36" height="36" />
-        <span>Alpha<span className="public-brand-label">{page === 'inquiry' ? 'Project inquiry' : 'Client home'}</span></span>
+        <span>Alphaexplora<span className="public-brand-label">{page === 'inquiry' ? 'Project inquiry' : page === 'access' ? 'Client sign in' : 'Client home'}</span></span>
       </a>
       <nav className={`public-header-nav public-header-nav-${page}`} aria-label="Client navigation">
         {page === 'landing' ? <>
           <a className="public-current-page" href={homeHref} aria-current="page">Home</a>
           <a className="public-text-link" href={clientHref}>Client sign in</a>
           <button className="public-text-link public-how-link" onClick={() => document.getElementById('alpha-workflow')?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })}>How it works</button>
+          <a className="public-nav-action" href={publicInquiryHref(slug)}>Start an inquiry <ArrowUpRight size={15} /></a>
+        </> : page === 'access' ? <>
+          <a className="public-text-link" href={homeHref}>Home</a>
+          <span className="public-current-page" aria-current="page">Client sign in</span>
           <a className="public-nav-action" href={publicInquiryHref(slug)}>Start an inquiry <ArrowUpRight size={15} /></a>
         </> : <>
           <a className="public-text-link" href={homeHref}>Home</a>
@@ -50,7 +54,7 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
     </header>
     <main ref={mainRef} tabIndex={-1} className="public-main">{children}</main>
     <footer className="public-footer public-container">
-      <span className="public-footer-brand">Alpha <span>AI work, orchestrated.</span></span>
+      <span className="public-footer-brand">Alphaexplora <span>AI work, orchestrated.</span></span>
       <p>Only requests your project manager shares with you appear in your account.</p>
     </footer>
   </div>;

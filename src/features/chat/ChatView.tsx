@@ -93,7 +93,7 @@ const MODE_META: Record<AgentCallMode, {
 const TARGET_LABELS: Record<string, string> = {
   message: 'Message',
   agent_response: 'Agent response',
-  issue: 'Issue',
+  issue: 'Task',
   specification: 'Specification',
   file: 'File',
   code: 'Code selection',
@@ -910,7 +910,7 @@ export const ChatView: React.FC = () => {
     }
     const target = makeTarget();
     if (mode !== 'ask' && !target) {
-      showToast('Select a target', 'Review, revise, and implement calls need a message, issue, file, or other target.', 'info');
+      showToast('Select a target', 'Review, revise, and implement calls need a message, task, file, or other target.', 'info');
       return;
     }
 

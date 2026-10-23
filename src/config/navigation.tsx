@@ -137,7 +137,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
 
   { id: 'tickets', label: 'Tickets', title: 'Tickets', subtitle: 'Review client requests, communicate, and track delivery', group: 'workspace', section: 'delivery', icon: Ticket },
-  { id: 'issues', label: 'Issues', labels: { pm: 'All Issues', admin: 'All Issues' }, title: 'Issues', subtitle: 'Assigned work and project issues', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'delivery', admin: 'delivery' }, icon: CheckSquare },
+  { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'delivery', admin: 'delivery' }, icon: CheckSquare },
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
 
   { id: 'agents', label: 'Agents', labels: { dev: 'Agent Directory' }, title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'workspace', section: 'automation', icon: Bot },

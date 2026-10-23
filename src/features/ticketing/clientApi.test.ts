@@ -46,14 +46,14 @@ describe('client browser transport', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
   });
 
-  it('redeems activation and returning sign-in proofs only through the isolated client API', async () => {
+  it('redeems PM invitation proofs only through the isolated client API, with no standalone email sign-in calls', async () => {
     browser();
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { activated: true }))
-      .mockResolvedValueOnce(jsonResponse(200, { authenticated: true, expiresAt: '2026-10-12T12:00:00Z' }));
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { activated: true }));
     vi.stubGlobal('fetch', fetchMock);
     await clientTicketApi.activateInvitation('a'.repeat(43), 'b'.repeat(32), 'invite');
-    await clientTicketApi.createSessionFromEmailLink('c'.repeat(32), 'magiclink');
-    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/client/auth/activate', '/api/client/auth/session']);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual(['/api/client/auth/activate']);
+    expect(clientTicketApi).not.toHaveProperty('requestSignInLink');
+    expect(clientTicketApi).not.toHaveProperty('createSessionFromEmailLink');
     for (const [, options] of fetchMock.mock.calls) {
       expect(options).toMatchObject({ credentials: 'same-origin', mode: 'same-origin', referrerPolicy: 'no-referrer' });
       const headers = new Headers(options.headers);
@@ -103,7 +103,7 @@ describe('client browser transport', () => {
 
     await expect(clientTicketApi.getSession()).rejects.toMatchObject({
       status: null,
-      message: 'For your safety, open Alpha in its secure website to access your requests.',
+      message: 'For your safety, open Alphaexplora in its secure website to access your requests.',
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });

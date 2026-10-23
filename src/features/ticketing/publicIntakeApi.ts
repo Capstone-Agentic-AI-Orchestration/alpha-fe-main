@@ -105,7 +105,7 @@ export const publicTicketIntakeApi = {
   },
   async submit(slug: string, request: PublicTicketInquiryRequest): Promise<PublicTicketInquiryResponse> {
     if (!browserOriginAllowed()) {
-      throw new PublicTicketIntakeApiError(null, 'Open Alpha in its secure website to send an inquiry.');
+      throw new PublicTicketIntakeApiError(null, 'Open Alphaexplora in its secure website to send an inquiry.');
     }
     if (slug !== '' && !INTAKE_SLUG.test(slug)) {
       throw new PublicTicketIntakeApiError(404, 'This inquiry link is unavailable.', 'ticket_intake_entry_unavailable');

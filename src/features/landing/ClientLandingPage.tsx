@@ -9,7 +9,7 @@ function readSlug(): string {
   return typeof window === 'undefined' ? '' : publicInquirySlug(window.location);
 }
 
-/** Pineapple's public landing design, linked to Alpha's current inquiry and password-auth routes. */
+/** Pineapple's public landing design, linked to Alphaexplora's current inquiry and password-auth routes. */
 export default function ClientLandingPage() {
   const [slug, setSlug] = useState(readSlug);
   const motionRef = useClientPageMotion();
@@ -31,7 +31,7 @@ export default function ClientLandingPage() {
       <section className="public-hero public-container">
         <div className="public-hero-copy" data-public-arrival>
           <h1>A clear start for<br />your next project<span>.</span></h1>
-          <p className="public-hero-description">Bring the idea. Your project manager will help make the next step clear, then you can follow the work shared with you in Alpha.</p>
+          <p className="public-hero-description">Bring the idea. Your project manager will help make the next step clear, then you can follow the work shared with you in Alphaexplora.</p>
           <a className="public-button public-button-primary public-hero-cta" href={inquiry}>Start a project inquiry <ArrowUpRight size={19} /></a>
           <p className="public-cta-note">No account is needed to ask about a project.</p>
           <div className="public-hero-footnote"><span className="public-fine-rule" /><p>One place for the request.<br /><strong>One place to stay in the loop.</strong></p></div>

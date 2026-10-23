@@ -90,7 +90,7 @@ export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onA
     <h3 className="text-sm font-medium text-gray-100">Review a prepared result</h3>
     <p className="mt-2 text-[11px] leading-relaxed text-gray-500">These protected candidates are not approved or visible to the client. Inspect the files and client-facing summary against the agreed work.</p>
     {loading && <p role="status" className="mt-3 text-xs text-gray-500">Checking prepared results…</p>}
-    {!loading && !error && candidates.length === 0 && <p className="mt-3 text-xs text-gray-500">No verified delivery is prepared yet. Completing Issues alone does not create a client delivery.</p>}
+    {!loading && !error && candidates.length === 0 && <p className="mt-3 text-xs text-gray-500">No verified delivery is prepared yet. Completing tasks alone does not create a client delivery.</p>}
     {error && <p role="alert" className="mt-3 text-xs text-amber-200/80">{error}</p>}
     {candidates.length > 0 && <label className="mt-3 block text-xs text-gray-300">Prepared result<select aria-label="Prepared result" className={`${input} mt-2`} value={selectedId} disabled={disabled || downloading !== null} onChange={event => { setManifest(null); setRead([]); setAcknowledged(false); setSelectedId(event.target.value); setError(''); }}>
       {candidates.map((candidate, index) => <option key={candidate.id} value={candidate.id}>Result {index + 1} · {candidate.fileCount} file{candidate.fileCount === 1 ? '' : 's'}</option>)}
@@ -105,7 +105,7 @@ export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onA
     {selected && <div className="mt-3 space-y-3">
       <label className="flex items-start gap-2 text-[11px] text-gray-300"><input type="checkbox" checked={acknowledged} disabled={disabled || !inspected || Boolean(error)} onChange={event => setAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I inspected all result files and the summary, and confirm they match the agreed work and are suitable to share with the client.</label>
       <button className={primary} disabled={disabled || !available || !inspected || !acknowledged || Boolean(error) || downloading !== null} onClick={() => { if (selected && inspected && acknowledged && available && !error) void onAssess(selected.id); }}>Approve result for sharing</button>
-      <p className="text-[10px] text-gray-500">This records PM assessment only. Sharing with the client is a separate action. If work needs fixing, use Return affected Issues above.</p>
+      <p className="text-[10px] text-gray-500">This records PM assessment only. Sharing with the client is a separate action. If work needs fixing, use Return affected tasks above.</p>
     </div>}
     {error && <button className={`${secondary} mt-3`} disabled={disabled || downloading !== null || loading} onClick={() => setRetry(value => value + 1)}>Refresh prepared results</button>}
   </section>;

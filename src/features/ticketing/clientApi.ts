@@ -117,7 +117,7 @@ function safeHttpError(status: number): string {
   if (status === 404) return 'This request or invitation is no longer available.';
   if (status === 409) return 'This request changed or was already updated. Refresh and check its current status.';
   if (status === 429) return 'Too many attempts. Wait a little, then try again.';
-  if (status >= 500) return 'Alpha is temporarily unavailable. Please try again later.';
+  if (status >= 500) return 'Alphaexplora is temporarily unavailable. Please try again later.';
   return 'We could not complete that action. Check the details and try again.';
 }
 
@@ -162,7 +162,7 @@ interface RequestOptions extends RequestInit { csrf?: boolean; accept?: string }
 
 async function requestResponse(path: string, options: RequestOptions = {}): Promise<Response> {
   if (!browserOriginAllowed()) {
-    throw new ClientTicketApiError(null, 'For your safety, open Alpha in its secure website to access your requests.');
+    throw new ClientTicketApiError(null, 'For your safety, open Alphaexplora in its secure website to access your requests.');
   }
   const { csrf: csrfOverride, accept = 'application/json', ...fetchOptions } = options;
   const method = (fetchOptions.method ?? 'GET').toUpperCase();
@@ -191,7 +191,7 @@ async function requestResponse(path: string, options: RequestOptions = {}): Prom
       null,
       writeOutcomeUnknown
         ? 'The connection ended before the result was confirmed. Checking whether your request went through; do not submit it again yet.'
-        : 'Could not connect to Alpha. Check your internet connection and try again.',
+        : 'Could not connect to Alphaexplora. Check your internet connection and try again.',
       writeOutcomeUnknown ? 'transport_outcome_unknown' : null,
       writeOutcomeUnknown,
     );
@@ -221,21 +221,10 @@ export const clientTicketApi = {
   getWorkflowCapabilities() {
     return requestJson<{ phaseWorkflowEnabled: boolean }>('/workflow-capabilities');
   },
-  requestSignInLink(email: string) {
-    return requestJson<{ accepted: true; message: string }>('/auth/sign-in-link', {
-      method: 'POST', csrf: false, body: JSON.stringify({ email }),
-    });
-  },
   activateInvitation(invitationToken: string, providerTokenHash: string, providerTokenType: ClientEmailLinkType) {
     return requestJson<{ activated: true }>('/auth/activate', {
       method: 'POST', csrf: false,
       body: JSON.stringify({ invitationToken, providerTokenHash, providerTokenType }),
-    });
-  },
-  createSessionFromEmailLink(providerTokenHash: string, providerTokenType: ClientEmailLinkType) {
-    return requestJson<{ authenticated: true; expiresAt: string }>('/auth/session', {
-      method: 'POST', csrf: false,
-      body: JSON.stringify({ providerTokenHash, providerTokenType }),
     });
   },
   getSession() { return requestJson<ClientSession>('/session'); },

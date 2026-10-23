@@ -1,4 +1,5 @@
 import { createTicketPreview, type PreviewSeedTicket } from './previewModel';
+import type { TicketDocumentsApi } from './ticketDocuments';
 import {
   pmTicketApi,
   type PmTicketDetail,
@@ -121,7 +122,13 @@ function toQueueItem(ticket: DemoTicket): PmTicketQueueItem {
     readOnly: true, writesAvailable: false, requestedAction: ticket.requestedAction,
     internal: {
       updatedAt: ticket.updatedAt, actionOwner: ticket.actionOwner, nextAction: ticket.nextAction,
-      projectId: ticket.projectId, clientAccessActive: ticket.clientAccessActive, clientInvitation: null,
+      projectId: ticket.projectId, projectName: ticket.projectName,
+      clientGroup: {
+        key: ticket.clientAccessActive ? 'preview-northstar' : `ticket:${ticket.id}`,
+        displayName: ticket.contact?.fullName ?? ticket.companyLabel,
+        accessActive: ticket.clientAccessActive, acceptsNewRequests: false,
+      },
+      clientAccessActive: ticket.clientAccessActive, clientInvitation: null,
     },
   };
 }
@@ -142,7 +149,7 @@ function toTicketDetail(ticket: DemoTicket): PmTicketDetail {
       projectLabel: ticket.projectName, requestedDeadline: ticket.requestedDeadline,
     },
     internal: {
-      updatedAt: ticket.updatedAt, projectId: ticket.projectId, requiredIssueIds: ticket.requiredIssueIds,
+      updatedAt: ticket.updatedAt, projectId: ticket.projectId, projectName: ticket.projectName, requiredIssueIds: ticket.requiredIssueIds,
       actionOwner: ticket.actionOwner, nextAction: ticket.nextAction,
       authorizedScopeVersionId: ticket.scopeAgreed ? scopeId : null,
       correctionRequestedFor: null, withdrawalRequested: false, closureReason: ticket.closureReason,
@@ -226,6 +233,13 @@ export const pmPreviewApi = new Proxy(pmTicketApi, {
     return value;
   },
 });
+
+/** Keep document inspection local too; a preview must never query real client files. */
+export const pmPreviewDocumentsApi: TicketDocumentsApi = {
+  list: async () => [],
+  upload: async () => { throw new Error('Uploads are disabled in the local UI preview.'); },
+  download: async () => { throw new Error('Downloads are disabled in the local UI preview.'); },
+};
 
 export function createClientPreviewModel() {
   return createTicketPreview(undefined, undefined, DEMO_TICKETS);
