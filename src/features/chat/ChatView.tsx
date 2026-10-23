@@ -462,6 +462,7 @@ export const ChatView: React.FC = () => {
   } = useApp();
 
   const [input, setInput] = useTabSessionState<string>('chatDraft', '');
+  const [approvalMode, setApprovalMode] = useTabSessionState<'ask' | 'approve' | 'full'>('chatApprovalMode', 'ask');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingFileViews, setPendingFileViews] = useState<Array<{ file: File; previewUrl?: string }>>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
@@ -1206,7 +1207,7 @@ export const ChatView: React.FC = () => {
       return;
     }
     setPendingFiles([]);
-    await sendChatMessage(message, activeThread?.id, buildRepositories, 'auto', uploadedAttachments);
+    await sendChatMessage(message, activeThread?.id, buildRepositories, 'auto', uploadedAttachments, { approvalMode });
     if (activeThread?.id) {
       void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
     }
@@ -1442,7 +1443,7 @@ export const ChatView: React.FC = () => {
     setInput('');
     setDraftProjectChoice('');
     followNextMessage();
-    await sendChatMessage(message, threadId, undefined, 'auto');
+    await sendChatMessage(message, threadId, undefined, 'auto', [], { approvalMode });
   };
 
   const startNewThread = () => {
@@ -1658,6 +1659,9 @@ export const ChatView: React.FC = () => {
                 </div>}
                 <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : undefined} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : 'Ask Alpha anything or describe what to build. Type @ to call an agent…'} className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-white placeholder-gray-500 outline-none" />
                 <div className="flex shrink-0 items-center gap-1">
+                {!isClient && !activeTurnMessageId && <select aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => setApprovalMode(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-36 rounded-lg border border-white/10 bg-surface-100 px-2 py-1.5 text-[10px] text-gray-300 outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50">
+                  <option value="ask">Ask for approval</option><option value="approve">Approve for me</option><option value="full">Full access</option>
+                </select>}
                 {/* One button: it stops the running response or build while the box is empty, and sends as soon as you type. */}
                 {composerStop ? <button type="button" onClick={() => void (composerStop === 'turn' ? stopChatTurn() : stopProjectBuild())}
                   disabled={composerStop === 'turn' ? Boolean(chatTurnActionBusy) : Boolean(stoppingProjectRunId)}
@@ -1681,6 +1685,8 @@ export const ChatView: React.FC = () => {
               onProjectChange={projectId => setDraftProjectChoice(projectId ?? '')}
               message={input}
               onMessageChange={setInput}
+              approvalMode={approvalMode}
+              onApprovalModeChange={setApprovalMode}
               onSend={() => void sendFromHome()}
               canSend={canStartThread}
               blockedReason={canStartThread ? undefined : 'Your workspace role cannot start conversations.'}

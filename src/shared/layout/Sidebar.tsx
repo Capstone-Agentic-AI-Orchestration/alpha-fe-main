@@ -21,6 +21,7 @@ interface SidebarProps {
   setCollapsed: (collapsed: boolean) => void;
   onOpenNewIssue: () => void;
   onSignOut: () => Promise<void> | void;
+  signingOut?: boolean;
   onSwitchProfile?: () => void;
 }
 
@@ -33,6 +34,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   onSignOut,
+  signingOut = false,
   collapsed,
   setCollapsed,
   onOpenNewIssue,
@@ -441,11 +443,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => void onSignOut()}
+            disabled={signingOut}
+            aria-busy={signingOut}
             className={`flex flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200 focus-visible:ring-2 focus-visible:ring-brand-300/70 ${
               compact ? 'h-9 w-9' : 'p-1.5'
             }`}
-            title="Sign out"
-            aria-label="Sign out"
+            title={signingOut ? 'Signing out…' : 'Sign out'}
+            aria-label={signingOut ? 'Signing out' : 'Sign out'}
           >
             <LogOut className="h-4 w-4" />
           </button>
