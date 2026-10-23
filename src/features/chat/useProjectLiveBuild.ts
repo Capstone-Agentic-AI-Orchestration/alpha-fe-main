@@ -54,6 +54,34 @@ function stateFor(statuses: string[]): BuildAgentState {
   return 'waiting';
 }
 
+/** Work passed from one agent to another: a task that waits on a task a different agent owns. */
+export interface BuildHandoff {
+  fromAgentId: string;
+  toAgentId: string;
+  /** active: the receiver is working on it now; done: the receiving task is accepted. */
+  state: 'pending' | 'active' | 'done';
+}
+
+const HANDOFF_RANK: Record<BuildHandoff['state'], number> = { pending: 0, done: 1, active: 2 };
+
+/** Who hands work to whom in this build, one entry per pair of agents, read from the plan's dependencies. */
+export function buildHandoffs(orchestration: Pick<LiveBuildRoomOrchestration, 'tasks'>): BuildHandoff[] {
+  const byId = new Map(orchestration.tasks.map(task => [task.id, task]));
+  const pairs = new Map<string, BuildHandoff>();
+  for (const task of orchestration.tasks) {
+    if (!task.ownerAgentId || ['cancelled', 'superseded'].includes(task.status)) continue;
+    for (const dependencyId of task.dependsOn) {
+      const from = byId.get(dependencyId)?.ownerAgentId;
+      if (!from || from === task.ownerAgentId) continue;
+      const state: BuildHandoff['state'] = ['running', 'submitted'].includes(task.status) ? 'active' : task.status === 'accepted' ? 'done' : 'pending';
+      const key = from + '>' + task.ownerAgentId;
+      const existing = pairs.get(key);
+      if (!existing || HANDOFF_RANK[state] > HANDOFF_RANK[existing.state]) pairs.set(key, { fromAgentId: from, toAgentId: task.ownerAgentId, state });
+    }
+  }
+  return [...pairs.values()];
+}
+
 /** One node per agent the plan assigned work to, in the order they first appear in the plan. */
 export function buildAgentNodes(snapshot: LiveBuildRoomSnapshot): BuildAgentNode[] {
   const orchestration = snapshot.orchestration;

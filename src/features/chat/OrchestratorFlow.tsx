@@ -4,8 +4,8 @@ import { ChevronDown, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
 
 import { Agent, AgentCall, ProjectChatAgent, RuntimeEngine } from '@/shared/types';
 import { AgentModelPanel } from './AgentModelPanel';
-import type { BuildAgentNode, BuildAgentState } from './useProjectLiveBuild';
-import type { SceneAgent } from './OrchestratorScene3D';
+import type { BuildAgentNode, BuildAgentState, BuildHandoff } from './useProjectLiveBuild';
+import type { SceneAgent, SceneLink } from './OrchestratorScene3D';
 import { supportsWebGL } from './orchestratorSceneLayout';
 
 // three.js loads only when someone opens the flow, never with the chat itself.
@@ -25,6 +25,8 @@ export interface FlowBuild {
   label: string;
   running: boolean;
   agents: BuildAgentNode[];
+  /** Work passed between agents, drawn as links from one agent to the next. */
+  handoffs?: BuildHandoff[];
 }
 
 interface OrchestratorFlowProps {
@@ -437,6 +439,14 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       };
     });
   }, [agentById, agentCalls, buildAgents, rosterAgents]);
+  // Agent-to-agent links: who handed work to whom in the open build.
+  const sceneLinks = useMemo<SceneLink[]>(() => {
+    const sceneId = (agentId: string) => (rosterAgents.length ? ROSTER_PREFIX : BUILD_PREFIX) + agentId;
+    const present = new Set(sceneAgents.map(agent => agent.id));
+    return (build?.handoffs ?? [])
+      .map(handoff => ({ from: sceneId(handoff.fromAgentId), to: sceneId(handoff.toAgentId), state: handoff.state }))
+      .filter(link => present.has(link.from) && present.has(link.to));
+  }, [build?.handoffs, rosterAgents.length, sceneAgents]);
   const agentStatus = (agentId: string): string => {
     if (agentId === orchestratorAgent?.id) return 'Orchestrator · ' + statusText;
     const inBuild = buildAgents.find(node => node.agentId === agentId);
@@ -593,6 +603,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       <Suspense fallback={<div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-gray-500">Loading the 3D view…</div>}>
         <OrchestratorScene3D
           agents={sceneAgents}
+          links={sceneLinks}
           hubId={hubId}
           hubLabel="Orchestrator"
           hubDetail={[title, statusText, orchestratorAgent ? orchestratorAgent.modelName : null, orchestratorAgent ? 'Click to see and change its model' : hubClickable ? 'Click to see activity' : null].filter(Boolean).join(' · ')}

@@ -4,8 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 vi.hoisted(() => { (globalThis as { window?: unknown }).window ??= globalThis; });
 vi.mock('@/features/live-build-room/OrchestrationWorkflowPanel', () => ({ ReviewDiff: () => null }));
 
-import { ChatBuildWizard, buildRepositoriesLabel, planningFailureReason, wizardStepFor, type ChatBuildWizardProps } from './ChatBuildWizard';
-import type { ProjectLiveBuild } from './useProjectLiveBuild';
+import { ChatBuildWizard, buildRepositoriesLabel, continueChoice, planningFailureReason, wizardStepFor, type ChatBuildWizardProps } from './ChatBuildWizard';
+import { buildHandoffs, type ProjectLiveBuild } from './useProjectLiveBuild';
 
 const build = (status: ProjectLiveBuild['status'], stoppedReason?: string): ProjectLiveBuild => ({
   runId: 'run-1', status, revision: 1, repository: 'acme/shop-fe', goal: 'Build an informational shop with login', running: status === 'executing',
@@ -75,5 +75,52 @@ describe('the build panel above the message box', () => {
     expect(buildRepositoriesLabel(running)).toBe('shop-fe, shop-be');
     const html = render({ build: running });
     expect(html).toContain('Add the login API · shop-be');
+  });
+
+  it('offers to re-run the final checks when every task is done, and reports what the agents delivered', () => {
+    const stopped = build('blocked', 'Every final check passed, but 1 blocking review finding is still open: “Token in local storage”.');
+    const orchestration = stopped.orchestration as any;
+    orchestration.tasks[0].status = 'accepted';
+    orchestration.attempts = [{ id: 'a1', taskId: 't1', attemptNumber: 1, agentName: 'Frontend Agent', status: 'accepted', summary: 'Added the login page and its tests.', changedPaths: ['src/Login.tsx', 'tests/Login.spec.tsx'] }];
+    orchestration.findings = [
+      { id: 'f1', taskId: 't1', sourceTaskId: 'r1', severity: 'blocking', status: 'open', title: 'Token in local storage', createdAt: '' },
+      { id: 'f2', taskId: 't1', sourceTaskId: 'r1', severity: 'warning', status: 'open', title: 'No login rate limit', createdAt: '' }
+    ];
+    orchestration.finalValidation = { status: 'passed', missingScripts: [], noOpenBlockingFindings: false, commands: [{ script: 'test', display: 'npm test', exitCode: 0, signal: null }] };
+    orchestration.recovery = { category: 'final_validation', availableActions: ['explain_failure', 'recheck_prerequisite'], actionReasons: {} };
+    expect(continueChoice(stopped)).toMatchObject({ label: 'Run the final checks again', action: 'recheck_prerequisite' });
+    const html = render({ build: stopped });
+    expect(html).toContain('Run the final checks again');
+    expect(html).not.toContain('Fix and continue');
+    expect(html).toContain('Added the login page and its tests.');
+    expect(html).toContain('2 files changed');
+    expect(html).toContain('1 blocking finding');
+    expect(html).toContain('1 review warning');
+  });
+
+  it('does not offer to continue when the server allows no automatic step', () => {
+    const stopped = build('blocked', 'The agent needs the API contract.');
+    (stopped.orchestration as any).recovery = { category: 'project_code', availableActions: ['explain_failure', 'provide_guidance'], actionReasons: { repair_and_continue: 'Tell the agent where the contract is.' } };
+    expect(continueChoice(stopped)).toBeNull();
+    const html = render({ build: stopped });
+    expect(html).not.toContain('Fix and continue');
+    expect(html).toContain('Tell the agent where the contract is.');
+  });
+});
+
+describe('agents handing work to each other', () => {
+  it('links each dependency owned by another agent, and marks the one being worked on', () => {
+    const task = (id: string, ownerAgentId: string, status: string, dependsOn: string[] = []) => ({ id, ownerAgentId, status, dependsOn });
+    const handoffs = buildHandoffs({ tasks: [
+      task('api', 'backend', 'accepted'),
+      task('ui', 'frontend', 'running', ['api']),
+      task('api-tests', 'backend', 'accepted', ['api']),
+      task('review', 'security', 'pending', ['api', 'ui'])
+    ] } as any);
+    expect(handoffs).toEqual([
+      { fromAgentId: 'backend', toAgentId: 'frontend', state: 'active' },
+      { fromAgentId: 'backend', toAgentId: 'security', state: 'pending' },
+      { fromAgentId: 'frontend', toAgentId: 'security', state: 'pending' }
+    ]);
   });
 });
