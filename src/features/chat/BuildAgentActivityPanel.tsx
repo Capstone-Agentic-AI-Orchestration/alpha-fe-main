@@ -1,8 +1,9 @@
-import React, { useEffect, useRef } from 'react';
-import { AlertTriangle, ArrowRightLeft, CheckCircle2, Circle, FileCode2, Flag, Radio, Sparkles, Wrench, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, ArrowRightLeft, CheckCircle2, Circle, FileCode2, Flag, Radio, Sparkles, Wrench } from 'lucide-react';
 
 import type { LiveBuildRoomActivity } from '@/shared/types';
 import type { BuildAgentNode, BuildAgentState } from './useProjectLiveBuild';
+import { LiveChangesView } from './LiveChangesView';
 
 const STATE: Record<BuildAgentState, { label: string; tone: string }> = {
   running: { label: 'Working', tone: 'text-violet-100 bg-violet-400/15' },
@@ -32,31 +33,35 @@ function clock(value?: string): string {
   return Number.isNaN(date.getTime()) ? '' : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 }
 
-/** One build agent's live work, shown beside the chat when its node is chosen. */
+/** One build agent's live work and code changes, shown as a tab beside the chat when its node is chosen. */
 export const BuildAgentActivityPanel: React.FC<{
   agent: BuildAgentNode;
+  projectId: string;
+  runId: string;
+  /** The codebase of the agent's current task. */
   repository: string;
   onOpenRoom: () => void;
-  onClose: () => void;
-}> = ({ agent, repository, onOpenRoom, onClose }) => {
+}> = ({ agent, projectId, runId, repository, onOpenRoom }) => {
   const timelineRef = useRef<HTMLOListElement>(null);
   const activities = [...(agent.card?.activity ?? [])].sort((a, b) => a.sequence - b.sequence);
   const live = agent.state === 'running';
   const state = STATE[agent.state];
+  const [view, setView] = useState<'activity' | 'changes'>('activity');
+  const [picked, setPicked] = useState(false);
+  const lastEdit = [...activities].reverse().find(activity => activity.kind === 'file_change' && activity.paths?.length);
+  const focusPath = lastEdit?.paths?.at(-1);
+
+  // When the agent starts writing files, show its edits — unless the person already chose a view.
+  useEffect(() => { if (live && lastEdit && !picked) setView('changes'); }, [live, lastEdit?.id, picked]);
+  const choose = (next: 'activity' | 'changes') => { setPicked(true); setView(next); };
 
   useEffect(() => {
     const list = timelineRef.current;
-    if (live && list) list.lastElementChild?.scrollIntoView({ block: 'nearest' });
-  }, [activities.length, live]);
-
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+    if (live && list && view === 'activity') list.lastElementChild?.scrollIntoView({ block: 'nearest' });
+  }, [activities.length, live, view]);
 
   return (
-    <aside aria-label={agent.name + ' build activity'} className="flex h-full w-[380px] shrink-0 flex-col border-l border-white/[0.08] bg-shell">
+    <section aria-label={agent.name + ' build activity'} className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-start gap-3 border-b border-white/[0.07] px-5 py-4">
         <span className={'grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-300 to-violet-700 text-sm font-semibold text-white ' + (live ? 'shadow-[0_0_18px_rgba(167,139,250,0.55)]' : '')}>{agent.name.slice(0, 1).toUpperCase()}</span>
         <div className="min-w-0 flex-1">
@@ -67,10 +72,22 @@ export const BuildAgentActivityPanel: React.FC<{
             {agent.card?.currentStage && <span className="text-gray-500">{agent.card.currentStage}</span>}
           </div>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close agent activity" className="rounded-lg p-1.5 text-gray-500 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><X className="h-4 w-4" /></button>
       </header>
 
-      <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+      <div role="tablist" aria-label={agent.name + ' views'} className="flex shrink-0 gap-4 border-b border-white/[0.07] px-5">
+        {(['activity', 'changes'] as const).map(item => <button key={item} type="button" role="tab" aria-selected={view === item} onClick={() => choose(item)}
+          className={'-mb-px border-b-2 py-2 text-[11px] font-medium ' + (view === item ? 'border-violet-300 text-white' : 'border-transparent text-gray-500 hover:text-gray-200')}>
+          {item === 'activity' ? 'Activity' : <span className="inline-flex items-center gap-1.5">Changes{agent.changedFiles.length > 0 && <span className="rounded bg-white/[0.08] px-1 text-[9px] text-gray-300">{agent.changedFiles.length}</span>}{live && lastEdit && <span className="h-1.5 w-1.5 rounded-full bg-violet-300 motion-safe:animate-pulse" />}</span>}
+        </button>)}
+      </div>
+
+      {view === 'changes' ? <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <LiveChangesView projectId={projectId} runId={runId} live={live} repository={repository || undefined}
+          // A working agent owns the edits in its codebase right now; a finished one shows the files it changed.
+          paths={live ? undefined : agent.changedFiles}
+          focusPath={focusPath}
+          emptyText={agent.state === 'waiting' ? 'This agent has not started yet.' : undefined} />
+      </div> : <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
         {agent.currentTaskTitle && <section>
           <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{live ? 'Working on' : agent.state === 'waiting' ? 'Next task' : 'Task'}</h3>
           <p className="text-xs leading-relaxed text-gray-200">{agent.currentTaskTitle}</p>
@@ -102,12 +119,12 @@ export const BuildAgentActivityPanel: React.FC<{
             {live && <li className="relative text-[11px] text-violet-200"><span className="absolute -left-[25px] top-1 h-2 w-2 rounded-full bg-violet-300 motion-safe:animate-ping" />Working…</li>}
           </ol> : <p className="flex items-center gap-2 text-xs text-gray-500"><Sparkles className="h-3.5 w-3.5 text-violet-300" />{live ? 'Starting up. Activity will appear here as the agent works.' : agent.state === 'waiting' ? 'This agent starts when the tasks before it are accepted.' : 'No activity was recorded for this agent yet.'}</p>}
         </section>
-      </div>
+      </div>}
 
       <footer className="border-t border-white/[0.07] px-5 py-3">
         <button type="button" onClick={onOpenRoom} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-violet-200 hover:text-violet-100"><Radio className="h-3.5 w-3.5" />Open in Live Build Room</button>
       </footer>
-    </aside>
+    </section>
   );
 };
 

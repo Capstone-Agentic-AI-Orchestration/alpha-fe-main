@@ -138,11 +138,14 @@ export function ChatHome({
         <div className="mt-2 flex items-center gap-2">
           <ProjectPicker projects={projects} projectId={projectId} onChange={onProjectChange} />
           <label className="sr-only" htmlFor="chat-home-approval-mode">Model access</label>
-          <select id="chat-home-approval-mode" aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => onApprovalModeChange(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-40 rounded-lg border border-white/10 bg-surface-100 px-2 py-1.5 text-[11px] text-gray-300 outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50">
-            <option value="ask">Ask for approval</option>
-            <option value="approve">Approve for me</option>
-            <option value="full">Full access</option>
-          </select>
+          <span className="relative flex items-center">
+            <select id="chat-home-approval-mode" aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => onApprovalModeChange(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-40 cursor-pointer appearance-none rounded-md bg-transparent py-1.5 pl-2 pr-5 text-[11px] text-gray-400 outline-none hover:text-white focus-visible:text-white focus-visible:ring-2 focus-visible:ring-violet-300/50 [&>option]:bg-[#17171f] [&>option]:text-gray-200">
+              <option value="ask">Ask for approval</option>
+              <option value="approve">Approve for me</option>
+              <option value="full">Full access</option>
+            </select>
+            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-1 h-3 w-3 text-gray-500" />
+          </span>
           <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">{blockedReason ?? (projectId ? 'Builds run in this project’s codebases.' : 'Not connected to a project. Pick one when you want Alpha to build.')}</span>
           <button type="submit" disabled={!ready} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-on-accent hover:bg-brand-400 disabled:opacity-30">
             <ArrowUp className="h-4 w-4" />

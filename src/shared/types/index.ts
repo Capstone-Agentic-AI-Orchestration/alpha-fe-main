@@ -1093,6 +1093,20 @@ export interface LiveBuildRoomDiffPreview {
   }>;
 }
 
+/** What a build's worktrees hold right now, against the commit the build started from. */
+export interface LiveBuildChanges {
+  generatedAt: string;
+  repositories: Array<{
+    repository: string;
+    branchName: string;
+    baseCommit: string;
+    files: Array<{ path: string; status: 'added' | 'modified' | 'deleted'; additions: number; deletions: number }>;
+    filesTruncated: boolean;
+    diff: string;
+    truncated: boolean;
+  }>;
+}
+
 export type LiveBuildPlanningRecoveryState = 'interrupted' | 'needs_review' | 'manual_review' | 'retained' | 'cleaned';
 
 export interface LiveBuildPlanningRecovery {
@@ -1118,6 +1132,7 @@ export interface LiveBuildPlanningRecoveryPreview {
 }
 
 export interface LiveBuildRoomOrchestration {
+  milestones?: Array<{ id: string; title: string; status: 'unplanned' | 'active' | 'accepted' }>;
   run: {
     id: string;
     status: LiveBuildOrchestrationStatus;
