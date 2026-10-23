@@ -26,6 +26,7 @@ import { deriveProjectKey } from '@/features/projects/useProjectsViewModel';
 import { Project, ProjectStatus, ProjectPriority } from '@/shared/types';
 import { Modal } from '@/shared/components/Modal';
 import { apiService } from '@/shared/services/apiService';
+import { aiFeaturesEnabled } from '@/config/features';
 
 type ProjectOrchestrationSettings = {
   enabled: boolean;
@@ -49,6 +50,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
 
     agents,
+    role,
     can
   } = useApp();
 
@@ -58,6 +60,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   /** Repository provisioning is narrower than general project administration. */
   const canProvisionRepositories = can('provision_repositories');
   const canManageIssues = can('manage_issues');
+  const showAi = aiFeaturesEnabled(role);
   
   // Selected Project for dedicated Workspace Kanban View
   const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string | null>('projects.selectedProject', null);
@@ -100,7 +103,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
   useEffect(() => {
     let current = true;
-    if (!selectedProject) {
+    if (!selectedProject || !showAi) {
       setOrchestrationSettings(null);
       return () => { current = false; };
     }
@@ -115,7 +118,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       })
       .finally(() => { if (current) setOrchestrationSettingsLoading(false); });
     return () => { current = false; };
-  }, [selectedProject?.id]);
+  }, [selectedProject?.id, showAi]);
 
   // GitHub repositories the API can read for this project. Given the attached
   // repositories so one created a moment ago shows up without a reload.
@@ -309,7 +312,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                       <dt className="text-gray-500">Target date</dt>
                       <dd>{selectedProject.targetDate || 'No deadline'}</dd>
                     </dl>
-                    {boundAgents.length > 0 && (
+                    {showAi && boundAgents.length > 0 && (
                       <div className="space-y-2 pt-2">
                         <h3 className="text-gray-400">Active agents ({boundAgents.length})</h3>
                         <div className="flex flex-wrap gap-2">
@@ -324,7 +327,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                     )}
                   </section>
                   <section className="space-y-2">
-                    <section aria-label="Orchestrated build workflow" className="space-y-2 rounded-xl border border-violet-400/15 bg-violet-500/[0.045] p-3">
+                    {showAi && <section aria-label="Orchestrated build workflow" className="space-y-2 rounded-xl border border-violet-400/15 bg-violet-500/[0.045] p-3">
                       <div className="flex items-center gap-2">
                         <Workflow className="h-3.5 w-3.5 text-violet-300" aria-hidden />
                         <h2 className="font-semibold text-gray-200">Orchestrator builds</h2>
@@ -338,7 +341,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                           : orchestrationSettings?.available ? 'Always enabled. One product plan can cover the frontend, backend, and other selected codebases.'
                             : orchestrationSettings?.reason ?? 'The Orchestrator is unavailable in this environment.'}
                       </p>
-                    </section>
+                    </section>}
                     <h2 className="flex items-center gap-1.5 font-medium text-gray-300">
                       <Sparkles className="h-3.5 w-3.5 text-brand-400" aria-hidden />Ground Rules &amp; Context
                     </h2>
@@ -621,7 +624,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             <h1 className="text-base font-semibold text-white">Projects</h1>
             <span className="text-xs tabular-nums text-gray-500">{projects.length}</span>
           </div>
-          <p className="mt-1 text-xs text-gray-500">Choose a project, then open a task to prepare an agent run.</p>
+          <p className="mt-1 text-xs text-gray-500">{showAi ? 'Choose a project, then open a task to prepare an agent run.' : 'Choose a project to view its board and manage tasks.'}</p>
         </div>
 
         {/* + New project button */}
@@ -780,7 +783,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
           <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-gray-500">
             {projects.length === 0
               ? (canManageProjects
-                ? 'Projects keep tasks, agents, and connected resources organized in one place.'
+                ? (showAi ? 'Projects keep tasks, agents, and connected resources organized in one place.' : 'Projects keep your tasks and delivery progress organized in one place.')
                 : 'Projects and repositories will appear here when a project manager initiates them for this workspace.')
               : 'Try a different search or clear the active filters to see more projects.'}
           </p>

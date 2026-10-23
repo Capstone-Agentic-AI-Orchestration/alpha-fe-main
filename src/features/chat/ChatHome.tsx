@@ -19,6 +19,8 @@ export interface ChatHomeProps {
   onProjectChange: (projectId: string | null) => void;
   message: string;
   onMessageChange: (message: string) => void;
+  approvalMode: 'ask' | 'approve' | 'full';
+  onApprovalModeChange: (mode: 'ask' | 'approve' | 'full') => void;
   /** Creates the conversation and sends the first message. */
   onSend: () => void;
   canSend: boolean;
@@ -97,7 +99,7 @@ function timeAgo(iso: string, now = Date.now()): string {
  * sent, so opening Alpha or pressing New chat never leaves empty conversations.
  */
 export function ChatHome({
-  userName, projects, projectId, onProjectChange, message, onMessageChange, onSend, canSend, blockedReason, recent, onOpenRecent
+  userName, projects, projectId, onProjectChange, message, onMessageChange, approvalMode, onApprovalModeChange, onSend, canSend, blockedReason, recent, onOpenRecent
 }: ChatHomeProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -135,6 +137,12 @@ export function ChatHome({
         />
         <div className="mt-2 flex items-center gap-2">
           <ProjectPicker projects={projects} projectId={projectId} onChange={onProjectChange} />
+          <label className="sr-only" htmlFor="chat-home-approval-mode">Model access</label>
+          <select id="chat-home-approval-mode" aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => onApprovalModeChange(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-40 rounded-lg border border-white/10 bg-surface-100 px-2 py-1.5 text-[11px] text-gray-300 outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50">
+            <option value="ask">Ask for approval</option>
+            <option value="approve">Approve for me</option>
+            <option value="full">Full access</option>
+          </select>
           <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">{blockedReason ?? (projectId ? 'Builds run in this project’s codebases.' : 'Not connected to a project. Pick one when you want Alpha to build.')}</span>
           <button type="submit" disabled={!ready} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-on-accent hover:bg-brand-400 disabled:opacity-30">
             <ArrowUp className="h-4 w-4" />
