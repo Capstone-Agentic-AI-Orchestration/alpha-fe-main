@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  ExternalLink, FileCode2, GitBranch, GitPullRequest, KeyRound,
+  Download, ExternalLink, FileCode2, GitBranch, GitPullRequest, KeyRound,
   LayoutDashboard, MonitorPlay, PlayCircle, ScrollText, type LucideIcon
 } from 'lucide-react';
 
@@ -8,6 +8,7 @@ import { useApp, useTabSessionState } from '@/app/AppContext';
 import { apiService } from '@/shared/services/apiService';
 import { RepoBranch, RepoPullRequest } from '@/shared/types';
 import { BranchSwitcher } from './BranchSwitcher';
+import { CloneToComputerDialog, canCloneToComputer } from './CloneToComputerDialog';
 import { PipelineStrip } from './PipelineStrip';
 import { RepoFileBrowser } from './RepoFileBrowser';
 import { RepoHostingPanel } from './RepoHostingPanel';
@@ -58,6 +59,9 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
     onInitialRepositoryApplied?.();
   }, [initialRepository, requestedRepository, onInitialRepositoryApplied, setStoredTab]);
   const [repositoryOpened, setRepositoryOpened] = useState(tab !== 'overview');
+  const [cloneOpen, setCloneOpen] = useState(false);
+  // Clients never get code; everyone else may clone onto their own computer in the desktop app.
+  const canClone = role !== 'client' && repositories.length > 0 && canCloneToComputer();
   useEffect(() => {
     if (tab !== 'overview') setRepositoryOpened(true);
   }, [tab]);
@@ -103,7 +107,8 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
           })}
         </div>
         {tab !== 'overview' && repo && !repositoryPending && (
-          <div role="group" aria-label="Repository" className="my-2 flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-white/[0.08] bg-surface-raised p-0.5">
+          <div className="my-2 flex max-w-full items-center gap-2">
+          <div role="group" aria-label="Repository" className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-white/[0.08] bg-surface-raised p-0.5">
             {repositories.map(value => (
               <button
                 key={value} type="button" aria-pressed={value === repo}
@@ -114,7 +119,13 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
               >{shortName(value)}</button>
             ))}
           </div>
+          {canClone && <button type="button" onClick={() => setCloneOpen(true)} title="Clone the project's repositories to a folder on this computer"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-surface-raised px-3 py-1.5 text-[11px] font-medium text-gray-200 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
+            <Download className="h-3.5 w-3.5" aria-hidden />Clone to computer
+          </button>}
+          </div>
         )}
+      <CloneToComputerDialog isOpen={cloneOpen} onClose={() => setCloneOpen(false)} projectId={projectId} repositories={repositories} />
       </div>
 
       <div id={panelId('overview')} role="tabpanel" aria-labelledby={tabId('overview')}

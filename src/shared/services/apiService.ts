@@ -314,6 +314,17 @@ export interface IssueBuildStatus {
   updatedAt: string;
 }
 
+/** What happened to one repository when cloning a project into a chosen folder. */
+export interface FolderCloneResult {
+  repo: string;
+  path: string | null;
+  /** False when a checkout was already there and was reused. */
+  cloned: boolean;
+  /** True when it became this computer's working copy for Alpha's builds. */
+  bound: boolean;
+  error?: string;
+}
+
 export const apiService = {
   /** Internal ticket API path; preserves the existing session, workspace and desktop relay transport. */
   ticketRequest: async <T>(path: string, options?: RequestInit): Promise<T> => {
@@ -485,6 +496,12 @@ export const apiService = {
     fetchJson<ProjectBinding[]>(`/projects/${encodeURIComponent(projectId)}/clone`, {
       method: 'POST',
       body: JSON.stringify(repo ? { repo } : {})
+    }),
+  /** Clone the chosen repositories into a folder on this computer, optionally as Alpha's working copies. */
+  cloneProjectTo: (projectId: string, payload: { repos: string[]; intoDir: string; bind: boolean }) =>
+    fetchJson<{ results: FolderCloneResult[] }>(`/projects/${encodeURIComponent(projectId)}/clone-to`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
     }),
   /** Each of the project's repositories and this machine's checkout of it, if any. */
   getRepositoryCheckouts: (projectId: string) =>
