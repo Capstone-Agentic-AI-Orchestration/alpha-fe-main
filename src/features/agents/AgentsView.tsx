@@ -42,6 +42,7 @@ import {
   modelsForProvider,
   defaultModelFor,
   reasoningEffortsForProviderModel,
+  modelSourceNote,
   REASONING_EFFORT_LABELS
 } from '@/shared/lib/providers';
 
@@ -744,7 +745,7 @@ export const AgentsView: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] text-gray-500 font-mono uppercase">Provider</label>
+                        <label className="text-[10px] text-gray-500 font-mono uppercase">Runs on</label>
                         {isManagedByFile(selectedAgent, 'modelProvider') && (
                           <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
                         )}
@@ -828,6 +829,11 @@ export const AgentsView: React.FC = () => {
                           </select>
                         );
                       })()}
+                      {selectedAgent.modelName && (
+                        <p className="mt-1 text-[10px] leading-4 text-gray-500">
+                          {modelSourceNote(runtimes, selectedAgent.modelProvider, selectedAgent.modelName)}
+                        </p>
+                      )}
                     </div>
 
                     <div>
