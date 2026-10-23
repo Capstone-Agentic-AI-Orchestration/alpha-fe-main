@@ -9,6 +9,7 @@ import {
   ScaffoldStack
 } from '@/shared/types';
 import { useApp } from '@/app/AppContext';
+import { aiFeaturesEnabled } from '@/config/features';
 import { GitBranch, Folder, FolderOpen, Plus, Trash2, Unlink } from 'lucide-react';
 import { CheckoutSummary, RepoCheckoutLine, useRepositoryCheckouts } from './ProjectWorkspaceCard';
 import { ScaffoldResultCard } from './ScaffoldResultCard';
@@ -82,7 +83,9 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   onProvisioningChange
 }) => {
   const isFull = variant === 'full';
-  const { showToast, can } = useApp();
+  const { showToast, can, role } = useApp();
+  // Attaching working copies is agent setup, hidden for roles without AI features (config/features.ts).
+  const showAgentSetup = aiFeaturesEnabled(role);
   const canBind = can('bind_workspace');
   // Re-read whenever the repositories change: one created, attached or deleted.
   const repoKey = resources
@@ -581,8 +584,9 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       <div className={`space-y-2 overflow-y-auto ${deletingId ? 'max-h-[28rem]' : 'max-h-72'}`}>
         {resources.length === 0 ? (
           <p className="p-3 text-gray-500 italic bg-well rounded-xl border border-white/5">
-            Nothing attached yet. Agents need a working copy before they can run —
-            attach a folder above.
+            {showAgentSetup
+              ? 'Nothing attached yet. Agents need a working copy before they can run — attach a folder below.'
+              : 'No repositories yet.'}
           </p>
         ) : (
           resources.map((res) => {
@@ -670,7 +674,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         </p>
       )}
 
-      {isFull && !readOnly && (
+      {isFull && !readOnly && showAgentSetup && (
         <>
           {/* Hidden native OS folder picker input */}
           <input
