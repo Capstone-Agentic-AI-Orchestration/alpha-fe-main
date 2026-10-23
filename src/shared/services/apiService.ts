@@ -825,7 +825,7 @@ export const apiService = {
       `/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/route`,
       { method: 'POST', body: JSON.stringify(payload) }
     ),
-  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string; attachmentIds?: string[]; issueId?: string }) =>
+  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string; attachmentIds?: string[]; issueId?: string; approvalMode?: 'ask' | 'approve' | 'full' }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;
