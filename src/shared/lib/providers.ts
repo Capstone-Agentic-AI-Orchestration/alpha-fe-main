@@ -80,6 +80,60 @@ export function defaultModelFor(runtimes: RuntimeEngine[], provider: ModelProvid
   return modelsForProvider(runtimes, provider)[0] ?? '';
 }
 
+/**
+ * The company that makes a model, read from its id.
+ *
+ * The runtime and the model's maker are separate: Google Antigravity runs
+ * Anthropic's Claude, and OpenCode runs many makers' models. Null when the id
+ * does not say.
+ */
+export function modelMaker(modelName: string | undefined): string | null {
+  const id = (modelName ?? '').toLowerCase().split('/').pop() ?? '';
+  if (/^(claude|opus|sonnet|haiku)/.test(id)) return 'Anthropic';
+  if (/^(gemini|gemma)/.test(id)) return 'Google';
+  if (/^(gpt|o\d|codex|chatgpt|text-embedding)/.test(id)) return 'OpenAI';
+  if (id.startsWith('deepseek')) return 'DeepSeek';
+  if (id.startsWith('grok')) return 'xAI';
+  if (id.startsWith('kimi')) return 'Moonshot AI';
+  if (id.startsWith('qwen')) return 'Alibaba';
+  if (id.startsWith('glm')) return 'Zhipu AI';
+  if (id.startsWith('mistral')) return 'Mistral';
+  if (id.startsWith('minimax')) return 'MiniMax';
+  if (id.startsWith('llama')) return 'Meta';
+  return null;
+}
+
+/** The company behind each runtime's own plan, when it has one. */
+const RUNTIME_MAKER: Partial<Record<ModelProvider, string>> = {
+  Anthropic: 'Anthropic',
+  OpenAI: 'OpenAI',
+  Antigravity: 'Google',
+  'Google Gemini': 'Google'
+};
+
+/**
+ * One sentence on where a model runs and whose usage it spends, so a Claude
+ * model on Antigravity is not mistaken for one on Claude Code.
+ */
+export function modelSourceNote(runtimes: RuntimeEngine[], provider: ModelProvider, modelName: string | undefined): string {
+  const runtime = runtimes.find(item => RUNTIME_TO_PROVIDER[item.id] === provider);
+  const runner = runtime?.name ?? provider;
+  const maker = modelMaker(modelName);
+  const usage = `Usage counts against your ${runner} plan.`;
+  if (!maker || maker === RUNTIME_MAKER[provider]) return usage;
+  return `Made by ${maker}, run by ${runner}. ${usage}`;
+}
+
+/** Models grouped by maker, in the order they were reported. */
+export function modelsByMaker(models: string[]): Array<{ maker: string; models: string[] }> {
+  const groups = new Map<string, string[]>();
+  for (const model of models) {
+    const maker = modelMaker(model) ?? 'Other';
+    groups.set(maker, [...(groups.get(maker) ?? []), model]);
+  }
+  return [...groups].map(([maker, items]) => ({ maker, models: items }));
+}
+
 /* ---------------------------------------------------------------------------
  * Runtime-keyed views of the same data.
  *
@@ -127,7 +181,11 @@ export function reasoningEffortsForProviderModel(
     return ['low', 'medium', 'high', 'xhigh', 'max'];
   }
 
-  if (provider === 'Antigravity' || provider === 'Google Gemini') {
+  // Antigravity models carry their level in the id (gemini-3.8-flash-high,
+  // claude-opus-4-6-thinking) and agy refuses --effort for them.
+  if (provider === 'Antigravity') return [];
+
+  if (provider === 'Google Gemini') {
     // agy exposes a smaller --effort surface than Claude Code.
     return ['low', 'medium', 'high'];
   }

@@ -107,7 +107,8 @@ export const App: React.FC = () => {
     identityStatus,
     refreshIdentity,
     localMode,
-    continueInLocalMode
+    continueInLocalMode,
+    showToast
   } = useApp();
   const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
   const [mountedTabIds, setMountedTabIds] = useState<Set<string>>(() => new Set([activeTabId]));
@@ -176,21 +177,25 @@ export const App: React.FC = () => {
   // this during render would lose it on the first re-render.
   const [signInError] = useState<SignInError | undefined>(consumeSignInError);
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   /**
    * Sign out, which is a different act on each half.
    *
-   * On the web it ends the session cookie. On the desktop there is no session:
-   * the machine is signed in to GitHub, and signing out means disconnecting
-   * that account -- the same thing the connection panel in Settings does.
+   * On the web it ends the session cookie. On the desktop it clears Alpha's
+   * own GitHub sign-in -- the same action as Connected Accounts in Settings.
    */
   const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
     try {
       await (isDesktop ? apiService.githubLogout() : apiService.signOut());
-    } finally {
       // Reload rather than mutate state: signing out invalidates every cached
       // collection in the provider, and a fresh boot is simpler than unwinding
       // them one at a time.
       window.location.reload();
+    } catch (error) {
+      showToast('Could not sign out', error instanceof Error ? error.message : String(error), 'error');
+      setSigningOut(false);
     }
   };
   // Start in the compact rail. The sidebar reveals itself on pointer hover or
@@ -401,6 +406,7 @@ export const App: React.FC = () => {
         onOpenNewIssue={() => setTabSessionState(activeTabId, 'issueModal.open', true)}
         onSignOut={signOut}
         onSwitchProfile={isDesktop ? () => setProfilePickerOpen(true) : undefined}
+        signingOut={signingOut}
       />
 
       {/* Main Workspace Frame */}

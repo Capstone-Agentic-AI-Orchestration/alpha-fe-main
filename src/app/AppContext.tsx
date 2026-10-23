@@ -449,6 +449,8 @@ export interface ChatSendOptions {
   issueId?: string;
   /** Project of a thread created in the same tick, before it reaches `chatThreads`. */
   projectId?: string;
+  /** Approval policy for the selected runtime when this message is handled as chat. */
+  approvalMode?: 'ask' | 'approve' | 'full';
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -3025,6 +3027,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
         projectId: options.projectId ?? chatThreads.find(thread => thread.id === targetThreadId)?.projectId,
         intent,
         issueId: options.issueId,
+        approvalMode: options.approvalMode,
         clientMessageId: userMsg.id,
         attachmentIds: attachments.map(attachment => attachment.id)
       });

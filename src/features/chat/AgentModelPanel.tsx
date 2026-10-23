@@ -1,7 +1,7 @@
 import { Activity, X } from 'lucide-react';
 
 import type { Agent, ModelProvider, ReasoningEffort, RuntimeEngine } from '@/shared/types';
-import { defaultModelFor, modelsForProvider, providerOptions, reasoningEffortsForProviderModel } from '@/shared/lib/providers';
+import { defaultModelFor, modelSourceNote, modelsByMaker, modelsForProvider, providerOptions, reasoningEffortsForProviderModel } from '@/shared/lib/providers';
 
 const EFFORT_LABEL: Record<string, string> = {
   minimal: 'Minimal', low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra high', max: 'Max', ultra: 'Ultra', none: 'None'
@@ -31,6 +31,7 @@ const fieldClass = 'w-full rounded-lg border border-white/10 bg-black/40 px-2.5 
 export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, onViewActivity, changedFiles, onClose }: AgentModelPanelProps) {
   const providers = providerOptions(runtimes);
   const models = modelsForProvider(runtimes, agent.modelProvider);
+  const groups = modelsByMaker(models);
   const efforts = reasoningEffortsForProviderModel(agent.modelProvider, agent.modelName);
   const keepEffort = (provider: ModelProvider | string, modelName: string) => {
     const allowed = reasoningEffortsForProviderModel(provider, modelName);
@@ -66,7 +67,7 @@ export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, on
       </section>}
 
       <label className="block space-y-0.5">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Provider</span>
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Runs on</span>
         <select value={agent.modelProvider} disabled={!canEdit} className={fieldClass}
           onChange={event => {
             const provider = event.target.value as ModelProvider;
@@ -84,17 +85,22 @@ export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, on
           ? <select value={agent.modelName} disabled={!canEdit} className={fieldClass + ' font-mono'}
               onChange={event => onUpdate(agent.id, { modelName: event.target.value, reasoningEffort: keepEffort(agent.modelProvider, event.target.value) })}>
               {agent.modelName && !models.includes(agent.modelName) && <option value={agent.modelName}>{agent.modelName} (not detected)</option>}
-              {models.map(model => <option key={model} value={model}>{model}</option>)}
+              {groups.length > 1
+                ? groups.map(group => <optgroup key={group.maker} label={group.maker + ' models'}>
+                    {group.models.map(model => <option key={model} value={model}>{model}</option>)}
+                  </optgroup>)
+                : models.map(model => <option key={model} value={model}>{model}</option>)}
             </select>
           : <input value={agent.modelName} disabled={!canEdit} placeholder="No models detected; type a model id" className={fieldClass + ' font-mono'}
               onChange={event => onUpdate(agent.id, { modelName: event.target.value })} />}
+        {agent.modelName && <span className="block pt-0.5 text-[10px] leading-4 text-gray-400">{modelSourceNote(runtimes, agent.modelProvider, agent.modelName)}</span>}
       </label>
 
       <label className="block space-y-0.5">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Reasoning effort</span>
-        <select value={agent.reasoningEffort ?? ''} disabled={!canEdit || !efforts.length} className={fieldClass}
+        <select value={efforts.length ? agent.reasoningEffort ?? '' : ''} disabled={!canEdit || !efforts.length} className={fieldClass}
           onChange={event => onUpdate(agent.id, { reasoningEffort: (event.target.value || null) as ReasoningEffort | null })}>
-          <option value="">Auto</option>
+          <option value="">{efforts.length ? 'Auto' : 'Set by the model'}</option>
           {efforts.map(effort => <option key={effort} value={effort}>{EFFORT_LABEL[effort] ?? effort}</option>)}
         </select>
       </label>
