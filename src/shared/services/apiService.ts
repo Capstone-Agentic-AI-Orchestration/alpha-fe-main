@@ -41,6 +41,7 @@ import {
   ScaffoldResponse,
   RepoBranch,
   RepoTree,
+  RepoArchitecture,
   RepoFile,
   RepoCompare,
   RepoPullRequest,
@@ -1045,6 +1046,8 @@ export const apiService = {
     fetchJson<{ branches: RepoBranch[] }>(`${projectRepoPath(projectId, repo)}/branches`),
   getRepoTree: (projectId: string, repo: string, ref: string) =>
     fetchJson<RepoTree>(`${projectRepoPath(projectId, repo)}/tree${query({ ref })}`),
+  getRepoArchitecture: (projectId: string, repo: string) =>
+    fetchJson<RepoArchitecture>(`${projectRepoPath(projectId, repo)}/architecture`),
   getRepoFile: (projectId: string, repo: string, path: string, ref: string) =>
     fetchJson<RepoFile>(`${projectRepoPath(projectId, repo)}/file${query({ path, ref })}`),
   compareRepoBranches: (projectId: string, repo: string, base: string, head: string) =>
