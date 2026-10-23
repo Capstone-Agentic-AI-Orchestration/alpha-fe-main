@@ -325,6 +325,12 @@ export interface FolderCloneResult {
   error?: string;
 }
 
+/** This computer's projects folder, where each project gets its own folder. */
+export interface CodeFolderSetting {
+  codeFolder: string;
+  defaultCodeFolder: string;
+}
+
 export const apiService = {
   /** Internal ticket API path; preserves the existing session, workspace and desktop relay transport. */
   ticketRequest: async <T>(path: string, options?: RequestInit): Promise<T> => {
@@ -414,6 +420,14 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  /** The projects folder on this computer (desktop only). */
+  getCodeFolder: () => fetchJson<CodeFolderSetting>('/machine/code-folder'),
+  /** Move the projects folder; null goes back to Documents\AlphaProjects. */
+  setCodeFolder: (dir: string | null) =>
+    fetchJson<CodeFolderSetting>('/machine/code-folder', { method: 'PUT', body: JSON.stringify({ dir }) }),
+  /** A project's folder on this computer, created if it is the default one. */
+  getProjectFolder: (projectId: string) =>
+    fetchJson<{ codeFolder: string; folder: string; isDefault: boolean }>(`/projects/${encodeURIComponent(projectId)}/folder`),
   /** The organisation's role-granting teams, for staffing a workspace as it is created. */
   getOrgTeamRoster: () =>
     fetchJson<Array<{

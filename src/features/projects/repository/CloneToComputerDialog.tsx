@@ -37,7 +37,13 @@ export const CloneToComputerDialog: React.FC<{
   useEffect(() => {
     if (!isOpen) return;
     setSelected(repositories); setBind(false); setBusy(false); setError(null); setResults(null);
-  }, [isOpen, repositories]);
+    // Start in the project's own folder on this computer, which Alpha creates.
+    let current = true;
+    void apiService.getProjectFolder(projectId)
+      .then(location => { if (current) setFolder(previous => previous || location.folder); })
+      .catch(() => undefined);
+    return () => { current = false; };
+  }, [isOpen, repositories, projectId]);
 
   const browse = async () => {
     try {

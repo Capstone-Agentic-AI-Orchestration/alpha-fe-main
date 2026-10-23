@@ -18,6 +18,7 @@ import { desktop, isDesktop, type UpdateCheck } from '@/shared/desktop';
 import { GitHubConnectionPanel } from './GitHubConnectionPanel';
 import { McpServersPanel } from './McpServersPanel';
 import { WorkspaceAccessPanel } from './WorkspaceAccessPanel';
+import { ProjectFoldersPanel } from './ProjectFoldersPanel';
 
 export const SettingsView: React.FC = () => {
   const { settings, updateSettings, role, can } = useApp();
@@ -205,6 +206,7 @@ export const SettingsView: React.FC = () => {
                     in a browser tab. */}
                 {isDesktop && (
                   <div className="pt-4 border-t border-white/10">
+                    <div className="mb-4"><ProjectFoldersPanel /></div>
                     <div className="p-4 rounded-xl bg-well border border-white/10 space-y-3">
                       <div>
                         <div className="text-xs font-semibold text-white flex items-center gap-2">
