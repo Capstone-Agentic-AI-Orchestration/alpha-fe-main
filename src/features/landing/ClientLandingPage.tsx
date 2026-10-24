@@ -59,6 +59,21 @@ const recap = [
   { text: <>starts with <b>one message.</b></>, range: [0.775, 0.93] },
 ];
 
+function captionIndex(pp: number): number {
+  if (pp < 0.13) return 0;
+  return pp < 0.26 ? 1 : 2;
+}
+
+function recapClass(pp: number, [from, to]: number[]): string {
+  if (pp >= to) return 'is-past';
+  return pp >= from ? 'is-on' : '';
+}
+
+function railClass(index: number, step: number): string {
+  if (index === step) return 'is-on';
+  return index < step ? 'is-done' : '';
+}
+
 /** "Zoom journey" landing: a scroll-driven camera dives into the client's project, then back out to the two doors. */
 export default function ClientLandingPage() {
   const [slug, setSlug] = useState(readSlug);
@@ -144,7 +159,7 @@ export default function ClientLandingPage() {
   const { flat, hp, ip, wp, pp, active } = journey;
   const litWords = flat ? ideaWords.length : Math.floor(clamp(ip * 1.9) * ideaWords.length);
   const step = flat ? -1 : journeyStep(wp);
-  const caption = flat ? -1 : pp < 0.13 ? 0 : pp < 0.26 ? 1 : 2;
+  const caption = flat ? -1 : captionIndex(pp);
   const sectionClass = (base: string, id: string) => `${base}${flat || active === id ? ' is-in' : ''}`;
   const shown = (on: boolean) => flat || on ? ' is-on' : '';
   const heroStyle: CSSProperties = flat ? {} : { opacity: clamp((0.5 - hp) / 0.26), transform: `scale(${1 + clamp((hp - 0.2) / 0.3) * 0.08})` };
@@ -168,7 +183,7 @@ export default function ClientLandingPage() {
       </ul>
     </nav>
     <div className="cl-recap" aria-hidden="true">
-      {recap.map(({ text, range: [from, to] }, index) => <span key={index} className={flat ? '' : pp >= from && pp < to ? 'is-on' : pp >= to ? 'is-past' : ''}>{text}</span>)}
+      {recap.map(({ text, range }) => <span key={range[0]} className={flat ? '' : recapClass(pp, range)}>{text}</span>)}
     </div>
 
     <div className="cl-layer">
@@ -208,7 +223,7 @@ export default function ClientLandingPage() {
             <div className="cl-idea-in public-container">
               <span className="cl-eyebrow cl-mono cl-fade">The idea</span>
               <p className="cl-manifesto cl-fade">
-                {ideaWords.map((word, index) => <span key={index} className={`cl-word${index < litWords ? ' is-on' : ''}${highlighted.has(word) ? ' is-accent' : ''}`}>{index < ideaWords.length - 1 ? `${word} ` : word}</span>)}
+                {ideaWords.map((word, index) => <span key={word} className={`cl-word${index < litWords ? ' is-on' : ''}${highlighted.has(word) ? ' is-accent' : ''}`}>{index < ideaWords.length - 1 ? `${word} ` : word}</span>)}
               </p>
               <div className="cl-assurances cl-mono cl-fade"><span>A project manager reviews every inquiry</span><span>Only invited clients can sign in</span><span>Your project stays private</span></div>
             </div>
@@ -223,7 +238,7 @@ export default function ClientLandingPage() {
                 <span className="cl-eyebrow cl-mono">How it works</span>
                 <h2 id="client-how-heading">Three steps.<br /><span>Nothing to set up.</span></h2>
                 <div className="cl-rail cl-mono" aria-hidden="true">
-                  {steps.map((_, index) => <span key={index} className={index === step ? 'is-on' : index < step ? 'is-done' : ''}><span>0{index + 1}</span><i /></span>)}
+                  {steps.map(({ title }, index) => <span key={title} className={railClass(index, step)}><span>0{index + 1}</span><i /></span>)}
                 </div>
               </div>
               <ol className="cl-steps cl-fade">

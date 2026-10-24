@@ -20,6 +20,7 @@ type World = {
   dust3: [number, number, number][];
 };
 type Frame = { U: number; time: number; still: boolean; mx: number; my: number; projP: number; wp: number };
+type WorldPainter = (ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) => void;
 type WarpStreak = { a: number; r0: number; sp: number; len: number; hot: number };
 
 /** Scroll progress per sticky section, each 0–1. */
@@ -32,7 +33,11 @@ const smooth = (x: number) => { x = clamp(x); return x * x * (3 - 2 * x); };
 const lerp = (a: Vec, b: Vec, t: number): Vec => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
 function seeded(seed: number) {
-  return () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  let state = seed;
+  return () => {
+    state = (state * 16807) % 2147483647;
+    return state / 2147483647;
+  };
 }
 
 function buildWorld(): World {
@@ -77,48 +82,89 @@ function pureCamera(level: number): Camera {
   return { i, s, q: [p[0] * (1 - keep), p[1] * (1 - keep)], P: PORTALS };
 }
 
+function introCamera(g: number): Camera {
+  const u = clamp((g - 0.18) / 0.82);
+  const eased = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+  return pureCamera(Math.min(0.9999, eased * 0.9999));
+}
+
+function nebulaCamera(u: number): Camera {
+  return pureCamera(u < 0.8 ? 1 + 0.12 * (u / 0.8) : 1.12 + 0.8799 * smooth((u - 0.8) / 0.2));
+}
+
+/** Planets: zoom in, pan across the three steps (holding on each), then dive into the third. */
+function planetsCamera(u: number): Camera {
+  const Z = 2.4, C = PORTALS['2'];
+  const A: Vec = [-1.0 - 0.26 / Z, 0.15], B: Vec = [0.24 / Z, -0.25 - 0.14 / Z], Cf: Vec = [C[0] + 0.26 / Z, C[1] + 0.08 / Z];
+  if (u < 0.12) {
+    const t = smooth(u / 0.12);
+    return { i: 2, s: Math.exp(Math.log(Z) * t), q: lerp([0, 0], A, t), P: PORTALS };
+  }
+  if (u >= 0.8) {
+    const t = smooth((u - 0.8) / 0.2);
+    return { i: 2, s: Math.min(ZOOM - 0.01, Math.exp(Math.log(Z) + (Math.log(ZOOM) - Math.log(Z)) * t)), q: lerp(Cf, C, Math.min(1, t * 1.4)), P: PORTALS };
+  }
+  // Each pan glides for 0.12 and then holds, so a later pan picks up where the previous one stopped.
+  const pans: [number, Vec, Vec][] = [[0.3, A, B], [0.6, B, Cf]];
+  let q = A;
+  pans.forEach(([from, a, b]) => { if (u >= from) q = lerp(a, b, smooth((u - from) / 0.12)); });
+  return { i: 2, s: Z, q, P: PORTALS };
+}
+
+/** Keyframes [progress, x offset, y offset] that drift the project camera between the three captions. */
+const CAPTION_DRIFT = [[0, 0, 0], [0.05, 0.24, -0.06], [0.11, 0.24, -0.06], [0.15, -0.24, 0.1], [0.24, -0.24, 0.1], [0.28, -0.24, -0.08], [0.36, -0.24, -0.08], [0.4, 0, 0]];
+
+/** Project: drift between the captions, then pull all the way back out. */
+function projectCamera(u: number): Camera {
+  const c = pureCamera(u < 0.4 ? 3 + 0.08 * (u / 0.4) : 3.08 - 3.83 * smooth((u - 0.4) / 0.6));
+  if (c.i !== 3 || u >= 0.4) return c;
+  let j = 0;
+  while (j < CAPTION_DRIFT.length - 2 && u > CAPTION_DRIFT[j + 1][0]) j++;
+  const a = CAPTION_DRIFT[j], b = CAPTION_DRIFT[j + 1], t = smooth((u - a[0]) / (b[0] - a[0]));
+  const ox = a[1] + (b[1] - a[1]) * t, oy = a[2] + (b[2] - a[2]) * t;
+  c.q = [c.q[0] - ox / c.s, c.q[1] - oy / c.s];
+  return c;
+}
+
 /** Maps global progress g (0 hero … 4 end) to a camera. */
 function camera(g: number): Camera {
-  if (g < 1) {
-    const u = clamp((g - 0.18) / 0.82);
-    const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
-    return pureCamera(Math.min(0.9999, e * 0.9999));
-  }
-  if (g < 2) { const u = g - 1; return pureCamera(u < 0.8 ? 1 + 0.12 * (u / 0.8) : 1.12 + 0.8799 * smooth((u - 0.8) / 0.2)); }
-  if (g < 3) {
-    // Planets: pan across the three steps, then dive into the third.
-    const u = g - 2;
-    const Z = 2.4, A0: Vec = [-1.0, 0.15], B0: Vec = [0, -0.25], C = PORTALS['2'];
-    const A: Vec = [A0[0] - 0.26 / Z, A0[1]], B: Vec = [B0[0] + 0.24 / Z, B0[1] - 0.14 / Z], Cf: Vec = [C[0] + 0.26 / Z, C[1] + 0.08 / Z];
-    let s = 1, q: Vec = [0, 0];
-    if (u < 0.12) { const t = smooth(u / 0.12); s = Math.exp(Math.log(Z) * t); q = lerp([0, 0], A, t); }
-    else if (u < 0.3) { s = Z; q = A; }
-    else if (u < 0.42) { s = Z; q = lerp(A, B, smooth((u - 0.3) / 0.12)); }
-    else if (u < 0.6) { s = Z; q = B; }
-    else if (u < 0.72) { s = Z; q = lerp(B, Cf, smooth((u - 0.6) / 0.12)); }
-    else if (u < 0.8) { s = Z; q = Cf; }
-    else { const t = smooth((u - 0.8) / 0.2); s = Math.min(ZOOM - 0.01, Math.exp(Math.log(Z) + (Math.log(ZOOM) - Math.log(Z)) * t)); q = lerp(Cf, C, Math.min(1, t * 1.4)); }
-    return { i: 2, s, q, P: PORTALS };
-  }
-  if (g < 4) {
-    // Project: drift between the captions, then pull all the way back out.
-    const u = g - 3;
-    const c = pureCamera(u < 0.4 ? 3 + 0.08 * (u / 0.4) : 3.08 - 3.83 * smooth((u - 0.4) / 0.6));
-    const K = [[0, 0, 0], [0.05, 0.24, -0.06], [0.11, 0.24, -0.06], [0.15, -0.24, 0.1], [0.24, -0.24, 0.1], [0.28, -0.24, -0.08], [0.36, -0.24, -0.08], [0.4, 0, 0]];
-    if (c.i === 3 && u < 0.4) {
-      let j = 0; while (j < K.length - 2 && u > K[j + 1][0]) j++;
-      const a = K[j], b = K[j + 1], t = smooth((u - a[0]) / (b[0] - a[0]));
-      const ox = a[1] + (b[1] - a[1]) * t, oy = a[2] + (b[2] - a[2]) * t;
-      c.q = [c.q[0] - ox / c.s, c.q[1] - oy / c.s];
-    }
-    return c;
-  }
+  if (g < 1) return introCamera(g);
+  if (g < 2) return nebulaCamera(g - 1);
+  if (g < 3) return planetsCamera(g - 2);
+  if (g < 4) return projectCamera(g - 3);
   return pureCamera(-0.75);
 }
 
+/** How far the project world has lit up (0–1). */
+function projectProgress(progress: JourneyProgress, g: number): number {
+  if (g >= 4) return 1;
+  if (g < 3) return 0;
+  return clamp(progress.flat ? (g - 3) / 0.32 : progress.pp / 0.32);
+}
+
+/** Progress through the planets scene, held at 1 once the camera has moved past it. */
+function stepsProgress(g: number): number {
+  if (g >= 3) return 1;
+  return g >= 2 ? g - 2 : 0;
+}
+
+function nebulaColor(r: number, hot: number): string {
+  if (r < 0.35) return '245,243,252';
+  if (hot > 0.8) return '103,232,249';
+  if (hot > 0.5) return '208,191,255';
+  return '178,154,245';
+}
+
+const STATUS_LABEL: Record<Kind, string> = { em: 'Done', am: 'Awaiting you', vi: 'In progress' };
+
+function buildWarp(): WarpStreak[] {
+  const rnd = seeded(41);
+  return Array.from({ length: 180 }, () => ({ a: rnd() * 6.2832, r0: rnd(), sp: 0.5 + rnd() * 0.9, len: 0.04 + rnd() * 0.1, hot: rnd() }));
+}
+
 export class ZoomScene {
-  private world: World | null = null;
-  private warpStreaks: WarpStreak[] | null = null;
+  private readonly world = buildWorld();
+  private readonly warpStreaks = buildWarp();
   private eased: number | null = null;
   private lastTime: number | null = null;
 
@@ -137,66 +183,64 @@ export class ZoomScene {
     return 4;
   }
 
-  draw(time: number, still: boolean, progress: JourneyProgress, pointer: Vec) {
+  /** Matches the backing store to the CSS size and clears it; null while the canvas has no size. */
+  private prepare(): { ctx: CanvasRenderingContext2D; w: number; h: number } | null {
     const cv = this.canvas;
     const w = cv.clientWidth, h = cv.clientHeight;
-    if (!w || !h) return;
-    const ctx = cv.getContext('2d');
-    if (!ctx) return;
+    const ctx = w && h ? cv.getContext('2d') : null;
+    if (!ctx) return null;
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     if (cv.width !== Math.round(w * dpr) || cv.height !== Math.round(h * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr); }
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = BACKGROUND;
     ctx.fillRect(0, 0, w, h);
-    this.world ??= buildWorld();
+    return { ctx, w, h };
+  }
 
-    const target = this.globalProgress(progress, time, still);
-    let g = target;
-    if (!still) {
-      // Ease toward the scroll target so wheel steps glide instead of jump.
-      const dt = this.lastTime == null ? 0.016 : Math.min(0.1, Math.max(0, time - this.lastTime));
-      if (this.eased == null || Math.abs(target - this.eased) > 1.5) this.eased = target;
-      else this.eased += (target - this.eased) * Math.min(1, dt * 5.5);
-      g = this.eased;
-    }
+  /** Eases toward the scroll target so wheel steps glide instead of jump. */
+  private ease(target: number, time: number, still: boolean): number {
+    const last = this.lastTime;
     this.lastTime = time;
+    if (still) return target;
+    const dt = last == null ? 0.016 : Math.min(0.1, Math.max(0, time - last));
+    if (this.eased == null || Math.abs(target - this.eased) > 1.5) this.eased = target;
+    else this.eased += (target - this.eased) * Math.min(1, dt * 5.5);
+    return this.eased;
+  }
 
-    const cam = camera(g);
+  private drawWorld(ctx: CanvasRenderingContext2D, i: number, T: Transform, k: number, alpha: number, frame: Frame, w: number, h: number) {
+    if (alpha <= 0.01) return;
+    const worlds: Record<number, WorldPainter> = { [-1]: this.cosmos, 0: this.thread, 1: this.nebula, 2: this.planets, 3: this.project };
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    worlds[i]?.call(this, ctx, T, k, frame, w, h);
+    ctx.restore();
+  }
+
+  draw(time: number, still: boolean, progress: JourneyProgress, pointer: Vec) {
+    const surface = this.prepare();
+    if (!surface) return;
+    const { ctx, w, h } = surface;
+    const g = this.ease(this.globalProgress(progress, time, still), time, still);
     const [mx, my] = pointer;
     const U = Math.min(w, h) * 0.42;
     const cx = w / 2 + mx * 18, cy = h / 2 + my * 12;
-    const projP = progress.flat ? (g >= 3 && g < 4 ? (g - 3) / 0.32 : g >= 4 ? 1 : 0) : (g >= 3 ? clamp(progress.pp / 0.32) : 0);
-    const frame: Frame = { U, time, still, mx, my, projP: g >= 4 ? 1 : projP, wp: g >= 2 && g < 3 ? g - 2 : (g >= 3 ? 1 : 0) };
-    const drawWorld = (i: number, T: Transform, k: number, alpha: number) => {
-      if (alpha <= 0.01) return;
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      if (i === -1) this.cosmos(ctx, T, k, frame, w, h);
-      else if (i === 0) this.thread(ctx, T, k, frame, w, h);
-      else if (i === 1) this.nebula(ctx, T, k, frame, w, h);
-      else if (i === 2) this.planets(ctx, T, k, frame, w, h);
-      else if (i === 3) this.project(ctx, T, k, frame, w, h);
-      ctx.restore();
-    };
-    const { s, q, i } = cam;
+    const frame: Frame = { U, time, still, mx, my, projP: projectProgress(progress, g), wp: stepsProgress(g) };
+    const { s, q, i, P } = camera(g);
     const k = s * U;
     const T: Transform = (x, y) => [cx + (x - q[0]) * k, cy + (y - q[1]) * k];
-    drawWorld(i, T, k, 1 - clamp((s - 8) / 24));
+    this.drawWorld(ctx, i, T, k, 1 - clamp((s - 8) / 24), frame, w, h);
     if (i < 3) {
-      const p = cam.P[String(i)] ?? [0, 0];
+      // The next world in, seen through this world's portal.
+      const p = P[String(i)] ?? [0, 0];
       const Tc: Transform = (x, y) => T(p[0] + x / ZOOM, p[1] + y / ZOOM);
-      drawWorld(i + 1, Tc, k / ZOOM, clamp((s - 2.5) / 7));
+      this.drawWorld(ctx, i + 1, Tc, k / ZOOM, clamp((s - 2.5) / 7), frame, w, h);
     }
     if (!still && g > 3.4 && g < 4) this.warp(ctx, w, h, Math.sin(Math.PI * clamp((g - 3.4) / 0.6)), time);
   }
 
   private warp(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number, time: number) {
     if (intensity <= 0.01) return;
-    if (!this.warpStreaks) {
-      const rnd = seeded(41);
-      this.warpStreaks = [];
-      for (let i = 0; i < 180; i++) this.warpStreaks.push({ a: rnd() * 6.2832, r0: rnd(), sp: 0.5 + rnd() * 0.9, len: 0.04 + rnd() * 0.1, hot: rnd() });
-    }
     const cx = w / 2, cy = h / 2, R = Math.hypot(w, h) / 2;
     ctx.lineWidth = 1.2;
     this.warpStreaks.forEach(s => {
@@ -219,7 +263,7 @@ export class ZoomScene {
   }
 
   private cosmos(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
-    this.world!.stars.forEach(s => {
+    this.world.stars.forEach(s => {
       const p = T(s[0], s[1]);
       const tw = C.still ? 0.7 : 0.5 + 0.5 * Math.sin(C.time * (0.6 + s[2]) + s[3]);
       this.dot(ctx, p[0], p[1], 0.6 + s[2] * 0.9, s[2] > 0.85 ? '208,191,255' : '245,243,252', 0.15 + 0.5 * tw * s[2], w, h);
@@ -303,16 +347,16 @@ export class ZoomScene {
 
   private nebula(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
     const t = C.time;
-    this.world!.neb.forEach(p => {
+    this.world.neb.forEach(p => {
       const ang = p.arm * 2.0944 + p.r * 2.8 + p.off - t * 0.12 / (p.r + 0.35);
       const q = T(Math.cos(ang) * p.r, Math.sin(ang) * p.r * 0.62);
-      const col = p.r < 0.35 ? '245,243,252' : p.hot > 0.8 ? '103,232,249' : p.hot > 0.5 ? '208,191,255' : '178,154,245';
+      const col = nebulaColor(p.r, p.hot);
       const tw = C.still ? 1 : 0.7 + 0.3 * Math.sin(t * 1.3 + p.ph);
       this.dot(ctx, q[0], q[1], p.r < 0.3 ? 1.2 : 0.9, col, (0.2 + 0.6 * (1 - p.r / 1.8)) * tw, w, h);
     });
     const zs = k / C.U;
     const coreA = clamp(1 - (zs - 2) / 4);
-    this.world!.core.forEach(c => {
+    this.world.core.forEach(c => {
       const q = T(c[0], c[1]);
       this.dot(ctx, q[0], q[1], 1.2, '255,255,255', (0.5 + 0.5 * c[2]) * coreA, w, h);
     });
@@ -321,7 +365,7 @@ export class ZoomScene {
 
   private sphereAt(ctx: CanvasRenderingContext2D, T: Transform, cx: number, cy: number, R: number, rot: number, tilt: number, col: string, w: number, h: number) {
     const cr = Math.cos(rot), sr = Math.sin(rot), ct = Math.cos(tilt), st = Math.sin(tilt);
-    this.world!.sphere.forEach(p => {
+    this.world.sphere.forEach(p => {
       const x = p[0] * cr + p[2] * sr, z = -p[0] * sr + p[2] * cr, y = p[1];
       const y2 = y * ct - z * st, z2 = y * st + z * ct;
       const q = T(cx + x * R, cy + y2 * R);
@@ -331,7 +375,7 @@ export class ZoomScene {
 
   private planets(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
     const t = C.time;
-    this.world!.dust2.forEach(d => { const q = T(d[0], d[1]); this.dot(ctx, q[0], q[1], 0.8, '178,154,245', 0.15 + 0.3 * d[2], w, h); });
+    this.world.dust2.forEach(d => { const q = T(d[0], d[1]); this.dot(ctx, q[0], q[1], 0.8, '178,154,245', 0.15 + 0.3 * d[2], w, h); });
     const A: Vec = [-1.0, 0.15], B: Vec = [0, -0.25], Cc: Vec = [1.0, 0.2];
     ctx.save();
     ctx.setLineDash([2, 10]);
@@ -381,7 +425,7 @@ export class ZoomScene {
 
   private project(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
     const t = C.time;
-    const W = this.world!;
+    const W = this.world;
     const yaw = (C.still ? 0.3 : t * 0.12) + C.mx * 0.6, pitch = 0.2 + C.my * 0.3;
     const cy1 = Math.cos(yaw), sy1 = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
     const project = (p: readonly number[]): [number, number, number] => {
@@ -417,7 +461,7 @@ export class ZoomScene {
         ctx.beginPath(); ctx.arc(c[0], c[1], Math.max(6, k * 0.035) * (1.6 + j * 0.9), 0, 6.2832); ctx.stroke();
       }
       this.dot(ctx, c[0], c[1], Math.max(4, k * 0.03), COL[kind], 0.4 + 0.6 * lit, w, h);
-      if (lit > 0.6) labels.push({ x: c[0], y: c[1], text: wk.name + '  ·  ' + (kind === 'em' ? 'Done' : kind === 'am' ? 'Awaiting you' : 'In progress'), col: COL[kind], a: (lit - 0.6) / 0.4, r: Math.max(4, k * 0.03) });
+      if (lit > 0.6) labels.push({ x: c[0], y: c[1], text: wk.name + '  ·  ' + STATUS_LABEL[kind], col: COL[kind], a: (lit - 0.6) / 0.4, r: Math.max(4, k * 0.03) });
     });
     this.dot(ctx, hub[0], hub[1], Math.max(5, k * 0.04), '245,243,252', 1, w, h);
     for (let j = 0; j < 3; j++) {
@@ -450,5 +494,6 @@ export class ZoomScene {
 
 /** Which of the three "How it works" steps is in focus for a section progress. */
 export function journeyStep(progress: number): 0 | 1 | 2 {
-  return progress < 0.36 ? 0 : progress < 0.66 ? 1 : 2;
+  if (progress < 0.36) return 0;
+  return progress < 0.66 ? 1 : 2;
 }
