@@ -648,7 +648,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                       )}
                     </div>
                   </div>
-                  {repo && variant === 'inline' && (
+                  {repo && variant === 'inline' && role === 'dev' && (
                     <div className="border-t border-white/[0.06] px-2.5 py-2">
                       <button
                         type="button"
