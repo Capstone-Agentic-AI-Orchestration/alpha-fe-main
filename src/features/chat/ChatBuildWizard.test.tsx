@@ -25,6 +25,12 @@ const render = (overrides: Partial<ChatBuildWizardProps>) => renderToStaticMarku
   {...overrides} />);
 
 describe('the build panel above the message box', () => {
+  it('offers a reviewable Security plan instead of blindly retrying missing audit evidence', () => {
+    const html = render({ build: build('blocked', 'The task has no dependency audit findings.'), onAuditPlan: noop });
+    expect(html).toContain('Plan with Security');
+    expect(html).toContain('revised audit-and-fix plan for your review');
+    expect(html).not.toContain('Fix and continue');
+  });
   it('places each build state on its step', () => {
     expect(wizardStepFor(build('planning'))).toEqual({ step: 'plan', attention: false });
     expect(wizardStepFor(build('awaiting_plan_approval'))).toEqual({ step: 'approve', attention: true });
@@ -50,8 +56,17 @@ describe('the build panel above the message box', () => {
     expect(html).toContain('Plan ready for your approval');
     expect(html).toContain('Add the login page');
     expect(html).toContain('Start planned work');
+    expect(html).toContain('Saved plan document');
+    expect(html).toMatch(/disabled=""[^>]*>[\s\S]*?Start planned work/);
     expect(html).toContain('Stop and plan something else');
     expect(html).toMatch(/aria-current="step"[^>]*>.*Approve/);
+  });
+
+  it('offers milestone planning retry without treating it as final validation', () => {
+    const stopped = build('blocked', 'Milestone planning stopped before dispatch: Provider unavailable');
+    stopped.orchestration.tasks.forEach(task => { task.status = 'accepted'; });
+    expect(continueChoice(stopped)).toMatchObject({ label: 'Retry milestone planning' });
+    expect(continueChoice(stopped)?.action).toBeUndefined();
   });
 
   it('shows why a blocked build stopped, and offers to fix and continue', () => {
@@ -67,14 +82,18 @@ describe('the build panel above the message box', () => {
     expect(html).toContain('Your workspace role cannot start builds.');
   });
 
-  it('names the repository of the task being worked on, not only the first one', () => {
+  it('shows a working build as the step bar alone, and labels every repository it touches', () => {
     const running = build('executing');
     running.orchestration.run.currentTaskId = 't2';
     running.orchestration.tasks.push({ ...running.orchestration.tasks[0], id: 't2', title: 'Add the login API', repository: 'acme/shop-be', ownerName: 'Backend Agent', status: 'running' });
     running.agents = [{ name: 'Backend Agent', state: 'running', currentTaskTitle: 'Add the login API' }] as unknown as ProjectLiveBuild['agents'];
     expect(buildRepositoriesLabel(running)).toBe('shop-fe, shop-be');
     const html = render({ build: running });
-    expect(html).toContain('Add the login API · shop-be');
+    expect(html).toContain('aria-label="Build steps"');
+    expect(html).toContain('Pull request');
+    // The "who is working on what" line lives in the side panel now, not above the message box.
+    expect(html).not.toContain('Add the login API · shop-be');
+    expect(html).not.toMatch(/>Backend Agent is working</);
   });
 
   it('offers to re-run the final checks when every task is done, and reports what the agents delivered', () => {

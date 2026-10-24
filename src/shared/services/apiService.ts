@@ -13,6 +13,7 @@ import {
   PrototypeRun,
   SquadRun,
   ChatThread,
+  ChatThreadMemory,
   ChatMessage,
   ChatAttachmentReference,
   ChatSyncStatus,
@@ -27,6 +28,7 @@ import {
   WorkspaceProjectAssignment,
   LiveBuildRoomSnapshot,
   LiveBuildRoomDiffPreview,
+  LiveBuildChanges,
   LiveBuildRoomOrchestration,
   LiveBuildRecoveryState,
   LiveBuildRecoveryAction,
@@ -666,9 +668,14 @@ export const apiService = {
 
   /** The latest Orchestrator build per issue, for board status chips. Desktop only. */
   getIssueBuildStatuses: () => fetchJson<IssueBuildStatus[]>('/issues/build-status'),
-  getLiveBuildRoom: async (projectId: string, runId?: string) => {
+  getLiveBuildRoom: async (projectId: string, runId?: string, threadId?: string) => {
+    const query = new URLSearchParams();
+    if (runId) query.set('runId', runId);
+    if (threadId) query.set('threadId', threadId);
+    // Keep percent-encoded spaces for compatibility with existing request URLs.
+    const search = query.toString().replace(/\+/g, '%20');
     const snapshot = await fetchJson<LiveBuildRoomSnapshot>(
-      `/projects/${encodeURIComponent(projectId)}/live-build-room${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`,
+      `/projects/${encodeURIComponent(projectId)}/live-build-room${search ? `?${search}` : ''}`,
       { cache: 'no-store' },
     );
     if (!snapshot || typeof snapshot !== 'object' || !snapshot.summary
@@ -684,6 +691,11 @@ export const apiService = {
   getOrchestrationDiffPreview: (projectId: string, runId: string) =>
     fetchJson<LiveBuildRoomDiffPreview>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/diff`
+    ),
+  getOrchestrationLiveChanges: (projectId: string, runId: string) =>
+    fetchJson<LiveBuildChanges>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/live-changes`,
+      { cache: 'no-store' }
     ),
   getOrchestrationRecovery: (projectId: string, runId: string) =>
     fetchJson<LiveBuildRecoveryState>(
@@ -731,6 +743,11 @@ export const apiService = {
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`,
       { method: 'POST', body: JSON.stringify({ expectedTaskRevision }) }
     ),
+  proposeSecurityAuditPlan: (projectId: string, runId: string, expectedRevision: number) =>
+    fetchJson<{ runId: string; status: string; revision: number; planVersion: number }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/audit-plan`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) }
+    ),
   startPlannedOrchestration: (projectId: string, runId: string, expectedRevision: number) =>
     fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/start`,
@@ -740,6 +757,10 @@ export const apiService = {
     fetchJson<{ runId: string; status: string; pauseRequestedAt?: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/pause`,
       { method: 'POST', body: JSON.stringify({ expectedRevision }) }
+    ),
+  getOrchestrationPlans: (projectId: string, runId: string) =>
+    fetchJson<{ documents: Array<{ version: number; fileName: string; content: string; contentHash: string }> }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/plans`
     ),
   resumeOrchestration: (projectId: string, runId: string) =>
     fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
@@ -831,6 +852,14 @@ export const apiService = {
       method: 'DELETE'
     }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
+  getChatThreadMemory: (threadId: string) =>
+    fetchJson<ChatThreadMemory>(`/chat/threads/${encodeURIComponent(threadId)}/memory`),
+  saveChatThreadMemory: (threadId: string, content: string) =>
+    fetchJson<ChatThreadMemory>(`/chat/threads/${encodeURIComponent(threadId)}/memory`, {
+      method: 'PUT', body: JSON.stringify({ content })
+    }),
+  clearChatThreadMemory: (threadId: string) =>
+    fetchJson<{ success: boolean }>(`/chat/threads/${encodeURIComponent(threadId)}/memory`, { method: 'DELETE' }),
   uploadChatAttachment: async (threadId: string, file: File) => {
     const headers = new Headers({
       'Content-Type': 'application/octet-stream',

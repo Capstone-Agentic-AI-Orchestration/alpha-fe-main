@@ -1,7 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { inferRecoveryAction, isContinueRequest, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
+import { inferRecoveryAction, isBuildDirection, isContinueRequest, isExplicitBuildRetry, isRetryRequest, resolveRecoveryAction } from './chatRecoveryIntent';
 
 describe('chat recovery intent', () => {
+  it('sends a retry as direction when the build only accepts direction', () => {
+    expect(resolveRecoveryAction('repair_and_continue', { category: 'review_input', availableActions: ['explain_failure', 'provide_guidance'] })).toBe('provide_guidance');
+    expect(resolveRecoveryAction('repair_and_continue', { category: 'review_input', availableActions: ['recheck_prerequisite', 'provide_guidance'] })).toBe('recheck_prerequisite');
+  });
+
+  it('reads an instruction typed while a build waits as direction, but not a question or mention', () => {
+    expect(isBuildDirection('Use the lockfile summaries and compare them with the manifests.')).toBe(true);
+    expect(isBuildDirection('Why did the review fail?')).toBe(false);
+    expect(isBuildDirection('what changed in the lockfile')).toBe(false);
+    expect(isBuildDirection('@Frontend Agent check the config')).toBe(false);
+    expect(isBuildDirection('ok')).toBe(false);
+  });
+
+  it('treats a short "retry" as a request to retry the stopped build, and nothing longer', () => {
+    for (const text of ['retry', 'can you retry', 'Can you retry?', 'try again', 'please try again', 'run it again', 'rerun it', 'retry the task']) {
+      expect(isRetryRequest(text)).toBe(true);
+    }
+    for (const text of ['why did the retry fail?', "don't retry", 'retry later after I fix the API key and explain what changed', 'can you explain why it failed']) {
+      expect(isRetryRequest(text)).toBe(false);
+    }
+  });
+
   it('treats everyday ways of saying carry on as a request to continue the build', () => {
     for (const message of [
       'continue', 'Continue.', 'continue with the plan', 'can you continue with the plan', 'Could you continue?',

@@ -50,6 +50,7 @@ export function AgentModelPanel({ agent, status, runtimes, canEdit, onUpdate, on
     </div>
     <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3.5 py-2.5">
       <p className="line-clamp-2 text-[11px] leading-4 text-violet-200">{status}</p>
+      {agent.description && <p className="text-[11px] leading-4 text-gray-400">{agent.description}</p>}
 
       {changedFiles && <section aria-label="Files changed in this build" className="rounded-lg border border-white/[0.06] bg-black/30 px-2.5 py-2">
         <div className="mb-1 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-gray-500">

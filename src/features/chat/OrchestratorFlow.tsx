@@ -357,8 +357,8 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   const turnCalls = useMemo(() => latestChatTurn(calls), [calls]);
   const orchestratorCall = turnCalls.find(isOrchestratorCall);
   const agentCalls = useMemo(() => turnCalls.filter(call => !isOrchestratorCall(call)), [turnCalls]);
-  const activeAgentCall = agentCalls.find(call => ['queued', 'running'].includes(call.status));
-  const orchestratorLive = Boolean(orchestratorCall && ['queued', 'running'].includes(orchestratorCall.status));
+  const activeAgentCall = agentCalls.find(call => call.status === 'running');
+  const orchestratorLive = Boolean(orchestratorCall && orchestratorCall.status === 'running');
   const working = isWorking || orchestratorLive || Boolean(activeAgentCall) || Boolean(build?.running);
   const buildAgents = useMemo(() => build?.agents ?? [], [build]);
   const hubId = orchestratorCall?.id ?? HUB_ID;
@@ -379,7 +379,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       id: call.id,
       initial: (agentById.get(call.agentId)?.name ?? call.agentId).slice(0, 1).toUpperCase(),
       tone: toneFor(call.status),
-      active: call.status === 'running' || call.status === 'queued'
+      active: call.status === 'running'
     }))
   ].slice(0, AGENT_OFFSETS.length), [agentById, agentCalls, buildAgents]);
   const selectedId = selectedCallId ?? (selectedBuildAgentId ? BUILD_PREFIX + selectedBuildAgentId : null);
@@ -418,7 +418,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
           id: call.id,
           name: agentById.get(call.agentId)?.name ?? call.agentId,
           tone: toneFor(call.status),
-          active: call.status === 'running' || call.status === 'queued',
+          active: call.status === 'running',
           engaged: true,
           detail: [agentById.get(call.agentId)?.role, callStatus(call.status)].filter(Boolean).join(' · ')
         }))
@@ -428,12 +428,12 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       const inBuild = buildAgents.find(node => node.agentId === agent.id);
       const call = agentCalls.find(item => item.agentId === agent.id);
       const state = inBuild ? [BUILD_STATE_LABEL[inBuild.state], inBuild.currentTaskTitle].filter(Boolean).join(' · ')
-        : call ? callStatus(call.status) : 'Idle';
+        : call ? callStatus(call.status) : 'Available · not assigned';
       return {
         id: ROSTER_PREFIX + agent.id,
         name: agent.name,
         tone: inBuild ? buildTone(inBuild.state) : call ? toneFor(call.status) : IDLE_RGB,
-        active: inBuild?.state === 'running' || (call ? ['running', 'queued'].includes(call.status) : false),
+        active: inBuild?.state === 'running' || (call ? call.status === 'running' : false),
         engaged: Boolean(inBuild || call),
         detail: [agent.role, state, inBuild?.changedFiles.length ? inBuild.changedFiles.length + (inBuild.changedFiles.length === 1 ? ' file changed' : ' files changed') : null, agent.modelName].filter(Boolean).join(' · ')
       };
@@ -694,7 +694,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
             <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}</span>
           </span>
         </button>
-        {(failedNodes > 0 || (!expanded && nodeCount > 0)) && <span className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (failedNodes > 0 ? 'border-rose-300/30 text-rose-200' : 'border-violet-300/20 text-violet-200')}>{failedNodes > 0 ? 'Needs attention' : nodeCount + (nodeCount === 1 ? ' agent' : ' agents')}</span>}
+        {(failedNodes > 0 || (!expanded && nodeCount > 0)) && <span className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (failedNodes > 0 ? 'border-rose-300/30 text-rose-200' : 'border-violet-300/20 text-violet-200')}>{failedNodes > 0 ? 'Needs attention' : nodeCount + (nodeCount === 1 ? ' assigned agent' : ' assigned agents')}</span>}
         {show3D && <>
           <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
           <button type="button" onClick={() => setMaximized(value => !value)} aria-label={maximized ? 'Restore the 3D view' : 'Enlarge the 3D view'} title={maximized ? 'Restore' : 'Enlarge'} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{maximized ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}</button>
