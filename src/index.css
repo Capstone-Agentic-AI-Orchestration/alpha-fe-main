@@ -275,6 +275,7 @@ input[type='radio']:disabled {
   }
 }
 
+
 /*
  * Desktop window dragging (Windows hides the native title bar). Electron reads
  * these regions to decide which pixels move the window; anything clickable that
@@ -307,9 +308,44 @@ input[type='radio']:disabled {
   display: none;
 }
 
-/* The WebGL field is painted only inside the workflow stage. */
-.agent-flow-stage {
-  contain: paint;
-  background: radial-gradient(ellipse at 50% 26%, rgb(73 42 126 / 0.24), transparent 42%),
-    radial-gradient(ellipse at 50% 90%, rgb(30 31 77 / 0.25), transparent 54%), #080b14;
+/* Static purple dot field; motion belongs to the workflow connections. */
+.agent-flow-viewport {
+  background-color: #080b14;
+  background-image: radial-gradient(circle, rgb(167 139 250 / 0.23) 0.85px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.agent-flow-stage { contain: paint; }
+
+.live-agent-inspector {
+  animation: live-agent-panel-in 180ms ease-out;
+}
+
+@keyframes live-agent-panel-in {
+  from { opacity: 0; transform: translateX(10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes live-agent-sheet-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 1279px) {
+  .live-agent-inspector {
+    position: fixed;
+    inset: auto 0.75rem 0.75rem;
+    z-index: 50;
+    height: min(62dvh, 560px);
+    max-height: calc(100dvh - 2rem);
+    box-shadow: 0 -16px 70px rgb(3 5 12 / 0.65);
+    background-color: #10131e;
+    animation-name: live-agent-sheet-in;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-flow-node *, .agent-flow-stage .animate-pulse { animation: none; }
+  .agent-flow-stage button { transition: none; }
+  .live-agent-inspector { animation: none; }
 }

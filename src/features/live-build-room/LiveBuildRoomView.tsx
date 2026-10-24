@@ -44,6 +44,9 @@ import { normalizeLogsResponse } from '@/features/projects/repository/deployment
 import type { DeploymentLogsResponse } from '@/features/projects/repository/deploymentLogs/logTypes';
 import { OrchestrationWorkflowPanel } from './OrchestrationWorkflowPanel';
 import { PlanningRecoveryPanel } from './PlanningRecoveryPanel';
+import { OrchestratorActivityPanel } from './OrchestratorActivityPanel';
+import { AgentCommandHistory } from './AgentCommandHistory';
+import { agentActivityScope } from './agentActivityScope';
 import { AgentHandoffGraph, type WorkflowConnectionSelection } from './AgentHandoffGraph';
 import { OrchestrationRecoveryPanel } from '@/features/chat/OrchestrationRecoveryPanel';
 
@@ -157,18 +160,6 @@ function assignmentLabel(card: LiveBuildRoomAgentCard): string {
   return 'Assigned work';
 }
 
-function toolDetail(activity: LiveBuildRoomActivity): string | undefined {
-  if (!activity.detail) return undefined;
-  try {
-    const parsed = JSON.parse(activity.detail);
-    if (typeof parsed.command === 'string') return parsed.command;
-    if (typeof parsed.tool === 'string') return `${parsed.tool}${parsed.input ? ` · ${JSON.stringify(parsed.input)}` : ''}`;
-  } catch {
-    // Most tools provide a plain-text detail rather than a JSON payload.
-  }
-  return activity.detail;
-}
-
 interface ExecutionTimelineEvent {
   id: string;
   category: 'activity' | 'handoff' | 'invocation' | 'completion';
@@ -188,7 +179,7 @@ function handoffMatchesCard(handoff: LiveBuildRoomHandoff, card: LiveBuildRoomAg
   return handoff.executionId === card.executionId;
 }
 
-function executionTimeline(snapshot: LiveBuildRoomSnapshot, card: LiveBuildRoomAgentCard): ExecutionTimelineEvent[] {
+function executionTimeline(snapshot: LiveBuildRoomSnapshot, card: LiveBuildRoomAgentCard, relatedCards = [card]): ExecutionTimelineEvent[] {
   const events: ExecutionTimelineEvent[] = card.activity.map(activity => ({
     id: `activity-${activity.id}`,
     category: 'activity',
@@ -200,7 +191,7 @@ function executionTimeline(snapshot: LiveBuildRoomSnapshot, card: LiveBuildRoomA
     isStreaming: activity.isStreaming,
   }));
 
-  const relatedHandoffs = snapshot.handoffs.filter(handoff => handoffMatchesCard(handoff, card));
+  const relatedHandoffs = snapshot.handoffs.filter(handoff => relatedCards.some(item => handoffMatchesCard(handoff, item)));
   relatedHandoffs.forEach(handoff => {
     const alreadyInActivity = card.activity.some(activity =>
       activity.kind === 'handoff' && Date.parse(activity.createdAt) === Date.parse(handoff.createdAt) &&
@@ -312,29 +303,36 @@ const PhaseTimeline: React.FC<{ phases: LiveBuildRoomPhase[] }> = ({ phases }) =
   </div>
 );
 
-const ActivityPanel: React.FC<{
+export const LiveAgentActivityInspector: React.FC<{
   snapshot: LiveBuildRoomSnapshot;
   card: LiveBuildRoomAgentCard;
   tab: DetailTab;
   setTab: (tab: DetailTab) => void;
   onClose: () => void;
+  taskId?: string | null;
+  executionOnly?: boolean;
+  onClearTask: () => void;
   onViewAssignedTask?: (taskId: string) => void;
-}> = ({ snapshot, card, tab, setTab, onClose, onViewAssignedTask }) => {
+}> = ({ snapshot, card, tab, setTab, onClose, taskId, executionOnly, onClearTask, onViewAssignedTask }) => {
   const detailTabsId = useId();
-  const meta = statusMeta[card.status];
+  const { selectedTask, attempts: scopedAttempts, relatedCards, activityCard, outputCard } = agentActivityScope(snapshot, card, taskId, executionOnly);
+  const taskStatus: LiveBuildRoomCardStatus = selectedTask
+    ? selectedTask.status === 'accepted' ? 'completed' : selectedTask.status === 'running' ? 'running' : selectedTask.status === 'submitted' ? 'review' : ['blocked', 'failed', 'cancelled'].includes(selectedTask.status) ? 'failed' : 'waiting'
+    : card.status;
+  const meta = statusMeta[taskStatus];
   const tabs: Array<{ id: DetailTab; label: string }> = [
     { id: 'activity', label: 'Activity' },
     { id: 'handoff', label: 'Handoff' },
     { id: 'files', label: 'Files' },
-    { id: 'tools', label: 'Tools' }
+    { id: 'tools', label: 'Commands' }
   ];
-  const activities = card.activity;
-  const timeline = executionTimeline(snapshot, card);
-  const handoffs = snapshot.handoffs.filter(handoff => handoffMatchesCard(handoff, card));
-  const filePaths = [...new Set([...(card.filePaths ?? []), ...activities.flatMap(activity => activity.paths ?? [])])];
-  const toolActivities = activities.filter(activity => activity.kind === 'tool' || activity.kind === 'tool_result' || Boolean(activity.toolName));
+  const activities = activityCard.activity;
+  const scopedSnapshot = snapshot.orchestration ? { ...snapshot, orchestration: { ...snapshot.orchestration, attempts: scopedAttempts } } : snapshot;
+  const timeline = executionTimeline(scopedSnapshot, activityCard, relatedCards);
+  const handoffs = snapshot.handoffs.filter(handoff => relatedCards.some(item => handoffMatchesCard(handoff, item)));
+  const filePaths = [...new Set([...(activityCard.filePaths ?? []), ...activities.flatMap(activity => activity.paths ?? [])])];
   const latestRunTaskId = snapshot.orchestration?.attempts.find(attempt => attempt.prototypeRunId === card.runId)?.taskId;
-  const assignedTaskId = card.orchestrationTaskId ?? latestRunTaskId;
+  const assignedTaskId = selectedTask?.id ?? card.orchestrationTaskId ?? latestRunTaskId;
   const latestRunTaskTitle = latestRunTaskId
     ? snapshot.orchestration?.tasks.find(task => task.id === latestRunTaskId)?.title
     : undefined;
@@ -350,26 +348,27 @@ const ActivityPanel: React.FC<{
   };
 
   return (
-    <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.10] bg-surface-100/90 shadow-2xl shadow-black/20 xl:sticky xl:top-0 xl:h-[calc(100vh-8.5rem)]">
-      <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] p-4">
-        <div className="flex min-w-0 items-center gap-3">
+    <aside aria-label={`${card.agentName} activity`} className="live-agent-inspector flex min-h-0 max-h-[80dvh] flex-col overflow-hidden rounded-2xl border border-white/[0.10] bg-surface-100/90 shadow-2xl shadow-black/20 xl:sticky xl:top-0 xl:max-h-none xl:h-[calc(100dvh-8.5rem)]">
+      <div className="border-b border-white/[0.08] p-4">
+        <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-200"><Layers3 className="h-4 w-4" /></div>
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-slate-300">Agent Activity</div>
-            <div className="mt-0.5 truncate text-base font-semibold text-white">{card.agentName}</div>
-          </div>
+          <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-white">{card.agentName}</div><div className="mt-0.5 truncate text-[11px] text-slate-500">{card.agentRole || 'Specialist agent'}</div></div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200" aria-label="Close agent activity"><X className="h-4 w-4" /></button>
         </div>
-        {assignedTaskId && <button type="button" onClick={() => onViewAssignedTask?.(assignedTaskId)} className="ml-auto inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-[10px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><Workflow className="h-3 w-3" />View assigned task</button>}
-        <div className="flex items-center gap-2">
-          {card.isStale && <span title="No execution activity has been recorded for five minutes" className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 px-2 py-1 text-[10px] font-semibold text-amber-200"><Clock3 className="h-3 w-3" />No signal</span>}
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${card.status === 'running' ? 'animate-pulse' : ''}`} />
-            {meta.label}
-          </span>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-white" aria-label="Close agent activity"><X className="h-4 w-4" /></button>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}><span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />{meta.label}</span>
+          {card.isStale && <span className="text-[10px] text-amber-200">No recent signal</span>}
+          {assignedTaskId && <button type="button" onClick={() => onViewAssignedTask?.(assignedTaskId)} className="ml-auto inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-[10px] font-medium text-slate-400 hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><Workflow className="h-3 w-3" />View assigned task</button>}
         </div>
       </div>
 
+      <div className="border-b border-white/[0.08] px-4 py-3">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>{selectedTask ? 'Selected task' : executionOnly ? 'Selected execution' : 'All assigned tasks'}</span>
+          {(selectedTask || executionOnly) && <button type="button" onClick={onClearTask} className="rounded px-1.5 py-1 text-violet-200 hover:bg-violet-300/10 focus-visible:ring-2 focus-visible:ring-violet-200">All agent activity</button>}
+        </div>
+        <p className="mt-1 text-xs leading-5 text-slate-300">{selectedTask?.title || card.currentTask}</p>
+        {selectedTask ? <p className="mt-1 text-[10px] text-slate-500">Task status · {selectedTask.status.replace(/_/g, ' ')}</p> : snapshot.orchestration && <p className="mt-1 text-[10px] tabular-nums text-slate-500">{snapshot.orchestration.tasks.filter(task => task.ownerAgentId === card.agentId && task.status === 'accepted').length} / {snapshot.orchestration.tasks.filter(task => task.ownerAgentId === card.agentId).length} tasks complete</p>}
+      </div>
       <div className="flex gap-1 border-b border-white/[0.08] px-3 pt-2" role="tablist" aria-label="Agent activity details">
         {tabs.map(item => (
           <button key={item.id} id={`${detailTabsId}-${item.id}-tab`} type="button" role="tab" tabIndex={tab === item.id ? 0 : -1} aria-selected={tab === item.id} aria-controls={`${detailTabsId}-panel`} onClick={() => setTab(item.id)} onKeyDown={handleDetailTabKeyDown} className={`border-b-2 px-2 py-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-200 ${tab === item.id ? 'border-violet-400 text-white' : 'border-transparent text-slate-500 hover:text-slate-200'}`}>{item.label}</button>
@@ -380,14 +379,14 @@ const ActivityPanel: React.FC<{
         {tab === 'activity' && (
           <div className="space-y-4">
             <div>
-              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{assignmentLabel(card)}</div>
-              <div className="mt-1 text-sm font-medium text-white">{card.currentTask}</div>
+              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{assignmentLabel({ ...card, status: taskStatus })}</div>
+              <div className="mt-1 text-sm font-medium text-white">{activityCard.currentTask}</div>
             </div>
             {latestRunTaskId && latestRunTaskId !== assignedTaskId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2">
               <span className="min-w-0 text-[10px] text-slate-500">Latest run worked on <span className="text-slate-300">{latestRunTaskTitle || 'another assigned task'}</span></span>
               <button type="button" onClick={() => onViewAssignedTask?.(latestRunTaskId)} className="min-h-7 shrink-0 rounded-md px-2 text-[10px] font-medium text-violet-200 hover:bg-violet-300/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200">View run task</button>
             </div>}
-            {card.progress > 0 ? <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-violet-400" style={{ width: `${card.progress}%` }} /></div> : card.status === 'running' ? <div className="text-[11px] text-slate-500">Progress will appear after Alpha confirms a completed stage.</div> : null}
+            {!selectedTask && card.progress > 0 ? <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-violet-400" style={{ width: `${card.progress}%` }} /></div> : taskStatus === 'running' ? <div className="text-[11px] text-slate-500">Progress will appear after Alpha confirms a completed stage.</div> : null}
             <div className="space-y-3 border-t border-white/[0.08] pt-4">
               <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Execution timeline</div>
               {timeline.length ? timeline.map(event => (
@@ -430,25 +429,13 @@ const ActivityPanel: React.FC<{
           <div className="space-y-3">
             <div><div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Files and outputs</div><p className="mt-1 text-[11px] leading-5 text-slate-400">Paths come from recorded project activity.</p></div>
             {filePaths.length ? <div className="space-y-2">{filePaths.map(file => <div key={file} className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-xs text-slate-200"><FileCode2 className="h-4 w-4 shrink-0 text-violet-300" /><code className="min-w-0 break-all">{file}</code></div>)}</div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No changed file paths have been recorded for this execution yet.</div>}
-            {card.output ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="flex items-center gap-2 text-xs font-medium text-white"><FileCode2 className="h-4 w-4 text-violet-300" />{card.output.label}</div><div className="mt-2 break-all text-[11px] text-slate-500">{card.output.value}</div></div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No output has been recorded for this agent yet.</div>}
-            {card.branchName && <div className="flex items-center gap-2 text-xs text-slate-400"><GitBranch className="h-3.5 w-3.5" /><span className="truncate">{card.branchName}</span></div>}
-            {card.runId && snapshot.artifacts.filter(artifact => artifact.runId === card.runId).map(artifact => <div key={artifact.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="text-xs font-medium text-white">{artifact.name}</div><div className="mt-1 break-all text-[11px] text-slate-500">{artifact.detail}</div></div>)}
+            {outputCard?.output ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="flex items-center gap-2 text-xs font-medium text-white"><FileCode2 className="h-4 w-4 text-violet-300" />{outputCard?.output.label}</div><div className="mt-2 break-all text-[11px] text-slate-500">{outputCard?.output.value}</div></div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No output has been recorded for this agent yet.</div>}
+            {outputCard?.branchName && <div className="flex items-center gap-2 text-xs text-slate-400"><GitBranch className="h-3.5 w-3.5" /><span className="truncate">{outputCard?.branchName}</span></div>}
+            {snapshot.artifacts.filter(artifact => artifact.runId && relatedCards.some(item => item.runId === artifact.runId)).map(artifact => <div key={artifact.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="text-xs font-medium text-white">{artifact.name}</div><div className="mt-1 break-all text-[11px] text-slate-500">{artifact.detail}</div></div>)}
           </div>
         )}
 
-        {tab === 'tools' && (
-          <div className="space-y-3">
-            <div><div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Commands and tools</div><p className="mt-1 text-[11px] leading-5 text-slate-400">Recorded tool calls and results for this execution.</p></div>
-            {toolActivities.length ? toolActivities.slice().reverse().map(activity => (
-              <div key={activity.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-                <div className="flex items-center justify-between gap-2"><span className="flex items-center gap-1.5 text-xs font-medium text-slate-200">{activityLabel(activity)}{activity.isStreaming && <span className="rounded border border-violet-300/20 px-1 py-0.5 text-[9px] text-violet-100">Live</span>}</span><time className="text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</time></div>
-                <div className="mt-2 text-xs leading-5 text-white">{activity.message}</div>
-                {toolDetail(activity) && <pre className="mt-2 max-h-52 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-black/25 p-2.5 text-[10px] leading-4 text-slate-300">{toolDetail(activity)}</pre>}
-                {activity.paths?.length ? <div className="mt-2 flex flex-wrap gap-1.5">{activity.paths.map(file => <code key={file} className="max-w-full break-all rounded bg-white/[0.05] px-1.5 py-1 text-[10px] text-slate-300">{file}</code>)}</div> : null}
-              </div>
-            )) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">Tool calls and commands will appear here as the agent uses them.</div>}
-          </div>
-        )}
+        {tab === 'tools' && <AgentCommandHistory key={`${card.agentId}:${selectedTask?.id || (executionOnly ? card.executionId : 'all')}`} activities={activities} attempts={scopedAttempts} />}
       </div>
     </aside>
   );
@@ -493,7 +480,7 @@ const HandoffContextPanel: React.FC<{
   const incomingContext = handoff?.summary || task?.description || snapshot.orchestration?.run.goal;
   const routingReason = task?.assignmentReason;
 
-  return <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-violet-300/20 bg-surface-100/90 shadow-2xl shadow-black/25 xl:sticky xl:top-0 xl:h-[calc(100vh-8.5rem)]" aria-labelledby="handoff-context-title">
+  return <aside className="live-agent-inspector flex min-h-0 flex-col overflow-hidden rounded-2xl border border-violet-300/20 bg-surface-100/90 shadow-2xl shadow-black/25 xl:sticky xl:top-0 xl:h-[calc(100vh-8.5rem)]" aria-labelledby="handoff-context-title">
     <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] p-4">
       <div className="min-w-0">
         <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-violet-200"><Layers3 className="h-3.5 w-3.5" />Context transfer</div>
@@ -567,8 +554,10 @@ export const LiveBuildRoomView: React.FC = () => {
   const [chatStatusFilter, setChatStatusFilter] = useTabSessionState<string>('liveBuildChatStatusFilter', 'all');
   const [patchPreview, setPatchPreview] = useState<{ callId: string; content: string } | null>(null);
   const [patchBusyCallId, setPatchBusyCallId] = useState<string | null>(null);
+  const [inspectorOrchestratorOpen, setInspectorOrchestratorOpen] = useState(false);
+  const [inspectorTaskId, setInspectorTaskId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useTabSessionState<DetailTab>('liveBuildDetailTab', 'activity');
-  const [detailOpen, setDetailOpen] = useTabSessionState<boolean>('liveBuildDetailOpen', true);
+  const [detailOpen, setDetailOpen] = useState(false);
   const [showAllArtifacts, setShowAllArtifacts] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -591,8 +580,24 @@ export const LiveBuildRoomView: React.FC = () => {
   const [buildLogsError, setBuildLogsError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const refreshTimerRef = useRef<number | null>(null);
-  const detailAutoOpenedRunIdRef = useRef<string | null>(null);
   const inspectorTriggerRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (!detailOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || (event.target as HTMLElement)?.closest('[role="dialog"]')) return;
+      setDetailOpen(false);
+      requestAnimationFrame(() => inspectorTriggerRef.current?.focus());
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [detailOpen]);
+  useEffect(() => {
+    setDetailOpen(false);
+    setInspectorTaskId(null);
+    setInspectorOrchestratorOpen(false);
+    setSelectedConnection(null);
+  }, [selectedProjectId, selectedBuildRunId]);
 
   useEffect(() => setShowAllArtifacts(false), [selectedBuildRunId]);
 
@@ -642,11 +647,6 @@ export const LiveBuildRoomView: React.FC = () => {
           : next.agentCards.find(card => card.status === 'running')?.executionId ?? next.agentCards[0]?.executionId ?? null;
       });
       setInspectorRunOverrideId(current => current && next.agentCards.some(card => card.runId === current) ? current : null);
-      if (next.orchestration && orchestrationCards.length && detailAutoOpenedRunIdRef.current !== next.orchestration.run.id) {
-        detailAutoOpenedRunIdRef.current = next.orchestration.run.id;
-        setDetailOpen(true);
-        setDetailTab('activity');
-      }
       const calls = next.chatCalls ?? [];
       const liveCallIds = new Set(next.agentCards.map(card => card.agentCallId).filter((id): id is string => Boolean(id)));
       setSelectedChatCallId(current => current && calls.some(call => call.id === current && !liveCallIds.has(call.id))
@@ -908,8 +908,8 @@ export const LiveBuildRoomView: React.FC = () => {
   }), [agentCardsForBuild, agentSearch, agentStatusFilter]);
 
   const selectedRosterCard = useMemo(() =>
-    visibleAgentCards.find(card => card.executionId === selectedExecutionId) ?? visibleAgentCards[0] ?? null,
-  [selectedExecutionId, visibleAgentCards]);
+    agentCardsForBuild.find(card => card.executionId === selectedExecutionId) ?? null,
+  [selectedExecutionId, agentCardsForBuild]);
   const inspectorRunCard = useMemo(() => inspectorRunOverrideId
     ? snapshot?.agentCards.find(card => card.runId === inspectorRunOverrideId) ?? null
     : null,
@@ -953,6 +953,8 @@ export const LiveBuildRoomView: React.FC = () => {
     setSelectedConnection(null);
     setSelectedExecutionId(null);
     setInspectorRunOverrideId(null);
+    setInspectorTaskId(null);
+    setInspectorOrchestratorOpen(false);
     setSelectedChatCallId(null);
     setAgentSearch('');
     setAgentStatusFilter('all');
@@ -1016,6 +1018,8 @@ export const LiveBuildRoomView: React.FC = () => {
     setAgentSearch('');
     setAgentStatusFilter('all');
     setSelectedExecutionId(card.executionId);
+    setInspectorTaskId(taskId);
+    setInspectorOrchestratorOpen(false);
     setInspectorRunOverrideId(exactRunCard?.runId ?? null);
     setDetailTab('activity');
     setDetailOpen(true);
@@ -1472,12 +1476,12 @@ export const LiveBuildRoomView: React.FC = () => {
           </div>
         </section>}
 
-        <div className={`order-2 grid gap-4 ${detailOpen && (selectedCard || selectedConnection) ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'xl:grid-cols-1'}`}>
+        <div className={`order-2 grid gap-4 ${detailOpen && (selectedCard || selectedConnection || inspectorOrchestratorOpen) ? 'xl:grid-cols-[minmax(0,1fr)_minmax(340px,390px)]' : 'xl:grid-cols-1'}`}>
           <div className="min-w-0 space-y-4">
             <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/45 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-sm font-semibold text-white">{snapshot.orchestration ? 'Agent handoffs' : 'Project agent activity'}</div>
-                <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{snapshot.orchestration ? `${agentCardsForBuild.length} assigned ${agentCardsForBuild.length === 1 ? 'specialist' : 'specialists'} · ${snapshot.orchestration.tasks.length} tasks. Arrows follow planned dependencies; review corrections loop back to their owner.` : `Agent activity and recorded handoffs for ${activeProject?.name || snapshot.project.name}.`}</div>
+                <div className="text-sm font-semibold text-white">{snapshot.orchestration ? 'Live agent actions' : 'Project agent activity'}</div>
+                <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{snapshot.orchestration ? `${agentCardsForBuild.length} assigned ${agentCardsForBuild.length === 1 ? 'specialist' : 'specialists'} · ${snapshot.orchestration.tasks.length} tasks. Expand an agent to see its tasks; select a node to follow its commands and actions.` : `Agent activity and recorded handoffs for ${activeProject?.name || snapshot.project.name}.`}</div>
               </div>
               {agentCardsForBuild.length > 0 && <label className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 sm:w-72">
                 <span className="sr-only">Search live agents</span>
@@ -1499,12 +1503,14 @@ export const LiveBuildRoomView: React.FC = () => {
               allAgentCount={agentCardsForBuild.length}
               workflow={snapshot.orchestration}
               handoffs={snapshot.handoffs}
-              selectedExecutionId={selectedRosterCard?.executionId}
+              selectedExecutionId={detailOpen && !inspectorOrchestratorOpen ? selectedRosterCard?.executionId : null}
+              selectedOrchestrator={detailOpen && inspectorOrchestratorOpen}
               selectedConnectionId={selectedConnection?.id}
-              visible={!snapshot.orchestration || buildRoomPanel === 'live'}
-              onSelect={(card, trigger) => { inspectorTriggerRef.current = trigger; setSelectedConnection(null); setSelectedExecutionId(card.executionId); setInspectorRunOverrideId(null); setDetailTab('activity'); setDetailOpen(true); }}
-              onSelectConnection={(selection, trigger) => { inspectorTriggerRef.current = trigger; setSelectedConnection(selection); setSelectedExecutionId(selection.toExecutionId); setInspectorRunOverrideId(null); setDetailOpen(true); }}
-              onSelectOrchestrator={snapshot.orchestration ? trigger => { inspectorTriggerRef.current = trigger; setSelectedConnection(null); setBuildRoomPanel('plan'); } : undefined}
+              selectedTaskId={detailOpen ? inspectorTaskId : null}
+              visible={isActiveTab && (!snapshot.orchestration || buildRoomPanel === 'live')}
+              onSelect={(card, trigger, taskId) => { setInspectorOrchestratorOpen(false); setInspectorTaskId(taskId ?? null); inspectorTriggerRef.current = trigger; setSelectedConnection(null); setSelectedExecutionId(card.executionId); setInspectorRunOverrideId(null); setDetailTab(taskId ? 'activity' : 'tools'); setDetailOpen(true); }}
+              onSelectConnection={(selection, trigger) => { setInspectorOrchestratorOpen(false); setInspectorTaskId(null); inspectorTriggerRef.current = trigger; setSelectedConnection(selection); setSelectedExecutionId(selection.toExecutionId); setInspectorRunOverrideId(null); setDetailOpen(true); }}
+              onSelectOrchestrator={snapshot.orchestration ? trigger => { inspectorTriggerRef.current = trigger; setSelectedConnection(null); setInspectorTaskId(null); setInspectorOrchestratorOpen(true); setDetailOpen(true); } : undefined}
               onClearFilters={() => { setAgentSearch(''); setAgentStatusFilter('all'); }}
             /> : <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] text-slate-400"><Users className="h-5 w-5" /></div>
@@ -1525,7 +1531,7 @@ export const LiveBuildRoomView: React.FC = () => {
                   return <div key={artifact.id} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-200">{artifact.kind === 'pull_request' ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}</div>
                     <div className="min-w-0"><div className="break-words text-xs font-medium text-slate-200 [overflow-wrap:anywhere]">{artifact.name}</div><div className="mt-0.5 break-all text-[10px] leading-4 text-slate-500">{artifact.detail}</div></div>
-                    {producer ? <button type="button" aria-label={snapshot.orchestration ? `Inspect the run that produced ${artifact.name}` : `View ${producer.agentName}`} onClick={event => { inspectorTriggerRef.current = event.currentTarget; setSelectedConnection(null); setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(producer.executionId); setInspectorRunOverrideId(snapshot.orchestration ? producingRun?.runId ?? null : null); setDetailTab('files'); setDetailOpen(true); }} className="col-span-2 inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-white/10 px-2.5 text-[10px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 sm:col-span-1 sm:justify-self-end">{snapshot.orchestration ? 'Inspect producing run' : `View ${producer.agentName}`}<ExternalLink className="h-3 w-3 shrink-0" /></button>
+                    {producer ? <button type="button" aria-label={snapshot.orchestration ? `Inspect the run that produced ${artifact.name}` : `View ${producer.agentName}`} onClick={event => { inspectorTriggerRef.current = event.currentTarget; setSelectedConnection(null); setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(producer.executionId); setInspectorOrchestratorOpen(false); setInspectorTaskId(null); setInspectorRunOverrideId(snapshot.orchestration ? producingRun?.runId ?? null : null); setDetailTab('files'); setDetailOpen(true); }} className="col-span-2 inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-white/10 px-2.5 text-[10px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 sm:col-span-1 sm:justify-self-end">{snapshot.orchestration ? 'Inspect producing run' : `View ${producer.agentName}`}<ExternalLink className="h-3 w-3 shrink-0" /></button>
                       : <span className="text-[10px] text-slate-600">Producer unavailable in this view</span>}
                   </div>;
                 }) : <div className="rounded-xl border border-dashed border-white/10 px-3 py-5 text-center text-xs text-slate-500">Artifacts will appear as agents produce outputs.</div>}
@@ -1533,8 +1539,9 @@ export const LiveBuildRoomView: React.FC = () => {
               </div>
             </div>
           </div>
-          {detailOpen && selectedConnection && <HandoffContextPanel snapshot={snapshot} selection={selectedConnection} onClose={() => { setSelectedConnection(null); setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewAssignedTask={handleViewAssignedTask} />}
-          {detailOpen && !selectedConnection && selectedCard && <ActivityPanel snapshot={snapshot} card={selectedCard} tab={detailTab} setTab={setDetailTab} onClose={() => { setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewAssignedTask={handleViewAssignedTask} />}
+          {detailOpen && inspectorOrchestratorOpen && snapshot.orchestration && <OrchestratorActivityPanel workflow={snapshot.orchestration} onClose={() => { setInspectorOrchestratorOpen(false); setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewPlan={() => setBuildRoomPanel('plan')} onViewTask={taskId => { const task = snapshot.orchestration?.tasks.find(item => item.id === taskId); const owner = agentCardsForBuild.find(card => card.agentId === task?.ownerAgentId); if (owner) { setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(owner.executionId); setInspectorRunOverrideId(null); setInspectorTaskId(taskId); setInspectorOrchestratorOpen(false); setDetailTab('activity'); } }} />}
+          {detailOpen && !inspectorOrchestratorOpen && selectedConnection && <HandoffContextPanel snapshot={snapshot} selection={selectedConnection} onClose={() => { setSelectedConnection(null); setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewAssignedTask={handleViewAssignedTask} />}
+          {detailOpen && !inspectorOrchestratorOpen && !selectedConnection && selectedCard && <LiveAgentActivityInspector snapshot={snapshot} card={selectedCard} taskId={inspectorTaskId} executionOnly={Boolean(inspectorRunOverrideId)} onClearTask={() => { setInspectorTaskId(null); setInspectorRunOverrideId(null); }} tab={detailTab} setTab={setDetailTab} onClose={() => { setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewAssignedTask={handleViewAssignedTask} />}
         </div>
         </div>}
       </div>
