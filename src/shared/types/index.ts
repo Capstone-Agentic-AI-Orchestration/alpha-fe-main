@@ -326,18 +326,21 @@ export interface RepoTree {
   entries: RepoTreeEntry[];
 }
 
-export type ArchitectureNodeKind = 'web' | 'api' | 'auth' | 'database' | 'jobs' | 'integration' | 'application';
+export type ArchitectureNodeKind = 'web' | 'api' | 'auth' | 'database' | 'jobs' | 'integration' | 'application' | 'module';
 
 export interface ArchitectureNode {
   id: string;
   label: string;
   kind: ArchitectureNodeKind;
   technology?: string;
+  details?: string;
+  path?: string;
 }
 
 export interface ArchitectureEdge {
   from: string;
   to: string;
+  label?: string;
 }
 
 export interface RepoArchitecture {
