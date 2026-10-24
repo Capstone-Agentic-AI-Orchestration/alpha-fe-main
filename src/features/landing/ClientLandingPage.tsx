@@ -1,18 +1,73 @@
-import { useEffect, useState } from 'react';
-import { ArrowUpRight, Check, LockKeyhole, ShieldCheck } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
+import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { clientPortalHref, publicInquiryHref, publicInquirySlug } from '@/features/ticketing/publicIntakeApi';
-import { ClientPublicShell } from '@/features/ticketing/publicClient/ClientPublicShell';
-import { InquiryWorkflow } from '@/features/ticketing/publicClient/InquiryWorkflow';
-import { useClientPageMotion } from '@/features/ticketing/publicClient/useClientPageMotion';
+import '@/features/ticketing/publicClient/clientPublic.css';
+import { journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
+import './clientLanding.css';
 
 function readSlug(): string {
   return typeof window === 'undefined' ? '' : publicInquirySlug(window.location);
 }
 
-/** Pineapple's public landing design, linked to Alpha's current inquiry and password-auth routes. */
+function prefersReducedMotion(): boolean {
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/** Very tall viewports and reduced motion get a flat page: no sticky scenes, everything shown at once. */
+function isFlat(): boolean {
+  return window.innerHeight > 1600 || prefersReducedMotion();
+}
+
+function scrollToSection(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+}
+
+const clamp = (v: number) => Math.max(0, Math.min(1, v));
+
+type Journey = JourneyProgress & { page: number; active: string };
+const INITIAL: Journey = { hp: 0, ip: 0, wp: 0, pp: 0, flat: false, page: 0, active: 'client-intro' };
+
+const sections = [
+  { id: 'client-intro', label: 'Intro' },
+  { id: 'client-idea', label: 'The idea' },
+  { id: 'client-how', label: 'How it works' },
+  { id: 'client-project', label: 'Your project' },
+  { id: 'client-start', label: 'Start' },
+];
+
+const ideaWords = 'Tell us what you have in mind. We take it from there.'.split(' ');
+const highlighted = new Set(['Tell', 'there.']);
+
+const steps = [
+  { title: 'Tell us', short: 'Start with what you want.', description: 'Describe your idea in your own words. No account is needed to send an inquiry, and a project manager reads every one.' },
+  { title: 'Get your invitation', short: 'Access, when it is ready.', description: 'Your project manager follows up, then sends an email invitation. Open it to verify your email and choose a password.' },
+  { title: 'See your project', short: 'Watch it come together.', description: 'Sign in to follow your project, see updates as they happen, and share your feedback in one place.' },
+];
+
+const captions = [
+  { title: 'Then see it come together.', description: 'Every piece of your project, lighting up as it moves forward.' },
+  { title: 'Your say, when it matters.', description: 'See what is waiting on you and reply to your PM right there.' },
+  { title: 'All in one place.', description: 'From the first message to the finished work.' },
+];
+
+/** Zoom-out lines shown over the canvas, each with the project-progress window it owns. */
+const recap = [
+  { text: <>Every detail you see,</>, range: [0.43, 0.55] },
+  { text: <>every step you take,</>, range: [0.55, 0.665] },
+  { text: <>every idea you bring,</>, range: [0.665, 0.775] },
+  { text: <>starts with <b>one message.</b></>, range: [0.775, 0.93] },
+];
+
+/** "Zoom journey" landing: a scroll-driven camera dives into the client's project, then back out to the two doors. */
 export default function ClientLandingPage() {
   const [slug, setSlug] = useState(readSlug);
-  const motionRef = useClientPageMotion();
+  const [journey, setJourney] = useState<Journey>(INITIAL);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mainRef = useRef<HTMLElement>(null);
+  const journeyRef = useRef(journey);
+  const pointerRef = useRef<[number, number]>([0, 0]);
   const inquiry = publicInquiryHref(slug);
   const clientSignIn = clientPortalHref(slug);
 
@@ -26,47 +81,195 @@ export default function ClientLandingPage() {
     };
   }, []);
 
-  return <ClientPublicShell slug={slug}>
-    <div ref={motionRef}>
-      <section className="public-hero public-container">
-        <div className="public-hero-copy" data-public-arrival>
-          <h1>A clear start for<br />your next project<span>.</span></h1>
-          <p className="public-hero-description">Bring the idea. Your project manager will help make the next step clear, then you can follow the work shared with you in Alpha.</p>
-          <a className="public-button public-button-primary public-hero-cta" href={inquiry}>Start a project inquiry <ArrowUpRight size={19} /></a>
-          <p className="public-cta-note">No account or workspace choice is needed for a general inquiry.</p>
-          <div className="public-hero-footnote"><span className="public-fine-rule" /><p>One place for the request.<br /><strong>One place to stay in the loop.</strong></p></div>
-        </div>
+  const measure = useCallback(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    const vh = window.innerHeight || 800;
+    const track = (name: string) => {
+      const rect = root.querySelector(`[data-track="${name}"]`)?.getBoundingClientRect();
+      return rect ? clamp(-rect.top / Math.max(1, rect.height - vh)) : 0;
+    };
+    let active = sections[0].id;
+    sections.forEach(({ id }) => { if ((document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) < vh * 0.5) active = id; });
+    const page = document.scrollingElement ?? document.documentElement;
+    const next: Journey = {
+      hp: track('hero'), ip: track('idea'), wp: track('how'), pp: track('project'),
+      flat: isFlat(), page: clamp(page.scrollTop / Math.max(1, page.scrollHeight - vh)), active,
+    };
+    const previous = journeyRef.current;
+    const same = (Object.keys(next) as (keyof Journey)[]).every(key => {
+      const value = next[key];
+      return typeof value === 'number' ? Math.abs((previous[key] as number) - value) < 0.002 : previous[key] === value;
+    });
+    if (!same) { journeyRef.current = next; setJourney(next); }
+  }, []);
 
-        <section aria-label="Client sign in" className="public-access-card" data-public-arrival>
-          <div className="public-card-heading"><span className="public-icon-tile"><LockKeyhole size={22} /></span><span>Already invited?</span></div>
-          <h2>Access your tickets</h2>
-          <p>Sign in with the email and password you set up from your project manager’s invitation.</p>
-          <div className="public-signin-form">
-            <a className="public-button public-button-primary" href={clientSignIn}>Go to client sign in <ArrowUpRight size={17} /></a>
-          </div>
-          <div className="public-notice"><ShieldCheck size={17} /><p>An inquiry does not create an account or grant access. Your PM must invite you first; then set up your password from the email link.</p></div>
-          <p className="public-small-copy">Already have a password? <a href={clientSignIn}>Sign in to your client portal.</a></p>
-        </section>
-      </section>
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const scene = new ZoomScene(canvas);
+    const start = performance.now();
+    let frame = 0, pending = 0;
+    const drawStill = () => scene.draw(0, true, journeyRef.current, pointerRef.current);
+    const onScroll = () => {
+      if (pending) return;
+      pending = requestAnimationFrame(() => {
+        pending = 0;
+        measure();
+        if (prefersReducedMotion()) drawStill();
+      });
+    };
+    const loop = (now: number) => {
+      if (prefersReducedMotion()) { drawStill(); frame = 0; return; }
+      scene.draw((now - start) / 1000, false, journeyRef.current, pointerRef.current);
+      frame = requestAnimationFrame(loop);
+    };
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const restart = () => { cancelAnimationFrame(frame); measure(); frame = requestAnimationFrame(loop); };
+    measure();
+    frame = requestAnimationFrame(loop);
+    document.addEventListener('scroll', onScroll, { capture: true, passive: true });
+    window.addEventListener('resize', onScroll);
+    motion.addEventListener('change', restart);
+    return () => {
+      document.removeEventListener('scroll', onScroll, { capture: true });
+      window.removeEventListener('resize', onScroll);
+      motion.removeEventListener('change', restart);
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(pending);
+    };
+  }, [measure]);
 
-      <div className="public-assurances public-container">
-        {['A PM reviews every inquiry', 'Only invited clients can sign in', 'Your project stays private'].map(label => <span key={label}><Check size={16} />{label}</span>)}
-      </div>
+  const { flat, hp, ip, wp, pp, active } = journey;
+  const litWords = flat ? ideaWords.length : Math.floor(clamp(ip * 1.9) * ideaWords.length);
+  const step = flat ? -1 : journeyStep(wp);
+  const caption = flat ? -1 : pp < 0.13 ? 0 : pp < 0.26 ? 1 : 2;
+  const sectionClass = (base: string, id: string) => `${base}${flat || active === id ? ' is-in' : ''}`;
+  const shown = (on: boolean) => flat || on ? ' is-on' : '';
+  const heroStyle: CSSProperties = flat ? {} : { opacity: clamp((0.5 - hp) / 0.26), transform: `scale(${1 + clamp((hp - 0.2) / 0.3) * 0.08})` };
+  const fadeOut = (until: number, width: number, progress: number): CSSProperties => flat ? {} : { opacity: clamp((until - progress) / width) };
 
-      <InquiryWorkflow />
-
-      <section className="public-questions public-container" aria-labelledby="client-questions-heading">
-        <div><h2 id="client-questions-heading">Before you begin.</h2><p>A few things to know about your client space.</p></div>
-        <div className="public-question-list">
-          <details><summary>Do I need an account to send an inquiry?</summary><p>No. Use the general inquiry form. It goes to the shared PM inbox for review; a PM accepts it into a workspace before it becomes a ticket. A workspace-specific link still goes to that workspace.</p></details>
-          <details><summary>When can I sign in?</summary><p>After a PM reviews your inquiry and invites the same email address, open the email link to verify it and choose a password. After setup, sign in here with that email and password.</p></details>
-          <details><summary>What can I see after I’m invited?</summary><p>Only the tickets and project preview explicitly shared with your account. Internal project work, developer controls, and private PM notes stay private.</p></details>
-        </div>
-      </section>
-
-      <div className="public-container flex flex-wrap justify-end gap-4 pb-8 text-xs">
-        <a className="public-text-link" href="/#/team">Team sign in <ArrowUpRight size={14} /></a>
-      </div>
+  return <div
+    ref={rootRef}
+    className={`alpha-public client-landing ${flat ? 'is-flat' : 'is-immersive'}`}
+    onPointerMove={event => {
+      if (event.pointerType !== 'mouse') return;
+      pointerRef.current = [clamp(event.clientX / window.innerWidth) - 0.5, clamp(event.clientY / window.innerHeight) - 0.5];
+    }}
+    onPointerLeave={() => { pointerRef.current = [0, 0]; }}
+  >
+    <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
+    <canvas ref={canvasRef} className="cl-canvas" aria-hidden="true" />
+    <div className="cl-progress" style={{ transform: `scaleX(${journey.page})` }} aria-hidden="true" />
+    <nav aria-label="Sections">
+      <ul className="cl-index cl-mono">
+        {sections.map(({ id, label }) => <li key={id}><button type="button" className={active === id ? 'is-on' : ''} aria-current={active === id ? 'location' : undefined} onClick={() => scrollToSection(id)}>{label}</button></li>)}
+      </ul>
+    </nav>
+    <div className="cl-recap" aria-hidden="true">
+      {recap.map(({ text, range: [from, to] }, index) => <span key={index} className={flat ? '' : pp >= from && pp < to ? 'is-on' : pp >= to ? 'is-past' : ''}>{text}</span>)}
     </div>
-  </ClientPublicShell>;
+
+    <div className="cl-layer">
+      <main ref={mainRef} tabIndex={-1} className="public-main">
+        <section id="client-intro" className="cl-hero" data-track="hero" aria-labelledby="client-hero-heading">
+          <div className="cl-stick cl-hero-stick" style={heroStyle}>
+            <header className="cl-header public-container">
+              <a className="public-brand" href={clientSignIn}>
+                <img src={alphaMarkUrl} alt="" width="36" height="36" />
+                <span>Alpha<span className="public-brand-label">Client portal</span></span>
+              </a>
+              <nav className="cl-nav" aria-label="Client navigation">
+                <button type="button" className="public-text-link cl-nav-link" onClick={() => scrollToSection('client-how')}>How it works</button>
+                <a className="public-text-link cl-nav-link" href={clientSignIn}>Client sign in</a>
+                <a className="public-nav-action" href={inquiry}>Start an inquiry <ArrowUpRight size={15} /></a>
+              </nav>
+            </header>
+            <div className="cl-shade" aria-hidden="true" />
+            <div className="cl-hero-in public-container">
+              <p className="cl-hero-aside">One place for the request. <span>One place to stay in the loop.</span></p>
+              <p className="cl-kicker cl-mono"><span className="cl-dot" />Client portal · Invite only</p>
+              <h1 id="client-hero-heading"><span className="cl-line"><span>A clear start for</span></span><span className="cl-line"><span>your next project<span className="cl-accent">.</span></span></span></h1>
+              <div className="cl-hero-row">
+                <div className="cl-buttons">
+                  <a className="public-button public-button-primary cl-arrow-button" href={inquiry}>Start a project inquiry <ArrowRight size={18} /></a>
+                  <a className="public-button public-button-secondary" href={clientSignIn}>Client sign in</a>
+                </div>
+                <span className="cl-cue cl-mono">Scroll to dive in <ArrowDown size={14} /></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="client-idea" className={sectionClass('cl-idea', 'client-idea')} data-track="idea" aria-label="Our approach">
+          <div className="cl-stick" style={fadeOut(0.9, 0.12, ip)}>
+            <div className="cl-idea-in public-container">
+              <span className="cl-eyebrow cl-mono cl-fade">The idea</span>
+              <p className="cl-manifesto cl-fade">
+                {ideaWords.map((word, index) => <span key={index} className={`cl-word${index < litWords ? ' is-on' : ''}${highlighted.has(word) ? ' is-accent' : ''}`}>{index < ideaWords.length - 1 ? `${word} ` : word}</span>)}
+              </p>
+              <div className="cl-assurances cl-mono cl-fade"><span>A PM reviews every inquiry</span><span>Only invited clients can sign in</span><span>Your project stays private</span></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="client-how" className={sectionClass('cl-how', 'client-how')} data-track="how" aria-labelledby="client-how-heading">
+          <div className="cl-stick" style={fadeOut(0.94, 0.12, wp)}>
+            <div className="cl-shade" aria-hidden="true" />
+            <div className="cl-how-in public-container">
+              <div className="cl-fade">
+                <span className="cl-eyebrow cl-mono">How it works</span>
+                <h2 id="client-how-heading">Three steps.<br /><span>Nothing to set up.</span></h2>
+                <div className="cl-rail cl-mono" aria-hidden="true">
+                  {steps.map((_, index) => <span key={index} className={index === step ? 'is-on' : index < step ? 'is-done' : ''}><span>0{index + 1}</span><i /></span>)}
+                </div>
+              </div>
+              <ol className="cl-steps cl-fade">
+                {steps.map(({ title, short, description }, index) => <li key={title} className={`cl-step cl-pos-${index + 1}${shown(step === index)}`}>
+                  <span className="cl-mono">Step 0{index + 1} of 03</span><h3>{title}</h3><p className="cl-step-short">{short}</p><p>{description}</p>
+                </li>)}
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        <section id="client-project" className={sectionClass('cl-project', 'client-project')} data-track="project" aria-labelledby="client-project-heading">
+          <div className="cl-stick" style={fadeOut(0.42, 0.04, pp)}>
+            <div className="cl-shade" aria-hidden="true" />
+            <div className="cl-project-in public-container">
+              <h2 id="client-project-heading" className="sr-only">Then see your project come together</h2>
+              <ol className="cl-captions cl-fade">
+                {captions.map(({ title, description }, index) => <li key={title} className={`cl-caption cl-pos-${index + 1}${shown(caption === index)}`}><strong>{title}</strong><span>{description}</span></li>)}
+              </ol>
+            </div>
+          </div>
+        </section>
+
+        <section id="client-start" className={sectionClass('cl-close public-container', 'client-start')} aria-labelledby="client-close-heading">
+          <h2 id="client-close-heading" className="cl-fade">Ready when<br />you are<span className="cl-accent">.</span></h2>
+          <p className="cl-fade">Every project starts as a spark. Tell us yours.</p>
+          <div className="cl-doors cl-fade">
+            <a className="cl-door cl-door-new" href={inquiry}>
+              <span className="cl-mono">New here</span>
+              <span className="cl-door-title">Start a project inquiry <span className="cl-door-arrow"><ArrowRight size={18} /></span></span>
+              <span className="cl-door-copy">No account or workspace choice is needed for a general inquiry.</span>
+            </a>
+            <a className="cl-door" href={clientSignIn}>
+              <span className="cl-mono">Already invited</span>
+              <span className="cl-door-title">Go to client sign in <span className="cl-door-arrow"><ArrowRight size={18} /></span></span>
+              <span className="cl-door-copy">An inquiry does not create an account. Your PM must invite you first; then set up your password from the email link.</span>
+            </a>
+          </div>
+        </section>
+      </main>
+
+      <footer className="public-footer public-container">
+        <span className="public-footer-brand">Alpha <span>Client portal</span></span>
+        <div className="cl-footer-end">
+          <p>Client access is limited to work shared with your account.</p>
+          <a className="public-text-link" href="/#/team">Team sign in <ArrowUpRight size={14} /></a>
+        </div>
+      </footer>
+    </div>
+  </div>;
 }
