@@ -104,7 +104,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
 
   const accept = async () => {
     if (!selected || !workspaceId || accepting || declining || filter !== 'pending') return;
-    const generation = loadGeneration.current;
+    const generation = ++loadGeneration.current;
+    setLoading(false); setLoadingMore(false);
     let operationId = operationIds.current.get(selected.id);
     if (!operationId) {
       operationId = crypto.randomUUID();
@@ -132,7 +133,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
 
   const decline = async () => {
     if (!selected || !workspaceId || declining || accepting || filter !== 'pending') return;
-    const generation = loadGeneration.current;
+    const generation = ++loadGeneration.current;
+    setLoading(false); setLoadingMore(false);
     let operationId = declineOperationIds.current.get(selected.id);
     if (!operationId) {
       operationId = crypto.randomUUID();
