@@ -3,7 +3,7 @@ import { OrchestrationPlanPreview } from '../live-build-room/OrchestrationPlanPr
 import { AlertTriangle, Check, ChevronDown, CircleDot, ExternalLink, LoaderCircle } from 'lucide-react';
 
 import { PlanBody, ReviewBody } from './ChatBuildBodies';
-import type { ProjectLiveBuild } from './useProjectLiveBuild';
+import { needsSecurityAuditPlan, type ProjectLiveBuild } from './useProjectLiveBuild';
 import type { LiveBuildRecoveryAction } from '@/shared/types';
 
 export type WizardStep = 'plan' | 'approve' | 'build' | 'review' | 'publish';
@@ -234,6 +234,7 @@ export interface ChatBuildWizardProps {
   onStop: () => void;
   /** Resume a paused build, or take the recovery action the server offers for a stopped one. */
   onContinue: (action?: LiveBuildRecoveryAction) => void;
+  onAuditPlan?: () => void;
   /** Put the cursor in the message box, for a reply in the person's own words. */
   onReply: (prefill?: string) => void;
   onRetry: () => void;
@@ -296,7 +297,8 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       {
         title = build.status === 'paused' ? 'Build paused' : 'The build needs you';
         subtitle = buildRepositoriesLabel(build);
-        const choice = continueChoice(build);
+        const auditPlan = needsSecurityAuditPlan(build) && props.onAuditPlan;
+        const choice = auditPlan ? null : continueChoice(build);
         const recovery = build.orchestration.recovery;
         // Why "continue" is not offered, in the server's words, when no automatic step is safe.
         const noAutomaticStep = !choice && recovery
@@ -308,6 +310,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
           <Progress build={build} />
         </>;
         options = [
+          ...(auditPlan ? [{ label: 'Plan with Security', hint: 'The Orchestrator prepares a revised audit-and-fix plan for your review.', onSelect: auditPlan, tone: 'primary' as const, busy: busy === 'continue', disabled: !props.canStart }] : []),
           ...(choice ? [{ label: choice.label, hint: choice.hint, onSelect: () => props.onContinue(choice.action), tone: 'primary' as const, busy: busy === 'continue' }] : []),
           { label: 'Tell the Orchestrator what to do', hint: 'Answer in the message box.', onSelect: () => props.onReply(), tone: choice ? undefined : 'primary' as const },
           ...(props.canStop ? [{ label: 'Stop the build', hint: 'Work saved on the build branch stays available.', onSelect: props.onStop, tone: 'danger' as const, busy: busy === 'stop' }] : [])

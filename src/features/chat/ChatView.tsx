@@ -3,6 +3,7 @@ import { OrchestrationPlanPreview, PlanDocumentTab, PlanPanelContext, planFileNa
 import {
   AlertTriangle,
   Activity,
+  Brain,
   Bot,
   Check,
   CheckCircle2,
@@ -37,6 +38,7 @@ import {
 } from 'lucide-react';
 
 import { useApp, useTabSessionState } from '@/app/AppContext';
+import { isDesktop } from '@/shared/desktop';
 import { Modal } from '@/shared/components/Modal';
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
@@ -60,7 +62,7 @@ import { BuildAgentActivityPanel } from './BuildAgentActivityPanel';
 import { ChatSidePanel, type SidePanelTab } from './ChatSidePanel';
 import { LiveChangesView } from './LiveChangesView';
 import { ChatBuildWizard, planningFailureReason, type BuildPlanningFailure } from './ChatBuildWizard';
-import { buildHandoffs, buildStatusLabel, useProjectLiveBuild } from './useProjectLiveBuild';
+import { buildHandoffs, buildStatusLabel, needsSecurityAuditPlan, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { inferRecoveryAction, isBuildDirection, isContinueRequest, isExplicitBuildRetry, isRetryRequest, resolveRecoveryAction } from './chatRecoveryIntent';
 import { ChatHome } from './ChatHome';
@@ -465,25 +467,25 @@ export const ChatView: React.FC = () => {
     setActiveTab,
     setTabSessionState,
     activeTabId,
-    squadRuns,
     agents: workspaceAgents,
     runtimes,
     updateAgent,
     currentUser
   } = useApp();
 
-  const [input, setInput] = useTabSessionState<string>('chatDraft', '');
-  const [approvalMode, setApprovalMode] = useTabSessionState<'ask' | 'approve' | 'full'>('chatApprovalMode', 'ask');
+  const sessionStateKey = (key: string, threadId = activeThreadId) => `chat.session.${threadId ?? 'draft'}.${key}`;
+  const [input, setInput] = useTabSessionState<string>(sessionStateKey('draft'), '');
+  const [approvalMode, setApprovalMode] = useTabSessionState<'ask' | 'approve' | 'full'>(sessionStateKey('approvalMode'), 'ask');
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingFileViews, setPendingFileViews] = useState<Array<{ file: File; previewUrl?: string }>>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [chatTurnActionBusy, setChatTurnActionBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [callInstruction, setCallInstruction] = useTabSessionState<string>('chatCallInstruction', '');
+  const [callInstruction, setCallInstruction] = useTabSessionState<string>(sessionStateKey('callInstruction'), '');
   const [showCallPanel, setShowCallPanel] = useState(false);
   /** What is open in the right side panel, one tab each, and which tab is showing. */
-  const [sideTabs, setSideTabs] = useState<SideTab[]>([]);
-  const [activeSideTabId, setActiveSideTabId] = useState<string | null>(null);
+  const [sideTabs, setSideTabs] = useTabSessionState<SideTab[]>(sessionStateKey('sideTabs'), []);
+  const [activeSideTabId, setActiveSideTabId] = useTabSessionState<string | null>(sessionStateKey('activeSideTab'), null);
   const activeSideTab = sideTabs.find(tab => tab.id === activeSideTabId) ?? null;
   const inspectedCallId = activeSideTab?.kind === 'call' ? activeSideTab.callId : null;
   const inspectedBuildAgentId = activeSideTab?.kind === 'agent' ? activeSideTab.agentId : null;
@@ -512,21 +514,26 @@ export const ChatView: React.FC = () => {
   const [buildDecisionBusy, setBuildDecisionBusy] = useState<'start' | 'approve' | 'stop' | 'continue' | 'retry' | null>(null);
   const [buildDecisionError, setBuildDecisionError] = useState<string | null>(null);
   /** Planning failures someone closed in the build panel, by message id. */
-  const [dismissedBuildFailures, setDismissedBuildFailures] = useTabSessionState<string[]>('chat.dismissedBuildFailures', []);
-  const [publishedBuild, setPublishedBuild] = useState<{ projectId: string; links: Array<{ repository: string; url: string }> } | null>(null);
+  const [dismissedBuildFailures, setDismissedBuildFailures] = useTabSessionState<string[]>(sessionStateKey('dismissedBuildFailures'), []);
+  const [publishedBuild, setPublishedBuild] = useTabSessionState<{ projectId: string; links: Array<{ repository: string; url: string }> } | null>(sessionStateKey('publishedBuild'), null);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
   const [loadingSnapshot, setLoadingSnapshot] = useState(false);
   const [snapshotError, setSnapshotError] = useState<string | null>(null);
   const [chatSyncStatus, setChatSyncStatus] = useState<ChatSyncStatus | null>(null);
   const [syncRetrying, setSyncRetrying] = useState(false);
-  const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string>('chatSelectedAgentId', '');
-  const [selectedBuildRepositories, setSelectedBuildRepositories] = useTabSessionState<string[]>('chatBuildRepositories', []);
+  const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string>(sessionStateKey('selectedAgent'), '');
+  const [selectedBuildRepositories, setSelectedBuildRepositories] = useTabSessionState<string[]>(sessionStateKey('buildRepositories'), []);
   const [routingMessageId, setRoutingMessageId] = useState<string | null>(null);
   // The list stays docked; a collapsed rail expands only on click.
   const [threadListCollapsed, setThreadListCollapsed] = useTabSessionState<boolean>('chatThreadListCollapsed', false);
   const [expandedProjectIds, setExpandedProjectIds] = useTabSessionState<string[]>('chatExpandedProjectIds', []);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [threadPendingDelete, setThreadPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [memoryThreadId, setMemoryThreadId] = useState<string | null>(null);
+  const [memoryContent, setMemoryContent] = useState('');
+  const [memoryBusy, setMemoryBusy] = useState(false);
+  const [memoryLoading, setMemoryLoading] = useState(false);
+  const [memoryError, setMemoryError] = useState<string | null>(null);
   const [openThreadMenuId, setOpenThreadMenuId] = useState<string | null>(null);
   const threadMenuRef = useRef<HTMLDivElement>(null);
   const [openProjectMenuId, setOpenProjectMenuId] = useState<string | null>(null);
@@ -542,9 +549,26 @@ export const ChatView: React.FC = () => {
     observer.observe(element);
     return () => observer.disconnect();
   }, [activeThreadId]);
-  const [mode, setMode] = useTabSessionState<AgentCallMode>('chatCallMode', 'ask');
-  const [targetType, setTargetType] = useTabSessionState<AgentCallTarget['type']>('chatTargetType', 'issue');
-  const [targetId, setTargetId] = useTabSessionState<string>('chatTargetId', '');
+  useEffect(() => {
+    setPendingFileViews(current => {
+      current.forEach(item => { if (item.previewUrl) URL.revokeObjectURL(item.previewUrl); });
+      return [];
+    });
+    setPendingFiles([]);
+    setIsDraggingFiles(false);
+    setChatTurnActionBusy(false);
+    setBuildDecisionBusy(null);
+    setBuildDecisionError(null);
+    setStoppingProjectRunId(null);
+    setRoutingMessageId(null);
+    setRepositoryMenuOpen(false);
+    setShowCallPanel(false);
+    setMentionQuery(null);
+    setMemoryThreadId(null);
+  }, [activeThreadId]);
+  const [mode, setMode] = useTabSessionState<AgentCallMode>(sessionStateKey('callMode'), 'ask');
+  const [targetType, setTargetType] = useTabSessionState<AgentCallTarget['type']>(sessionStateKey('callTargetType'), 'issue');
+  const [targetId, setTargetId] = useTabSessionState<string>(sessionStateKey('callTargetId'), '');
   const [calls, setCalls] = useState<Record<string, AgentCall>>({});
   const [busyCallId, setBusyCallId] = useState<string | null>(null);
   const [stoppingProjectRunId, setStoppingProjectRunId] = useState<string | null>(null);
@@ -589,15 +613,14 @@ export const ChatView: React.FC = () => {
   const isClient = role === 'client';
   const project = projects.find(item => item.id === activeThread?.projectId);
   const projectIssues = issues.filter(issue => issue.projectId === activeThread?.projectId);
-  const projectSquadRuns = squadRuns
-    .filter(run => run.projectId === activeThread?.projectId)
-    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  const activeProjectBuildRuns = projectSquadRuns.filter(run => run.status === 'running');
-  const latestProjectBuildRun = projectSquadRuns[0];
-  // The project's Orchestrator build, wherever it was started. It holds the repositories until it ends.
-  const { build: liveBuild, refresh: refreshLiveBuild } = useProjectLiveBuild(project?.id, !isClient && Boolean(project) && isActiveTab);
+  // Only a build originating in this conversation can appear or be controlled here.
+  const { build: liveBuild, refresh: refreshLiveBuild } = useProjectLiveBuild(
+    project?.id,
+    !isClient && Boolean(project) && Boolean(activeThreadId) && isActiveTab,
+    activeThreadId
+  );
   const inspectedBuildAgent = liveBuild?.agents.find(agent => agent.agentId === inspectedBuildAgentId) ?? null;
-  const buildIsOpen = Boolean(liveBuild) || activeProjectBuildRuns.length > 0;
+  const buildIsOpen = Boolean(liveBuild);
   const canStopBuild = !isClient && can('run_builds') && buildIsOpen && liveBuild?.status !== 'cancelling' && liveBuild?.status !== 'publishing';
   // Plan approval and final review are answered in the chat itself.
   const buildDecision = !isClient && liveBuild && ['awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(liveBuild.status) ? liveBuild : null;
@@ -1077,10 +1100,25 @@ export const ChatView: React.FC = () => {
   };
 
   /** With `optional`, a message the open recovery cannot take returns false so it goes to Alpha's chat instead. */
+  const proposeSecurityAuditPlan = async (): Promise<boolean> => {
+    if (!liveBuild || !project || !liveBuild.canControl || !can('run_builds')) return false;
+    setBuildDecisionBusy('continue'); setBuildDecisionError(null);
+    try {
+      const next = await apiService.proposeSecurityAuditPlan(project.id, liveBuild.runId, liveBuild.revision);
+      await refreshLiveBuild();
+      openPlanTab({ projectId: project.id, runId: liveBuild.runId, planVersion: next.planVersion, auto: false });
+      showToast('Security audit plan ready', 'Review the revised Markdown plan before starting work.', 'success');
+    } catch (error) {
+      setBuildDecisionError(error instanceof Error ? error.message : 'The Orchestrator could not prepare the audit plan.');
+    } finally { setBuildDecisionBusy(null); }
+    return true;
+  };
+
   const dispatchRecoveryFollowUp = async (message: string, requestedAction: LiveBuildRecoveryAction, optional = false): Promise<boolean> => {
+    if (needsSecurityAuditPlan(liveBuild) && requestedAction === 'repair_and_continue' && isExplicitBuildRetry(message)) return proposeSecurityAuditPlan();
     if (!activeThread?.id || !activeThread.projectId) return false;
     const explicitBuildRetry = isExplicitBuildRetry(message);
-    // This conversation's builds, plus the project's open build when another conversation started it.
+    // This conversation's build messages and the live build filtered to this thread.
     const runIds = [...new Set([
       ...currentMessages.filter(item => item.messageType === 'build' && item.orchestrationRunId).map(item => item.orchestrationRunId!),
       ...(liveBuild ? [liveBuild.runId] : [])
@@ -1230,12 +1268,6 @@ export const ChatView: React.FC = () => {
         : 'Stop the current build or wait for it to finish before starting another one.', 'info');
       return;
     }
-    if (sendsBuild && latestProjectBuildRun?.status === 'awaiting_approval' && !window.confirm(
-      'The previous build is finished and waiting for review. Start another orchestrated project build?'
-    )) return;
-    if (sendsBuild && (latestProjectBuildRun?.status === 'failed' || latestProjectBuildRun?.status === 'cancelled') && !window.confirm(
-      'The previous build stopped. Start a new orchestrated build attempt for this project?'
-    )) return;
     followNextMessage();
     setInput('');
     setMentionQuery(null);
@@ -1264,20 +1296,18 @@ export const ChatView: React.FC = () => {
 
   const stopProjectBuild = async () => {
     const orchestrationRunId = liveBuild && liveBuild.status !== 'cancelling' ? liveBuild.runId : null;
-    const total = activeProjectBuildRuns.length + (orchestrationRunId ? 1 : 0);
-    if (!total || stoppingProjectRunId || !project?.id) return;
+    if (!orchestrationRunId || stoppingProjectRunId || !project?.id) return;
     if (!window.confirm(liveBuild?.status === 'awaiting_plan_approval'
       ? 'Stop this build plan? No agents have started, and the plan will not run.'
       : 'Stop the current build? Running agents stop at the next safe point. Work already saved on the build branch stays available.')) return;
     setStoppingProjectRunId('all');
     try {
       const results = await Promise.allSettled([
-        ...(orchestrationRunId ? [apiService.cancelOrchestration(project.id, orchestrationRunId)] : []),
-        ...activeProjectBuildRuns.map(run => apiService.cancelSquadRun(run.id))
+        apiService.cancelOrchestration(project.id, orchestrationRunId)
       ]);
       const stoppedCount = results.filter(result => result.status === 'fulfilled').length;
-      if (stoppedCount === total) {
-        showToast(stoppedCount > 1 ? 'Builds stopped' : 'Build stopped', 'The agents are stopping. Work already on the build branch remains available for review.', 'success');
+      if (stoppedCount === 1) {
+        showToast('Build stopped', 'The agents are stopping. Work already on the build branch remains available for review.', 'success');
       } else {
         const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
         showToast(stoppedCount ? 'Some builds could not be stopped' : 'Could not stop build', failure?.reason?.message ?? 'Check the Live Build Room for current status.', 'error');
@@ -1321,6 +1351,7 @@ export const ChatView: React.FC = () => {
   };
   const continueBuild = async (action: LiveBuildRecoveryAction = 'repair_and_continue') => {
     if (!liveBuild || buildDecisionBusy) return;
+    if (needsSecurityAuditPlan(liveBuild)) { await proposeSecurityAuditPlan(); return; }
     if (liveBuild.status === 'paused' || (liveBuild.status === 'blocked' && /^(Milestone planning stopped|Plan document could not be saved) before dispatch:/.test(liveBuild.orchestration.run.stoppedReason ?? ''))) {
       setBuildDecisionBusy('continue');
       try { await resumePausedBuild(); } finally { setBuildDecisionBusy(null); }
@@ -1534,10 +1565,68 @@ export const ChatView: React.FC = () => {
   }, [activeThread?.projectId, projects]);
   const canStartThread = isClient || can('manage_chat');
 
+  useEffect(() => {
+    if (!memoryThreadId) {
+      setMemoryContent('');
+      setMemoryError(null);
+      setMemoryLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setMemoryLoading(true);
+    setMemoryError(null);
+    apiService.getChatThreadMemory(memoryThreadId).then(memory => {
+      if (!cancelled) setMemoryContent(memory.content);
+    }).catch((error: any) => {
+      if (!cancelled) setMemoryError(error?.message ?? 'Could not load this chat\'s memory.');
+    }).finally(() => {
+      if (!cancelled) setMemoryLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [memoryThreadId]);
+
+  const saveSessionMemory = async () => {
+    if (!memoryThreadId) return;
+    setMemoryBusy(true);
+    setMemoryError(null);
+    try {
+      const saved = await apiService.saveChatThreadMemory(memoryThreadId, memoryContent);
+      setMemoryContent(saved.content);
+      showToast('Session memory saved', 'These notes will be used only in this conversation.', 'success');
+    } catch (error: any) {
+      setMemoryError(error?.message ?? 'Could not save this chat\'s memory.');
+    } finally {
+      setMemoryBusy(false);
+    }
+  };
+
+  const clearSessionMemory = async () => {
+    if (!memoryThreadId) return;
+    setMemoryBusy(true);
+    setMemoryError(null);
+    try {
+      await apiService.clearChatThreadMemory(memoryThreadId);
+      setMemoryContent('');
+      showToast('Session memory cleared', 'This conversation will start with no saved notes.', 'success');
+    } catch (error: any) {
+      setMemoryError(error?.message ?? 'Could not clear this chat\'s memory.');
+    } finally {
+      setMemoryBusy(false);
+    }
+  };
+
   // A new chat is a draft until its first message, and is connected to no project until one is picked.
-  const [draftProjectChoice, setDraftProjectChoice] = useTabSessionState<string>('chatDraftProject', '');
+  const [draftProjectChoice, setDraftProjectChoice] = useTabSessionState<string>('chat.session.draft.projectId', '');
   const draftProjectId = draftProjectChoice && assignedProjects.some(item => item.id === draftProjectChoice) ? draftProjectChoice : null;
   const startDraft = (projectId?: string | null) => {
+    setTabSessionState(activeTabId, 'chat.session.draft.draft', '');
+    setTabSessionState(activeTabId, 'chat.session.draft.approvalMode', 'ask');
+    setTabSessionState(activeTabId, 'chat.session.draft.callInstruction', '');
+    setTabSessionState(activeTabId, 'chat.session.draft.dismissedBuildFailures', []);
+    setTabSessionState(activeTabId, 'chat.session.draft.selectedAgent', '');
+    setTabSessionState(activeTabId, 'chat.session.draft.buildRepositories', []);
+    setTabSessionState(activeTabId, 'chat.session.draft.sideTabs', []);
+    setTabSessionState(activeTabId, 'chat.session.draft.activeSideTab', null);
     setActiveThreadId(null);
     setDraftProjectChoice(projectId ?? '');
   };
@@ -1578,6 +1667,7 @@ export const ChatView: React.FC = () => {
       {!isClient && <div className="absolute right-1 top-1">
         <button type="button" onClick={() => setOpenThreadMenuId(value => value === thread.id ? null : thread.id)} aria-label={`More options for ${thread.title}`} aria-expanded={rowMenuOpen} className={`rounded-md p-1 text-gray-500 hover:bg-white/[0.08] hover:text-white focus:opacity-100 ${rowMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}><MoreHorizontal className="h-3.5 w-3.5" /></button>
         {rowMenuOpen && <div ref={threadMenuRef} role="menu" aria-label={`Options for ${thread.title}`} className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-xl border border-white/10 bg-surface-raised p-1.5 shadow-xl">
+          {isDesktop && <button type="button" role="menuitem" onClick={() => { setOpenThreadMenuId(null); setMemoryThreadId(thread.id); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-gray-300 hover:bg-white/[0.06]"><Brain className="h-3.5 w-3.5" />Session memory</button>}
           <button type="button" role="menuitem" onClick={() => { setOpenThreadMenuId(null); setThreadPendingDelete({ id: thread.id, title: thread.title }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-rose-300 hover:bg-rose-500/10"><Trash2 className="h-3.5 w-3.5" />Delete chat</button>
         </div>}
       </div>}
@@ -1629,7 +1719,6 @@ export const ChatView: React.FC = () => {
 
   let stopBuildLabel: string;
   if (stoppingProjectRunId) stopBuildLabel = 'Stopping…';
-  else if (activeProjectBuildRuns.length + (liveBuild ? 1 : 0) > 1) stopBuildLabel = `Stop ${activeProjectBuildRuns.length + (liveBuild ? 1 : 0)} builds`;
   else stopBuildLabel = liveBuild?.status === 'awaiting_plan_approval' ? 'Stop plan' : 'Stop build';
   const composerHasContent = Boolean(input.trim()) || pendingFiles.length > 0;
   const composerStop: 'turn' | 'build' | null = composerHasContent ? null : activeTurnMessageId ? 'turn' : canStopBuild ? 'build' : null;
@@ -1672,10 +1761,10 @@ export const ChatView: React.FC = () => {
   return (
     <PlanPanelContext.Provider value={isClient ? null : openPlanTab}>
     <div className="relative h-full min-h-0 flex overflow-hidden bg-shell text-sm text-gray-200">
-      <div className="relative w-12 shrink-0">
+      <div className={'relative shrink-0 ' + (threadListCollapsed ? 'w-12' : 'w-72 sm:w-80')}>
       {threadListCollapsed ? <div className="group flex h-full items-center justify-center bg-shell">
         <button type="button" onClick={() => setThreadListCollapsed(false)} aria-label="Show conversations" title="Show conversations" className="flex h-16 w-5 items-center justify-center rounded-full border border-white/10 bg-surface-raised/90 text-gray-400 opacity-0 shadow-lg shadow-black/40 transition-all duration-200 hover:border-violet-300/40 hover:text-white group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><ChevronRight className="h-3.5 w-3.5" /></button>
-      </div> : <aside className="absolute inset-y-0 left-0 z-30 flex w-72 flex-col bg-shell shadow-2xl shadow-black/40 sm:w-80">
+      </div> : <aside aria-label="Project conversations" className="relative z-30 flex h-full w-full min-w-0 flex-col border-r border-white/[0.08] bg-shell">
         <div className="flex items-start justify-between gap-2 border-b border-white/[0.08] px-4 py-3"><div className="min-w-0"><h2 className="text-base font-semibold text-white">{isClient ? 'Messages' : 'Project chat'}</h2><p className="mt-0.5 truncate text-[10px] text-gray-500">{activeWorkspace?.name ?? 'Workspace'}</p></div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={startNewThread} aria-label="New chat" title="New chat" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white"><Plus className="h-4 w-4" /></button><button type="button" onClick={() => setThreadListCollapsed(true)} aria-label="Collapse conversations" title="Collapse conversations" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white"><PanelLeftClose className="h-4 w-4" /></button></div></div>
         <div className="flex-1 overflow-y-auto px-2 py-3">
           {isClient ? <div className="space-y-1">{chatThreads.map(thread => renderThreadRow(thread))}</div> : <>
@@ -1712,6 +1801,22 @@ export const ChatView: React.FC = () => {
         footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setThreadPendingDelete(null)} className="rounded-lg px-3 py-2 text-xs text-gray-300 hover:bg-white/[0.06]">Cancel</button><button type="button" onClick={() => { if (threadPendingDelete) deleteThread(threadPendingDelete.id); setThreadPendingDelete(null); }} className="rounded-lg bg-rose-500/15 px-3 py-2 text-xs font-semibold text-rose-200 hover:bg-rose-500/25">Delete chat</button></div>}
       >
         <p className="text-sm text-gray-300">Are you sure you want to delete <span className="font-semibold text-white">{threadPendingDelete?.title}</span>?</p>
+      </Modal>
+      <Modal
+        isOpen={Boolean(memoryThreadId)}
+        onClose={() => setMemoryThreadId(null)}
+        title="Session memory"
+        subtitle="Private notes used only in this chat. Add durable facts or decisions you want Alpha to remember."
+        maxWidth="max-w-2xl"
+        closeDisabled={memoryBusy}
+        footer={<div className="flex items-center justify-between gap-3"><button type="button" onClick={() => void clearSessionMemory()} disabled={memoryBusy || memoryLoading} className="rounded-lg px-3 py-2 text-xs text-rose-300 hover:bg-rose-500/10 disabled:opacity-50">Clear notes</button><div className="flex gap-2"><button type="button" onClick={() => setMemoryThreadId(null)} disabled={memoryBusy} className="rounded-lg px-3 py-2 text-xs text-gray-300 hover:bg-white/[0.06]">Close</button><button type="button" onClick={() => void saveSessionMemory()} disabled={memoryBusy || memoryLoading || memoryContent.length > 6000} className="rounded-lg bg-brand-500 px-3 py-2 text-xs font-semibold text-white hover:bg-brand-400 disabled:opacity-50">{memoryBusy ? 'Saving…' : 'Save notes'}</button></div></div>}
+      >
+        <div className="space-y-3">
+          <p className="text-xs leading-5 text-gray-400">These notes stay in this conversation’s local session memory. They are not copied to project, agent, or global memory. Keep secrets and credentials out of notes.</p>
+          <textarea value={memoryContent} onChange={event => setMemoryContent(event.target.value)} maxLength={6000} rows={12} disabled={memoryLoading || memoryBusy} aria-label="Session memory notes" placeholder="Example: We chose PostgreSQL, the API must remain backward compatible, and the next step is to add migration tests." className="w-full resize-y rounded-xl border border-white/10 bg-black/20 p-3 text-sm leading-6 text-gray-100 outline-none placeholder:text-gray-600 focus:border-brand-400/40 disabled:opacity-60" />
+          <div className="flex items-center justify-between text-[10px] text-gray-500"><span>{memoryLoading ? 'Loading saved notes…' : 'Notes are added to future turns in this chat.'}</span><span>{memoryContent.length}/6000</span></div>
+          {memoryError && <p role="alert" className="rounded-lg border border-rose-400/20 bg-rose-500/10 p-2.5 text-xs text-rose-200">{memoryError}</p>}
+        </div>
       </Modal>
       <main className="relative flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden bg-shell">
         {activeThread ? <>
@@ -1770,6 +1875,7 @@ export const ChatView: React.FC = () => {
                 onApprove={() => void approveBuild()}
                 onStop={() => void stopProjectBuild()}
                 onContinue={action => void continueBuild(action)}
+                onAuditPlan={() => void proposeSecurityAuditPlan()}
                 onReply={replyInComposer}
                 onRetry={() => void retryPlanning()}
                 onDismiss={dismissBuildFailure}

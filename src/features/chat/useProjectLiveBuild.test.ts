@@ -1,8 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import type { LiveBuildRoomSnapshot } from '@/shared/types';
-import { buildAgentNodes } from './useProjectLiveBuild';
+import { buildAgentNodes, snapshotBelongsToThread } from './useProjectLiveBuild';
+
+describe('chat build isolation', () => {
+  it('only accepts build snapshots that identify the selected thread as their origin', () => {
+    const snapshot = { orchestration: { run: { originChatThreadId: 'thread-a' } } } as any;
+    expect(snapshotBelongsToThread(snapshot, 'thread-a')).toBe(true);
+    expect(snapshotBelongsToThread(snapshot, 'thread-b')).toBe(false);
+    expect(snapshotBelongsToThread({ orchestration: { run: {} } } as any, 'thread-a')).toBe(false);
+    expect(snapshotBelongsToThread(snapshot)).toBe(true);
+  });
+});
 
 describe('buildAgentNodes', () => {
+  it('waits for a dispatch record before showing working and retains assignment boundaries', () => {
+    const task = { id: 'api', title: 'API', status: 'running', ownerAgentId: 'backend', ownerName: 'Backend Agent',
+      kind: 'backend', assignmentReason: 'Server expertise', repository: 'test/api',
+      scope: { includePaths: ['src/**'], excludePaths: ['src/generated/**'] }, requiredChecks: ['test'], dependsOn: ['brief'] };
+    const snapshot = { agentCards: [], orchestration: { tasks: [task], attempts: [] } } as any;
+    expect(buildAgentNodes(snapshot)[0]).toMatchObject({ state: 'waiting', tasks: [{ id: 'api', assignmentReason: 'Server expertise', scope: task.scope, requiredChecks: ['test'], dependsOn: ['brief'] }] });
+    snapshot.orchestration.attempts.push({ taskId: 'api', status: 'starting' });
+    expect(buildAgentNodes(snapshot)[0].state).toBe('waiting');
+    snapshot.orchestration.attempts[0] = { taskId: 'api', status: 'running', prototypeRunId: 'run-1' };
+    expect(buildAgentNodes(snapshot)[0].state).toBe('running');
+  });
   it('collects every file each agent changed, from its attempts, reports and live activity', () => {
     const snapshot = {
       agentCards: [{
