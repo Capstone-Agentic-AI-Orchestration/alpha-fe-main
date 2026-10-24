@@ -10,7 +10,7 @@ function barClass(step: ClientProgressStep): string {
 
 function labelClass(step: ClientProgressStep): string {
   if (step.state === 'done') return 'text-gray-300';
-  if (step.state === 'upcoming') return 'text-gray-600';
+  if (step.state === 'upcoming') return 'text-gray-400';
   return step.needsYou ? 'font-medium text-amber-100' : 'font-medium text-white';
 }
 
@@ -19,7 +19,7 @@ export function ClientProgressStrip({ steps }: { steps: ClientProgressStep[] }) 
   if (steps.length === 0) return null;
   const index = steps.findIndex(step => step.state === 'current');
   const current = steps[index];
-  return <div className="mt-3 w-full">
+  return <div className="client-progress-strip">
     <ol aria-label="Request progress" className="flex w-full items-start gap-1.5">
       {steps.map(step => {
         return <li key={step.label} aria-current={step.state === 'current' ? 'step' : undefined} className="min-w-0 flex-1">

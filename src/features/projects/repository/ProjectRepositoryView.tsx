@@ -1,22 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  ExternalLink,
-  FileCode2,
-  GitBranch,
-  GitPullRequest,
-  KeyRound,
-  LayoutDashboard,
-  MonitorPlay,
-  PlayCircle,
-  ScrollText,
-  Workflow,
-  type LucideIcon
+  Download, ExternalLink, FileCode2, GitBranch, GitPullRequest, KeyRound,
+  LayoutDashboard, MonitorPlay, PlayCircle, ScrollText, type LucideIcon
 } from 'lucide-react';
 
-import { useApp } from '@/app/AppContext';
+import { useApp, useTabSessionState } from '@/app/AppContext';
 import { apiService } from '@/shared/services/apiService';
 import { RepoBranch, RepoPullRequest } from '@/shared/types';
 import { BranchSwitcher } from './BranchSwitcher';
+import { CloneToComputerDialog, canCloneToComputer } from './CloneToComputerDialog';
 import { PipelineStrip } from './PipelineStrip';
 import { RepoFileBrowser } from './RepoFileBrowser';
 import { RepoHostingPanel } from './RepoHostingPanel';
@@ -25,130 +17,157 @@ import { RepoEnvEditor } from './RepoEnvEditor';
 import { RepoPullsList } from './RepoPullsList';
 import { RepoRunsList } from './RepoRunsList';
 import { defaultBranch } from './repoFormat';
-import { REPO_TABS, readStoredTab, storeTab, tabForKey, type RepoTab } from './repoTabs';
+import { REPO_TABS, isRepoTab, tabForKey, type RepoTab } from './repoTabs';
 import { SectionError, SectionLoading } from './SectionState';
 import { useRepoResource, type RepoResource } from './useRepoResource';
 
 interface ProjectRepositoryViewProps {
   projectId: string;
-  /** `owner/name`, from `GET /projects/:id/repos`. Render nothing when empty. */
   repositories: string[];
-  /** Repository created from this project: focus it and open its preview once it appears. */
   initialRepository?: string;
   onInitialRepositoryApplied?: () => void;
+  repositoriesLoading?: boolean;
+  overview: React.ReactNode;
+  onManageRepositories?: () => void;
 }
 
-/** `acme/shop-be` → `shop-be`, which is what tells a pair apart. */
+type RepositoryTab = Exclude<RepoTab, 'overview'>;
 const shortName = (repo: string) => repo.split('/').pop() ?? repo;
-
 const TAB_ICONS: Record<RepoTab, LucideIcon> = {
-  overview: LayoutDashboard,
-  code: FileCode2,
-  pulls: GitPullRequest,
-  runs: PlayCircle,
-  previews: MonitorPlay,
-  logs: ScrollText,
-  environment: KeyRound
+  overview: LayoutDashboard, code: FileCode2, pulls: GitPullRequest,
+  runs: PlayCircle, previews: MonitorPlay, logs: ScrollText, environment: KeyRound
 };
 
-/**
- * Where a project's code stands, one concern per tab: the pipeline and its
- * hosting, the code, pull requests, CI runs, previews, logs and variables.
- *
- * Everything is read through the API against GitHub and the hosting
- * platforms; the writes are a promotion (which opens a pull request rather
- * than merging anything), setting hosting up, and variables.
- */
+/** Project tasks and repository tools share one navigation row and the full page width. */
 export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
-  projectId,
-  repositories,
-  initialRepository,
-  onInitialRepositoryApplied
+  projectId, repositories, repositoriesLoading = false, overview, onManageRepositories, initialRepository, onInitialRepositoryApplied
 }) => {
   const { role, can } = useApp();
-  const canPromote = role === 'pm' || role === 'admin';
-  // The same role the server checks (deployment.manage): project managers and admins.
-  const canSetUpHosting = can('manage_deployments');
-  // uat/dev variables: any developer. Production goes with canSetUpHosting (deployment.manage).
-  const canManagePreviewEnv = can('manage_preview_env');
-
+  const [storedTab, setStoredTab] = useTabSessionState<RepoTab>(`projects.workspaceTab:${projectId}`, 'overview');
+  const tab = isRepoTab(storedTab) ? storedTab : 'overview';
   const [selectedRepo, setSelectedRepo] = useState<string | null>(repositories[0] ?? null);
-  // The list can change under us (a repository created, the project switched).
-  useEffect(() => {
-    if (!selectedRepo || !repositories.includes(selectedRepo)) setSelectedRepo(repositories[0] ?? null);
-  }, [repositories, selectedRepo]);
-
-  // Held here, above the per-repository panel, so switching between the -be
-  // and the -fe of a pair stays on the same tab.
-  const [tab, setTabState] = useState<RepoTab>(readStoredTab);
-  const setTab = (next: RepoTab) => {
-    setTabState(next);
-    storeTab(next);
-  };
-
+  const requestedRepository = initialRepository
+    ? repositories.find(value => value.toLowerCase() === initialRepository.toLowerCase())
+    : undefined;
+  const repositoryPending = Boolean(initialRepository && !requestedRepository);
+  const repo = requestedRepository ?? (selectedRepo && repositories.includes(selectedRepo) ? selectedRepo : repositories[0] ?? null);
   useEffect(() => {
     if (!initialRepository) return;
-    const target = repositories.find(repo => repo.toLowerCase() === initialRepository.toLowerCase());
-    if (!target) return;
-    setSelectedRepo(target);
-    setTabState('previews');
-    storeTab('previews');
+    setStoredTab('previews');
+    if (!requestedRepository) return;
+    setSelectedRepo(requestedRepository);
     onInitialRepositoryApplied?.();
-  }, [initialRepository, onInitialRepositoryApplied, projectId, repositories]);
+  }, [initialRepository, requestedRepository, onInitialRepositoryApplied, setStoredTab]);
+  const [repositoryOpened, setRepositoryOpened] = useState(tab !== 'overview');
+  const [cloneOpen, setCloneOpen] = useState(false);
+  // Clients never get code; everyone else may clone onto their own computer in the desktop app.
+  const canClone = role !== 'client' && repositories.length > 0 && canCloneToComputer();
+  useEffect(() => {
+    if (tab !== 'overview') setRepositoryOpened(true);
+  }, [tab]);
 
-  if (!selectedRepo || repositories.length === 0) return null;
+  const instanceId = useId().replace(/:/g, '');
+  const idBase = `project-${projectId}-${instanceId}`;
+  const tabRefs = useRef<Partial<Record<RepoTab, HTMLButtonElement | null>>>({});
+  const tabId = (id: RepoTab) => `${idBase}-tab-${id}`;
+  const panelId = (id: RepoTab) => `${idBase}-panel-${id}`;
+  const onTabKeyDown = (event: React.KeyboardEvent) => {
+    const next = tabForKey(tab, event.key);
+    if (!next) return;
+    event.preventDefault();
+    setStoredTab(next);
+    tabRefs.current[next]?.focus();
+  };
 
   return (
-    <div className="space-y-4">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-white">
-            <Workflow className="h-4 w-4 text-brand-400" aria-hidden />
-            Repository &amp; pipeline
-          </h2>
-          <p className="mt-0.5 text-[11px] text-gray-500">
-            Work lands on dev and moves to uat, then main, by pull request.
-          </p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 border-b border-white/[0.06] px-4 sm:px-5">
+        <div role="tablist" aria-label="Project sections" className="-mb-px flex min-w-0 max-w-full overflow-x-auto" onKeyDown={onTabKeyDown}>
+          {REPO_TABS.map(({ id, label }) => {
+            const Icon = TAB_ICONS[id];
+            const selected = id === tab;
+            return (
+              <button
+                key={id}
+                ref={el => { tabRefs.current[id] = el; }}
+                id={tabId(id)}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                aria-controls={panelId(id)}
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setStoredTab(id)}
+                className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${
+                  selected ? 'border-brand-400 text-white' : 'border-transparent text-gray-400 hover:text-white'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" aria-hidden />{label}
+              </button>
+            );
+          })}
         </div>
-
-        {repositories.length > 1 && (
-          // A paired project has a -be and a -fe: two halves of one thing, so
-          // a pair of toggle buttons rather than a dropdown.
-          <div role="group" aria-label="Repository" className="flex items-center rounded-lg border border-white/[0.08] bg-surface-raised p-0.5">
-            {repositories.map(repo => {
-              const active = repo === selectedRepo;
-              return (
-                <button
-                  key={repo}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => setSelectedRepo(repo)}
-                  title={repo}
-                  className={`rounded-md px-3 py-1 font-mono text-[11px] transition-colors ${
-                    active ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
-                  }`}
-                >
-                  {shortName(repo)}
-                </button>
-              );
-            })}
+        {tab !== 'overview' && repo && !repositoryPending && (
+          <div className="my-2 flex max-w-full items-center gap-2">
+          <div role="group" aria-label="Repository" className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-white/[0.08] bg-surface-raised p-0.5">
+            {repositories.map(value => (
+              <button
+                key={value} type="button" aria-pressed={value === repo}
+                onClick={() => setSelectedRepo(value)} title={value}
+                className={`max-w-48 shrink-0 truncate rounded-md px-3 py-1 font-mono text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${
+                  value === repo ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
+                }`}
+              >{shortName(value)}</button>
+            ))}
+          </div>
+          {canClone && <button type="button" onClick={() => setCloneOpen(true)} title="Clone the project's repositories to a folder on this computer"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-surface-raised px-3 py-1.5 text-[11px] font-medium text-gray-200 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
+            <Download className="h-3.5 w-3.5" aria-hidden />Clone to computer
+          </button>}
           </div>
         )}
-      </header>
+      <CloneToComputerDialog isOpen={cloneOpen} onClose={() => setCloneOpen(false)} projectId={projectId} repositories={repositories} />
+      </div>
 
-      {/* Keyed by repository: branch choice, promotion outcomes, the open
-          file and which tabs have loaded all belong to one repository and
-          must not carry across. */}
-      <RepoPanel
-        key={selectedRepo}
-        projectId={projectId}
-        repo={selectedRepo}
-        tab={tab}
-        onTabChange={setTab}
-        canPromote={canPromote}
-        canSetUpHosting={canSetUpHosting}
-        canManagePreviewEnv={canManagePreviewEnv}
-      />
+      <div id={panelId('overview')} role="tabpanel" aria-labelledby={tabId('overview')}
+        hidden={tab !== 'overview'} className={tab === 'overview' ? 'min-h-0 flex-1' : 'hidden'}>
+        {overview}
+      </div>
+
+      {tab !== 'overview' && (!repo || repositoryPending) && (
+        <div id={panelId(tab)} role="tabpanel" aria-labelledby={tabId(tab)} className="min-h-0 flex-1 overflow-y-auto p-5" tabIndex={0}>
+          {repositoriesLoading || repositoryPending ? <SectionLoading label={repositoryPending ? "Connecting the new repository and opening its preview…" : "Loading repositories…"} /> : (
+            <div className="rounded-xl border border-white/[0.08] p-8 text-center">
+              <GitBranch className="mx-auto h-6 w-6 text-gray-500" aria-hidden />
+              <h2 className="mt-3 text-sm font-semibold text-white">No accessible repositories</h2>
+              <p className="mt-2 text-xs text-gray-400">Attach a repository or check your access to an existing one.</p>
+              {onManageRepositories && (
+                <button type="button" onClick={onManageRepositories} className="mt-4 rounded-lg bg-brand-500 px-3 py-2 text-xs font-medium text-on-accent hover:bg-brand-600">
+                  Manage repositories
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {repo && !repositoryPending && (repositoryOpened || tab !== 'overview') && (
+        <div hidden={tab === 'overview'} className={tab === 'overview' ? 'hidden' : 'min-h-0 flex-1 overflow-y-auto p-4 select-text sm:p-5'}>
+          <a href={`https://github.com/${repo}`} target="_blank" rel="noreferrer"
+            className="mb-4 inline-flex max-w-full items-center gap-1.5 text-xs text-gray-400 hover:text-white">
+            <GitBranch className="h-3.5 w-3.5 shrink-0" aria-hidden />
+            <span className="truncate font-mono">{repo}</span>
+            <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
+            <span className="sr-only">(opens GitHub)</span>
+          </a>
+          <RepoPanel
+            key={`${projectId}|${repo}`} projectId={projectId} repo={repo}
+            tab={tab === 'overview' ? null : tab} idBase={idBase}
+            canPromote={role === 'pm' || role === 'admin'}
+            canSetUpHosting={can('manage_deployments')}
+            canManagePreviewEnv={can('manage_preview_env')}
+          />
+        </div>
+      )}
     </div>
   );
 };
@@ -156,172 +175,70 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
 const RepoPanel: React.FC<{
   projectId: string;
   repo: string;
-  tab: RepoTab;
-  onTabChange: (tab: RepoTab) => void;
+  tab: RepositoryTab | null;
+  idBase: string;
   canPromote: boolean;
   canSetUpHosting: boolean;
   canManagePreviewEnv: boolean;
-}> = ({ projectId, repo, tab, onTabChange, canPromote, canSetUpHosting, canManagePreviewEnv }) => {
+}> = ({ projectId, repo, tab, idBase, canPromote, canSetUpHosting, canManagePreviewEnv }) => {
   const branches = useRepoResource<{ branches: RepoBranch[] }>(
-    () => apiService.getRepoBranches(projectId, repo),
-    `${projectId}|${repo}|branches`
+    () => apiService.getRepoBranches(projectId, repo), `${projectId}|${repo}|branches`
   );
   const pulls = useRepoResource<{ pullRequests: RepoPullRequest[] }>(
-    () => apiService.getRepoPulls(projectId, repo, 'open'),
-    `${projectId}|${repo}|pulls`
+    () => apiService.getRepoPulls(projectId, repo, 'open'), `${projectId}|${repo}|pulls`
   );
-
   const branchList = useMemo(() => branches.data?.branches ?? [], [branches.data]);
   const branchNames = useMemo(() => branchList.map(b => b.name), [branchList]);
   const [branch, setBranch] = useState<string | null>(null);
-
-  // Default to dev, and fall back again if the chosen branch disappears
-  // (an agent branch deleted after its pull request merged).
   useEffect(() => {
-    if (branchList.length === 0) return;
-    if (!branch || !branchNames.includes(branch)) setBranch(defaultBranch(branchList));
+    if (branchList.length && (!branch || !branchNames.includes(branch))) setBranch(defaultBranch(branchList));
   }, [branchList, branchNames, branch]);
 
-  // A tab mounts the first time it is opened and then stays mounted, hidden:
-  // its answers and whatever was typed into it survive switching away, and
-  // nothing is fetched for a tab nobody opens.
-  const [visited, setVisited] = useState<ReadonlySet<RepoTab>>(() => new Set([tab]));
+  // Keep visited sections mounted so inputs and branch selection survive a trip to Overview.
+  const [visited, setVisited] = useState<ReadonlySet<RepositoryTab>>(() => new Set(tab ? [tab] : []));
   useEffect(() => {
-    setVisited(current => (current.has(tab) ? current : new Set(current).add(tab)));
+    if (tab) setVisited(current => current.has(tab) ? current : new Set(current).add(tab));
   }, [tab]);
-
-  const idBase = `repo-${repo.replace(/[^A-Za-z0-9_-]/g, '-')}`;
-  const tabId = (id: RepoTab) => `${idBase}-tab-${id}`;
-  const panelId = (id: RepoTab) => `${idBase}-panel-${id}`;
-  const tabRefs = useRef<Partial<Record<RepoTab, HTMLButtonElement | null>>>({});
-
-  const onTabKeyDown = (event: React.KeyboardEvent) => {
-    const next = tabForKey(tab, event.key);
-    if (!next) return;
-    event.preventDefault();
-    onTabChange(next);
-    tabRefs.current[next]?.focus();
-  };
-
-  const openPulls = pulls.data?.pullRequests.length;
-  const branchPicker = (
-    <BranchSwitcher
-      id={`${idBase}-branch`}
-      branches={branchList}
-      value={branch}
-      onChange={setBranch}
-      disabled={branches.loading && !branches.data}
-    />
+  const hostingRef = useRef<HTMLDivElement>(null);
+  const branchPicker = (section: RepositoryTab) => (
+    <BranchSwitcher id={`${idBase}-branch-${section}`} branches={branchList} value={branch}
+      onChange={setBranch} disabled={branches.loading && !branches.data} />
   );
-
-  const content: Record<RepoTab, () => React.ReactNode> = {
-    overview: () => (
-      <>
-        <BranchGate branches={branches} empty={branchList.length === 0}>
-          <PipelineStrip
-            projectId={projectId}
-            repo={repo}
-            branchNames={branchNames}
-            selectedBranch={branch}
-            onSelectBranch={setBranch}
-            canPromote={canPromote}
-            onPromoted={pulls.reload}
-          />
-        </BranchGate>
-        <RepoHostingPanel projectId={projectId} repo={repo} canManage={canSetUpHosting} />
-      </>
-    ),
+  const content: Record<RepositoryTab, () => React.ReactNode> = {
     code: () => (
-      <BranchGate branches={branches} empty={branchList.length === 0}>
-        {branchPicker}
+      <BranchGate branches={branches} empty={!branchList.length}>
+        {branchPicker('code')}
         {branch && <RepoFileBrowser key={branch} projectId={projectId} repo={repo} branch={branch} />}
       </BranchGate>
     ),
     pulls: () => <RepoPullsList repo={repo} pulls={pulls} />,
     runs: () => (
-      <BranchGate branches={branches} empty={branchList.length === 0}>
-        {branchPicker}
+      <BranchGate branches={branches} empty={!branchList.length}>
+        <PipelineStrip projectId={projectId} repo={repo} branchNames={branchNames} selectedBranch={branch}
+          onSelectBranch={setBranch} canPromote={canPromote} onPromoted={pulls.reload} />
+        {branchPicker('runs')}
         {branch && <RepoRunsList projectId={projectId} repo={repo} branch={branch} />}
       </BranchGate>
     ),
     previews: () => (
-      <RepoPreviews
-        projectId={projectId}
-        repo={repo}
-        active={tab === 'previews'}
-        onOpenHosting={() => onTabChange('overview')}
-      />
+      <>
+        <div ref={hostingRef}><RepoHostingPanel projectId={projectId} repo={repo} canManage={canSetUpHosting} /></div>
+        <RepoPreviews projectId={projectId} repo={repo} active={tab === 'previews'}
+          onOpenHosting={() => hostingRef.current?.scrollIntoView({ block: 'start' })} />
+      </>
     ),
     logs: () => <RepoLogsTab projectId={projectId} repo={repo} active={tab === 'logs'} />,
-    environment: () => (
-      <RepoEnvEditor projectId={projectId} repo={repo} canManageMain={canSetUpHosting} canManagePreview={canManagePreviewEnv} />
-    )
+    environment: () => <RepoEnvEditor projectId={projectId} repo={repo} canManageMain={canSetUpHosting} canManagePreview={canManagePreviewEnv} />
   };
-
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 border-b border-white/[0.06]">
-        <div role="tablist" aria-label={`${shortName(repo)} sections`} className="-mb-px flex flex-wrap gap-x-1" onKeyDown={onTabKeyDown}>
-          {REPO_TABS.map(({ id, label }) => {
-            const Icon = TAB_ICONS[id];
-            const selected = id === tab;
-            return (
-              <button
-                key={id}
-                ref={el => {
-                  tabRefs.current[id] = el;
-                }}
-                id={tabId(id)}
-                type="button"
-                role="tab"
-                aria-selected={selected}
-                aria-controls={panelId(id)}
-                tabIndex={selected ? 0 : -1}
-                onClick={() => onTabChange(id)}
-                className={`inline-flex items-center gap-1.5 border-b-2 px-3 py-2 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${
-                  selected ? 'border-brand-400 text-white' : 'border-transparent text-gray-400 hover:text-white'
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" aria-hidden />
-                {label}
-                {id === 'pulls' && openPulls ? (
-                  <span className="rounded-full bg-white/10 px-1.5 text-[10px] text-gray-200" aria-label={`${openPulls} open`}>
-                    {openPulls}
-                  </span>
-                ) : null}
-              </button>
-            );
-          })}
+    <>
+      {REPO_TABS.map(({ id }) => id !== 'overview' && (visited.has(id) || tab === id) ? (
+        <div key={id} id={`${idBase}-panel-${id}`} role="tabpanel" aria-labelledby={`${idBase}-tab-${id}`}
+          hidden={id !== tab} tabIndex={0} className={id === tab ? 'space-y-4 focus:outline-none' : 'hidden'}>
+          {content[id]()}
         </div>
-        <a
-          href={`https://github.com/${repo}`}
-          target="_blank"
-          rel="noreferrer"
-          className="mb-2 inline-flex items-center gap-1.5 font-mono text-[11px] text-gray-400 transition-colors hover:text-white"
-        >
-          <GitBranch className="h-3.5 w-3.5" aria-hidden />
-          {repo}
-          <ExternalLink className="h-3 w-3" aria-hidden />
-          <span className="sr-only">(opens GitHub)</span>
-        </a>
-      </div>
-
-      {REPO_TABS.map(({ id }) =>
-        visited.has(id) ? (
-          <div
-            key={id}
-            id={panelId(id)}
-            role="tabpanel"
-            aria-labelledby={tabId(id)}
-            hidden={id !== tab}
-            tabIndex={0}
-            className="space-y-4 focus:outline-none"
-          >
-            {content[id]()}
-          </div>
-        ) : null
-      )}
-    </div>
+      ) : null)}
+    </>
   );
 };
 

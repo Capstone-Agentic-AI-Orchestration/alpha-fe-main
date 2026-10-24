@@ -130,7 +130,7 @@ export const AgentRunModal: React.FC = () => {
       <div className="space-y-5">
         <div className="grid gap-4 border-b border-white/[0.06] pb-5 sm:grid-cols-2">
           <div>
-            <p className="text-[11px] font-medium text-gray-500">Issue</p>
+            <p className="text-[11px] font-medium text-gray-500">Task</p>
             <p className="mt-1 text-sm font-medium text-white">{issue.title}</p>
             <p className="mt-1 text-xs text-gray-500">{project?.name || 'Unassigned project'}</p>
           </div>

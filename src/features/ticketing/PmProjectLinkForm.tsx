@@ -87,7 +87,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
     <div className="flex items-start justify-between gap-3">
       <div>
         <h3 className="text-sm font-medium text-gray-100">Organize this request</h3>
-        <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Link it to a project to keep this client’s requests together. This does not expose the project or its Issues to the client.</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Link it to a project to keep this client’s requests together. This does not expose the project or its tasks to the client.</p>
       </div>
       <button type="button" className={secondary} disabled={disabled || loading} onClick={() => setRefresh(value => value + 1)} aria-label="Refresh workspace projects"><RefreshCw size={13} /></button>
     </div>
@@ -107,7 +107,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
     <label className={`flex items-start gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3 text-[11px] leading-relaxed ${projectId ? 'text-gray-300' : 'text-gray-600'}`}>
       <input type="checkbox" className="mt-0.5 accent-brand-500" checked={clientVisible} disabled={disabled || !projectId}
         onChange={event => setClientVisible(event.target.checked)} />
-      Show the project name on this ticket in the client portal. This never grants access to Issues, project files, or other requests.
+      Show the project name on this ticket in the client portal. This never grants access to tasks, project files, or other requests.
     </label>
     <label className={`block space-y-1.5 ${projectId && clientVisible ? '' : 'opacity-50'}`}>
       <span className="text-[11px] font-medium text-gray-300">Optional hosted preview</span>
@@ -119,7 +119,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
       {previewLoading && <span role="status" className="block text-[10px] text-gray-500">Checking ready hosted frontend previews…</span>}
       {previewError && <span role="alert" className="block text-[10px] text-amber-200">Hosted previews could not be checked. You can still save the project link without sharing one.</span>}
       {!previewLoading && !previewError && projectId && previews.length === 0 && <span className="block text-[10px] text-gray-500">No ready, embeddable main or uat frontend preview was found.</span>}
-      <span className="block text-[10px] text-gray-500">Only ready hosted frontend previews are offered. The link may be publicly accessible; the client gets no repository, Issue, or internal project access.</span>
+      <span className="block text-[10px] text-gray-500">Only ready hosted frontend previews are offered. The link may be publicly accessible; the client gets no repository, task, or internal project access.</span>
     </label>
     <div className="flex flex-wrap justify-end gap-2 border-t border-white/[0.06] pt-3">
       <button type="button" disabled={disabled} onClick={onCancel} className={secondary}>Cancel</button>

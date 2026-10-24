@@ -155,7 +155,7 @@ describe('public inquiry browser transport', () => {
 
     await expect(publicTicketIntakeApi.submit('acme-client', request)).rejects.toMatchObject({
       status: null,
-      message: 'Inquiry submission is available only in a secure web browser or local development.',
+      message: 'Open Alphaexplora in its secure website to send an inquiry.',
     });
     expect(fetchMock).not.toHaveBeenCalled();
   });
@@ -229,7 +229,7 @@ describe('public inquiry browser transport', () => {
       status: null,
       code: 'transport_outcome_unknown',
       retryWithSameOperationId: true,
-      message: 'We could not confirm whether this went through. Keep the same submission ID and verify again before retrying.',
+      message: 'We could not confirm whether your inquiry was received. Check its status before trying again.',
     });
   });
 

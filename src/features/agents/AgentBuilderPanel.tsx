@@ -39,7 +39,7 @@ const QUICK_IDEAS = [
   'A senior frontend reviewer for React and Tailwind components',
   'A Playwright QA agent that writes end-to-end tests',
   'An SRE that manages Docker builds and release checks',
-  'A triager that labels and routes incoming issues'
+  'A triager that labels and routes incoming tasks'
 ];
 
 /**

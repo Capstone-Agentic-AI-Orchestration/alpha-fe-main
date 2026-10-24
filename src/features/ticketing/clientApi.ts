@@ -113,12 +113,12 @@ function csrfToken(): string {
 
 function safeHttpError(status: number): string {
   if (status === 401) return 'Sign in to continue.';
-  if (status === 403) return 'This request could not be verified or is not allowed.';
-  if (status === 404) return 'This ticket or invitation is unavailable.';
-  if (status === 409) return 'The ticket changed or this action was already handled. Refresh and review it.';
-  if (status === 429) return 'Too many attempts. Try again later.';
-  if (status >= 500) return 'The client service is temporarily unavailable. Try again later.';
-  return 'The request could not be completed. Check the information and try again.';
+  if (status === 403) return 'We could not verify this action. Refresh the page and try again.';
+  if (status === 404) return 'This request or invitation is no longer available.';
+  if (status === 409) return 'This request changed or was already updated. Refresh and check its current status.';
+  if (status === 429) return 'Too many attempts. Wait a little, then try again.';
+  if (status >= 500) return 'Alphaexplora is temporarily unavailable. Please try again later.';
+  return 'We could not complete that action. Check the details and try again.';
 }
 
 async function apiError(response: Response): Promise<ClientTicketApiError> {
@@ -162,7 +162,7 @@ interface RequestOptions extends RequestInit { csrf?: boolean; accept?: string }
 
 async function requestResponse(path: string, options: RequestOptions = {}): Promise<Response> {
   if (!browserOriginAllowed()) {
-    throw new ClientTicketApiError(null, 'Client access is available only in a secure web browser or on local development.');
+    throw new ClientTicketApiError(null, 'For your safety, open Alphaexplora in its secure website to access your requests.');
   }
   const { csrf: csrfOverride, accept = 'application/json', ...fetchOptions } = options;
   const method = (fetchOptions.method ?? 'GET').toUpperCase();
@@ -191,7 +191,7 @@ async function requestResponse(path: string, options: RequestOptions = {}): Prom
       null,
       writeOutcomeUnknown
         ? 'The connection ended before the result was confirmed. Checking whether your request went through; do not submit it again yet.'
-        : 'Could not reach the client service. Check your connection and try again.',
+        : 'Could not connect to Alphaexplora. Check your internet connection and try again.',
       writeOutcomeUnknown ? 'transport_outcome_unknown' : null,
       writeOutcomeUnknown,
     );
@@ -204,7 +204,7 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
   const response = await requestResponse(path, options);
   if (response.status === 204) return undefined as T;
   try { return await response.json() as T; }
-  catch { throw new ClientTicketApiError(response.status, 'The client service returned an unreadable response.'); }
+  catch { throw new ClientTicketApiError(response.status, 'We could not read the response. Reload the page and try again.'); }
 }
 
 function pathId(value: string): string { return encodeURIComponent(value); }
@@ -221,21 +221,10 @@ export const clientTicketApi = {
   getWorkflowCapabilities() {
     return requestJson<{ phaseWorkflowEnabled: boolean }>('/workflow-capabilities');
   },
-  requestSignInLink(email: string) {
-    return requestJson<{ accepted: true; message: string }>('/auth/sign-in-link', {
-      method: 'POST', csrf: false, body: JSON.stringify({ email }),
-    });
-  },
   activateInvitation(invitationToken: string, providerTokenHash: string, providerTokenType: ClientEmailLinkType) {
     return requestJson<{ activated: true }>('/auth/activate', {
       method: 'POST', csrf: false,
       body: JSON.stringify({ invitationToken, providerTokenHash, providerTokenType }),
-    });
-  },
-  createSessionFromEmailLink(providerTokenHash: string, providerTokenType: ClientEmailLinkType) {
-    return requestJson<{ authenticated: true; expiresAt: string }>('/auth/session', {
-      method: 'POST', csrf: false,
-      body: JSON.stringify({ providerTokenHash, providerTokenType }),
     });
   },
   getSession() { return requestJson<ClientSession>('/session'); },

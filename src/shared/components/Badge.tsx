@@ -55,7 +55,7 @@ export const StatusBadge: React.FC<{ status: IssueStatus; className?: string }> 
       icon: <PlayCircle className="h-3 w-3 text-amber-400" />,
     },
     agent_running: {
-      label: 'Agent running',
+      label: 'Building',
       className: 'text-cyan-300',
       icon: <Bot className="h-3.5 w-3.5 text-cyan-400" />,
     },
@@ -134,6 +134,7 @@ export const RoleBadge: React.FC<{ role: AgentRole; className?: string }> = ({
     'Research Agent': 'bg-cyan-400',
     'Architecture Agent': 'bg-indigo-400',
     'Manager Agent': 'bg-violet-400',
+    'Orchestrator Agent': 'bg-purple-400',
     'Database Agent': 'bg-teal-400',
     'Backend Agent': 'bg-emerald-400',
     'Frontend Agent': 'bg-blue-400',

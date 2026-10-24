@@ -9,11 +9,13 @@ import {
   ScaffoldStack
 } from '@/shared/types';
 import { useApp } from '@/app/AppContext';
-import { GitBranch, Folder, FolderOpen, Plus, Trash2, Unlink } from 'lucide-react';
+import { aiFeaturesEnabled } from '@/config/features';
+import { GitBranch, Folder, FolderOpen, Network, Plus, Trash2, Unlink } from 'lucide-react';
 import { CheckoutSummary, RepoCheckoutLine, useRepositoryCheckouts } from './ProjectWorkspaceCard';
 import { ScaffoldResultCard } from './ScaffoldResultCard';
 import { DeleteRepositoryConfirm, repoNameWithOwner } from './DeleteRepositoryConfirm';
 import type { RepoDeletionResult } from '@/shared/types';
+import { ArchitectureDiagramModal } from './repository/ArchitectureDiagramModal';
 
 type RepoShape = 'standalone' | 'paired';
 
@@ -82,8 +84,11 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   onProvisioningChange
 }) => {
   const isFull = variant === 'full';
-  const { showToast, can } = useApp();
+  const { showToast, can, role } = useApp();
+  // Attaching working copies is agent setup, hidden for roles without AI features (config/features.ts).
+  const showAgentSetup = aiFeaturesEnabled(role);
   const canBind = can('bind_workspace');
+  const [architectureRepo, setArchitectureRepo] = useState<string | null>(null);
   // Re-read whenever the repositories change: one created, attached or deleted.
   const repoKey = resources
     .filter(r => r.type === 'github_repo')
@@ -581,8 +586,9 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       <div className={`space-y-2 overflow-y-auto ${deletingId ? 'max-h-[28rem]' : 'max-h-72'}`}>
         {resources.length === 0 ? (
           <p className="p-3 text-gray-500 italic bg-well rounded-xl border border-white/5">
-            Nothing attached yet. Agents need a working copy before they can run —
-            attach a folder above.
+            {showAgentSetup
+              ? 'Nothing attached yet. Agents need a working copy before they can run — attach a folder below.'
+              : 'No repositories yet.'}
           </p>
         ) : (
           resources.map((res) => {
@@ -642,6 +648,19 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                       )}
                     </div>
                   </div>
+                  {repo && variant === 'inline' && role === 'dev' && (
+                    <div className="border-t border-white/[0.06] px-2.5 py-2">
+                      <button
+                        type="button"
+                        onClick={() => setArchitectureRepo(repo)}
+                        className="inline-flex items-center gap-2 rounded-lg border border-brand-400/20 bg-brand-500/[0.07] px-2.5 py-1.5 font-sans text-[11px] font-medium text-brand-200 transition-colors hover:border-brand-400/40 hover:bg-brand-500/[0.13] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400"
+                        aria-label={`View current architecture for ${repo}`}
+                      >
+                        <Network className="h-3.5 w-3.5" />
+                        View current architecture
+                      </button>
+                    </div>
+                  )}
                   {repo && isFull && (
                     <RepoCheckoutLine projectId={projectId} repo={repo} checkouts={checkouts} canBind={canBind} />
                   )}
@@ -670,7 +689,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         </p>
       )}
 
-      {isFull && !readOnly && (
+      {isFull && !readOnly && showAgentSetup && (
         <>
           {/* Hidden native OS folder picker input */}
           <input
@@ -735,6 +754,14 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
             </div>
           </div>
         </>
+      )}
+
+      {architectureRepo && (
+        <ArchitectureDiagramModal
+          projectId={projectId}
+          repository={architectureRepo}
+          onClose={() => setArchitectureRepo(null)}
+        />
       )}
     </div>
   );

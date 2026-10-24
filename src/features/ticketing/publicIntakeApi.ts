@@ -68,7 +68,7 @@ function safeFailure(code: unknown, status: number): { code: string | null; mess
     ticket_intake_operation_conflict: { message: 'The submission changed. Start a new inquiry.' },
     ticket_intake_invalid_request: { message: 'Check the inquiry fields and try again.' },
     ticket_intake_outcome_unknown: {
-      message: 'We could not confirm whether this went through. Keep the same submission ID and verify again before retrying.',
+      message: 'We could not confirm whether your inquiry was received. Check its status before trying again.',
       retrySame: true,
     },
     ticket_intake_unavailable: { message: 'Inquiry submission is temporarily unavailable.' },
@@ -105,7 +105,7 @@ export const publicTicketIntakeApi = {
   },
   async submit(slug: string, request: PublicTicketInquiryRequest): Promise<PublicTicketInquiryResponse> {
     if (!browserOriginAllowed()) {
-      throw new PublicTicketIntakeApiError(null, 'Inquiry submission is available only in a secure web browser or local development.');
+      throw new PublicTicketIntakeApiError(null, 'Open Alphaexplora in its secure website to send an inquiry.');
     }
     if (slug !== '' && !INTAKE_SLUG.test(slug)) {
       throw new PublicTicketIntakeApiError(404, 'This inquiry link is unavailable.', 'ticket_intake_entry_unavailable');
@@ -130,7 +130,7 @@ export const publicTicketIntakeApi = {
     } catch {
       throw new PublicTicketIntakeApiError(
         null,
-        'We could not confirm whether this went through. Keep the same submission ID and verify again before retrying.',
+        'We could not confirm whether your inquiry was received. Check its status before trying again.',
         'transport_outcome_unknown', null, true,
       );
     } finally {
@@ -163,7 +163,7 @@ export const publicTicketIntakeApi = {
       }
     }
     throw new PublicTicketIntakeApiError(
-      response.status, 'We could not confirm whether this went through. Keep the same submission ID and verify again before retrying.',
+      response.status, 'We could not confirm whether your inquiry was received. Check its status before trying again.',
       'response_outcome_unknown', null, true,
     );
   },

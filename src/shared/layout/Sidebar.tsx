@@ -21,6 +21,7 @@ interface SidebarProps {
   setCollapsed: (collapsed: boolean) => void;
   onOpenNewIssue: () => void;
   onSignOut: () => Promise<void> | void;
+  signingOut?: boolean;
   onSwitchProfile?: () => void;
 }
 
@@ -33,6 +34,7 @@ const ROLE_LABEL: Record<UserRole, string> = {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   onSignOut,
+  signingOut = false,
   collapsed,
   setCollapsed,
   onOpenNewIssue,
@@ -59,6 +61,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
   const [isPointerInside, setIsPointerInside] = useState(false);
   const [isFocusWithin, setIsFocusWithin] = useState(false);
+  /**
+   * Hover intent. The rail opens after a short dwell and closes after a short
+   * grace period, so brushing past it on the way to the left edge of the
+   * content does not open and close the panel over the page.
+   */
+  const hoverTimer = useRef<number | undefined>(undefined);
+  const setPointerInsideAfter = (inside: boolean, delayMs: number) => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setIsPointerInside(inside), delayMs);
+  };
+  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
   // Creating is the only way into a workspace from here. Nobody joins one:
   // a project manager puts people in theirs, straight away, as they make it.
   const [createOpen, setCreateOpen] = useState(false);
@@ -188,8 +201,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <aside
         aria-label="Application sidebar"
         aria-expanded={expanded}
-        onPointerEnter={() => setIsPointerInside(true)}
-        onPointerLeave={() => setIsPointerInside(false)}
+        onPointerEnter={() => setPointerInsideAfter(true, 90)}
+        onPointerLeave={() => setPointerInsideAfter(false, 140)}
         onFocusCapture={() => setIsFocusWithin(true)}
         onBlurCapture={event => {
           const nextTarget = event.relatedTarget as Node | null;
@@ -197,7 +210,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             setIsFocusWithin(false);
           }
         }}
-        className={`sidebar-flyout absolute inset-y-0 left-0 flex h-full flex-col border-r border-white/[0.08] bg-shell/95 font-sans text-sm text-gray-300 backdrop-blur-xl ${
+        className={`sidebar-flyout app-no-drag absolute inset-y-0 left-0 flex h-full flex-col border-r border-white/[0.08] bg-shell font-sans text-sm text-gray-300 ${
           expanded
             ? 'w-64 shadow-[14px_0_36px_-28px_rgba(0,0,0,0.9)]'
             : 'w-[4.5rem] shadow-none'
@@ -334,15 +347,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               className={`flex rounded-lg text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
                 compact ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
               }`}
-              title={compact ? 'New issue' : undefined}
-              aria-label="New issue"
+              title={compact ? 'New task' : undefined}
+              aria-label="New task"
             >
               <span className={`flex items-center ${compact ? 'justify-center' : 'gap-3'}`}>
                 <Edit3 className="h-4 w-4 text-gray-500" />
                 <span
                   className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
                 >
-                  New Issue
+                  New Task
                 </span>
               </span>
               {!compact && <kbd className="px-2 py-0.5 text-[11px] text-gray-500">C</kbd>}
@@ -430,11 +443,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <button
             type="button"
             onClick={() => void onSignOut()}
+            disabled={signingOut}
+            aria-busy={signingOut}
             className={`flex flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200 focus-visible:ring-2 focus-visible:ring-brand-300/70 ${
               compact ? 'h-9 w-9' : 'p-1.5'
             }`}
-            title="Sign out"
-            aria-label="Sign out"
+            title={signingOut ? 'Signing out…' : 'Sign out'}
+            aria-label={signingOut ? 'Signing out' : 'Sign out'}
           >
             <LogOut className="h-4 w-4" />
           </button>

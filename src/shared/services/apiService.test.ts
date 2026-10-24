@@ -61,18 +61,56 @@ describe('multi-repository project builds', () => {
   });
 
   it('requests the selected repository run in the Live Build Room', async () => {
-    const fetchMock = vi.fn().mockResolvedValue(json({}));
+    const snapshot = { summary: { review: 0, failed: 0, stale: 0 } };
+    const fetchMock = vi.fn().mockResolvedValue(json(snapshot));
     vi.stubGlobal('fetch', fetchMock);
 
-    await apiService.getLiveBuildRoom('project-1', 'run/with space');
+    await expect(apiService.getLiveBuildRoom('project-1', 'run/with space')).resolves.toEqual(snapshot);
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('runId=run%2Fwith%20space');
+    expect((fetchMock.mock.calls[0][1] as RequestInit).cache).toBe('no-store');
   });
+
+  it('passes the chat session identity with its Live Build Room request', async () => {
+    const snapshot = { summary: { review: 0, failed: 0, stale: 0 } };
+    const fetchMock = vi.fn().mockResolvedValue(json(snapshot));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiService.getLiveBuildRoom('project-1', undefined, 'thread/one');
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('threadId=thread%2Fone');
+  });
+
+  it('uses one encoded private memory endpoint for read, save and clear', async () => {
+    const memory = { threadId: 'thread/one', content: 'Decision: keep compatibility.', revision: 1 };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(json(memory))
+      .mockResolvedValueOnce(json(memory))
+      .mockResolvedValueOnce(json({ success: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiService.getChatThreadMemory('thread/one')).resolves.toEqual(memory);
+    await expect(apiService.saveChatThreadMemory('thread/one', memory.content)).resolves.toEqual(memory);
+    await expect(apiService.clearChatThreadMemory('thread/one')).resolves.toEqual({ success: true });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/chat/threads/thread%2Fone/memory');
+    expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe('PUT');
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({ content: memory.content });
+    expect((fetchMock.mock.calls[2][1] as RequestInit).method).toBe('DELETE');
+  });
+
+  it.each([{}, { summary: {} }, { summary: { review: '0', failed: 0, stale: 0 } }])(
+    'rejects an incomplete Live Build Room snapshot before rendering: %j', async snapshot => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(snapshot)));
+
+      await expect(apiService.getLiveBuildRoom('project-1')).rejects.toThrow('incomplete data');
+    }
+  );
 });
 
-describe('project orchestration opt-in', () => {
-  it('reads local pilot availability for a selected project', async () => {
-    const settings = { enabled: false, available: true, localOnly: true as const };
+describe('always-on desktop project orchestration', () => {
+  it('reads local orchestrator availability for a selected project', async () => {
+    const settings = { enabled: true, available: true, localOnly: true as const };
     const fetchMock = vi.fn().mockResolvedValue(json(settings));
     vi.stubGlobal('fetch', fetchMock);
 
@@ -80,7 +118,7 @@ describe('project orchestration opt-in', () => {
     expect(String(fetchMock.mock.calls[0][0])).toContain('/projects/project%2F1/orchestration-settings');
   });
 
-  it('writes an explicit project opt-in', async () => {
+  it('keeps the compatibility write endpoint enabled', async () => {
     const settings = { enabled: true, available: true, localOnly: true as const };
     const fetchMock = vi.fn().mockResolvedValue(json(settings));
     vi.stubGlobal('fetch', fetchMock);

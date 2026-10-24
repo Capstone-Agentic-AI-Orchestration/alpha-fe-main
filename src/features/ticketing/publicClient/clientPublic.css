@@ -36,6 +36,7 @@
 .public-text-link, .public-nav-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 500; line-height: 1.5; text-decoration: none; transition: color 160ms, background-color 160ms, border-color 160ms; }
 .public-text-link { min-height: 44px; color: var(--public-muted); }
 .public-text-link:hover { color: var(--public-ink); }
+.public-current-page { display: inline-flex; min-height: 44px; align-items: center; border-bottom: 2px solid var(--public-accent); color: var(--public-ink); font-size: 13px; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .public-nav-action { min-height: 42px; padding: 10px 16px; border: 1px solid rgba(178, 154, 245, .3); border-radius: 7px; background: rgba(178, 154, 245, .055); color: #d0bfff; white-space: nowrap; }
 .public-nav-action:hover { border-color: #a388df; background: rgba(178, 154, 245, .12); }
 .public-backdrop { position: absolute; inset: 0 0 auto; height: 1100px; z-index: -1; pointer-events: none; overflow: hidden; color: #b699ff; mask-image: linear-gradient(#000 0%, #000 70%, transparent 100%); }
@@ -209,8 +210,15 @@
   .public-inquiry-guide .public-notice { padding: 11px 14px; }
   .public-back-link { margin-bottom: 17px; }
 }
-@media (max-width: 480px) {
+@media (max-width: 560px) {
   .public-container { width: calc(100% - 40px); }
+  .public-header { align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; padding-block: 10px; }
+  .public-header nav { width: 100%; justify-content: space-between; gap: 6px; }
+  .public-header-nav-access > .public-text-link { display: none; }
+  .public-header .public-header-nav-landing { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 8px; }
+  .public-header-nav-landing > * { min-width: 0; }
+  .public-header-nav-landing .public-nav-action { min-height: 44px; padding-inline: 8px; font-size: 11px; }
+  .public-header nav .public-text-link, .public-current-page { font-size: 11px; }
   .public-brand { gap: 9px; }
   .public-brand img { width: 30px; height: 30px; }
   .public-brand > span { font-size: 21px; }

@@ -5,15 +5,17 @@ import {
   RepositoryCheckout,
   Agent,
   AgentPersonaFile,
+  AgentPerformance,
   Issue,
   IssueComment,
-  Squad,
   Skill,
   RuntimeEngine,
   PrototypeRun,
   SquadRun,
   ChatThread,
+  ChatThreadMemory,
   ChatMessage,
+  ChatAttachmentReference,
   ChatSyncStatus,
   McpServer,
   McpServerInput,
@@ -24,10 +26,12 @@ import {
   AnalyticsData,
   WorkspaceSummary,
   WorkspaceProjectAssignment,
-  WorkspaceSquadProjectAssignment,
   LiveBuildRoomSnapshot,
   LiveBuildRoomDiffPreview,
+  LiveBuildChanges,
   LiveBuildRoomOrchestration,
+  LiveBuildRecoveryState,
+  LiveBuildRecoveryAction,
   LiveBuildPlanningRecoveryPreview,
   UserRole,
   AgentCall,
@@ -39,6 +43,7 @@ import {
   ScaffoldResponse,
   RepoBranch,
   RepoTree,
+  RepoArchitecture,
   RepoFile,
   RepoCompare,
   RepoPullRequest,
@@ -303,6 +308,32 @@ function ticketApiError(res: Response, detail: string): ApiRequestError {
     code, reconciliationRequired);
 }
 
+/** Latest Orchestrator build for one issue, as the board shows it. */
+export interface IssueBuildStatus {
+  issueId: string;
+  projectId: string;
+  runId: string;
+  status: string;
+  updatedAt: string;
+}
+
+/** What happened to one repository when cloning a project into a chosen folder. */
+export interface FolderCloneResult {
+  repo: string;
+  path: string | null;
+  /** False when a checkout was already there and was reused. */
+  cloned: boolean;
+  /** True when it became this computer's working copy for Alpha's builds. */
+  bound: boolean;
+  error?: string;
+}
+
+/** This computer's projects folder, where each project gets its own folder. */
+export interface CodeFolderSetting {
+  codeFolder: string;
+  defaultCodeFolder: string;
+}
+
 export const apiService = {
   /** Internal ticket API path; preserves the existing session, workspace and desktop relay transport. */
   ticketRequest: async <T>(path: string, options?: RequestInit): Promise<T> => {
@@ -392,6 +423,14 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  /** The projects folder on this computer (desktop only). */
+  getCodeFolder: () => fetchJson<CodeFolderSetting>('/machine/code-folder'),
+  /** Move the projects folder; null goes back to Documents\AlphaProjects. */
+  setCodeFolder: (dir: string | null) =>
+    fetchJson<CodeFolderSetting>('/machine/code-folder', { method: 'PUT', body: JSON.stringify({ dir }) }),
+  /** A project's folder on this computer, created if it is the default one. */
+  getProjectFolder: (projectId: string) =>
+    fetchJson<{ codeFolder: string; folder: string; isDefault: boolean }>(`/projects/${encodeURIComponent(projectId)}/folder`),
   /** The organisation's role-granting teams, for staffing a workspace as it is created. */
   getOrgTeamRoster: () =>
     fetchJson<Array<{
@@ -475,6 +514,12 @@ export const apiService = {
       method: 'POST',
       body: JSON.stringify(repo ? { repo } : {})
     }),
+  /** Clone the chosen repositories into a folder on this computer, optionally as Alpha's working copies. */
+  cloneProjectTo: (projectId: string, payload: { repos: string[]; intoDir: string; bind: boolean }) =>
+    fetchJson<{ results: FolderCloneResult[] }>(`/projects/${encodeURIComponent(projectId)}/clone-to`, {
+      method: 'POST',
+      body: JSON.stringify(payload)
+    }),
   /** Each of the project's repositories and this machine's checkout of it, if any. */
   getRepositoryCheckouts: (projectId: string) =>
     fetchJson<{ checkouts: RepositoryCheckout[] }>(`/projects/${encodeURIComponent(projectId)}/checkouts`),
@@ -485,7 +530,7 @@ export const apiService = {
     return fetchJson<Project[]>('/projects');
   },
 
-  /** Local executor capability and per-project orchestration opt-in. */
+  /** Local executor capability and always-on desktop project orchestration. */
   getProjectOrchestrationSettings: (projectId: string) =>
     fetchJson<{ enabled: boolean; available: boolean; localOnly: true; reason?: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestration-settings`
@@ -561,6 +606,15 @@ export const apiService = {
    */
   getAgentPersona: (id: string) => fetchJson<AgentPersonaFile>(`/agents/${id}/persona`),
 
+  /** Build scorecard and lessons suggested from the agent's rejections and review findings. */
+  getAgentPerformance: (id: string) => fetchJson<AgentPerformance>(`/agents/${encodeURIComponent(id)}/performance`, { cache: 'no-store' }),
+
+  decideAgentLesson: (id: string, lessonId: string, action: 'accept' | 'dismiss') =>
+    fetchJson<{ accepted: string[] }>(`/agents/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lessonId)}`, {
+      method: 'POST',
+      body: JSON.stringify({ action })
+    }),
+
   saveAgentPersona: (id: string, content: string) =>
     fetchJson<AgentPersonaFile>(`/agents/${id}/persona`, {
       method: 'PUT',
@@ -612,34 +666,64 @@ export const apiService = {
   addIssueComment: (issueId: string, comment: Partial<IssueComment>) =>
     fetchJson<IssueComment>(`/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify(comment) }),
 
-  // Squads
-  getSquads: () => fetchJson<Squad[]>('/squads'),
-  createSquad: (squad: Partial<Squad>) =>
-    fetchJson<Squad>('/squads', { method: 'POST', body: JSON.stringify(squad) }),
-  updateSquad: (id: string, updates: Partial<Squad>) =>
-    fetchJson<Squad>(`/squads/${id}`, { method: 'PUT', body: JSON.stringify(updates) }),
-  deleteSquad: (id: string) =>
-    fetchJson<{ success: boolean }>(`/squads/${id}`, { method: 'DELETE' }),
-  getSquadProjectAssignments: (squadId: string) =>
-    fetchJson<WorkspaceSquadProjectAssignment[]>(`/squads/${encodeURIComponent(squadId)}/projects`),
-  assignSquadToProject: (squadId: string, projectId: string, relationship: 'owned' | 'assigned' = 'assigned') =>
-    fetchJson<WorkspaceSquadProjectAssignment>(
-      `/squads/${encodeURIComponent(squadId)}/projects/${encodeURIComponent(projectId)}`,
-      { method: 'PUT', body: JSON.stringify({ relationship }) }
-    ),
-  removeSquadFromProject: (squadId: string, projectId: string) =>
-    fetchJson<{ success: boolean }>(
-      `/squads/${encodeURIComponent(squadId)}/projects/${encodeURIComponent(projectId)}`,
-      { method: 'DELETE' }
-    ),
-  getLiveBuildRoom: (projectId: string, runId?: string) =>
-    fetchJson<LiveBuildRoomSnapshot>(`/projects/${encodeURIComponent(projectId)}/live-build-room${runId ? `?runId=${encodeURIComponent(runId)}` : ''}`),
+  /** The latest Orchestrator build per issue, for board status chips. Desktop only. */
+  getIssueBuildStatuses: () => fetchJson<IssueBuildStatus[]>('/issues/build-status'),
+  getLiveBuildRoom: async (projectId: string, runId?: string, threadId?: string) => {
+    const query = new URLSearchParams();
+    if (runId) query.set('runId', runId);
+    if (threadId) query.set('threadId', threadId);
+    // Keep percent-encoded spaces for compatibility with existing request URLs.
+    const search = query.toString().replace(/\+/g, '%20');
+    const snapshot = await fetchJson<LiveBuildRoomSnapshot>(
+      `/projects/${encodeURIComponent(projectId)}/live-build-room${search ? `?${search}` : ''}`,
+      { cache: 'no-store' },
+    );
+    if (!snapshot || typeof snapshot !== 'object' || !snapshot.summary
+      || typeof snapshot.summary.review !== 'number'
+      || typeof snapshot.summary.failed !== 'number'
+      || typeof snapshot.summary.stale !== 'number') {
+      throw new Error('The project room returned incomplete data. Retry to load a fresh snapshot.');
+    }
+    return snapshot;
+  },
   getLiveBuildRoomProjects: () =>
     fetchJson<Array<Pick<Project, 'id' | 'key' | 'name' | 'color'>>>('/live-build-room/projects'),
   getOrchestrationDiffPreview: (projectId: string, runId: string) =>
     fetchJson<LiveBuildRoomDiffPreview>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/diff`
     ),
+  getOrchestrationLiveChanges: (projectId: string, runId: string) =>
+    fetchJson<LiveBuildChanges>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/live-changes`,
+      { cache: 'no-store' }
+    ),
+  getOrchestrationRecovery: (projectId: string, runId: string) =>
+    fetchJson<LiveBuildRecoveryState>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/recovery`,
+      { cache: 'no-store' }
+    ),
+  performOrchestrationRecoveryAction: (projectId: string, runId: string, body: {
+    recoveryId: string;
+    expectedRunRevision: number;
+    expectedRecoveryRevision: number;
+    expectedTaskRevision?: number;
+    idempotencyKey: string;
+    action: LiveBuildRecoveryAction;
+    guidance?: string;
+    threadId?: string;
+  }) => fetchJson<{
+    accepted: boolean;
+    pending?: boolean;
+    actionId: string;
+    runStatus?: string;
+    currentTaskId?: string;
+    explanation?: string;
+    message?: string;
+    state?: LiveBuildRecoveryState;
+  }>(
+    `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/recovery/actions`,
+    { method: 'POST', body: JSON.stringify(body) }
+  ),
   inspectOrchestrationPlanningRecovery: (projectId: string, runId: string) =>
     fetchJson<{ runId: string; state: 'cleaned' | 'needs_review' | 'manual_review' | 'retained'; revision?: number; reason?: string }>(
       `/projects/${encodeURIComponent(projectId)}/planning-recoveries/${encodeURIComponent(runId)}/inspect`,
@@ -658,6 +742,25 @@ export const apiService = {
     fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(taskId)}/retry`,
       { method: 'POST', body: JSON.stringify({ expectedTaskRevision }) }
+    ),
+  proposeSecurityAuditPlan: (projectId: string, runId: string, expectedRevision: number) =>
+    fetchJson<{ runId: string; status: string; revision: number; planVersion: number }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/audit-plan`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) }
+    ),
+  startPlannedOrchestration: (projectId: string, runId: string, expectedRevision: number) =>
+    fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/start`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) }
+    ),
+  pauseOrchestration: (projectId: string, runId: string, expectedRevision: number) =>
+    fetchJson<{ runId: string; status: string; pauseRequestedAt?: string }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/pause`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) }
+    ),
+  getOrchestrationPlans: (projectId: string, runId: string) =>
+    fetchJson<{ documents: Array<{ version: number; fileName: string; content: string; contentHash: string }> }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/plans`
     ),
   resumeOrchestration: (projectId: string, runId: string) =>
     fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
@@ -710,14 +813,12 @@ export const apiService = {
   retryRun: (id: string) =>
     fetchJson<PrototypeRun>(`/runs/${id}/retry`, { method: 'POST' }),
 
-  // Squad runs
+  // Builds from before squads were removed: history and stop only.
   getSquadRuns: () => fetchJson<SquadRun[]>('/squad-runs'),
   getSquadRun: (id: string) =>
     fetchJson<SquadRun & { runs: PrototypeRun[] }>(`/squad-runs/${id}`),
   cancelSquadRun: (id: string) =>
     fetchJson<SquadRun>(`/squad-runs/${id}/cancel`, { method: 'POST' }),
-  runSquad: (squadId: string, payload: { issueId: string; plan?: string[]; mission?: string }) =>
-    fetchJson<SquadRun>(`/squads/${squadId}/run`, { method: 'POST', body: JSON.stringify(payload) }),
 
   // Chat
   getChatThreads: () => fetchJson<ChatThread[]>('/chat/threads'),
@@ -751,12 +852,46 @@ export const apiService = {
       method: 'DELETE'
     }),
   getChatMessages: (threadId: string) => fetchJson<ChatMessage[]>(`/chat/threads/${threadId}/messages`),
-  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string }) =>
+  getChatThreadMemory: (threadId: string) =>
+    fetchJson<ChatThreadMemory>(`/chat/threads/${encodeURIComponent(threadId)}/memory`),
+  saveChatThreadMemory: (threadId: string, content: string) =>
+    fetchJson<ChatThreadMemory>(`/chat/threads/${encodeURIComponent(threadId)}/memory`, {
+      method: 'PUT', body: JSON.stringify({ content })
+    }),
+  clearChatThreadMemory: (threadId: string) =>
+    fetchJson<{ success: boolean }>(`/chat/threads/${encodeURIComponent(threadId)}/memory`, { method: 'DELETE' }),
+  uploadChatAttachment: async (threadId: string, file: File) => {
+    const headers = new Headers({
+      'Content-Type': 'application/octet-stream',
+      'X-Chat-File-Name': encodeURIComponent(file.name),
+      'X-Chat-File-Type': file.type || 'application/octet-stream',
+      ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
+      ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {}),
+    });
+    const res = await fetch(`${API_BASE}/chat/threads/${encodeURIComponent(threadId)}/attachments`, {
+      method: 'POST', body: file, credentials: 'include', headers,
+    });
+    if (!res.ok) throw await ticketApiError(res, await res.text().catch(() => res.statusText));
+    return res.json() as Promise<{ attachment: ChatAttachmentReference }>;
+  },
+  deleteChatAttachment: (threadId: string, attachmentId: string) =>
+    fetchJson<{ success: boolean }>(`/chat/threads/${encodeURIComponent(threadId)}/attachments/${encodeURIComponent(attachmentId)}`, { method: 'DELETE' }),
+  stopChatTurn: (threadId: string, messageId: string) =>
+    fetchJson<{ status: 'stopping' | 'stopped' }>(`/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/stop`, { method: 'POST', body: JSON.stringify({}) }),
+  steerChatTurn: (threadId: string, messageId: string, instruction: string) =>
+    fetchJson<{ status: 'queued'; position: number }>(`/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/steer`, { method: 'POST', body: JSON.stringify({ instruction }) }),
+  /** Plan a user message as a build, or have Alpha answer it instead. */
+  routeChatMessage: (threadId: string, messageId: string, payload: { action: 'build' | 'answer'; repositories?: string[]; projectId?: string }) =>
+    fetchJson<{ userMessage: ChatMessage; agentMessage: ChatMessage; agentMessages: ChatMessage[] }>(
+      `/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/route`,
+      { method: 'POST', body: JSON.stringify(payload) }
+    ),
+  sendChatMessage: (payload: { threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string; attachmentIds?: string[]; issueId?: string; approvalMode?: 'ask' | 'approve' | 'full' }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;
       /**
-       * Every reply. More than one when a squad was addressed — each member
+       * Every reply. More than one when several agents were named — each
        * answers in turn. `agentMessage` is the first of these.
        */
       agentMessages?: ChatMessage[];
@@ -767,9 +902,6 @@ export const apiService = {
         repository?: string;
         issueId?: string;
         issueIdentifier?: string;
-        squadId?: string;
-        squadName?: string;
-        squadRunId?: string;
         branchName?: string;
         reason?: string;
       }>;
@@ -780,9 +912,6 @@ export const apiService = {
         repository?: string;
         issueId?: string;
         issueIdentifier?: string;
-        squadId?: string;
-        squadName?: string;
-        squadRunId?: string;
         branchName?: string;
         reason?: string;
       };
@@ -796,7 +925,6 @@ export const apiService = {
     projectId: string,
     threadId: string,
     payload: {
-      squadId: string;
       agentId: string;
       mode: AgentCallMode;
       target?: AgentCallTarget;
@@ -947,6 +1075,8 @@ export const apiService = {
     fetchJson<{ branches: RepoBranch[] }>(`${projectRepoPath(projectId, repo)}/branches`),
   getRepoTree: (projectId: string, repo: string, ref: string) =>
     fetchJson<RepoTree>(`${projectRepoPath(projectId, repo)}/tree${query({ ref })}`),
+  getRepoArchitecture: (projectId: string, repo: string) =>
+    fetchJson<RepoArchitecture>(`${projectRepoPath(projectId, repo)}/architecture`),
   getRepoFile: (projectId: string, repo: string, path: string, ref: string) =>
     fetchJson<RepoFile>(`${projectRepoPath(projectId, repo)}/file${query({ path, ref })}`),
   compareRepoBranches: (projectId: string, repo: string, base: string, head: string) =>

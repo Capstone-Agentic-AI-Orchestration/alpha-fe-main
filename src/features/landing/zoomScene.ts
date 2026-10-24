@@ -426,7 +426,7 @@ export class ZoomScene {
       ctx.beginPath(); ctx.arc(hub[0], hub[1], Math.max(5, k * 0.04) * (1 + ph * 4), 0, 6.2832); ctx.stroke();
     }
     if (k < 120) return;
-    if (P > 0.95) labels.push({ x: hub[0], y: hub[1], text: 'New message from your PM', col: '178,154,245', a: Math.min(1, (P - 0.95) / 0.05), r: Math.max(5, k * 0.04), up: true });
+    if (P > 0.95) labels.push({ x: hub[0], y: hub[1], text: 'New message from your project manager', col: '178,154,245', a: Math.min(1, (P - 0.95) / 0.05), r: Math.max(5, k * 0.04), up: true });
     ctx.font = '500 12px "DM Sans", sans-serif';
     ctx.textBaseline = 'middle';
     const baseA = ctx.globalAlpha;

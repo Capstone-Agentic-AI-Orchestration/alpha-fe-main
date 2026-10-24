@@ -24,12 +24,17 @@ describe('client ticket detail layout', () => {
     expect(html).toMatch(/id="client-tab-conversation"[^>]*aria-selected="true"/);
     expect(html).toMatch(/id="client-tab-details"[^>]*aria-selected="false"/);
     expect(html).toContain('Action needed: ');
-    expect(html).toContain('Review scope');
+    expect(html).toContain('Decision needed');
+    expect(html).toContain('Review proposed work');
     expect(html).toContain('Write a message…');
+    expect(html).toContain('Private messages between you and your project manager');
+    expect(html).toContain('class="client-reply-form"');
+    expect(html).toContain('aria-label="Send reply"');
     expect(html).toContain('Hello there');
-    expect(html).toContain('Copy ticket reference');
-    // The progress path sits in the banner: Agree scope is the current step, and it is the client's turn.
+    expect(html).toContain('Copy request reference');
+    expect(html).toContain('min-h-[44px]');
+    // The progress path names the proposed work as the current step and makes the client's turn explicit.
     expect(html).toContain('aria-label="Request progress"');
-    expect(html).toContain('Agree scope · you');
+    expect(html).toContain('Review proposed work · you');
   });
 });

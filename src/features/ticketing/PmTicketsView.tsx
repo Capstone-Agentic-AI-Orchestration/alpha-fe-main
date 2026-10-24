@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, ArrowLeft, Check, Clock3, Copy, Info, LockKeyhole, MessageSquare,
-  RefreshCw, Search, Send, StickyNote, Ticket as TicketIcon, UserRound,
+  AlertCircle, Archive, ArrowLeft, ArrowUpRight, Check, ChevronDown, CircleDot, Clock3, FileText, Inbox, Info,
+  LockKeyhole, MessageSquare, Paperclip, RefreshCw, Search, Send, StickyNote,
+  Ticket as TicketIcon, UserRound,
 } from 'lucide-react';
 
 import { ApiRequestError } from '@/shared/services/apiService';
@@ -15,6 +16,7 @@ import { PmScopeProposalForm, type PmScopeProposalDraft } from './PmScopeProposa
 import { PmWorkHandoffForm, type PmWorkHandoffDraft } from './PmWorkHandoffForm';
 import { PmProjectLinkForm, type PmProjectLinkDraft } from './PmProjectLinkForm';
 import { PmTicketQueueList } from './PmTicketQueueList';
+import { pmTicketNextAction } from './pmTicketNextAction';
 import { canAuthorizeTicketWork } from './pmWorkHandoff';
 import { PmCorrectionForm } from './PmCorrectionForm';
 import { canAssessTicketDelivery, canCloseAcceptedTicket, canShareAssessedDelivery, pmCorrectionCommand, pmCorrectionMode, type PmCorrectionDraft } from './pmReview';
@@ -22,9 +24,12 @@ import { PmDeliveryReview } from './PmDeliveryReview';
 import { PmDeliveryAssessment } from './PmDeliveryAssessment';
 import { input, primary, secondary, time } from './ticketUi';
 import { TicketDocumentsPanel } from './TicketDocumentsPanel';
+import type { TicketDocumentsApi } from './ticketDocuments';
+import './pmTickets.css';
 
 type Filter = NonNullable<PmTicketQueueOptions['filter']>;
 type Panel = 'conversation' | 'notes';
+type TicketSection = 'conversation' | 'notes' | 'details' | 'documents';
 type WorkflowActions = 'none' | 'triage' | 'review_scope' | 'all';
 interface PendingOperation {
   ticketId: string;
@@ -35,24 +40,26 @@ interface PendingOperation {
   draftPanel?: Panel;
 }
 
-const filters: Array<{ id: Filter; label: string }> = [
-  { id: 'all', label: 'All' },
-  { id: 'needs_pm', label: 'Needs PM' },
-  { id: 'in_progress', label: 'In progress' },
-  { id: 'waiting_client', label: 'Waiting on client' },
+const filters: Array<{ id: Filter; label: string; counter?: 'needsPm' | 'inProgress' | 'waitingClient' | 'closedMonth' }> = [
+  { id: 'all', label: 'All tickets' },
+  { id: 'needs_pm', label: 'Needs attention', counter: 'needsPm' },
+  { id: 'in_progress', label: 'In progress', counter: 'inProgress' },
+  { id: 'waiting_client', label: 'Waiting for client', counter: 'waitingClient' },
+  { id: 'closed_month', label: 'Closed this month', counter: 'closedMonth' },
   { id: 'history', label: 'History' },
 ];
 
 function statusLabel(status: TicketStatus): string {
-  return status.replace(/_/g, ' ').replace(/\b\w/g, (letter: string) => letter.toUpperCase());
+  const label = status.replace(/_/g, ' ');
+  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 function statusStyle(status: TicketStatus): string {
-  if (status === 'closed') return 'bg-emerald-500/10 text-emerald-300';
-  if (status === 'in_progress' || status === 'ready_for_review') return 'bg-brand-500/10 text-brand-300';
-  if (status === 'awaiting_client' || status === 'on_hold') return 'bg-amber-500/10 text-amber-300';
-  if (status === 'declined' || status === 'cancelled') return 'bg-rose-500/10 text-rose-300';
-  return 'bg-white/[0.06] text-gray-300';
+  if (status === 'closed') return 'pm-status--closed';
+  if (status === 'in_progress' || status === 'ready_for_review') return 'pm-status--active';
+  if (status === 'awaiting_client' || status === 'on_hold') return 'pm-status--waiting';
+  if (status === 'declined' || status === 'cancelled') return 'pm-status--stopped';
+  return 'pm-status--review';
 }
 
 type ClientInvitationSummary = PmTicketQueueItem['internal']['clientInvitation'];
@@ -110,18 +117,11 @@ export function safeError(error: unknown, area: 'queue' | 'ticket' | 'write'): s
       : 'The action could not be completed. Refresh the ticket and try again.';
 }
 
-function Counter({ label, value, active, onClick }: { label: string; value: number; active: boolean; onClick: () => void }) {
-  return <button onClick={onClick} aria-pressed={active} className={`rounded-xl border p-3 text-left transition-colors ${active ? 'border-brand-400/50 bg-brand-500/10' : 'border-white/[0.07] bg-surface hover:bg-white/[0.04]'}`}>
-    <span className="block text-[11px] text-gray-500">{label}</span>
-    <span className="mt-1 block text-xl font-semibold tabular-nums text-gray-100">{value}</span>
-  </button>;
-}
-
 function EmptyPanel({ title, detail }: { title: string; detail: string }) {
-  return <div className="flex min-h-48 flex-col items-center justify-center px-6 text-center">
-    <TicketIcon size={22} className="text-gray-600" />
-    <p className="mt-3 text-sm font-medium text-gray-300">{title}</p>
-    <p className="mt-1 max-w-md text-xs leading-relaxed text-gray-500">{detail}</p>
+  return <div className="pm-tickets__empty">
+    <TicketIcon size={22} aria-hidden="true" />
+    <p className="pm-tickets__empty-title">{title}</p>
+    <p className="pm-tickets__empty-detail">{detail}</p>
   </div>;
 }
 
@@ -136,8 +136,9 @@ export function PmContactVerification({ verification }: { verification: unknown 
   return <span className="text-gray-500">Unable to verify status</span>;
 }
 
-export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false }: {
+export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false }: {
   api?: typeof pmTicketApi;
+  documentsApi?: TicketDocumentsApi;
   intakeEnabled?: boolean;
   /** Limit actions to the implemented production phase. */
   workflowActions?: WorkflowActions;
@@ -155,9 +156,14 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
   const [messageCursor, setMessageCursor] = useState<string | null>(null);
   const [noteCursor, setNoteCursor] = useState<string | null>(null);
   const [panel, setPanel] = useState<Panel>('conversation');
+  const [ticketSection, setTicketSection] = useState<TicketSection>('conversation');
+  const [composerOpen, setComposerOpen] = useState(false);
   const [scopeComposerOpen, setScopeComposerOpen] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
   const [projectLinkOpen, setProjectLinkOpen] = useState(false);
+  const [deliveryAssessmentOpen, setDeliveryAssessmentOpen] = useState(false);
+  const [deliveryReviewOpen, setDeliveryReviewOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [projectLinkSaving, setProjectLinkSaving] = useState(false);
   const [projectLinkError, setProjectLinkError] = useState('');
   const [requestAccessSaving, setRequestAccessSaving] = useState<string | null>(null);
@@ -180,23 +186,43 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
   const [writeError, setWriteError] = useState('');
   const [invitationEmailSending, setInvitationEmailSending] = useState(false);
   const [invitationEmailError, setInvitationEmailError] = useState('');
-  const [inquiryCode, setInquiryCode] = useState<{ code: string; submissionEnabled: boolean } | null>(null);
-  const [inquiryCodeLoading, setInquiryCodeLoading] = useState(false);
-  const [inquiryCodeCopied, setInquiryCodeCopied] = useState(false);
-  const [inquiryCodeError, setInquiryCodeError] = useState('');
   const [pending, setPending] = useState<PendingOperation | null>(null);
   const [refreshVersion, setRefreshVersion] = useState(0);
   const queueGeneration = useRef(0);
   const historyGeneration = useRef(0);
   const writeLock = useRef(false);
+  const queueElement = useRef<HTMLDivElement>(null);
+  const detailHeading = useRef<HTMLHeadingElement>(null);
+  const detailsElement = useRef<HTMLElement>(null);
+
+  useEffect(() => { detailHeading.current?.focus({ preventScroll: true }); }, [detail?.id]);
+
+  useEffect(() => {
+    if (ticketSection === 'details' && (projectLinkOpen || declineOpen || scopeComposerOpen || handoffOpen
+      || deliveryAssessmentOpen || deliveryReviewOpen || reviewAction)) {
+      detailsElement.current?.querySelector('.pm-tickets__action-form')?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [ticketSection, projectLinkOpen, declineOpen, scopeComposerOpen, handoffOpen, deliveryAssessmentOpen, deliveryReviewOpen, reviewAction]);
+
+  function backToQueue() {
+    const ticketId = selectedId;
+    setSelectedId(null);
+    window.requestAnimationFrame(() => {
+      [...(queueElement.current?.querySelectorAll<HTMLButtonElement>('[data-ticket-id]') ?? [])]
+        .find(button => button.dataset.ticketId === ticketId)?.focus({ preventScroll: true });
+    });
+  }
 
   useEffect(() => {
     // Never carry one client's text to a different ticket. Public and private
     // composers also keep separate drafts, so changing tabs cannot publish a note.
-    setDrafts({ conversation: '', notes: '' }); setMessageAction('reply'); setWriteError('');
+    setDrafts({ conversation: '', notes: '' }); setMessageAction('reply'); setWriteError(''); setPanel('conversation');
     setDeclineOpen(false); setDeclineReason('');
     setInvitationEmailError('');
     setProjectLinkOpen(false); setProjectLinkError(''); setRequestAccessError('');
+    setTicketSection('conversation'); setComposerOpen(false);
+    setDeliveryAssessmentOpen(false); setDeliveryReviewOpen(false);
+    setActionMenuOpen(false);
   }, [selectedId]);
 
   useEffect(() => {
@@ -217,8 +243,7 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
       const result = await api.list({ limit: 50, filter, search });
       if (generation !== queueGeneration.current) return;
       setQueue(result);
-      setSelectedId(current => current && result.items.some(item => item.id === current)
-        ? current : window.matchMedia('(min-width: 1280px)').matches ? result.items[0]?.id ?? null : null);
+      setSelectedId(current => current && result.items.some(item => item.id === current) ? current : null);
     } catch (error) {
       if (generation !== queueGeneration.current) return;
       setQueue(null);
@@ -245,6 +270,15 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     [queue, selectedId],
   );
   const selectedInvitation = selectedQueueItem?.internal.clientInvitation ?? null;
+  const selectedNextStep = useMemo(() => {
+    if (!selectedQueueItem) return null;
+    const owner = selectedQueueItem.internal.actionOwner === 'pm' ? 'You'
+      : selectedQueueItem.internal.actionOwner === 'client' ? 'Client'
+        : selectedQueueItem.internal.actionOwner === 'developer' ? 'Development team' : null;
+    const action = pmTicketNextAction(selectedQueueItem.internal.nextAction);
+    if (action) return owner ? `${owner} · ${action}` : action;
+    return owner ? `${owner} is up next.` : 'No action is pending.';
+  }, [selectedQueueItem]);
 
   useEffect(() => {
     setScopeComposerOpen(false);
@@ -426,33 +460,6 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     });
   }
 
-  async function loadInquiryCode() {
-    if (inquiryCodeLoading) return;
-    setInquiryCodeLoading(true);
-    setInquiryCodeError('');
-    setInquiryCodeCopied(false);
-    try {
-      setInquiryCode(await api.getPublicInquiryCode());
-    } catch (error) {
-      setInquiryCode(null);
-      setInquiryCodeError(safeError(error, 'ticket'));
-    } finally {
-      setInquiryCodeLoading(false);
-    }
-  }
-
-  async function copyInquiryCode() {
-    if (!inquiryCode) return;
-    setInquiryCodeError('');
-    try {
-      await navigator.clipboard.writeText(inquiryCode.code);
-      setInquiryCodeCopied(true);
-    } catch {
-      setInquiryCodeCopied(false);
-      setInquiryCodeError('Clipboard access is unavailable. Select the inquiry code and copy it manually.');
-    }
-  }
-
   async function sendClientInvitationEmail() {
     const invitation = selectedQueueItem?.internal.clientInvitation ?? null;
     const canRetryFailed = invitation?.status === 'pending' && invitation.delivery === 'failed';
@@ -549,7 +556,10 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     if (succeeded) setReviewAction(null);
   }
 
-  const activeFilter = (value: Filter) => setFilter(current => current === value && value !== 'all' ? 'all' : value);
+  const activeFilter = (value: Filter) => {
+    setSelectedId(null);
+    setFilter(value);
+  };
 
   async function loadMoreQueue() {
     if (!queue?.nextCursor || queueMoreLoading) return;
@@ -597,168 +607,249 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
     }
   }
 
-  return <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4 md:p-6 xl:overflow-hidden">
-    <header className="flex flex-wrap items-center justify-between gap-3">
-      <div>
-        <h1 className="text-xl font-semibold text-gray-100">Tickets</h1>
-        <p className="mt-1 text-xs text-gray-500">Review client requests and manage their conversation in this workspace.</p>
+  const canMarkUnderReview = Boolean(detail && workflowActions !== 'none'
+    && detail.status === 'received' && detail.writesAvailable);
+  const canInviteClient = Boolean(detail && selectedQueueItem && workflowActions !== 'none'
+    && detail.internal.request?.source === 'public_inquiry'
+    && !selectedQueueItem.internal.clientAccessActive && detail.status === 'under_review'
+    && detail.writesAvailable && selectedInvitation?.status !== 'consumed');
+  const canDeclineInquiry = Boolean(detail && workflowActions !== 'none'
+    && ['received', 'under_review'].includes(detail.status)
+    && detail.writesAvailable && !detail.internal.authorizedScopeVersionId);
+  const canProposeScope = Boolean(detail && selectedQueueItem
+    && (workflowActions === 'all' || workflowActions === 'review_scope')
+    && detail.writesAvailable && selectedQueueItem.internal.clientAccessActive
+    && ['under_review', 'awaiting_client'].includes(detail.status)
+    && !detail.internal.authorizedScopeVersionId && detail.internal.requiredIssueIds.length === 0);
+  const canLinkAgreedWork = Boolean(detail && selectedQueueItem && workflowActions === 'all'
+    && canAuthorizeTicketWork(detail, selectedQueueItem.internal.clientAccessActive));
+  const canManageProjectLink = Boolean(detail && workflowActions !== 'none'
+    && detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status));
+  const canReviewCorrection = Boolean(detail && selectedQueueItem && workflowActions === 'all'
+    && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive));
+  const canCloseTicket = Boolean(detail && selectedQueueItem && workflowActions === 'all'
+    && canCloseAcceptedTicket(detail, selectedQueueItem.internal.clientAccessActive));
+  const canAssessDelivery = Boolean(detail && selectedQueueItem && workflowActions === 'all'
+    && canAssessTicketDelivery(detail, selectedQueueItem.internal.clientAccessActive));
+  const canReviewDelivery = Boolean(detail && workflowActions === 'all' && detail.internal.deliveryAssessment);
+  const primaryAction = canMarkUnderReview ? 'review'
+    : canInviteClient ? 'invite'
+      : canLinkAgreedWork ? 'authorize'
+        : canCloseTicket ? 'close' : null;
+  const hasMoreActions = canDeclineInquiry || canProposeScope
+    || (canLinkAgreedWork && primaryAction !== 'authorize') || canManageProjectLink
+    || (canInviteClient && primaryAction !== 'invite') || canReviewCorrection
+    || canAssessDelivery || canReviewDelivery || (canCloseTicket && primaryAction !== 'close');
+
+  function openWorkflowAction(action: 'decline' | 'scope' | 'handoff' | 'project' | 'correction' | 'close' | 'delivery-assess' | 'delivery-review') {
+    const wasOpen = action === 'decline' ? declineOpen
+      : action === 'scope' ? scopeComposerOpen
+        : action === 'handoff' ? handoffOpen
+          : action === 'project' ? projectLinkOpen
+            : action === 'correction' ? reviewAction === 'correction'
+              : action === 'close' ? reviewAction === 'close'
+                : action === 'delivery-assess' ? deliveryAssessmentOpen : deliveryReviewOpen;
+    setTicketSection('details');
+    setActionMenuOpen(false);
+    setDeclineOpen(false);
+    setScopeComposerOpen(false);
+    setHandoffOpen(false);
+    setProjectLinkOpen(false);
+    setReviewAction(null);
+    setDeliveryAssessmentOpen(false);
+    setDeliveryReviewOpen(false);
+    if (wasOpen) return;
+
+    if (action === 'decline') { setDeclineReason(''); setDeclineOpen(true); }
+    if (action === 'scope') { setWriteError(''); setScopeComposerOpen(true); }
+    if (action === 'handoff') { setWriteError(''); setHandoffOpen(true); }
+    if (action === 'project') { setProjectLinkError(''); setProjectLinkOpen(true); }
+    if (action === 'correction') { setWriteError(''); setReviewAction('correction'); }
+    if (action === 'close') { setWriteError(''); setReviewAction('close'); }
+    if (action === 'delivery-assess') setDeliveryAssessmentOpen(true);
+    if (action === 'delivery-review') setDeliveryReviewOpen(true);
+  }
+
+  return <div className={`pm-tickets${selectedId ? ' pm-tickets--ticket-open' : ''}`}>
+    <aside className="pm-tickets__navigation" aria-label="Ticket views">
+      <header className="pm-tickets__navigation-heading">
+        <h1 className="pm-tickets__title"><TicketIcon size={19} aria-hidden="true" />Tickets</h1>
+        <p>Client requests</p>
+      </header>
+      <nav aria-label="Filter requests" className="pm-tickets__filters">
+        {filters.map(option => {
+          const Icon = option.id === 'all' ? Inbox : option.id === 'needs_pm' ? CircleDot
+            : option.id === 'in_progress' ? ArrowUpRight : option.id === 'waiting_client' ? Clock3
+              : option.id === 'closed_month' ? Check : Archive;
+          return <button key={option.id} type="button" aria-pressed={filter === option.id}
+            disabled={!intakeEnabled || writing || Boolean(pending)} onClick={() => activeFilter(option.id)}
+            className={`pm-tickets__filter${filter === option.id ? ' is-active' : ''}`}>
+            <Icon size={15} aria-hidden="true" /><span>{option.label}</span>
+            {option.counter && queue?.counters.kind === 'pm' && <span className="pm-tickets__filter-count">{queue.counters[option.counter]}</span>}
+          </button>;
+        })}
+      </nav>
+    </aside>
+    <div className="pm-tickets__main">
+    <header className="pm-tickets__header">
+      <div className="pm-tickets__view-heading">
+        {selectedId ? <button type="button" onClick={backToQueue} disabled={writing || Boolean(pending)} className="pm-tickets__back"><ArrowLeft size={16} />{filters.find(option => option.id === filter)?.label}</button>
+          : <><h2>{filters.find(option => option.id === filter)?.label}</h2><span className="pm-tickets__view-count">{queue ? queue.items.length : '…'}</span></>}
       </div>
-      <div className="flex flex-wrap gap-2">
-        {intakeEnabled && <button onClick={() => void loadInquiryCode()} disabled={inquiryCodeLoading} className={secondary}>
-          <Copy size={14} />{inquiryCodeLoading ? 'Loading code…' : inquiryCode ? 'Refresh inquiry code' : 'Share inquiry code'}
-        </button>}
-        <button onClick={refreshAll} disabled={!intakeEnabled || queueLoading || Boolean(pending)} className={secondary}>
-          <RefreshCw size={14} className={queueLoading ? 'animate-spin' : ''} />Refresh
+      <div className="pm-tickets__header-actions">
+        {!selectedId && <label className="pm-tickets__search"><Search size={15} aria-hidden="true" />
+          <span className="sr-only">Search tickets</span>
+          <input value={searchInput} disabled={!intakeEnabled} onChange={event => setSearchInput(event.target.value)} placeholder="Search tickets…" className="pm-tickets__search-input" />
+        </label>}
+        <button type="button" onClick={refreshAll} disabled={!intakeEnabled || queueLoading || Boolean(pending)} className="pm-tickets__refresh" title="Refresh tickets">
+          <RefreshCw size={15} className={queueLoading ? 'animate-spin' : ''} /><span>Refresh</span>
         </button>
       </div>
     </header>
 
-    {(inquiryCode || inquiryCodeError) && <section aria-label="Client inquiry access" className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-surface p-4">
-      {inquiryCode ? <div className="min-w-0">
-        <p className="text-[10px] uppercase tracking-wide text-gray-500">Workspace inquiry code</p>
-        <p className="mt-1 font-mono text-sm text-gray-100" aria-label="Inquiry code">{inquiryCode.code}</p>
-        <p className="mt-1 text-[11px] text-gray-500">Share the Alpha web app link and this code. The client enters it to open this workspace’s inquiry form.</p>
-        <p className={`mt-1 text-[10px] ${inquiryCode.submissionEnabled ? 'text-emerald-300/80' : 'text-amber-300/80'}`}>
-          {inquiryCode.submissionEnabled ? 'Inquiry submissions are enabled.' : 'The link is published, but submissions are currently unavailable.'}
-        </p>
-      </div> : <p role="alert" className="text-xs text-rose-200">{inquiryCodeError}</p>}
-      {inquiryCode && <button onClick={() => void copyInquiryCode()} className={secondary}>
-        <Copy size={13} />{inquiryCodeCopied ? 'Copied' : 'Copy code'}
-      </button>}
-      {inquiryCode && inquiryCodeError && <p role="alert" className="w-full text-[11px] text-amber-200">{inquiryCodeError}</p>}
-    </section>}
-
-    {!intakeEnabled && <div role="status" className="flex items-start gap-2 rounded-lg border border-white/[0.08] bg-white/[0.025] p-3 text-xs leading-relaxed text-gray-400">
-      <Info size={15} className="mt-0.5 shrink-0 text-gray-500" />
+    {!intakeEnabled && <div role="status" className="pm-tickets__service-notice">
+      <Info size={15} aria-hidden="true" />
       <p>Ticketing is coming soon. You can review the interface, but submissions are not available yet.</p>
     </div>}
 
-    {intakeEnabled && queue?.counters.kind === 'pm' && <section aria-label="Ticket counters" className="grid grid-cols-2 gap-2 md:grid-cols-4">
-      <Counter label="Needs PM" value={queue.counters.needsPm} active={filter === 'needs_pm'} onClick={() => activeFilter('needs_pm')} />
-      <Counter label="In progress" value={queue.counters.inProgress} active={filter === 'in_progress'} onClick={() => activeFilter('in_progress')} />
-      <Counter label="Waiting on client" value={queue.counters.waitingClient} active={filter === 'waiting_client'} onClick={() => activeFilter('waiting_client')} />
-      <Counter label="Closed this month" value={queue.counters.closedMonth} active={filter === 'closed_month'} onClick={() => activeFilter('closed_month')} />
-    </section>}
-
-    {intakeEnabled && queueError && <div role="alert" className="flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-3 text-xs text-rose-200">
-      <AlertCircle size={15} className="mt-0.5 shrink-0" />{queueError}
+    {intakeEnabled && queueError && <div role="alert" className="pm-tickets__error">
+      <AlertCircle size={15} aria-hidden="true" />{queueError}
     </div>}
 
-    <section className="grid gap-4 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(300px,0.78fr)_minmax(0,1.5fr)]">
-      <div className={`${selectedId ? 'hidden xl:flex' : 'flex'} min-h-[320px] min-w-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-surface`}>
-        <div className="space-y-3 border-b border-white/[0.07] p-3">
-          <label className="relative block"><Search size={14} className="pointer-events-none absolute left-3 top-2.5 text-gray-600" />
-            <span className="sr-only">Search tickets</span>
-            <input value={searchInput} disabled={!intakeEnabled} onChange={event => setSearchInput(event.target.value)} placeholder="Search tickets…" className={`${input} py-2 pl-9 disabled:cursor-not-allowed disabled:opacity-50`} />
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            {filters.map(option => <button key={option.id} aria-pressed={filter === option.id} disabled={!intakeEnabled} onClick={() => activeFilter(option.id)} className={`rounded-md px-2 py-1 text-[10px] disabled:cursor-not-allowed disabled:opacity-50 ${filter === option.id ? 'bg-brand-500/15 text-brand-200' : 'text-gray-500 hover:bg-white/[0.05] hover:text-gray-300'}`}>
-              {option.label}
-            </button>)}
-          </div>
+    <section className="pm-tickets__workspace">
+      <div ref={queueElement} className={`pm-tickets__queue${selectedId ? ' pm-tickets__queue--collapsed' : ''}`}>
+        <div className="pm-tickets__queue-toolbar">
+          <p>{search ? `Results for “${search}”` : queue?.counters.kind === 'pm' && queue.counters.needsPm > 0
+            ? `${queue.counters.needsPm} request${queue.counters.needsPm === 1 ? '' : 's'} need${queue.counters.needsPm === 1 ? 's' : ''} your attention.`
+            : 'Your client requests and their next steps.'}</p>
+          <span>Open a ticket to continue</span>
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
-          {requestAccessError && <p role="alert" className="m-3 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{requestAccessError}</p>}
+        <div className="pm-tickets__queue-scroll">
+          {requestAccessError && <p role="alert" className="pm-tickets__error">{requestAccessError}</p>}
           {!intakeEnabled ? <EmptyPanel title="Live tickets are not connected yet" detail="No ticket data is loaded while ticketing is disabled." />
             : queueLoading && !queue ? <div className="p-6 text-center text-xs text-gray-500">Loading tickets…</div>
             : queue && queue.items.length > 0 ? <PmTicketQueueList items={queue.items} selectedId={selectedId}
               disabled={Boolean(pending)} requestAccessSaving={requestAccessSaving}
               onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDraft(''); setWriteError(''); }}
               onToggleRequests={(ticketId, enabled) => void setClientRequestAccess(ticketId, enabled)} />
-              : queue && <EmptyPanel title="No tickets in this view" detail={filter === 'all' ? 'New client inquiries and requests will appear here when ticket intake is enabled.' : 'Try another filter or clear your search.'} />}
+              : queue && <div className="pm-tickets__empty-state"><EmptyPanel title="No tickets in this view" detail={filter === 'all' && !search ? 'Accepted inquiries will appear here. New inquiries are reviewed in the separate intake inbox.' : 'Try another view or clear your search.'} />
+                {(search || filter !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); activeFilter('all'); }}>Show all tickets</button>}</div>}
         </div>
-        {queue && <div className="flex items-center justify-between gap-2 border-t border-white/[0.06] px-3 py-2 text-[10px] text-gray-600">
+        {queue && <div className="pm-tickets__queue-footer">
           <span>Showing {queue.items.length} ticket{queue.items.length === 1 ? '' : 's'}</span>
           {queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading} className="text-brand-300 hover:text-brand-200 disabled:opacity-50">{queueMoreLoading ? 'Loading…' : 'Load more'}</button>}
         </div>}
       </div>
 
-      <div role="region" aria-label="Ticket detail panel" className={`${selectedId ? 'block' : 'hidden xl:block'} min-h-[420px] min-w-0 rounded-xl border border-white/[0.08] bg-surface xl:overflow-x-hidden xl:overflow-y-auto`}>
+      <div role="region" aria-label="Ticket detail panel" className={`pm-tickets__detail${selectedId ? ' pm-tickets__detail--selected' : ''}`}>
         {!intakeEnabled ? <EmptyPanel title="Ticketing is coming soon" detail="Ticket details and conversations will be available when ticketing is connected." />
           : !selectedId || !selectedQueueItem ? <EmptyPanel title={queueError ? 'Ticket queue unavailable' : 'Select a ticket'} detail={queueError ? 'No ticket data is shown when the service cannot be reached.' : 'Choose a request from the queue to review its details and conversation.'} />
           : detailLoading ? <div role="status" className="p-8 text-center text-xs text-gray-500">Loading ticket…</div>
             : detailError ? <div role="alert" className="m-4 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-4 text-xs text-rose-200">{detailError}</div>
-              : detail && selectedQueueItem && <div className="flex min-h-full flex-col">
-                <div className="border-b border-white/[0.07] p-4 md:p-5">
-                  <button type="button" onClick={() => setSelectedId(null)} disabled={writing || Boolean(pending)} className="mb-3 inline-flex items-center gap-1.5 text-xs text-gray-400 hover:text-white xl:hidden"><ArrowLeft size={13} />Back to tickets</button>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2"><span className="font-mono text-[10px] text-gray-500">{detail.reference}</span><span className={`rounded px-2 py-1 text-[10px] ${statusStyle(detail.status)}`}>{statusLabel(detail.status)}</span></div>
-                    <span className="flex items-center gap-1 text-[10px] text-gray-500"><Clock3 size={12} />Updated {time(detail.updatedAt)}</span>
+              : detail && selectedQueueItem && <div className="pm-tickets__detail-shell">
+                <header className="pm-tickets__detail-header">
+                  <div className="pm-tickets__detail-meta">
+                    <div className="pm-tickets__detail-identity"><span className="pm-tickets__reference" title={detail.reference}>{detail.reference.length > 20 ? `${detail.reference.slice(0, 16)}…` : detail.reference}</span><span className={`pm-tickets__status ${statusStyle(detail.status)}`}>{statusLabel(detail.status)}</span></div>
+                    <span className="pm-tickets__updated">Updated {time(detail.updatedAt)}</span>
                   </div>
-                  <h2 className="mt-2 break-words text-lg font-semibold text-gray-100">{detail.title}</h2>
-                  <div className="mt-4 flex flex-wrap items-center gap-2">
-                    {workflowActions !== 'none' && detail.status === 'received' && detail.writesAvailable && <button onClick={markUnderReview} disabled={writing || Boolean(pending)} className={primary}><Check size={14} />Mark under review</button>}
-                    {workflowActions !== 'none' && ['received', 'under_review'].includes(detail.status)
-                      && detail.writesAvailable && !detail.internal.authorizedScopeVersionId
-                      && <button onClick={() => { setDeclineReason(''); setDeclineOpen(value => !value); }} disabled={writing || Boolean(pending)} className={secondary}>Decline inquiry</button>}
-                    {(workflowActions === 'all' || workflowActions === 'review_scope') && detail.writesAvailable && selectedQueueItem.internal.clientAccessActive
-                      && ['under_review', 'awaiting_client'].includes(detail.status)
-                      && !detail.internal.authorizedScopeVersionId
-                      && detail.internal.requiredIssueIds.length === 0
-                      && <button onClick={() => { setWriteError(''); setHandoffOpen(false); setScopeComposerOpen(value => !value); }} disabled={writing || Boolean(pending)} className={secondary}>
-                        {scopeComposerOpen ? 'Close scope editor' : detail.scope?.agreed ? 'Replace agreed scope' : detail.scope ? 'Revise proposed scope' : 'Propose scope'}
-                      </button>}
-                    {workflowActions === 'all' && canAuthorizeTicketWork(detail, selectedQueueItem.internal.clientAccessActive) && <button
-                      onClick={() => { setWriteError(''); setScopeComposerOpen(false); setHandoffOpen(value => !value); }}
-                      disabled={writing || Boolean(pending)} className={primary}>
-                      {handoffOpen ? 'Close work selector' : 'Link agreed work'}
+                  <h2 ref={detailHeading} tabIndex={-1} className="pm-tickets__detail-title">{detail.title}</h2>
+                  <p className="pm-tickets__ticket-context">{detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? detail.companyLabel}
+                    <span>·</span>{detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? detail.request?.projectLabel ?? 'No project linked'}</p>
+                  <div className="pm-tickets__ticket-toolbar">
+                  <div className="pm-tickets__next-step"><CircleDot size={14} aria-hidden="true" /><p>{selectedNextStep}</p></div>
+                  <div className="pm-tickets__detail-actions">
+                    {primaryAction === 'review' && <button onClick={markUnderReview} disabled={writing || Boolean(pending)} className={primary}><Check size={14} />Mark under review</button>}
+                    {primaryAction === 'invite' && <button onClick={() => void sendClientInvitationEmail()}
+                      disabled={invitationEmailSending || writing || Boolean(pending)
+                        || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')} className={primary}>
+                      <Send size={14} />{invitationEmailSending ? 'Sending invitation…' : invitationButtonLabel(selectedInvitation)}
                     </button>}
-                    {workflowActions !== 'none' && detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status) && <button
-                      type="button" onClick={() => { setProjectLinkError(''); setProjectLinkOpen(value => !value); }}
-                      disabled={writing || projectLinkSaving || Boolean(pending)} className={secondary}>
-                      {projectLinkOpen ? 'Close project link' : detail.internal.projectId ? 'Manage project link' : 'Link to project'}
-                    </button>}
-                    {workflowActions !== 'none' && detail.internal.request?.source === 'public_inquiry'
-                      && !selectedQueueItem.internal.clientAccessActive && detail.status === 'under_review'
-                      && detail.writesAvailable && selectedInvitation?.status !== 'consumed' && <button type="button" onClick={() => void sendClientInvitationEmail()}
-                        disabled={invitationEmailSending || writing || Boolean(pending)
-                          || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')} className={secondary}>
-                        <Send size={13} />{invitationEmailSending ? 'Sending…' : invitationButtonLabel(selectedInvitation)}
-                      </button>}
-                    {detail.internal.request?.source === 'public_inquiry' && !selectedQueueItem.internal.clientAccessActive && <span className="rounded-md border border-amber-400/15 bg-amber-500/[0.05] px-2.5 py-2 text-[10px] text-amber-200/80">Ticket access starts only after the invited client verifies their email</span>}
-                    {detail.internal.request?.source === 'public_inquiry' && <span className="rounded-md border border-white/[0.07] px-2.5 py-2 text-[10px] text-gray-500">Public inquiry · <PmContactVerification verification={detail.internal.request.contact?.verification} /></span>}
-                    {detail.internal.authorizedScopeVersionId && <span className="text-[10px] text-gray-500">Scope locked after work authorization · new work needs a linked ticket</span>}
-                    {workflowActions === 'all' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <button className={secondary} disabled={writing || Boolean(pending)}
-                      onClick={() => { setWriteError(''); setScopeComposerOpen(false); setHandoffOpen(false); setReviewAction(value => value === 'correction' ? null : 'correction'); }}>
-                      {reviewAction === 'correction' ? 'Close correction editor' : detail.internal.correctionRequestedFor ? 'Review client correction' : 'Return affected Issues'}
-                    </button>}
-                    {workflowActions === 'all' && canCloseAcceptedTicket(detail, selectedQueueItem.internal.clientAccessActive) && <button className={primary} disabled={writing || Boolean(pending)}
-                      onClick={() => { setWriteError(''); setReviewAction('close'); }}>Close accepted ticket</button>}
-                  </div>
-                  {invitationEmailError && <p role="alert" className="mt-3 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{invitationEmailError}</p>}
-                  {selectedInvitation && !selectedQueueItem.internal.clientAccessActive && <p role="status" className="mt-3 rounded-lg border border-white/[0.08] bg-white/[0.025] p-2.5 text-[11px] leading-relaxed text-gray-300">
-                    {invitationStatusMessage(selectedInvitation)} Expires {time(selectedInvitation.expiresAt)}.
-                  </p>}
-                </div>
-
-                <div className="grid gap-3 border-b border-white/[0.07] p-4 md:grid-cols-2 md:p-5">
-                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                    <p className="text-[10px] uppercase tracking-wide text-gray-600">Request</p>
-                    <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-300">{detail.description}</p>
-                    {detail.request?.requestedDeadline && <p className="mt-3 text-[10px] text-gray-500">Requested date: {detail.request.requestedDeadline} · not guaranteed</p>}
-                    {detail.scope && <div className="mt-4 border-t border-white/[0.06] pt-3">
-                      <p className="text-[10px] uppercase tracking-wide text-gray-600">Proposed scope · {detail.scope.agreed ? 'Agreed' : 'Awaiting client'}</p>
-                      <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-300">{detail.scope.summary}</p>
-                    </div>}
-                    {detail.internal.scopeVersion && <details className="mt-3 rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5">
-                      <summary className="cursor-pointer text-[10px] font-medium text-gray-400">Internal developer brief</summary>
-                      <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-300">{detail.internal.scopeVersion.developerBrief ?? 'No internal brief is available for this older scope record.'}</p>
+                    {primaryAction === 'authorize' && <button onClick={() => openWorkflowAction('handoff')}
+                      disabled={writing || Boolean(pending)} className={primary}><Check size={14} />Link agreed work</button>}
+                    {primaryAction === 'close' && <button onClick={() => openWorkflowAction('close')}
+                      disabled={writing || Boolean(pending)} className={primary}>Close accepted ticket</button>}
+                    {hasMoreActions && <details key={detail.id} open={actionMenuOpen}
+                      onToggle={event => setActionMenuOpen(event.currentTarget.open)} className="pm-tickets__more-actions">
+                      <summary>More actions<ChevronDown size={14} aria-hidden="true" /></summary>
+                      <div className="pm-tickets__action-menu">
+                        {canInviteClient && primaryAction !== 'invite' && <button type="button" onClick={() => { setActionMenuOpen(false); void sendClientInvitationEmail(); }}
+                          disabled={invitationEmailSending || writing || Boolean(pending)
+                            || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')}>
+                          <Send size={14} />{invitationEmailSending ? 'Sending invitation…' : invitationButtonLabel(selectedInvitation)}
+                        </button>}
+                        {canDeclineInquiry && <button type="button" onClick={() => openWorkflowAction('decline')}>Decline inquiry</button>}
+                        {canProposeScope && <button type="button" onClick={() => openWorkflowAction('scope')}>
+                          {detail.scope?.agreed ? 'Replace agreed scope' : detail.scope ? 'Revise proposed scope' : 'Propose scope'}
+                        </button>}
+                        {canLinkAgreedWork && primaryAction !== 'authorize' && <button type="button" onClick={() => openWorkflowAction('handoff')}>Link agreed work</button>}
+                        {canManageProjectLink && <button type="button" onClick={() => openWorkflowAction('project')}>
+                          {detail.internal.projectId ? 'Manage project link' : 'Link to project'}
+                        </button>}
+                        {canReviewCorrection && <button type="button" onClick={() => openWorkflowAction('correction')}>
+                          {detail.internal.correctionRequestedFor ? 'Review client correction' : 'Return affected tasks'}
+                        </button>}
+                        {canAssessDelivery && <button type="button" onClick={() => openWorkflowAction('delivery-assess')}>Assess prepared work</button>}
+                        {canReviewDelivery && <button type="button" onClick={() => openWorkflowAction('delivery-review')}>Review client response</button>}
+                        {canCloseTicket && primaryAction !== 'close' && <button type="button" onClick={() => openWorkflowAction('close')}>Close accepted ticket</button>}
+                      </div>
                     </details>}
                   </div>
-                  <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
-                    <p className="text-[10px] uppercase tracking-wide text-gray-600">Client & project</p>
-                    <p className="mt-2 text-xs text-gray-300">{detail.companyLabel}</p>
-                    {detail.internal.request?.contact && <div className="mt-2 space-y-1 text-[11px] text-gray-400">
+                  </div>
+                  {invitationEmailError && <p role="alert" className="pm-tickets__detail-notice pm-tickets__detail-notice--error">{invitationEmailError}</p>}
+                </header>
+
+                {pending && <div className="pm-tickets__pending">
+                  <span>Unconfirmed {pending.label} · operation {pending.operationId.slice(0, 8)}…</span>
+                  <button onClick={async () => {
+                    const operation = pending;
+                    const succeeded = await performWrite(operation, operation.clearDraft);
+                    if (succeeded && operation.label === 'scope proposal') setScopeComposerOpen(false);
+                    if (succeeded && operation.label === 'work authorization') setHandoffOpen(false);
+                    if (succeeded && ['correction authorization', 'accepted ticket closure'].includes(operation.label)) setReviewAction(null);
+                  }} disabled={writing} className={secondary}>{writing ? 'Checking…' : 'Check and retry'}</button>
+                </div>}
+
+                <nav aria-label="Ticket sections" className="pm-tickets__section-tabs">
+                  <button type="button" aria-pressed={ticketSection === 'conversation'} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setPanel('conversation'); setComposerOpen(false); setTicketSection('conversation'); }}
+                    className={ticketSection === 'conversation' ? 'is-active' : ''}><MessageSquare size={15} />Conversation</button>
+                  <button type="button" aria-pressed={ticketSection === 'notes'} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setPanel('notes'); setComposerOpen(false); setTicketSection('notes'); }}
+                    className={ticketSection === 'notes' ? 'is-active' : ''}><LockKeyhole size={14} />Private notes</button>
+                  <button type="button" aria-pressed={ticketSection === 'details'} onClick={() => setTicketSection('details')}
+                    className={ticketSection === 'details' ? 'is-active' : ''}><FileText size={15} />Request details</button>
+                  {communicationEnabled && <button type="button" aria-pressed={ticketSection === 'documents'} onClick={() => setTicketSection('documents')}
+                    className={ticketSection === 'documents' ? 'is-active' : ''}><Paperclip size={15} />Documents</button>}
+                </nav>
+
+                {ticketSection === 'details' && <section ref={detailsElement} aria-label="Request details and workflow" className="pm-tickets__details-view">
+                <div className="pm-tickets__overview">
+                  <div className="pm-tickets__overview-section">
+                    <p className="pm-tickets__eyebrow">Request</p>
+                    <p className="pm-tickets__description">{detail.description}</p>
+                    {detail.request?.requestedDeadline && <p className="pm-tickets__deadline">Requested date: {detail.request.requestedDeadline} · not guaranteed</p>}
+                    {detail.scope && <div className="pm-tickets__scope-summary">
+                      <p className="pm-tickets__eyebrow">Proposed scope <span>· {detail.scope.agreed ? 'Agreed' : 'Awaiting client'}</span></p>
+                      <p className="pm-tickets__description">{detail.scope.summary}</p>
+                    </div>}
+                    {detail.internal.scopeVersion && <details className="pm-tickets__internal-brief">
+                      <summary>Internal developer brief</summary>
+                      <p className="pm-tickets__description">{detail.internal.scopeVersion.developerBrief ?? 'No internal brief is available for this older scope record.'}</p>
+                    </details>}
+                  </div>
+                  <div className="pm-tickets__overview-section">
+                    <p className="pm-tickets__eyebrow">Client & project</p>
+                    <p className="pm-tickets__client-company">{detail.companyLabel}</p>
+                    {detail.internal.request?.contact && <div className="pm-tickets__client-contact">
                       <p className="flex items-center gap-1.5"><UserRound size={12} />{detail.internal.request.contact.fullName}</p>
                       <p className="break-all">{detail.internal.request.contact.email} · <PmContactVerification verification={detail.internal.request.contact.verification} /></p>
                     </div>}
-                    <p className="mt-3 text-[10px] text-gray-500">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : selectedInvitation?.status === 'pending' ? 'Invitation pending · no access until verified' : 'Client account not active'}</p>
-                    <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectId ? `Project: ${detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? 'linked'}` : 'No project linked yet'}</p>
-                    {detail.internal.projectId && <p className="mt-1 text-[10px] text-gray-500">{detail.internal.projectClientVisible ? 'Project name preview is visible to this ticket’s client; project and Issue access remain private.' : 'Project link is PM-only.'}</p>}
+                    <p className="pm-tickets__client-access">{selectedQueueItem.internal.clientAccessActive ? 'Client account active' : selectedInvitation?.status === 'pending' ? 'Invitation pending · no access until verified' : 'Client account not active'}</p>
+                    {!selectedQueueItem.internal.clientAccessActive && selectedInvitation && <p className="pm-tickets__client-access">{invitationStatusMessage(selectedInvitation)}</p>}
+                    <p className="pm-tickets__project">{detail.internal.projectId ? `Project: ${detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? 'linked'}` : 'No project linked yet'}</p>
+                    {detail.internal.projectId && <p className="pm-tickets__project-note">{detail.internal.projectClientVisible ? 'Project name preview is visible to this ticket’s client; project and task access remain private.' : 'Project link is PM-only.'}</p>}
                   </div>
                 </div>
 
-                {projectLinkOpen && <div className="border-b border-white/[0.07] p-4 md:p-5">
+                {projectLinkOpen && <div className="pm-tickets__action-form">
                   {projectLinkError && <p role="alert" className="mb-3 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{projectLinkError}</p>}
                   <PmProjectLinkForm key={`${detail.id}:${detail.version}:${detail.internal.projectId ?? ''}:${detail.internal.projectClientVisible === true}`}
                     initialProjectId={detail.internal.projectId}
@@ -769,93 +860,94 @@ export function PmTicketsView({ api = pmTicketApi, intakeEnabled = true, workflo
                     onCancel={() => setProjectLinkOpen(false)} onSubmit={value => void saveProjectLink(value)} />
                 </div>}
 
-                {declineOpen && ['received', 'under_review'].includes(detail.status) && <form aria-label="Decline inquiry" className="m-4 space-y-3 rounded-lg border border-rose-400/20 p-4" onSubmit={event => { event.preventDefault(); declineTicket(); }}>
+                {declineOpen && ['received', 'under_review'].includes(detail.status) && <form aria-label="Decline inquiry" className="pm-tickets__action-form pm-tickets__action-form--decline" onSubmit={event => { event.preventDefault(); declineTicket(); }}>
                   <label className="block text-xs text-gray-300">Reason for declining (required)<textarea required maxLength={4000} value={declineReason} onChange={event => setDeclineReason(event.target.value)} disabled={writing || Boolean(pending)} className={`${input} mt-2`} /></label>
                   <p className="text-xs text-gray-500">Saved in private PM history. No email is sent in this phase.</p>
                   <button type="button" onClick={() => setDeclineOpen(false)} className={secondary}>Cancel</button>
                   <button type="submit" className={primary} disabled={writing || Boolean(pending) || !declineReason.trim()}>Confirm decline</button>
                 </form>}
 
-              {workflowActions === 'all' && canAssessTicketDelivery(detail, selectedQueueItem.internal.clientAccessActive) && <PmDeliveryAssessment key={JSON.stringify([detail.id, detail.version, detail.scope?.id])}
-                ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onAssess={assessPreparedDelivery} />}
-              {workflowActions === 'all' && detail.internal.deliveryAssessment && <PmDeliveryReview key={JSON.stringify([detail.id, detail.version, detail.internal.deliveryAssessment.id, detail.internal.deliveryAssessment.pinnedAssetId])}
-                ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onShare={shareAssessedDelivery} />}
-              {scopeComposerOpen && <div className="border-b border-white/[0.07] p-4 md:p-5">
+              {deliveryAssessmentOpen && workflowActions === 'all' && canAssessTicketDelivery(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form"><PmDeliveryAssessment key={JSON.stringify([detail.id, detail.version, detail.scope?.id])}
+                ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onAssess={assessPreparedDelivery} /></div>}
+              {deliveryReviewOpen && workflowActions === 'all' && detail.internal.deliveryAssessment && <div className="pm-tickets__action-form"><PmDeliveryReview key={JSON.stringify([detail.id, detail.version, detail.internal.deliveryAssessment.id, detail.internal.deliveryAssessment.pinnedAssetId])}
+                ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onShare={shareAssessedDelivery} /></div>}
+              {scopeComposerOpen && <div className="pm-tickets__action-form">
                 <PmScopeProposalForm existingScopeAgreed={detail.scope?.agreed === true} disabled={writing || Boolean(pending)} onCancel={() => setScopeComposerOpen(false)} onSubmit={draftValue => void submitScopeProposal(draftValue)} />
               </div>}
-              {handoffOpen && canAuthorizeTicketWork(detail, selectedQueueItem.internal.clientAccessActive) && <div className="border-b border-white/[0.07] p-4 md:p-5">
+              {handoffOpen && canAuthorizeTicketWork(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form">
                 <PmWorkHandoffForm key={`${detail.id}:${detail.version}`} linkedProjectId={detail.internal.projectId}
                   linkedProjectName={detail.internal.projectName ?? null} disabled={writing || Boolean(pending)}
                   onCancel={() => setHandoffOpen(false)} onSubmit={value => void submitWorkHandoff(value)} />
               </div>}
-              {reviewAction === 'correction' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <div className="border-b border-white/[0.07] p-4 md:p-5">
+              {reviewAction === 'correction' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form">
                 <PmCorrectionForm key={`${detail.id}:${detail.version}`} ticket={detail} mode={pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive)!}
                   disabled={writing || Boolean(pending)} onCancel={() => setReviewAction(null)} onSubmit={value => void submitCorrection(value)} />
               </div>}
-              {reviewAction === 'close' && canCloseAcceptedTicket(detail, selectedQueueItem.internal.clientAccessActive) && <section aria-label="Confirm accepted ticket closure" className="m-4 rounded-xl border border-emerald-400/15 bg-emerald-500/[0.04] p-4">
+              {reviewAction === 'close' && canCloseAcceptedTicket(detail, selectedQueueItem.internal.clientAccessActive) && <section aria-label="Confirm accepted ticket closure" className="pm-tickets__action-form pm-tickets__action-form--confirm">
                 <h3 className="text-sm font-medium text-gray-100">Close this accepted ticket?</h3>
                 <p className="mt-2 text-[11px] leading-relaxed text-gray-400">The client accepted this result. Closing makes this ticket read-only; its conversation and delivery history remain available. This does not complete the project or approve a deployment.</p>
                 <div className="mt-3 flex justify-end gap-2"><button className={secondary} disabled={writing || Boolean(pending)} onClick={() => setReviewAction(null)}>Cancel</button>
                   <button className={primary} disabled={writing || Boolean(pending)} onClick={() => void closeAcceptedTicket()}>Confirm ticket closure</button></div>
               </section>}
-              {writeError && <div role="alert" className="mx-4 mt-3 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{writeError}</div>}
-              <div className="flex min-h-0 flex-1 flex-col">
-                  <div className="flex items-center gap-1 border-b border-white/[0.06] px-4 pt-2">
-                    <button onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setPanel('conversation'); }} className={`flex items-center gap-1.5 border-b-2 px-2 py-2 text-xs ${panel === 'conversation' ? 'border-brand-400 text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-300'}`}><MessageSquare size={13} />Conversation</button>
-                    <button onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setPanel('notes'); }} className={`flex items-center gap-1.5 border-b-2 px-2 py-2 text-xs ${panel === 'notes' ? 'border-brand-400 text-gray-100' : 'border-transparent text-gray-500 hover:text-gray-300'}`}><LockKeyhole size={13} />Private notes</button>
-                  </div>
-
-                  <div className="min-h-36 flex-1 space-y-3 overflow-y-auto p-4">
-                    {(panel === 'conversation' ? messageCursor : noteCursor) && <button onClick={() => void loadMoreHistory()} disabled={historyLoading} className="mx-auto block rounded-md px-3 py-1.5 text-[10px] text-brand-300 hover:bg-white/[0.04] disabled:opacity-50">{historyLoading ? 'Loading…' : 'Load more'}</button>}
-                    {historyError && <div role="alert" className="rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2 text-[10px] text-rose-200">{historyError}</div>}
+              </section>}
+              {writeError && <div role="alert" className="pm-tickets__error">{writeError}</div>}
+              {(ticketSection === 'conversation' || ticketSection === 'notes') && <div className={`pm-tickets__conversation-area${panel === 'conversation' ? ' pm-tickets__conversation-area--chat' : ''}`}>
+                  {panel === 'notes' && <p className="pm-tickets__privacy-notice"><LockKeyhole size={13} />Only authorized project managers can see these notes.</p>}
+                  <div className="pm-tickets__conversation-history">
+                    {(panel === 'conversation' ? messageCursor : noteCursor) && <button type="button" onClick={() => void loadMoreHistory()} disabled={historyLoading} className="pm-tickets__load-more">{historyLoading ? 'Loading…' : 'Load more'}</button>}
+                    {historyError && <div role="alert" className="pm-tickets__error">{historyError}</div>}
                     {panel === 'conversation' && !selectedQueueItem.internal.clientAccessActive
-                      ? <div className="flex min-h-32 flex-col items-center justify-center text-center"><LockKeyhole size={18} className="text-gray-600" /><p className="mt-2 text-xs text-gray-400">Client conversation is available after the invited client activates access.</p><p className="mt-1 max-w-sm text-[10px] text-gray-600">The invitation email contains a one-time activation link. Use private notes for internal triage until then.</p></div>
+                      ? <div className="pm-tickets__locked"><LockKeyhole size={18} aria-hidden="true" /><p>Client conversation is available after the invited client activates access.</p><p>The invitation email contains a one-time activation link. Use private notes for internal triage until then.</p></div>
                       : panel === 'conversation' && messages.length === 0
-                        ? <p className="py-8 text-center text-xs text-gray-600">No messages yet.</p>
+                        ? <p className="pm-tickets__conversation-empty">No messages yet.</p>
                         : panel === 'notes' && notes.length === 0
-                          ? <p className="py-8 text-center text-xs text-gray-600">No private notes yet. These notes are visible only to authorized PMs.</p>
-                          : panel === 'conversation' ? messages.map(message => <article key={message.id} className={`max-w-[88%] rounded-xl border p-3 ${message.author === 'pm' ? 'ml-auto border-brand-400/15 bg-brand-500/[0.06]' : 'border-white/[0.07] bg-white/[0.025]'}`}>
-                            <div className="flex items-center justify-between gap-4 text-[10px] text-gray-500"><span>{message.author === 'pm' ? 'Project Manager' : 'Client'}</span><time dateTime={message.createdAt}>{time(message.createdAt)}</time></div>
-                            <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-200">{message.body}</p>
-                          </article>) : notes.map(note => <article key={note.id} className="rounded-xl border border-amber-400/10 bg-amber-500/[0.035] p-3">
-                            <div className="flex items-center justify-between gap-4 text-[10px] text-amber-200/60"><span className="flex items-center gap-1"><LockKeyhole size={11} />PM-only note</span><time dateTime={note.createdAt}>{time(note.createdAt)}</time></div>
-                            <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-200">{note.body}</p>
+                          ? <p className="pm-tickets__conversation-empty">No private notes yet. These notes are visible only to authorized PMs.</p>
+                          : panel === 'conversation' ? messages.map(message => <article key={message.id} className={`pm-tickets__message${message.author === 'pm' ? ' pm-tickets__message--pm' : ''}`}>
+                            <span className="pm-tickets__message-avatar" aria-hidden="true">{message.author === 'pm' ? 'PM' : (detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? 'Client').slice(0, 1)}</span>
+                            <div className="pm-tickets__message-content"><div className="pm-tickets__message-meta"><span>{message.author === 'pm' ? 'Project Manager' : detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? 'Client'}</span><time dateTime={message.createdAt}>{time(message.createdAt)}</time></div>
+                            <p className="pm-tickets__message-body">{message.body}</p>
+                            </div>
+                          </article>) : notes.map(note => <article key={note.id} className="pm-tickets__message pm-tickets__message--note">
+                            <span className="pm-tickets__message-avatar" aria-hidden="true"><LockKeyhole size={14} /></span>
+                            <div className="pm-tickets__message-content"><div className="pm-tickets__message-meta"><span>PM-only note</span><time dateTime={note.createdAt}>{time(note.createdAt)}</time></div>
+                            <p className="pm-tickets__message-body">{note.body}</p>
+                            </div>
                           </article>)}
                   </div>
 
-                  {pending && <div className="mx-4 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/20 bg-amber-500/[0.05] p-3 text-[11px] text-amber-100/80">
-                    <span>Unconfirmed {pending.label} · operation {pending.operationId.slice(0, 8)}…</span>
-                    <button onClick={async () => {
-                      const operation = pending;
-                      const succeeded = await performWrite(operation, operation.clearDraft);
-                      if (succeeded && operation.label === 'scope proposal') setScopeComposerOpen(false);
-                      if (succeeded && operation.label === 'work authorization') setHandoffOpen(false);
-                      if (succeeded && ['correction authorization', 'accepted ticket closure'].includes(operation.label)) setReviewAction(null);
-                    }} disabled={writing} className={secondary}>{writing ? 'Checking…' : 'Check and retry'}</button>
-                  </div>}
-                  {(panel === 'notes' || ((communicationEnabled || workflowActions !== 'triage') && selectedQueueItem.internal.clientAccessActive)) && <form className="border-t border-white/[0.06] p-3" onSubmit={event => { event.preventDefault(); panel === 'notes' ? submitNote() : submitReply(); }}>
-                    <label className="sr-only" htmlFor="ticket-message-draft">{panel === 'notes' ? 'Private note' : 'Message to client'}</label>
-                    {panel === 'conversation' && !communicationEnabled && <div className="mb-2 flex flex-wrap items-center gap-2">
-                      <button type="button" aria-pressed={messageAction === 'reply'} onClick={() => setMessageAction('reply')} className={`rounded-md px-2.5 py-1.5 text-[10px] ${messageAction === 'reply' ? 'bg-brand-500/15 text-brand-200' : 'text-gray-500 hover:bg-white/[0.04]'}`}>Send update</button>
-                      <button type="button" aria-pressed={messageAction === 'request_details'} onClick={() => setMessageAction('request_details')} disabled={!['under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)} className={`rounded-md px-2.5 py-1.5 text-[10px] disabled:cursor-not-allowed disabled:opacity-40 ${messageAction === 'request_details' ? 'bg-amber-500/10 text-amber-200' : 'text-gray-500 hover:bg-white/[0.04]'}`}>Request details</button>
-                      {messageAction === 'request_details' && <span className="text-[10px] text-amber-200/70">Sets the next action to the client.</span>}
-                    </div>}
-                    <textarea id="ticket-message-draft" value={draft} onChange={event => setDraft(event.target.value)} disabled={!detail.writesAvailable || writing || Boolean(pending)} maxLength={4000} rows={2} placeholder={panel === 'notes' ? 'Write a private PM note…' : 'Write a message to the client…'} className={`${input} min-h-20 resize-y`} />
-                    <div className="mt-2 flex items-center justify-between gap-2">
-                      <span className="flex items-center gap-1 text-[10px] text-gray-600">{panel === 'notes' ? <><LockKeyhole size={11} />Visible only to PMs</> : <><MessageSquare size={11} />Visible to the client</>}</span>
-                      <button type="submit" disabled={!detail.writesAvailable || !draft.trim() || writing || Boolean(pending)} className={panel === 'notes' ? secondary : primary}>
-                        {panel === 'notes' ? <StickyNote size={13} /> : <Send size={13} />}{panel === 'notes' ? 'Save private note' : messageAction === 'request_details' ? 'Ask for details' : 'Send update'}
-                      </button>
-                    </div>
-                  </form>}
-                  {!detail.writesAvailable && <div className="border-t border-white/[0.06] px-4 py-3 text-center text-[10px] text-gray-600">This ticket is read-only or ticket changes are disabled.</div>}
-                </div>
-                {communicationEnabled && <TicketDocumentsPanel
-                  api={pmTicketDocumentsApi} ticketId={detail.id}
-                  canUpload={detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status)}
-                />}
+                  {(panel === 'notes' || ((communicationEnabled || workflowActions !== 'triage') && selectedQueueItem.internal.clientAccessActive)) && <>
+                    {!composerOpen && <button type="button" className="pm-tickets__reply-prompt" onClick={() => setComposerOpen(true)}>
+                      <span>{panel === 'notes' ? 'Write a private note…' : 'Write a message to the client…'}</span>
+                      <span>{panel === 'notes' ? 'Add note' : 'Reply'}<ArrowUpRight size={15} /></span>
+                    </button>}
+                    {composerOpen && <form className="pm-tickets__composer" onSubmit={event => { event.preventDefault(); panel === 'notes' ? submitNote() : submitReply(); }}>
+                      <label className="sr-only" htmlFor="ticket-message-draft">{panel === 'notes' ? 'Private note' : 'Message to client'}</label>
+                      {panel === 'conversation' && !communicationEnabled && <div className="pm-tickets__message-actions">
+                        <button type="button" aria-pressed={messageAction === 'reply'} onClick={() => setMessageAction('reply')} className={messageAction === 'reply' ? 'is-active' : ''}>Send update</button>
+                        <button type="button" aria-pressed={messageAction === 'request_details'} onClick={() => setMessageAction('request_details')} disabled={!['under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)} className={messageAction === 'request_details' ? 'is-active' : ''}>Request details</button>
+                        {messageAction === 'request_details' && <span>Sets the next action to the client.</span>}
+                      </div>}
+                      <textarea autoFocus id="ticket-message-draft" value={draft} onChange={event => setDraft(event.target.value)} disabled={!detail.writesAvailable || writing || Boolean(pending)} maxLength={4000} rows={3} placeholder={panel === 'notes' ? 'Write a private PM note…' : 'Write a message to the client…'} className="pm-tickets__composer-input" />
+                      <div className="pm-tickets__composer-footer">
+                        <span className="pm-tickets__composer-visibility">{panel === 'notes' ? <><LockKeyhole size={12} />Only PMs can see this note</> : <><MessageSquare size={12} />Visible to the client</>}</span>
+                        <div className="pm-tickets__composer-buttons">
+                          <button type="button" onClick={() => setComposerOpen(false)} disabled={writing} className={secondary}>Close</button>
+                          <button type="submit" disabled={!detail.writesAvailable || !draft.trim() || writing || Boolean(pending)} className={panel === 'notes' ? secondary : primary}>
+                            {panel === 'notes' ? <StickyNote size={13} /> : <Send size={13} />}{panel === 'notes' ? 'Save note' : messageAction === 'request_details' ? 'Ask for details' : 'Send update'}
+                          </button>
+                        </div>
+                      </div>
+                    </form>}
+                  </>}
+                  {!detail.writesAvailable && <div className="pm-tickets__readonly">This ticket is read-only or ticket changes are disabled.</div>}
+                </div>}
+                {ticketSection === 'documents' && communicationEnabled && <section aria-label="Ticket documents" className="pm-tickets__documents-view">
+                  <TicketDocumentsPanel api={documentsApi} ticketId={detail.id} heading="Shared files"
+                    canUpload={detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status)} />
+                </section>}
               </div>}
       </div>
     </section>
+    </div>
   </div>;
 }

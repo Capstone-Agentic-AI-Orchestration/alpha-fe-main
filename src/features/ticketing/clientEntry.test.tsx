@@ -19,17 +19,24 @@ describe('client landing and password entry', () => {
     expect(html).toContain('<canvas class="cl-canvas" aria-hidden="true">');
     expect(html).toContain('A clear start for');
     expect(html).toContain('Three steps.');
-    expect(html).toContain('Your PM must invite you first');
+    expect(html).toContain('Alphaexplora');
+    expect(html).toContain('If your project manager invites you');
+    expect(html).toContain('Sign in to your requests');
+    expect(html).toContain('aria-current="page">Home</a>');
+    expect(html).not.toMatch(/\bPM\b/);
     expect(html).not.toContain('Send sign-in link');
     expect(html).not.toContain('TBD');
     expect(html).not.toContain('<form');
   });
   it('shows password sign-in and existing-account migration without open signup or client GitHub login', () => {
     browser(); const html = renderToStaticMarkup(<ClientPasswordSignIn unavailable={false} error="" onRetry={() => {}} onSignedIn={() => {}} />);
+    expect(html).toContain('class="alpha-public"');
+    expect(html).toContain('Alphaexplora');
+    expect(html).toContain('aria-current="page">Client sign in</span>');
     expect(html).toContain('type="password"');
     expect(html).toContain('autoComplete="current-password"');
     expect(html).toContain('/#/client/forgot');
-    expect(html).toContain('Set up your password');
+    expect(html).toContain('use password recovery to set one');
     expect(html).not.toContain('Continue with GitHub');
     expect(html).not.toContain('30 days');
     expect(html).not.toContain('/sign-up');
@@ -37,13 +44,15 @@ describe('client landing and password entry', () => {
   it('explains password recovery without sending another inquiry or promising account existence', () => {
     const html = renderToStaticMarkup(<ClientPasswordRecovery />);
     expect(html).toContain('Your account and existing requests will stay together');
-    expect(html).toContain('Your PM must first invite you');
+    expect(html).toContain('Your project manager must first invite you');
+    expect(html).toContain('Reset your password');
   });
   it('recognizes recovery links and removes credentials before navigation', () => {
     const location = { pathname: '/', search: '', hash: `#/client/activate?providerTokenHash=${'a'.repeat(32)}&providerTokenType=recovery` };
     expect(activationLink(location)?.providerTokenType).toBe('recovery');
     expect(scrubbedActivationUrl(location)).toBe('/#/client/activate');
     expect(activationLink({ ...location, hash: `${location.hash}&providerTokenType=invite` })).toBeNull();
+    expect(activationLink({ ...location, hash: `#/client/activate?providerTokenHash=${'a'.repeat(32)}&providerTokenType=magiclink` })).toBeNull();
   });
   it('uses same-origin password transport without attaching the internal token or requiring a prior client CSRF cookie', async () => {
     browser();
@@ -62,7 +71,7 @@ describe('client landing and password entry', () => {
     const fetch = vi.fn(async () => new Response(JSON.stringify(view), { status: 200 }));
     vi.stubGlobal('fetch', fetch);
     const proof = 'a'.repeat(32);
-    expect(await clientAccountApi.begin({ invitationToken: null, providerTokenHash: proof, providerTokenType: 'magiclink' })).toEqual(view);
+    expect(await clientAccountApi.begin({ invitationToken: 'i'.repeat(43), providerTokenHash: proof, providerTokenType: 'magiclink' })).toEqual(view);
     expect((fetch.mock.calls[0] as unknown as [string, RequestInit])[0]).not.toContain(proof);
     expect(await clientAccountApi.setup()).toEqual(view);
   });

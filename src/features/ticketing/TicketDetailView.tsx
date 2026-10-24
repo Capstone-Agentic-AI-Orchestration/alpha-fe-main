@@ -84,8 +84,8 @@ export function TicketDetailView({ ticket, role, model, refresh, onBack, onExtra
     </>}
     {role === 'pm' && !publicInquiry && <section className="mt-6 rounded-xl border border-white/[0.07] p-4">
       <div className="flex items-center gap-2 text-xs font-medium text-gray-300"><FolderKanban size={15} />Internal work connection</div>
-      <p className="my-2 text-xs leading-relaxed text-gray-500">No project or Issues linked. Work will use existing Projects and Issues after scope agreement and PM authorization—not another execution engine.</p>
-      <button disabled className={secondary} title="Requires connected ticket service">Link project and assign Issues</button>
+      <p className="my-2 text-xs leading-relaxed text-gray-500">No project or tasks linked. Work will use existing Projects and Tasks after scope agreement and PM authorization—not another execution engine.</p>
+      <button disabled className={secondary} title="Requires connected ticket service">Link project and assign tasks</button>
     </section>}
     {!publicInquiry && <details className="mt-6 rounded-xl border border-dashed border-amber-400/20 bg-amber-500/[0.02] p-4">
       <summary className="cursor-pointer text-xs font-medium text-amber-200/80">UI rehearsal controls · not business actions</summary>

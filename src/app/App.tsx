@@ -21,7 +21,6 @@ import { ChatView } from '@/features/chat/ChatView';
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectsView } from '@/features/projects/ProjectsView';
 import { AgentsView } from '@/features/agents/AgentsView';
-import { SquadsView } from '@/features/squads/SquadsView';
 import { AnalyticsView } from '@/features/analytics/AnalyticsView';
 import { RuntimesView } from '@/features/runtimes/RuntimesView';
 import { SkillsView } from '@/features/skills/SkillsView';
@@ -36,7 +35,7 @@ import { NavigationTab } from '@/shared/types';
 import { Plus, X } from 'lucide-react';
 // Whether this is the packaged desktop app rather than a browser tab, read from
 // the preload bridge. Shared with the settings panel rather than defined twice.
-import { isDesktop } from '@/shared/desktop';
+import { desktop, isDesktop } from '@/shared/desktop';
 
 /**
  * The new-tab picker's list, derived rather than declared.
@@ -62,7 +61,6 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
     case 'issues': content = <IssuesView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'projects': content = <ProjectsView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'agents': content = <AgentsView />; break;
-    case 'squads': content = <SquadsView />; break;
     case 'live_build_room': content = <LiveBuildRoomView />; break;
     case 'analytics': content = <AnalyticsView />; break;
     case 'runtimes': content = <RuntimesView />; break;
@@ -104,12 +102,13 @@ const desktopDownloadUrl = `${API_BASE}/download/desktop`;
 export const App: React.FC = () => {
   const {
     tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role, setTabSessionState,
-    projects, chatThreads, issues, agents, squads, runtimes, skills, deployments, requirementDocs,
+    projects, chatThreads, issues, agents, runtimes, skills, deployments, requirementDocs,
     identity,
     identityStatus,
     refreshIdentity,
     localMode,
-    continueInLocalMode
+    continueInLocalMode,
+    showToast
   } = useApp();
   const availableTabs = ALL_TABS.filter(t => visibleTabs.includes(t.id));
   const [mountedTabIds, setMountedTabIds] = useState<Set<string>>(() => new Set([activeTabId]));
@@ -161,7 +160,6 @@ export const App: React.FC = () => {
       return contextualTitle(selectedIssue?.identifier ?? projectTitle(session['issues.project']));
     }
     if (view === 'agents') return contextualTitle(agents.find(item => item.id === session['agents.selectedAgent'])?.name);
-    if (view === 'squads') return contextualTitle(squads.find(item => item.id === session['squads.selectedSquad'])?.name);
     if (view === 'runtimes') return contextualTitle(runtimes.find(item => item.id === session['runtimes.selectedRuntime'])?.name);
     if (view === 'skills') return contextualTitle(skills.find(item => item.id === session['skills.selectedSkill'])?.name);
     if (view === 'deployments') return contextualTitle(deployments.find(item => item.id === session['deployments.selectedDeployment'])?.name);
@@ -179,21 +177,25 @@ export const App: React.FC = () => {
   // this during render would lose it on the first re-render.
   const [signInError] = useState<SignInError | undefined>(consumeSignInError);
   const [profilePickerOpen, setProfilePickerOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   /**
    * Sign out, which is a different act on each half.
    *
-   * On the web it ends the session cookie. On the desktop there is no session:
-   * the machine is signed in to GitHub, and signing out means disconnecting
-   * that account -- the same thing the connection panel in Settings does.
+   * On the web it ends the session cookie. On the desktop it clears Alpha's
+   * own GitHub sign-in -- the same action as Connected Accounts in Settings.
    */
   const signOut = async () => {
+    if (signingOut) return;
+    setSigningOut(true);
     try {
       await (isDesktop ? apiService.githubLogout() : apiService.signOut());
-    } finally {
       // Reload rather than mutate state: signing out invalidates every cached
       // collection in the provider, and a fresh boot is simpler than unwinding
       // them one at a time.
       window.location.reload();
+    } catch (error) {
+      showToast('Could not sign out', error instanceof Error ? error.message : String(error), 'error');
+      setSigningOut(false);
     }
   };
   // Start in the compact rail. The sidebar reveals itself on pointer hover or
@@ -204,6 +206,8 @@ export const App: React.FC = () => {
   const newTabButtonRef = useRef<HTMLButtonElement>(null);
   const newTabMenuContentRef = useRef<HTMLDivElement>(null);
   const workspaceFrameRef = useRef<HTMLDivElement>(null);
+  // The desktop app on Windows draws its own title bar area; see main.js.
+  const nativeWindowControls = isDesktop && desktop?.platform === 'win32';
   const [newTabMenuPosition, setNewTabMenuPosition] = useState<{
     top: number;
     left: number;
@@ -402,18 +406,23 @@ export const App: React.FC = () => {
         onOpenNewIssue={() => setTabSessionState(activeTabId, 'issueModal.open', true)}
         onSignOut={signOut}
         onSwitchProfile={isDesktop ? () => setProfilePickerOpen(true) : undefined}
+        signingOut={signingOut}
       />
 
       {/* Main Workspace Frame */}
       <div ref={workspaceFrameRef} className="relative flex-1 min-w-0 bg-shell overflow-hidden">
+        {/* On Windows the native title bar is hidden and its minimize, maximize
+            and close buttons are drawn over the top-right corner. The strip
+            above the toolbar and the toolbar's empty space move the window. */}
+        {nativeWindowControls && <div aria-hidden="true" className="app-drag-region absolute inset-x-0 top-0 z-20 h-3 sm:h-4" />}
         {/* Floating workspace toolbar */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4">
-          <div className="pointer-events-auto mx-auto flex w-full max-w-[1800px] items-center gap-1.5 rounded-2xl border border-white/[0.10] bg-surface-200/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/[0.04]">
+        <div className={`pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4 ${nativeWindowControls ? 'pr-[9.5rem] sm:pr-[9.5rem]' : ''}`}>
+          <div className={`pointer-events-auto mx-auto flex w-full max-w-[1800px] items-center gap-1.5 rounded-2xl border border-white/[0.10] bg-surface-200/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/[0.04] ${nativeWindowControls ? 'app-drag-region' : ''}`}>
             {/* Scrollable Open Tabs List */}
             <div
               role="tablist"
               aria-label="Open workspace tabs"
-              className="workspace-tab-strip flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar"
+              className="workspace-tab-strip app-no-drag flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar"
             >
             {tabs.map((tab) => {
               const isActive = activeTabId === tab.id;
@@ -467,7 +476,7 @@ export const App: React.FC = () => {
             </div>
 
             {/* New Tab Button & Dropdown Picker */}
-            <div className="relative flex-shrink-0" ref={newTabMenuRef}>
+            <div className="app-no-drag relative flex-shrink-0" ref={newTabMenuRef}>
               <button
                 ref={newTabButtonRef}
                 onClick={() => setNewTabMenuOpen(prev => !prev)}

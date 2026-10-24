@@ -3,7 +3,7 @@ import { ChevronDown, Edit3, FlaskConical, HelpCircle, Pin, PinOff, Plus, Search
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import type { PreviewRole } from './previewModel';
-import { pmPreviewApi } from './ticketingPreviewFixtures';
+import { pmPreviewApi, pmPreviewDocumentsApi } from './ticketingPreviewFixtures';
 import { clientPreviewApi } from './clientPreviewApi';
 import ClientPortal from './ClientPortal';
 import { PmTicketsView } from './PmTicketsView';
@@ -24,7 +24,7 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
   const expanded = pinnedOpen || hovered || focused;
   const sections = useMemo(() => sectionsFor('pm'), []);
 
-  return <div className="flex h-dvh w-full overflow-hidden bg-background text-sm text-gray-100 font-sans">
+  return <div className="pm-ticket-preview flex h-dvh w-full overflow-hidden bg-background text-sm text-gray-100 font-sans">
     <div className="relative z-40 h-full w-[4.5rem] flex-shrink-0 overflow-visible">
       <aside aria-label="Alpha project manager navigation" aria-expanded={expanded}
         onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)}
@@ -49,8 +49,8 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
               <span className={`flex items-center ${expanded ? 'gap-3' : ''}`}><Search className="h-4 w-4" /><span className={expanded ? 'block text-gray-400' : 'hidden'}>Search…</span></span>
               {expanded && <kbd className="text-[11px] text-gray-600">⌘ K</kbd>}
             </button>
-            <button type="button" disabled aria-label="New Issue" title="Create an Issue in Alpha · unavailable in preview" className={`flex rounded-lg text-gray-500 opacity-70 ${expanded ? 'w-full items-center justify-between px-3 py-2' : 'h-9 w-9 items-center justify-center'}`}>
-              <span className={`flex items-center ${expanded ? 'gap-3' : ''}`}><Edit3 className="h-4 w-4" /><span className={expanded ? 'block' : 'hidden'}>New Issue</span></span>
+            <button type="button" disabled aria-label="New task" title="Create a task in Alpha · unavailable in preview" className={`flex rounded-lg text-gray-500 opacity-70 ${expanded ? 'w-full items-center justify-between px-3 py-2' : 'h-9 w-9 items-center justify-center'}`}>
+              <span className={`flex items-center ${expanded ? 'gap-3' : ''}`}><Edit3 className="h-4 w-4" /><span className={expanded ? 'block' : 'hidden'}>New Task</span></span>
               {expanded && <kbd className="text-[11px] text-gray-600">C</kbd>}
             </button>
           </div>
@@ -103,8 +103,8 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
         <div className="h-full min-h-0">{/** The page body is the same PmTicketsView used by Alpha. */}
           {/* Kept visible so sample content cannot be mistaken for live records. */}
           <div className="flex h-full min-h-0 flex-col">
-            <div className="mx-4 mt-1 flex items-center gap-2 rounded-md border border-amber-400/10 bg-amber-500/[0.035] px-3 py-1.5 text-[10px] text-amber-100/70"><FlaskConical size={12} />Fictional preview records · changes are disabled · nothing is sent to Alpha</div>
-            <div className="min-h-0 flex-1"><PmTicketsView api={pmPreviewApi} /></div>
+            <div className="pm-ticket-preview__notice"><FlaskConical size={12} />Design preview · fictional tickets · changes are disabled</div>
+            <div className="min-h-0 flex-1"><PmTicketsView api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} communicationEnabled /></div>
           </div>
         </div>
       </main>

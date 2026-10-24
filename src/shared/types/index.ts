@@ -8,7 +8,6 @@ export type NavigationTab =
   | 'issues'
   | 'projects'
   | 'agents'
-  | 'squads'
   | 'live_build_room'
   | 'analytics'
   | 'runtimes'
@@ -65,8 +64,8 @@ export interface Issue {
   createdBy?: string;
   /** The project repository this issue/build is executing against, when scoped. */
   githubRepo?: string;
+  /** Legacy single-agent owner; the board no longer sets or shows it. */
   assignedAgentId?: string;
-  assignedSquadId?: string;
   assignedHuman?: string;
   labels: string[];
   subtasks: Subtask[];
@@ -325,6 +324,32 @@ export interface RepoTree {
   /** GitHub stopped listing before the end of a very large tree. */
   truncated: boolean;
   entries: RepoTreeEntry[];
+}
+
+export type ArchitectureNodeKind = 'web' | 'api' | 'auth' | 'database' | 'jobs' | 'integration' | 'application' | 'module';
+
+export interface ArchitectureNode {
+  id: string;
+  label: string;
+  kind: ArchitectureNodeKind;
+  technology?: string;
+  details?: string;
+  path?: string;
+}
+
+export interface ArchitectureEdge {
+  from: string;
+  to: string;
+  label?: string;
+}
+
+export interface RepoArchitecture {
+  repository: string;
+  branch: string;
+  commit: string;
+  nodes: ArchitectureNode[];
+  edges: ArchitectureEdge[];
+  truncated: boolean;
 }
 
 export interface RepoFile {
@@ -608,7 +633,6 @@ export interface Project {
   leadType?: 'member' | 'agent';
   leadName?: string;
   leadAgentId?: string;
-  leadSquadId?: string;
   resources?: ProjectResource[];
   /**
    * GitHub organization every repository for this project is created under.
@@ -660,6 +684,7 @@ export type AgentRole =
   | 'Research Agent'
   | 'Architecture Agent'
   | 'Manager Agent'
+  | 'Orchestrator Agent'
   | 'Database Agent'
   | 'Backend Agent'
   | 'Frontend Agent'
@@ -928,7 +953,9 @@ export type LiveBuildRoomActivityKind =
   | 'file_change'
   | 'handoff'
   | 'error'
-  | 'summary';
+  | 'summary'
+  | 'attachment'
+  | 'steering';
 
 export interface LiveBuildRoomActivity {
   id: string;
@@ -937,6 +964,7 @@ export interface LiveBuildRoomActivity {
   message: string;
   toolName?: string;
   detail?: string;
+  isStreaming?: boolean;
   paths?: string[];
   createdAt: string;
 }
@@ -958,6 +986,9 @@ export interface LiveBuildRoomAgentCard {
   runId?: string;
   agentCallId?: string;
   squadRunId?: string;
+  orchestrationTaskId?: string;
+  orchestrationAttemptNumber?: number;
+  orchestrationTaskCount?: number;
   activity: LiveBuildRoomActivity[];
   filePaths?: string[];
   branchName?: string;
@@ -984,7 +1015,7 @@ export interface LiveBuildRoomHandoff {
 export interface AgentCallActivity {
   id: string;
   sequence: number;
-  kind: 'status' | 'stage' | 'tool' | 'tool_result' | 'file_change' | 'handoff' | 'error' | 'summary';
+  kind: 'status' | 'stage' | 'tool' | 'tool_result' | 'file_change' | 'handoff' | 'error' | 'summary' | 'attachment' | 'steering';
   message: string;
   toolName?: string;
   detail?: string;
@@ -1018,7 +1049,9 @@ export interface LiveBuildRoomChatCall {
 
 export type LiveBuildOrchestrationStatus =
   | 'planning'
+  | 'awaiting_plan_approval'
   | 'executing'
+  | 'paused'
   | 'validating'
   | 'awaiting_approval'
   | 'publishing'
@@ -1041,6 +1074,8 @@ export type LiveBuildTaskStatus =
   | 'superseded';
 
 export interface LiveBuildRoomDiffPreview {
+  reviewType?: 'validated' | 'saved_checkpoint';
+  repository?: string;
   baseCommit: string;
   resultCommit: string;
   branchName: string;
@@ -1048,6 +1083,31 @@ export interface LiveBuildRoomDiffPreview {
   pathsTruncated: boolean;
   diff: string;
   truncated: boolean;
+  repositories?: Array<{
+    reviewType?: 'validated' | 'saved_checkpoint';
+    repository: string;
+    baseCommit: string;
+    resultCommit: string;
+    branchName: string;
+    changedPaths: string[];
+    pathsTruncated: boolean;
+    diff: string;
+    truncated: boolean;
+  }>;
+}
+
+/** What a build's worktrees hold right now, against the commit the build started from. */
+export interface LiveBuildChanges {
+  generatedAt: string;
+  repositories: Array<{
+    repository: string;
+    branchName: string;
+    baseCommit: string;
+    files: Array<{ path: string; status: 'added' | 'modified' | 'deleted'; additions: number; deletions: number }>;
+    filesTruncated: boolean;
+    diff: string;
+    truncated: boolean;
+  }>;
 }
 
 export type LiveBuildPlanningRecoveryState = 'interrupted' | 'needs_review' | 'manual_review' | 'retained' | 'cleaned';
@@ -1074,9 +1134,17 @@ export interface LiveBuildPlanningRecoveryPreview {
   truncated: boolean;
 }
 
+export interface DependencyAuditSummary {
+  id: string; repository: string; purpose: 'baseline' | 'verification' | 'self-check'; level: string; scanner: string;
+  status: 'clean' | 'findings' | 'error'; passesPolicy: boolean; counts: Record<string, number>; createdAt: string;
+  findings: Array<{ package: string; severity: string; range: string; advisories: string[] }>;
+}
+
 export interface LiveBuildRoomOrchestration {
+  milestones?: Array<{ id: string; title: string; status: 'unplanned' | 'active' | 'accepted' }>;
   run: {
     id: string;
+    originChatThreadId?: string;
     status: LiveBuildOrchestrationStatus;
     revision: number;
     planVersion: number;
@@ -1084,15 +1152,26 @@ export interface LiveBuildRoomOrchestration {
     exclusions: string[];
     repository: string;
     branchName?: string;
+    repositories?: Array<{ repository: string; branchName: string }>;
     currentTaskId?: string;
+    pauseRequestedAt?: string;
     stoppedReason?: string;
     publication?: {
+      repository?: string;
       branchName: string;
       baseBranch: string;
       resultCommit: string;
       pullRequestUrl: string;
       publishedAt: string;
     };
+    publications?: Array<{
+      repository: string;
+      branchName: string;
+      baseBranch: string;
+      resultCommit: string;
+      pullRequestUrl: string;
+      publishedAt: string;
+    }>;
     createdAt: string;
     updatedAt: string;
   };
@@ -1102,17 +1181,24 @@ export interface LiveBuildRoomOrchestration {
     title: string;
     description: string;
     kind: string;
+    repository: string;
     ownerAgentId?: string;
     ownerName: string;
+    assignmentReason: string;
     dependsOn: string[];
     requirementIds: string[];
     acceptanceCriteria: string[];
     requiredChecks: string[];
+    dependencyAudit?: { scanner: 'npm'; purpose: 'baseline' | 'verification' | 'self-check'; level: string };
     scope: { includePaths: string[]; excludePaths: string[] };
     required: boolean;
     status: LiveBuildTaskStatus;
     revision: number;
     attemptCount: number;
+    /** Count of work attempts, excluding the one read-only report-format retry. */
+    executionAttemptCount?: number;
+    /** Server-approved task retry action; the server remains the source of retry eligibility. */
+    retryAvailable?: boolean;
     correctionOfTaskId?: string;
     correctionCycle?: number;
   }>;
@@ -1120,6 +1206,8 @@ export interface LiveBuildRoomOrchestration {
     id: string;
     taskId: string;
     attemptNumber: number;
+    reportFormatRetry?: boolean;
+    dependencyAudits?: DependencyAuditSummary[];
     prototypeRunId?: string;
     agentId?: string;
     agentName: string;
@@ -1128,6 +1216,11 @@ export interface LiveBuildRoomOrchestration {
     completedAt?: string;
     resultCommit?: string;
     summary?: string;
+    reportResponse?: string;
+    reportResponseTruncated?: boolean;
+    reportError?: string;
+    reportSchemaVersionExpected?: number;
+    reportSchemaVersionReceived?: number;
     failureReason?: string;
     report?: {
       requirementCoverage: Array<{ requirementId?: string; evidence?: string }>;
@@ -1148,6 +1241,7 @@ export interface LiveBuildRoomOrchestration {
     verification?: {
       status?: string;
       missingScripts: string[];
+      preparation?: { display?: string; exitCode: number | null; signal: string | null };
       commands: Array<{ script?: string; display?: string; exitCode: number | null; signal: string | null }>;
     };
     changedPaths: string[];
@@ -1158,7 +1252,15 @@ export interface LiveBuildRoomOrchestration {
     commands: Array<{ script?: string; display?: string; exitCode: number | null; signal: string | null }>;
     resultCommit?: string;
     noOpenBlockingFindings: boolean;
+    repositories?: Array<{
+      repository: string;
+      status?: string;
+      missingScripts: string[];
+      commands: Array<{ script?: string; display?: string; exitCode: number | null; signal: string | null }>;
+      resultCommit?: string;
+    }>;
   };
+  recovery?: LiveBuildRecoveryProjection;
   artifacts: Array<{
     id: string;
     taskId: string;
@@ -1184,6 +1286,47 @@ export interface LiveBuildRoomOrchestration {
     createdAt: string;
     resolvedAt?: string;
   }>;
+}
+
+export type LiveBuildRecoveryAction =
+  | 'explain_failure'
+  | 'retry_report_format'
+  | 'repair_and_continue'
+  | 'provide_guidance'
+  | 'recheck_prerequisite'
+  | 'plan_final_validation_corrections'
+  | 'resume_checkpoint'
+  | 'review_saved_changes'
+  | 'keep_paused'
+  | 'cancel_build';
+
+export interface LiveBuildRecoveryProjection {
+  id: string;
+  runId: string;
+  phase: 'repairing' | 'waiting_for_user' | 'ready_to_continue' | 'resolved' | 'cancelled';
+  category: 'project_code' | 'report' | 'review_input' | 'provider' | 'configuration' | 'workspace' | 'final_validation' | 'budget' | 'alpha' | 'unknown';
+  code: string;
+  summary: string;
+  taskId?: string;
+  taskTitle?: string;
+  taskRevision?: number;
+  attemptsUsed: number;
+  repairBudget: number;
+  reportCorrectionsUsed?: number;
+  reportCorrectionLimit?: number;
+  episodeNumber: number;
+  revision: number;
+  createdAt: string;
+  updatedAt: string;
+  availableActions: LiveBuildRecoveryAction[];
+  actionReasons: Partial<Record<LiveBuildRecoveryAction, string>>;
+}
+
+export interface LiveBuildRecoveryState {
+  runId: string;
+  runRevision: number;
+  recovery?: LiveBuildRecoveryProjection;
+  history: LiveBuildRecoveryProjection[];
 }
 
 export interface LiveBuildRoomSnapshot {
@@ -1410,11 +1553,32 @@ export interface ChatMessage {
   thinkingProcess?: string;
   toolsExecuted?: ToolExecutionRecord[];
   isStreaming?: boolean;
-  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build';
+  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build' | 'build_milestone' | 'build_proposal' | 'project_needed';
   agentCallId?: string;
+  orchestrationRunId?: string;
+  /** A build Alpha proposed instead of starting, awaiting the user's answer. */
+  routeProposal?: ChatRouteProposal;
   operationMode?: AgentCallMode;
   agentCallStatus?: AgentCallStatus;
   revisionTarget?: AgentCallTarget;
+  /** Attachment details are local metadata only; file bytes stay on this device. */
+  attachments?: ChatAttachmentReference[];
+}
+
+/** A build Alpha proposed in chat. */
+export interface ChatRouteProposal {
+  sourceMessageId: string;
+  goal: string;
+  repositories: string[];
+  status: 'open' | 'accepted' | 'dismissed';
+}
+
+export interface ChatAttachmentReference {
+  id: string;
+  name: string;
+  contentType: string;
+  byteLength: number;
+  inspection: 'included_text' | 'available_to_runtime' | 'stored_only';
 }
 
 export interface ChatThread {
@@ -1423,8 +1587,6 @@ export interface ChatThread {
   agentIds: string[];
   /** The responder selected for this conversation, when it is not automatic Alpha. */
   targetAgentId?: string;
-  /** The squad selected for this conversation, when several agents should answer. */
-  targetSquadId?: string;
   /**
    * Which project this conversation is about, when it is about one.
    *
@@ -1448,6 +1610,14 @@ export interface ChatThread {
   clientId?: string;
   /** Set on creation. Matches `chat_threads.created_at` in the backend schema. */
   createdAt?: string;
+}
+
+/** User-curated context owned by one private chat thread. */
+export interface ChatThreadMemory {
+  threadId: string;
+  content: string;
+  revision: number;
+  updatedAt?: string;
 }
 
 export interface ChatSyncStatus {
@@ -1528,8 +1698,6 @@ export interface ProjectChatAgent {
   description?: string;
   avatar?: string;
   color?: string;
-  squadId: string;
-  squadName: string;
   availability: 'ready';
   supportedModes: AgentCallMode[];
 }
@@ -1549,13 +1717,8 @@ export interface ProjectChatSnapshot {
     };
     /** Per-repository checkout state, used to route a build to the right working copy. */
     repositories?: Array<{ repo: string; connected: boolean }>;
-    assignedSquadNames: string[];
   };
-  squads: Array<{
-    id: string;
-    name: string;
-    agents: ProjectChatAgent[];
-  }>;
+  /** Every visible, ready agent; the Orchestrator picks from the same set. */
   agents: ProjectChatAgent[];
 }
 
@@ -1810,3 +1973,31 @@ export interface RequirementDoc {
   createdAt: string;
   updatedAt: string;
 }
+
+export interface AgentScorecard {
+  tasks: number;
+  acceptedFirstTry: number;
+  acceptedAfterRetry: number;
+  attempts: number;
+  reportFormatRejections: number;
+  blockersReported: number;
+  scopeRejections: number;
+  checkFailures: number;
+  reviewFindings: number;
+  lastWorkedAt?: string;
+}
+
+export interface AgentLesson {
+  id: string;
+  kind: 'report_format' | 'deliverables' | 'scope' | 'checks' | 'read_only' | 'coverage' | 'review';
+  text: string;
+  occurrences: number;
+  lastSeenAt: string;
+}
+
+export interface AgentPerformance {
+  scorecard: AgentScorecard;
+  lessons: AgentLesson[];
+  accepted: string[];
+}
+

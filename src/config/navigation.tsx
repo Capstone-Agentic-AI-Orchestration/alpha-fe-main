@@ -2,11 +2,12 @@ import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, PenLine, FileText, Inbox, MessageSquare,
-  CheckSquare, FolderKanban, Rocket, Bot, Users, BarChart3, Monitor, BookOpen, Settings,
+  CheckSquare, FolderKanban, Rocket, Bot, BarChart3, Monitor, BookOpen, Settings,
   RadioTower, Ticket
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
+import { AI_NAV_TABS, aiFeaturesEnabled } from './features';
 
 /**
  * Every fact about a navigation destination, in one place.
@@ -32,6 +33,7 @@ import { NavigationTab, UserRole } from '@/shared/types';
  */
 
 export type SectionId =
+  | 'build'
   | 'portal'
   | 'my_work'
   | 'requests'
@@ -60,6 +62,7 @@ export interface NavSection {
  * assigned work, automation, resources, and communication.
  */
 export const NAV_SECTIONS: NavSection[] = [
+  { id: 'build', label: 'Build' },
   { id: 'portal', label: 'Portal', labels: { pm: 'Overview', admin: 'Overview' } },
   { id: 'my_work', label: 'My Work' },
   { id: 'requests', label: 'Requests' },
@@ -79,9 +82,9 @@ export const NAV_SECTIONS: NavSection[] = [
 
 const ROLE_SECTION_ORDER: Record<UserRole, SectionId[]> = {
   client: ['portal', 'requests', 'communication', 'documents', 'settings'],
-  dev: ['my_work', 'automation', 'resources', 'communication', 'settings'],
-  pm: ['portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'workspace'],
-  admin: ['portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'administration']
+  dev: ['build', 'my_work', 'automation', 'resources', 'communication', 'settings'],
+  pm: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'workspace'],
+  admin: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'administration']
 };
 
 export interface NavItem {
@@ -126,26 +129,35 @@ export interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
   { id: 'inbox', label: 'Inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: Inbox },
-  { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Chat with autonomous agents & squads', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: MessageSquare },
+  // Chat is where work is planned and built with the Orchestrator, so internal roles find it
+  // first, under Build. A client's chat is still a conversation with their project manager.
+  { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Plan and build with Alpha and your agents', group: 'primary', section: 'build', sectionByRole: { client: 'communication' }, icon: MessageSquare },
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
   { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
 
   { id: 'tickets', label: 'Tickets', title: 'Tickets', subtitle: 'Review client requests, communicate, and track delivery', group: 'workspace', section: 'delivery', icon: Ticket },
-  { id: 'issues', label: 'Issues', labels: { pm: 'All Issues', admin: 'All Issues' }, title: 'Issues', subtitle: 'Assigned work and project issues', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'delivery', admin: 'delivery' }, icon: CheckSquare },
+  { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'delivery', admin: 'delivery' }, icon: CheckSquare },
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
 
   { id: 'agents', label: 'Agents', labels: { dev: 'Agent Directory' }, title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'workspace', section: 'automation', icon: Bot },
-  { id: 'squads', label: 'Squads', labels: { dev: 'Workspace Squads', pm: 'Project Squads', admin: 'All Squads' }, title: 'Agent Squads', subtitle: 'Shared agent teams for this workspace', group: 'workspace', section: 'automation', icon: Users },
   { id: 'live_build_room', label: 'Live Build Room', labels: { pm: 'Build Rooms', admin: 'Build Rooms' }, title: 'Live Build Room', subtitle: 'Watch project chat agents work in real time', group: 'workspace', section: 'automation', icon: RadioTower },
   { id: 'runtimes', label: 'Runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Monitor },
   { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
 
-  { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket },
-
   { id: 'analytics', label: 'Analytics', labels: { pm: 'Delivery Health', admin: 'Delivery Health' }, title: 'Operational Analytics', subtitle: 'Run health, delivery activity, and performance', group: 'workspace', section: 'insights', icon: BarChart3 },
 
   { id: 'settings', label: 'Settings', labels: { admin: 'Workspace Settings' }, title: 'Workspace Settings', subtitle: 'Preferences, keys, and autonomy governance', group: 'configure', section: 'settings', sectionByRole: { pm: 'workspace', admin: 'administration' }, icon: Settings }
+];
+
+/**
+ * Reversible archive: keep the destination metadata and view implementation
+ * available while removing Deployments from active menus and the tab picker.
+ * Restore it by moving this entry back into NAV_ITEMS and re-adding it to the
+ * desired roles in ROLE_NAV.
+ */
+export const ARCHIVED_NAV_ITEMS: NavItem[] = [
+  { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket }
 ];
 
 const BY_ID = new Map(NAV_ITEMS.map(item => [item.id, item]));
@@ -183,18 +195,30 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  * tab is not a permission, and a role that can open Analytics is not
  * necessarily one that can change workspace settings.
  */
-export const ROLE_NAV: Record<UserRole, NavigationTab[]> = {
+const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
   pm: [
     'issues', 'projects', 'tickets', 'documents', 'inbox', 'chat',
-    'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
+    'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
   ],
   admin: [
     'issues', 'projects', 'documents', 'inbox', 'chat',
-    'agents', 'squads', 'live_build_room', 'deployments', 'runtimes', 'skills', 'analytics', 'settings'
+    'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
   ]
 };
+
+/**
+ * What each role may actually reach: ROLE_NAV_ALL without the AI destinations
+ * for a role whose AI features are switched off in `config/features.ts`.
+ * Filtering here also stops saved tabs and deep links from opening them.
+ */
+export const ROLE_NAV: Record<UserRole, NavigationTab[]> = Object.fromEntries(
+  (Object.entries(ROLE_NAV_ALL) as Array<[UserRole, NavigationTab[]]>).map(([role, tabs]) => [
+    role,
+    aiFeaturesEnabled(role) ? tabs : tabs.filter(tab => !AI_NAV_TABS.includes(tab))
+  ])
+) as Record<UserRole, NavigationTab[]>;
 
 /** The view a role lands on, and falls back to when it opens one it may not. */
 export const landingTab = (role: UserRole): NavigationTab => ROLE_NAV[role][0];

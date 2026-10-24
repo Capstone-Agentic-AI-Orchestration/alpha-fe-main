@@ -1,4 +1,3 @@
-import { ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
 import React, { useState, useEffect } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IssuePriority, IssueStatus } from '@/shared/types';
@@ -32,8 +31,6 @@ interface CreateIssueModalProps {
   initialPrompt?: string;
   initialTitle?: string;
   initialDescription?: string;
-  initialAssignedAgentId?: string;
-  initialAssignedSquadId?: string;
 }
 
 export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
@@ -42,11 +39,9 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   initialProjectId,
   initialPrompt,
   initialTitle,
-  initialDescription,
-  initialAssignedAgentId,
-  initialAssignedSquadId
+  initialDescription
 }) => {
-  const { createIssue, projects, agents, squads } = useApp();
+  const { createIssue, projects } = useApp();
 
   // Mode: 'agent' (Create with agent) vs 'manual' (Create manually)
   const [mode, setMode] = useTabSessionState<'agent' | 'manual'>('issueModal.mode', 'agent');
@@ -58,8 +53,6 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   const [title, setTitle] = useTabSessionState<string>('issueModal.title', initialTitle ?? '');
   const [description, setDescription] = useTabSessionState<string>('issueModal.description', initialDescription ?? '');
   const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string>('issueModal.project', initialProjectId || projects[0]?.id || 'proj-1');
-  const [selectedSquadId, setSelectedSquadId] = useTabSessionState<string>('issueModal.squad', initialAssignedSquadId || '');
-  const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string>('issueModal.agent', initialAssignedSquadId ? '' : (initialAssignedAgentId || agents[1]?.id || agents[0]?.id || ''));
   const [status, setStatus] = useTabSessionState<IssueStatus>('issueModal.status', 'todo');
   const [priority, setPriority] = useTabSessionState<IssuePriority>('issueModal.priority', 'none');
   const [selectedLabels, setSelectedLabels] = useTabSessionState<string[]>('issueModal.labels', []);
@@ -75,18 +68,6 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   }, [projects, selectedProjectId]);
 
   useEffect(() => {
-    if (selectedSquadId && squads.length > 0 && !squads.some(squad => squad.id === selectedSquadId)) {
-      setSelectedSquadId(squads[0].id);
-    }
-  }, [squads, selectedSquadId]);
-
-  useEffect(() => {
-    if (selectedAgentId && agents.length > 0 && !agents.some(agent => agent.id === selectedAgentId)) {
-      setSelectedAgentId(agents[0].id);
-    }
-  }, [agents, selectedAgentId]);
-
-  useEffect(() => {
     if (!isOpen) return;
     if (initialProjectId) setSelectedProjectId(initialProjectId);
     if (initialPrompt !== undefined) {
@@ -95,16 +76,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     }
     if (initialTitle !== undefined) setTitle(initialTitle);
     if (initialDescription !== undefined) setDescription(initialDescription);
-    if (initialAssignedSquadId !== undefined) {
-      setSelectedSquadId(initialAssignedSquadId);
-      setSelectedAgentId('');
-    } else if (initialAssignedAgentId !== undefined) {
-      setSelectedAgentId(initialAssignedAgentId);
-      setSelectedSquadId('');
-    }
   }, [
-    initialAssignedAgentId,
-    initialAssignedSquadId,
     initialDescription,
     initialProjectId,
     initialPrompt,
@@ -161,12 +133,10 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         description: promptText.trim(),
         projectId: selectedProjectId,
         priority: priority === 'none' ? 'medium' : priority,
-        // Agent assignment is intentionally separate from execution. Keep the
-        // new card in Todo so the author can finish planning before starting a
-        // run from the issue card or inspector.
+        // New cards start unstarted so the author can finish planning before
+        // starting an Orchestrator build from the card. The Orchestrator picks
+        // the agents for each task when the build is planned.
         status: 'todo',
-        assignedSquadId: selectedSquadId || undefined,
-        assignedAgentId: selectedSquadId ? undefined : (selectedAgentId || undefined),
         labels: selectedLabels.length > 0 ? selectedLabels : ['agent-task'],
         subtasks: [
           'Deconstruct user prompt & analyze files',
@@ -193,8 +163,6 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         projectId: selectedProjectId,
         priority,
         status,
-        assignedSquadId: selectedSquadId || undefined,
-        assignedAgentId: selectedSquadId ? undefined : (selectedAgentId || undefined),
         labels: selectedLabels,
         subtasks: []
       });
@@ -265,11 +233,6 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             </div>
           </div>
 
-          {mode === 'agent' && <div className="px-6 pt-4"><ExecutionOwnerSelect agents={agents} squads={squads}
-            value={selectedSquadId ? { type: 'squad', id: selectedSquadId } : selectedAgentId ? { type: 'agent', id: selectedAgentId } : null}
-            onChange={owner => { setSelectedAgentId(owner?.type === 'agent' ? owner.id : ''); setSelectedSquadId(owner?.type === 'squad' ? owner.id : ''); }}
-          /></div>}
-
           {/* Main Input Area */}
           <div className="p-6 space-y-3">
             {mode === 'agent' ? (
@@ -290,7 +253,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                   type="text"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Issue title"
+                  placeholder="Task title"
                   className="w-full bg-transparent text-lg sm:text-xl font-bold text-white placeholder-gray-500 focus:outline-none border-none"
                 />
 
@@ -342,7 +305,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                       { id: 'backlog', label: 'Backlog', icon: <Circle className="w-4 h-4 text-gray-400" /> },
                       { id: 'todo', label: 'Todo', icon: <Clock className="w-4 h-4 text-slate-400" /> },
                       { id: 'in_progress', label: 'In Progress', icon: <PlayCircle className="w-4 h-4 text-amber-400" /> },
-                      { id: 'agent_running', label: 'Agent Running', icon: <Bot className="w-4 h-4 text-cyan-400" /> },
+                      { id: 'agent_running', label: 'Building', icon: <Bot className="w-4 h-4 text-cyan-400" /> },
                       { id: 'review', label: 'In Review', icon: <CheckCircle2 className="w-4 h-4 text-purple-400" /> },
                       { id: 'done', label: 'Done', icon: <CheckCircle2 className="w-4 h-4 text-emerald-400" /> },
                     ].map((st) => (
@@ -413,11 +376,6 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                 )}
               </div>
             )}
-
-            {mode === 'manual' && <div className="w-full border-t border-white/5 pt-3 pb-1"><ExecutionOwnerSelect agents={agents} squads={squads}
-              value={selectedSquadId ? { type: 'squad', id: selectedSquadId } : selectedAgentId ? { type: 'agent', id: selectedAgentId } : null}
-              onChange={owner => { setSelectedAgentId(owner?.type === 'agent' ? owner.id : ''); setSelectedSquadId(owner?.type === 'squad' ? owner.id : ''); }}
-            /></div>}
 
             {/* Label Pill (manual mode) */}
             {mode === 'manual' && (
@@ -543,7 +501,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                   type="button"
                   role="switch"
                   aria-checked={createAnother}
-                  aria-label="Create another issue after this one"
+                  aria-label="Create another task after this one"
                   onClick={() => setCreateAnother(!createAnother)}
                   className={`flex h-5 w-9 items-center rounded-full border p-0.5 transition-colors ${
                     createAnother
@@ -564,9 +522,9 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                 onClick={handleSubmit}
                 disabled={mode === 'agent' ? !promptText.trim() : (!title.trim() && !promptText.trim())}
                 className="inline-flex min-w-[112px] items-center justify-center whitespace-nowrap rounded-md bg-white px-4 py-2.5 text-xs font-semibold text-gray-900 shadow-sm transition-colors hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-white"
-                title="Create issue (Ctrl/Cmd + Enter)"
+                title="Create task (Ctrl/Cmd + Enter)"
               >
-                <span>Create issue</span>
+                <span>Create task</span>
               </button>
             </div>
           </div>

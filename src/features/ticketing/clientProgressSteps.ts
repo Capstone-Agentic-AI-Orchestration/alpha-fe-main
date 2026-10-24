@@ -1,6 +1,6 @@
 import type { ClientTicketDetail } from './clientApi';
 
-export const CLIENT_PROGRESS_LABELS = ['Received', 'Review', 'Agree scope', 'In progress', 'Your review'] as const;
+export const CLIENT_PROGRESS_LABELS = ['Request received', 'Project manager review', 'Proposed work', 'Work underway', 'Result review'] as const;
 export type ClientProgressState = 'done' | 'current' | 'upcoming';
 export interface ClientProgressStep { label: string; state: ClientProgressState; needsYou: boolean }
 
@@ -30,5 +30,14 @@ function stateAt(index: number, at: number | 'complete'): ClientProgressState {
 export function clientProgressSteps(ticket: TicketForSteps): ClientProgressStep[] {
   const at = position(ticket);
   if (at === null) return [];
-  return CLIENT_PROGRESS_LABELS.map((label, index) => ({ label, state: stateAt(index, at), needsYou: index === at && ticket.requestedAction !== null }));
+  return CLIENT_PROGRESS_LABELS.map((defaultLabel, index) => {
+    const state = stateAt(index, at);
+    const needsYou = index === at && ticket.requestedAction !== null;
+    const label = needsYou
+      ? ticket.requestedAction === 'reply' ? 'Reply to your project manager'
+        : ticket.requestedAction === 'agree_scope' ? 'Review proposed work'
+          : ticket.requestedAction === 'review_result' ? 'Review shared result' : defaultLabel
+      : defaultLabel;
+    return { label, state, needsYou };
+  });
 }

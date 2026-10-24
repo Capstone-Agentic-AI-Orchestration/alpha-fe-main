@@ -21,9 +21,10 @@ import { apiService } from '@/shared/services/apiService';
 interface Props {
   threadId: string;
   projectId?: string;
+  buttonLabel?: string;
 }
 
-export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
+export function ThreadProjectPicker({ threadId, projectId, buttonLabel }: Readonly<Props>) {
   const { projects, chatThreads, showToast, can, setThreadProject, createNewThread, setActiveThreadId } = useApp();
   const canManageChat = can('manage_chat');
 
@@ -148,7 +149,7 @@ export function ThreadProjectPicker({ threadId, projectId }: Readonly<Props>) {
           className="h-8 min-w-[174px] max-w-[220px] flex items-center gap-2 rounded-md border border-white/[0.10] bg-surface-100/80 px-2.5 text-[11px] text-gray-200 transition-colors hover:border-white/20 focus:outline-none focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-gray-500" />
-          <span className="min-w-0 flex-1 truncate text-left">{selectedLabel}</span>
+          <span className="min-w-0 flex-1 truncate text-left">{buttonLabel ?? selectedLabel}</span>
           <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 

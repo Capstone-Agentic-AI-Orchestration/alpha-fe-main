@@ -311,7 +311,7 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
               </span>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Alpha desktop</p>
-                <p className="text-sm font-medium text-gray-200">A workspace for coordinated delivery</p>
+                <p className="text-sm font-medium text-gray-200">A workspace for orchestrated delivery</p>
               </div>
             </div>
             {onClose && (

@@ -85,10 +85,10 @@ export const RepoPreviews: React.FC<{
                 : data?.state === 'failed'
                   ? (data.error ?? 'Hosting setup needs attention.')
                   : data?.state === 'partial'
-                    ? 'Hosting is only partly set up. Review the repository overview to finish it.'
+                    ? 'Hosting is only partly set up. Review hosting setup above to finish it.'
                     : data?.state === 'not_set_up'
-                      ? 'Hosting has not been set up yet. Open the repository overview to start it.'
-                      : 'No hosting status is available yet. Review setup from the repository overview.'}
+                      ? 'Hosting has not been set up yet. Review hosting setup above to start it.'
+                      : 'No hosting status is available yet. Review hosting setup above.'}
             </p>
             {onOpenHosting && (
               <button
@@ -165,7 +165,7 @@ export const RepoLogsTab: React.FC<{ projectId: string; repo: string; active: bo
         <SectionEmpty>
           {previews.data?.state === 'unavailable'
             ? (previews.data.error ?? 'Hosting is not available here.')
-            : 'Nothing is hosted yet, so there are no logs. Set up hosting from the Overview tab.'}
+            : 'Nothing is hosted yet, so there are no logs. Set up hosting from the Previews tab.'}
         </SectionEmpty>
       )}
     </RepoSection>

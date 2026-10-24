@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -11,12 +11,10 @@ import {
   Code2,
   ExternalLink,
   FileCode2,
-  FileText,
   GitBranch,
   Globe2,
   MessageSquare,
   Layers3,
-  Play,
   RadioTower,
   RefreshCw,
   ScrollText,
@@ -24,6 +22,7 @@ import {
   Square,
   TerminalSquare,
   Users,
+  Workflow,
   X
 } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
@@ -32,10 +31,12 @@ import { runnerSocket } from '@/shared/services/runnerSocket';
 import type {
   LiveBuildRoomAgentCard,
   LiveBuildRoomCardStatus,
+  LiveBuildRoomHandoff,
   LiveBuildRoomPhase,
   LiveBuildRoomActivity,
   LiveBuildRoomChatCall,
   LiveBuildRoomSnapshot,
+  LiveBuildTaskStatus,
   BuildBranchPreview,
   HealthResult,
 } from '@/shared/types';
@@ -43,9 +44,15 @@ import { normalizeLogsResponse } from '@/features/projects/repository/deployment
 import type { DeploymentLogsResponse } from '@/features/projects/repository/deploymentLogs/logTypes';
 import { OrchestrationWorkflowPanel } from './OrchestrationWorkflowPanel';
 import { PlanningRecoveryPanel } from './PlanningRecoveryPanel';
+import { OrchestratorActivityPanel } from './OrchestratorActivityPanel';
+import { AgentCommandHistory } from './AgentCommandHistory';
+import { agentActivityScope } from './agentActivityScope';
+import { AgentHandoffGraph, type WorkflowConnectionSelection } from './AgentHandoffGraph';
+import { OrchestrationRecoveryPanel } from '@/features/chat/OrchestrationRecoveryPanel';
 
 type DetailTab = 'activity' | 'handoff' | 'files' | 'tools';
 type AgentStatusFilter = 'all' | 'running' | 'waiting' | 'review' | 'failed' | 'completed' | 'idle' | 'stale';
+type BuildRoomPanel = 'plan' | 'live';
 
 function ciStateLabel(state: BuildBranchPreview['ci']['state']): string {
   return state === 'passed' ? 'Passed' : state === 'failed' ? 'Failed' : state === 'running' ? 'Running' :
@@ -130,6 +137,8 @@ function activityLabel(activity: LiveBuildRoomActivity): string {
   if (activity.kind === 'error') return 'Attention';
   if (activity.kind === 'summary') return 'Summary';
   if (activity.kind === 'stage') return 'Stage update';
+  if (activity.kind === 'attachment') return 'Attachment';
+  if (activity.kind === 'steering') return 'Direction queued';
   return 'Agent update';
 }
 
@@ -142,16 +151,119 @@ function activityTone(activity: LiveBuildRoomActivity): string {
   return 'bg-violet-400';
 }
 
-function toolDetail(activity: LiveBuildRoomActivity): string | undefined {
-  if (!activity.detail) return undefined;
-  try {
-    const parsed = JSON.parse(activity.detail);
-    if (typeof parsed.command === 'string') return parsed.command;
-    if (typeof parsed.tool === 'string') return `${parsed.tool}${parsed.input ? ` · ${JSON.stringify(parsed.input)}` : ''}`;
-  } catch {
-    // Most tools provide a plain-text detail rather than a JSON payload.
+function assignmentLabel(card: LiveBuildRoomAgentCard): string {
+  if (card.status === 'running') return 'Working on';
+  if (card.status === 'review') return 'In review';
+  if (card.status === 'failed') return 'Stopped at';
+  if (card.status === 'waiting') return 'Up next';
+  if (card.status === 'completed') return 'Latest assignment';
+  return 'Assigned work';
+}
+
+interface ExecutionTimelineEvent {
+  id: string;
+  category: 'activity' | 'handoff' | 'invocation' | 'completion';
+  label: string;
+  message: string;
+  tone: string;
+  detail?: string;
+  createdAt: string;
+  isStreaming?: boolean;
+}
+
+function handoffMatchesCard(handoff: LiveBuildRoomHandoff, card: LiveBuildRoomAgentCard): boolean {
+  if (card.squadRunId) {
+    return handoff.squadRunId === card.squadRunId && (handoff.fromAgentId === card.agentId || handoff.toAgentId === card.agentId);
   }
-  return activity.detail;
+  if (card.agentCallId) return handoff.agentCallId === card.agentCallId;
+  return handoff.executionId === card.executionId;
+}
+
+function executionTimeline(snapshot: LiveBuildRoomSnapshot, card: LiveBuildRoomAgentCard, relatedCards = [card]): ExecutionTimelineEvent[] {
+  const events: ExecutionTimelineEvent[] = card.activity.map(activity => ({
+    id: `activity-${activity.id}`,
+    category: 'activity',
+    label: activityLabel(activity),
+    message: activity.message,
+    tone: activityTone(activity),
+    detail: activity.detail,
+    createdAt: activity.createdAt,
+    isStreaming: activity.isStreaming,
+  }));
+
+  const relatedHandoffs = snapshot.handoffs.filter(handoff => relatedCards.some(item => handoffMatchesCard(handoff, item)));
+  relatedHandoffs.forEach(handoff => {
+    const alreadyInActivity = card.activity.some(activity =>
+      activity.kind === 'handoff' && Date.parse(activity.createdAt) === Date.parse(handoff.createdAt) &&
+      (activity.detail === handoff.summary || activity.message === `Handoff received from ${handoff.from}`)
+    );
+    if (alreadyInActivity) return;
+    events.push({
+      id: `handoff-${handoff.id}`,
+      category: 'handoff',
+      label: 'Context handoff',
+      message: `${handoff.from} → ${handoff.to}`,
+      tone: 'bg-cyan-300',
+      detail: handoff.summary,
+      createdAt: handoff.createdAt,
+    });
+  });
+
+  const workflow = snapshot.orchestration;
+  if (workflow) {
+    const attempts = workflow.attempts.filter(attempt =>
+      (card.runId && attempt.prototypeRunId === card.runId) || attempt.agentId === card.agentId
+    );
+    for (const attempt of attempts) {
+      const task = workflow.tasks.find(candidate => candidate.id === attempt.taskId);
+      const taskTitle = task?.title || card.currentTask;
+      if (attempt.startedAt) events.push({
+        id: `invocation-${attempt.id}`,
+        category: 'invocation',
+        label: 'Agent invocation',
+        message: `${attempt.agentName} assigned to ${taskTitle}`,
+        tone: 'bg-violet-300',
+        detail: `Attempt ${attempt.attemptNumber}`,
+        createdAt: attempt.startedAt,
+      });
+      if (attempt.completedAt) {
+        const completionLabel = attempt.status === 'accepted' ? 'Task completed'
+          : attempt.status === 'submitted' ? 'Output submitted'
+            : attempt.status === 'rejected' ? 'Task returned for revision'
+              : attempt.status === 'failed' || attempt.status === 'recovery_required' ? 'Attempt failed'
+                : attempt.status === 'cancelled' ? 'Attempt cancelled' : 'Attempt updated';
+        events.push({
+          id: `completion-${attempt.id}`,
+          category: attempt.status === 'failed' || attempt.status === 'recovery_required' ? 'activity' : 'completion',
+          label: completionLabel,
+          message: `${taskTitle}${attempt.summary ? ` · ${attempt.summary}` : ''}`,
+          tone: attempt.status === 'failed' || attempt.status === 'recovery_required' ? 'bg-rose-300' : attempt.status === 'accepted' ? 'bg-emerald-300' : 'bg-sky-300',
+          detail: attempt.failureReason || attempt.reportResponse || (attempt.changedPaths.length ? `${attempt.changedPaths.length} changed file${attempt.changedPaths.length === 1 ? '' : 's'}` : undefined),
+          createdAt: attempt.completedAt,
+        });
+      }
+    }
+  }
+
+  const call = snapshot.chatCalls.find(candidate => candidate.id === card.agentCallId);
+  if (call?.startedAt) events.push({
+    id: `call-start-${call.id}`,
+    category: 'invocation',
+    label: 'Agent invocation',
+    message: `${call.agentName} started from ${call.chatLabel}`,
+    tone: 'bg-violet-300',
+    createdAt: call.startedAt,
+  });
+  if (call?.completedAt) events.push({
+    id: `call-end-${call.id}`,
+    category: call.status === 'failed' ? 'activity' : 'completion',
+    label: call.status === 'failed' ? 'Agent call failed' : call.status === 'completed' ? 'Agent call completed' : 'Agent call ended',
+    message: call.agentName,
+    tone: call.status === 'failed' ? 'bg-rose-300' : 'bg-emerald-300',
+    createdAt: call.completedAt,
+  });
+
+  return events.sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt));
 }
 
 function phaseClasses(phase: LiveBuildRoomPhase): string {
@@ -161,90 +273,6 @@ function phaseClasses(phase: LiveBuildRoomPhase): string {
   if (phase.status === 'failed') return 'border-rose-400/30 bg-rose-400/[0.035]';
   return 'border-white/[0.08] bg-white/[0.015]';
 }
-
-function progressLabel(card: LiveBuildRoomAgentCard): string {
-  if (card.status === 'completed') return 'Complete';
-  if (card.status === 'review') return 'Awaiting review';
-  if (card.status === 'failed') return card.progress > 0 ? `${card.progress}% stages complete` : 'Stopped';
-  if (card.status === 'running') return card.progress > 0 ? `${card.progress}% stages complete` : 'In progress';
-  return card.progress > 0 ? `${card.progress}% stages complete` : 'Not started';
-}
-
-const AgentCard: React.FC<{
-  card: LiveBuildRoomAgentCard;
-  selected: boolean;
-  onSelect: () => void;
-}> = ({ card, selected, onSelect }) => {
-  const meta = statusMeta[card.status];
-  const hasMeasuredProgress = card.progress > 0;
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={`group min-w-0 rounded-2xl border p-4 text-left transition-all focus:outline-none focus:ring-2 focus:ring-violet-400/60 ${
-        selected
-          ? 'border-violet-400/70 bg-violet-400/[0.075] shadow-[0_0_34px_rgba(139,92,246,0.14)]'
-          : `${meta.border} bg-surface-100/70 hover:border-white/20 hover:bg-white/[0.035]`
-      }`}
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 text-sm font-semibold text-white"
-            style={{ backgroundColor: `${card.color || '#8b5cf6'}22` }}
-          >
-            {card.avatar ? (
-              <img src={card.avatar} alt="" className="h-8 w-8 rounded-lg object-cover" />
-            ) : (
-              <Code2 className="h-4 w-4 text-violet-200" />
-            )}
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-white">{card.agentName}</div>
-            <div className="truncate text-[11px] text-slate-400">{card.agentRole} · {card.sourceLabel}</div>
-          </div>
-        </div>
-        <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-          {card.isStale && <span title="No execution activity has been recorded for five minutes" className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/[0.06] px-2 py-1 text-[10px] font-semibold text-amber-200"><Clock3 className="h-3 w-3" />No signal</span>}
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${card.status === 'running' && !card.isStale ? 'animate-pulse' : ''}`} />
-            {meta.label}
-          </span>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-3 text-[11px] text-slate-400">
-        <span className="truncate">Now doing</span>
-        <span className="shrink-0 font-medium text-slate-300">{progressLabel(card)}</span>
-      </div>
-      {hasMeasuredProgress && <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/[0.08]">
-        <div
-          className={`h-full rounded-full transition-all duration-500 ${card.status === 'completed' ? 'bg-emerald-400' : card.status === 'failed' ? 'bg-rose-400' : card.status === 'review' ? 'bg-amber-400' : 'bg-violet-400'}`}
-          style={{ width: `${Math.max(0, Math.min(100, card.progress))}%` }}
-        />
-      </div>}
-      <div className="mt-2 truncate text-xs font-medium text-slate-200">{card.currentTask}</div>
-
-      <div className="mt-4 space-y-2 border-t border-white/[0.07] pt-3">
-        {(card.activity.length ? card.activity.slice(-3) : [{ id: 'empty', sequence: 0, kind: 'status' as const, message: 'Waiting for execution activity', createdAt: '' }]).map(activity => (
-          <div key={activity.id} className="flex min-w-0 items-center gap-2 text-[11px] text-slate-400">
-            <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${activityTone(activity)}`} />
-            <span className="truncate">{activity.message}</span>
-          </div>
-        ))}
-      </div>
-
-      <div className="mt-4 flex items-center justify-between border-t border-white/[0.07] pt-3 text-[10px] text-slate-500">
-        <span className="flex min-w-0 items-center gap-1.5 truncate">
-          <FileText className="h-3.5 w-3.5 shrink-0" />
-          {card.output?.value || card.currentStage || 'No output yet'}
-        </span>
-        <span className="flex shrink-0 items-center gap-2"><span className="text-slate-500">{card.updatedAt ? timeAgo(card.updatedAt) : ''}</span><ArrowRight className="h-3.5 w-3.5 text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:text-slate-300" /></span>
-      </div>
-    </button>
-  );
-};
 
 const PhaseTimeline: React.FC<{ phases: LiveBuildRoomPhase[] }> = ({ phases }) => (
   <div className="grid gap-2 [grid-template-columns:repeat(auto-fit,minmax(180px,1fr))]">
@@ -275,76 +303,102 @@ const PhaseTimeline: React.FC<{ phases: LiveBuildRoomPhase[] }> = ({ phases }) =
   </div>
 );
 
-const ActivityPanel: React.FC<{
+export const LiveAgentActivityInspector: React.FC<{
   snapshot: LiveBuildRoomSnapshot;
   card: LiveBuildRoomAgentCard;
   tab: DetailTab;
   setTab: (tab: DetailTab) => void;
   onClose: () => void;
-}> = ({ snapshot, card, tab, setTab, onClose }) => {
-  const meta = statusMeta[card.status];
+  taskId?: string | null;
+  executionOnly?: boolean;
+  onClearTask: () => void;
+  onViewAssignedTask?: (taskId: string) => void;
+}> = ({ snapshot, card, tab, setTab, onClose, taskId, executionOnly, onClearTask, onViewAssignedTask }) => {
+  const detailTabsId = useId();
+  const { selectedTask, attempts: scopedAttempts, relatedCards, activityCard, outputCard } = agentActivityScope(snapshot, card, taskId, executionOnly);
+  const taskStatus: LiveBuildRoomCardStatus = selectedTask
+    ? selectedTask.status === 'accepted' ? 'completed' : selectedTask.status === 'running' ? 'running' : selectedTask.status === 'submitted' ? 'review' : ['blocked', 'failed', 'cancelled'].includes(selectedTask.status) ? 'failed' : 'waiting'
+    : card.status;
+  const meta = statusMeta[taskStatus];
   const tabs: Array<{ id: DetailTab; label: string }> = [
     { id: 'activity', label: 'Activity' },
     { id: 'handoff', label: 'Handoff' },
     { id: 'files', label: 'Files' },
-    { id: 'tools', label: 'Tools' }
+    { id: 'tools', label: 'Commands' }
   ];
-  const activities = card.activity;
-  const handoffs = snapshot.handoffs.filter(handoff =>
-    card.squadRunId
-      ? handoff.squadRunId === card.squadRunId && (handoff.fromAgentId === card.agentId || handoff.toAgentId === card.agentId)
-      : card.agentCallId
-        ? handoff.agentCallId === card.agentCallId
-        : handoff.executionId === card.executionId
-  );
-  const filePaths = [...new Set([...(card.filePaths ?? []), ...activities.flatMap(activity => activity.paths ?? [])])];
-  const toolActivities = activities.filter(activity => activity.kind === 'tool' || activity.kind === 'tool_result' || Boolean(activity.toolName));
+  const activities = activityCard.activity;
+  const scopedSnapshot = snapshot.orchestration ? { ...snapshot, orchestration: { ...snapshot.orchestration, attempts: scopedAttempts } } : snapshot;
+  const timeline = executionTimeline(scopedSnapshot, activityCard, relatedCards);
+  const handoffs = snapshot.handoffs.filter(handoff => relatedCards.some(item => handoffMatchesCard(handoff, item)));
+  const filePaths = [...new Set([...(activityCard.filePaths ?? []), ...activities.flatMap(activity => activity.paths ?? [])])];
+  const latestRunTaskId = snapshot.orchestration?.attempts.find(attempt => attempt.prototypeRunId === card.runId)?.taskId;
+  const assignedTaskId = selectedTask?.id ?? card.orchestrationTaskId ?? latestRunTaskId;
+  const latestRunTaskTitle = latestRunTaskId
+    ? snapshot.orchestration?.tasks.find(task => task.id === latestRunTaskId)?.title
+    : undefined;
+  const handleDetailTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const index = tabs.findIndex(item => item.id === tab);
+    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+      : (index + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+    const next = tabs[nextIndex];
+    setTab(next.id);
+    document.getElementById(`${detailTabsId}-${next.id}-tab`)?.focus();
+  };
 
   return (
-    <aside className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.10] bg-surface-100/90 shadow-2xl shadow-black/20 xl:sticky xl:top-0 xl:h-[calc(100vh-8.5rem)]">
-      <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] p-4">
-        <div className="flex min-w-0 items-center gap-3">
+    <aside aria-label={`${card.agentName} activity`} className="live-agent-inspector flex min-h-0 max-h-[80dvh] flex-col overflow-hidden rounded-2xl border border-white/[0.10] bg-surface-100/90 shadow-2xl shadow-black/20 xl:sticky xl:top-0 xl:max-h-none xl:h-[calc(100dvh-8.5rem)]">
+      <div className="border-b border-white/[0.08] p-4">
+        <div className="flex items-start gap-3">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-200"><Layers3 className="h-4 w-4" /></div>
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-slate-300">Agent Activity</div>
-            <div className="mt-0.5 truncate text-base font-semibold text-white">{card.agentName}</div>
-          </div>
+          <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-white">{card.agentName}</div><div className="mt-0.5 truncate text-[11px] text-slate-500">{card.agentRole || 'Specialist agent'}</div></div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200" aria-label="Close agent activity"><X className="h-4 w-4" /></button>
         </div>
-        <div className="flex items-center gap-2">
-          {card.isStale && <span title="No execution activity has been recorded for five minutes" className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 px-2 py-1 text-[10px] font-semibold text-amber-200"><Clock3 className="h-3 w-3" />No signal</span>}
-          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${meta.dot} ${card.status === 'running' ? 'animate-pulse' : ''}`} />
-            {meta.label}
-          </span>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-white" aria-label="Close agent activity"><X className="h-4 w-4" /></button>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}><span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />{meta.label}</span>
+          {card.isStale && <span className="text-[10px] text-amber-200">No recent signal</span>}
+          {assignedTaskId && <button type="button" onClick={() => onViewAssignedTask?.(assignedTaskId)} className="ml-auto inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-[10px] font-medium text-slate-400 hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><Workflow className="h-3 w-3" />View assigned task</button>}
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-white/[0.08] px-3 pt-2">
+      <div className="border-b border-white/[0.08] px-4 py-3">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>{selectedTask ? 'Selected task' : executionOnly ? 'Selected execution' : 'All assigned tasks'}</span>
+          {(selectedTask || executionOnly) && <button type="button" onClick={onClearTask} className="rounded px-1.5 py-1 text-violet-200 hover:bg-violet-300/10 focus-visible:ring-2 focus-visible:ring-violet-200">All agent activity</button>}
+        </div>
+        <p className="mt-1 text-xs leading-5 text-slate-300">{selectedTask?.title || card.currentTask}</p>
+        {selectedTask ? <p className="mt-1 text-[10px] text-slate-500">Task status · {selectedTask.status.replace(/_/g, ' ')}</p> : snapshot.orchestration && <p className="mt-1 text-[10px] tabular-nums text-slate-500">{snapshot.orchestration.tasks.filter(task => task.ownerAgentId === card.agentId && task.status === 'accepted').length} / {snapshot.orchestration.tasks.filter(task => task.ownerAgentId === card.agentId).length} tasks complete</p>}
+      </div>
+      <div className="flex gap-1 border-b border-white/[0.08] px-3 pt-2" role="tablist" aria-label="Agent activity details">
         {tabs.map(item => (
-          <button key={item.id} type="button" onClick={() => setTab(item.id)} className={`border-b-2 px-2 py-2 text-[11px] font-medium transition-colors ${tab === item.id ? 'border-violet-400 text-white' : 'border-transparent text-slate-500 hover:text-slate-200'}`}>{item.label}</button>
+          <button key={item.id} id={`${detailTabsId}-${item.id}-tab`} type="button" role="tab" tabIndex={tab === item.id ? 0 : -1} aria-selected={tab === item.id} aria-controls={`${detailTabsId}-panel`} onClick={() => setTab(item.id)} onKeyDown={handleDetailTabKeyDown} className={`border-b-2 px-2 py-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-200 ${tab === item.id ? 'border-violet-400 text-white' : 'border-transparent text-slate-500 hover:text-slate-200'}`}>{item.label}</button>
         ))}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto p-4">
+      <div id={`${detailTabsId}-panel`} role="tabpanel" aria-labelledby={`${detailTabsId}-${tab}-tab`} tabIndex={0} className="min-h-0 flex-1 overflow-y-auto p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-200">
         {tab === 'activity' && (
           <div className="space-y-4">
             <div>
-              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Now doing</div>
-              <div className="mt-1 text-sm font-medium text-white">{card.currentTask}</div>
+              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{assignmentLabel({ ...card, status: taskStatus })}</div>
+              <div className="mt-1 text-sm font-medium text-white">{activityCard.currentTask}</div>
             </div>
-            {card.progress > 0 ? <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-violet-400" style={{ width: `${card.progress}%` }} /></div> : card.status === 'running' ? <div className="text-[11px] text-slate-500">Progress will appear after Alpha confirms a completed stage.</div> : null}
+            {latestRunTaskId && latestRunTaskId !== assignedTaskId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2">
+              <span className="min-w-0 text-[10px] text-slate-500">Latest run worked on <span className="text-slate-300">{latestRunTaskTitle || 'another assigned task'}</span></span>
+              <button type="button" onClick={() => onViewAssignedTask?.(latestRunTaskId)} className="min-h-7 shrink-0 rounded-md px-2 text-[10px] font-medium text-violet-200 hover:bg-violet-300/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200">View run task</button>
+            </div>}
+            {!selectedTask && card.progress > 0 ? <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-violet-400" style={{ width: `${card.progress}%` }} /></div> : taskStatus === 'running' ? <div className="text-[11px] text-slate-500">Progress will appear after Alpha confirms a completed stage.</div> : null}
             <div className="space-y-3 border-t border-white/[0.08] pt-4">
-              {activities.length ? activities.slice().reverse().map(activity => (
-                <div key={activity.id} className="flex gap-3">
-                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${activityTone(activity)}`} />
+              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Execution timeline</div>
+              {timeline.length ? timeline.map(event => (
+                <div key={event.id} className="flex gap-3">
+                  <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${event.tone}`} />
                   <div className="min-w-0">
-                    <div className="text-[10px] text-slate-500">{activityLabel(activity)} · {timeAgo(activity.createdAt)}</div>
-                    <div className="mt-1 text-xs leading-5 text-slate-300">{activity.message}</div>
-                    {activity.detail && <div className="mt-1 text-[11px] leading-4 text-slate-500">{activity.detail}</div>}
+                    <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] text-slate-500">{event.label}{event.isStreaming && <span className="inline-flex items-center gap-1 rounded border border-violet-300/20 bg-violet-300/[0.06] px-1.5 py-0.5 font-medium text-violet-100"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}<span>· {timeAgo(event.createdAt)}</span></div>
+                    <div className="mt-1 break-words text-xs leading-5 text-slate-300">{event.message}</div>
+                    {event.detail && <div className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-4 text-slate-500">{event.detail}</div>}
                   </div>
                 </div>
-              )) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">Activity will appear here once this agent begins working.</div>}
+              )) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">Invocations, handoffs, tool calls, and completions will appear here as the build runs.</div>}
             </div>
           </div>
         )}
@@ -363,8 +417,8 @@ const ActivityPanel: React.FC<{
                     <div className="flex min-w-0 items-center gap-2 text-xs"><span className="truncate font-medium text-slate-200">{handoff.from}</span><ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-300" /><span className="truncate font-semibold text-white">{handoff.to}</span></div>
                     <time className="shrink-0 text-[10px] text-slate-500">{timeAgo(handoff.createdAt)}</time>
                   </div>
-                  <p className="mt-2 text-[11px] leading-5 text-slate-400">{handoff.summary}</p>
-                  {handoff.branchName && <div className="mt-2 flex items-center gap-1.5 text-[10px] text-slate-500"><GitBranch className="h-3 w-3" />{handoff.branchName}</div>}
+                  <p className="mt-2 break-words text-[11px] leading-5 text-slate-400">{handoff.summary}</p>
+                  {handoff.branchName && <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500"><GitBranch className="h-3 w-3 shrink-0" /><span className="break-all">{handoff.branchName}</span></div>}
                 </div>
               ))}
             </div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No handoff has reached this execution yet. Transfers will appear here as the project moves between agents.</div>}
@@ -375,46 +429,123 @@ const ActivityPanel: React.FC<{
           <div className="space-y-3">
             <div><div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Files and outputs</div><p className="mt-1 text-[11px] leading-5 text-slate-400">Paths come from recorded project activity.</p></div>
             {filePaths.length ? <div className="space-y-2">{filePaths.map(file => <div key={file} className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-xs text-slate-200"><FileCode2 className="h-4 w-4 shrink-0 text-violet-300" /><code className="min-w-0 break-all">{file}</code></div>)}</div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No changed file paths have been recorded for this execution yet.</div>}
-            {card.output ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="flex items-center gap-2 text-xs font-medium text-white"><FileCode2 className="h-4 w-4 text-violet-300" />{card.output.label}</div><div className="mt-2 break-all text-[11px] text-slate-500">{card.output.value}</div></div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No output has been recorded for this agent yet.</div>}
-            {card.branchName && <div className="flex items-center gap-2 text-xs text-slate-400"><GitBranch className="h-3.5 w-3.5" /><span className="truncate">{card.branchName}</span></div>}
-            {card.runId && snapshot.artifacts.filter(artifact => artifact.runId === card.runId).map(artifact => <div key={artifact.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="text-xs font-medium text-white">{artifact.name}</div><div className="mt-1 break-all text-[11px] text-slate-500">{artifact.detail}</div></div>)}
+            {outputCard?.output ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="flex items-center gap-2 text-xs font-medium text-white"><FileCode2 className="h-4 w-4 text-violet-300" />{outputCard?.output.label}</div><div className="mt-2 break-all text-[11px] text-slate-500">{outputCard?.output.value}</div></div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No output has been recorded for this agent yet.</div>}
+            {outputCard?.branchName && <div className="flex items-center gap-2 text-xs text-slate-400"><GitBranch className="h-3.5 w-3.5" /><span className="truncate">{outputCard?.branchName}</span></div>}
+            {snapshot.artifacts.filter(artifact => artifact.runId && relatedCards.some(item => item.runId === artifact.runId)).map(artifact => <div key={artifact.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="text-xs font-medium text-white">{artifact.name}</div><div className="mt-1 break-all text-[11px] text-slate-500">{artifact.detail}</div></div>)}
           </div>
         )}
 
-        {tab === 'tools' && (
-          <div className="space-y-3">
-            <div><div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Commands and tools</div><p className="mt-1 text-[11px] leading-5 text-slate-400">Recorded tool calls and results for this execution.</p></div>
-            {toolActivities.length ? toolActivities.slice().reverse().map(activity => (
-              <div key={activity.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
-                <div className="flex items-center justify-between gap-2"><span className="text-xs font-medium text-slate-200">{activityLabel(activity)}</span><time className="text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</time></div>
-                <div className="mt-2 text-xs leading-5 text-white">{activity.message}</div>
-                {toolDetail(activity) && <pre className="mt-2 overflow-x-auto rounded-lg bg-black/25 p-2.5 text-[10px] leading-4 text-slate-300">{toolDetail(activity)}</pre>}
-                {activity.paths?.length ? <div className="mt-2 flex flex-wrap gap-1.5">{activity.paths.map(file => <code key={file} className="rounded bg-white/[0.05] px-1.5 py-1 text-[10px] text-slate-300">{file}</code>)}</div> : null}
-              </div>
-            )) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">Tool calls and commands will appear here as the agent uses them.</div>}
-          </div>
-        )}
+        {tab === 'tools' && <AgentCommandHistory key={`${card.agentId}:${selectedTask?.id || (executionOnly ? card.executionId : 'all')}`} activities={activities} attempts={scopedAttempts} />}
       </div>
     </aside>
   );
 };
 
+const ContextBlock: React.FC<{ title: string; empty: string; children?: React.ReactNode }> = ({ title, empty, children }) => {
+  const content = React.Children.toArray(children);
+  return <section className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5">
+    <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">{title}</div>
+    <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-300">{content.length ? content : <span className="text-slate-500">{empty}</span>}</div>
+  </section>;
+};
+
+const HandoffContextPanel: React.FC<{
+  snapshot: LiveBuildRoomSnapshot;
+  selection: WorkflowConnectionSelection;
+  onClose: () => void;
+  onViewAssignedTask?: (taskId: string) => void;
+}> = ({ snapshot, selection, onClose, onViewAssignedTask }) => {
+  const source = selection.fromExecutionId
+    ? snapshot.agentCards.find(card => card.executionId === selection.fromExecutionId)
+    : undefined;
+  const destination = snapshot.agentCards.find(card => card.executionId === selection.toExecutionId);
+  const handoff = selection.handoffId ? snapshot.handoffs.find(item => item.id === selection.handoffId) : undefined;
+  const task = selection.taskId ? snapshot.orchestration?.tasks.find(item => item.id === selection.taskId) : undefined;
+  const sourceAttempts = snapshot.orchestration?.attempts.filter(attempt =>
+    source && (source.runId ? attempt.prototypeRunId === source.runId : attempt.agentId === source.agentId)
+  ).sort((left, right) => Date.parse(right.completedAt || right.startedAt || '') - Date.parse(left.completedAt || left.startedAt || '')) ?? [];
+  const targetAttempts = snapshot.orchestration?.attempts.filter(attempt =>
+    destination && (destination.runId ? attempt.prototypeRunId === destination.runId : attempt.agentId === destination.agentId)
+  ).sort((left, right) => Date.parse(right.completedAt || right.startedAt || '') - Date.parse(left.completedAt || left.startedAt || '')) ?? [];
+  const sourceLatest = source?.activity.slice().sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).find(activity => activity.kind === 'summary' || activity.kind === 'assistant');
+  const destinationLatest = destination?.activity.slice().sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).find(activity => activity.kind === 'summary' || activity.kind === 'assistant');
+  const incomingActivity = handoff
+    ? undefined
+    : destination?.activity.slice().sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt)).find(activity => activity.kind === 'handoff');
+  const previousOutput = source?.output?.value || sourceAttempts.find(attempt => attempt.summary || attempt.reportResponse)?.summary || sourceAttempts.find(attempt => attempt.reportResponse)?.reportResponse || sourceLatest?.message;
+  const destinationOutput = destination?.output?.value || targetAttempts.find(attempt => attempt.summary || attempt.reportResponse)?.summary || targetAttempts.find(attempt => attempt.reportResponse)?.reportResponse || destinationLatest?.message;
+  const outgoingFiles = [...new Set([...(source?.filePaths ?? []), ...(source?.activity.flatMap(activity => activity.paths ?? []) ?? []), ...(sourceAttempts[0]?.changedPaths ?? [])])];
+  const sourceName = source?.agentName || handoff?.from || 'Alpha Orchestrator';
+  const destinationName = destination?.agentName || handoff?.to || 'Specialist agent';
+  const incomingContext = handoff?.summary || task?.description || snapshot.orchestration?.run.goal;
+  const routingReason = task?.assignmentReason;
+
+  return <aside className="live-agent-inspector flex min-h-0 flex-col overflow-hidden rounded-2xl border border-violet-300/20 bg-surface-100/90 shadow-2xl shadow-black/25 xl:sticky xl:top-0 xl:h-[calc(100vh-8.5rem)]" aria-labelledby="handoff-context-title">
+    <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] p-4">
+      <div className="min-w-0">
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-violet-200"><Layers3 className="h-3.5 w-3.5" />Context transfer</div>
+        <h3 id="handoff-context-title" className="mt-1 truncate text-base font-semibold text-white">{handoff ? 'Handoff details' : selection.kind === 'orchestrator' ? 'Orchestrator route' : 'Dependency context'}</h3>
+        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-400"><span className="truncate">{sourceName}</span><ArrowRight className="h-3 w-3 shrink-0 text-violet-300" /><span className="truncate font-medium text-slate-200">{destinationName}</span></div>
+      </div>
+      <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200" aria-label="Close context inspector"><X className="h-4 w-4" /></button>
+    </div>
+
+    <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full border px-2 py-1 text-[9px] font-semibold ${handoff ? 'border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100' : 'border-violet-300/25 bg-violet-300/[0.06] text-violet-100'}`}>{handoff ? 'Recorded handoff' : selection.kind === 'orchestrator' ? 'Root assignment' : 'Planned dependency'}</span>
+        {handoff && <time className="text-[10px] text-slate-500">{timeAgo(handoff.createdAt)}</time>}
+        {task && <span className="ml-auto text-[10px] text-slate-500">Task · {task.status.replace(/_/g, ' ')}</span>}
+      </div>
+
+      {task && <section className="rounded-xl border border-violet-300/15 bg-violet-300/[0.035] p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0"><div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-violet-200/75">Orchestrator routing</div><div className="mt-1 break-words text-xs font-semibold text-white">{task.title}</div></div>
+          <button type="button" onClick={() => onViewAssignedTask?.(task.id)} className="min-h-8 shrink-0 rounded-lg border border-white/10 px-2 text-[9px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><Workflow className="mr-1 inline h-3 w-3" />Plan</button>
+        </div>
+        <div className="mt-2 text-[10px] leading-4 text-slate-400">Selected {task.ownerName} · {task.assignmentReason || 'No separate assignment reason was recorded.'}</div>
+      </section>}
+
+      <ContextBlock title={handoff ? 'Handoff reason' : 'Routing reason'} empty={handoff ? 'A separate handoff reason was not recorded. The transfer summary and context are shown below.' : 'A separate routing reason was not recorded for this connection.'}>{routingReason}</ContextBlock>
+      <ContextBlock title="Incoming context" empty="No task description or handoff summary was recorded for this connection.">{incomingContext}</ContextBlock>
+      <ContextBlock title="Inherited conversation state" empty="No separate conversation transcript was recorded. The handoff summary above is the context available in this snapshot.">{handoff ? `Received from ${handoff.from}\n${handoff.summary}` : incomingActivity ? `${incomingActivity.message}${incomingActivity.detail ? `\n${incomingActivity.detail}` : ''}` : undefined}</ContextBlock>
+      <ContextBlock title="Previous agent output" empty={source ? 'The previous agent has not recorded a summary or output yet.' : 'This route starts at the Orchestrator, so there is no previous agent output.'}>{previousOutput}</ContextBlock>
+      <ContextBlock title="Outgoing payload" empty="No structured payload is exposed on the handoff record.">
+        {handoff?.summary ? `Recorded transfer: ${handoff.summary}` : undefined}
+        {selection.kind === 'orchestrator' && task && <div className="space-y-2">
+          <div className="font-medium text-violet-100">Assignment package · {task.title}</div>
+          {task.acceptanceCriteria.length > 0 && <div><div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">Acceptance criteria</div><ul className="list-disc space-y-1 pl-4">{task.acceptanceCriteria.map((criterion, index) => <li key={`${task.id}-criterion-${index}`}>{criterion}</li>)}</ul></div>}
+          {task.requiredChecks.length > 0 && <div><div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">Required checks</div><ul className="list-disc space-y-1 pl-4">{task.requiredChecks.map(check => <li key={check}>{check}</li>)}</ul></div>}
+        </div>}
+        {Boolean(outgoingFiles.length) && <div className="mt-2 space-y-1.5">{outgoingFiles.map(path => <div key={path} className="flex min-w-0 items-start gap-1.5 text-[10px] text-slate-400"><FileCode2 className="mt-0.5 h-3 w-3 shrink-0 text-violet-300" /><code className="break-all">{path}</code></div>)}</div>}
+        {source?.branchName && <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500"><GitBranch className="h-3 w-3 shrink-0" /><span className="break-all">{source.branchName}</span></div>}
+      </ContextBlock>
+      <ContextBlock title="Receiving agent output" empty={destination ? 'The receiving agent has not recorded an output yet.' : 'The receiving agent is not available in the current snapshot.'}>{destinationOutput}</ContextBlock>
+      {handoff?.branchName && <div className="flex min-w-0 items-center gap-2 rounded-lg border border-white/[0.07] px-3 py-2 text-[10px] text-slate-500"><GitBranch className="h-3.5 w-3.5 shrink-0" /><span className="break-all">Shared branch · {handoff.branchName}</span></div>}
+    </div>
+  </aside>;
+};
+
 export const LiveBuildRoomView: React.FC = () => {
+  const roomPanelId = useId();
   const {
     projects,
-    issues,
     role,
     can,
     isActiveTab,
     showToast,
-    triggerSquadRun,
     setActiveTab,
-    setActiveThreadId
+    setActiveThreadId,
+    chatThreads,
+    createNewThread
   } = useApp();
   const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string>('liveBuildProjectId', '');
   const [selectedBuildRunId, setSelectedBuildRunId] = useTabSessionState<string>('liveBuildRunId', '');
+  const [buildRoomPanel, setBuildRoomPanel] = useTabSessionState<BuildRoomPanel>('liveBuildPanel', 'plan');
+  const [focusPlanTaskId, setFocusPlanTaskId] = useTabSessionState<string | null>('liveBuildPlanTaskId', null);
   const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
   const [selectedExecutionId, setSelectedExecutionId] = useTabSessionState<string | null>('liveBuildExecutionId', null);
+  const [selectedConnection, setSelectedConnection] = useState<WorkflowConnectionSelection | null>(null);
+  const [inspectorRunOverrideId, setInspectorRunOverrideId] = useTabSessionState<string | null>('liveBuildInspectorRunId', null);
   const [agentSearch, setAgentSearch] = useTabSessionState<string>('liveBuildAgentSearch', '');
   const [agentStatusFilter, setAgentStatusFilter] = useTabSessionState<AgentStatusFilter>('liveBuildAgentStatusFilter', 'all');
   const [selectedChatCallId, setSelectedChatCallId] = useTabSessionState<string | null>('liveBuildChatCallId', null);
@@ -423,12 +554,14 @@ export const LiveBuildRoomView: React.FC = () => {
   const [chatStatusFilter, setChatStatusFilter] = useTabSessionState<string>('liveBuildChatStatusFilter', 'all');
   const [patchPreview, setPatchPreview] = useState<{ callId: string; content: string } | null>(null);
   const [patchBusyCallId, setPatchBusyCallId] = useState<string | null>(null);
+  const [inspectorOrchestratorOpen, setInspectorOrchestratorOpen] = useState(false);
+  const [inspectorTaskId, setInspectorTaskId] = useState<string | null>(null);
   const [detailTab, setDetailTab] = useTabSessionState<DetailTab>('liveBuildDetailTab', 'activity');
-  const [detailOpen, setDetailOpen] = useTabSessionState<boolean>('liveBuildDetailOpen', true);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [showAllArtifacts, setShowAllArtifacts] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [starting, setStarting] = useState(false);
   const [stoppingRun, setStoppingRun] = useState(false);
   const [orchestrationBusyAction, setOrchestrationBusyAction] = useState<string | null>(null);
   const [orchestrationActionError, setOrchestrationActionError] = useState<string | null>(null);
@@ -447,8 +580,28 @@ export const LiveBuildRoomView: React.FC = () => {
   const [buildLogsError, setBuildLogsError] = useState<string | null>(null);
   const requestIdRef = useRef(0);
   const refreshTimerRef = useRef<number | null>(null);
+  const inspectorTriggerRef = useRef<HTMLElement | null>(null);
 
-  const eligibleRole = role !== 'client' && can('view_squads');
+  useEffect(() => {
+    if (!detailOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || (event.target as HTMLElement)?.closest('[role="dialog"]')) return;
+      setDetailOpen(false);
+      requestAnimationFrame(() => inspectorTriggerRef.current?.focus());
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [detailOpen]);
+  useEffect(() => {
+    setDetailOpen(false);
+    setInspectorTaskId(null);
+    setInspectorOrchestratorOpen(false);
+    setSelectedConnection(null);
+  }, [selectedProjectId, selectedBuildRunId]);
+
+  useEffect(() => setShowAllArtifacts(false), [selectedBuildRunId]);
+
+  const eligibleRole = role !== 'client' && (can('run_builds') || can('run_agents'));
   const buildRepository = snapshot?.orchestration ? null : snapshot?.issue?.githubRepo ?? null;
   const buildBranch = snapshot?.orchestration ? null : snapshot?.activeRun?.branchName ?? snapshot?.issue?.branchName ?? null;
   const canOfferPreviewHosting = Boolean(
@@ -480,9 +633,20 @@ export const LiveBuildRoomView: React.FC = () => {
         ? current
         : next.orchestration?.run.id ?? next.activeRun?.id ?? next.buildRuns[0]?.id ?? '');
       setError(null);
-      setSelectedExecutionId(current => current && next.agentCards.some(card => card.executionId === current)
-        ? current
-        : next.agentCards.find(card => card.status === 'running')?.executionId ?? next.agentCards[0]?.executionId ?? null);
+      const orchestrationRunIds = new Set(next.orchestration?.attempts.map(attempt => attempt.prototypeRunId).filter((id): id is string => Boolean(id)) ?? []);
+      const orchestrationCards = next.orchestration
+        ? next.agentCards.filter(card => card.runId && orchestrationRunIds.has(card.runId))
+        : [];
+      const preferredOrchestrationCard = orchestrationCards.find(card => card.status === 'running') ?? orchestrationCards[orchestrationCards.length - 1];
+      setSelectedExecutionId(current => {
+        if (current && (next.orchestration
+          ? orchestrationCards.some(card => card.executionId === current)
+          : next.agentCards.some(card => card.executionId === current))) return current;
+        return next.orchestration
+          ? preferredOrchestrationCard?.executionId ?? null
+          : next.agentCards.find(card => card.status === 'running')?.executionId ?? next.agentCards[0]?.executionId ?? null;
+      });
+      setInspectorRunOverrideId(current => current && next.agentCards.some(card => card.runId === current) ? current : null);
       const calls = next.chatCalls ?? [];
       const liveCallIds = new Set(next.agentCards.map(card => card.agentCallId).filter((id): id is string => Boolean(id)));
       setSelectedChatCallId(current => current && calls.some(call => call.id === current && !liveCallIds.has(call.id))
@@ -499,7 +663,7 @@ export const LiveBuildRoomView: React.FC = () => {
         setRefreshing(false);
       }
     }
-  }, [eligibleRole, selectedBuildRunId, selectedProjectId, setSelectedBuildRunId]);
+  }, [eligibleRole, selectedBuildRunId, selectedProjectId, setInspectorRunOverrideId, setSelectedBuildRunId]);
 
   useEffect(() => {
     if (!isActiveTab) return undefined;
@@ -507,8 +671,8 @@ export const LiveBuildRoomView: React.FC = () => {
     if (!selectedProjectId || !eligibleRole) return;
     const interval = window.setInterval(() => {
       if (document.visibilityState === 'visible') void loadRoom(true);
-    }, 10_000);
-    const eventNames = ['stage_update', 'run_activity', 'run_started', 'run_completed', 'run_failed', 'run_cancelled', 'squad_member_started', 'squad_run_completed', 'squad_run_failed', 'squad_run_cancelled', 'agent_call.created', 'agent_call.queued', 'agent_call.started', 'agent_call.activity', 'agent_call.completed', 'agent_call.failed', 'agent_call.cancelled', 'orchestration_event'];
+    }, 2_500);
+    const eventNames = ['stage_update', 'log_chunk', 'run_activity', 'run_started', 'run_completed', 'run_failed', 'run_cancelled', 'squad_member_started', 'squad_run_completed', 'squad_run_failed', 'squad_run_cancelled', 'agent_call.created', 'agent_call.queued', 'agent_call.started', 'agent_call.activity', 'agent_call.completed', 'agent_call.failed', 'agent_call.cancelled', 'orchestration_event'];
     const scheduleRefresh = () => {
       if (refreshTimerRef.current !== null) window.clearTimeout(refreshTimerRef.current);
       refreshTimerRef.current = window.setTimeout(() => {
@@ -653,17 +817,111 @@ export const LiveBuildRoomView: React.FC = () => {
     return () => runIds.forEach(runId => runnerSocket.unsubscribeFromRunStream(runId));
   }, [isActiveTab, runStreamKey]);
 
-  const visibleAgentCards = useMemo(() => (snapshot?.agentCards ?? []).filter(card => {
+  const orchestrationPrototypeRunIds = useMemo(() => new Set(
+    (snapshot?.orchestration?.attempts ?? []).map(attempt => attempt.prototypeRunId).filter((id): id is string => Boolean(id))
+  ), [snapshot?.orchestration?.attempts]);
+  const plannedWorkByAgent = useMemo(() => {
+    const assignments = new Map<string, NonNullable<LiveBuildRoomSnapshot['orchestration']>['tasks']>();
+    for (const task of snapshot?.orchestration?.tasks ?? []) {
+      if (!task.ownerAgentId) continue;
+      const forAgent = assignments.get(task.ownerAgentId) ?? [];
+      forAgent.push(task);
+      assignments.set(task.ownerAgentId, forAgent);
+    }
+
+    const priority: LiveBuildTaskStatus[] = ['running', 'submitted', 'failed', 'blocked', 'ready', 'pending', 'accepted'];
+    const statusForTask: Partial<Record<LiveBuildTaskStatus, LiveBuildRoomCardStatus>> = {
+      running: 'running',
+      submitted: 'review',
+      failed: 'failed',
+      blocked: 'failed',
+      ready: 'waiting',
+      pending: 'waiting',
+      accepted: 'completed'
+    };
+    return new Map([...assignments].map(([agentId, tasks]) => {
+      let selectedTask: (typeof tasks)[number] | undefined;
+      for (const status of priority) {
+        selectedTask = tasks.find(task => task.status === status);
+        if (selectedTask) break;
+      }
+      return [agentId, {
+        taskId: selectedTask?.id,
+        taskTitle: selectedTask?.title,
+        taskStatus: selectedTask ? statusForTask[selectedTask.status] : undefined,
+        taskCount: tasks.length
+      }] as const;
+    }));
+  }, [snapshot?.orchestration?.tasks]);
+  const agentCardsForBuild = useMemo(() => {
+    const cards = (snapshot?.agentCards ?? []).filter(card => !snapshot?.orchestration ||
+      (card.orchestrationTaskId && !card.runId) || Boolean(card.runId && orchestrationPrototypeRunIds.has(card.runId)));
+    if (!snapshot?.orchestration) return cards;
+    const latestByAgent = new Map<string, LiveBuildRoomAgentCard>();
+    for (const card of cards) {
+      const current = latestByAgent.get(card.agentId);
+      const cardHasRun = Boolean(card.runId);
+      const currentHasRun = Boolean(current?.runId);
+      const cardUpdatedAt = Date.parse(card.updatedAt ?? '');
+      const currentUpdatedAt = Date.parse(current?.updatedAt ?? '');
+      const newerTimestamp = (Number.isFinite(cardUpdatedAt) ? cardUpdatedAt : 0) >
+        (Number.isFinite(currentUpdatedAt) ? currentUpdatedAt : 0);
+      const sameTimestampNewerAttempt = cardUpdatedAt === currentUpdatedAt &&
+        (card.orchestrationAttemptNumber ?? 0) > (current?.orchestrationAttemptNumber ?? 0);
+      if (!current || (cardHasRun && !currentHasRun) ||
+          (cardHasRun === currentHasRun && (newerTimestamp || sameTimestampNewerAttempt))) {
+        latestByAgent.set(card.agentId, card);
+      }
+    }
+    const statusPriority: Record<LiveBuildRoomCardStatus, number> = {
+      running: 0, review: 1, failed: 2, waiting: 3, completed: 4, idle: 5
+    };
+    return [...latestByAgent.values()].map(card => {
+      const plannedWork = plannedWorkByAgent.get(card.agentId);
+      if (!plannedWork) return card;
+      const isSameAssignment = plannedWork.taskId === card.orchestrationTaskId;
+      return {
+        ...card,
+        currentTask: plannedWork.taskTitle ?? card.currentTask,
+        orchestrationTaskId: plannedWork.taskId ?? card.orchestrationTaskId,
+        orchestrationTaskCount: plannedWork.taskCount,
+        status: plannedWork.taskStatus ?? card.status,
+        progress: plannedWork.taskStatus === 'completed' ? 100 : isSameAssignment ? card.progress : 0
+      };
+    }).sort((left, right) => {
+      const statusDelta = statusPriority[left.status] - statusPriority[right.status];
+      if (statusDelta) return statusDelta;
+      return (Number.isFinite(Date.parse(right.updatedAt ?? '')) ? Date.parse(right.updatedAt ?? '') : 0) -
+        (Number.isFinite(Date.parse(left.updatedAt ?? '')) ? Date.parse(left.updatedAt ?? '') : 0);
+    });
+  }, [orchestrationPrototypeRunIds, plannedWorkByAgent, snapshot?.agentCards, snapshot?.orchestration]);
+  const visibleArtifacts = useMemo(() => {
+    const artifacts = snapshot?.artifacts ?? [];
+    return showAllArtifacts ? artifacts : artifacts.slice(0, 8);
+  }, [showAllArtifacts, snapshot?.artifacts]);
+  const visibleAgentCards = useMemo(() => agentCardsForBuild.filter(card => {
     const matchesStatus = agentStatusFilter === 'all'
       || (agentStatusFilter === 'stale' ? Boolean(card.isStale) : card.status === agentStatusFilter);
     const query = agentSearch.trim().toLocaleLowerCase();
     const matchesSearch = !query || `${card.agentName} ${card.agentRole} ${card.currentTask} ${card.sourceLabel}`.toLocaleLowerCase().includes(query);
     return matchesStatus && matchesSearch;
-  }), [agentSearch, agentStatusFilter, snapshot?.agentCards]);
+  }), [agentCardsForBuild, agentSearch, agentStatusFilter]);
 
-  const selectedCard = useMemo(() =>
-    visibleAgentCards.find(card => card.executionId === selectedExecutionId) ?? visibleAgentCards[0] ?? null,
-  [selectedExecutionId, visibleAgentCards]);
+  const selectedRosterCard = useMemo(() =>
+    agentCardsForBuild.find(card => card.executionId === selectedExecutionId) ?? null,
+  [selectedExecutionId, agentCardsForBuild]);
+  const inspectorRunCard = useMemo(() => inspectorRunOverrideId
+    ? snapshot?.agentCards.find(card => card.runId === inspectorRunOverrideId) ?? null
+    : null,
+  [inspectorRunOverrideId, snapshot?.agentCards]);
+  const selectedCard = inspectorRunCard ?? selectedRosterCard;
+
+  useEffect(() => {
+    if (!snapshot?.orchestration || !selectedExecutionId || agentCardsForBuild.some(card => card.executionId === selectedExecutionId)) return;
+    const previouslySelected = snapshot.agentCards.find(card => card.executionId === selectedExecutionId);
+    const latestForAgent = previouslySelected && agentCardsForBuild.find(card => card.agentId === previouslySelected.agentId);
+    if (latestForAgent) setSelectedExecutionId(latestForAgent.executionId);
+  }, [agentCardsForBuild, selectedExecutionId, setSelectedExecutionId, snapshot?.agentCards, snapshot?.orchestration]);
 
   const liveCallIds = useMemo(() => new Set(
     (snapshot?.agentCards ?? []).map(card => card.agentCallId).filter((id): id is string => Boolean(id))
@@ -682,19 +940,21 @@ export const LiveBuildRoomView: React.FC = () => {
   }] as const)).values()];
 
   const activeProject = projects.find(project => project.id === selectedProjectId);
-  const agentStatusCounts = (snapshot?.agentCards ?? []).reduce<Record<AgentStatusFilter, number>>((counts, card) => {
+  const agentStatusCounts = agentCardsForBuild.reduce<Record<AgentStatusFilter, number>>((counts, card) => {
     counts[card.status] += 1;
     if (card.isStale) counts.stale += 1;
     return counts;
-  }, { all: snapshot?.agentCards.length ?? 0, running: 0, waiting: 0, review: 0, failed: 0, completed: 0, idle: 0, stale: 0 });
-  const fallbackIssue = issues.find(issue => issue.projectId === selectedProjectId && issue.assignedSquadId === snapshot?.squad?.id)
-    ?? issues.find(issue => issue.projectId === selectedProjectId);
+  }, { all: agentCardsForBuild.length, running: 0, waiting: 0, review: 0, failed: 0, completed: 0, idle: 0, stale: 0 });
 
   const handleProjectChange = (projectId: string) => {
     requestIdRef.current += 1;
     setSelectedProjectId(projectId);
     setSelectedBuildRunId('');
+    setSelectedConnection(null);
     setSelectedExecutionId(null);
+    setInspectorRunOverrideId(null);
+    setInspectorTaskId(null);
+    setInspectorOrchestratorOpen(false);
     setSelectedChatCallId(null);
     setAgentSearch('');
     setAgentStatusFilter('all');
@@ -706,26 +966,12 @@ export const LiveBuildRoomView: React.FC = () => {
     setLoading(true);
   };
 
-  const handleRunBuild = async () => {
-    if (!snapshot || !snapshot.squad || starting || !snapshot.canRun) return;
-    const issue = snapshot.issue ?? fallbackIssue;
-    if (!issue) {
-      showToast('Add an issue first', 'A squad run needs a project issue as its build target.', 'info');
-      return;
-    }
-    if (snapshot.activeRun?.status === 'awaiting_approval' && !window.confirm(
-      'This build is finished and waiting for review. Start another full squad build for this issue?'
-    )) return;
-    if ((snapshot.activeRun?.status === 'failed' || snapshot.activeRun?.status === 'cancelled') && !window.confirm(
-      'The previous build stopped. Start a new squad build attempt for this issue?'
-    )) return;
-    setStarting(true);
-    try {
-      await triggerSquadRun(snapshot.squad.id, issue.id, undefined, issue.title);
-      await loadRoom(true);
-    } finally {
-      setStarting(false);
-    }
+  const openOrchestratorBuild = () => {
+    if (!selectedProjectId) return;
+    const existingThread = chatThreads.find(thread => thread.projectId === selectedProjectId);
+    const threadId = existingThread?.id ?? createNewThread('New product build', selectedProjectId);
+    setActiveThreadId(threadId);
+    setActiveTab('chat');
   };
 
   const handleStopBuild = async () => {
@@ -737,7 +983,7 @@ export const LiveBuildRoomView: React.FC = () => {
       showToast('Build stopped', 'The active agent has stopped. Work already on the build branch remains available for review.', 'success');
       await loadRoom(true);
     } catch (error: any) {
-      showToast('Could not stop build', error?.message ?? 'The active squad build could not be stopped.', 'error');
+      showToast('Could not stop build', error?.message ?? 'The active build could not be stopped.', 'error');
       await loadRoom(true);
     } finally {
       setStoppingRun(false);
@@ -759,6 +1005,51 @@ export const LiveBuildRoomView: React.FC = () => {
     }
   };
 
+  const handleViewAgentActivity = (taskId: string, prototypeRunId: string) => {
+    const ownerAgentId = snapshot?.orchestration?.tasks.find(task => task.id === taskId)?.ownerAgentId;
+    const exactRunCard = snapshot?.agentCards.find(item => item.runId === prototypeRunId);
+    const card = agentCardsForBuild.find(item => item.agentId === ownerAgentId) ?? exactRunCard;
+    if (!card) {
+      showToast('Agent activity not available', 'This task has no visible execution in the selected build yet. Refresh the room to load its activity.', 'info');
+      return;
+    }
+    setFocusPlanTaskId(taskId);
+    setBuildRoomPanel('live');
+    setAgentSearch('');
+    setAgentStatusFilter('all');
+    setSelectedExecutionId(card.executionId);
+    setInspectorTaskId(taskId);
+    setInspectorOrchestratorOpen(false);
+    setInspectorRunOverrideId(exactRunCard?.runId ?? null);
+    setDetailTab('activity');
+    setDetailOpen(true);
+  };
+
+  const handleViewAssignedTask = (taskId: string) => {
+    setFocusPlanTaskId(taskId);
+    setDetailOpen(false);
+    setBuildRoomPanel('plan');
+  };
+
+  const handleStartPlannedOrchestration = async () => {
+    if (!snapshot?.orchestration || !selectedProjectId || orchestrationBusyAction) return;
+    setOrchestrationBusyAction('start-plan');
+    setOrchestrationActionError(null);
+    try {
+      await apiService.startPlannedOrchestration(
+        selectedProjectId,
+        snapshot.orchestration.run.id,
+        snapshot.orchestration.run.revision
+      );
+      await loadRoom(true);
+    } catch (error: any) {
+      setOrchestrationActionError(error?.message ?? 'The plan could not be started. Refresh the room and review its current state.');
+      await loadRoom(true);
+    } finally {
+      setOrchestrationBusyAction(null);
+    }
+  };
+
   const handleResumeOrchestration = async () => {
     if (!snapshot?.orchestration || !selectedProjectId || orchestrationBusyAction) return;
     setOrchestrationBusyAction('resume');
@@ -774,16 +1065,31 @@ export const LiveBuildRoomView: React.FC = () => {
     }
   };
 
+  const handlePauseOrchestration = async () => {
+    if (!snapshot?.orchestration || !selectedProjectId || orchestrationBusyAction) return;
+    setOrchestrationBusyAction('pause');
+    setOrchestrationActionError(null);
+    try {
+      await apiService.pauseOrchestration(selectedProjectId, snapshot.orchestration.run.id, snapshot.orchestration.run.revision);
+      await loadRoom(true);
+    } catch (error: any) {
+      setOrchestrationActionError(error?.message ?? 'The build could not be paused safely. Refresh the room and check its current state.');
+      await loadRoom(true);
+    } finally {
+      setOrchestrationBusyAction(null);
+    }
+  };
+
   const handleCancelOrchestration = async () => {
     if (!snapshot?.orchestration || !selectedProjectId || orchestrationBusyAction) return;
     setOrchestrationBusyAction('cancel');
     setOrchestrationActionError(null);
     try {
       await apiService.cancelOrchestration(selectedProjectId, snapshot.orchestration.run.id);
-      showToast('Task build stopped', 'The coordinator stopped future work and preserved the current branch for review.', 'success');
+      showToast('Orchestrator build stopped', 'The Orchestrator stopped the remaining steps and kept the current branch for review.', 'success');
       await loadRoom(true);
     } catch (error: any) {
-      setOrchestrationActionError(error?.message ?? 'The task build could not be stopped safely. Refresh the room to reconcile its status.');
+      setOrchestrationActionError(error?.message ?? 'The Orchestrator build could not be stopped safely. Refresh the Build Room to check its status.');
       await loadRoom(true);
     } finally {
       setOrchestrationBusyAction(null);
@@ -902,12 +1208,23 @@ export const LiveBuildRoomView: React.FC = () => {
     snapshot.issue?.prUrl === snapshot.orchestration.run.publication.pullRequestUrl &&
     snapshot.issue?.branchName === snapshot.orchestration.run.publication.branchName &&
     snapshot.issue.comments?.some(comment => comment.id === `comm-${snapshot.orchestration!.run.id}-orchestration-published`));
+  const orchestrationBlocked = snapshot.orchestration && ['blocked', 'failed', 'recovery_required'].includes(snapshot.orchestration.run.status);
+  const latestStoppedAttempt = orchestrationBlocked
+    ? snapshot.orchestration!.attempts.slice().reverse().find(attempt =>
+      ['rejected', 'failed', 'recovery_required'].includes(attempt.status) &&
+      snapshot.orchestration!.tasks.some(task => task.id === attempt.taskId && ['failed', 'blocked'].includes(task.status)))
+    : undefined;
+  const stoppedTask = latestStoppedAttempt
+    ? snapshot.orchestration?.tasks.find(task => task.id === latestStoppedAttempt.taskId)
+    : undefined;
   const roomStatus = snapshot.orchestration
-    ? snapshot.orchestration.run.status === 'awaiting_approval' ? 'Review required'
-      : snapshot.orchestration.run.status === 'publishing' ? 'Publishing pull request'
-      : snapshot.orchestration.run.status === 'completed' ? !snapshot.orchestration.run.publication ? 'Build complete' : publicationSynced ? 'Ready for review' : 'Publication syncing'
+    ? snapshot.orchestration.run.status === 'awaiting_plan_approval' ? 'Plan ready to review'
+      : snapshot.orchestration.run.status === 'awaiting_approval' ? 'Review required'
+      : snapshot.orchestration.run.status === 'publishing' ? 'Opening pull requests'
+      : snapshot.orchestration.run.status === 'completed' ? !snapshot.orchestration.run.publication ? 'Build complete' : publicationSynced ? 'Ready for review' : 'Pull request update pending'
       : ['blocked', 'recovery_required', 'failed'].includes(snapshot.orchestration.run.status) ? 'Needs attention'
         : snapshot.orchestration.run.status === 'planning' ? 'Preparing task plan'
+          : snapshot.orchestration.run.status === 'paused' ? 'Build paused'
           : snapshot.orchestration.run.status === 'cancelling' ? 'Stopping specialist'
           : snapshot.orchestration.run.status === 'cancelled' ? 'Build stopped'
             : 'Build in progress'
@@ -926,7 +1243,7 @@ export const LiveBuildRoomView: React.FC = () => {
     ? 'text-rose-300 bg-rose-400/10 border-rose-400/25'
     : roomStatus === 'Review required'
       ? 'text-amber-200 bg-amber-400/10 border-amber-400/25'
-      : roomStatus === 'Publication syncing' || roomStatus === 'Publishing pull request'
+      : roomStatus === 'Pull request update pending' || roomStatus === 'Opening pull requests'
         ? 'text-amber-200 bg-amber-400/10 border-amber-400/25'
       : roomStatus === 'Ready for review' || roomStatus === 'Build complete'
           ? 'text-emerald-200 bg-emerald-400/10 border-emerald-400/25'
@@ -936,6 +1253,14 @@ export const LiveBuildRoomView: React.FC = () => {
         ? 'text-slate-300 bg-white/[0.04] border-white/10'
         : 'text-violet-200 bg-violet-400/10 border-violet-400/25';
 
+  const handleRoomPanelKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return;
+    event.preventDefault();
+    const nextPanel = event.key === 'Home' ? 'plan' : event.key === 'End' ? 'live' : buildRoomPanel === 'plan' ? 'live' : 'plan';
+    setBuildRoomPanel(nextPanel);
+    document.getElementById(`${roomPanelId}-${nextPanel}-tab`)?.focus();
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-shell text-slate-200">
       <div className="mx-auto flex max-w-[1800px] flex-col gap-4 p-4 pb-8 sm:p-6">
@@ -944,7 +1269,7 @@ export const LiveBuildRoomView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"><span>Workspace</span><span>/</span><span className="text-slate-300">{activeProject?.name || snapshot.project.name}</span><span>/</span><span>Automation</span></div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-200"><RadioTower className="h-5 w-5" /></div>
-              <div><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">{snapshot.planningRecoveries?.some(recovery => recovery.state !== 'retained') ? 'Review the preserved planning workspace before starting another build.' : snapshot.orchestration ? 'Follow the approved task sequence, owners, checks, and recovery state.' : 'See which agents are working across this project and inspect their live activity.'}</p></div>
+              <div><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">{snapshot.planningRecoveries?.some(recovery => recovery.state !== 'retained') ? 'Review the preserved work before starting another build.' : snapshot.orchestration ? 'Follow the Orchestrator’s plan, specialist assignments, checks, and progress.' : 'See Orchestrator builds and direct agent work across this project.'}</p></div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -957,12 +1282,12 @@ export const LiveBuildRoomView: React.FC = () => {
             </label>
             {snapshot.buildRuns.length > 1 && <label className="relative flex min-w-[220px] items-center rounded-xl border border-violet-400/20 bg-violet-500/[0.06] px-3 py-2">
               <span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-400">Build</span>
-              <select aria-label="Choose project build" value={selectedBuildRunId || snapshot.orchestration?.run.id || snapshot.activeRun?.id || ''} onChange={event => setSelectedBuildRunId(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-violet-200">
-                {snapshot.buildRuns.map(run => <option key={run.id} value={run.id} className="bg-surface-100 text-white">{[run.kind === 'orchestration' ? 'Task workflow' : 'Squad build', run.repository, run.issueIdentifier, run.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') || 'Project build'}</option>)}
+              <select aria-label="Choose project build" value={selectedBuildRunId || snapshot.orchestration?.run.id || snapshot.activeRun?.id || ''} onChange={event => { setSelectedConnection(null); setSelectedBuildRunId(event.target.value); }} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-violet-200">
+                {snapshot.buildRuns.map(run => <option key={run.id} value={run.id} className="bg-surface-100 text-white">{[run.kind === 'orchestration' ? 'Orchestrator build' : 'Earlier build', run.repository, run.issueIdentifier, run.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') || 'Project build'}</option>)}
               </select>
               <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-400" />
             </label>}
-            <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 text-xs">{snapshot.orchestration ? <Activity className="h-3.5 w-3.5 text-violet-300" /> : <Users className="h-3.5 w-3.5 text-violet-300" />}<span className="text-slate-400">{snapshot.orchestration ? 'Workflow' : 'Squad'}</span><span className="font-semibold text-white">{snapshot.orchestration ? `${snapshot.orchestration.tasks.length} tasks` : snapshot.squad?.name ?? 'None assigned'}</span>{!snapshot.orchestration && snapshot.squad && <span className="text-slate-500">· {snapshot.squad.memberCount}</span>}</div>
+            <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 text-xs">{snapshot.orchestration ? <Activity className="h-3.5 w-3.5 text-violet-300" /> : <Workflow className="h-3.5 w-3.5 text-violet-300" />}<span className="text-slate-400">{snapshot.orchestration ? 'Orchestrator' : 'Build lead'}</span><span className="font-semibold text-white">{snapshot.orchestration ? `${snapshot.orchestration.tasks.length} planned tasks` : 'Orchestrator'}</span></div>
             {!snapshot.orchestration && <button type="button" onClick={() => { setDetailOpen(true); setDetailTab('activity'); }} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.10] px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-white/[0.06] hover:text-white"><TerminalSquare className="h-3.5 w-3.5" />View logs</button>}
             <button type="button" onClick={() => void loadRoom(true)} className="rounded-xl border border-white/[0.10] p-2.5 text-slate-400 hover:bg-white/[0.06] hover:text-white" title="Refresh room" aria-label="Refresh room"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button>
             <span className="w-full text-right text-[10px] text-slate-500 xl:w-auto">{lastSyncedAt ? `Synced ${timeAgo(lastSyncedAt)}` : 'Waiting for first sync'}</span>
@@ -976,7 +1301,30 @@ export const LiveBuildRoomView: React.FC = () => {
           onChanged={() => void loadRoom(true)}
         />}
 
-        {snapshot.orchestration && <OrchestrationWorkflowPanel
+        {snapshot.orchestration?.recovery && <OrchestrationRecoveryPanel
+          projectId={selectedProjectId}
+          runId={snapshot.orchestration.run.id}
+          runRevision={snapshot.orchestration.run.revision}
+          taskRevision={snapshot.orchestration.recovery.taskId
+            ? snapshot.orchestration.tasks.find(task => task.id === snapshot.orchestration!.recovery!.taskId)?.revision
+            : undefined}
+          recovery={snapshot.orchestration.recovery}
+          canControl={Boolean(snapshot.canControlOrchestration ?? snapshot.canRun)}
+          onActionComplete={() => loadRoom(true)}
+        />}
+
+        {snapshot.orchestration && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-surface-100/50 p-1.5" role="tablist" aria-label="Build room views">
+          <button id={`${roomPanelId}-plan-tab`} type="button" role="tab" tabIndex={buildRoomPanel === 'plan' ? 0 : -1} aria-controls={`${roomPanelId}-plan-panel`} aria-selected={buildRoomPanel === 'plan'} onClick={() => setBuildRoomPanel('plan')} onKeyDown={handleRoomPanelKeyDown} className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${buildRoomPanel === 'plan' ? 'bg-violet-400/[0.12] text-violet-100 shadow-sm' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`}>
+            Orchestrator build<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'plan' ? 'bg-violet-300/10 text-violet-100/80' : 'bg-white/[0.04] text-slate-500'}`}>{snapshot.orchestration.tasks.length}</span>
+          </button>
+          <button id={`${roomPanelId}-live-tab`} type="button" role="tab" tabIndex={buildRoomPanel === 'live' ? 0 : -1} aria-controls={`${roomPanelId}-live-panel`} aria-selected={buildRoomPanel === 'live'} onClick={() => setBuildRoomPanel('live')} onKeyDown={handleRoomPanelKeyDown} className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${buildRoomPanel === 'live' ? 'bg-violet-400/[0.12] text-violet-100 shadow-sm' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`}>
+            Live agent workflows &amp; actions<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'live' ? 'bg-violet-300/10 text-violet-100/80' : 'bg-white/[0.04] text-slate-500'}`}>{agentCardsForBuild.length}</span>
+          </button>
+          <span className="ml-auto hidden pr-2 text-[10px] text-slate-500 sm:block">Switch views without losing this build</span>
+        </div>}
+
+        {snapshot.orchestration && <div id={`${roomPanelId}-plan-panel`} role="tabpanel" aria-labelledby={`${roomPanelId}-plan-tab`} hidden={buildRoomPanel !== 'plan'}>
+          <OrchestrationWorkflowPanel
           key={snapshot.orchestration.run.id}
           projectId={selectedProjectId}
           workflow={snapshot.orchestration}
@@ -987,11 +1335,15 @@ export const LiveBuildRoomView: React.FC = () => {
           busyAction={orchestrationBusyAction}
           actionError={orchestrationActionError}
           onRetry={(taskId, revision) => void handleRetryOrchestrationTask(taskId, revision)}
+          onStartPlan={() => void handleStartPlannedOrchestration()}
           onResume={() => void handleResumeOrchestration()}
+          onPause={() => void handlePauseOrchestration()}
           onCancel={() => void handleCancelOrchestration()}
           onApprove={() => void handleApproveOrchestration()}
-          onOpenProjectSettings={() => setActiveTab('projects')}
-        />}
+          onViewAgentActivity={handleViewAgentActivity}
+          focusTaskId={focusPlanTaskId}
+        />
+        </div>}
 
         <section className={`order-5 rounded-2xl border border-violet-400/20 bg-surface-100/60 p-4 sm:p-5 ${snapshot.orchestration ? 'hidden' : ''}`}>
           <div className="flex flex-col gap-3 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-end lg:justify-between">
@@ -1021,7 +1373,7 @@ export const LiveBuildRoomView: React.FC = () => {
               </div>
               {selectedChatCall ? <div className="min-w-0 rounded-xl border border-white/[0.08] bg-black/10 p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-semibold text-white">{selectedChatCall.agentName}<span className="font-normal text-slate-400"> · {selectedChatCall.agentRole}</span></div><div className="mt-1 text-xs text-slate-500">{selectedChatCall.origin === 'chat_turn' ? 'Chat message' : 'Agent call'} · {selectedChatCall.chatLabel} · {selectedChatCall.operationMode} · {selectedChatCall.target?.label || selectedChatCall.target?.type || 'Project chat'}</div></div><div className="flex flex-wrap gap-2">{selectedChatCall.canOpenChat && selectedChatCall.threadId && <button type="button" onClick={() => { setActiveThreadId(selectedChatCall.threadId!); setActiveTab('chat'); }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-2 text-[11px] text-slate-200 hover:bg-white/[0.06]"><MessageSquare className="h-3.5 w-3.5" />Open chat</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && <button type="button" onClick={() => void reviewChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 px-2.5 py-2 text-[11px] text-violet-200 hover:bg-violet-400/10"><FileCode2 className="h-3.5 w-3.5" />{patchPreview?.callId === selectedChatCall.id ? 'Refresh diff' : 'Review diff'}</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && selectedChatCall.status === 'completed' && can('run_agents') && !selectedChatCall.patchApplied && <button type="button" disabled={patchBusyCallId === selectedChatCall.id} onClick={() => void applyChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 px-2.5 py-2 text-[11px] text-emerald-200 hover:bg-emerald-400/10 disabled:opacity-50"><Check className="h-3.5 w-3.5" />{patchBusyCallId === selectedChatCall.id ? 'Applying…' : 'Apply patch'}</button>}{selectedChatCall.patchApplied && <span className="self-center text-[10px] text-emerald-300">Patch applied</span>}</div></div>
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>Working copy: {selectedChatCall.workingCopyId?.split(':').at(-1) || 'project workspace'}</span>{selectedChatCall.workingBranch && <span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" />{selectedChatCall.workingBranch}</span>}{selectedChatCall.target?.type === 'issue' && <span>Issue: {selectedChatCall.target.label || selectedChatCall.target.id}</span>}{selectedChatCall.target?.type === 'pull_request' && selectedChatCall.target.id && <a href={selectedChatCall.target.id} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-violet-300 hover:text-violet-200">{selectedChatCall.target.label || 'Pull request'}<ExternalLink className="h-3 w-3" /></a>}</div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>Working copy: {selectedChatCall.workingCopyId?.split(':').at(-1) || 'project workspace'}</span>{selectedChatCall.workingBranch && <span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" />{selectedChatCall.workingBranch}</span>}{selectedChatCall.target?.type === 'issue' && <span>Task: {selectedChatCall.target.label || selectedChatCall.target.id}</span>}{selectedChatCall.target?.type === 'pull_request' && selectedChatCall.target.id && <a href={selectedChatCall.target.id} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-violet-300 hover:text-violet-200">{selectedChatCall.target.label || 'Pull request'}<ExternalLink className="h-3 w-3" /></a>}</div>
                 <div className="mt-4 max-h-[360px] space-y-3 overflow-y-auto border-t border-white/[0.07] pt-3">
                   {selectedChatCall.activities.length ? selectedChatCall.activities.slice().reverse().map(activity => <div key={activity.id} className="flex gap-3"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'tool' || activity.kind === 'tool_result' ? 'bg-sky-400' : 'bg-violet-400'}`} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-slate-200">{activity.toolName && <span className="font-medium text-violet-200">{activity.toolName} · </span>}{activity.message}</span><time className="text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</time></div>{activity.detail && <div className="mt-1 text-[11px] leading-4 text-slate-500">{activity.detail}</div>}{activity.paths?.length ? <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <code key={file} className="rounded bg-white/[0.05] px-1.5 py-1 text-[10px] text-slate-300">{file}</code>)}</div> : null}</div></div>) : <div className="text-xs text-slate-500">Waiting for the first activity event.</div>}
                 </div>
@@ -1032,8 +1384,8 @@ export const LiveBuildRoomView: React.FC = () => {
         </section>
 
         <div className={`order-1 flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4 lg:flex-row lg:items-center lg:justify-between ${snapshot.orchestration ? 'hidden' : ''}`}>
-          <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/[0.05] text-slate-300"><TerminalSquare className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.issue ? `${snapshot.issue.identifier} · ${snapshot.issue.title}` : snapshot.squad ? 'Ready for the next project issue' : 'No squad assigned to this project'}</div><div className="mt-1 text-xs text-slate-500">{snapshot.activeRun?.mission || (snapshot.squad ? 'Run a squad against a project issue to start a live build.' : 'Assign a squad before starting a squad build.')}</div></div></div>
-          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.squad ? snapshot.activeRun?.status === 'running' ? <button type="button" onClick={() => void handleStopBuild()} disabled={!snapshot.canRun || stoppingRun} title="Stop the active squad agent and leave the build branch available for review." className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-45"><Square className={`h-3.5 w-3.5 ${stoppingRun ? 'animate-pulse' : 'fill-current'}`} />{stoppingRun ? 'Stopping…' : 'Stop build'}</button> : <button type="button" onClick={() => void handleRunBuild()} disabled={!snapshot.canRun || starting || stoppingRun || !snapshot.issue && !fallbackIssue} title={!snapshot.issue && !fallbackIssue ? 'Create a project issue before starting a squad run.' : snapshot.activeRun?.status === 'awaiting_approval' ? 'Start another build after confirming.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400 disabled:cursor-not-allowed disabled:opacity-45"><Play className="h-3.5 w-3.5 fill-current" />{starting ? 'Starting…' : snapshot.activeRun?.status === 'awaiting_approval' ? 'Run again' : snapshot.activeRun?.status === 'failed' || snapshot.activeRun?.status === 'cancelled' ? 'Retry build' : 'Run Build'}</button> : <button type="button" onClick={() => setActiveTab('squads')} className="inline-flex items-center gap-2 rounded-xl bg-violet-500 px-3.5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-violet-500/15 transition hover:bg-violet-400"><Users className="h-3.5 w-3.5" />Set up a squad</button>}</div>
+          <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-violet-200"><Workflow className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.activeRun?.status === 'running' ? 'Earlier build in progress' : 'Start a coordinated product build'}</div><div className="mt-1 text-xs text-slate-400">{snapshot.activeRun?.status === 'running' ? 'This build is using the previous workflow. Stop it before starting a new Orchestrator build.' : 'Describe the change in Project chat. The Orchestrator will plan work across selected codebases and show its assignments before anyone starts.'}</div></div></div>
+          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.activeRun?.status === 'running' ? <button type="button" onClick={() => void handleStopBuild()} disabled={!snapshot.canRun || stoppingRun} title="Stop the earlier build." className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-45"><Square className={`h-3.5 w-3.5 ${stoppingRun ? 'animate-pulse' : 'fill-current'}`} />{stoppingRun ? 'Stopping…' : 'Stop earlier build'}</button> : <button type="button" onClick={openOrchestratorBuild} disabled={!can('run_agents')} title={!can('run_agents') ? 'You do not have permission to start project builds.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-violet-400 px-3.5 py-2.5 text-xs font-semibold text-[#171224] shadow-lg shadow-violet-500/15 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-45"><Workflow className="h-3.5 w-3.5" />Start Orchestrator build</button>}</div>
         </div>
 
         {buildRepository && buildBranch && <section className="order-2 flex flex-col gap-4 rounded-2xl border border-sky-400/20 bg-gradient-to-r from-sky-500/[0.07] to-surface-100/50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-live="polite">
@@ -1111,56 +1463,87 @@ export const LiveBuildRoomView: React.FC = () => {
 
         {!snapshot.orchestration && snapshot.phases.length > 0 && <div className="order-3"><PhaseTimeline phases={snapshot.phases} /></div>}
 
-        <div className={`order-2 grid gap-4 ${detailOpen && selectedCard ? 'xl:grid-cols-[minmax(0,1fr)_360px]' : 'xl:grid-cols-1'} ${snapshot.orchestration ? 'hidden' : ''}`}>
+        {<div id={snapshot.orchestration ? `${roomPanelId}-live-panel` : undefined} role={snapshot.orchestration ? 'tabpanel' : undefined} aria-labelledby={snapshot.orchestration ? `${roomPanelId}-live-tab` : undefined} hidden={Boolean(snapshot.orchestration && buildRoomPanel !== 'live')} className="space-y-4">
+        {snapshot.orchestration && orchestrationBlocked && buildRoomPanel === 'live' && <section className="order-1 rounded-xl border border-amber-300/20 bg-amber-300/[0.045] px-4 py-3.5" role="status" aria-live="polite">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 text-sm font-semibold text-amber-100"><AlertTriangle className="h-4 w-4" />Build needs attention</div>
+              <p className="mt-1 text-xs text-slate-300">{stoppedTask ? `${stoppedTask.title} · ${stoppedTask.ownerName}` : 'The Orchestrator stopped before the next handoff.'}</p>
+              <p className="mt-2 max-w-4xl break-words text-xs leading-5 text-amber-100/75">{latestStoppedAttempt?.failureReason || snapshot.orchestration.run.stoppedReason || 'Review the build plan for the saved failure details.'}</p>
+              {latestStoppedAttempt?.failureReason?.toLowerCase().includes('report') && <p className="mt-1 text-[11px] text-slate-400">Alpha’s checks do not replace an independent review. This report must be accepted before the build can continue.</p>}
+            </div>
+            <button type="button" onClick={() => setBuildRoomPanel('plan')} className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-amber-200/20 px-3 text-xs font-semibold text-amber-100 hover:bg-amber-100/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200">Review build plan<ArrowRight className="h-3.5 w-3.5" /></button>
+          </div>
+        </section>}
+
+        <div className={`order-2 grid gap-4 ${detailOpen && (selectedCard || selectedConnection || inspectorOrchestratorOpen) ? 'xl:grid-cols-[minmax(0,1fr)_minmax(340px,390px)]' : 'xl:grid-cols-1'}`}>
           <div className="min-w-0 space-y-4">
             <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/45 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-sm font-semibold text-white">Project agents</div>
-                <div className="mt-1 text-xs text-slate-500">Live squad, direct-run, and project-chat executions for {activeProject?.name || snapshot.project.name}.</div>
+                <div className="text-sm font-semibold text-white">{snapshot.orchestration ? 'Live agent actions' : 'Project agent activity'}</div>
+                <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{snapshot.orchestration ? `${agentCardsForBuild.length} assigned ${agentCardsForBuild.length === 1 ? 'specialist' : 'specialists'} · ${snapshot.orchestration.tasks.length} tasks. Expand an agent to see its tasks; select a node to follow its commands and actions.` : `Agent activity and recorded handoffs for ${activeProject?.name || snapshot.project.name}.`}</div>
               </div>
-              {snapshot.agentCards.length > 0 && <label className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 sm:w-72">
-                <span className="sr-only">Search project agents</span>
+              {agentCardsForBuild.length > 0 && <label className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 sm:w-72">
+                <span className="sr-only">Search live agents</span>
                 <Code2 className="h-3.5 w-3.5 shrink-0 text-slate-500" />
                 <input value={agentSearch} onChange={event => setAgentSearch(event.target.value)} placeholder="Search agents or current work" className="min-w-0 flex-1 bg-transparent text-xs text-white placeholder:text-slate-500 outline-none" />
               </label>}
             </div>
-            {snapshot.agentCards.length > 0 && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter project agents by status">
+            {agentCardsForBuild.length > 0 && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter project agents by status">
               {(['all', 'running', 'waiting', 'review', 'failed', 'stale', 'completed', 'idle'] as AgentStatusFilter[]).map(status => {
                 const label = status === 'all' ? 'All' : status === 'stale' ? 'No signal' : statusMeta[status].label;
-                const count = status === 'all' ? snapshot.summary.totalAgents : status === 'stale' ? snapshot.summary.stale : agentStatusCounts[status];
+                const count = status === 'all' ? agentCardsForBuild.length : status === 'stale' ? agentStatusCounts.stale : agentStatusCounts[status];
                 return <button key={status} type="button" onClick={() => setAgentStatusFilter(status)} aria-pressed={agentStatusFilter === status} className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${agentStatusFilter === status ? 'border-violet-400/40 bg-violet-400/10 text-violet-100' : 'border-white/[0.08] text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`}>
                   {label}<span className="ml-1.5 text-slate-500">{count}</span>
                 </button>;
               })}
             </div>}
-            {snapshot.agentCards.length > 0 ? <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">
-              {visibleAgentCards.map(card => <AgentCard key={card.executionId} card={card} selected={selectedCard?.executionId === card.executionId} onSelect={() => { setSelectedExecutionId(card.executionId); setDetailTab('activity'); setDetailOpen(true); }} />)}
-              {!visibleAgentCards.length && <div className="col-span-full rounded-2xl border border-dashed border-white/10 px-5 py-8 text-center">
-                <div className="text-sm font-medium text-slate-300">No agents match these filters</div>
-                <p className="mt-1 text-xs text-slate-500">Clear the search or choose another status to see project activity.</p>
-                <button type="button" onClick={() => { setAgentSearch(''); setAgentStatusFilter('all'); }} className="mt-3 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]">Clear filters</button>
-              </div>}
-            </div> : <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
+            {agentCardsForBuild.length > 0 ? <AgentHandoffGraph
+              cards={visibleAgentCards}
+              allAgentCount={agentCardsForBuild.length}
+              workflow={snapshot.orchestration}
+              handoffs={snapshot.handoffs}
+              selectedExecutionId={detailOpen && !inspectorOrchestratorOpen ? selectedRosterCard?.executionId : null}
+              selectedOrchestrator={detailOpen && inspectorOrchestratorOpen}
+              selectedConnectionId={selectedConnection?.id}
+              selectedTaskId={detailOpen ? inspectorTaskId : null}
+              visible={isActiveTab && (!snapshot.orchestration || buildRoomPanel === 'live')}
+              onSelect={(card, trigger, taskId) => { setInspectorOrchestratorOpen(false); setInspectorTaskId(taskId ?? null); inspectorTriggerRef.current = trigger; setSelectedConnection(null); setSelectedExecutionId(card.executionId); setInspectorRunOverrideId(null); setDetailTab(taskId ? 'activity' : 'tools'); setDetailOpen(true); }}
+              onSelectConnection={(selection, trigger) => { setInspectorOrchestratorOpen(false); setInspectorTaskId(null); inspectorTriggerRef.current = trigger; setSelectedConnection(selection); setSelectedExecutionId(selection.toExecutionId); setInspectorRunOverrideId(null); setDetailOpen(true); }}
+              onSelectOrchestrator={snapshot.orchestration ? trigger => { inspectorTriggerRef.current = trigger; setSelectedConnection(null); setInspectorTaskId(null); setInspectorOrchestratorOpen(true); setDetailOpen(true); } : undefined}
+              onClearFilters={() => { setAgentSearch(''); setAgentStatusFilter('all'); }}
+            /> : <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
               <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] text-slate-400"><Users className="h-5 w-5" /></div>
-              <div className="mt-3 text-sm font-medium text-slate-200">No visible agent activity</div>
-              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">When a squad, direct run, or project chat agent starts work, its live status and activity will appear here.{snapshot.squad?.memberCount ? ' This project squad is ready for a build.' : ' Add an agent to a squad or start a project agent to begin.'}</p>
-              {(!snapshot.squad || snapshot.squad.memberCount === 0) && <button type="button" onClick={() => setActiveTab('squads')} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]"><Users className="h-3.5 w-3.5" />Open squads</button>}
+              <div className="mt-3 text-sm font-medium text-slate-200">{snapshot.orchestration ? 'Waiting for the specialist to start' : 'No visible agent activity'}</div>
+              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">{snapshot.orchestration ? 'The assignment is recorded. Agent updates, commands, and changed files will appear here as the specialist works.' : 'Orchestrator build activity and direct agent work appear here. Start a product change from Project chat to see the plan, specialist assignments, and progress.'}</p>
+              {!snapshot.orchestration && <button type="button" onClick={openOrchestratorBuild} disabled={!can('run_agents')} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-violet-300/20 bg-violet-300/[0.05] px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-300/[0.1] disabled:cursor-not-allowed disabled:opacity-45"><Workflow className="h-3.5 w-3.5" />Start Orchestrator build</button>}
             </div>}
             <div className="rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4">
               <div className="flex items-center justify-between gap-3">
-                <div><div className="text-sm font-semibold text-white">Build artifacts</div><div className="mt-1 text-xs text-slate-500">Outputs recorded from visible project executions</div></div>
-                <button type="button" disabled={!selectedCard} onClick={() => { if (!selectedCard) return; setSelectedExecutionId(selectedCard.executionId); setDetailTab('files'); setDetailOpen(true); }} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-300 hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40">Open artifacts <ExternalLink className="h-3.5 w-3.5" /></button>
+                <div><div className="text-sm font-semibold text-white">Build artifacts</div><div className="mt-1 text-xs text-slate-500">Recorded outputs for this build. Choose an item’s producer to inspect its files.</div></div>
               </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {snapshot.artifacts.length ? snapshot.artifacts.map(artifact => <div key={artifact.id} className="flex min-w-0 items-center gap-3 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-200">{artifact.kind === 'pull_request' ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}</div>
-                  <div className="min-w-0"><div className="truncate text-xs font-medium text-slate-200">{artifact.name}</div><div className="truncate text-[10px] text-slate-500">{artifact.detail}</div></div>
-                </div>) : <div className="col-span-full rounded-xl border border-dashed border-white/10 px-3 py-5 text-center text-xs text-slate-500">Artifacts will appear as agents produce outputs.</div>}
+              <div className="mt-3 max-h-[min(65vh,640px)] min-w-0 space-y-2 overflow-y-auto pr-1">
+                {snapshot.artifacts.length ? visibleArtifacts.map(artifact => {
+                  const producingRun = snapshot.agentCards.find(card => card.runId === artifact.runId);
+                  const producer = snapshot.orchestration && producingRun
+                    ? agentCardsForBuild.find(card => card.agentId === producingRun.agentId) ?? producingRun
+                    : producingRun;
+                  return <div key={artifact.id} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-200">{artifact.kind === 'pull_request' ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}</div>
+                    <div className="min-w-0"><div className="break-words text-xs font-medium text-slate-200 [overflow-wrap:anywhere]">{artifact.name}</div><div className="mt-0.5 break-all text-[10px] leading-4 text-slate-500">{artifact.detail}</div></div>
+                    {producer ? <button type="button" aria-label={snapshot.orchestration ? `Inspect the run that produced ${artifact.name}` : `View ${producer.agentName}`} onClick={event => { inspectorTriggerRef.current = event.currentTarget; setSelectedConnection(null); setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(producer.executionId); setInspectorOrchestratorOpen(false); setInspectorTaskId(null); setInspectorRunOverrideId(snapshot.orchestration ? producingRun?.runId ?? null : null); setDetailTab('files'); setDetailOpen(true); }} className="col-span-2 inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-white/10 px-2.5 text-[10px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 sm:col-span-1 sm:justify-self-end">{snapshot.orchestration ? 'Inspect producing run' : `View ${producer.agentName}`}<ExternalLink className="h-3 w-3 shrink-0" /></button>
+                      : <span className="text-[10px] text-slate-600">Producer unavailable in this view</span>}
+                  </div>;
+                }) : <div className="rounded-xl border border-dashed border-white/10 px-3 py-5 text-center text-xs text-slate-500">Artifacts will appear as agents produce outputs.</div>}
+                {snapshot.artifacts.length > 8 && <button type="button" onClick={() => setShowAllArtifacts(value => !value)} className="min-h-9 w-full rounded-lg border border-white/[0.08] px-3 text-xs font-medium text-slate-300 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200">{showAllArtifacts ? 'Show fewer artifacts' : `Show ${snapshot.artifacts.length - 8} more artifacts`}</button>}
               </div>
             </div>
           </div>
-          {detailOpen && selectedCard && <ActivityPanel snapshot={snapshot} card={selectedCard} tab={detailTab} setTab={setDetailTab} onClose={() => setDetailOpen(false)} />}
+          {detailOpen && inspectorOrchestratorOpen && snapshot.orchestration && <OrchestratorActivityPanel workflow={snapshot.orchestration} onClose={() => { setInspectorOrchestratorOpen(false); setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewPlan={() => setBuildRoomPanel('plan')} onViewTask={taskId => { const task = snapshot.orchestration?.tasks.find(item => item.id === taskId); const owner = agentCardsForBuild.find(card => card.agentId === task?.ownerAgentId); if (owner) { setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(owner.executionId); setInspectorRunOverrideId(null); setInspectorTaskId(taskId); setInspectorOrchestratorOpen(false); setDetailTab('activity'); } }} />}
+          {detailOpen && !inspectorOrchestratorOpen && selectedConnection && <HandoffContextPanel snapshot={snapshot} selection={selectedConnection} onClose={() => { setSelectedConnection(null); setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewAssignedTask={handleViewAssignedTask} />}
+          {detailOpen && !inspectorOrchestratorOpen && !selectedConnection && selectedCard && <LiveAgentActivityInspector snapshot={snapshot} card={selectedCard} taskId={inspectorTaskId} executionOnly={Boolean(inspectorRunOverrideId)} onClearTask={() => { setInspectorTaskId(null); setInspectorRunOverrideId(null); }} tab={detailTab} setTab={setDetailTab} onClose={() => { setDetailOpen(false); requestAnimationFrame(() => inspectorTriggerRef.current?.focus()); }} onViewAssignedTask={handleViewAssignedTask} />}
         </div>
+        </div>}
       </div>
     </div>
   );
