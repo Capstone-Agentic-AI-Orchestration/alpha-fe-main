@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { Modal } from '@/shared/components/Modal';
 import { apiService, parseApiError } from '@/shared/services/apiService';
-import type { ArchitectureNode, ArchitectureNodeKind, RepoArchitecture } from '@/shared/types';
+import type { ArchitectureEdge, ArchitectureNode, ArchitectureNodeKind, RepoArchitecture } from '@/shared/types';
 
 interface ArchitectureDiagramModalProps {
   projectId: string;
@@ -23,22 +23,17 @@ interface ArchitectureDiagramModalProps {
   onClose: () => void;
 }
 
-type DiagramNode = ArchitectureNode & { x: number; y: number };
+type DiagramNode = ArchitectureNode & { x: number; y: number; column: number };
 
-const NODE_WIDTH = 230;
-const NODE_HEIGHT = 84;
-const CANVAS_WIDTH = 1220;
-const CANVAS_HEIGHT = 560;
-const COLUMN_X: Record<number, number> = { 0: 48, 1: 344, 2: 644, 3: 944 };
-const KIND_COLUMN: Record<ArchitectureNodeKind, number> = {
-  web: 0,
-  api: 1,
-  application: 1,
-  auth: 2,
-  database: 2,
-  jobs: 2,
-  integration: 3,
-};
+const NODE_WIDTH = 250;
+const NODE_HEIGHT = 108;
+const COLUMN_GAP = 60;
+const ROW_GAP = 30;
+const MARGIN_X = 52;
+const MARGIN_Y = 34;
+const MIN_CANVAS_WIDTH = 1180;
+const MIN_CANVAS_HEIGHT = 560;
+
 const NODE_COLOR: Record<ArchitectureNodeKind, string> = {
   web: '#9b63ff',
   api: '#08c5f1',
@@ -47,7 +42,9 @@ const NODE_COLOR: Record<ArchitectureNodeKind, string> = {
   database: '#438fff',
   jobs: '#a36bff',
   integration: '#14d1df',
+  module: '#8794a8',
 };
+
 const NODE_ICON: Record<ArchitectureNodeKind, React.FC<{ className?: string; style?: React.CSSProperties }>> = {
   web: AppWindow,
   api: Server,
@@ -56,38 +53,84 @@ const NODE_ICON: Record<ArchitectureNodeKind, React.FC<{ className?: string; sty
   database: Database,
   jobs: Cog,
   integration: Globe2,
+  module: Boxes,
 };
 
-function placeNodes(nodes: ArchitectureNode[]): DiagramNode[] {
-  const groups = new Map<number, ArchitectureNode[]>();
-  for (const node of nodes) {
-    const column = KIND_COLUMN[node.kind];
-    groups.set(column, [...(groups.get(column) ?? []), node]);
+function placeNodes(nodes: ArchitectureNode[], edges: ArchitectureEdge[]) {
+  const outgoing = new Map(nodes.map(node => [node.id, [] as string[]]));
+  const incomingCount = new Map(nodes.map(node => [node.id, 0]));
+  for (const edge of edges) {
+    if (!outgoing.has(edge.from) || !incomingCount.has(edge.to)) continue;
+    outgoing.get(edge.from)!.push(edge.to);
+    incomingCount.set(edge.to, incomingCount.get(edge.to)! + 1);
   }
 
-  return [...groups.entries()].flatMap(([column, group]) => {
-    const rowGap = 42;
-    const totalHeight = group.length * NODE_HEIGHT + Math.max(0, group.length - 1) * rowGap;
-    const top = (CANVAS_HEIGHT - totalHeight) / 2;
-    return group.map((node, index) => ({
-      ...node,
-      x: COLUMN_X[column]!,
-      y: top + index * (NODE_HEIGHT + rowGap),
-    }));
-  });
+  const ranks = new Map<string, number>();
+  const roots = [
+    ...nodes.filter(node => incomingCount.get(node.id) === 0),
+    ...nodes,
+  ];
+  for (const root of roots) {
+    if (ranks.has(root.id)) continue;
+    ranks.set(root.id, 0);
+    const queue = [root.id];
+    while (queue.length) {
+      const current = queue.shift()!;
+      const nextRank = ranks.get(current)! + 1;
+      for (const next of outgoing.get(current) ?? []) {
+        if (ranks.has(next)) continue;
+        ranks.set(next, nextRank);
+        queue.push(next);
+      }
+    }
+  }
+
+  const grouped = new Map<number, ArchitectureNode[]>();
+  for (const node of nodes) {
+    const column = ranks.get(node.id) ?? 0;
+    grouped.set(column, [...(grouped.get(column) ?? []), node]);
+  }
+  const columns = [...grouped.keys()].sort((a, b) => a - b);
+  const columnCount = Math.max(1, (columns.at(-1) ?? 0) + 1);
+  const maxRows = Math.max(1, ...[...grouped.values()].map(group => group.length));
+  const width = Math.max(
+    MIN_CANVAS_WIDTH,
+    MARGIN_X * 2 + columnCount * NODE_WIDTH + (columnCount - 1) * COLUMN_GAP,
+  );
+  const height = Math.max(
+    MIN_CANVAS_HEIGHT,
+    MARGIN_Y * 2 + maxRows * NODE_HEIGHT + (maxRows - 1) * ROW_GAP,
+  );
+
+  const placed: DiagramNode[] = [];
+  for (const [column, group] of grouped) {
+    const groupHeight = group.length * NODE_HEIGHT + Math.max(0, group.length - 1) * ROW_GAP;
+    const top = Math.max(MARGIN_Y, (height - groupHeight) / 2);
+    group.forEach((node, index) => {
+      placed.push({
+        ...node,
+        column,
+        x: MARGIN_X + column * (NODE_WIDTH + COLUMN_GAP),
+        y: top + index * (NODE_HEIGHT + ROW_GAP),
+      });
+    });
+  }
+  return { nodes: placed, width, height };
 }
 
 function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
-  const nodes = placeNodes(diagram.nodes);
-  const byId = new Map(nodes.map(node => [node.id, node]));
+  const layout = placeNodes(diagram.nodes, diagram.edges);
+  const byId = new Map(layout.nodes.map(node => [node.id, node]));
 
   return (
-    <div className="relative flex min-h-0 flex-1 bg-[#080d14]">
+    <div className="relative flex min-h-0 flex-1 overflow-auto bg-[#080d14]">
       <svg
-        viewBox={`0 0 ${CANVAS_WIDTH} ${CANVAS_HEIGHT}`}
+        width={layout.width}
+        height={layout.height}
+        viewBox={'0 0 ' + layout.width + ' ' + layout.height}
         role="img"
-        aria-label={`Architecture diagram for ${diagram.repository} on ${diagram.branch}`}
-        className="h-full w-full"
+        aria-label={'Architecture diagram for ' + diagram.repository + ' on ' + diagram.branch}
+        className="block max-w-none shrink-0"
         preserveAspectRatio="xMidYMid meet"
       >
         <defs>
@@ -98,21 +141,25 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
             <path d="M0,0 L8,4 L0,8 Z" fill="#a8bddb" />
           </marker>
         </defs>
-        <rect width={CANVAS_WIDTH} height={CANVAS_HEIGHT} fill="url(#architecture-dots)" />
+        <rect width={layout.width} height={layout.height} fill="url(#architecture-dots)" />
 
         {diagram.edges.map((edge, index) => {
           const from = byId.get(edge.from);
           const to = byId.get(edge.to);
           if (!from || !to) return null;
-          const startX = from.x + NODE_WIDTH;
+          const forward = to.column > from.column ||
+            (to.column === from.column && to.y >= from.y);
+          const startX = forward ? from.x + NODE_WIDTH : from.x;
           const startY = from.y + NODE_HEIGHT / 2;
-          const endX = to.x - 8;
+          const endX = forward ? to.x - 8 : to.x + NODE_WIDTH + 8;
           const endY = to.y + NODE_HEIGHT / 2;
-          const bend = Math.max(34, (endX - startX) * 0.38);
+          const bend = Math.max(34, Math.abs(endX - startX) * 0.38);
+          const firstControl = forward ? startX + bend : startX - bend;
+          const secondControl = forward ? endX - bend : endX + bend;
           return (
             <path
-              key={`${edge.from}-${edge.to}-${index}`}
-              d={`M ${startX} ${startY} C ${startX + bend} ${startY}, ${endX - bend} ${endY}, ${endX} ${endY}`}
+              key={edge.from + '-' + edge.to + '-' + index}
+              d={'M ' + startX + ' ' + startY + ' C ' + firstControl + ' ' + startY + ', ' + secondControl + ' ' + endY + ', ' + endX + ' ' + endY}
               fill="none"
               stroke="#9cb1d0"
               strokeWidth="2.2"
@@ -122,41 +169,44 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
           );
         })}
 
-        {nodes.map(node => {
+        {layout.nodes.map(node => {
           const color = NODE_COLOR[node.kind];
           const Icon = NODE_ICON[node.kind];
+          const metadata = node.technology || node.details || 'Component';
           return (
             <g key={node.id}>
+              <title>{node.label + (node.details ? ': ' + node.details : '')}</title>
               <rect
                 x={node.x}
                 y={node.y}
                 width={NODE_WIDTH}
                 height={NODE_HEIGHT}
                 rx="13"
-                fill={`${color}0d`}
+                fill={color + '0d'}
                 stroke={color}
                 strokeWidth="1.8"
               />
-              <foreignObject x={node.x + 18} y={node.y + 23} width="42" height="40">
+              <foreignObject x={node.x + 17} y={node.y + 31} width="42" height="46">
                 <div className="flex h-full items-center justify-center">
                   <Icon className="h-8 w-8" style={{ color }} />
                 </div>
               </foreignObject>
-              <text x={node.x + 73} y={node.y + (node.technology ? 38 : 49)} fill="#f3f6fb" fontSize="18" fontWeight="600">
-                {node.label}
-              </text>
-              {node.technology && (
-                <text x={node.x + 73} y={node.y + 60} fill="#93a2b9" fontSize="12.5">
-                  {node.technology}
-                </text>
-              )}
+              <foreignObject x={node.x + 72} y={node.y + 15} width={NODE_WIDTH - 86} height={NODE_HEIGHT - 24}>
+                <div className="flex h-full flex-col justify-center overflow-hidden" title={node.label + ' — ' + metadata}>
+                  <span className="block truncate text-[15px] font-semibold text-slate-100">{node.label}</span>
+                  <span className="mt-1 block truncate text-xs text-slate-400">{metadata}</span>
+                  {node.path && (
+                    <span className="mt-1 block truncate font-mono text-[10px] text-slate-500">{node.path}</span>
+                  )}
+                </div>
+              </foreignObject>
             </g>
           );
         })}
       </svg>
       {diagram.truncated && (
-        <p className="absolute bottom-4 left-5 rounded-lg border border-amber-300/20 bg-black/50 px-3 py-2 text-[11px] text-amber-100/80">
-          GitHub returned a partial file tree; this diagram may omit components.
+        <p className="sticky bottom-4 left-4 mt-auto w-max max-w-[90%] rounded-lg border border-amber-300/20 bg-black/70 px-3 py-2 text-[11px] text-amber-100/80">
+          Large repository: the diagram uses a representative source sample.
         </p>
       )}
     </div>
@@ -211,7 +261,7 @@ export const ArchitectureDiagramModal: React.FC<ArchitectureDiagramModalProps> =
       {loading ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-[#080d14] text-sm text-slate-300" aria-live="polite">
           <LoaderCircle className="h-7 w-7 animate-spin text-brand-400" />
-          <span>Reading the current repository architecture…</span>
+          <span>Analyzing the current repository commit…</span>
         </div>
       ) : error ? (
         <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-[#080d14] px-6 text-center" role="alert">
