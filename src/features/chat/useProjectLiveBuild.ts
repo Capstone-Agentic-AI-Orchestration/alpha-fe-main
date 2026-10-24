@@ -21,11 +21,13 @@ export interface BuildAgentNode {
   state: BuildAgentState;
   /** The task this agent is on now, or its next one. */
   currentTaskTitle?: string;
-  tasks: Array<{ id: string; title: string; status: string }>;
+  tasks: Array<{ id: string; title: string; status: string; kind?: string; assignmentReason?: string;
+    repository?: string; scope?: { includePaths: string[]; excludePaths: string[] }; requiredChecks?: string[]; dependsOn?: string[] }>;
   /** Live execution for this agent in this build, once it has started. */
   card?: LiveBuildRoomAgentCard;
   /** Every file this agent changed in this build, across its tasks and attempts. */
   changedFiles: string[];
+  audits?: import('@/shared/types').DependencyAuditSummary[];
 }
 
 export interface ProjectLiveBuild {
@@ -39,6 +41,12 @@ export interface ProjectLiveBuild {
   agents: BuildAgentNode[];
   /** The full plan, checks and findings, for decisions made from the chat. */
   orchestration: LiveBuildRoomOrchestration;
+}
+
+export function needsSecurityAuditPlan(build: ProjectLiveBuild | null): boolean {
+  return build?.status === 'blocked' && /audit|vulnerab/i.test(build.orchestration.run.stoppedReason ?? '') &&
+    /dependency|package|npm/i.test(build.orchestration.run.stoppedReason ?? '') &&
+    !build.orchestration.tasks.some(task => task.required && task.dependencyAudit?.purpose === 'baseline');
 }
 
 const EVENTS = [
@@ -91,7 +99,9 @@ export function buildAgentNodes(snapshot: LiveBuildRoomSnapshot): BuildAgentNode
   for (const task of orchestration.tasks) {
     const agentId = task.ownerAgentId ?? task.ownerName;
     const node = byAgent.get(agentId) ?? { agentId, name: task.ownerName, role: '', state: 'waiting' as BuildAgentState, tasks: [], changedFiles: [] };
-    node.tasks.push({ id: task.id, title: task.title, status: task.status });
+    node.tasks.push({ id: task.id, title: task.title, status: task.status, kind: task.kind,
+      assignmentReason: task.assignmentReason, repository: task.repository, scope: task.scope,
+      requiredChecks: task.requiredChecks, dependsOn: task.dependsOn });
     byAgent.set(agentId, node);
   }
   return [...byAgent.values()].map(node => {
@@ -118,38 +128,43 @@ export function buildAgentNodes(snapshot: LiveBuildRoomSnapshot): BuildAgentNode
       ...node,
       name: card?.agentName ?? node.name,
       role: card?.agentRole ?? '',
-      state: stateFor(node.tasks.map(task => task.status)),
+      state: stateFor(node.tasks.map(task => task.status === 'running' &&
+        !orchestration.attempts.some(attempt => attempt.taskId === task.id && attempt.prototypeRunId && attempt.status === 'running') &&
+        !cards.some(item => item.orchestrationTaskId === task.id && item.status === 'running') ? 'ready' : task.status)),
       currentTaskTitle: active?.title,
+      audits: orchestration.attempts.filter(attempt => taskIds.has(attempt.taskId)).flatMap(attempt => attempt.dependencyAudits ?? []),
       card,
       changedFiles
     };
   });
 }
 
-/**
- * The project's open Orchestrator build, kept live for the chat bar.
- *
- * It reads the same Live Build Room snapshot as the room itself, so a build
- * started from another conversation still shows here. Socket events refresh
- * it straight away; a short poll covers anything the socket missed.
- */
-export function useProjectLiveBuild(projectId: string | undefined, enabled: boolean) {
-  const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
+/** Fail closed if an old or malformed room response does not belong to this chat. */
+export function snapshotBelongsToThread(snapshot: LiveBuildRoomSnapshot | null, threadId?: string | null): boolean {
+  return !threadId || snapshot?.orchestration?.run.originChatThreadId === threadId;
+}
+
+/** The originating chat's open Orchestrator build, kept live for its chat bar. */
+export function useProjectLiveBuild(projectId: string | undefined, enabled: boolean, threadId?: string | null) {
+  const scopeKey = `${projectId ?? ''}:${threadId ?? ''}`;
+  const [loaded, setLoaded] = useState<{ key: string; snapshot: LiveBuildRoomSnapshot } | null>(null);
+  // A thread switch hides the previous response synchronously, before effects run.
+  const snapshot = loaded?.key === scopeKey ? loaded.snapshot : null;
   const requestRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!projectId || !enabled) return;
     const request = ++requestRef.current;
     try {
-      const next = await apiService.getLiveBuildRoom(projectId);
-      if (request === requestRef.current) setSnapshot(next);
+      const next = await apiService.getLiveBuildRoom(projectId, undefined, threadId ?? undefined);
+      if (request === requestRef.current) setLoaded({ key: scopeKey, snapshot: next });
     } catch {
       // A room that cannot load leaves the bar on the chat's own activity.
     }
-  }, [enabled, projectId]);
+  }, [enabled, projectId, scopeKey, threadId]);
 
   useEffect(() => {
-    setSnapshot(null);
+    setLoaded(null);
     if (!projectId || !enabled) return undefined;
     void refresh();
     let debounce: number | undefined;
@@ -159,10 +174,11 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
     };
     const unsubs = EVENTS.map(event => runnerSocket.on(event, schedule));
     return () => {
+      requestRef.current += 1;
       if (debounce !== undefined) window.clearTimeout(debounce);
       unsubs.forEach(unsub => unsub());
     };
-  }, [enabled, projectId, refresh]);
+  }, [enabled, projectId, refresh, scopeKey]);
 
   const status = snapshot?.orchestration?.run.status;
   const open = Boolean(status && OPEN_BUILD_STATUSES.includes(status));
@@ -188,7 +204,7 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
 
   const build = useMemo<ProjectLiveBuild | null>(() => {
     const orchestration = snapshot?.orchestration;
-    if (!snapshot || !orchestration || !open) return null;
+    if (!snapshot || !orchestration || !open || !snapshotBelongsToThread(snapshot, threadId)) return null;
     return {
       runId: orchestration.run.id,
       status: orchestration.run.status,
@@ -200,7 +216,7 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
       agents: buildAgentNodes(snapshot),
       orchestration
     };
-  }, [open, running, snapshot]);
+  }, [open, running, snapshot, threadId]);
 
   return { build, refresh };
 }

@@ -1131,10 +1131,17 @@ export interface LiveBuildPlanningRecoveryPreview {
   truncated: boolean;
 }
 
+export interface DependencyAuditSummary {
+  id: string; repository: string; purpose: 'baseline' | 'verification' | 'self-check'; level: string; scanner: string;
+  status: 'clean' | 'findings' | 'error'; passesPolicy: boolean; counts: Record<string, number>; createdAt: string;
+  findings: Array<{ package: string; severity: string; range: string; advisories: string[] }>;
+}
+
 export interface LiveBuildRoomOrchestration {
   milestones?: Array<{ id: string; title: string; status: 'unplanned' | 'active' | 'accepted' }>;
   run: {
     id: string;
+    originChatThreadId?: string;
     status: LiveBuildOrchestrationStatus;
     revision: number;
     planVersion: number;
@@ -1179,6 +1186,7 @@ export interface LiveBuildRoomOrchestration {
     requirementIds: string[];
     acceptanceCriteria: string[];
     requiredChecks: string[];
+    dependencyAudit?: { scanner: 'npm'; purpose: 'baseline' | 'verification' | 'self-check'; level: string };
     scope: { includePaths: string[]; excludePaths: string[] };
     required: boolean;
     status: LiveBuildTaskStatus;
@@ -1196,6 +1204,7 @@ export interface LiveBuildRoomOrchestration {
     taskId: string;
     attemptNumber: number;
     reportFormatRetry?: boolean;
+    dependencyAudits?: DependencyAuditSummary[];
     prototypeRunId?: string;
     agentId?: string;
     agentName: string;
@@ -1598,6 +1607,14 @@ export interface ChatThread {
   clientId?: string;
   /** Set on creation. Matches `chat_threads.created_at` in the backend schema. */
   createdAt?: string;
+}
+
+/** User-curated context owned by one private chat thread. */
+export interface ChatThreadMemory {
+  threadId: string;
+  content: string;
+  revision: number;
+  updatedAt?: string;
 }
 
 export interface ChatSyncStatus {

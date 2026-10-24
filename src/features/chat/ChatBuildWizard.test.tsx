@@ -25,6 +25,12 @@ const render = (overrides: Partial<ChatBuildWizardProps>) => renderToStaticMarku
   {...overrides} />);
 
 describe('the build panel above the message box', () => {
+  it('offers a reviewable Security plan instead of blindly retrying missing audit evidence', () => {
+    const html = render({ build: build('blocked', 'The task has no dependency audit findings.'), onAuditPlan: noop });
+    expect(html).toContain('Plan with Security');
+    expect(html).toContain('revised audit-and-fix plan for your review');
+    expect(html).not.toContain('Fix and continue');
+  });
   it('places each build state on its step', () => {
     expect(wizardStepFor(build('planning'))).toEqual({ step: 'plan', attention: false });
     expect(wizardStepFor(build('awaiting_plan_approval'))).toEqual({ step: 'approve', attention: true });

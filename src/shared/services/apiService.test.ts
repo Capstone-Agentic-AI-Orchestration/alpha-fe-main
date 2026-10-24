@@ -71,6 +71,34 @@ describe('multi-repository project builds', () => {
     expect((fetchMock.mock.calls[0][1] as RequestInit).cache).toBe('no-store');
   });
 
+  it('passes the chat session identity with its Live Build Room request', async () => {
+    const snapshot = { summary: { review: 0, failed: 0, stale: 0 } };
+    const fetchMock = vi.fn().mockResolvedValue(json(snapshot));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await apiService.getLiveBuildRoom('project-1', undefined, 'thread/one');
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('threadId=thread%2Fone');
+  });
+
+  it('uses one encoded private memory endpoint for read, save and clear', async () => {
+    const memory = { threadId: 'thread/one', content: 'Decision: keep compatibility.', revision: 1 };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(json(memory))
+      .mockResolvedValueOnce(json(memory))
+      .mockResolvedValueOnce(json({ success: true }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiService.getChatThreadMemory('thread/one')).resolves.toEqual(memory);
+    await expect(apiService.saveChatThreadMemory('thread/one', memory.content)).resolves.toEqual(memory);
+    await expect(apiService.clearChatThreadMemory('thread/one')).resolves.toEqual({ success: true });
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/chat/threads/thread%2Fone/memory');
+    expect((fetchMock.mock.calls[1][1] as RequestInit).method).toBe('PUT');
+    expect(JSON.parse((fetchMock.mock.calls[1][1] as RequestInit).body as string)).toEqual({ content: memory.content });
+    expect((fetchMock.mock.calls[2][1] as RequestInit).method).toBe('DELETE');
+  });
+
   it.each([{}, { summary: {} }, { summary: { review: '0', failed: 0, stale: 0 } }])(
     'rejects an incomplete Live Build Room snapshot before rendering: %j', async snapshot => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(snapshot)));

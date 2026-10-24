@@ -88,6 +88,20 @@ export const BuildAgentActivityPanel: React.FC<{
           focusPath={focusPath}
           emptyText={agent.state === 'waiting' ? 'This agent has not started yet.' : undefined} />
       </div> : <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+        {!!agent.audits?.length && <section aria-label="Dependency audit evidence" className="space-y-3">
+          <h3 className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Dependency audit evidence</h3>
+          {[...agent.audits].reverse().map(audit => <div key={audit.id} className="rounded-xl border border-white/10 bg-white/[0.025] p-3 text-[11px]">
+            <div className={audit.passesPolicy ? 'font-semibold text-emerald-200' : 'font-semibold text-amber-200'}>
+              {audit.status === 'error' ? 'Audit could not run' : audit.purpose === 'verification' && audit.passesPolicy ? 'Security verification passed' : audit.status === 'findings' ? 'Audit completed: findings found' : 'Audit completed: no findings'}
+            </div>
+            <p className="mt-1 break-all text-gray-400">{audit.repository}</p>
+            <p className="mt-1 text-gray-500">{audit.scanner} · {audit.purpose} · threshold: {audit.level} · {audit.counts.total ?? audit.findings.length} findings</p>
+            {audit.purpose === 'self-check' && <p className="mt-1 text-gray-500">Supporting self-check; independent Security assessment is still required.</p>}
+            {!!audit.findings.length && <details className="mt-2"><summary className="cursor-pointer text-violet-200">Show package findings</summary>
+              <ul className="mt-2 space-y-2">{audit.findings.map(item => <li key={item.package} className="break-words"><span className="font-mono text-gray-200">{item.package}</span> · {item.severity}<p className="text-gray-500">{item.range}</p>{item.advisories.map((value, i) => <p key={i} className="text-gray-400">{value}</p>)}</li>)}</ul>
+            </details>}
+          </div>)}
+        </section>}
         {agent.currentTaskTitle && <section>
           <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">{live ? 'Working on' : agent.state === 'waiting' ? 'Next task' : 'Task'}</h3>
           <p className="text-xs leading-relaxed text-gray-200">{agent.currentTaskTitle}</p>
@@ -96,7 +110,17 @@ export const BuildAgentActivityPanel: React.FC<{
         <section>
           <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Assigned in this build</h3>
           <ul className="space-y-1.5">{agent.tasks.map(task => <li key={task.id} className="flex items-start justify-between gap-3 rounded-lg bg-white/[0.03] px-2.5 py-2">
-            <span className="min-w-0 text-[11px] text-gray-200">{task.title}</span>
+            <div className="min-w-0 flex-1 text-[11px] text-gray-200">
+              <p>{task.title}</p>
+              {task.assignmentReason && <p className="mt-1 text-[10px] leading-4 text-gray-400">Why assigned: {task.assignmentReason}</p>}
+              <p className="mt-1 text-[10px] text-violet-200">{['database', 'backend', 'frontend', 'mobile'].includes(task.kind ?? '') ? 'Scoped file edits' : 'Read-only assessment'}{task.repository ? ` · ${task.repository}` : ''}</p>
+              <details className="mt-1 text-[10px] text-gray-500"><summary className="cursor-pointer">Assignment boundaries</summary>
+                <p className="mt-1 break-words">Included: {task.scope?.includePaths.join(', ') || 'No repository edits'}</p>
+                {!!task.scope?.excludePaths.length && <p className="mt-1 break-words">Excluded: {task.scope.excludePaths.join(', ')}</p>}
+                <p className="mt-1">Approved checks: {task.requiredChecks?.join(', ') || 'None assigned'}</p>
+                <p className="mt-1">Dependencies: {task.dependsOn?.join(', ') || 'None'}</p>
+              </details>
+            </div>
             <span className="shrink-0 text-[10px] capitalize text-violet-200">{task.status.replace(/_/g, ' ')}</span>
           </li>)}</ul>
         </section>
