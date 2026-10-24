@@ -10,17 +10,24 @@ function readSlug(): string {
   return typeof window === 'undefined' ? '' : publicInquirySlug(window.location);
 }
 
+const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
+const HOW_IT_WORKS = 'client-how';
+
 function prefersReducedMotion(): boolean {
-  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  return globalThis.matchMedia(REDUCED_MOTION).matches;
 }
 
 /** Very tall viewports and reduced motion get a flat page: no sticky scenes, everything shown at once. */
 function isFlat(): boolean {
-  return window.innerHeight > 1600 || prefersReducedMotion();
+  return globalThis.innerHeight > 1600 || prefersReducedMotion();
+}
+
+function sectionElement(id: string) {
+  return document.querySelector(`#${id}`);
 }
 
 function scrollToSection(id: string) {
-  document.getElementById(id)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
+  sectionElement(id)?.scrollIntoView({ behavior: prefersReducedMotion() ? 'auto' : 'smooth' });
 }
 
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
@@ -31,7 +38,7 @@ const INITIAL: Journey = { hp: 0, ip: 0, wp: 0, pp: 0, flat: false, page: 0, act
 const sections = [
   { id: 'client-intro', label: 'Intro' },
   { id: 'client-idea', label: 'The idea' },
-  { id: 'client-how', label: 'How it works' },
+  { id: HOW_IT_WORKS, label: 'How it works' },
   { id: 'client-project', label: 'Your project' },
   { id: 'client-start', label: 'Start' },
 ];
@@ -100,13 +107,13 @@ export default function ClientLandingPage() {
   const measure = useCallback(() => {
     const root = rootRef.current;
     if (!root) return;
-    const vh = window.innerHeight || 800;
+    const vh = globalThis.innerHeight || 800;
     const track = (name: string) => {
       const rect = root.querySelector(`[data-track="${name}"]`)?.getBoundingClientRect();
       return rect ? clamp(-rect.top / Math.max(1, rect.height - vh)) : 0;
     };
     let active = sections[0].id;
-    sections.forEach(({ id }) => { if ((document.getElementById(id)?.getBoundingClientRect().top ?? Infinity) < vh * 0.5) active = id; });
+    sections.forEach(({ id }) => { if ((sectionElement(id)?.getBoundingClientRect().top ?? Infinity) < vh * 0.5) active = id; });
     const page = document.scrollingElement ?? document.documentElement;
     const next: Journey = {
       hp: track('hero'), ip: track('idea'), wp: track('how'), pp: track('project'),
@@ -140,16 +147,16 @@ export default function ClientLandingPage() {
       scene.draw((now - start) / 1000, false, journeyRef.current, pointerRef.current);
       frame = requestAnimationFrame(loop);
     };
-    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const motion = globalThis.matchMedia(REDUCED_MOTION);
     const restart = () => { cancelAnimationFrame(frame); measure(); frame = requestAnimationFrame(loop); };
     measure();
     frame = requestAnimationFrame(loop);
     document.addEventListener('scroll', onScroll, { capture: true, passive: true });
-    window.addEventListener('resize', onScroll);
+    globalThis.addEventListener('resize', onScroll);
     motion.addEventListener('change', restart);
     return () => {
       document.removeEventListener('scroll', onScroll, { capture: true });
-      window.removeEventListener('resize', onScroll);
+      globalThis.removeEventListener('resize', onScroll);
       motion.removeEventListener('change', restart);
       cancelAnimationFrame(frame);
       cancelAnimationFrame(pending);
@@ -170,7 +177,7 @@ export default function ClientLandingPage() {
     className={`alpha-public client-landing ${flat ? 'is-flat' : 'is-immersive'}`}
     onPointerMove={event => {
       if (event.pointerType !== 'mouse') return;
-      pointerRef.current = [clamp(event.clientX / window.innerWidth) - 0.5, clamp(event.clientY / window.innerHeight) - 0.5];
+      pointerRef.current = [clamp(event.clientX / globalThis.innerWidth) - 0.5, clamp(event.clientY / globalThis.innerHeight) - 0.5];
     }}
     onPointerLeave={() => { pointerRef.current = [0, 0]; }}
   >
@@ -198,7 +205,7 @@ export default function ClientLandingPage() {
               <nav className="cl-nav" aria-label="Client navigation">
                 <a className="public-current-page" href={home} aria-current="page">Home</a>
                 <a className="public-text-link cl-nav-link" href={clientSignIn}>Client sign in</a>
-                <button type="button" className="public-text-link cl-nav-link" onClick={() => scrollToSection('client-how')}>How it works</button>
+                <button type="button" className="public-text-link cl-nav-link" onClick={() => scrollToSection(HOW_IT_WORKS)}>How it works</button>
                 <a className="public-nav-action" href={inquiry}>Start an inquiry <ArrowUpRight size={15} /></a>
               </nav>
             </header>
@@ -230,7 +237,7 @@ export default function ClientLandingPage() {
           </div>
         </section>
 
-        <section id="client-how" className={sectionClass('cl-how', 'client-how')} data-track="how" aria-labelledby="client-how-heading">
+        <section id={HOW_IT_WORKS} className={sectionClass('cl-how', HOW_IT_WORKS)} data-track="how" aria-labelledby="client-how-heading">
           <div className="cl-stick" style={fadeOut(0.94, 0.12, wp)}>
             <div className="cl-shade" aria-hidden="true" />
             <div className="cl-how-in public-container">

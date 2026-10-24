@@ -28,6 +28,13 @@ export type JourneyProgress = { hp: number; ip: number; wp: number; pp: number; 
 
 const ZOOM = 40;
 const BACKGROUND = '#07070c';
+/** Canvas palette as "r,g,b" triplets; rgba() pairs one with an alpha. */
+const VIOLET = '178,154,245';
+const LILAC = '208,191,255';
+const MIST = '224,213,255';
+const INK = '245,243,252';
+const CYAN = '103,232,249';
+const rgba = (rgb: string, alpha: number | string) => `rgba(${rgb},${alpha})`;
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (x: number) => { x = clamp(x); return x * x * (3 - 2 * x); };
 const lerp = (a: Vec, b: Vec, t: number): Vec => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
@@ -35,8 +42,8 @@ const lerp = (a: Vec, b: Vec, t: number): Vec => [a[0] + (b[0] - a[0]) * t, a[1]
 function seeded(seed: number) {
   let state = seed;
   return () => {
-    state = (state * 16807) % 2147483647;
-    return state / 2147483647;
+    state = (state * 16_807) % 2_147_483_647;
+    return state / 2_147_483_647;
   };
 }
 
@@ -74,7 +81,7 @@ function buildWorld(): World {
 }
 
 /** Where each world's child portal sits, in that world's own units. */
-const PORTALS: Record<string, Vec> = { '-1': [0, 0], '0': [0.42, -0.12], '1': [0, 0], '2': [1.0, 0.2], '3': [0, 0] };
+const PORTALS: Record<string, Vec> = { '-1': [0, 0], '0': [0.42, -0.12], '1': [0, 0], '2': [1, 0.2], '3': [0, 0] };
 
 function pureCamera(level: number): Camera {
   const i = Math.floor(level), s = Math.pow(ZOOM, level - i), p = PORTALS[String(i)] ?? [0, 0];
@@ -95,7 +102,7 @@ function nebulaCamera(u: number): Camera {
 /** Planets: zoom in, pan across the three steps (holding on each), then dive into the third. */
 function planetsCamera(u: number): Camera {
   const Z = 2.4, C = PORTALS['2'];
-  const A: Vec = [-1.0 - 0.26 / Z, 0.15], B: Vec = [0.24 / Z, -0.25 - 0.14 / Z], Cf: Vec = [C[0] + 0.26 / Z, C[1] + 0.08 / Z];
+  const A: Vec = [-1 - 0.26 / Z, 0.15], B: Vec = [0.24 / Z, -0.25 - 0.14 / Z], Cf: Vec = [C[0] + 0.26 / Z, C[1] + 0.08 / Z];
   if (u < 0.12) {
     const t = smooth(u / 0.12);
     return { i: 2, s: Math.exp(Math.log(Z) * t), q: lerp([0, 0], A, t), P: PORTALS };
@@ -149,10 +156,10 @@ function stepsProgress(g: number): number {
 }
 
 function nebulaColor(r: number, hot: number): string {
-  if (r < 0.35) return '245,243,252';
-  if (hot > 0.8) return '103,232,249';
-  if (hot > 0.5) return '208,191,255';
-  return '178,154,245';
+  if (r < 0.35) return INK;
+  if (hot > 0.8) return CYAN;
+  if (hot > 0.5) return LILAC;
+  return VIOLET;
 }
 
 const STATUS_LABEL: Record<Kind, string> = { em: 'Done', am: 'Awaiting you', vi: 'In progress' };
@@ -249,7 +256,7 @@ export class ZoomScene {
       const r1 = (0.06 + r * 0.98) * R, r2 = r1 + s.len * (0.3 + r * 1.4) * R;
       const a = intensity * Math.min(1, r * 1.6) * (s.hot > 0.85 ? 0.9 : 0.45);
       const ca = Math.cos(s.a), sa = Math.sin(s.a);
-      ctx.strokeStyle = (s.hot > 0.85 ? 'rgba(245,243,252,' : 'rgba(178,154,245,') + a.toFixed(3) + ')';
+      ctx.strokeStyle = rgba(s.hot > 0.85 ? INK : VIOLET, a.toFixed(3));
       ctx.beginPath(); ctx.moveTo(cx + ca * r1, cy + sa * r1); ctx.lineTo(cx + ca * r2, cy + sa * r2); ctx.stroke();
     });
     ctx.lineWidth = 1;
@@ -257,7 +264,7 @@ export class ZoomScene {
 
   private dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, col: string, a: number, w: number, h: number) {
     if (x < -20 || y < -20 || x > w + 20 || y > h + 20 || a <= 0.01) return;
-    ctx.fillStyle = 'rgba(' + col + ',' + Math.min(1, a).toFixed(3) + ')';
+    ctx.fillStyle = rgba(col, Math.min(1, a).toFixed(3));
     if (r < 1.6) ctx.fillRect(x - r, y - r, r * 2, r * 2);
     else { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); }
   }
@@ -266,11 +273,11 @@ export class ZoomScene {
     this.world.stars.forEach(s => {
       const p = T(s[0], s[1]);
       const tw = C.still ? 0.7 : 0.5 + 0.5 * Math.sin(C.time * (0.6 + s[2]) + s[3]);
-      this.dot(ctx, p[0], p[1], 0.6 + s[2] * 0.9, s[2] > 0.85 ? '208,191,255' : '245,243,252', 0.15 + 0.5 * tw * s[2], w, h);
+      this.dot(ctx, p[0], p[1], 0.6 + s[2] * 0.9, s[2] > 0.85 ? LILAC : INK, 0.15 + 0.5 * tw * s[2], w, h);
     });
     const c = T(0, 0);
     [1.6, 2.6].forEach((r, j) => {
-      ctx.strokeStyle = 'rgba(178,154,245,' + (0.12 - j * 0.04) + ')';
+      ctx.strokeStyle = rgba(VIOLET, 0.12 - j * 0.04);
       ctx.beginPath(); ctx.arc(c[0], c[1], r * k * 0.05, 0, 6.2832); ctx.stroke();
     });
   }
@@ -302,9 +309,9 @@ export class ZoomScene {
         }
         ring.forEach((p, j) => {
           const a2 = 0.25 + 0.5 * ((p[2] + 1) / 2);
-          this.dot(ctx, p[0], p[1], 1.1, '178,154,245', a2, w, h);
+          this.dot(ctx, p[0], p[1], 1.1, VIOLET, a2, w, h);
           if (prev) {
-            ctx.strokeStyle = 'rgba(178,154,245,' + (a2 * 0.35).toFixed(3) + ')';
+            ctx.strokeStyle = rgba(VIOLET, (a2 * 0.35).toFixed(3));
             ctx.beginPath(); ctx.moveTo(prev[j][0], prev[j][1]); ctx.lineTo(p[0], p[1]); ctx.stroke();
           }
         });
@@ -312,7 +319,7 @@ export class ZoomScene {
       }
       ctx.globalAlpha = baseA;
     }
-    this.portal(ctx, T(0.42, -0.12), 0.055 * k, zs, C, '178,154,245', w, h);
+    this.portal(ctx, T(0.42, -0.12), 0.055 * k, zs, C, VIOLET, w, h);
   }
 
   private portal(ctx: CanvasRenderingContext2D, n: Vec, ringR: number, zs: number, C: Frame, col: string, w: number, h: number) {
@@ -322,24 +329,24 @@ export class ZoomScene {
     if (core > 0.01) {
       for (let j = 0; j < 3; j++) {
         const ph = C.still ? 0.3 : ((t * 0.5 + j / 3) % 1);
-        ctx.strokeStyle = 'rgba(' + col + ',' + (0.5 * (1 - ph) * core).toFixed(3) + ')';
+        ctx.strokeStyle = rgba(col, (0.5 * (1 - ph) * core).toFixed(3));
         ctx.beginPath(); ctx.arc(n[0], n[1], 6 + ph * 26, 0, 6.2832); ctx.stroke();
       }
-      this.dot(ctx, n[0], n[1], 5, '224,213,255', core, w, h);
+      this.dot(ctx, n[0], n[1], 5, MIST, core, w, h);
       this.dot(ctx, n[0], n[1], 2.5, '255,255,255', core, w, h);
     }
     if (ringR > 7 && ringA > 0.01) {
       const grow = clamp((zs - 1.1) / 1.5);
       ctx.lineWidth = 1.5;
-      ctx.strokeStyle = 'rgba(' + col + ',' + (0.75 * grow * ringA).toFixed(3) + ')';
+      ctx.strokeStyle = rgba(col, (0.75 * grow * ringA).toFixed(3));
       ctx.beginPath(); ctx.arc(n[0], n[1], ringR, 0, 6.2832); ctx.stroke();
       ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(' + col + ',' + (0.3 * grow * ringA).toFixed(3) + ')';
+      ctx.strokeStyle = rgba(col, (0.3 * grow * ringA).toFixed(3));
       ctx.beginPath(); ctx.arc(n[0], n[1], ringR * 1.18, 0, 6.2832); ctx.stroke();
       const spin = C.still ? 0 : t * 0.8;
       for (let j = 0; j < 6; j++) {
         const a = spin + j * 1.0472;
-        this.dot(ctx, n[0] + Math.cos(a) * ringR, n[1] + Math.sin(a) * ringR, 2, '224,213,255', grow * ringA, w, h);
+        this.dot(ctx, n[0] + Math.cos(a) * ringR, n[1] + Math.sin(a) * ringR, 2, MIST, grow * ringA, w, h);
       }
     }
     ctx.lineWidth = 1;
@@ -360,7 +367,7 @@ export class ZoomScene {
       const q = T(c[0], c[1]);
       this.dot(ctx, q[0], q[1], 1.2, '255,255,255', (0.5 + 0.5 * c[2]) * coreA, w, h);
     });
-    this.portal(ctx, T(0, 0), 0.05 * k, zs, C, '224,213,255', w, h);
+    this.portal(ctx, T(0, 0), 0.05 * k, zs, C, MIST, w, h);
   }
 
   private sphereAt(ctx: CanvasRenderingContext2D, T: Transform, cx: number, cy: number, R: number, rot: number, tilt: number, col: string, w: number, h: number) {
@@ -375,35 +382,35 @@ export class ZoomScene {
 
   private planets(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
     const t = C.time;
-    this.world.dust2.forEach(d => { const q = T(d[0], d[1]); this.dot(ctx, q[0], q[1], 0.8, '178,154,245', 0.15 + 0.3 * d[2], w, h); });
-    const A: Vec = [-1.0, 0.15], B: Vec = [0, -0.25], Cc: Vec = [1.0, 0.2];
+    this.world.dust2.forEach(d => { const q = T(d[0], d[1]); this.dot(ctx, q[0], q[1], 0.8, VIOLET, 0.15 + 0.3 * d[2], w, h); });
+    const A: Vec = [-1, 0.15], B: Vec = [0, -0.25], Cc: Vec = [1, 0.2];
     ctx.save();
     ctx.setLineDash([2, 10]);
     ctx.lineDashOffset = C.still ? 0 : -t * 20;
-    ctx.strokeStyle = 'rgba(178,154,245,0.5)';
+    ctx.strokeStyle = rgba(VIOLET, 0.5);
     ctx.lineWidth = 1.2;
     const a = T(A[0], A[1]), m1 = T(-0.5, -0.35), b = T(B[0], B[1]), m2 = T(0.5, -0.2), c = T(Cc[0], Cc[1]);
     ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo(m1[0], m1[1], b[0], b[1]); ctx.quadraticCurveTo(m2[0], m2[1], c[0], c[1]); ctx.stroke();
     ctx.restore();
     const R = 0.2;
     const step = journeyStep(C.wp);
-    this.sphereAt(ctx, T, A[0], A[1], R, t * 0.3, 0.3, step === 0 ? '208,191,255' : '178,154,245', w, h);
+    this.sphereAt(ctx, T, A[0], A[1], R, t * 0.3, 0.3, step === 0 ? LILAC : VIOLET, w, h);
     for (let j = 0; j < 3; j++) {
       const ang = t * (0.8 + j * 0.3) + j * 2.1, rr = R * (1.5 + j * 0.25);
       const q = T(A[0] + Math.cos(ang) * rr, A[1] + Math.sin(ang) * rr * 0.4);
-      this.dot(ctx, q[0], q[1], Math.max(2, k * 0.012), '224,213,255', 0.9, w, h);
+      this.dot(ctx, q[0], q[1], Math.max(2, k * 0.012), MIST, 0.9, w, h);
     }
-    this.sphereAt(ctx, T, B[0], B[1], R, -t * 0.25, 0.2, step === 1 ? '208,191,255' : '178,154,245', w, h);
-    ctx.strokeStyle = 'rgba(103,232,249,0.55)';
+    this.sphereAt(ctx, T, B[0], B[1], R, -t * 0.25, 0.2, step === 1 ? LILAC : VIOLET, w, h);
+    ctx.strokeStyle = rgba(CYAN, 0.55);
     ctx.lineWidth = 1.2;
     const bc = T(B[0], B[1]);
     ctx.beginPath(); ctx.ellipse(bc[0], bc[1], R * 1.9 * k, R * 0.45 * k, -0.35, 0, 6.2832); ctx.stroke();
     const sa = C.still ? 0.6 : t * 0.6;
     const sp = T(B[0] + Math.cos(sa) * R * 1.9 * Math.cos(-0.35) - Math.sin(sa) * R * 0.45 * Math.sin(-0.35), B[1] + Math.cos(sa) * R * 1.9 * Math.sin(-0.35) + Math.sin(sa) * R * 0.45 * Math.cos(-0.35));
-    this.dot(ctx, sp[0], sp[1], Math.max(2.5, k * 0.015), '103,232,249', 1, w, h);
-    this.sphereAt(ctx, T, Cc[0], Cc[1], R, t * 0.2, -0.2, step === 2 ? '208,191,255' : '178,154,245', w, h);
+    this.dot(ctx, sp[0], sp[1], Math.max(2.5, k * 0.015), CYAN, 1, w, h);
+    this.sphereAt(ctx, T, Cc[0], Cc[1], R, t * 0.2, -0.2, step === 2 ? LILAC : VIOLET, w, h);
     const cc = T(Cc[0], Cc[1]);
-    ctx.strokeStyle = 'rgba(110,231,183,0.45)';
+    ctx.strokeStyle = rgba('110,231,183', 0.45);
     ctx.lineWidth = 1;
     ctx.beginPath();
     for (let j = 0; j < 6; j++) {
@@ -417,7 +424,7 @@ export class ZoomScene {
     ctx.textAlign = 'center';
     ([[A, '01  TELL US', 0], [B, '02  YOUR INVITATION', 1], [Cc, '03  YOUR PROJECT', 2]] as const).forEach(([pos, label, index]) => {
       const q = T(pos[0], pos[1] + R * 1.9);
-      ctx.fillStyle = index === step ? 'rgba(245,243,252,0.95)' : 'rgba(167,165,185,0.7)';
+      ctx.fillStyle = index === step ? rgba(INK, 0.95) : rgba('167,165,185', 0.7);
       ctx.fillText(label, q[0], q[1] + 14);
     });
     ctx.textAlign = 'left';
@@ -435,7 +442,7 @@ export class ZoomScene {
       const q = T(x * f, y * f);
       return [q[0], q[1], z2];
     };
-    W.dust3.forEach(d => { const q = project(d); this.dot(ctx, q[0], q[1], 0.8, '178,154,245', 0.12 + 0.25 * ((q[2] + 1.5) / 3), w, h); });
+    W.dust3.forEach(d => { const q = project(d); this.dot(ctx, q[0], q[1], 0.8, VIOLET, 0.12 + 0.25 * ((q[2] + 1.5) / 3), w, h); });
     const P = C.projP;
     const hub = project([0, 0, 0]);
     const COL: Record<Kind, string> = { em: '52,211,153', am: '251,191,36', vi: '167,139,250' };
@@ -444,33 +451,33 @@ export class ZoomScene {
       const kind: Kind = wk.name === 'Homepage' && P >= 0.9 ? 'em' : wk.kind;
       const lit = clamp((P - wi * 0.12) / 0.5);
       const c = project(wk.pos);
-      ctx.strokeStyle = 'rgba(178,154,245,' + (0.15 + 0.35 * lit).toFixed(3) + ')';
+      ctx.strokeStyle = rgba(VIOLET, (0.15 + 0.35 * lit).toFixed(3));
       ctx.lineWidth = 1;
       ctx.beginPath(); ctx.moveTo(hub[0], hub[1]); ctx.lineTo(c[0], c[1]); ctx.stroke();
       wk.tasks.forEach((tk, ti) => {
         const q = project(tk);
         const on = ti / wk.tasks.length < lit;
-        ctx.strokeStyle = 'rgba(' + COL[kind] + ',' + (on ? 0.28 : 0.06) + ')';
+        ctx.strokeStyle = rgba(COL[kind], on ? 0.28 : 0.06);
         ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
         const tw = C.still ? 1 : 0.7 + 0.3 * Math.sin(t * 2 + tk[3] * 6);
-        this.dot(ctx, q[0], q[1], on ? 1.6 : 1, on ? COL[kind] : '178,154,245', (on ? 0.9 : 0.25) * tw, w, h);
+        this.dot(ctx, q[0], q[1], on ? 1.6 : 1, on ? COL[kind] : VIOLET, (on ? 0.9 : 0.25) * tw, w, h);
       });
       const pulse = kind === 'am' && !C.still ? 0.6 + 0.4 * Math.sin(t * 3) : 1;
       for (let j = 0; j < 2; j++) {
-        ctx.strokeStyle = 'rgba(' + COL[kind] + ',' + (0.35 * lit * pulse / (j + 1)).toFixed(3) + ')';
+        ctx.strokeStyle = rgba(COL[kind], (0.35 * lit * pulse / (j + 1)).toFixed(3));
         ctx.beginPath(); ctx.arc(c[0], c[1], Math.max(6, k * 0.035) * (1.6 + j * 0.9), 0, 6.2832); ctx.stroke();
       }
       this.dot(ctx, c[0], c[1], Math.max(4, k * 0.03), COL[kind], 0.4 + 0.6 * lit, w, h);
       if (lit > 0.6) labels.push({ x: c[0], y: c[1], text: wk.name + '  ·  ' + STATUS_LABEL[kind], col: COL[kind], a: (lit - 0.6) / 0.4, r: Math.max(4, k * 0.03) });
     });
-    this.dot(ctx, hub[0], hub[1], Math.max(5, k * 0.04), '245,243,252', 1, w, h);
+    this.dot(ctx, hub[0], hub[1], Math.max(5, k * 0.04), INK, 1, w, h);
     for (let j = 0; j < 3; j++) {
       const ph = C.still ? 0.3 : ((t * 0.35 + j / 3) % 1);
-      ctx.strokeStyle = 'rgba(224,213,255,' + (0.4 * (1 - ph)).toFixed(3) + ')';
+      ctx.strokeStyle = rgba(MIST, (0.4 * (1 - ph)).toFixed(3));
       ctx.beginPath(); ctx.arc(hub[0], hub[1], Math.max(5, k * 0.04) * (1 + ph * 4), 0, 6.2832); ctx.stroke();
     }
     if (k < 120) return;
-    if (P > 0.95) labels.push({ x: hub[0], y: hub[1], text: 'New message from your project manager', col: '178,154,245', a: Math.min(1, (P - 0.95) / 0.05), r: Math.max(5, k * 0.04), up: true });
+    if (P > 0.95) labels.push({ x: hub[0], y: hub[1], text: 'New message from your project manager', col: VIOLET, a: Math.min(1, (P - 0.95) / 0.05), r: Math.max(5, k * 0.04), up: true });
     ctx.font = '500 12px "DM Sans", sans-serif';
     ctx.textBaseline = 'middle';
     const baseA = ctx.globalAlpha;
@@ -478,8 +485,8 @@ export class ZoomScene {
       const width = ctx.measureText(l.text).width + 24;
       const bx = l.x + l.r + 10, by = l.up ? l.y - l.r - 34 : l.y - 13;
       ctx.globalAlpha = clamp(l.a) * baseA;
-      ctx.fillStyle = 'rgba(20,18,32,0.92)';
-      ctx.strokeStyle = 'rgba(' + l.col + ',0.6)';
+      ctx.fillStyle = rgba('20,18,32', 0.92);
+      ctx.strokeStyle = rgba(l.col, 0.6);
       ctx.beginPath();
       if (ctx.roundRect) ctx.roundRect(bx, by, width, 26, 6); else ctx.rect(bx, by, width, 26);
       ctx.fill(); ctx.stroke();
