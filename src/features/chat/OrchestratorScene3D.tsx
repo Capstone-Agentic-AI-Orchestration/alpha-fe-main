@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { Billboard, Html, Line, OrbitControls, QuadraticBezierLine, Sparkles } from '@react-three/drei';
+import { Html, Line, OrbitControls, QuadraticBezierLine, Sparkles } from '@react-three/drei';
 
-import { atomPositions, CAMERA_FOV, CAMERA_START, orbitPath, ORBIT_COUNT, waveAt, type Vec3 } from './orchestratorSceneLayout';
+import { AgentSceneOrb, AgentSceneWave, useAgentGlowTexture } from './AgentScenePrimitives';
+
+import { atomPositions, CAMERA_FOV, CAMERA_START, orbitPath, ORBIT_COUNT, type Vec3 } from './orchestratorSceneLayout';
 
 export interface SceneAgent {
   id: string;
@@ -45,55 +47,6 @@ export interface OrchestratorSceneProps {
 
 const SHELL = '#0d0d11';
 
-/** A soft round glow, drawn once and tinted per sprite. */
-function useGlowTexture(): THREE.Texture {
-  const texture = useMemo(() => {
-    const canvas = document.createElement('canvas');
-    canvas.width = canvas.height = 128;
-    const ctx = canvas.getContext('2d')!;
-    const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-    gradient.addColorStop(0, 'rgba(255,255,255,1)');
-    gradient.addColorStop(0.25, 'rgba(255,255,255,0.45)');
-    gradient.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 128, 128);
-    return new THREE.CanvasTexture(canvas);
-  }, []);
-  useEffect(() => () => texture.dispose(), [texture]);
-  return texture;
-}
-
-/** The dotted wave from the 2D bar, laid out as a floor under the atom. */
-function WaveFloor({ working }: { working: boolean }) {
-  const cols = 110;
-  const rows = 36;
-  const geometry = useMemo(() => {
-    const next = new THREE.BufferGeometry();
-    next.setAttribute('position', new THREE.BufferAttribute(new Float32Array(cols * rows * 3), 3));
-    return next;
-  }, []);
-  const fill = (t: number) => {
-    const array = geometry.attributes.position.array as Float32Array;
-    let k = 0;
-    for (let j = 0; j < rows; j++) {
-      const v = j / (rows - 1);
-      for (let i = 0; i < cols; i++) {
-        const u = i / (cols - 1);
-        array[k++] = (u - 0.5) * 26;
-        array[k++] = -4.1 + waveAt(u, v, t) * 0.45;
-        array[k++] = (v - 0.5) * 14;
-      }
-    }
-    geometry.attributes.position.needsUpdate = true;
-  };
-  useMemo(() => fill(0), []); // eslint-disable-line react-hooks/exhaustive-deps
-  useEffect(() => () => geometry.dispose(), [geometry]);
-  useFrame(({ clock }) => fill(clock.getElapsedTime() * (working ? 1.5 : 0.65)));
-  return <points geometry={geometry}>
-    <pointsMaterial color={working ? '#a78bfa' : '#8b5cf6'} size={1.8} sizeAttenuation={false} transparent opacity={0.55} depthWrite={false} />
-  </points>;
-}
-
 /** The three orbit lines of the atom. */
 function Orbits({ working }: { working: boolean }) {
   const paths = useMemo(() => Array.from({ length: ORBIT_COUNT }, (_, orbit) => orbitPath(orbit)), []);
@@ -104,38 +57,9 @@ function Hub({ glow, working, selected, clickable, onOver, onOut, onClick }: {
   glow: THREE.Texture; working: boolean; selected: boolean; clickable: boolean;
   onOver: () => void; onOut: () => void; onClick: () => void;
 }) {
-  const core = useRef<THREE.Mesh>(null);
-  const rings = useRef<THREE.Group>(null);
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    core.current?.scale.setScalar(1 + Math.sin(t * (working ? 2.4 : 1.2)) * 0.03);
-    rings.current?.children.forEach((ring, index) => {
-      const phase = (t * 0.45 + index / 2) % 1;
-      ring.scale.setScalar(1 + phase * 1.8);
-      ((ring as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = working ? (1 - phase) * 0.28 : 0;
-    });
-  });
-  return <group>
-    <sprite scale={[4.4, 4.4, 1]}>
-      <spriteMaterial map={glow} color="#8b5cf6" transparent opacity={working ? 0.6 : 0.45} depthWrite={false} blending={THREE.AdditiveBlending} />
-    </sprite>
-    <mesh ref={core}
-      onPointerOver={event => { event.stopPropagation(); onOver(); }}
-      onPointerOut={onOut}
-      onClick={event => { event.stopPropagation(); if (clickable) onClick(); }}>
-      <sphereGeometry args={[0.66, 48, 48]} />
-      <meshPhysicalMaterial color="#a78bfa" emissive="#6d28d9" emissiveIntensity={working ? 1.1 : 0.75} roughness={0.15} clearcoat={1} clearcoatRoughness={0.1} />
-    </mesh>
-    <Billboard>
-      <group ref={rings}>
-        {[0, 1].map(index => <mesh key={index}>
-          <ringGeometry args={[0.7, 0.73, 64]} />
-          <meshBasicMaterial color="#c4b5fd" transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
-        </mesh>)}
-      </group>
-      {selected && <mesh><ringGeometry args={[0.9, 0.95, 64]} /><meshBasicMaterial color="#ede9fe" transparent opacity={0.9} depthWrite={false} /></mesh>}
-    </Billboard>
-  </group>;
+  return <AgentSceneOrb glow={glow} color="#a78bfa" hub active={working} selected={selected}
+    onPointerOver={event => { event.stopPropagation(); onOver(); }} onPointerOut={onOut}
+    onClick={event => { event.stopPropagation(); if (clickable) onClick(); }} />;
 }
 
 /** A link from the Orchestrator, drawn only while the agent takes part in the work. */
@@ -190,22 +114,11 @@ function AgentOrb({ agent, position, glow, selected, hovered, onOver, onOut, onC
   agent: SceneAgent; position: Vec3; glow: THREE.Texture; selected: boolean; hovered: boolean;
   onOver: (event: ThreeEvent<PointerEvent>) => void; onOut: () => void; onClick: (event: ThreeEvent<MouseEvent>) => void;
 }) {
-  const halo = useRef<THREE.SpriteMaterial>(null);
   const color = useMemo(() => new THREE.Color('rgb(' + agent.tone + ')'), [agent.tone]);
-  // The orb stays where it is; a working agent only breathes its glow.
-  useFrame(({ clock }) => {
-    if (halo.current && agent.active) halo.current.opacity = 0.45 + Math.sin(clock.getElapsedTime() * 3) * 0.15;
-  });
   const lit = agent.active || agent.engaged;
   return <group position={position}>
-    <sprite scale={hovered || selected || lit ? [1.9, 1.9, 1] : [1.3, 1.3, 1]}>
-      <spriteMaterial ref={halo} map={glow} color={color} transparent opacity={lit ? 0.5 : 0.24} depthWrite={false} blending={THREE.AdditiveBlending} />
-    </sprite>
-    <mesh onPointerOver={onOver} onPointerOut={onOut} onClick={onClick} scale={hovered ? 1.15 : 1}>
-      <sphereGeometry args={[0.28, 32, 32]} />
-      <meshPhysicalMaterial color={color} emissive={color} emissiveIntensity={agent.active ? 0.95 : lit ? 0.6 : 0.3} roughness={0.2} clearcoat={1} />
-    </mesh>
-    {selected && <Billboard><mesh><ringGeometry args={[0.4, 0.44, 48]} /><meshBasicMaterial color="#ede9fe" transparent opacity={0.9} depthWrite={false} /></mesh></Billboard>}
+    <AgentSceneOrb glow={glow} color={color} active={agent.active} engaged={agent.engaged} selected={selected} hovered={hovered}
+      onPointerOver={onOver} onPointerOut={onOut} onClick={onClick} />
     <Html center position={[0, -0.46, 0]} zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
       <div className={'whitespace-nowrap rounded-full px-1.5 py-px text-[8.5px] font-medium leading-3 ' + (selected ? 'bg-violet-400/30 text-white' : lit ? 'bg-black/60 text-gray-100' : 'bg-black/40 text-gray-400')}>{agent.name}</div>
     </Html>
@@ -220,7 +133,7 @@ function AgentOrb({ agent, position, glow, selected, hovered, onOver, onOut, onC
 }
 
 function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, working, selectedId, onSelect, reduceMotion, resetToken }: OrchestratorSceneProps) {
-  const glow = useGlowTexture();
+  const glow = useAgentGlowTexture();
   const { gl } = useThree();
   const controls = useThree(state => state.controls) as unknown as { reset?: () => void } | null;
   const positions = useMemo(() => atomPositions(agents.length), [agents.length]);
@@ -240,7 +153,7 @@ function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, w
     <ambientLight intensity={0.45} />
     <pointLight position={[0, 0, 0]} intensity={28} distance={14} color="#a78bfa" />
     <directionalLight position={[5, 8, 6]} intensity={0.9} />
-    <WaveFloor working={working} />
+    <AgentSceneWave working={working} reduceMotion={reduceMotion} />
     {!reduceMotion && <Sparkles count={60} scale={[16, 8, 9]} size={1.4} speed={0.2} opacity={0.4} color="#c4b5fd" />}
     <Orbits working={working} />
     {agents.map((agent, index) => (agent.active || agent.engaged) &&
