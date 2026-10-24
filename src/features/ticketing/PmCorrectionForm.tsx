@@ -36,20 +36,20 @@ export function PmCorrectionForm({ ticket, mode, disabled, onCancel, onSubmit }:
     <fieldset disabled={disabled} className="min-w-0 space-y-3">
       <legend className="sr-only">Correction details</legend>
       {issues && <div className="max-h-56 space-y-1 overflow-y-auto rounded-lg border border-white/[0.07] p-2">
-        {candidates.length === 0 && <p className="p-2 text-xs text-gray-500">No assigned tasks are ready for correction. Already queued or running work is not restarted.</p>}
+        {candidates.length === 0 && <p className="p-2 text-xs text-gray-500">No linked tasks are ready for correction. Already queued or running work is not restarted.</p>}
         {candidates.map(issue => <label key={issue.id} className="flex cursor-pointer items-start gap-2 rounded-md p-2 hover:bg-white/[0.035]">
           <input type="checkbox" className="mt-0.5 accent-brand-500" checked={issueIds.includes(issue.id)} onChange={event => {
             setIssueIds(current => event.target.checked ? [...current, issue.id] : current.filter(id => id !== issue.id)); setConfirmed(false);
           }} />
           <span className="min-w-0 text-xs text-gray-300"><span className="text-[10px] text-gray-500">{issue.identifier}</span> {issue.title}
-            <span className="mt-1 block text-[10px] text-gray-500">{issue.status === 'done' ? 'Done' : 'In review'} · {issue.assignedHuman}</span>
+            <span className="mt-1 block text-[10px] text-gray-500">{issue.status === 'done' ? 'Done' : 'In review'}{issue.assignedHuman?.trim() ? ` · ${issue.assignedHuman}` : ''}</span>
           </span>
         </label>)}
       </div>}
       <label className="block space-y-1.5"><span className="text-[11px] font-medium text-gray-300">Developer correction instructions</span>
         <textarea required maxLength={4000} rows={3} className={`${input} min-h-24 resize-y`} value={reason}
           onChange={event => { setReason(event.target.value); setConfirmed(false); }} placeholder="What failed the agreed checks, and what should be corrected?" />
-        <span className="block text-[10px] text-gray-500">Shared only with the assigned developer. Client messages and private notes are not copied automatically.</span>
+        <span className="block text-[10px] text-gray-500">Available to developers with project access. No named developer is required. Client messages and private notes are not copied automatically.</span>
       </label>
       <label className="flex items-start gap-2 text-[11px] leading-relaxed text-amber-100/80">
         <input type="checkbox" className="mt-0.5 accent-brand-500" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />

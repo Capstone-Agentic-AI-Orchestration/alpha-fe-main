@@ -60,11 +60,19 @@ describe('PM work handoff display preflight', () => {
     expect(isHandoffIssueCandidate(issue, 'project-a')).toBe(true);
     expect(isHandoffIssueCandidate(issue, 'project-b')).toBe(false);
   });
-  it.each(['in_progress', 'agent_running', 'review', 'done'] as const)('excludes already-started %s Issues', status => {
-    expect(isHandoffIssueCandidate({ ...options().issues[0], status }, 'project-a')).toBe(false);
+  it.each(['in_progress', 'agent_running', 'review', 'done'] as const)('excludes already-started %s tasks regardless of assignment', status => {
+    for (const assignedHuman of ['dev', null]) {
+      expect(isHandoffIssueCandidate({ ...options().issues[0], status, assignedHuman }, 'project-a')).toBe(false);
+    }
   });
-  it.each([null, '', '   '])('excludes missing human assignment %s', assignedHuman => {
-    expect(isHandoffIssueCandidate({ ...options().issues[0], assignedHuman }, 'project-a')).toBe(false);
+  it.each([null, '', '   '])('allows handoff without a named developer (%s)', assignedHuman => {
+    for (const status of ['backlog', 'todo'] as const) {
+      const choices = options();
+      choices.issues[0] = { ...choices.issues[0], assignedHuman, status };
+      expect(isHandoffIssueCandidate(choices.issues[0], 'project-a')).toBe(true);
+      expect(isHandoffIssueCandidate(choices.issues[0], 'project-b')).toBe(false);
+      expect(validHandoffSelection(choices, 'project-a', ['issue-a'])).toBe(true);
+    }
   });
   it('accepts only a nonempty unique selection of existing Issues in one existing project', () => {
     const choices = options();
@@ -90,5 +98,13 @@ describe('PM work handoff display preflight', () => {
     vi.spyOn(apiService, 'getProjects').mockResolvedValue([]);
     vi.spyOn(apiService, 'getIssues').mockRejectedValue(new Error('Unavailable'));
     await expect(loadPmHandoffOptions()).rejects.toThrow('Unavailable');
+  });
+  it('loads an unassigned task from the workspace API and permits its handoff', async () => {
+    const choices = options(); choices.issues[0].assignedHuman = null;
+    vi.spyOn(apiService, 'getProjects').mockResolvedValue(choices.projects as Project[]);
+    vi.spyOn(apiService, 'getIssues').mockResolvedValue(choices.issues as unknown as Issue[]);
+    const loaded = await loadPmHandoffOptions();
+    expect(loaded.issues[0].assignedHuman).toBeNull();
+    expect(validHandoffSelection(loaded, 'project-a', ['issue-a'])).toBe(true);
   });
 });
