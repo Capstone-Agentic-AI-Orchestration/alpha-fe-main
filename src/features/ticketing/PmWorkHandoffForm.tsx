@@ -49,7 +49,7 @@ export function PmWorkHandoffForm({ disabled, linkedProjectId = null, linkedProj
     <div className="flex items-start justify-between gap-3">
       <div>
         <h3 className="text-sm font-medium text-gray-100">Link agreed work</h3>
-        <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Select an existing project and its assigned tasks. Create any missing work through the existing Projects and Tasks pages, then refresh this list.</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Select an existing project and its tasks. Create any missing work through the existing Projects and Tasks pages, then refresh this list.</p>
       </div>
       <button type="button" className={secondary} disabled={disabled || loading} onClick={() => setRefresh(value => value + 1)} aria-label="Refresh project and task choices"><RefreshCw size={13} /></button>
     </div>
@@ -78,15 +78,15 @@ export function PmWorkHandoffForm({ disabled, linkedProjectId = null, linkedProj
       {linkedProjectId && <p className="text-[10px] text-gray-500">This request is already organized under {project?.name ?? linkedProjectName ?? 'its linked project'}. Authorized work must stay in that project.</p>}
       {project && <div>
         <p className="text-[11px] font-medium text-gray-300">Tasks to include</p>
-        <p className="mt-1 text-[10px] leading-relaxed text-gray-500">Only Backlog or Todo tasks with a human assignee appear. The server checks current developer access, existing ticket links and active runs before saving.</p>
+        <p className="mt-1 text-[10px] leading-relaxed text-gray-500">Backlog or Todo tasks can be selected without an assigned developer. The server checks project access, existing ticket links and active runs before saving.</p>
         <div className="mt-2 max-h-56 space-y-1 overflow-y-auto rounded-lg border border-white/[0.07] p-2">
-          {issues.length === 0 && <p className="p-2 text-xs text-gray-500">No eligible tasks in this project. Create or assign an unstarted task, then refresh.</p>}
+          {issues.length === 0 && <p className="p-2 text-xs text-gray-500">No eligible tasks in this project. Create an unstarted task, then refresh.</p>}
           {issues.map(issue => <label key={issue.id} className="flex cursor-pointer items-start gap-2 rounded-md p-2 hover:bg-white/[0.035]">
             <input type="checkbox" className="mt-0.5 accent-brand-500" checked={issueIds.includes(issue.id)} onChange={event => {
               setIssueIds(current => event.target.checked ? [...current, issue.id] : current.filter(id => id !== issue.id)); setConfirmed(false);
             }} />
             <span className="min-w-0 text-xs text-gray-300"><span className="text-[10px] text-gray-500">{issue.identifier}</span> {issue.title}
-              <span className="mt-1 block text-[10px] text-gray-500">{issue.status === 'todo' ? 'Todo' : 'Backlog'} · {issue.assignedHuman}</span>
+              <span className="mt-1 block text-[10px] text-gray-500">{issue.status === 'todo' ? 'Todo' : 'Backlog'}{issue.assignedHuman?.trim() ? ` · ${issue.assignedHuman}` : ''}</span>
             </span>
           </label>)}
         </div>
