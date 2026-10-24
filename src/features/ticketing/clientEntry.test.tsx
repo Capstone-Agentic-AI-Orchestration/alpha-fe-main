@@ -11,16 +11,19 @@ function browser() {
   vi.stubGlobal('window', { location: { protocol: 'https:', hostname: 'alpha.example.test', hash: '#/?intake=team-a', search: '' } });
 }
 describe('client landing and password entry', () => {
-  it('uses Pineapple’s public design while preserving the current inquiry, password sign-in, and staff routes', () => {
+  it('uses the zoom-journey design while preserving the current inquiry, password sign-in, and staff routes', () => {
     browser(); const html = renderToStaticMarkup(<ClientLandingPage />);
     expect(html).toContain('/#/request?intake=team-a');
     expect(html).toContain('/#/client?intake=team-a');
     expect(html).toContain('href="/#/team"');
-    expect(html).toContain('class="public-hero public-container"');
+    expect(html).toContain('<canvas class="cl-canvas" aria-hidden="true">');
     expect(html).toContain('A clear start for');
+    expect(html).toContain('Three steps.');
+    expect(html).toContain('Alphaexplora');
     expect(html).toContain('If your project manager invites you');
     expect(html).toContain('Sign in to your requests');
     expect(html).toContain('aria-current="page">Home</a>');
+    expect(html).not.toMatch(/\bPM\b/);
     expect(html).not.toContain('Send sign-in link');
     expect(html).not.toContain('TBD');
     expect(html).not.toContain('<form');
