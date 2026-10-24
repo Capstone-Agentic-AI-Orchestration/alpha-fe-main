@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { OrchestrationPlanPreview } from '../live-build-room/OrchestrationPlanPreview';
 import { AlertTriangle, Check, ChevronDown, CircleDot, ExternalLink, LoaderCircle } from 'lucide-react';
 
 import { PlanBody, ReviewBody } from './ChatBuildBodies';
@@ -21,6 +22,8 @@ export interface BuildPlanningFailure {
   reason: string;
   /** The request that was being planned, so it can be tried again. */
   request?: string;
+  /** Codebases that planning attempt covered. */
+  repositories?: string[];
 }
 
 /** Which step a build is on, and whether that step needs the person. */
@@ -78,13 +81,14 @@ const Options: React.FC<{ options: Option[] }> = ({ options }) => (
 
 const Stepper: React.FC<{ step: WizardStep; attention: boolean; failed: boolean }> = ({ step, attention, failed }) => {
   const current = STEPS.findIndex(item => item.id === step);
-  return <ol aria-label="Build steps" className="flex min-w-0 items-center gap-1.5">
+  // Stretched across the composer's width: the connectors grow, the labels keep their size.
+  return <ol aria-label="Build steps" className="flex min-w-0 flex-1 items-center">
     {STEPS.map((item, index) => {
       const done = index < current;
       const active = index === current;
-      return <li key={item.id} aria-current={active ? 'step' : undefined} className="flex min-w-0 items-center gap-1.5">
-        {index > 0 && <span aria-hidden="true" className={'h-px w-3 shrink-0 ' + (done || active ? 'bg-violet-300/50' : 'bg-white/10')} />}
-        <span className={'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ' +
+      return <li key={item.id} aria-current={active ? 'step' : undefined} className={'flex min-w-0 items-center ' + (index > 0 ? 'flex-1' : '')}>
+        {index > 0 && <span aria-hidden="true" className={'mx-2 h-px min-w-3 flex-1 ' + (done || active ? 'bg-violet-300/50' : 'bg-white/10')} />}
+        <span className={'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium ' +
           (active ? (failed ? 'bg-rose-400/15 text-rose-100' : attention ? 'bg-amber-300/15 text-amber-100' : 'bg-violet-400/15 text-violet-100')
             : done ? 'text-violet-200/80' : 'text-gray-500')}>
           {done ? <Check className="h-3 w-3" /> : active ? (failed ? <AlertTriangle className="h-3 w-3" /> : attention ? <CircleDot className="h-3 w-3" /> : <LoaderCircle className="h-3 w-3 animate-spin" />) : null}
@@ -129,6 +133,8 @@ function currentRepositoryLabel(build: ProjectLiveBuild, taskTitle?: string): st
  * when it cannot be done left the person pressing a button that changed nothing.
  */
 export function continueChoice(build: ProjectLiveBuild): { label: string; hint: string; action?: LiveBuildRecoveryAction } | null {
+  if (build.status === 'blocked' && build.orchestration.run.stoppedReason?.startsWith('Plan document could not be saved before dispatch:')) return { label: 'Retry saving the plan', hint: 'Save the Markdown document before continuing work.' };
+  if (build.status === 'blocked' && build.orchestration.run.stoppedReason?.startsWith('Milestone planning stopped before dispatch:')) return { label: 'Retry milestone planning', hint: 'Use the saved checkpoint to plan the next milestone again.' };
   if (build.status === 'paused') return { label: 'Resume', hint: 'Pick up where it stopped.' };
   const recovery = build.orchestration.recovery;
   const available = new Set(recovery?.availableActions ?? []);
@@ -242,9 +248,13 @@ export interface ChatBuildWizardProps {
  */
 export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   const { build, failure, busy } = props;
-  const [collapsed, setCollapsed] = useState(false);
+  const [documentVersion, setDocumentVersion] = useState(0);
   const failed = !build && Boolean(failure);
   const { step, attention } = wizardStepFor(build);
+  // Only a step that needs the person opens by itself; a working build is just the step bar.
+  const needsYou = failed || attention;
+  const [collapsed, setCollapsed] = useState(!needsYou);
+  useEffect(() => { if (needsYou) setCollapsed(false); }, [needsYou, build?.status]);
 
   let title: string;
   let subtitle: string;
@@ -274,7 +284,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
         body = <PlanBody orchestration={build.orchestration} />;
         options = [
           props.canStart
-            ? { label: 'Start planned work', hint: 'Agents begin with the first task.', onSelect: props.onStart, tone: 'primary', busy: busy === 'start' }
+            ? { label: 'Start planned work', hint: 'Review the saved Markdown plan first.', onSelect: props.onStart, tone: 'primary', busy: busy === 'start', disabled: documentVersion !== build.orchestration.run.planVersion }
             : { label: 'Start planned work', hint: 'Your workspace role cannot start builds.', onSelect: () => undefined, disabled: true },
           ...(props.canStop ? [{ label: 'Stop and plan something else', hint: 'Then describe what you want instead.', onSelect: props.onStop, busy: busy === 'stop' }] : []),
           { label: 'Open the full plan', onSelect: props.onOpenRoom }
@@ -332,23 +342,27 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
     return null;
   }
 
-  const border = failed ? 'border-rose-300/25' : attention ? 'border-amber-300/25' : 'border-violet-300/25';
-  return <section aria-label={title} className={'overflow-hidden rounded-2xl border bg-surface-raised/95 shadow-xl shadow-black/50 backdrop-blur ' + border}>
-    <div className="flex items-center gap-3 px-4 pt-3">
+  const border = failed ? 'border-rose-300/25' : attention ? 'border-amber-300/25' : 'border-white/10';
+  const details = !collapsed && Boolean((build && build.status !== 'planning') || body || options.length || props.error);
+  return <section aria-label={title} className="space-y-2">
+    <div className="flex items-center gap-3 px-3">
       <Stepper step={step} attention={attention} failed={failed} />
-      <span className="ml-auto flex items-center gap-1">
+      <span className="flex shrink-0 items-center gap-1">
         {build && <button type="button" onClick={props.onOpenRoom} aria-label="Open in Live Build Room" title="Open in Live Build Room" className="rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></button>}
         <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? 'Show build details' : 'Hide build details'} className="rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white"><ChevronDown className={'h-4 w-4 transition-transform ' + (collapsed ? '' : 'rotate-180')} /></button>
       </span>
     </div>
-    <div className="px-4 pb-3 pt-2">
-      <div className="text-xs font-semibold text-white">{title}</div>
-      <div className="truncate text-[11px] text-gray-400">{subtitle}</div>
-    </div>
-    {!collapsed && <>
+    {details && <div className={'overflow-hidden rounded-2xl border bg-surface-raised/95 shadow-xl shadow-black/50 backdrop-blur ' + border}>
+      {needsYou && <div className="px-4 pb-2 pt-3">
+        <div className="text-xs font-semibold text-white">{title}</div>
+        <div className="truncate text-[11px] text-gray-400">{subtitle}</div>
+      </div>}
+      {build && build.status !== 'planning' && <div className={'px-4 pb-3 ' + (needsYou ? '' : 'pt-3')}><OrchestrationPlanPreview key={build.runId} projectId={props.projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={['awaiting_plan_approval', 'executing'].includes(build.status)} onReady={setDocumentVersion} /></div>}
       {body && <div className="max-h-[22vh] space-y-3 overflow-y-auto border-t border-white/[0.07] px-4 py-3">{body}</div>}
       {options.length > 0 && <div className="border-t border-white/[0.07] px-3 py-2.5"><Options options={options} /></div>}
       {props.error && <p role="alert" className="border-t border-rose-300/15 bg-rose-500/[0.06] px-4 py-2 text-[11px] text-rose-100">{props.error}</p>}
-    </>}
+    </div>}
+    {/* The plan must load for "Start planned work" to unlock, even while the details are hidden. */}
+    {!details && build?.status === 'awaiting_plan_approval' && <div className="hidden"><OrchestrationPlanPreview key={build.runId} projectId={props.projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={false} onReady={setDocumentVersion} /></div>}
   </section>;
 };

@@ -57,6 +57,11 @@ export function resolveRecoveryAction(
       recovery.availableActions.includes('resume_checkpoint')) {
     return 'resume_checkpoint';
   }
+  // Any retry the build cannot take as-is goes as direction when direction is what it waits for.
+  if (['repair_and_continue', 'recheck_prerequisite', 'resume_checkpoint'].includes(action) &&
+      !recovery.availableActions.includes(action) && recovery.availableActions.includes('provide_guidance')) {
+    return 'provide_guidance';
+  }
   return action;
 }
 
@@ -71,6 +76,29 @@ const CHAT_CONTINUATION = /\bcontinue\s+(?:to\s+(?!work\b|build\b)\w+|explaining
  * Questions about continuing, negations and requests to continue an answer are
  * not, so asking "should we continue?" never starts work.
  */
+/**
+ * A short request to try the stopped work again: "retry", "can you retry", "try again",
+ * "run it again". Only meaningful while a build is waiting on the person; longer messages
+ * and negations go to Alpha as ordinary chat.
+ */
+export function isRetryRequest(message: string): boolean {
+  const text = message.trim().toLowerCase().replace(/[.!?]+$/, '');
+  if (!text || text.length > 60) return false;
+  return /^(?:(?:can|could|would|will) you\s+|please\s+|ok(?:ay)?,?\s+|let'?s\s+)?(?:retry|try (?:it |that )?again|re-?run(?: it| that)?|run (?:it|that) again|do (?:it|that) again|redo(?: it| that)?)(?:\s+(?:please|now|the (?:task|build)))?$/.test(text);
+}
+
+/**
+ * A message that answers a build waiting for direction: an instruction, not a question,
+ * an @mention or a slash command. "Tell the Orchestrator what to do" asks for exactly this
+ * in the message box, so it must reach the build rather than Alpha's chat.
+ */
+export function isBuildDirection(message: string): boolean {
+  const text = message.trim();
+  if (text.length < 8 || text.length > 4_000 || /^[@/]/.test(text)) return false;
+  if (/\?\s*$/.test(text) || QUESTION_START.test(text.toLowerCase())) return false;
+  return true;
+}
+
 export function isContinueRequest(message: string): boolean {
   const text = message.trim().toLowerCase().replace(/[.!]+$/, '');
   if (!text || text.length > 120) return false;

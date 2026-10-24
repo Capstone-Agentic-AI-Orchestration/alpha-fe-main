@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { OrchestrationPlanPreview, PlanDocumentTab, PlanPanelContext, planFileName, type PlanPanelRequest } from '../live-build-room/OrchestrationPlanPreview';
 import {
   AlertTriangle,
   Activity,
@@ -56,10 +57,12 @@ import { MessageMarkdown } from './MessageMarkdown';
 import { OrchestratorFlow, isOrchestratorCall } from './OrchestratorFlow';
 import { AgentActivityPanel } from './AgentActivityPanel';
 import { BuildAgentActivityPanel } from './BuildAgentActivityPanel';
+import { ChatSidePanel, type SidePanelTab } from './ChatSidePanel';
+import { LiveChangesView } from './LiveChangesView';
 import { ChatBuildWizard, planningFailureReason, type BuildPlanningFailure } from './ChatBuildWizard';
 import { buildHandoffs, buildStatusLabel, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
-import { inferRecoveryAction, isContinueRequest, isExplicitBuildRetry, resolveRecoveryAction } from './chatRecoveryIntent';
+import { inferRecoveryAction, isBuildDirection, isContinueRequest, isExplicitBuildRetry, isRetryRequest, resolveRecoveryAction } from './chatRecoveryIntent';
 import { ChatHome } from './ChatHome';
 import { useTranscriptScroll } from './useTranscriptScroll';
 
@@ -371,6 +374,7 @@ function OrchestratorBuildActivityRow({
         compact
       />
     </div>}
+    {orchestration && <div className="px-3 py-2"><OrchestrationPlanPreview projectId={projectId} runId={runId} planVersion={orchestration.run.planVersion} autoShow={false} /></div>}
     {expanded && <div className="space-y-4 border-t border-white/[0.07] px-3 py-3">
       {loading && !snapshot && <div className="flex items-center gap-2 text-[10px] text-gray-500"><Loader2 className="h-3 w-3 animate-spin" />Loading run details…</div>}
       {error && <p role="alert" className="text-[10px] text-rose-300">{error}</p>}
@@ -432,6 +436,13 @@ function MessageAttachments({ attachments }: { attachments?: ChatAttachmentRefer
   </span>)}</div>;
 }
 
+/** One thing open in the chat's right side panel. */
+type SideTab =
+  | { id: string; kind: 'plan'; projectId: string; runId: string; planVersion: number }
+  | { id: string; kind: 'agent'; agentId: string }
+  | { id: string; kind: 'call'; callId: string }
+  | { id: string; kind: 'changes'; projectId: string; runId: string };
+
 export const ChatView: React.FC = () => {
   const {
     chatThreads,
@@ -470,8 +481,34 @@ export const ChatView: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [callInstruction, setCallInstruction] = useTabSessionState<string>('chatCallInstruction', '');
   const [showCallPanel, setShowCallPanel] = useState(false);
-  const [inspectedCallId, setInspectedCallId] = useState<string | null>(null);
-  const [inspectedBuildAgentId, setInspectedBuildAgentId] = useState<string | null>(null);
+  /** What is open in the right side panel, one tab each, and which tab is showing. */
+  const [sideTabs, setSideTabs] = useState<SideTab[]>([]);
+  const [activeSideTabId, setActiveSideTabId] = useState<string | null>(null);
+  const activeSideTab = sideTabs.find(tab => tab.id === activeSideTabId) ?? null;
+  const inspectedCallId = activeSideTab?.kind === 'call' ? activeSideTab.callId : null;
+  const inspectedBuildAgentId = activeSideTab?.kind === 'agent' ? activeSideTab.agentId : null;
+  const openSideTab = (tab: SideTab, focus = true) => {
+    setSideTabs(current => current.some(item => item.id === tab.id) ? current.map(item => item.id === tab.id ? tab : item) : [...current, tab]);
+    if (focus) setActiveSideTabId(tab.id);
+    else setActiveSideTabId(active => active ?? tab.id);
+  };
+  const closeSideTab = (id: string) => {
+    setSideTabs(current => {
+      const index = current.findIndex(item => item.id === id);
+      const next = current.filter(item => item.id !== id);
+      setActiveSideTabId(active => active === id ? next[Math.min(index, next.length - 1)]?.id ?? null : active);
+      return next;
+    });
+  };
+  /** Plans that opened by themselves, once per version, so a closed plan tab stays closed. */
+  const autoOpenedPlans = useRef(new Set<string>());
+  const openPlanTab = (request: PlanPanelRequest) => {
+    const key = request.runId + ':' + request.planVersion;
+    if (request.auto && autoOpenedPlans.current.has(key)) return;
+    autoOpenedPlans.current.add(key);
+    // Opening by itself adds the tab without taking over the agent you are watching.
+    openSideTab({ id: 'plan:' + request.runId, kind: 'plan', projectId: request.projectId, runId: request.runId, planVersion: request.planVersion }, !request.auto);
+  };
   const [buildDecisionBusy, setBuildDecisionBusy] = useState<'start' | 'approve' | 'stop' | 'continue' | 'retry' | null>(null);
   const [buildDecisionError, setBuildDecisionError] = useState<string | null>(null);
   /** Planning failures someone closed in the build panel, by message id. */
@@ -610,12 +647,12 @@ export const ChatView: React.FC = () => {
     }
   };
   const selectCall = (callId: string | null) => {
-    setInspectedCallId(callId);
-    if (callId) setInspectedBuildAgentId(null);
+    if (callId) openSideTab({ id: 'call:' + callId, kind: 'call', callId });
+    else if (activeSideTab?.kind === 'call') closeSideTab(activeSideTab.id);
   };
   const selectBuildAgent = (agentId: string | null) => {
-    setInspectedBuildAgentId(agentId);
-    if (agentId) setInspectedCallId(null);
+    if (agentId) openSideTab({ id: 'agent:' + agentId, kind: 'agent', agentId });
+    else if (activeSideTab?.kind === 'agent') closeSideTab(activeSideTab.id);
   };
 
   useEffect(() => {
@@ -693,7 +730,7 @@ export const ChatView: React.FC = () => {
   );
   const highlightedCall = callList[0];
   const inspectedCall = inspectedCallId ? calls[inspectedCallId] : undefined;
-  useEffect(() => setInspectedCallId(null), [activeThread?.id]);
+  useEffect(() => { setSideTabs([]); setActiveSideTabId(null); }, [activeThread?.id]);
   const activeCall = callList.find(call => ['queued', 'running', 'awaiting_confirmation'].includes(call.status));
   const activeChatTurnCall = callList.find(call => call.origin === 'chat_turn' && ['queued', 'running'].includes(call.status));
   const latestUserMessage = [...currentMessages].reverse().find(message => message.senderType === 'user');
@@ -1039,7 +1076,8 @@ export const ChatView: React.FC = () => {
     }
   };
 
-  const dispatchRecoveryFollowUp = async (message: string, requestedAction: LiveBuildRecoveryAction): Promise<boolean> => {
+  /** With `optional`, a message the open recovery cannot take returns false so it goes to Alpha's chat instead. */
+  const dispatchRecoveryFollowUp = async (message: string, requestedAction: LiveBuildRecoveryAction, optional = false): Promise<boolean> => {
     if (!activeThread?.id || !activeThread.projectId) return false;
     const explicitBuildRetry = isExplicitBuildRetry(message);
     // This conversation's builds, plus the project's open build when another conversation started it.
@@ -1083,12 +1121,14 @@ export const ChatView: React.FC = () => {
       ? selected.state.history[0]
       : undefined);
     if (!recovery) {
+      if (optional) return false;
       showToast('No open recovery', 'This build has no saved recovery waiting for an action. Open the Live Build Room to review its current status.', 'info');
       return true;
     }
 
     const action = resolveRecoveryAction(requestedAction, recovery);
     if (!recovery.availableActions.includes(action)) {
+      if (optional) return false;
       const reason = recovery.actionReasons[action]
         ?? recovery.actionReasons.provide_guidance
         ?? Object.values(recovery.actionReasons).find(value => typeof value === 'string' && value.trim())
@@ -1166,8 +1206,11 @@ export const ChatView: React.FC = () => {
       return;
     }
     const requestedRecoveryAction = inferRecoveryAction(message)
-      ?? (continueRequest && liveBuild && ['blocked', 'recovery_required'].includes(liveBuild.status) ? 'repair_and_continue' : undefined);
+      ?? ((continueRequest || isRetryRequest(message)) && !sendsBuild && liveBuild && ['blocked', 'recovery_required'].includes(liveBuild.status) ? 'repair_and_continue' : undefined);
     if (requestedRecoveryAction && await dispatchRecoveryFollowUp(message, requestedRecoveryAction)) return;
+    // A build waiting for direction takes an instruction typed here as its answer.
+    if (!requestedRecoveryAction && !sendsBuild && liveBuild && ['blocked', 'recovery_required'].includes(liveBuild.status) &&
+        isBuildDirection(message) && await dispatchRecoveryFollowUp(message, 'repair_and_continue', true)) return;
     if (sendsBuild && !can('run_agents')) {
       showToast('Build access needed', 'Your workspace role cannot start Orchestrator builds.', 'info');
       return;
@@ -1256,8 +1299,15 @@ export const ChatView: React.FC = () => {
       if (message.senderType === 'user') return null;
       if (message.messageType !== 'build' || !/\*\*Build not started(?: for any repository)?\.\*\*/i.test(message.content)) continue;
       if (dismissedBuildFailures.includes(message.id)) return null;
-      const request = [...currentMessages.slice(0, index)].reverse().find(item => item.senderType === 'user')?.content;
-      return { messageId: message.id, reason: planningFailureReason(message.content), request };
+      // Replan the goal the planner actually received; the user's words may only say "do that".
+      const earlier = currentMessages.slice(0, index);
+      const words = [...earlier].reverse().find(item => item.senderType === 'user')?.content;
+      // Older build replies carry no goal; a retry of the same words reuses the goal accepted for them.
+      const accepted = message.routeProposal ?? [...earlier].reverse().find(item =>
+        item.routeProposal?.status === 'accepted' && item.routeProposal.goal &&
+        earlier.find(source => source.id === item.routeProposal!.sourceMessageId)?.content === words)?.routeProposal;
+      const request = accepted?.goal || words;
+      return { messageId: message.id, reason: planningFailureReason(message.content), request, repositories: accepted?.repositories };
     }
     return null;
   }, [currentMessages, dismissedBuildFailures, isClient, liveBuild]);
@@ -1271,8 +1321,9 @@ export const ChatView: React.FC = () => {
   };
   const continueBuild = async (action: LiveBuildRecoveryAction = 'repair_and_continue') => {
     if (!liveBuild || buildDecisionBusy) return;
-    if (liveBuild.status === 'paused') {
-      await resumePausedBuild();
+    if (liveBuild.status === 'paused' || (liveBuild.status === 'blocked' && /^(Milestone planning stopped|Plan document could not be saved) before dispatch:/.test(liveBuild.orchestration.run.stoppedReason ?? ''))) {
+      setBuildDecisionBusy('continue');
+      try { await resumePausedBuild(); } finally { setBuildDecisionBusy(null); }
       return;
     }
     setBuildDecisionBusy('continue');
@@ -1291,7 +1342,8 @@ export const ChatView: React.FC = () => {
     try {
       dismissBuildFailure();
       followNextMessage();
-      await sendChatMessage(buildFailure.request, activeThread.id, validBuildRepositories, 'build', [], { approvalMode });
+      const repositories = buildFailure.repositories?.length ? buildFailure.repositories : validBuildRepositories;
+      await sendChatMessage(buildFailure.request, activeThread.id, repositories, 'build', [], { approvalMode });
     } finally {
       setBuildDecisionBusy(null);
     }
@@ -1582,7 +1634,43 @@ export const ChatView: React.FC = () => {
   const composerHasContent = Boolean(input.trim()) || pendingFiles.length > 0;
   const composerStop: 'turn' | 'build' | null = composerHasContent ? null : activeTurnMessageId ? 'turn' : canStopBuild ? 'build' : null;
 
+  const buildChangedFiles = liveBuild ? [...new Set(liveBuild.agents.flatMap(agent => agent.changedFiles))] : [];
+  const openBuildChanges = () => { if (liveBuild && project) openSideTab({ id: 'changes:' + liveBuild.runId, kind: 'changes', projectId: project.id, runId: liveBuild.runId }); };
+  const sideTabMeta = (tab: SideTab): SidePanelTab => {
+    switch (tab.kind) {
+      case 'plan': return { id: tab.id, title: planFileName(tab.planVersion), icon: <FileText className="h-3.5 w-3.5" /> };
+      case 'changes': return { id: tab.id, title: 'Code changes', icon: <Code2 className="h-3.5 w-3.5" />, live: Boolean(liveBuild?.running && liveBuild.runId === tab.runId) };
+      case 'agent': {
+        const agent = liveBuild?.agents.find(item => item.agentId === tab.agentId);
+        return { id: tab.id, title: agent?.name ?? 'Agent', icon: <Bot className="h-3.5 w-3.5" />, live: agent?.state === 'running' };
+      }
+      case 'call': {
+        const call = calls[tab.callId];
+        return { id: tab.id, title: call ? (isOrchestratorCall(call) ? 'Orchestrator' : agentForCall(call)?.name ?? 'Agent') : 'Agent', icon: <MessageSquare className="h-3.5 w-3.5" />, live: Boolean(call && ['queued', 'running'].includes(call.status)) };
+      }
+    }
+  };
+  const renderSideTab = (tab: SideTab): React.ReactNode => {
+    switch (tab.kind) {
+      case 'plan': return <PlanDocumentTab key={tab.id + ':' + tab.planVersion} projectId={tab.projectId} runId={tab.runId} planVersion={tab.planVersion} />;
+      case 'changes': return <div key={tab.id} className="min-h-0 flex-1 overflow-y-auto p-4"><LiveChangesView projectId={tab.projectId} runId={tab.runId} live={Boolean(liveBuild?.running && liveBuild.runId === tab.runId)} /></div>;
+      case 'agent': {
+        const agent = liveBuild?.agents.find(item => item.agentId === tab.agentId);
+        if (!agent || !liveBuild || !project) return <p className="p-5 text-xs text-gray-500">This agent is not part of the current build.</p>;
+        const tasks = liveBuild.orchestration.tasks.filter(task => task.ownerAgentId === agent.agentId);
+        const task = tasks.find(item => item.status === 'running' || item.status === 'submitted') ?? tasks[0];
+        return <BuildAgentActivityPanel key={tab.id} agent={agent} projectId={project.id} runId={liveBuild.runId} repository={task?.repository ?? liveBuild.repository} onOpenRoom={() => openLiveBuildRun(liveBuild.runId)} />;
+      }
+      case 'call': {
+        const call = calls[tab.callId];
+        if (!call) return <p className="p-5 text-xs text-gray-500">This agent call is no longer available.</p>;
+        return <AgentActivityPanel key={tab.id} call={call} agent={agentForCall(call)} name={isOrchestratorCall(call) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(call) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} />;
+      }
+    }
+  };
+
   return (
+    <PlanPanelContext.Provider value={isClient ? null : openPlanTab}>
     <div className="relative h-full min-h-0 flex overflow-hidden bg-shell text-sm text-gray-200">
       <div className="relative w-12 shrink-0">
       {threadListCollapsed ? <div className="group flex h-full items-center justify-center bg-shell">
@@ -1632,7 +1720,7 @@ export const ChatView: React.FC = () => {
           {showCallPanel && !isClient && <section className="shrink-0 max-h-[45%] overflow-y-auto overscroll-contain mx-5 mt-4 rounded-2xl border border-white/10 bg-surface-100/80 p-4 lg:p-5 shadow-xl"><div className="flex items-start justify-between gap-4 mb-4"><div><div className="flex items-center gap-2"><Bot className="h-4 w-4 text-brand-300" /><h3 className="text-sm font-semibold text-white">Call an assigned agent</h3></div><p className="mt-1 text-[11px] text-gray-500">Use this for a focused question or review with one agent. For product changes, describe the work and the Orchestrator will choose the right specialists.</p></div><button type="button" onClick={() => setShowCallPanel(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.06]"><X className="h-4 w-4" /></button></div>{callPanelBody}</section>}
 
           {!isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={liveBuild ? { runId: liveBuild.runId, label: buildStatusLabel(liveBuild), running: liveBuild.running, agents: liveBuild.agents, handoffs: buildHandoffs(liveBuild.orchestration) } : null} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} roster={workspaceAgents} runtimes={runtimes} canEditAgents={can('manage_agents')} onUpdateAgent={updateAgent} /></div>}
-          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 space-y-5 [overflow-anchor:none]">{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className="w-full"><div className={`min-w-0 space-y-2 ${isUser ? 'flex flex-col items-end' : ''}`}><div className={`text-sm leading-relaxed ${isUser ? 'max-w-[80%] rounded-2xl bg-white/[0.07] px-4 py-2.5 text-gray-100' : 'text-gray-200'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 rounded-xl border border-violet-300/15 bg-violet-300/[0.04] p-3 text-xs text-gray-200"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-200" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-violet-200">Build update</div><p className="whitespace-pre-wrap break-words text-[11px] leading-5">{message.content}</p></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
+          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 [overflow-anchor:none]"><div className={'mx-auto w-full max-w-3xl space-y-5 ' + (currentMessages.length === 0 ? 'h-full' : '')}>{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className="w-full"><div className={`min-w-0 space-y-2 ${isUser ? 'flex flex-col items-end' : ''}`}><div className={`text-sm leading-relaxed ${isUser ? 'max-w-[80%] rounded-2xl bg-white/[0.07] px-4 py-2.5 text-gray-100' : 'text-gray-200'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 rounded-xl border border-violet-300/15 bg-violet-300/[0.04] p-3 text-xs text-gray-200"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-200" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-violet-200">Build update</div><p className="whitespace-pre-wrap break-words text-[11px] leading-5">{message.content}</p></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
   const needsLiveRoom = /live build room|product build is already/i.test(message.content);
   const buildNotStarted = /\*\*Build not started(?: for any repository)?\.\*\*/i.test(message.content);
   const setupRequired = /review the project setup|project needs setup|choose (?:a|one) codebase|configured model|available model|workspace identity|reconnect (?:this )?repository|repository admission remains paused/i.test(message.content);
@@ -1649,9 +1737,9 @@ export const ChatView: React.FC = () => {
     return <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/30 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/20"><Activity className="h-3.5 w-3.5" /> {label}</button>;
   }
   return <button type="button" onClick={openProjectSetup} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-300 hover:bg-white/[0.06]">Review project setup</button>;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenRoom={() => openLiveBuildRun(message.orchestrationRunId!)} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}</div></div>; })}</div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenRoom={() => openLiveBuildRun(message.orchestrationRunId!)} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}</div></div>; })}</div></div>
 
-          <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 px-4 pb-4 lg:px-8 lg:pb-6">
+          <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-4 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-8 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-3xl space-y-2">
               {showLatest && <div className="flex justify-center"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-surface-raised px-4 py-2 text-xs font-medium text-brand-200 shadow-lg shadow-black/40 hover:bg-brand-500/15">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
               {publishedBuild && publishedBuild.projectId === project?.id && !buildDecision && <div role="status" className="flex items-center gap-3 rounded-2xl border border-emerald-300/25 bg-surface-raised/95 px-4 py-2.5 text-[11px] text-emerald-100 shadow-lg shadow-black/40">
@@ -1659,6 +1747,13 @@ export const ChatView: React.FC = () => {
                 <span className="min-w-0 flex-1 font-semibold">Pull request opened</span>
                 {publishedBuild.links.map(link => <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-emerald-200/30 px-3 py-1 font-medium text-emerald-50 hover:bg-emerald-300/10">{publishedBuild.links.length > 1 ? link.repository : 'Open on GitHub'}</a>)}
                 <button type="button" onClick={() => setPublishedBuild(null)} aria-label="Dismiss" className="rounded-full p-1 text-emerald-200/70 hover:bg-white/[0.06] hover:text-white"><X className="h-3.5 w-3.5" /></button>
+              </div>}
+              {/* When the agents have finished their part, what they changed, one click from the diff. */}
+              {!isClient && project && liveBuild && !liveBuild.running && buildChangedFiles.length > 0 && <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-surface-raised/95 px-3 py-2 text-[11px] shadow-lg shadow-black/40">
+                <FileCode2 className="h-3.5 w-3.5 shrink-0 text-violet-200" aria-hidden="true" />
+                <span className="shrink-0 font-medium text-white">{buildChangedFiles.length} {buildChangedFiles.length === 1 ? 'file' : 'files'} changed</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-gray-500">{buildChangedFiles.slice(0, 4).map(file => file.split('/').pop()).join(', ')}{buildChangedFiles.length > 4 ? ' …' : ''}</span>
+                <button type="button" onClick={openBuildChanges} className="shrink-0 rounded-lg px-2 py-1 font-medium text-violet-200 hover:bg-white/[0.06] hover:text-white">Review changes</button>
               </div>}
               {/* The build, step by step, with the choices it is waiting on. */}
               {!isClient && project && (liveBuild || buildFailure) && <ChatBuildWizard
@@ -1728,9 +1823,12 @@ export const ChatView: React.FC = () => {
                 </div>}
                 <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : undefined} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : 'Ask Alpha anything or describe what to build. Type @ to call an agent…'} className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-white placeholder-gray-500 outline-none" />
                 <div className="flex shrink-0 items-center gap-1">
-                {!isClient && !activeTurnMessageId && <select aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => setApprovalMode(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-36 rounded-lg border border-white/10 bg-surface-100 px-2 py-1.5 text-[10px] text-gray-300 outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50">
-                  <option value="ask">Ask for approval</option><option value="approve">Approve for me</option><option value="full">Full access</option>
-                </select>}
+                {!isClient && !activeTurnMessageId && <span className="relative flex items-center">
+                  <select aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => setApprovalMode(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-36 cursor-pointer appearance-none rounded-md bg-transparent py-1.5 pl-2 pr-5 text-[11px] text-gray-400 outline-none hover:text-white focus-visible:text-white focus-visible:ring-2 focus-visible:ring-violet-300/50 [&>option]:bg-[#17171f] [&>option]:text-gray-200">
+                    <option value="ask">Ask for approval</option><option value="approve">Approve for me</option><option value="full">Full access</option>
+                  </select>
+                  <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-1 h-3 w-3 text-gray-500" />
+                </span>}
                 {/* One button: it stops the running response or build while the box is empty, and sends as soon as you type. */}
                 {composerStop ? <button type="button" onClick={() => void (composerStop === 'turn' ? stopChatTurn() : stopProjectBuild())}
                   disabled={composerStop === 'turn' ? Boolean(chatTurnActionBusy) : Boolean(stoppingProjectRunId)}
@@ -1767,9 +1865,11 @@ export const ChatView: React.FC = () => {
               onOpenRecent={threadId => setActiveThreadId(threadId)}
             />}
       </main>
-      {!isClient && inspectedBuildAgent && liveBuild && <BuildAgentActivityPanel agent={inspectedBuildAgent} repository={liveBuild.repository} onOpenRoom={() => openLiveBuildRun(liveBuild.runId)} onClose={() => setInspectedBuildAgentId(null)} />}
-      {!isClient && !inspectedBuildAgent && inspectedCall && <AgentActivityPanel call={inspectedCall} agent={agentForCall(inspectedCall)} name={isOrchestratorCall(inspectedCall) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(inspectedCall) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} onClose={() => setInspectedCallId(null)} />}
+      {!isClient && sideTabs.length > 0 && <ChatSidePanel tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setSideTabs([]); setActiveSideTabId(null); }}>
+        {activeSideTab ? renderSideTab(activeSideTab) : null}
+      </ChatSidePanel>}
     </div>
+    </PlanPanelContext.Provider>
   );
 };
 

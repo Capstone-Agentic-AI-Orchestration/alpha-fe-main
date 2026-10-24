@@ -27,6 +27,7 @@ import {
   WorkspaceProjectAssignment,
   LiveBuildRoomSnapshot,
   LiveBuildRoomDiffPreview,
+  LiveBuildChanges,
   LiveBuildRoomOrchestration,
   LiveBuildRecoveryState,
   LiveBuildRecoveryAction,
@@ -685,6 +686,11 @@ export const apiService = {
     fetchJson<LiveBuildRoomDiffPreview>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/diff`
     ),
+  getOrchestrationLiveChanges: (projectId: string, runId: string) =>
+    fetchJson<LiveBuildChanges>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/live-changes`,
+      { cache: 'no-store' }
+    ),
   getOrchestrationRecovery: (projectId: string, runId: string) =>
     fetchJson<LiveBuildRecoveryState>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/recovery`,
@@ -740,6 +746,10 @@ export const apiService = {
     fetchJson<{ runId: string; status: string; pauseRequestedAt?: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/pause`,
       { method: 'POST', body: JSON.stringify({ expectedRevision }) }
+    ),
+  getOrchestrationPlans: (projectId: string, runId: string) =>
+    fetchJson<{ documents: Array<{ version: number; fileName: string; content: string; contentHash: string }> }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/plans`
     ),
   resumeOrchestration: (projectId: string, runId: string) =>
     fetchJson<{ runId: string; status: string; currentTaskId?: string }>(

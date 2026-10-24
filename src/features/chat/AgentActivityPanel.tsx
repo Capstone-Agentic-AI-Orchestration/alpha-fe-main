@@ -9,8 +9,7 @@ import {
   MessageSquare,
   Paperclip,
   Sparkles,
-  Wrench,
-  X
+  Wrench
 } from 'lucide-react';
 
 import { AgentCall, AgentCallActivity, ProjectChatAgent } from '@/shared/types';
@@ -21,7 +20,6 @@ interface AgentActivityPanelProps {
   /** Overrides for calls that are not a listed agent, such as the Orchestrator itself. */
   name?: string;
   subtitle?: string;
-  onClose: () => void;
 }
 
 const STATUS: Record<AgentCall['status'], { label: string; tone: string }> = {
@@ -72,7 +70,7 @@ function duration(call: AgentCall): string | null {
 }
 
 /** What one agent is doing, shown beside the chat when its node is chosen. */
-export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, agent, name: nameOverride, subtitle, onClose }) => {
+export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, agent, name: nameOverride, subtitle }) => {
   const timelineRef = useRef<HTMLOListElement>(null);
   const activities = [...call.activities].sort((a, b) => a.sequence - b.sequence);
   const live = call.status === 'running' || call.status === 'queued';
@@ -86,14 +84,8 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, ag
     if (live && list) list.lastElementChild?.scrollIntoView({ block: 'nearest' });
   }, [activities.length, live]);
 
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') onClose(); };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
-
   return (
-    <aside aria-label={name + ' activity'} className="flex h-full w-[380px] shrink-0 flex-col border-l border-white/[0.08] bg-shell">
+    <section aria-label={name + ' activity'} className="flex min-h-0 flex-1 flex-col">
       <header className="flex items-start gap-3 border-b border-white/[0.07] px-5 py-4">
         <span className={'grid h-10 w-10 shrink-0 place-items-center rounded-full bg-gradient-to-br from-violet-300 to-violet-700 text-sm font-semibold text-white ' + (live ? 'shadow-[0_0_18px_rgba(167,139,250,0.55)]' : '')}>{name.slice(0, 1).toUpperCase()}</span>
         <div className="min-w-0 flex-1">
@@ -105,7 +97,6 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, ag
             {elapsed && <span className="text-gray-600">· {elapsed}</span>}
           </div>
         </div>
-        <button type="button" onClick={onClose} aria-label="Close agent activity" className="rounded-lg p-1.5 text-gray-500 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><X className="h-4 w-4" /></button>
       </header>
 
       <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
@@ -144,6 +135,6 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, ag
           </li>)}</ul>
         </section>}
       </div>
-    </aside>
+    </section>
   );
 };

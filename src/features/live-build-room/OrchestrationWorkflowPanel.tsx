@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { OrchestrationPlanPreview } from './OrchestrationPlanPreview';
 import {
   AlertTriangle,
   ArrowDown,
@@ -309,6 +310,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
   const firstActionableTask = workflow.tasks.find(task => ['failed', 'blocked'].includes(task.status));
   const [expandedTaskId, setExpandedTaskId] = useState(workflow.run.currentTaskId ?? firstActionableTask?.id ?? workflow.tasks[0]?.id ?? '');
   const [confirmStop, setConfirmStop] = useState(false);
+  const [documentVersion, setDocumentVersion] = useState(0);
   useEffect(() => {
     if (focusTaskId && workflow.tasks.some(task => task.id === focusTaskId)) setExpandedTaskId(focusTaskId);
   }, [focusTaskId, workflow.tasks]);
@@ -326,7 +328,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
   const resumable = canManage && canResume && (
     workflow.run.status === 'paused' ||
     workflow.run.status === 'recovery_required' ||
-    (workflow.run.status === 'blocked' && /orchestrator is unavailable/i.test(workflow.run.stoppedReason || ''))
+    (workflow.run.status === 'blocked' && /orchestrator is unavailable|Milestone planning stopped before dispatch:|Plan document could not be saved before dispatch:/i.test(workflow.run.stoppedReason || ''))
   );
   const pausable = canManage && workflow.run.status === 'executing';
   const cancellable = canManage && !['publishing', 'completed', 'failed', 'cancelled'].includes(workflow.run.status);
@@ -337,6 +339,9 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
   }, [workflow.run.currentTaskId]);
 
   return <section aria-labelledby="orchestration-title" className="overflow-hidden rounded-[1.35rem] border border-violet-300/[0.16] bg-[radial-gradient(ellipse_at_12%_0%,rgba(139,92,246,0.11),transparent_44%),linear-gradient(135deg,rgba(20,24,39,0.96),rgba(14,17,27,0.92))] shadow-[0_24px_70px_-45px_rgba(91,74,169,0.45)]">
+    <div className="p-4"><OrchestrationPlanPreview key={workflow.run.id} projectId={projectId} runId={workflow.run.id} planVersion={workflow.run.planVersion} autoShow={['awaiting_plan_approval', 'executing'].includes(workflow.run.status)} onReady={setDocumentVersion} />
+      {!!workflow.milestones?.length && <ol aria-label="Milestone progress" className="mt-3 space-y-2 text-xs">{workflow.milestones.map((milestone, index) => <li key={milestone.id} className="flex justify-between gap-3 rounded-lg bg-white/[0.03] px-3 py-2"><span className="text-slate-200">{index + 1}. {milestone.title}</span><span className="text-violet-200">{milestone.status === 'unplanned' ? 'Planned after prior work' : milestone.status === 'accepted' ? 'Accepted' : 'In progress'}</span></li>)}</ol>}
+    </div>
     <div className="border-b border-white/[0.07] px-4 py-5 sm:px-6 sm:py-6">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0 flex-1">
@@ -354,7 +359,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          {workflow.run.status === 'awaiting_plan_approval' && canManage && <button type="button" onClick={onStartPlan} disabled={Boolean(busyAction)} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-violet-400 px-3.5 text-xs font-semibold text-[#171224] transition duration-200 hover:bg-violet-300 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:cursor-wait disabled:opacity-55">
+          {workflow.run.status === 'awaiting_plan_approval' && canManage && <button type="button" onClick={onStartPlan} disabled={Boolean(busyAction) || documentVersion !== workflow.run.planVersion} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-violet-400 px-3.5 text-xs font-semibold text-[#171224] transition duration-200 hover:bg-violet-300 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 disabled:cursor-wait disabled:opacity-55">
             {busyAction === 'start-plan' ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Workflow className="h-3.5 w-3.5" />}{busyAction === 'start-plan' ? 'Starting…' : 'Start planned work'}
           </button>}
           {approvalActionAvailable && canApprove && <button type="button" onClick={onApprove} disabled={Boolean(busyAction)} className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-300 px-3.5 text-xs font-semibold text-[#10201b] transition duration-200 hover:bg-emerald-200 active:translate-y-px focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-100 disabled:cursor-wait disabled:opacity-55">
@@ -392,7 +397,7 @@ export const OrchestrationWorkflowPanel: React.FC<OrchestrationWorkflowPanelProp
       <div className="min-w-0">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div><SectionLabel>{workflow.run.status === 'awaiting_plan_approval' ? 'Proposed plan' : 'Work plan'}</SectionLabel><p className="mt-1 text-xs text-slate-500">See what needs to happen, who the Orchestrator chose, and why. Each step waits for earlier work to finish.</p></div>
-          <div className="text-right"><div className="font-mono text-sm tabular-nums text-white">{completedRequired}<span className="text-slate-500">/{requiredTasks.length}</span></div><div className="text-[10px] text-slate-500">work steps complete</div></div>
+          <div className="text-right"><div className="font-mono text-sm tabular-nums text-white">{completedRequired}<span className="text-slate-500">/{requiredTasks.length}</span></div><div className="text-[10px] text-slate-500">{workflow.milestones?.length ? 'planned steps complete' : 'work steps complete'}</div></div>
         </div>
         <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-white/[0.06]" role="progressbar" aria-label="Required task progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}>
           <div className="h-full rounded-full bg-gradient-to-r from-violet-400 to-emerald-300 transition-[width] duration-500" style={{ width: `${progress}%` }} />
