@@ -198,6 +198,7 @@ export const WorkspaceOverview: React.FC = () => {
     lastSyncedAt,
     projects,
     requirementDocs,
+    visibleTabs,
     role,
     serverStatus,
     setActiveTab,
@@ -329,7 +330,7 @@ export const WorkspaceOverview: React.FC = () => {
             </div>
 
             <div className="mt-4 space-y-1">
-              {pendingDocs.length > 0 && <AttentionRow icon={GitBranch} tone="amber" title={`${pendingDocs.length} specification${pendingDocs.length === 1 ? '' : 's'} need review`} detail="Refine scope before work starts." onClick={() => setActiveTab('documents')} />}
+              {visibleTabs.includes('documents') && pendingDocs.length > 0 && <AttentionRow icon={GitBranch} tone="amber" title={`${pendingDocs.length} specification${pendingDocs.length === 1 ? '' : 's'} need review`} detail="Refine scope before work starts." onClick={() => setActiveTab('documents')} />}
               {reviewIssues.length > 0 && <AttentionRow icon={ListChecks} tone="amber" title={`${reviewIssues.length} task${reviewIssues.length === 1 ? '' : 's'} ready for review`} detail="Check the latest work before it moves on." onClick={() => setActiveTab('issues')} />}
               {failedDeployments.length > 0 && <AttentionRow icon={Rocket} tone="rose" title={`${failedDeployments.length} deployment${failedDeployments.length === 1 ? '' : 's'} failed`} detail="Open delivery history to inspect the failure." onClick={() => setActiveTab('deployments')} />}
               {unreadInbox.length > 0 && <AttentionRow icon={Inbox} tone="brand" title={`${unreadInbox.length} unread inbox item${unreadInbox.length === 1 ? '' : 's'}`} detail="Approvals and updates are waiting for you." onClick={() => setActiveTab('inbox')} />}

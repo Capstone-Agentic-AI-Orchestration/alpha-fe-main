@@ -83,8 +83,8 @@ export const NAV_SECTIONS: NavSection[] = [
 const ROLE_SECTION_ORDER: Record<UserRole, SectionId[]> = {
   client: ['portal', 'requests', 'communication', 'documents', 'settings'],
   dev: ['build', 'my_work', 'automation', 'resources', 'communication', 'settings'],
-  pm: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'workspace'],
-  admin: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'operations', 'insights', 'administration']
+  pm: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'workspace'],
+  admin: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'administration']
 };
 
 export interface NavItem {
@@ -134,14 +134,12 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Plan and build with Alpha and your agents', group: 'primary', section: 'build', sectionByRole: { client: 'communication' }, icon: MessageSquare },
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
-  { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
 
   { id: 'tickets', label: 'Tickets', title: 'Tickets', subtitle: 'Review client requests, communicate, and track delivery', group: 'workspace', section: 'delivery', icon: Ticket },
   { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'delivery', admin: 'delivery' }, icon: CheckSquare },
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
 
-  { id: 'agents', label: 'Agents', labels: { dev: 'Agent Directory' }, title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'workspace', section: 'automation', icon: Bot },
-  { id: 'live_build_room', label: 'Live Build Room', labels: { pm: 'Build Rooms', admin: 'Build Rooms' }, title: 'Live Build Room', subtitle: 'Watch project chat agents work in real time', group: 'workspace', section: 'automation', icon: RadioTower },
+  { id: 'agents', label: 'Agents', labels: { dev: 'Agent Directory' }, title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'configure', section: 'resources', icon: Bot },
   { id: 'runtimes', label: 'Runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Monitor },
   { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
 
@@ -152,11 +150,13 @@ export const NAV_ITEMS: NavItem[] = [
 
 /**
  * Reversible archive: keep the destination metadata and view implementation
- * available while removing Deployments from active menus and the tab picker.
+ * available while removing archived pages from active menus and the tab picker.
  * Restore it by moving this entry back into NAV_ITEMS and re-adding it to the
- * desired roles in ROLE_NAV.
+ * desired roles in ROLE_NAV_ALL.
  */
 export const ARCHIVED_NAV_ITEMS: NavItem[] = [
+  { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
+  { id: 'live_build_room', label: 'Live Build Room', labels: { pm: 'Build Rooms', admin: 'Build Rooms' }, title: 'Live Build Room', subtitle: 'Watch project chat agents work in real time', group: 'workspace', section: 'automation', icon: RadioTower },
   { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket }
 ];
 
@@ -196,15 +196,15 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  * necessarily one that can change workspace settings.
  */
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
-  client: ['portal', 'intake', 'documents', 'inbox', 'chat', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'live_build_room', 'runtimes', 'skills', 'inbox', 'chat', 'documents', 'settings'],
+  client: ['portal', 'intake', 'inbox', 'chat', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'inbox', 'chat', 'settings'],
   pm: [
-    'issues', 'projects', 'tickets', 'documents', 'inbox', 'chat',
-    'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
+    'issues', 'projects', 'tickets', 'inbox', 'chat',
+    'agents', 'runtimes', 'skills', 'analytics', 'settings'
   ],
   admin: [
-    'issues', 'projects', 'documents', 'inbox', 'chat',
-    'agents', 'live_build_room', 'runtimes', 'skills', 'analytics', 'settings'
+    'issues', 'projects', 'inbox', 'chat',
+    'agents', 'runtimes', 'skills', 'analytics', 'settings'
   ]
 };
 

@@ -46,7 +46,7 @@ const field =
   'placeholder-content-muted focus:outline-none focus:border-control transition-colors';
 
 export const IntakeWizardView: React.FC = () => {
-  const { submitIntake, setActiveTab } = useApp();
+  const { submitIntake, setActiveTab, visibleTabs } = useApp();
 
   const [step, setStep] = useTabSessionState<number>('intake.step', 1);
   const [a, setA] = useTabSessionState<IntakeAnswers>('intake.answers', () => ({ ...EMPTY, capabilities: [...EMPTY.capabilities], concerns: [...EMPTY.concerns], attachments: [...EMPTY.attachments] }));
@@ -90,7 +90,7 @@ export const IntakeWizardView: React.FC = () => {
     await new Promise(r => setTimeout(r, 1600));
     submitIntake({ ...a, capabilities: a.capabilities.filter(c => c.trim()) });
     setSubmitting(false);
-    setActiveTab('documents');
+    setActiveTab(visibleTabs.includes('documents') ? 'documents' : 'portal');
   };
 
   return (

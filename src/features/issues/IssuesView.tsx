@@ -118,6 +118,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     lastSyncedAt,
     can,
     role,
+    visibleTabs,
     setActiveTab,
     activeTabId,
     setTabSessionState
@@ -1108,14 +1109,14 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 {issueBuilds[selectedIssue.id] && (
                   <div className="flex items-center justify-between gap-2 rounded-xl border border-divider bg-surface-raised px-3.5 py-2.5">
                     <BuildChip build={issueBuilds[selectedIssue.id]} />
-                    <button
+                    {visibleTabs.includes('live_build_room') && <button
                       type="button"
                       onClick={() => openBuildRoom(selectedIssue)}
                       className="inline-flex items-center gap-1.5 text-[11px] font-medium text-link hover:text-link-hover"
                     >
                       <Radio className="h-3.5 w-3.5" />
                       Open Live Build Room
-                    </button>
+                    </button>}
                   </div>
                 )}
 

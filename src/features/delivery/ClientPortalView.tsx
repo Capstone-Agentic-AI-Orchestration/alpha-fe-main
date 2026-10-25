@@ -5,8 +5,11 @@ import { Plus, ArrowRight, MessageSquare, FileText } from 'lucide-react';
 import { WorkspaceOverview } from '@/features/delivery/WorkspaceOverview';
 
 export const ClientPortalView: React.FC = () => {
-  const { currentUser, requirementDocs, projects, issues, setActiveTab, role } = useApp();
+  const { currentUser, requirementDocs, projects, issues, setActiveTab, role, visibleTabs } = useApp();
   if (role !== 'client') return <WorkspaceOverview />;
+
+  const specificationsVisible = visibleTabs.includes('documents');
+  const RequestRow = specificationsVisible ? 'button' : 'div';
 
   const myDocs = requirementDocs.filter(doc => doc.clientId === currentUser.id);
   const awaitingMe = myDocs.filter(doc => doc.status === 'awaiting_client');
@@ -26,7 +29,7 @@ export const ClientPortalView: React.FC = () => {
           </button>
         </div>
 
-        {awaitingMe.length > 0 && (
+        {specificationsVisible && awaitingMe.length > 0 && (
           <section className="space-y-3">
             <SectionLabel>Waiting on you</SectionLabel>
             {awaitingMe.map(doc => (
@@ -73,13 +76,13 @@ export const ClientPortalView: React.FC = () => {
           ) : (
             <div className="divide-y divide-divider">
               {myDocs.map(doc => (
-                <button key={doc.id} onClick={() => setActiveTab('documents')} className="flex w-full items-center gap-4 rounded px-2 py-3 text-left transition-colors hover:bg-surface-high">
+                <RequestRow key={doc.id} onClick={specificationsVisible ? () => setActiveTab('documents') : undefined} className={`flex w-full items-center gap-4 rounded px-2 py-3 text-left ${specificationsVisible ? 'transition-colors hover:bg-surface-high' : ''}`}>
                   <FileText className="h-4 w-4 flex-shrink-0 text-content-muted" />
                   <span className="w-20 flex-shrink-0 font-mono text-[11px] text-content-muted">{doc.identifier}</span>
                   <span className="min-w-0 flex-1 truncate text-xs text-content-secondary">{doc.title}</span>
                   <span className="flex-shrink-0 text-[11px] text-content-muted">{doc.functionalRequirements.filter(item => item.included).length} requirements</span>
                   <DocStatus status={doc.status} />
-                </button>
+                </RequestRow>
               ))}
             </div>
           )}
