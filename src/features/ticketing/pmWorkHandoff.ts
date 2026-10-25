@@ -23,11 +23,10 @@ export function canAuthorizeTicketWork(detail: PmTicketDetail, clientAccessActiv
 }
 
 /** Display preflight only. The command service rechecks authoritative tenant,
- * assignment, run, binding and revision evidence inside the handoff transaction.
+ * project access, run, binding and revision evidence inside the handoff transaction.
  */
 export function isHandoffIssueCandidate(issue: PmHandoffIssue, projectId: string): boolean {
-  return issue.projectId === projectId && (issue.status === 'backlog' || issue.status === 'todo')
-    && Boolean(issue.assignedHuman?.trim());
+  return issue.projectId === projectId && (issue.status === 'backlog' || issue.status === 'todo');
 }
 
 export function validHandoffSelection(options: PmHandoffOptions, projectId: string, issueIds: readonly string[]): boolean {

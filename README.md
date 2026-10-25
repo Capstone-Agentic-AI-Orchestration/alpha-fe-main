@@ -38,7 +38,7 @@ Preview the production build locally:
 npm run preview
 ```
 
-## Desktop installer
+## Desktop installer (Electron)
 
 The Windows `.exe` is not checked into this frontend repository. It is built
 by the private [`alpha-desktop`](https://github.com/Capstone-Agentic-AI-Orchestration/alpha-desktop)

@@ -46,7 +46,7 @@ export function PmTicketsPage() {
       <button type="button" aria-pressed={section === 'tickets'} onClick={() => setSection('tickets')}
         className={section === 'tickets' ? 'is-active' : ''}>Tickets</button>
       <button type="button" aria-pressed={section === 'inquiries'} onClick={() => setSection('inquiries')}
-        className={section === 'inquiries' ? 'is-active' : ''}>New inquiries</button>
+        className={section === 'inquiries' ? 'is-active' : ''}>Inquiries</button>
     </nav>}
     <div className="pm-ticket-page__content">
       {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-content-secondary">Loading sample tickets…</p>}><SampleTickets /></Suspense>

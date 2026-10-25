@@ -96,12 +96,26 @@ describe('PM correction preflight', () => {
   it.each(['review', 'done'] as const)('offers an assigned %s Issue in the exact ticket manifest', status => {
     expect(isPmCorrectionCandidate(detail(), { ...issues()[0], status })).toBe(true);
   });
-  it.each(['backlog', 'todo', 'in_progress', 'agent_running'] as const)('does not offer %s work for another reset', status => {
-    expect(isPmCorrectionCandidate(detail(), { ...issues()[0], status })).toBe(false);
+  it.each(['backlog', 'todo', 'in_progress', 'agent_running'] as const)('does not offer %s work for another reset regardless of assignment', status => {
+    for (const assignedHuman of ['dev', null]) {
+      expect(isPmCorrectionCandidate(detail(), { ...issues()[0], status, assignedHuman })).toBe(false);
+    }
   });
-  it('excludes other projects, other tickets and unassigned work', () => {
-    for (const extra of [{ projectId: 'other' }, { id: 'unrelated' }, { assignedHuman: null }, { assignedHuman: ' ' }]) {
-      expect(isPmCorrectionCandidate(detail(), { ...issues()[0], ...extra })).toBe(false);
+  it('excludes other projects and other tickets regardless of assignment', () => {
+    for (const assignedHuman of ['dev', null]) {
+      for (const extra of [{ projectId: 'other' }, { id: 'unrelated' }]) {
+        expect(isPmCorrectionCandidate(detail(), { ...issues()[0], assignedHuman, ...extra })).toBe(false);
+      }
+    }
+  });
+  it.each([null, '', '   '])('allows correction without a named developer (%s)', assignedHuman => {
+    for (const status of ['review', 'done'] as const) {
+      const candidates = issues();
+      candidates[0] = { ...candidates[0], assignedHuman, status };
+      expect(isPmCorrectionCandidate(detail(), candidates[0])).toBe(true);
+      expect(validPmCorrectionSelection(detail(), candidates, {
+        issueIds: ['issue-a'], reason: 'Correct the agreed validation behavior.',
+      })).toBe(true);
     }
   });
   it('requires the full visible manifest and a unique affected subset with explicit instructions', () => {

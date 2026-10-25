@@ -6,6 +6,18 @@ import { pmTicketApi } from './pmApi';
 afterEach(() => vi.restoreAllMocks());
 
 describe('PM ticket transport', () => {
+  it('loads handled inquiries and allowlists outcome status without exposing internal notes', async () => {
+    const row = { id: 'inquiry-1', publicReference: `INQ-${'A'.repeat(32)}`, fullName: 'Test client', email: 'client@example.test',
+      company: null, title: 'Test inquiry', description: 'A request', requestedDeadline: null, submittedAt: '2026-10-24T01:00:00Z',
+      status: 'declined', handledAt: '2026-10-24T02:00:00Z', outcomeEmailStatus: 'pending', declineReason: 'PRIVATE note' };
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ items: [row], nextCursor: null } as never);
+    const result = await pmTicketApi.listCentralIntakes(null, 'handled');
+    expect(request).toHaveBeenCalledWith('/tickets/intakes?limit=50&filter=handled');
+    expect(result.items[0]).toMatchObject({ status: 'declined', handledAt: row.handledAt, outcomeEmailStatus: 'pending' });
+    expect(JSON.stringify(result)).not.toContain('PRIVATE');
+    request.mockResolvedValue({ items: [{ ...row, status: 'unknown' }], nextCursor: null } as never);
+    await expect(pmTicketApi.listCentralIntakes(null, 'handled')).rejects.toThrow('status is invalid');
+  });
   it('loads the server-owned Phase 7–9 capability without making it a UI grant', async () => {
     const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ phaseWorkflowEnabled: true } as never);
     await expect(pmTicketApi.getWorkflowCapabilities()).resolves.toEqual({ phaseWorkflowEnabled: true });
