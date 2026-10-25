@@ -1,3 +1,9 @@
+import type { ChatUsageSnapshot } from '@/features/chat/ChatUsage';
+import type { LocalPreview } from '@/shared/types/localPreview';
+
+export const getLocalPreviews = (threadId: string) => fetchJson<LocalPreview[]>(`/chat/threads/${encodeURIComponent(threadId)}/previews`);
+export const startLocalPreview = (threadId: string, repository?: string) => fetchJson<LocalPreview>(`/chat/threads/${encodeURIComponent(threadId)}/previews`, { method: 'POST', body: JSON.stringify({ repository }) });
+export const stopLocalPreview = (threadId: string, id: string) => fetchJson(`/chat/threads/${encodeURIComponent(threadId)}/previews/${encodeURIComponent(id)}/stop`, { method: 'POST' });
 import {
   Project,
   ProjectBinding,
@@ -59,6 +65,7 @@ import {
 } from '@/shared/types';
 
 import { API_BASE } from '@/shared/config';
+import type { ActionsFilters, ActionsRun, ActionsRunsPage, ActionsWorkflowsPage, ActionsJobsPage, ActionsLog, ActionsArtifactsPage } from '@/shared/types/actions';
 
 const API_TOKEN = import.meta.env.VITE_ALPHA_LOCAL_TOKEN;
 let activeWorkspaceId: string | null = null;
@@ -190,9 +197,9 @@ function projectRepoPath(projectId: string, repo: string): string {
 }
 
 /** A query string from the defined values, or nothing. */
-function query(params: Record<string, string | undefined>): string {
+function query(params: Record<string, string | number | undefined>): string {
   const pairs = Object.entries(params)
-    .filter((entry): entry is [string, string] => typeof entry[1] === 'string' && entry[1] !== '')
+    .filter((entry): entry is [string, string | number] => (typeof entry[1] === 'string' && entry[1] !== '') || (typeof entry[1] === 'number' && Number.isFinite(entry[1])))
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`);
   return pairs.length > 0 ? `?${pairs.join('&')}` : '';
 }
@@ -260,6 +267,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     let detail = errorText;
     let code: string | null = null;
     let reconciliationRequired = false;
+    let providerRetryAfter: number | null = null;
     try {
       const parsed: unknown = JSON.parse(errorText);
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -267,6 +275,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
         if (typeof payload.error === 'string') detail = payload.error;
         if (typeof payload.code === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(payload.code)) code = payload.code;
         reconciliationRequired = payload.reconciliationRequired === true || code?.endsWith('_outcome_unknown') === true;
+        if (Number.isSafeInteger(payload.retryAfterSeconds) && Number(payload.retryAfterSeconds) > 0 && Number(payload.retryAfterSeconds) <= 86400) providerRetryAfter = Number(payload.retryAfterSeconds);
       }
     } catch {
       /* not JSON — the raw text is the best we have */
@@ -274,8 +283,8 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     if (res.status === 403 && detail === WORKSPACE_REFUSED && activeWorkspaceId) {
       workspaceRefusedHandler?.(activeWorkspaceId);
     }
-    const retryAfterHeader = Number(res.headers.get('Retry-After'));
-    const retryAfterSeconds = res.status === 429 && Number.isSafeInteger(retryAfterHeader)
+    const retryAfterHeader = Number(res.headers.get('Retry-After')) || providerRetryAfter || 0;
+    const retryAfterSeconds = [403, 429].includes(res.status) && Number.isSafeInteger(retryAfterHeader)
       && retryAfterHeader > 0 && retryAfterHeader <= 86400 ? retryAfterHeader : null;
     throw new ApiRequestError(res.status, `API Error [${res.status}]: ${detail}`, code, reconciliationRequired, retryAfterSeconds);
   }
@@ -821,6 +830,7 @@ export const apiService = {
     fetchJson<SquadRun>(`/squad-runs/${id}/cancel`, { method: 'POST' }),
 
   // Chat
+  getChatUsage: (threadId: string) => fetchJson<ChatUsageSnapshot>(`/chat/threads/${encodeURIComponent(threadId)}/usage`),
   getChatThreads: () => fetchJson<ChatThread[]>('/chat/threads'),
   getChatSyncStatus: (threadId?: string) =>
     fetchJson<ChatSyncStatus>(`/chat/sync/status${threadId ? `?threadId=${encodeURIComponent(threadId)}` : ''}`),
@@ -1085,6 +1095,29 @@ export const apiService = {
     fetchJson<{ pullRequests: RepoPullRequest[] }>(`${projectRepoPath(projectId, repo)}/pulls${query({ state })}`),
   getRepoRuns: (projectId: string, repo: string, branch: string) =>
     fetchJson<{ runs: RepoRun[] }>(`${projectRepoPath(projectId, repo)}/runs${query({ branch })}`),
+  getActionsRuns: (projectId: string, repo: string, filters: ActionsFilters, signal?: AbortSignal) =>
+    fetchJson<ActionsRunsPage>(`${projectRepoPath(projectId, repo)}/runs${query({ ...filters })}`, { signal }),
+  getActionsWorkflows: (projectId: string, repo: string, page = 1, signal?: AbortSignal) =>
+    fetchJson<ActionsWorkflowsPage>(`${projectRepoPath(projectId, repo)}/workflows${query({ page, perPage: 100 })}`, { signal }),
+  getActionsRun: (projectId: string, repo: string, runId: number | string, signal?: AbortSignal) =>
+    fetchJson<{ run: ActionsRun }>(`${projectRepoPath(projectId, repo)}/runs/${encodeURIComponent(runId)}`, { signal }),
+  getActionsJobs: (projectId: string, repo: string, runId: number | string, attempt: number, page = 1, signal?: AbortSignal) =>
+    fetchJson<ActionsJobsPage>(`${projectRepoPath(projectId, repo)}/runs/${encodeURIComponent(runId)}/jobs${query({ attempt, page, perPage: 100 })}`, { signal }),
+  getActionsLogs: (projectId: string, repo: string, runId: number | string, jobId: number, signal?: AbortSignal) =>
+    fetchJson<ActionsLog>(`${projectRepoPath(projectId, repo)}/runs/${encodeURIComponent(runId)}/jobs/${jobId}/logs`, { signal }),
+  getActionsArtifacts: (projectId: string, repo: string, runId: number | string, page = 1, signal?: AbortSignal) =>
+    fetchJson<ActionsArtifactsPage>(`${projectRepoPath(projectId, repo)}/runs/${encodeURIComponent(runId)}/artifacts${query({ page, perPage: 100 })}`, { signal }),
+  downloadActionsArtifact: async (projectId: string, repo: string, runId: number | string, artifactId: number, signal?: AbortSignal): Promise<Blob> => {
+    const res = await fetch(`${API_BASE}${projectRepoPath(projectId, repo)}/runs/${encodeURIComponent(runId)}/artifacts/${artifactId}/download`, {
+      credentials: 'include', redirect: 'error', cache: 'no-store', signal,
+      headers: { ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}), ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {}) },
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ error: 'Artifact download failed.' }));
+      throw new ApiRequestError(res.status, body.error || 'Artifact download failed.');
+    }
+    return res.blob();
+  },
   /** Open (or find) the pull request that moves work one step along the pipeline. PM and admin only. */
   promoteRepoBranch: (projectId: string, repo: string, step: { from: 'dev'; to: 'uat' } | { from: 'uat'; to: 'main' }) =>
     fetchJson<PromoteResult>(`${projectRepoPath(projectId, repo)}/promote`, {

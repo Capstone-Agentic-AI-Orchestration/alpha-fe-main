@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import { OrchestrationPlanPreview } from '../live-build-room/OrchestrationPlanPreview';
 import { AlertTriangle, Check, ChevronDown, CircleDot, ExternalLink, LoaderCircle } from 'lucide-react';
 
-import { PlanBody, ReviewBody } from './ChatBuildBodies';
 import { needsSecurityAuditPlan, type ProjectLiveBuild } from './useProjectLiveBuild';
 import type { LiveBuildRecoveryAction } from '@/shared/types';
 
@@ -58,25 +57,23 @@ interface Option {
   disabled?: boolean;
 }
 
-/** Numbered choices, like the prompts a coding agent shows above its input. */
+/** Compact controls for recovery; approval lives in the review tab. */
 const Options: React.FC<{ options: Option[] }> = ({ options }) => (
-  <ol className="space-y-1">
-    {options.map((option, index) => <li key={option.label}>
+  <div className="flex flex-wrap gap-2">
+    {options.map(option => <div key={option.label}>
       <button type="button" onClick={option.onSelect} disabled={option.disabled || option.busy}
         className={'group flex w-full items-start gap-2.5 rounded-xl border px-3 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60 ' +
           (option.tone === 'primary' ? 'border-violet-300/30 bg-violet-400/[0.12] hover:bg-violet-400/[0.2]'
             : option.tone === 'danger' ? 'border-white/[0.07] bg-white/[0.02] hover:border-rose-300/30 hover:bg-rose-400/[0.08]'
               : 'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]')}>
-        <span className={'mt-px grid h-5 w-5 shrink-0 place-items-center rounded-md text-[10px] font-semibold ' + (option.tone === 'primary' ? 'bg-violet-300 text-[#171224]' : 'bg-white/[0.08] text-gray-300')}>
-          {option.busy ? <LoaderCircle className="h-3 w-3 animate-spin" /> : index + 1}
-        </span>
+        {option.busy && <LoaderCircle className="h-3 w-3 animate-spin" />}
         <span className="min-w-0 flex-1">
           <span className={'block text-xs font-medium ' + (option.tone === 'danger' ? 'text-gray-200 group-hover:text-rose-100' : 'text-white')}>{option.label}</span>
           {option.hint && <span className="block text-[11px] leading-4 text-gray-400">{option.hint}</span>}
         </span>
       </button>
-    </li>)}
-  </ol>
+    </div>)}
+  </div>
 );
 
 const Stepper: React.FC<{ step: WizardStep; attention: boolean; failed: boolean }> = ({ step, attention, failed }) => {
@@ -239,7 +236,7 @@ export interface ChatBuildWizardProps {
   onReply: (prefill?: string) => void;
   onRetry: () => void;
   onDismiss: () => void;
-  onOpenRoom: () => void;
+  onOpenReview?: () => void;
 }
 
 /**
@@ -249,7 +246,6 @@ export interface ChatBuildWizardProps {
  */
 export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   const { build, failure, busy } = props;
-  const [documentVersion, setDocumentVersion] = useState(0);
   const failed = !build && Boolean(failure);
   const { step, attention } = wizardStepFor(build);
   // Only a step that needs the person opens by itself; a working build is just the step bar.
@@ -282,14 +278,8 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'awaiting_plan_approval':
         title = 'Plan ready for your approval';
         subtitle = build.orchestration.tasks.length + (build.orchestration.tasks.length === 1 ? ' task' : ' tasks') + ' · ' + buildRepositoriesLabel(build) + '. No code has changed yet.';
-        body = <PlanBody orchestration={build.orchestration} />;
-        options = [
-          props.canStart
-            ? { label: 'Start planned work', hint: 'Review the saved Markdown plan first.', onSelect: props.onStart, tone: 'primary', busy: busy === 'start', disabled: documentVersion !== build.orchestration.run.planVersion }
-            : { label: 'Start planned work', hint: 'Your workspace role cannot start builds.', onSelect: () => undefined, disabled: true },
-          ...(props.canStop ? [{ label: 'Stop and plan something else', hint: 'Then describe what you want instead.', onSelect: props.onStop, busy: busy === 'stop' }] : []),
-          { label: 'Open the full plan', onSelect: props.onOpenRoom }
-        ];
+        body = <p className="text-xs text-gray-300">{props.canStart ? 'Review the saved plan and type start in the Build review tab.' : 'Your workspace role cannot start builds.'}</p>;
+        options = [];
         break;
       case 'paused':
       case 'blocked':
@@ -321,14 +311,8 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'publishing':
         title = build.status === 'publishing' ? 'Opening the pull request' : 'Build ready for your review';
         subtitle = buildRepositoriesLabel(build);
-        body = <ReviewBody projectId={props.projectId} orchestration={build.orchestration} />;
-        options = [
-          props.canApprove
-            ? { label: build.status === 'publishing' ? 'Retry opening the pull request' : 'Approve and open the pull request', hint: 'Pushes the checked branch to GitHub.', onSelect: props.onApprove, tone: 'primary', busy: busy === 'approve' }
-            : { label: 'Approve and open the pull request', hint: 'A project manager or admin approves builds.', onSelect: () => undefined, disabled: true },
-          { label: 'Ask for changes', hint: 'Describe them in the message box.', onSelect: () => props.onReply() },
-          { label: 'Open the full review', onSelect: props.onOpenRoom }
-        ];
+        body = <p className="text-xs text-gray-300">{build.status === 'publishing' ? 'Publication progress is in the Build review tab.' : 'Checks, findings, code changes and approval are in the Build review tab.'}</p>;
+        options = [];
         break;
       default: {
         const working = build.agents.find(agent => agent.state === 'running');
@@ -336,7 +320,6 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
         subtitle = (working?.currentTaskTitle ?? build.goal) + ' · ' + currentRepositoryLabel(build, working?.currentTaskTitle);
         body = <Progress build={build} />;
         options = [
-          { label: 'Watch it live', onSelect: props.onOpenRoom },
           ...(props.canStop && build.status !== 'cancelling' ? [{ label: 'Stop the build', hint: 'Agents stop at the next safe point.', onSelect: props.onStop, tone: 'danger' as const, busy: busy === 'stop' }] : [])
         ];
       }
@@ -351,7 +334,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
     <div className="flex items-center gap-3 px-3">
       <Stepper step={step} attention={attention} failed={failed} />
       <span className="flex shrink-0 items-center gap-1">
-        {build && <button type="button" onClick={props.onOpenRoom} aria-label="Open in Live Build Room" title="Open in Live Build Room" className="rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></button>}
+        {build && <button type="button" onClick={props.onOpenReview} aria-label="Show Build review tab" title="Show Build review tab" className="rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></button>}
         <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? 'Show build details' : 'Hide build details'} className="rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white"><ChevronDown className={'h-4 w-4 transition-transform ' + (collapsed ? '' : 'rotate-180')} /></button>
       </span>
     </div>
@@ -360,12 +343,10 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
         <div className="text-xs font-semibold text-white">{title}</div>
         <div className="truncate text-[11px] text-gray-400">{subtitle}</div>
       </div>}
-      {build && build.status !== 'planning' && <div className={'px-4 pb-3 ' + (needsYou ? '' : 'pt-3')}><OrchestrationPlanPreview key={build.runId} projectId={props.projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={['awaiting_plan_approval', 'executing'].includes(build.status)} onReady={setDocumentVersion} /></div>}
+      {build && !['planning', 'awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(build.status) && <div className={'px-4 pb-3 ' + (needsYou ? '' : 'pt-3')}><OrchestrationPlanPreview key={build.runId} projectId={props.projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={build.status === 'executing'} /></div>}
       {body && <div className="max-h-[22vh] space-y-3 overflow-y-auto border-t border-white/[0.07] px-4 py-3">{body}</div>}
       {options.length > 0 && <div className="border-t border-white/[0.07] px-3 py-2.5"><Options options={options} /></div>}
       {props.error && <p role="alert" className="border-t border-rose-300/15 bg-rose-500/[0.06] px-4 py-2 text-[11px] text-rose-100">{props.error}</p>}
     </div>}
-    {/* The plan must load for "Start planned work" to unlock, even while the details are hidden. */}
-    {!details && build?.status === 'awaiting_plan_approval' && <div className="hidden"><OrchestrationPlanPreview key={build.runId} projectId={props.projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={false} onReady={setDocumentVersion} /></div>}
   </section>;
 };

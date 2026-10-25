@@ -55,7 +55,7 @@ export const PlanBody: React.FC<{ orchestration: LiveBuildRoomOrchestration }> =
   </>;
 };
 
-export const ReviewBody: React.FC<{ projectId: string; orchestration: LiveBuildRoomOrchestration }> = ({ projectId, orchestration }) => {
+export const ReviewBody: React.FC<{ projectId: string; orchestration: LiveBuildRoomOrchestration; expandedDiff?: boolean; onDiffReady?: () => void }> = ({ projectId, orchestration, expandedDiff, onDiffReady }) => {
   const checks = finalChecks(orchestration);
   const openFindings = orchestration.findings.filter(finding => finding.status === 'open');
   return <>
@@ -77,8 +77,8 @@ export const ReviewBody: React.FC<{ projectId: string; orchestration: LiveBuildR
     </div>
     {openFindings.length > 0 && <div className="rounded-xl border border-amber-300/20 bg-amber-400/[0.05] px-3 py-2.5 text-[11px] text-amber-100">
       <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />{openFindings.length} open {openFindings.length === 1 ? 'finding' : 'findings'}</div>
-      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-amber-100/80">{openFindings.slice(0, 5).map(finding => <li key={finding.id}>{finding.title ?? finding.instruction ?? finding.severity}{finding.path ? ' · ' + finding.path : ''}</li>)}</ul>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-amber-100/80">{openFindings.map(finding => <li key={finding.id}>{finding.title ?? finding.instruction ?? finding.severity}{finding.path ? ' · ' + finding.path : ''}</li>)}</ul>
     </div>}
-    <ReviewDiff projectId={projectId} runId={orchestration.run.id} branchName={orchestration.run.branchName} />
+    <ReviewDiff projectId={projectId} runId={orchestration.run.id} branchName={orchestration.run.branchName} expanded={expandedDiff} onReady={onDiffReady} />
   </>;
 };

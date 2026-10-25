@@ -1,3 +1,7 @@
+import { ChatPanelHandle } from './ChatPanelHandle';
+import { LocalPreviewTab, WebPreviewCard, useLocalPreviews } from './LocalPreview';
+import { reconcileCallSnapshot } from './chatCallSnapshot';
+import { WorkUsageRow, useChatUsage, entriesAtMessage } from './ChatUsage';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { OrchestrationPlanPreview, PlanDocumentTab, PlanPanelContext, planFileName, type PlanPanelRequest } from '../live-build-room/OrchestrationPlanPreview';
 import {
@@ -22,6 +26,7 @@ import {
   MessageSquare,
   MoreHorizontal,
   PanelLeftClose,
+  Globe,
   PencilLine,
   Paperclip,
   Image as ImageIcon,
@@ -60,6 +65,7 @@ import { OrchestratorFlow, isOrchestratorCall } from './OrchestratorFlow';
 import { AgentActivityPanel } from './AgentActivityPanel';
 import { BuildAgentActivityPanel } from './BuildAgentActivityPanel';
 import { ChatSidePanel, type SidePanelTab } from './ChatSidePanel';
+import { BuildReviewTab, SavedBuildReviewTab } from './BuildReviewTab';
 import { LiveChangesView } from './LiveChangesView';
 import { ChatBuildWizard, planningFailureReason, type BuildPlanningFailure } from './ChatBuildWizard';
 import { buildHandoffs, buildStatusLabel, needsSecurityAuditPlan, useProjectLiveBuild } from './useProjectLiveBuild';
@@ -158,12 +164,10 @@ function getMentionQueryAtCursor(value: string, cursor: number): ChatMentionQuer
 
 function ChatTurnActivityRow({
   calls,
-  agents,
-  onOpenRoom
+  agents
 }: {
   calls: AgentCall[];
   agents: ProjectChatAgent[];
-  onOpenRoom: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   if (!calls.length) return null;
@@ -198,12 +202,12 @@ function ChatTurnActivityRow({
                 <span className={`absolute -left-[17px] top-1.5 h-1.5 w-1.5 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'handoff' ? 'bg-amber-300' : 'bg-violet-300'}`} />
                 <span>{activity.toolName ? `${activity.toolName} · ` : ''}{activity.message}</span>
                 {activity.detail && <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-black/20 px-2 py-1.5 font-mono text-[9px] text-gray-400">{activity.detail}</pre>}
-                {!!activity.paths?.length && <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <button key={file} type="button" onClick={onOpenRoom} className="inline-flex items-center gap-1 rounded bg-white/[0.05] px-1.5 py-1 text-left font-mono text-[9px] text-emerald-200 hover:bg-white/10"><FileCode2 className="h-3 w-3" />{file}</button>)}</div>}
+                {!!activity.paths?.length && <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <span key={file} className="inline-flex items-center gap-1 rounded bg-white/[0.05] px-1.5 py-1 text-left font-mono text-[9px] text-emerald-200 hover:bg-white/10"><FileCode2 className="h-3 w-3" />{file}</span>)}</div>}
               </li>)}
             </ol> : <p className="text-[10px] text-gray-500">Waiting for the first visible work update.</p>}
           </section>;
         })}
-        <button type="button" onClick={onOpenRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/20 px-2.5 py-1.5 text-[10px] font-medium text-violet-200 hover:bg-violet-400/10"><Activity className="h-3 w-3" />Open Live Build Room</button>
+
       </div>}
     </div>
   );
@@ -213,14 +217,14 @@ function OrchestratorBuildActivityRow({
   projectId,
   runId,
   threadId,
-  onOpenRoom,
+  onOpenReview,
   onWithdraw,
   withdrawing = false
 }: {
   projectId: string;
   runId: string;
   threadId: string;
-  onOpenRoom: () => void;
+  onOpenReview: () => void;
   /** Turn an unstarted plan back into a question for Alpha to answer. */
   onWithdraw?: () => void;
   withdrawing?: boolean;
@@ -245,7 +249,7 @@ function OrchestratorBuildActivityRow({
         if (cancelled) return;
         setSnapshot(next);
         if (next.orchestration?.run.id !== runId) {
-          setError('Run details could not be matched to this chat update. Open the Live Build Room to review the saved build.');
+          setError('Run details could not be matched to this chat update. The saved Build review tab contains the build details.');
           return;
         }
         setError('');
@@ -324,7 +328,7 @@ function OrchestratorBuildActivityRow({
         setRetryNotice('The task restarted. Alpha will check its new result before handing work to the next specialist.');
         setRetryNoticeTaskId(failedTask.id);
       } else {
-        setRetryError(refreshed.orchestration?.run.stoppedReason || 'Alpha could not start the retry. Open the Live Build Room to review the saved reason.');
+        setRetryError(refreshed.orchestration?.run.stoppedReason || 'Alpha could not start the retry. Open the Build review tab to review the saved reason.');
         setRetryNotice('');
         setRetryNoticeTaskId('');
       }
@@ -371,7 +375,7 @@ function OrchestratorBuildActivityRow({
         taskRevision={activeRecovery.taskId ? tasks.find(task => task.id === activeRecovery.taskId)?.revision : undefined}
         recovery={activeRecovery}
         canControl={Boolean(snapshot.canControlOrchestration ?? snapshot.canRun)}
-        onOpenRoom={onOpenRoom}
+        onOpenReview={onOpenReview}
         onActionComplete={refreshAfterRecovery}
         compact
       />
@@ -420,7 +424,7 @@ function OrchestratorBuildActivityRow({
           {!!item.paths?.length && <div className="mt-1 flex flex-wrap gap-1">{item.paths.map(file => <code key={file} className="max-w-full truncate rounded bg-white/[0.05] px-1.5 py-1 font-mono text-[9px] text-emerald-200">{file}</code>)}</div>}
         </li>)}</ol> : <p className="text-[10px] text-gray-500">{working ? 'The agent is starting. Its conversation, tool calls, and file edits will appear here.' : 'No agent actions were recorded for this build.'}</p>}
       </section>
-      <button type="button" onClick={onOpenRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/20 px-2.5 py-1.5 text-[10px] font-medium text-violet-200 hover:bg-violet-400/10"><Activity className="h-3 w-3" />Open this build in Live Build Room</button>
+
     </div>}
   </div>;
 }
@@ -443,6 +447,8 @@ type SideTab =
   | { id: string; kind: 'plan'; projectId: string; runId: string; planVersion: number }
   | { id: string; kind: 'agent'; agentId: string }
   | { id: string; kind: 'call'; callId: string }
+  | { id: string; kind: 'review'; projectId: string; runId: string }
+  | { id: string; kind: 'preview' }
   | { id: string; kind: 'changes'; projectId: string; runId: string };
 
 export const ChatView: React.FC = () => {
@@ -458,7 +464,6 @@ export const ChatView: React.FC = () => {
     isActiveTab,
     activeChatAgentId,
     projects,
-    issues,
     activeWorkspace,
     role,
     users,
@@ -481,20 +486,22 @@ export const ChatView: React.FC = () => {
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [chatTurnActionBusy, setChatTurnActionBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [callInstruction, setCallInstruction] = useTabSessionState<string>(sessionStateKey('callInstruction'), '');
-  const [showCallPanel, setShowCallPanel] = useState(false);
   /** What is open in the right side panel, one tab each, and which tab is showing. */
-  const [sideTabs, setSideTabs] = useTabSessionState<SideTab[]>(sessionStateKey('sideTabs'), []);
-  const [activeSideTabId, setActiveSideTabId] = useTabSessionState<string | null>(sessionStateKey('activeSideTab'), null);
+  const panelKey = (key: string) => `${sessionStateKey(key)}.${activeWorkspace?.id ?? ''}.${currentUser?.id ?? ''}`;
+  const [panelVisible, setPanelVisible] = useTabSessionState<boolean>(panelKey('panelVisible'), false);
+  const [sideTabs, setSideTabs] = useTabSessionState<SideTab[]>(panelKey('sideTabs'), []);
+  const [activeSideTabId, setActiveSideTabId] = useTabSessionState<string | null>(panelKey('activeSideTab'), null);
+  const [openedReviewDecisions, setOpenedReviewDecisions] = useTabSessionState<string[]>(sessionStateKey('openedReviewDecisions'), []);
   const activeSideTab = sideTabs.find(tab => tab.id === activeSideTabId) ?? null;
   const inspectedCallId = activeSideTab?.kind === 'call' ? activeSideTab.callId : null;
   const inspectedBuildAgentId = activeSideTab?.kind === 'agent' ? activeSideTab.agentId : null;
   const openSideTab = (tab: SideTab, focus = true) => {
     setSideTabs(current => current.some(item => item.id === tab.id) ? current.map(item => item.id === tab.id ? tab : item) : [...current, tab]);
-    if (focus) setActiveSideTabId(tab.id);
-    else setActiveSideTabId(active => active ?? tab.id);
+    if (focus) { setActiveSideTabId(tab.id); setPanelVisible(true); }
+    else { setActiveSideTabId(active => active ?? tab.id); if (!sideTabs.length) setPanelVisible(true); }
   };
   const closeSideTab = (id: string) => {
+    if (sideTabs.find(tab => tab.id === id)?.kind === 'preview') void previews.stop();
     setSideTabs(current => {
       const index = current.findIndex(item => item.id === id);
       const next = current.filter(item => item.id !== id);
@@ -517,11 +524,8 @@ export const ChatView: React.FC = () => {
   const [dismissedBuildFailures, setDismissedBuildFailures] = useTabSessionState<string[]>(sessionStateKey('dismissedBuildFailures'), []);
   const [publishedBuild, setPublishedBuild] = useTabSessionState<{ projectId: string; links: Array<{ repository: string; url: string }> } | null>(sessionStateKey('publishedBuild'), null);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
-  const [loadingSnapshot, setLoadingSnapshot] = useState(false);
-  const [snapshotError, setSnapshotError] = useState<string | null>(null);
-  const [chatSyncStatus, setChatSyncStatus] = useState<ChatSyncStatus | null>(null);
+      const [chatSyncStatus, setChatSyncStatus] = useState<ChatSyncStatus | null>(null);
   const [syncRetrying, setSyncRetrying] = useState(false);
-  const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string>(sessionStateKey('selectedAgent'), '');
   const [selectedBuildRepositories, setSelectedBuildRepositories] = useTabSessionState<string[]>(sessionStateKey('buildRepositories'), []);
   const [routingMessageId, setRoutingMessageId] = useState<string | null>(null);
   // The list stays docked; a collapsed rail expands only on click.
@@ -562,13 +566,9 @@ export const ChatView: React.FC = () => {
     setStoppingProjectRunId(null);
     setRoutingMessageId(null);
     setRepositoryMenuOpen(false);
-    setShowCallPanel(false);
     setMentionQuery(null);
     setMemoryThreadId(null);
   }, [activeThreadId]);
-  const [mode, setMode] = useTabSessionState<AgentCallMode>(sessionStateKey('callMode'), 'ask');
-  const [targetType, setTargetType] = useTabSessionState<AgentCallTarget['type']>(sessionStateKey('callTargetType'), 'issue');
-  const [targetId, setTargetId] = useTabSessionState<string>(sessionStateKey('callTargetId'), '');
   const [calls, setCalls] = useState<Record<string, AgentCall>>({});
   const [busyCallId, setBusyCallId] = useState<string | null>(null);
   const [stoppingProjectRunId, setStoppingProjectRunId] = useState<string | null>(null);
@@ -578,6 +578,12 @@ export const ChatView: React.FC = () => {
   const [copiedCallId, setCopiedCallId] = useState<string | null>(null);
   const [expandedCallPanel, setExpandedCallPanel] = useState<Record<string, boolean>>({});
   const callsRef = useRef<Record<string, AgentCall>>({});
+  const acceptCallSnapshot = (next: AgentCall, threadId: string) => {
+    const accepted = reconcileCallSnapshot(callsRef.current[next.id], next, threadId);
+    if (!accepted) return;
+    callsRef.current = { ...callsRef.current, [accepted.id]: accepted };
+    setCalls(previous => ({ ...previous, [accepted.id]: accepted }));
+  };
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const [mentionQuery, setMentionQuery] = useState<ChatMentionQuery | null>(null);
   const [activeMentionIndex, setActiveMentionIndex] = useState(0);
@@ -610,21 +616,34 @@ export const ChatView: React.FC = () => {
     [chatThreads, activeThreadId]
   );
   const currentMessages = activeThread?.messages ?? [];
+  const usage = useChatUsage(activeThread?.id, `${activeWorkspace?.id ?? ''}:${currentUser?.id ?? ''}`, isActiveTab, isAgentTyping);
+  const usageNames = Object.fromEntries(workspaceAgents.map(agent => [agent.id, agent.name]));
   const isClient = role === 'client';
   const project = projects.find(item => item.id === activeThread?.projectId);
-  const projectIssues = issues.filter(issue => issue.projectId === activeThread?.projectId);
+  const openPreview = () => openSideTab({ id: 'preview', kind: 'preview' });
+  const previews = useLocalPreviews(activeThreadId ?? undefined, `${activeWorkspace?.id}:${currentUser?.id}:${activeThreadId}`, Boolean(project && !isClient && isActiveTab), openPreview);
   // Only a build originating in this conversation can appear or be controlled here.
-  const { build: liveBuild, refresh: refreshLiveBuild } = useProjectLiveBuild(
+  const { build: liveBuild, latestBuild, refresh: refreshLiveBuild } = useProjectLiveBuild(
     project?.id,
     !isClient && Boolean(project) && Boolean(activeThreadId) && isActiveTab,
     activeThreadId
   );
-  const inspectedBuildAgent = liveBuild?.agents.find(agent => agent.agentId === inspectedBuildAgentId) ?? null;
+  const inspectedBuildAgent = latestBuild?.agents.find(agent => agent.agentId === inspectedBuildAgentId) ?? null;
   const buildIsOpen = Boolean(liveBuild);
   const canStopBuild = !isClient && can('run_builds') && buildIsOpen && liveBuild?.status !== 'cancelling' && liveBuild?.status !== 'publishing';
   // Plan approval and final review are answered in the chat itself.
   const buildDecision = !isClient && liveBuild && ['awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(liveBuild.status) ? liveBuild : null;
   const buildDecisionKey = liveBuild ? liveBuild.runId + ':' + liveBuild.status : '';
+  const openBuildReview = () => {
+    if (latestBuild && project) openSideTab({ id: 'review:' + latestBuild.runId, kind: 'review', projectId: project.id, runId: latestBuild.runId });
+  };
+  useEffect(() => {
+    if (isClient || !latestBuild || !project || !['awaiting_plan_approval', 'awaiting_approval', 'completed'].includes(latestBuild.status)) return;
+    const key = `${latestBuild.runId}:${latestBuild.status}:${latestBuild.orchestration.run.planVersion}`;
+    if (openedReviewDecisions.includes(key)) return;
+    setOpenedReviewDecisions(current => [...current, key]);
+    openBuildReview();
+  }, [activeThreadId, isClient, latestBuild?.runId, latestBuild?.status, latestBuild?.orchestration.run.planVersion, openedReviewDecisions]);
   useEffect(() => { setBuildDecisionError(null); }, [buildDecisionKey]);
   const startPlannedBuild = async () => {
     if (!liveBuild || !project?.id || buildDecisionBusy) return;
@@ -674,6 +693,8 @@ export const ChatView: React.FC = () => {
     else if (activeSideTab?.kind === 'call') closeSideTab(activeSideTab.id);
   };
   const selectBuildAgent = (agentId: string | null) => {
+    const selected = workspaceAgents.find(agent => agent.id === agentId);
+    if (selected && (selected.templateKey === 'orchestrator' || /orchestrator/i.test(selected.role)) && latestBuild) { openBuildReview(); return; }
     if (agentId) openSideTab({ id: 'agent:' + agentId, kind: 'agent', agentId });
     else if (activeSideTab?.kind === 'agent') closeSideTab(activeSideTab.id);
   };
@@ -700,8 +721,6 @@ export const ChatView: React.FC = () => {
     };
   }, [activeThreadId, isActiveTab, isClient]);
   const pmName = users.find(user => user.role === 'pm')?.name ?? 'your project manager';
-  const selectedAgent = snapshot?.agents.find(agent => agent.id === selectedAgentId);
-  const visibleModes = selectedAgent?.supportedModes ?? [];
   const projectRepositories = snapshot?.project.repositories ?? [];
   const repositorySignature = projectRepositories.map(item => `${item.repo}:${item.connected ? '1' : '0'}`).join('|');
   const validBuildRepositories = selectedBuildRepositories.filter(repo => projectRepositories.some(item => item.repo === repo));
@@ -748,12 +767,12 @@ export const ChatView: React.FC = () => {
   }, [repositoryMenuOpen]);
 
   const callList = useMemo(
-    () => Object.values(calls).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [calls]
+    () => Object.values(calls).filter(call => call.threadId === activeThreadId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    [calls, activeThreadId]
   );
   const highlightedCall = callList[0];
   const inspectedCall = inspectedCallId ? calls[inspectedCallId] : undefined;
-  useEffect(() => { setSideTabs([]); setActiveSideTabId(null); }, [activeThread?.id]);
+
   const activeCall = callList.find(call => ['queued', 'running', 'awaiting_confirmation'].includes(call.status));
   const activeChatTurnCall = callList.find(call => call.origin === 'chat_turn' && ['queued', 'running'].includes(call.status));
   const latestUserMessage = [...currentMessages].reverse().find(message => message.senderType === 'user');
@@ -798,12 +817,9 @@ export const ChatView: React.FC = () => {
     if (!isActiveTab) return undefined;
     let cancelled = false;
     setSnapshot(null);
-    setSnapshotError(null);
     setCalls({});
-    setShowCallPanel(false);
 
     if (isClient || !activeThread?.projectId) return undefined;
-    setLoadingSnapshot(true);
     Promise.all([
       apiService.getProjectChatAgents(activeThread.projectId),
       apiService.getThreadAgentCalls(activeThread.projectId, activeThread.id)
@@ -811,24 +827,14 @@ export const ChatView: React.FC = () => {
       if (cancelled) return;
       setSnapshot(nextSnapshot);
       setCalls(Object.fromEntries(nextCalls.calls.map(call => [call.id, call])));
-      const preferredAgentId = selectedAgentId || activeChatAgentId;
-      const firstAgent = nextSnapshot.agents.find(agent => agent.id === preferredAgentId) ?? nextSnapshot.agents[0];
-      setSelectedAgentId(firstAgent?.id ?? '');
-      setMode(current => firstAgent?.supportedModes.includes(current)
-        ? current
-        : firstAgent?.supportedModes.includes('ask') ? 'ask' : firstAgent?.supportedModes[0] ?? 'ask');
-    }).catch((error: any) => {
-      if (!cancelled) setSnapshotError(error?.message ?? 'Could not load project agents.');
-    }).finally(() => {
-      if (!cancelled) setLoadingSnapshot(false);
+
+    }).catch(() => {
+      // The transcript remains usable while project activity access is unavailable.
     });
 
     return () => { cancelled = true; };
   }, [activeChatAgentId, activeThread?.id, activeThread?.projectId, isActiveTab, isClient]);
 
-  useEffect(() => {
-    if (!visibleModes.includes(mode)) setMode(visibleModes[0] ?? 'ask');
-  }, [mode, visibleModes]);
 
   useEffect(() => {
     if (!isActiveTab) return undefined;
@@ -836,35 +842,22 @@ export const ChatView: React.FC = () => {
     const threadId = activeThread?.id;
     if (isClient || !projectId || !threadId) return undefined;
 
-    const updateFromSocket = (payload: Partial<AgentCall> & Pick<AgentCall, 'id'>, eventName: string) => {
-      const existing = payload?.id ? callsRef.current[payload.id] : undefined;
-      if (!existing) return;
-      if (eventName === 'agent_call.activity') {
-        void apiService.getAgentCall(payload.id).then(result => {
-          callsRef.current[result.call.id] = result.call;
-          setCalls(prev => ({ ...prev, [result.call.id]: result.call }));
-          if (result.call.activities?.some(activity => activity.kind === 'file_change' && activity.message === 'Proposed patch applied to the project working copy')) {
-            void refreshChatThread(threadId);
-          }
-        }).catch(() => undefined);
-        return;
-      }
-      const next = {
-        ...existing,
-        ...payload,
-        artifacts: payload.artifacts ?? existing.artifacts
-      };
-      callsRef.current[payload.id] = next;
-      setCalls(prev => ({ ...prev, [payload.id]: next }));
-      if (['completed', 'failed', 'cancelled'].includes(payload.status ?? '')) {
-        void Promise.all([
-          apiService.getAgentCall(payload.id).then(result => {
-            callsRef.current[result.call.id] = result.call;
-            setCalls(prev => ({ ...prev, [result.call.id]: result.call }));
-          }).catch(() => undefined),
-          refreshChatThread(threadId)
-        ]);
-      }
+    let disposed = false;
+    const requests = new Map<string, number>();
+    const updateFromSocket = (payload: Partial<AgentCall> & Pick<AgentCall, 'id'>) => {
+      if (!payload?.id) return;
+      const existing = callsRef.current[payload.id];
+      if ((!existing && payload.threadId !== threadId) || (existing && existing.threadId !== threadId)) return;
+      const sequence = (requests.get(payload.id) ?? 0) + 1;
+      requests.set(payload.id, sequence);
+      // Socket frames are notifications. Fetch current, authorized state instead of trusting a late started frame.
+      void apiService.getAgentCall(payload.id).then(result => {
+        if (disposed || requests.get(payload.id) !== sequence || result.call.threadId !== threadId) return;
+        acceptCallSnapshot(result.call, threadId);
+        if (['completed', 'failed', 'cancelled'].includes(result.call.status) || result.call.activities?.some(activity => activity.kind === 'file_change' && activity.message === 'Proposed patch applied to the project working copy')) {
+          void refreshChatThread(threadId);
+        }
+      }).catch(() => undefined);
     };
     const eventNames = [
       'agent_call.created',
@@ -875,8 +868,8 @@ export const ChatView: React.FC = () => {
       'agent_call.failed',
       'agent_call.cancelled'
     ];
-    const unsubscribers = eventNames.map(eventName => runnerSocket.on(eventName, payload => updateFromSocket(payload, eventName)));
-    return () => unsubscribers.forEach(unsubscribe => unsubscribe());
+    const unsubscribers = eventNames.map(eventName => runnerSocket.on(eventName, payload => updateFromSocket(payload)));
+    return () => { disposed = true; unsubscribers.forEach(unsubscribe => unsubscribe()); };
   }, [activeThread?.id, activeThread?.projectId, isActiveTab, isClient, refreshChatThread]);
 
   useEffect(() => {
@@ -890,7 +883,7 @@ export const ChatView: React.FC = () => {
       try {
         const result = await apiService.getAgentCall(activeCall.id);
         if (cancelled) return;
-        setCalls(prev => ({ ...prev, [result.call.id]: result.call }));
+        acceptCallSnapshot(result.call, threadId);
         if (['completed', 'failed', 'cancelled'].includes(result.call.status)) {
           await refreshChatThread(threadId);
         }
@@ -912,9 +905,7 @@ export const ChatView: React.FC = () => {
       try {
         const result = await apiService.getThreadAgentCalls(activeThread.projectId!, activeThread.id);
         if (cancelled) return;
-        const next = Object.fromEntries(result.calls.map(call => [call.id, call]));
-        callsRef.current = { ...callsRef.current, ...next };
-        setCalls(previous => ({ ...previous, ...next }));
+        result.calls.forEach(call => acceptCallSnapshot(call, activeThread.id));
       } catch {
         // Live room updates may be delayed while workspace access refreshes.
       }
@@ -923,82 +914,6 @@ export const ChatView: React.FC = () => {
     const timer = window.setInterval(() => void refreshTurnActivity(), 1500);
     return () => { cancelled = true; window.clearInterval(timer); };
   }, [activeChatTurnCall?.id, activeChatTurnCall?.status, activeThread?.id, activeThread?.projectId, isActiveTab, isAgentTyping, isClient]);
-
-  const targetOptions = useMemo(() => {
-    if (targetType === 'issue') {
-      return projectIssues.map(issue => ({ id: issue.id, label: `${issue.identifier} · ${issue.title}` }));
-    }
-    if (targetType === 'message' || targetType === 'agent_response') {
-      return currentMessages
-        .filter(message => message.senderType !== 'system')
-        .map(message => ({
-          id: message.id,
-          label: `${message.senderName} · ${message.content.slice(0, 72)}`
-        }));
-    }
-    return [];
-  }, [currentMessages, projectIssues, targetType]);
-
-  const makeTarget = (): AgentCallTarget | undefined => {
-    if (mode === 'ask' && !targetId) return undefined;
-    if (!targetId.trim()) return undefined;
-    const option = targetOptions.find(item => item.id === targetId);
-    return {
-      type: targetType,
-      id: targetId.trim(),
-      label: option?.label ?? targetId.trim()
-    };
-  };
-
-  const openCallPanel = () => {
-    if (isClient) return;
-    if (!activeThread?.projectId) {
-      showToast('Choose a project first', 'Agent calls can only inspect an assigned project.', 'info');
-      return;
-    }
-    if (!snapshot?.agents.length) {
-      showToast('No project agents available', 'This project has no ready specialist that you can call directly on this machine.', 'info');
-      return;
-    }
-    setShowCallPanel(true);
-  };
-
-  const callAgent = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!activeThread?.projectId || !selectedAgentId) return;
-    const instruction = callInstruction.trim() || input.trim();
-    if (!instruction) {
-      showToast('Add an instruction', 'Tell the selected agent what you want it to do.', 'info');
-      return;
-    }
-    const target = makeTarget();
-    if (mode !== 'ask' && !target) {
-      showToast('Select a target', 'Review, revise, and implement calls need a message, task, file, or other target.', 'info');
-      return;
-    }
-
-    setBusyCallId('new');
-    try {
-      const result = await apiService.createAgentCall(activeThread.projectId, activeThread.id, {
-        agentId: selectedAgentId,
-        mode,
-        target,
-        instruction,
-        senderName: users.find(user => user.role === role)?.name
-      });
-      setCalls(prev => ({ ...prev, [result.call.id]: result.call }));
-      await refreshChatThread(activeThread.id);
-      setCallInstruction('');
-      setInput('');
-      if (result.call.status === 'awaiting_confirmation') {
-        showToast('Implementation ready for confirmation', 'No files changed. Confirm the call to generate a proposed patch.', 'info');
-      }
-    } catch (error: any) {
-      showToast('Agent call not started', error?.message ?? 'The request could not be sent.', 'error');
-    } finally {
-      setBusyCallId(null);
-    }
-  };
 
   const confirmCall = async (call: AgentCall) => {
     setBusyCallId(call.id);
@@ -1146,7 +1061,7 @@ export const ChatView: React.FC = () => {
       : undefined);
     if (!selected?.state) {
       if (states.some(item => !item.state)) {
-        showToast('Recovery details unavailable', 'Refresh Alpha or open the Live Build Room to load this build’s recovery controls.', 'error');
+        showToast('Recovery details unavailable', 'Refresh the Build review tab to load this build’s recovery controls.', 'error');
         return true;
       }
       if (explicitBuildRetry && runIds.length > 1) {
@@ -1160,7 +1075,7 @@ export const ChatView: React.FC = () => {
       : undefined);
     if (!recovery) {
       if (optional) return false;
-      showToast('No open recovery', 'This build has no saved recovery waiting for an action. Open the Live Build Room to review its current status.', 'info');
+      showToast('No open recovery', 'This build has no saved recovery waiting for an action. Open the Build review tab to review its current status.', 'info');
       return true;
     }
 
@@ -1193,7 +1108,7 @@ export const ChatView: React.FC = () => {
       setInput('');
       if (activeThread.id) await refreshChatThread(activeThread.id);
       followNextMessage();
-      if (action === 'review_saved_changes') openLiveBuildRun(selected.runId);
+      if (action === 'review_saved_changes') openSavedBuildReview(selected.runId);
       showToast(action === 'explain_failure' ? 'Build explanation' : 'Build recovery updated',
         result.explanation ?? result.message ?? 'Alpha saved the recovery action.',
         action === 'explain_failure' ? 'info' : 'success');
@@ -1310,7 +1225,7 @@ export const ChatView: React.FC = () => {
         showToast('Build stopped', 'The agents are stopping. Work already on the build branch remains available for review.', 'success');
       } else {
         const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-        showToast(stoppedCount ? 'Some builds could not be stopped' : 'Could not stop build', failure?.reason?.message ?? 'Check the Live Build Room for current status.', 'error');
+        showToast(stoppedCount ? 'Some builds could not be stopped' : 'Could not stop build', failure?.reason?.message ?? 'Check the Build review tab for current status.', 'error');
       }
     } finally {
       setStoppingProjectRunId(null);
@@ -1393,11 +1308,7 @@ export const ChatView: React.FC = () => {
     }
   };
 
-  const openLiveBuildRoom = () => {
-    if (!activeThread?.projectId) return;
-    setTabSessionState(activeTabId, 'liveBuildProjectId', activeThread.projectId);
-    setActiveTab('live_build_room');
-  };
+
 
   const canRouteBuild = !isClient && can('run_agents');
   /** The user message a reply answers: the proposal's source, else the nearest earlier user message. */
@@ -1460,11 +1371,9 @@ export const ChatView: React.FC = () => {
   };
 
 
-  const openLiveBuildRun = (runId: string) => {
+  const openSavedBuildReview = (runId: string) => {
     if (!activeThread?.projectId) return;
-    setTabSessionState(activeTabId, 'liveBuildProjectId', activeThread.projectId);
-    setTabSessionState(activeTabId, 'liveBuildRunId', runId);
-    setActiveTab('live_build_room');
+    openSideTab({ id: 'review:' + runId, kind: 'review', projectId: activeThread.projectId, runId });
   };
 
   const updateMessageInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -1711,11 +1620,7 @@ export const ChatView: React.FC = () => {
   };
 
 
-  let callPanelBody: React.ReactNode;
-  if (loadingSnapshot) callPanelBody = <div className="flex items-center gap-2 text-xs text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading project agents…</div>;
-  else if (snapshotError) callPanelBody = <div className="flex items-center gap-2 text-xs text-rose-300"><AlertTriangle className="h-4 w-4" /> {snapshotError}</div>;
-  else if (!snapshot?.agents.length) callPanelBody = <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs text-gray-500">No project specialist is ready for a direct call yet. Product builds can still start with the Orchestrator.</div>;
-  else callPanelBody = <form onSubmit={callAgent} className="space-y-4"><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Agent</label><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{snapshot.agents.map(agent => <button type="button" key={agent.id} onClick={() => setSelectedAgentId(agent.id)} className={`rounded-lg border p-2.5 text-left ${selectedAgentId === agent.id ? 'border-brand-400/50 bg-brand-500/15' : 'border-white/10 bg-white/[0.03] hover:border-white/20'}`}><span className="flex items-center gap-2"><span className="h-6 w-6 rounded-md flex items-center justify-center text-[10px] font-semibold text-white" style={{ backgroundColor: agent.color || '#6d28d9' }}>{agent.avatar ? <img src={agent.avatar} alt="" className="h-6 w-6 rounded-md object-cover" /> : agent.name.charAt(0)}</span><span className="min-w-0"><span className="block truncate text-xs font-medium text-white">{agent.name}</span><span className="block truncate text-[10px] text-gray-500">{agent.role}</span></span></span></button>)}</div></div><div className="grid gap-3 sm:grid-cols-[150px_1fr]"><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Mode</label><select value={mode} onChange={event => setMode(event.target.value as AgentCallMode)} className="w-full rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400">{visibleModes.map(value => <option key={value} value={value}>{MODE_META[value].label}</option>)}</select><p className="text-[10px] leading-relaxed text-gray-600">{MODE_META[mode].description}</p></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Target <span className="normal-case text-gray-600">{mode === 'ask' ? 'optional' : 'required'}</span></label><div className="flex gap-2"><select value={targetType} onChange={event => { setTargetType(event.target.value as AgentCallTarget['type']); setTargetId(''); }} className="w-36 shrink-0 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400">{Object.entries(TARGET_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>{targetOptions.length > 0 ? <select value={targetId} onChange={event => setTargetId(event.target.value)} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 outline-none focus:border-brand-400"><option value="">Select target…</option>{targetOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select> : <input value={targetId} onChange={event => setTargetId(event.target.value)} placeholder={targetType === 'file' ? 'src/features/example.tsx' : 'Enter target id or relative path'} className="min-w-0 flex-1 rounded-lg border border-white/10 bg-surface-200 px-3 py-2 text-xs text-gray-200 placeholder-gray-600 outline-none focus:border-brand-400" />}</div>{targetType === 'file' && <p className="text-[10px] text-gray-600">Repository-relative only. Alpha resolves the working copy server-side.</p>}</div></div><div className="space-y-2"><label className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Instruction</label><textarea value={callInstruction} onChange={event => setCallInstruction(event.target.value)} rows={3} placeholder={selectedAgent ? `What should ${selectedAgent.name} look at?` : 'Choose an agent first…'} className="w-full resize-none rounded-xl border border-white/10 bg-surface-200 px-3 py-2.5 text-sm text-gray-100 placeholder-gray-600 outline-none focus:border-brand-400" /></div>{mode === 'implement' && <div className="flex items-start gap-2 rounded-lg border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-[11px] text-amber-200"><ShieldCheck className="h-3.5 w-3.5 mt-0.5 shrink-0" /><span>Implementation is two-step. This request creates a reviewable call first; you must confirm before the agent generates a patch, and applying the patch is a separate action.</span></div>}<div className="flex items-center justify-end gap-2"><button type="button" onClick={() => setShowCallPanel(false)} className="rounded-lg px-3 py-2 text-xs text-gray-500 hover:text-white">Cancel</button><button type="submit" disabled={busyCallId === 'new' || !selectedAgentId || !callInstruction.trim()} className="inline-flex items-center gap-2 rounded-lg bg-brand-500 px-4 py-2 text-xs font-semibold text-on-accent hover:bg-brand-400 disabled:opacity-40">{busyCallId === 'new' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bot className="h-3.5 w-3.5" />} Call {selectedAgent?.name ?? 'agent'}</button></div></form>;
+
 
   let stopBuildLabel: string;
   if (stoppingProjectRunId) stopBuildLabel = 'Stopping…';
@@ -1727,11 +1632,13 @@ export const ChatView: React.FC = () => {
   const openBuildChanges = () => { if (liveBuild && project) openSideTab({ id: 'changes:' + liveBuild.runId, kind: 'changes', projectId: project.id, runId: liveBuild.runId }); };
   const sideTabMeta = (tab: SideTab): SidePanelTab => {
     switch (tab.kind) {
+      case 'preview': return { id: tab.id, title: 'Web preview', icon: <Globe className="h-3.5 w-3.5" />, live: previews.record?.state === 'starting' };
       case 'plan': return { id: tab.id, title: planFileName(tab.planVersion), icon: <FileText className="h-3.5 w-3.5" /> };
       case 'changes': return { id: tab.id, title: 'Code changes', icon: <Code2 className="h-3.5 w-3.5" />, live: Boolean(liveBuild?.running && liveBuild.runId === tab.runId) };
+      case 'review': return { id: tab.id, title: 'Build review', icon: <ShieldCheck className="h-3.5 w-3.5" />, live: Boolean(liveBuild?.running && liveBuild.runId === tab.runId) };
       case 'agent': {
-        const agent = liveBuild?.agents.find(item => item.agentId === tab.agentId);
-        return { id: tab.id, title: agent?.name ?? 'Agent', icon: <Bot className="h-3.5 w-3.5" />, live: agent?.state === 'running' };
+        const agent = latestBuild?.agents.find(item => item.agentId === tab.agentId);
+        return { id: tab.id, title: agent?.name ?? workspaceAgents.find(item => item.id === tab.agentId)?.name ?? 'Agent', icon: <Bot className="h-3.5 w-3.5" />, live: Boolean(latestBuild?.running && agent?.state === 'running') };
       }
       case 'call': {
         const call = calls[tab.callId];
@@ -1741,19 +1648,26 @@ export const ChatView: React.FC = () => {
   };
   const renderSideTab = (tab: SideTab): React.ReactNode => {
     switch (tab.kind) {
+      case 'preview': return <LocalPreviewTab record={previews.record} repositories={projectRepositories.map(item => item.repo)} busy={previews.busy} error={previews.error} onStart={repo => void previews.start(repo)} onStop={() => void previews.stop()} blocked={Boolean(!isActiveTab || memoryThreadId || threadPendingDelete || showCreateProject || repositoryMenuOpen)} />;
       case 'plan': return <PlanDocumentTab key={tab.id + ':' + tab.planVersion} projectId={tab.projectId} runId={tab.runId} planVersion={tab.planVersion} />;
+      case 'review': return latestBuild?.runId === tab.runId
+        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('approve_runs')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} onStart={() => void startPlannedBuild()} onApprove={() => void approveBuild()} />
+        : activeThreadId ? <SavedBuildReviewTab key={tab.id} projectId={tab.projectId} runId={tab.runId} threadId={activeThreadId} /> : null;
       case 'changes': return <div key={tab.id} className="min-h-0 flex-1 overflow-y-auto p-4"><LiveChangesView projectId={tab.projectId} runId={tab.runId} live={Boolean(liveBuild?.running && liveBuild.runId === tab.runId)} /></div>;
       case 'agent': {
-        const agent = liveBuild?.agents.find(item => item.agentId === tab.agentId);
-        if (!agent || !liveBuild || !project) return <p className="p-5 text-xs text-gray-500">This agent is not part of the current build.</p>;
-        const tasks = liveBuild.orchestration.tasks.filter(task => task.ownerAgentId === agent.agentId);
+        const agent = latestBuild?.agents.find(item => item.agentId === tab.agentId);
+        if (!agent || !latestBuild || !project) {
+          const member = workspaceAgents.find(item => item.id === tab.agentId);
+          return <section className="space-y-3 p-5"><h2 className="text-sm font-semibold text-white">{member?.name ?? 'Agent'}</h2><p className="text-xs text-gray-400">{member?.description ?? member?.role}</p><p className="text-xs text-gray-500">No task is assigned to this agent in this conversation.</p></section>;
+        }
+        const tasks = latestBuild.orchestration.tasks.filter(task => task.ownerAgentId === agent.agentId);
         const task = tasks.find(item => item.status === 'running' || item.status === 'submitted') ?? tasks[0];
-        return <BuildAgentActivityPanel key={tab.id} agent={agent} projectId={project.id} runId={liveBuild.runId} repository={task?.repository ?? liveBuild.repository} onOpenRoom={() => openLiveBuildRun(liveBuild.runId)} />;
+        return <BuildAgentActivityPanel key={tab.id} agent={agent} projectId={project.id} runId={latestBuild.runId} repository={task?.repository ?? latestBuild.repository} onOpenReview={() => openSavedBuildReview(latestBuild.runId)} usage={<WorkUsageRow entries={(usage.snapshot?.entries ?? []).filter(entry => entry.agentId === agent.agentId && entry.orchestrationRunId === latestBuild.runId)} now={usage.now} names={usageNames} />} />;
       }
       case 'call': {
         const call = calls[tab.callId];
         if (!call) return <p className="p-5 text-xs text-gray-500">This agent call is no longer available.</p>;
-        return <AgentActivityPanel key={tab.id} call={call} agent={agentForCall(call)} name={isOrchestratorCall(call) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(call) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} />;
+        return <AgentActivityPanel key={tab.id} call={call} agent={agentForCall(call)} name={isOrchestratorCall(call) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(call) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} usage={<WorkUsageRow entries={(usage.snapshot?.entries ?? []).filter(entry => entry.callId === call.id)} now={usage.now} names={usageNames} />} />;
       }
     }
   };
@@ -1822,27 +1736,15 @@ export const ChatView: React.FC = () => {
         {activeThread ? <>
           {!isClient && chatSyncStatus?.state === 'failed' && <div className="shrink-0 px-5 pt-3 lg:px-7"><div className="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-full border border-amber-400/20 bg-amber-500/10 px-4 py-2 text-[11px] text-amber-200"><span>Chat sync paused</span><button type="button" onClick={() => void handleRetryChatSync()} disabled={syncRetrying} className="font-medium hover:text-white disabled:opacity-50">{syncRetrying ? 'Retrying…' : 'Retry'}</button></div></div>}
 
-          {showCallPanel && !isClient && <section className="shrink-0 max-h-[45%] overflow-y-auto overscroll-contain mx-5 mt-4 rounded-2xl border border-white/10 bg-surface-100/80 p-4 lg:p-5 shadow-xl"><div className="flex items-start justify-between gap-4 mb-4"><div><div className="flex items-center gap-2"><Bot className="h-4 w-4 text-brand-300" /><h3 className="text-sm font-semibold text-white">Call an assigned agent</h3></div><p className="mt-1 text-[11px] text-gray-500">Use this for a focused question or review with one agent. For product changes, describe the work and the Orchestrator will choose the right specialists.</p></div><button type="button" onClick={() => setShowCallPanel(false)} className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/[0.06]"><X className="h-4 w-4" /></button></div>{callPanelBody}</section>}
 
-          {!isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={liveBuild ? { runId: liveBuild.runId, label: buildStatusLabel(liveBuild), running: liveBuild.running, agents: liveBuild.agents, handoffs: buildHandoffs(liveBuild.orchestration) } : null} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} roster={workspaceAgents} runtimes={runtimes} canEditAgents={can('manage_agents')} onUpdateAgent={updateAgent} /></div>}
-          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 [overflow-anchor:none]"><div className={'mx-auto w-full max-w-3xl space-y-5 ' + (currentMessages.length === 0 ? 'h-full' : '')}>{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div>{!isClient && <button type="button" onClick={openCallPanel} className="inline-flex items-center gap-2 rounded-lg border border-brand-400/25 bg-brand-500/10 px-3 py-2 text-xs font-semibold text-brand-200 hover:bg-brand-500/20"><Bot className="h-3.5 w-3.5" /> Call an assigned agent</button>}</div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}</div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className="w-full"><div className={`min-w-0 space-y-2 ${isUser ? 'flex flex-col items-end' : ''}`}><div className={`text-sm leading-relaxed ${isUser ? 'max-w-[80%] rounded-2xl bg-white/[0.07] px-4 py-2.5 text-gray-100' : 'text-gray-200'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 rounded-xl border border-violet-300/15 bg-violet-300/[0.04] p-3 text-xs text-gray-200"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-200" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-violet-200">Build update</div><p className="whitespace-pre-wrap break-words text-[11px] leading-5">{message.content}</p></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
-  const needsLiveRoom = /live build room|product build is already/i.test(message.content);
-  const buildNotStarted = /\*\*Build not started(?: for any repository)?\.\*\*/i.test(message.content);
-  const setupRequired = /review the project setup|project needs setup|choose (?:a|one) codebase|configured model|available model|workspace identity|reconnect (?:this )?repository|repository admission remains paused/i.test(message.content);
+          {!isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={latestBuild ? { runId: latestBuild.runId, label: buildStatusLabel(latestBuild), running: latestBuild.running, agents: latestBuild.agents, handoffs: buildHandoffs(latestBuild.orchestration) } : null} sidePanelOpen={Boolean(panelVisible)} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} roster={workspaceAgents} runtimes={runtimes} canEditAgents={can('manage_agents')} onUpdateAgent={updateAgent} /></div>}
+          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 [overflow-anchor:none]"><div className={'mx-auto w-full max-w-3xl space-y-5 ' + (currentMessages.length === 0 ? 'h-full' : '')}>{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-brand-400/20 bg-brand-500/10 flex items-center justify-center"><Sparkles className="h-6 w-6 text-brand-300" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-white">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-gray-500 max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div></div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-white/10 bg-surface-100 p-4 text-xs text-gray-400">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-white/10 bg-surface-100 px-4 py-2 text-xs text-gray-400 flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-brand-300" />{message.content}</div></div>; return <div key={message.id} className="w-full"><div className={`min-w-0 space-y-2 ${isUser ? 'flex flex-col items-end' : ''}`}><div className={`text-sm leading-relaxed ${isUser ? 'max-w-[80%] rounded-2xl bg-white/[0.07] px-4 py-2.5 text-gray-100' : 'text-gray-200'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-violet-200"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 py-2 text-xs text-gray-200"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-violet-200" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-violet-200">Build update</div><MessageMarkdown content={message.content} /></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-violet-200"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
+  const setupRequired = /review the project setup|project needs setup|configured model|available model|workspace identity|reconnect (?:this )?repository/i.test(message.content);
   if (message.content.includes('Choose a codebase') || message.content.includes('Choose one repository')) {
-    return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-xs font-semibold text-amber-100 hover:bg-amber-400/20"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
+    return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-amber-100"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
   }
-  if (buildNotStarted && !setupRequired) {
-    const label = /task planning stopped|plan did not pass|correction/i.test(message.content) ? 'Review planning details' : 'View build details';
-    return <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/30 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/20"><Activity className="h-3.5 w-3.5" /> {label}</button>;
-  }
-  if (!buildNotStarted || needsLiveRoom) {
-    const label = /plan ready|review each assignment/i.test(message.content) ? 'Review plan in Live Build Room'
-      : needsLiveRoom ? 'Open current build' : 'Follow progress in Live Build Room';
-    return <button type="button" onClick={openLiveBuildRoom} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-300/30 bg-violet-400/10 px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-400/20"><Activity className="h-3.5 w-3.5" /> {label}</button>;
-  }
-  return <button type="button" onClick={openProjectSetup} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-300 hover:bg-white/[0.06]">Review project setup</button>;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} onOpenRoom={openLiveBuildRoom} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenRoom={() => openLiveBuildRun(message.orchestrationRunId!)} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}</div></div>; })}</div></div>
+  return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-gray-300">Review project setup</button> : null;
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-violet-300/15 bg-surface-100/75 px-3 py-2 text-[11px] text-violet-100"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div></div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-4 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-8 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-3xl space-y-2">
@@ -1879,7 +1781,8 @@ export const ChatView: React.FC = () => {
                 onReply={replyInComposer}
                 onRetry={() => void retryPlanning()}
                 onDismiss={dismissBuildFailure}
-                onOpenRoom={() => liveBuild ? openLiveBuildRun(liveBuild.runId) : openLiveBuildRoom()} />}
+                onOpenReview={openBuildReview}
+                />}
               {forcedBuild && !isClient && <div className={`px-4 text-[10px] ${requiresRepositorySelection ? 'text-amber-200' : 'text-gray-500'}`}>{repositorySelectionMessage}</div>}
               {pendingFileViews.length > 0 && <div className="flex flex-wrap gap-2 px-2">{pendingFileViews.map(({ file, previewUrl }, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex max-w-full items-center gap-2 rounded-xl border border-white/10 bg-surface-100 px-2 py-1.5 text-[10px] text-gray-300 shadow-lg shadow-black/30">
                 {previewUrl ? <img src={previewUrl} alt={`Preview of ${file.name}`} className="h-8 w-8 rounded-md object-cover" /> : <FileText className="ml-1 h-4 w-4 shrink-0 text-violet-200" />}
@@ -1894,9 +1797,7 @@ export const ChatView: React.FC = () => {
                     {buildIsOpen && <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-400" />}
                   </button>
                   {repositoryMenuOpen && <div role="menu" aria-label="Message tools" className="absolute bottom-full left-0 z-40 mb-3 w-[min(22rem,calc(100vw-2rem))] animate-slide-up overflow-hidden rounded-2xl border border-white/15 bg-[#17171f] p-1.5 shadow-2xl shadow-black/60">
-                    {!isClient && project && <button type="button" role="menuitem" onClick={() => { setRepositoryMenuOpen(false); openLiveBuildRoom(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-gray-200 transition hover:bg-white/[0.06]"><Activity className="h-4 w-4 shrink-0 text-violet-300" /><span className="text-xs font-medium">Build details</span></button>}
                     <button type="button" role="menuitem" disabled={Boolean(activeTurnMessageId) || pendingFiles.length >= MAX_CHAT_FILES} onClick={() => { setRepositoryMenuOpen(false); fileInputRef.current?.click(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-gray-200 transition hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-40"><Paperclip className="h-4 w-4 shrink-0 text-gray-400" /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">Attach files</span><span className="block text-[10px] text-gray-500">{activeTurnMessageId ? 'Finish this response before attaching files.' : 'Images, documents, or code'}</span></span></button>
-                    {!isClient && <button type="button" role="menuitem" onClick={() => { setRepositoryMenuOpen(false); openCallPanel(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-gray-200 transition hover:bg-white/[0.06]"><Bot className="h-4 w-4 shrink-0 text-gray-400" /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">Call an agent</span><span className="block text-[10px] text-gray-500">Ask a project agent to review or work on something</span></span></button>}
                     {!isClient && project && <div className="mt-1 border-t border-white/[0.08] pt-1.5">
                       {projectRepositories.length > 1 ? <>
                         <div className="flex items-center justify-between px-3 py-1.5">
@@ -1971,8 +1872,9 @@ export const ChatView: React.FC = () => {
               onOpenRecent={threadId => setActiveThreadId(threadId)}
             />}
       </main>
-      {!isClient && sideTabs.length > 0 && <ChatSidePanel tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setSideTabs([]); setActiveSideTabId(null); }}>
-        {activeSideTab ? renderSideTab(activeSideTab) : null}
+      {!isClient && <ChatPanelHandle open={Boolean(panelVisible)} onToggle={() => setPanelVisible(value => !value)} />}
+      {!isClient && panelVisible && <ChatSidePanel tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setPanelVisible(false); document.getElementById('chat-panel-toggle')?.focus(); }}>
+        {activeSideTab ? renderSideTab(activeSideTab) : <section className="space-y-4 p-5"><h2 className="text-sm font-semibold">Side panel</h2><p className="text-xs text-gray-400">Keep previews, plans, agents and changes beside your conversation.</p><button type="button" onClick={openPreview} className="flex w-full items-center gap-2 rounded-lg border border-white/10 p-3 text-xs hover:bg-white/5"><Globe className="h-4 w-4" />Web preview</button>{latestBuild && project && <><button type="button" onClick={() => openPlanTab({ projectId: project.id, runId: latestBuild.runId, planVersion: latestBuild.orchestration.run.planVersion, auto: false })} className="block text-xs text-violet-200">Open saved plan</button><button type="button" onClick={() => openSavedBuildReview(latestBuild.runId)} className="block text-xs text-violet-200">Build review</button><button type="button" onClick={openBuildChanges} className="block text-xs text-violet-200">Code changes</button></>}</section>}
       </ChatSidePanel>}
     </div>
     </PlanPanelContext.Provider>

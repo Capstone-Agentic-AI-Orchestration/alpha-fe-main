@@ -15,31 +15,15 @@ import {
   Check, 
   Copy, 
   AlertCircle,
-  RefreshCw,
-  Bot,
   Activity
 } from 'lucide-react';
 import { Deployment, DeploymentStatus } from '@/shared/types';
 import { Modal } from '@/shared/components/Modal';
-import { useDeploymentsViewModel, LiveWorkflowRun } from './useDeploymentsViewModel';
+import { DeploymentsActionsView } from './DeploymentsActionsView';
 
 export const DeploymentsView: React.FC = () => {
   const { deployments, projects, triggerDeployment, can } = useApp();
   const canManageDeployments = can('manage_deployments');
-  const canRunAgents = can('run_agents');
-  const {
-    liveRuns,
-    selectedRunId,
-    failedLogs,
-    isLoadingLogs,
-    isSelfHealing,
-    isRefreshing,
-    loadGitHubRuns,
-    handleInspectFailedLogs,
-    triggerSelfHealing,
-    closeLogViewer
-  } = useDeploymentsViewModel();
-
   // Active Sub-view Tab: 'actions' (Live GitHub Actions) | 'deployments' (Environment Releases)
   const [viewMode, setViewMode] = useTabSessionState<'actions' | 'deployments'>('deployments.viewMode', 'actions');
 
@@ -109,32 +93,6 @@ export const DeploymentsView: React.FC = () => {
 
     return list;
   }, [deployments, envFilter, statusFilter, searchQuery, sortOrder]);
-
-  // Filter GitHub Actions live runs
-  const filteredLiveRuns = useMemo(() => {
-    let list = liveRuns.filter(r => {
-      if (statusFilter !== 'all') {
-        const st = r.conclusion || r.status;
-        if (st !== statusFilter) return false;
-      }
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesName = r.name.toLowerCase().includes(q);
-        const matchesBranch = r.headBranch.toLowerCase().includes(q);
-        const matchesSha = r.headSha?.toLowerCase().includes(q);
-        if (!matchesName && !matchesBranch && !matchesSha) return false;
-      }
-      return true;
-    });
-
-    list = [...list].sort((a, b) => {
-      const timeA = new Date(a.createdAt).getTime();
-      const timeB = new Date(b.createdAt).getTime();
-      return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
-    });
-
-    return list;
-  }, [liveRuns, statusFilter, searchQuery, sortOrder]);
 
   const formatRelativeTime = (dateStr: string) => {
     const diffMs = Date.now() - new Date(dateStr).getTime();
@@ -250,25 +208,15 @@ export const DeploymentsView: React.FC = () => {
             <Rocket className="w-4 h-4 text-gray-400" />
             <h1 className="text-base font-semibold tracking-tight text-white">CI/CD & GitHub Actions</h1>
             <span className="text-xs text-gray-500 font-mono">
-              {viewMode === 'actions' ? liveRuns.length : deployments.length}
+              {viewMode === 'deployments' ? deployments.length : ''}
             </span>
           </div>
           <p className="mt-1 text-xs text-gray-500">
-            Live pipeline monitoring, GitHub Actions logs inspection, and Autonomous Agent self-healing.
+            Project workflow runs, job logs, and environment deployments.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          {/* Refresh Button */}
-          <button
-            onClick={loadGitHubRuns}
-            disabled={isRefreshing}
-            className="p-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-gray-400 hover:text-white transition-colors"
-            title="Refresh GitHub Actions Runs"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-cyan-400' : ''}`} />
-          </button>
-
           {/* Trigger run button */}
           {canManageDeployments && (
             <button
@@ -295,11 +243,7 @@ export const DeploymentsView: React.FC = () => {
         >
           <Activity className="w-3.5 h-3.5 text-cyan-400" />
           <span>Live GitHub Actions</span>
-          {liveRuns.length > 0 && (
-            <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-cyan-500/20 text-cyan-300">
-              {liveRuns.length}
-            </span>
-          )}
+
         </button>
 
         <button
@@ -319,7 +263,7 @@ export const DeploymentsView: React.FC = () => {
       </div>
 
       {/* ================= SEARCH & ACTION ROW ================= */}
-      <div className="flex items-center justify-between gap-4">
+      {viewMode === 'deployments' && <div className="flex items-center justify-between gap-4">
         {/* Search input */}
         <div className="relative flex-1 max-w-xs">
           <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -327,7 +271,7 @@ export const DeploymentsView: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder={viewMode === 'actions' ? 'Search workflow, branch, sha...' : 'Search runs, commits, branches...'}
+            placeholder="Search runs, commits, branches..."
             className="w-full bg-surface border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
           />
         </div>
@@ -432,106 +376,9 @@ export const DeploymentsView: React.FC = () => {
             <span>Table</span>
           </button>
         </div>
-      </div>
+      </div>}
 
-      {/* ================= VIEW 1: LIVE GITHUB ACTIONS ================= */}
-      {viewMode === 'actions' && (
-        <div className="w-full">
-          <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-gray-500 border-b border-white/[0.04]">
-            <div className="col-span-5">Workflow & Branch</div>
-            <div className="col-span-2">Commit SHA</div>
-            <div className="col-span-2">Conclusion / Status</div>
-            <div className="col-span-2">Actions</div>
-            <div className="col-span-1 text-right">Time</div>
-          </div>
-
-          <div className="divide-y divide-white/[0.02]">
-            {filteredLiveRuns.length === 0 ? (
-              <div className="p-8 text-center text-xs text-gray-500 space-y-2">
-                <p>No live GitHub Actions workflow runs detected.</p>
-                <p className="text-[11px] text-gray-600">
-                  Ensure the project has a valid git repository with <code>.github/workflows/*.yml</code>.
-                </p>
-              </div>
-            ) : (
-              filteredLiveRuns.map((run: LiveWorkflowRun) => {
-                const isFailed = run.conclusion === 'failure';
-
-                return (
-                  <div
-                    key={run.databaseId}
-                    className="grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-xs hover:bg-white/[0.02] transition-colors group"
-                  >
-                    {/* 1. Workflow Name & Branch */}
-                    <div className="col-span-5 min-w-0 space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-white truncate group-hover:text-gray-200">
-                          {run.name}
-                        </span>
-                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/5 text-gray-400 border border-white/5 flex-shrink-0">
-                          #{run.databaseId}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-gray-500 font-mono truncate">
-                        <span className="flex items-center gap-1 text-gray-400">
-                          <GitBranch className="w-3 h-3 text-gray-500" /> {run.headBranch}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* 2. Commit SHA */}
-                    <div className="col-span-2 font-mono text-gray-400 text-xs">
-                      {run.headSha ? (
-                        <span className="px-2 py-1 rounded bg-white/5 border border-white/5">
-                          {run.headSha}
-                        </span>
-                      ) : (
-                        <span>—</span>
-                      )}
-                    </div>
-
-                    {/* 3. Status Badge */}
-                    <div className="col-span-2">
-                      {renderStatusBadge(run.conclusion || run.status)}
-                    </div>
-
-                    {/* 4. Actions: Inspect logs / Self Heal */}
-                    <div className="col-span-2 flex items-center gap-2">
-                      <button
-                        onClick={() => handleInspectFailedLogs(run.databaseId)}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                          isFailed
-                            ? 'bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 border border-rose-500/30'
-                            : 'bg-white/5 hover:bg-white/10 text-gray-300'
-                        }`}
-                      >
-                        Inspect Logs
-                      </button>
-
-                      {run.url && (
-                        <a
-                          href={run.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="p-1 text-gray-500 hover:text-white"
-                          title="Open on GitHub"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </a>
-                      )}
-                    </div>
-
-                    {/* 5. Relative Time */}
-                    <div className="col-span-1 text-right text-xs text-gray-500 font-mono">
-                      {formatRelativeTime(run.createdAt)}
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
+      {viewMode === 'actions' && <DeploymentsActionsView />}
 
       {/* ================= VIEW 2: ENVIRONMENT DEPLOYMENTS ================= */}
       {viewMode === 'deployments' && (
@@ -618,57 +465,6 @@ export const DeploymentsView: React.FC = () => {
             })}
           </div>
         </div>
-      )}
-
-      {/* ================= FAILED WORKFLOW LOGS INSPECTOR MODAL ================= */}
-      {selectedRunId && (
-        <Modal
-          isOpen={true}
-          onClose={closeLogViewer}
-          title={`GitHub Actions Run #${selectedRunId} Logs`}
-          subtitle="Inspect failure logs and trigger Autonomous Agent Self-Healing"
-          maxWidth="max-w-4xl"
-        >
-          <div className="space-y-5 text-xs text-gray-300">
-            <div className="flex items-center justify-between border-b border-white/[0.06] pb-3">
-              <div className="flex items-center gap-2 font-mono text-rose-300">
-                <AlertCircle className="w-4 h-4 text-rose-400" />
-                <span>Workflow Failure Trace</span>
-              </div>
-
-              {/* Trigger Autonomous Agent Self Healing */}
-              {canRunAgents && (
-                <button
-                  onClick={() => triggerSelfHealing(selectedRunId)}
-                  disabled={isSelfHealing}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-semibold shadow-glow-brand transition-all disabled:opacity-50"
-                >
-                  <Bot className="w-3.5 h-3.5" />
-                  <span>{isSelfHealing ? 'Agent Triaging...' : 'Autonomous Agent Self-Healing'}</span>
-                </button>
-              )}
-            </div>
-
-            {isLoadingLogs ? (
-              <div className="p-8 text-center text-gray-400 animate-pulse font-mono">
-                Pulling failed workflow step logs from GitHub...
-              </div>
-            ) : (
-              <pre className="max-h-96 overflow-y-auto p-4 rounded-xl bg-well border border-white/[0.06] text-rose-200/90 font-mono text-xs leading-relaxed whitespace-pre-wrap">
-                {failedLogs}
-              </pre>
-            )}
-
-            <div className="flex justify-end pt-2">
-              <button
-                onClick={closeLogViewer}
-                className="px-4 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-gray-200 text-xs font-medium transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </Modal>
       )}
 
       {/* ================= PIPELINE RUN MODAL (DEPLOYMENTS) ================= */}

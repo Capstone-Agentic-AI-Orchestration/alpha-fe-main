@@ -1,6 +1,12 @@
 import type { LiveBuildRecoveryAction, LiveBuildRecoveryProjection } from '@/shared/types';
 
+/** A local website's lifetime/errors are separate from the saved product build. */
+export function isLocalPreviewRequest(message: string): boolean {
+  return /\b(?:preview|localhost|npm\s+(?:run\s+)?(?:dev|start)|(?:local|development|dev)\s+(?:run|server|website))\b/i.test(message);
+}
+
 export function isExplicitBuildRetry(message: string): boolean {
+  if (isLocalPreviewRequest(message)) return false;
   const text = message.trim().toLowerCase();
   const retryPattern = /\b(rerun|re-run|retry|run(?:\s+it)?\s+again|try again|restart)\b.*\b(build|run|task|agent|it)\b|\b(build|run|task)\b.*\b(again|rerun|re-run|retry)\b/;
   const retryVerb = '(?:rerun|re-run|retry|run(?:\\s+it)?\\s+again|try again|restart)';
@@ -12,6 +18,7 @@ export function isExplicitBuildRetry(message: string): boolean {
 }
 
 export function inferRecoveryAction(message: string): LiveBuildRecoveryAction | undefined {
+  if (isLocalPreviewRequest(message)) return undefined;
   const text = message.trim().toLowerCase();
   if (/\bwhy\b.*\b(can't|cannot|won't|isn't|not allowed)\b.*\b(rerun|re-run|retry|run again|restart)\b/.test(text)) return 'explain_failure';
   if (/\b(explain|why did|what caused|what is the reason)\b/.test(text)) return 'explain_failure';
@@ -93,6 +100,7 @@ export function isRetryRequest(message: string): boolean {
  * in the message box, so it must reach the build rather than Alpha's chat.
  */
 export function isBuildDirection(message: string): boolean {
+  if (isLocalPreviewRequest(message)) return false;
   const text = message.trim();
   if (text.length < 8 || text.length > 4_000 || /^[@/]/.test(text)) return false;
   if (/\?\s*$/.test(text) || QUESTION_START.test(text.toLowerCase())) return false;
@@ -100,6 +108,7 @@ export function isBuildDirection(message: string): boolean {
 }
 
 export function isContinueRequest(message: string): boolean {
+  if (isLocalPreviewRequest(message)) return false;
   const text = message.trim().toLowerCase().replace(/[.!]+$/, '');
   if (!text || text.length > 120) return false;
   if (text.endsWith('?') && !/^(?:can|could|would) you\b/.test(text)) return false;

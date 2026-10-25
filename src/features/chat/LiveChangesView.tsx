@@ -118,7 +118,7 @@ export const LiveChangesView: React.FC<{
           {expanded && (section ? <DiffLines diff={section} label={'Changes in ' + file.path} /> : <p className="px-3 py-2 text-[11px] text-gray-500">The diff for this file is not available in this preview.</p>)}
         </div>;
       })}
-      {(group.truncated || group.filesTruncated) && <p className="text-[10px] text-amber-100/70">Some changes are not shown here. Open the Live Build Room or the repository for the full diff.</p>}
+      {(group.truncated || group.filesTruncated) && <p className="text-[10px] text-amber-100/70">Some changes are not shown here. Use the repository for the full diff. The in-chat preview reached its display limit.</p>}
     </section>)}
   </div>;
 };

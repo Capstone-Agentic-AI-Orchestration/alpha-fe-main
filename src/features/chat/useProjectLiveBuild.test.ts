@@ -50,3 +50,11 @@ describe('buildAgentNodes', () => {
   });
 });
 
+
+
+describe('stopped task history', () => {
+  it('does not call a cancelled task done or discard its history', () => {
+    const snapshot = { agentCards: [], orchestration: { tasks: [{ id: 't', title: 'Stopped', status: 'cancelled', ownerAgentId: 'a' }], attempts: [] } } as any;
+    expect(buildAgentNodes(snapshot)[0]).toMatchObject({ state: 'waiting', tasks: [{ status: 'cancelled' }] });
+  });
+});
