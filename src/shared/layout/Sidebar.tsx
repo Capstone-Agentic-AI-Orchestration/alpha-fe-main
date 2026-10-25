@@ -164,13 +164,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           compact ? 'justify-center px-0 py-2.5' : 'justify-between px-3 py-2'
         } ${
           active
-            ? 'bg-brand-500/15 font-semibold text-gray-100 ring-1 ring-inset ring-white/[0.06]'
-            : 'text-gray-400 hover:bg-white/[0.05] hover:text-gray-100'
+            ? 'bg-selected font-semibold text-selected-content ring-1 ring-inset ring-content/[0.06]'
+            : 'text-content-secondary hover:bg-surface-high hover:text-content'
         }`}
       >
         <span
           className={`flex items-center ${compact ? 'justify-center' : 'gap-3'} ${
-            active ? 'text-brand-300' : 'text-gray-500 group-hover:text-gray-300'
+            active ? 'text-link' : 'text-content-muted group-hover:text-content-secondary'
           }`}
         >
           {navIcon(tab)}
@@ -187,7 +187,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               title={`${unreadInboxCount} unread`}
             />
           ) : (
-            <span className="text-xs font-medium tabular-nums text-amber-300">
+            <span className="text-xs font-medium tabular-nums text-status-warning">
               {unreadInboxCount}
             </span>
           )
@@ -210,9 +210,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
             setIsFocusWithin(false);
           }
         }}
-        className={`sidebar-flyout app-no-drag absolute inset-y-0 left-0 flex h-full flex-col border-r border-white/[0.08] bg-shell font-sans text-sm text-gray-300 ${
+        className={`sidebar-flyout app-no-drag absolute inset-y-0 left-0 flex h-full flex-col border-r border-divider bg-shell font-sans text-sm text-content-secondary ${
           expanded
-            ? 'w-64 shadow-[14px_0_36px_-28px_rgba(0,0,0,0.9)]'
+            ? 'w-64 shadow-[14px_0_36px_-28px_rgb(var(--ui-overlay)/0.9)]'
             : 'w-[4.5rem] shadow-none'
         }`}
       >
@@ -222,7 +222,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <div className={`flex items-center ${compact ? 'flex-col gap-1' : 'gap-1'}`}>
             <button
               onClick={() => setWorkspaceMenuOpen(open => !open)}
-              className={`flex min-w-0 items-center rounded-lg py-1.5 text-left transition-colors hover:bg-white/[0.04] ${
+              className={`flex min-w-0 items-center rounded-lg py-1.5 text-left transition-colors hover:bg-surface-high ${
                 compact ? 'w-9 justify-center px-0' : 'flex-1 justify-between px-2'
               }`}
               title={compact ? `${workspaceName} workspace` : undefined}
@@ -230,7 +230,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               aria-expanded={workspaceMenuOpen}
             >
               <span className="flex min-w-0 items-center gap-2.5">
-                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-white/[0.06] ring-1 ring-inset ring-white/[0.08]">
+                <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-action dark:bg-surface-raised ring-1 ring-inset ring-content/[0.08]">
                   <img
                     src={alphaMarkUrl}
                     alt=""
@@ -239,17 +239,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   />
                 </span>
                 <span
-                  className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'} truncate text-sm font-semibold text-white`}
+                  className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'} truncate text-sm font-semibold text-content`}
                 >
                   {workspaceName}
                 </span>
               </span>
-              {!compact && <ChevronDown className="h-4 w-4 flex-shrink-0 text-gray-500" />}
+              {!compact && <ChevronDown className="h-4 w-4 flex-shrink-0 text-content-muted" />}
             </button>
 
             <button
               onClick={toggleSidebar}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.06] hover:text-gray-200"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-surface-high hover:text-content"
               title={sidebarModeLabel}
               aria-label={sidebarModeLabel}
               aria-pressed={!collapsed}
@@ -262,13 +262,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div
               role="menu"
               aria-label="Workspaces"
-              className={`absolute top-full z-30 mt-1.5 max-h-[min(28rem,calc(100vh-6rem))] space-y-1 overflow-y-auto rounded-xl border border-white/[0.08] bg-surface p-2 text-sm shadow-2xl animate-slide-up no-scrollbar ${
+              className={`absolute top-full z-30 mt-1.5 max-h-[min(28rem,calc(100vh-6rem))] space-y-1 overflow-y-auto rounded-xl border border-divider bg-surface p-2 text-sm shadow-2xl animate-slide-up no-scrollbar ${
                 compact ? 'left-0 w-56' : 'left-0 right-0'
               }`}
             >
-              <div className="px-2 py-1 text-xs font-medium text-gray-500">Workspaces</div>
+              <div className="px-2 py-1 text-xs font-medium text-content-muted">Workspaces</div>
               {workspaceLoading && workspaces.length === 0 ? (
-                <div className="px-3 py-3 text-xs text-gray-500">Loading workspaces…</div>
+                <div className="px-3 py-3 text-xs text-content-muted">Loading workspaces…</div>
               ) : (
                 <div className="space-y-0.5">
                   {workspaces.map(workspace => (
@@ -279,13 +279,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         closeWorkspaceMenu();
                       }}
                       role="menuitem"
-                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
+                      className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm text-content-secondary transition-colors hover:bg-surface-high hover:text-content"
                     >
-                      <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[10px] font-semibold ${workspace.id === activeWorkspace?.id ? 'bg-brand-500/20 text-brand-300' : 'bg-white/[0.07] text-gray-400'}`}>
+                      <span className={`flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-md text-[10px] font-semibold ${workspace.id === activeWorkspace?.id ? 'bg-selected text-selected-content' : 'bg-surface-raised text-content-secondary'}`}>
                         {workspace.name.slice(0, 1).toUpperCase()}
                       </span>
                       <span className="min-w-0 flex-1 truncate">{workspace.name}</span>
-                      {workspace.id === activeWorkspace?.id && <Check className="h-3.5 w-3.5 text-brand-300" />}
+                      {workspace.id === activeWorkspace?.id && <Check className="h-3.5 w-3.5 text-link" />}
                     </button>
                   ))}
                 </div>
@@ -294,14 +294,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   joins at that role. Offering it to anyone else was a
                   button whose only outcome was a 403. */}
               {canCreateWorkspace && (
-                <div className="mt-1.5 grid grid-cols-1 gap-1 border-t border-white/[0.06] pt-2">
+                <div className="mt-1.5 grid grid-cols-1 gap-1 border-t border-divider pt-2">
                   <button
                     onClick={() => {
                       setCreateOpen(true);
                       closeWorkspaceMenu();
                     }}
                     role="menuitem"
-                    className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-gray-400 hover:bg-white/[0.05] hover:text-white"
+                    className="flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-xs text-content-secondary hover:bg-surface-high hover:text-content"
                   >
                     <Plus className="h-3.5 w-3.5" /> Add workspace
                   </button>
@@ -313,7 +313,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   closeWorkspaceMenu();
                 }}
                 role="menuitem"
-                className="w-full rounded-lg px-3 py-2 text-left text-sm text-gray-300 hover:bg-white/[0.04] hover:text-white"
+                className="w-full rounded-lg px-3 py-2 text-left text-sm text-content-secondary hover:bg-surface-high hover:text-content"
               >
                 Settings
               </button>
@@ -324,41 +324,41 @@ export const Sidebar: React.FC<SidebarProps> = ({
         <div className={`space-y-1.5 pt-1 ${compact ? 'flex flex-col items-center' : ''}`}>
           <button
             onClick={() => setCommandPaletteOpen(true)}
-            className={`flex rounded-lg text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
+            className={`flex rounded-lg text-content-secondary transition-colors hover:bg-surface-high hover:text-content ${
               compact ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
             }`}
             title={compact ? 'Search (⌘ K)' : undefined}
             aria-label="Search"
           >
               <span className={`flex items-center ${compact ? 'justify-center' : 'gap-3'}`}>
-              <Search className="h-4 w-4 text-gray-500" />
+              <Search className="h-4 w-4 text-content-muted" />
               <span
                 className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
               >
                 Search...
               </span>
             </span>
-            {!compact && <kbd className="px-1.5 py-0.5 text-[11px] text-gray-500">⌘ K</kbd>}
+            {!compact && <kbd className="px-1.5 py-0.5 text-[11px] text-content-muted">⌘ K</kbd>}
           </button>
 
           {canManageIssues && (
             <button
               onClick={onOpenNewIssue}
-              className={`flex rounded-lg text-gray-400 transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
+              className={`flex rounded-lg text-content-secondary transition-colors hover:bg-surface-high hover:text-content ${
                 compact ? 'h-9 w-9 items-center justify-center' : 'w-full items-center justify-between px-3 py-2'
               }`}
               title={compact ? 'New task' : undefined}
               aria-label="New task"
             >
               <span className={`flex items-center ${compact ? 'justify-center' : 'gap-3'}`}>
-                <Edit3 className="h-4 w-4 text-gray-500" />
+                <Edit3 className="h-4 w-4 text-content-muted" />
                 <span
                   className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
                 >
                   New Task
                 </span>
               </span>
-              {!compact && <kbd className="px-2 py-0.5 text-[11px] text-gray-500">C</kbd>}
+              {!compact && <kbd className="px-2 py-0.5 text-[11px] text-content-muted">C</kbd>}
             </button>
           )}
         </div>
@@ -367,10 +367,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
       {/* Main navigation */}
       <div className={`no-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto py-2 ${compact ? 'px-1.5' : 'px-2'}`}>
         {groups.map(({ section, items }) => (
-          <div key={section.id} className="space-y-0.5 border-t border-white/[0.05] pt-3 first:border-t-0 first:pt-0">
-            <div className={compact ? 'sr-only' : 'mb-1 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500'}>
+          <div key={section.id} className="space-y-0.5 border-t border-divider pt-3 first:border-t-0 first:pt-0">
+            <div className={compact ? 'sr-only' : 'mb-1 flex items-center gap-2 px-3 text-[10px] font-semibold uppercase tracking-[0.14em] text-content-muted'}>
               <span>{section.label}</span>
-              <span className="h-px flex-1 bg-white/[0.05]" aria-hidden="true" />
+              <span className="h-px flex-1 bg-surface-raised" aria-hidden="true" />
             </div>
             {items.map(item => navButton(item.id))}
           </div>
@@ -383,7 +383,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         the developer download page, so everyone already inside a workspace --
         every project manager, admin and client -- had no way to leave it.
       */}
-      <div className={`border-t border-white/[0.06] py-2.5 ${compact ? 'px-1.5' : 'px-2.5'}`}>
+      <div className={`border-t border-divider py-2.5 ${compact ? 'px-1.5' : 'px-2.5'}`}>
         {/* One group either way: collapsed, the avatar and sign-out stack in
             the same centred column as the navigation icons above them. */}
         <div
@@ -395,15 +395,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <button
               type="button"
               onClick={onSwitchProfile}
-              className={`flex min-w-0 items-center rounded-lg text-left transition hover:bg-white/[0.05] focus-visible:ring-2 focus-visible:ring-brand-300/70 ${compact ? 'h-9 w-9 justify-center' : 'flex-1 gap-2.5 px-1.5 py-1'}`}
+              className={`flex min-w-0 items-center rounded-lg text-left transition hover:bg-surface-high focus-visible:ring-2 focus-visible:ring-focus ${compact ? 'h-9 w-9 justify-center' : 'flex-1 gap-2.5 px-1.5 py-1'}`}
               title={`Switch GitHub profile · ${userName}`}
               aria-label={`Switch GitHub profile. Currently ${userName}`}
             >
               {identity?.avatarUrl ? (
-                <img src={identity.avatarUrl} alt="" className="h-7 w-7 flex-shrink-0 rounded-full border border-white/10 object-cover" />
+                <img src={identity.avatarUrl} alt="" className="h-7 w-7 flex-shrink-0 rounded-full border border-divider object-cover" />
               ) : (
                 <span
-                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-xs font-semibold text-gray-200"
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-divider bg-surface-raised text-xs font-semibold text-content"
                   aria-hidden="true"
                 >
                   {userName[0].toUpperCase()}
@@ -412,8 +412,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span
                 className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible min-w-0 flex-1'}`}
               >
-                <span className="block truncate text-xs text-white">{userName}</span>
-                <span className="block text-[11px] text-gray-500">{ROLE_LABEL[role]} · Switch profile</span>
+                <span className="block truncate text-xs text-content">{userName}</span>
+                <span className="block text-[11px] text-content-muted">{ROLE_LABEL[role]} · Switch profile</span>
               </span>
             </button>
           ) : (
@@ -423,10 +423,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               aria-label={`${userName}, ${ROLE_LABEL[role]}`}
             >
               {identity?.avatarUrl ? (
-                <img src={identity.avatarUrl} alt="" className="h-7 w-7 flex-shrink-0 rounded-full border border-white/10 object-cover" />
+                <img src={identity.avatarUrl} alt="" className="h-7 w-7 flex-shrink-0 rounded-full border border-divider object-cover" />
               ) : (
                 <span
-                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-xs font-semibold text-gray-200"
+                  className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-divider bg-surface-raised text-xs font-semibold text-content"
                   aria-hidden="true"
                 >
                   {userName[0].toUpperCase()}
@@ -435,8 +435,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span
                 className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible min-w-0 flex-1'}`}
               >
-                <span className="block truncate text-xs text-white">{userName}</span>
-                <span className="block text-[11px] text-gray-500">{ROLE_LABEL[role]}</span>
+                <span className="block truncate text-xs text-content">{userName}</span>
+                <span className="block text-[11px] text-content-muted">{ROLE_LABEL[role]}</span>
               </span>
             </div>
           )}
@@ -445,7 +445,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             onClick={() => void onSignOut()}
             disabled={signingOut}
             aria-busy={signingOut}
-            className={`flex flex-shrink-0 items-center justify-center rounded-lg text-gray-500 transition-colors hover:bg-white/[0.05] hover:text-gray-200 focus-visible:ring-2 focus-visible:ring-brand-300/70 ${
+            className={`flex flex-shrink-0 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-surface-high hover:text-content focus-visible:ring-2 focus-visible:ring-focus ${
               compact ? 'h-9 w-9' : 'p-1.5'
             }`}
             title={signingOut ? 'Signing out…' : 'Sign out'}
@@ -456,24 +456,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className={`border-t border-white/[0.06] py-2.5 text-xs text-gray-400 ${compact ? 'px-1.5' : 'px-4'}`}>
+      <div className={`border-t border-divider py-2.5 text-xs text-content-secondary ${compact ? 'px-1.5' : 'px-4'}`}>
         <div className={`flex items-center ${compact ? 'flex-col gap-2' : 'justify-between'}`}>
           <button
             onClick={() => window.dispatchEvent(new Event('alpha:open-prototype-guide'))}
-            className={`flex items-center rounded-lg font-medium transition-colors hover:bg-white/[0.04] hover:text-gray-200 ${
+            className={`flex items-center rounded-lg font-medium transition-colors hover:bg-surface-high hover:text-content ${
               compact ? 'h-9 w-9 justify-center' : 'gap-2'
             }`}
             title={compact ? 'Prototype guide' : undefined}
             aria-label="Open prototype guide"
           >
-            <HelpCircle className="h-4 w-4 text-gray-500" />
+            <HelpCircle className="h-4 w-4 text-content-muted" />
             <span
               className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
             >
               Prototype guide
             </span>
           </button>
-          <span className="font-mono text-[10px] font-medium text-brand-400">{compact ? '2.0' : 'v2.0.0'}</span>
+          <span className="font-mono text-[10px] font-medium text-link">{compact ? '2.0' : 'v2.0.0'}</span>
         </div>
       </div>
       <CreateWorkspaceModal

@@ -327,7 +327,7 @@ const SignInButton: React.FC<{ onClick: () => void; label: string }> = ({ onClic
   <button
     type="button"
     onClick={onClick}
-    className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-3 text-sm font-medium text-gray-900 transition hover:bg-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/60 focus-visible:ring-offset-2 focus-visible:ring-offset-well"
+    className="flex w-full items-center justify-center gap-2.5 rounded-xl bg-content px-4 py-3 text-sm font-medium text-canvas transition hover:bg-content-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-well"
   >
     <Github className="h-4 w-4" aria-hidden="true" />
     {label}

@@ -2,14 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Html, Line } from '@react-three/drei';
-import { AgentSceneOrb, useAgentGlowTexture } from '@/features/chat/AgentScenePrimitives';
+import { useTheme, rgbChannels, type ScenePalette } from '@/shared/theme';
+import { AgentSceneOrb, SceneThemeFrame, useAgentGlowTexture } from '@/features/chat/AgentScenePrimitives';
 import { workflowPathSegments, type WorkflowCurveConnection, type WorkflowSceneNode } from './workflowPaths';
 
 function toWorld(point: [number, number], width: number, height: number, z = 0): THREE.Vector3 {
   return new THREE.Vector3(point[0] - width / 2, height / 2 - point[1], z);
 }
 
-function FlowConnection({ connection, width, height, reduceMotion, glow, onSelect }: {
+function FlowConnection({ palette, connection, width, height, reduceMotion, glow, onSelect }: {
+  palette: ScenePalette;
   connection: WorkflowCurveConnection;
   width: number;
   height: number;
@@ -53,7 +55,7 @@ function FlowConnection({ connection, width, height, reduceMotion, glow, onSelec
       <meshStandardMaterial color={connection.color} emissive={connection.color} emissiveIntensity={connection.selected ? 1.1 : connection.active ? 0.75 : 0.3} metalness={0.34} roughness={0.3} transparent opacity={connection.muted ? 0.42 : connection.active || connection.selected ? 0.96 : 0.7} depthWrite={false} />
     </mesh>
     {(connection.feedback || connection.muted) && <Line points={points} color={connection.color} lineWidth={1.2} transparent opacity={connection.muted ? 0.5 : 0.82} dashed dashSize={10} gapSize={7} />}
-    {!reduceMotion && <Line ref={flowLine} points={points} color={connection.active ? '#ede9fe' : connection.color} lineWidth={connection.active ? 1.3 : 0.85} transparent opacity={connection.active ? 0.75 : 0.28} dashed dashSize={connection.active ? 12 : 5} gapSize={connection.active ? 48 : 65} depthWrite={false} />}
+    {!reduceMotion && <Line ref={flowLine} points={points} color={connection.active ? palette.highlight : connection.color} lineWidth={connection.active ? 1.3 : 0.85} transparent opacity={connection.active ? 0.75 : 0.28} dashed dashSize={connection.active ? 12 : 5} gapSize={connection.active ? 48 : 65} depthWrite={false} />}
     <mesh position={arrowPosition} quaternion={arrowRotation}>
       <coneGeometry args={[4.4, 10, 10]} />
       <meshBasicMaterial color={connection.color} transparent opacity={connection.muted ? 0.48 : 0.95} />
@@ -63,29 +65,30 @@ function FlowConnection({ connection, width, height, reduceMotion, glow, onSelec
     </mesh>
     {(!reduceMotion || connection.active) && <group ref={markers}>{Array.from({ length: reduceMotion ? 1 : particleCount }, (_, index) => <group key={index} position={curve.getPointAt(reduceMotion ? 0.5 : index / particleCount)}>
       <sprite scale={connection.active ? [19, 19, 1] : [10, 10, 1]}><spriteMaterial map={glow} color={connection.color} transparent opacity={connection.active ? 0.85 : 0.35} depthWrite={false} blending={THREE.AdditiveBlending} /></sprite>
-      <mesh><sphereGeometry args={[connection.active ? 2.6 : 1.3, 12, 10]} /><meshBasicMaterial color={connection.active ? '#f5f3ff' : connection.color} transparent opacity={connection.active ? 1 : 0.55} toneMapped={false} /></mesh>
+      <mesh><sphereGeometry args={[connection.active ? 2.6 : 1.3, 12, 10]} /><meshBasicMaterial color={connection.active ? palette.highlight : connection.color} transparent opacity={connection.active ? 1 : 0.55} toneMapped={false} /></mesh>
       {index === 0 && connection.indicator && <Html center position={[0, 13, 0]} zIndexRange={[12, 1]} style={{ pointerEvents: 'none' }}>
-        <span className="rounded-full border border-violet-200/40 bg-[#12101c]/95 px-1.5 py-0.5 text-[8px] font-bold tracking-[0.12em] text-violet-100 shadow-[0_0_12px_rgba(167,139,250,0.35)]">{connection.indicator || 'CTX'}</span>
+        <span style={{ color: palette.labelForeground, backgroundColor: `rgba(${rgbChannels(palette.labelBackground)}, 0.95)`, borderColor: `rgba(${rgbChannels(palette.ring)}, 0.4)`, boxShadow: `0 0 12px rgba(${rgbChannels(palette.glow)}, 0.35)` }} className="rounded-full border px-1.5 py-0.5 text-[8px] font-bold tracking-[0.12em]">{connection.indicator || 'CTX'}</span>
       </Html>}
     </group>)}</group>}
   </group>;
 }
 
-function NodeOrb({ node, width, height, root, reduceMotion, glow, onSelect }: {
-  node: WorkflowSceneNode; width: number; height: number; root: boolean; reduceMotion: boolean;
+function NodeOrb({ palette, node, width, height, root, reduceMotion, glow, onSelect }: {
+  palette: ScenePalette; node: WorkflowSceneNode; width: number; height: number; root: boolean; reduceMotion: boolean;
   glow: THREE.Texture; onSelect: (id: string) => void;
 }) {
   const center = toWorld(node.center, width, height, 4);
   const scale = root ? 48 : node.kind === 'task' ? 53 : 88;
   return <group position={center} scale={scale}>
-    <AgentSceneOrb glow={glow} color={node.color} hub={root} showRings={false} emissiveScale={0.35}
+    <AgentSceneOrb palette={palette} glow={glow} color={node.color} hub={root} showRings={false} emissiveScale={0.35}
       active={node.active} engaged selected={node.selected} reduceMotion={reduceMotion}
       onClick={event => { event.stopPropagation(); onSelect(node.id); }}
       onPointerOver={event => { event.stopPropagation(); }} />
   </group>;
 }
 
-function Scene({ width, height, connections, nodes, active, reduceMotion, onSelect, onSelectNode }: {
+function Scene({ palette, width, height, connections, nodes, active, reduceMotion, onSelect, onSelectNode }: {
+  palette: ScenePalette;
   width: number;
   height: number;
   connections: WorkflowCurveConnection[];
@@ -97,13 +100,14 @@ function Scene({ width, height, connections, nodes, active, reduceMotion, onSele
 }) {
   const glow = useAgentGlowTexture();
   return <>
-    <ambientLight intensity={0.32} color="#ddd6fe" />
-    <hemisphereLight args={['#e9d5ff', '#080b14', 0.35]} />
-    <directionalLight position={[-width * 0.22, height * 0.18, 80]} intensity={2.3} color="#f5f3ff" />
-    <pointLight position={[0, height * 0.25, 18]} intensity={active ? 260 : 140} distance={width * 0.72} color="#8b5cf6" />
+    <SceneThemeFrame palette={palette} />
+    <ambientLight intensity={0.32} color={palette.ring} />
+    <hemisphereLight args={[palette.highlight, palette.background, 0.35]} />
+    <directionalLight position={[-width * 0.22, height * 0.18, 80]} intensity={2.3} color={palette.highlight} />
+    <pointLight position={[0, height * 0.25, 18]} intensity={active ? 260 : 140} distance={width * 0.72} color={palette.glow} />
 
-    {connections.map(connection => <FlowConnection key={connection.id} connection={connection} width={width} height={height} reduceMotion={reduceMotion} glow={glow} onSelect={onSelect} />)}
-    {nodes.map(node => <NodeOrb key={node.id} node={node} width={width} height={height} root={node.id === 'orchestrator'} reduceMotion={reduceMotion} glow={glow} onSelect={onSelectNode} />)}
+    {connections.map(connection => <FlowConnection palette={palette} key={connection.id} connection={connection} width={width} height={height} reduceMotion={reduceMotion} glow={glow} onSelect={onSelect} />)}
+    {nodes.map(node => <NodeOrb palette={palette} key={node.id} node={node} width={width} height={height} root={node.id === 'orchestrator'} reduceMotion={reduceMotion} glow={glow} onSelect={onSelectNode} />)}
   </>;
 }
 
@@ -117,6 +121,8 @@ export function AgentWorkflowScene3D({ width, height, connections, nodes, active
   onSelect: (id: string) => void;
   onSelectNode: (id: string) => void;
 }) {
+  const { theme } = useTheme();
+  const palette = theme.scene;
   const [pageVisible, setPageVisible] = useState(() => !document.hidden);
   useEffect(() => {
     const update = () => setPageVisible(!document.hidden);
@@ -131,9 +137,8 @@ export function AgentWorkflowScene3D({ width, height, connections, nodes, active
     camera={{ position: [0, 0, 120], zoom: 1, near: 0.1, far: 400 }}
     gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
     frameloop={!pageVisible ? 'never' : reduceMotion ? 'demand' : 'always'}
-    onCreated={({ gl }) => gl.setClearColor('#080a13', 0)}
     aria-label="Interactive 3D agent workflow connections"
   >
-    <Scene width={width} height={height} connections={connections} nodes={nodes} active={active} reduceMotion={reduceMotion} onSelect={onSelect} onSelectNode={onSelectNode} />
+    <Scene palette={palette} width={width} height={height} connections={connections} nodes={nodes} active={active} reduceMotion={reduceMotion} onSelect={onSelect} onSelectNode={onSelectNode} />
   </Canvas>;
 }

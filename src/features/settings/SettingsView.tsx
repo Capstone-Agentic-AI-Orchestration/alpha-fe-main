@@ -19,12 +19,13 @@ import { GitHubConnectionPanel } from './GitHubConnectionPanel';
 import { McpServersPanel } from './McpServersPanel';
 import { WorkspaceAccessPanel } from './WorkspaceAccessPanel';
 import { ProjectFoldersPanel } from './ProjectFoldersPanel';
+import { AppearancePanel } from './AppearancePanel';
 
 export const SettingsView: React.FC = () => {
   const { settings, updateSettings, role, can } = useApp();
   const canManageSettings = can('manage_settings');
   const canManageMcp = can('manage_mcp');
-  const [requestedTab, setActiveTab] = useTabSessionState<'general' | 'members' | 'project_access' | 'integrations' | 'keys' | 'runtimes' | 'autonomy'>('settings.section', 'general');
+  const [requestedTab, setActiveTab] = useTabSessionState<'general' | 'appearance' | 'members' | 'project_access' | 'integrations' | 'keys' | 'runtimes' | 'autonomy'>('settings.section', 'general');
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
 
@@ -93,6 +94,7 @@ export const SettingsView: React.FC = () => {
   // Secrets and agent governance belong to whoever administers the workspace.
   // A client's settings are their own profile and how they want to be contacted.
   const allTabs = [
+    { id: 'appearance', label: 'Appearance', icon: <Eye className="w-4 h-4" />, roles: ['client', 'dev', 'pm', 'admin'] },
     { id: 'general', label: 'Workspace General', icon: <Layers className="w-4 h-4" />, roles: ['client', 'dev', 'pm', 'admin'] },
     // Developers see the team too: knowing your colleagues is not privileged,
     // and the panel shows them the list without the controls.
@@ -117,8 +119,8 @@ export const SettingsView: React.FC = () => {
   return (
     <div className="h-full flex flex-col md:flex-row overflow-hidden bg-background">
       {/* Settings Navigation Sidebar */}
-      <div className="w-full md:w-64 bg-surface-200/50 border-r border-white/10 p-4 space-y-1 flex-shrink-0">
-        <div className="text-xs font-bold uppercase tracking-wider text-white px-3 py-2 mb-2">
+      <div className="w-full md:w-64 bg-surface/50 border-r border-divider p-4 space-y-1 flex-shrink-0">
+        <div className="text-xs font-bold uppercase tracking-wider text-content px-3 py-2 mb-2">
           Settings & Config
         </div>
         {tabs.map((tab) => (
@@ -127,8 +129,8 @@ export const SettingsView: React.FC = () => {
             onClick={() => setActiveTab(tab.id as any)}
             className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
               activeTab === tab.id
-                ? 'bg-brand-500 text-on-accent shadow-glow-brand font-semibold'
-                : 'text-gray-400 hover:text-white hover:bg-white/5'
+                ? 'bg-action text-on-action shadow-glow-brand font-semibold'
+                : 'text-content-secondary hover:text-content hover:bg-surface-high'
             }`}
           >
             {tab.icon}
@@ -139,13 +141,13 @@ export const SettingsView: React.FC = () => {
 
       {/* Settings Content Area */}
       <div className="max-w-5xl flex-1 space-y-5 overflow-y-auto p-6 md:p-7">
-        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+        <div className="flex items-center justify-between border-b border-divider pb-4">
           <div>
-            <h2 className="text-lg font-bold text-white capitalize">
+            <h2 className="text-lg font-bold text-content capitalize">
               {tabs.find(t => t.id === activeTab)?.label}
             </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Configure system parameters and preferences for your Alpha workspace.
+            <p className="text-xs text-content-secondary mt-0.5">
+              {activeTab === 'appearance' ? 'Personal appearance for this device. No workspace administration permission is required.' : 'Configure system parameters and preferences for your Alpha workspace.'}
             </p>
           </div>
 
@@ -157,38 +159,38 @@ export const SettingsView: React.FC = () => {
           )}
         </div>
 
-        {isAccessTab ? (
+        {activeTab === 'appearance' ? <AppearancePanel /> : isAccessTab ? (
           <WorkspaceAccessPanel mode={activeTab === 'members' ? 'members' : 'project_access'} />
         ) : (
         <form onSubmit={handleSave} className="space-y-5">
           {/* General Tab */}
           {activeTab === 'general' && (
-            <div className="space-y-4 rounded-2xl border border-white/10 bg-surface-200/50 p-5">
+            <div className="space-y-4 rounded-2xl border border-divider bg-surface/50 p-5">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1">Workspace Name</label>
+                  <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1">Workspace Name</label>
                   <input
                     type="text"
                     value={formData.workspaceName}
                     disabled={!canManageSettings}
                     onChange={(e) => setFormData({ ...formData, workspaceName: e.target.value })}
-                    className="w-full bg-surface-100 border border-white/10 rounded-lg px-3.5 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-control rounded-lg px-3.5 py-2 text-sm text-content focus:outline-none focus:border-focus"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1">Workspace Slug</label>
+                  <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1">Workspace Slug</label>
                   <input
                     type="text"
                     value={formData.workspaceSlug}
                     disabled={!canManageSettings}
                     onChange={(e) => setFormData({ ...formData, workspaceSlug: e.target.value })}
-                    className="w-full bg-surface-100 border border-white/10 rounded-lg px-3.5 py-2 text-sm text-white font-mono text-xs focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-control rounded-lg px-3.5 py-2 text-sm text-content font-mono text-xs focus:outline-none focus:border-focus"
                   />
                 </div>
 
                 <div className="pt-2">
-                  <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1">Max Parallel Agent Runs</label>
+                  <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1">Max Parallel Agent Runs</label>
                   <input
                     type="number"
                     min={1}
@@ -196,7 +198,7 @@ export const SettingsView: React.FC = () => {
                     value={formData.maxParallelAgentRuns}
                     disabled={!canManageSettings}
                     onChange={(e) => setFormData({ ...formData, maxParallelAgentRuns: parseInt(e.target.value) || 4 })}
-                    className="w-32 bg-surface-100 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                    className="w-32 bg-surface-raised border border-control rounded-lg px-3 py-1.5 text-xs text-content font-mono focus:outline-none focus:border-focus"
                   />
                 </div>
 
@@ -205,20 +207,20 @@ export const SettingsView: React.FC = () => {
                     version number and an update button would both be fiction
                     in a browser tab. */}
                 {isDesktop && (
-                  <div className="pt-4 border-t border-white/10">
+                  <div className="pt-4 border-t border-divider">
                     <div className="mb-4"><ProjectFoldersPanel /></div>
-                    <div className="p-4 rounded-xl bg-well border border-white/10 space-y-3">
+                    <div className="p-4 rounded-xl bg-well border border-divider space-y-3">
                       <div>
-                        <div className="text-xs font-semibold text-white flex items-center gap-2">
+                        <div className="text-xs font-semibold text-content flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
                           Alpha Desktop
                         </div>
-                        <div className="text-[11px] font-mono text-gray-400 mt-0.5">
+                        <div className="text-[11px] font-mono text-content-secondary mt-0.5">
                           {appVersion ? `Version ${appVersion}` : 'Reading version…'} · local daemon
                         </div>
                       </div>
 
-                      <p className="text-[11px] text-gray-400 leading-relaxed">
+                      <p className="text-[11px] text-content-secondary leading-relaxed">
                         Alpha looks for a new release when it starts and every six hours, downloads it
                         in the background, and asks before restarting.
                       </p>
@@ -228,13 +230,13 @@ export const SettingsView: React.FC = () => {
                           type="button"
                           onClick={checkForUpdates}
                           disabled={updateChecking}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs text-white font-medium transition-colors disabled:opacity-50"
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high text-xs text-content font-medium transition-colors disabled:opacity-50"
                         >
                           <RefreshCw className={`h-3.5 w-3.5 ${updateChecking ? 'animate-spin' : ''}`} />
                           {updateChecking ? 'Checking…' : 'Check for updates'}
                         </button>
                         {updateCheck && (
-                          <span className={`text-[11px] ${updateCheck.status === 'error' ? 'text-amber-300' : 'text-gray-400'}`}>
+                          <span className={`text-[11px] ${updateCheck.status === 'error' ? 'text-amber-300' : 'text-content-secondary'}`}>
                             {updateMessage(updateCheck)}
                           </span>
                         )}
@@ -253,7 +255,7 @@ export const SettingsView: React.FC = () => {
             <div className="space-y-8">
               <GitHubConnectionPanel />
               {canManageMcp && (
-                <div className="border-t border-white/5 pt-6">
+                <div className="border-t border-divider pt-6">
                   <McpServersPanel />
                 </div>
               )}
@@ -261,7 +263,7 @@ export const SettingsView: React.FC = () => {
           )}
 
           {activeTab === 'keys' && (
-            <div className="p-6 rounded-2xl bg-surface-200/50 border border-white/10 space-y-4">
+            <div className="p-6 rounded-2xl bg-surface/50 border border-divider space-y-4">
               <p className="text-xs text-amber-300 bg-amber-400/10 border border-amber-400/20 rounded-lg px-3 py-2 leading-relaxed">
                 Stored as plain text in this browser&apos;s local storage — not encrypted.
                 Prefer signing into a local CLI (see Connected Accounts) so no key is
@@ -277,7 +279,7 @@ export const SettingsView: React.FC = () => {
                   { id: 'huggingface', label: 'Hugging Face Token', placeholder: 'hf_...' },
                 ].map((k) => (
                   <div key={k.id} className="relative">
-                    <label className="block text-xs font-semibold text-gray-300 mb-1">{k.label}</label>
+                    <label className="block text-xs font-semibold text-content-secondary mb-1">{k.label}</label>
                     <div className="relative flex items-center">
                       <input
                         type={showKeys[k.id] ? 'text' : 'password'}
@@ -288,12 +290,12 @@ export const SettingsView: React.FC = () => {
                           apiKeys: { ...formData.apiKeys, [k.id]: e.target.value }
                         })}
                         placeholder={k.placeholder}
-                        className="w-full bg-surface-100 border border-white/10 rounded-lg pl-3.5 pr-10 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500"
+                        className="w-full bg-surface-raised border border-control rounded-lg pl-3.5 pr-10 py-2 text-xs font-mono text-content focus:outline-none focus:border-focus"
                       />
                       <button
                         type="button"
                         onClick={() => toggleShowKey(k.id)}
-                        className="absolute right-3 text-gray-400 hover:text-white p-0.5"
+                        className="absolute right-3 text-content-secondary hover:text-content p-0.5"
                       >
                         {showKeys[k.id] ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -306,24 +308,24 @@ export const SettingsView: React.FC = () => {
 
           {/* Local Runtimes Tab */}
           {activeTab === 'runtimes' && (
-            <div className="p-6 rounded-2xl bg-surface-200/50 border border-white/10 space-y-4">
+            <div className="p-6 rounded-2xl bg-surface/50 border border-divider space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1">Local Ollama Host Endpoint</label>
+                <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1">Local Ollama Host Endpoint</label>
                 <input
                   type="text"
                   value={formData.localRuntimeUrl}
                   disabled={!canManageSettings}
                   onChange={(e) => setFormData({ ...formData, localRuntimeUrl: e.target.value })}
                   placeholder="http://localhost:11434"
-                  className="w-full bg-surface-100 border border-white/10 rounded-lg px-3.5 py-2 text-xs font-mono text-white focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface-raised border border-control rounded-lg px-3.5 py-2 text-xs font-mono text-content focus:outline-none focus:border-focus"
                 />
               </div>
 
-              <div className="p-4 rounded-xl bg-surface-100 border border-white/5 space-y-2">
+              <div className="p-4 rounded-xl bg-surface-raised border border-control space-y-2">
                 <div className="text-xs font-semibold text-teal-300 flex items-center gap-1.5">
                   <Server className="w-4 h-4" /> Local Engine Probe
                 </div>
-                <p className="text-[11px] text-gray-400">
+                <p className="text-[11px] text-content-secondary">
                   When enabled, Alpha polls `http://localhost:11434/api/tags` and `http://localhost:1234/v1/models` every 30s to discover newly downloaded models.
                 </p>
               </div>
@@ -332,14 +334,14 @@ export const SettingsView: React.FC = () => {
 
           {/* Autonomy Governance Tab */}
           {activeTab === 'autonomy' && (
-            <div className="p-6 rounded-2xl bg-surface-200/50 border border-white/10 space-y-4">
+            <div className="p-6 rounded-2xl bg-surface/50 border border-divider space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">Default Agent Autonomy Tier</label>
+                <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">Default Agent Autonomy Tier</label>
                 <select
                   value={formData.defaultAutonomy}
                   disabled={!canManageSettings}
                   onChange={(e) => setFormData({ ...formData, defaultAutonomy: e.target.value as AgentAutonomyLevel })}
-                  className="w-full bg-surface-100 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface-raised border border-control rounded-lg px-3 py-2 text-xs text-content focus:outline-none focus:border-focus"
                 >
                   <option value="Supervised">Supervised (Human Step-by-Step Confirmation)</option>
                   <option value="Semi-Autonomous (Requires Approval)">Semi-Autonomous (Requires Approval for Merging)</option>
@@ -382,7 +384,7 @@ export const SettingsView: React.FC = () => {
             <button
               type="submit"
               disabled={!canManageSettings}
-              className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs shadow-glow-brand transition-all"
+              className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-action hover:bg-action-hover text-on-action font-medium text-xs shadow-glow-brand transition-all"
             >
               <Save className="w-4 h-4" />
               <span>Save Preferences</span>

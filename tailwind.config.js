@@ -25,6 +25,14 @@ const gray = Object.fromEntries(
     withAlpha(`--c-gray-${step}`),
   ])
 );
+// Semantic roles are preferred. Numeric families are transitional palette-aware aliases.
+const steps = [50,100,200,300,400,500,600,700,800,900,950];
+const families = Object.fromEntries(['slate','zinc','neutral','stone','brand','violet','purple','indigo','blue','sky','cyan','teal','emerald','green','lime','amber','yellow','orange','red','rose','pink','fuchsia'].map(family => [family,{
+  ...Object.fromEntries(steps.map(step => [step,withAlpha(`--c-${family}-${step}`)])),
+  DEFAULT:withAlpha(`--c-${family}-500`),
+}]));
+const ui = role => withAlpha(`--ui-${role}`);
+const status = Object.fromEntries(['success','warning','danger','info'].map(role => [role,{DEFAULT:ui(`status-${role}`),subtle:ui(`status-${role}-subtle`),border:ui(`status-${role}-border`)}]));
 
 export default {
   content: [
@@ -35,8 +43,18 @@ export default {
   theme: {
     extend: {
       colors: {
+        ...families,
         white: withAlpha('--c-white'),
         gray,
+        content: { DEFAULT:ui('text-primary'),secondary:ui('text-secondary'),muted:ui('text-muted') },
+        action: {DEFAULT:ui('action'),hover:ui('action-hover')},
+        'on-action':ui('on-action'),
+        link:{DEFAULT:ui('link'),hover:ui('link-hover')},
+        selected:{DEFAULT:ui('selected'),content:ui('selected-content')},
+        divider:ui('divider'),control:ui('control'),focus:ui('focus'),
+        overlay:ui('overlay'),status,
+        code:{DEFAULT:ui('code'),content:ui('code-content')},
+        diff:{added:{DEFAULT:ui('diff-added'),content:ui('diff-added-content')},removed:{DEFAULT:ui('diff-removed'),content:ui('diff-removed-content')},hunk:ui('diff-hunk')},
 
         /** Always a real white: legible on a saturated button in either theme. */
         'on-accent': withAlpha('--c-on-accent'),
@@ -63,18 +81,9 @@ export default {
           subtle: 'rgb(var(--c-white) / 0.06)',
           DEFAULT: 'rgb(var(--c-white) / 0.10)',
           hover: 'rgb(var(--c-white) / 0.20)',
-          accent: 'rgba(99, 102, 241, 0.3)',
+          accent: ui('accent'),
         },
 
-        brand: {
-          50: '#faf5ff',
-          100: '#f3e8ff',
-          400: '#a78bfa',
-          500: '#8b5cf6',
-          600: '#7c3aed',
-          700: '#6d28d9',
-          DEFAULT: '#8b5cf6',
-        },
         agent: {
           coder: '#38bdf8',
           reviewer: '#a855f7',

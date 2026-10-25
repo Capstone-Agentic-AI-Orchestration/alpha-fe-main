@@ -24,23 +24,23 @@ export function ProjectActionsView({ projectId, repositories, repository, active
   const opened = selected && visibleRepos.includes(selected.repository) ? selected : null;
   return <div className="space-y-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><h2 className="flex items-center gap-2 text-sm font-semibold text-white"><PlayCircle className="h-4 w-4 text-brand-300" />GitHub Actions</h2>
-        <p className="mt-1 text-xs text-gray-400">Inspect workflow runs, jobs, logs, and artifacts here in the project.</p></div>
+      <div><h2 className="flex items-center gap-2 text-sm font-semibold text-content"><PlayCircle className="h-4 w-4 text-link" />GitHub Actions</h2>
+        <p className="mt-1 text-xs text-content-secondary">Inspect workflow runs, jobs, logs, and artifacts here in the project.</p></div>
       <button type="button" className={actionsButton} onClick={() => setRefresh(n => n + 1)}><RefreshCw className="mr-1 inline h-3 w-3" />Refresh history</button>
     </div>
     {repository && <Promotion projectId={projectId} repo={repository} active={active} canPromote={canPromote} />}
-    <form aria-label="Actions run filters" className="flex flex-wrap items-end gap-3 rounded-xl border border-white/10 bg-surface-200/50 p-3" onSubmit={e => { e.preventDefault(); setFilters(draft); }}>
-      <label className="min-w-0 flex-1 text-[11px] text-gray-400">Branch<input className={`${actionsInput} mt-1 block w-full`} placeholder="All branches" value={draft.branch || ''} onChange={e => setDraft(f => ({ ...f, branch: e.target.value.trim() || undefined }))} /></label>
-      <label className="text-[11px] text-gray-400">Status<select aria-label="Run status" className={`${actionsInput} mt-1 block`} value={draft.status || ''} onChange={e => setDraft(f => ({ ...f, status: e.target.value || undefined }))}>
+    <form aria-label="Actions run filters" className="flex flex-wrap items-end gap-3 rounded-xl border border-divider bg-surface/50 p-3" onSubmit={e => { e.preventDefault(); setFilters(draft); }}>
+      <label className="min-w-0 flex-1 text-[11px] text-content-secondary">Branch<input className={`${actionsInput} mt-1 block w-full`} placeholder="All branches" value={draft.branch || ''} onChange={e => setDraft(f => ({ ...f, branch: e.target.value.trim() || undefined }))} /></label>
+      <label className="text-[11px] text-content-secondary">Status<select aria-label="Run status" className={`${actionsInput} mt-1 block`} value={draft.status || ''} onChange={e => setDraft(f => ({ ...f, status: e.target.value || undefined }))}>
         {[['', 'All statuses'], ['success', 'Success'], ['failure', 'Failed'], ['in_progress', 'In progress'], ['queued', 'Queued'], ['waiting', 'Waiting'], ['cancelled', 'Cancelled'], ['timed_out', 'Timed out'], ['skipped', 'Skipped'], ['action_required', 'Action required']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select></label>
-      <label className="text-[11px] text-gray-400">Event<input list="actions-events" placeholder="All events" className={`${actionsInput} mt-1 block w-36`} value={draft.event || ''} onChange={e => setDraft(f => ({ ...f, event: e.target.value.trim() || undefined }))} /><datalist id="actions-events">{['push', 'pull_request', 'workflow_dispatch', 'schedule', 'workflow_run', 'release'].map(event => <option key={event} value={event} />)}</datalist></label>
-      <label className="text-[11px] text-gray-400">From<input aria-label="Runs from date" type="date" value={draft.from || ''} onChange={e => setDraft(f => ({ ...f, from: e.target.value || undefined }))} className={`${actionsInput} mt-1 block [color-scheme:dark]`} /></label>
-      <label className="text-[11px] text-gray-400">To<input aria-label="Runs to date" type="date" value={draft.to || ''} onChange={e => setDraft(f => ({ ...f, to: e.target.value || undefined }))} className={`${actionsInput} mt-1 block [color-scheme:dark]`} /></label>
+      <label className="text-[11px] text-content-secondary">Event<input list="actions-events" placeholder="All events" className={`${actionsInput} mt-1 block w-36`} value={draft.event || ''} onChange={e => setDraft(f => ({ ...f, event: e.target.value.trim() || undefined }))} /><datalist id="actions-events">{['push', 'pull_request', 'workflow_dispatch', 'schedule', 'workflow_run', 'release'].map(event => <option key={event} value={event} />)}</datalist></label>
+      <label className="text-[11px] text-content-secondary">From<input aria-label="Runs from date" type="date" value={draft.from || ''} onChange={e => setDraft(f => ({ ...f, from: e.target.value || undefined }))} className={`${actionsInput} mt-1 block [color-scheme:dark]`} /></label>
+      <label className="text-[11px] text-content-secondary">To<input aria-label="Runs to date" type="date" value={draft.to || ''} onChange={e => setDraft(f => ({ ...f, to: e.target.value || undefined }))} className={`${actionsInput} mt-1 block [color-scheme:dark]`} /></label>
       <button className={actionsButton} type="submit">Apply filters</button>
       <button className={actionsButton} type="button" onClick={() => { setDraft({}); setFilters({}); }}>Clear filters</button>
     </form>
-    <p className="text-[11px] text-gray-400">{repository || 'All repositories'} · {filters.branch || 'All branches'} · Retained GitHub history. Deleted runs and expired logs cannot be restored here.</p>
+    <p className="text-[11px] text-content-secondary">{repository || 'All repositories'} · {filters.branch || 'All branches'} · Retained GitHub history. Deleted runs and expired logs cannot be restored here.</p>
     <div className={opened ? 'grid min-w-0 items-start gap-4 xl:grid-cols-[minmax(260px,0.6fr)_minmax(0,1.4fr)]' : 'space-y-4'}>
       <div className={`${opened ? 'hidden xl:block' : ''} min-w-0 space-y-4`} aria-label="Actions run history">
         {visibleRepos.map(repo => <RepoHistory key={repo} projectId={projectId} repo={repo} filters={filters} filterKey={filterKey} active={active} refresh={refresh} selected={opened} onSelect={pick} />)}
@@ -61,7 +61,7 @@ function RepoHistory({ projectId, repo, filters, filterKey, active, refresh, sel
   const workflows = inventory.data?.workflows || [];
   return <RepoSection id={`actions-${repo.replace(/[^a-z0-9]/gi, '-')}`} title={repo} icon={<GitBranch className="h-3.5 w-3.5" />}>
     <div className="space-y-3 p-3">
-      <label className="block text-[11px] text-gray-400">Workflow
+      <label className="block text-[11px] text-content-secondary">Workflow
         <select aria-label={`Workflow in ${repo}`} className={`${actionsInput} mt-1 block w-full`} value={workflow?.id || ''} onChange={e => setWorkflow(workflows.find(w => String(w.id) === e.target.value) || null)}>
           <option value="">All workflows</option>
           {workflow && !workflows.some(w => w.id === workflow.id) && <option value={workflow.id}>{workflow.name}</option>}
@@ -91,15 +91,15 @@ function RunsPage({ projectId, repo, filters, active, refresh, selected, onSelec
     {resource.error && <SectionError message={resource.error} onRetry={resource.reload} />}
     {!data && resource.loading && <SectionLoading label="Loading workflow runs…" />}
     {data && <>
-      <p className="px-3 text-[11px] text-gray-400">{data.totalCount} matching runs · Page {page}{resource.updated && ` · Updated ${new Date(resource.updated).toLocaleTimeString()}`}</p>
+      <p className="px-3 text-[11px] text-content-secondary">{data.totalCount} matching runs · Page {page}{resource.updated && ` · Updated ${new Date(resource.updated).toLocaleTimeString()}`}</p>
       {data.runs.length === 0 && <SectionEmpty>No retained runs match these filters. Try All branches or a different date range.</SectionEmpty>}
-      <ul className="divide-y divide-white/5">{data.runs.map(run => <li key={run.id}><button type="button" onClick={() => onSelect(run)} aria-pressed={selected?.repository === repo && selected.id === run.id}
-        className={`flex w-full flex-wrap items-start justify-between gap-3 p-3 text-left hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${selected?.repository === repo && selected.id === run.id ? 'bg-brand-500/10' : ''}`}>
-        <span className="min-w-0 flex-1"><span className="block break-words text-xs font-medium text-gray-100">{run.name} #{run.number}</span><span className="mt-1 block break-words text-xs text-gray-400">{run.title}</span>
-          <span className="mt-2 block break-words text-[11px] text-gray-400">{run.branch || 'Branch unavailable'} · {run.event} · {run.sha.slice(0, 7)} · {relativeTime(run.createdAt)} · {run.actor}</span></span>
+      <ul className="divide-y divide-divider">{data.runs.map(run => <li key={run.id}><button type="button" onClick={() => onSelect(run)} aria-pressed={selected?.repository === repo && selected.id === run.id}
+        className={`flex w-full flex-wrap items-start justify-between gap-3 p-3 text-left hover:bg-surface-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${selected?.repository === repo && selected.id === run.id ? 'bg-selected' : ''}`}>
+        <span className="min-w-0 flex-1"><span className="block break-words text-xs font-medium text-content">{run.name} #{run.number}</span><span className="mt-1 block break-words text-xs text-content-secondary">{run.title}</span>
+          <span className="mt-2 block break-words text-[11px] text-content-secondary">{run.branch || 'Branch unavailable'} · {run.event} · {run.sha.slice(0, 7)} · {relativeTime(run.createdAt)} · {run.actor}</span></span>
         <ActionsStatus value={run} />
       </button></li>)}</ul>
-      {data.limited && <p className="px-3 text-xs text-amber-200">GitHub limits filtered history to 1,000 results. Narrow the date range to browse older retained runs.</p>}
+      {data.limited && <p className="px-3 text-xs text-status-warning">GitHub limits filtered history to 1,000 results. Narrow the date range to browse older retained runs.</p>}
     </>}
     <div className="px-3"><PageControls page={page} nextPage={data?.nextPage} loading={resource.loading} onPage={setPage} /></div>
   </div>;
@@ -109,7 +109,7 @@ function Promotion({ projectId, repo, active, canPromote }: { projectId: string;
   const [branch, setBranch] = useState('dev');
   const branches = useActionsResource<{ branches: RepoBranch[] }>(() => apiService.getRepoBranches(projectId, repo), `${repo}|promotion-branches`, active);
   if (!branches.data) return null;
-  return <details className="rounded-lg border border-white/10 p-3"><summary className="cursor-pointer text-xs text-gray-400">Branch promotion: dev → uat → main</summary>
+  return <details className="rounded-lg border border-divider p-3"><summary className="cursor-pointer text-xs text-content-secondary">Branch promotion: dev → uat → main</summary>
     <div className="mt-3"><PipelineStrip projectId={projectId} repo={repo} branchNames={branches.data.branches.map(b => b.name)} selectedBranch={branch} onSelectBranch={setBranch} canPromote={canPromote} onPromoted={branches.reload} /></div>
   </details>;
 }

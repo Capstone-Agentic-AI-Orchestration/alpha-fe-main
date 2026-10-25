@@ -1,0 +1,26 @@
+{
+  "id": "forest",
+  "name": "Forest",
+  "description": "Deep green · restrained mint",
+  "mode": "dark",
+  "colors": {
+    "canvas": "#0B1210",
+    "shell": "#0F1915",
+    "surface": "#14211C",
+    "raised": "#1B2B24",
+    "high": "#192822",
+    "well": "#080D0B",
+    "textPrimary": "#EAF3EE",
+    "textSecondary": "#A9BCAF",
+    "textMuted": "#91A69A",
+    "accent": "#34D399",
+    "action": "#047857",
+    "actionHover": "#046A4D",
+    "link": "#6EE7B7",
+    "linkHover": "#85EBC3",
+    "focus": "#6EE7B7",
+    "divider": "#34473C",
+    "control": "#727A77",
+    "sceneIdle": "#8CB09E"
+  }
+}

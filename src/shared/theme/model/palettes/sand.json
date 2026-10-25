@@ -1,0 +1,26 @@
+{
+  "id": "sand",
+  "name": "Sand",
+  "description": "Warm ivory · grounded bronze",
+  "mode": "light",
+  "colors": {
+    "canvas": "#F5F1E9",
+    "shell": "#EBE5D9",
+    "surface": "#FFFCF7",
+    "raised": "#F0E9DE",
+    "high": "#F5EFE6",
+    "well": "#F8F5F0",
+    "textPrimary": "#2C2823",
+    "textSecondary": "#62594E",
+    "textMuted": "#706455",
+    "accent": "#8A5230",
+    "action": "#8A5230",
+    "actionHover": "#79482A",
+    "link": "#8A5230",
+    "linkHover": "#79482A",
+    "focus": "#8A5230",
+    "divider": "#D9CEBD",
+    "control": "#9A9691",
+    "sceneIdle": "#74614F"
+  }
+}

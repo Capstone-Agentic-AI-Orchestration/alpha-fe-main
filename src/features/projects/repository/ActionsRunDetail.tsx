@@ -7,8 +7,8 @@ import { runState, RUN_TONE_CLASS } from './repoFormat';
 import { useActionsResource, actionsError } from './useActionsResource';
 import { actionsDuration, actionsSize, saveActionsFile } from './actionsFormat';
 
-export const actionsButton = 'rounded-md border border-white/10 px-2.5 py-1.5 text-xs text-gray-200 hover:bg-white/5 disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400';
-export const actionsInput = 'min-w-0 rounded-md border border-white/10 bg-surface-raised px-2.5 py-1.5 text-xs text-gray-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400';
+export const actionsButton = 'rounded-md border border-divider px-2.5 py-1.5 text-xs text-content hover:bg-surface-high disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400';
+export const actionsInput = 'min-w-0 rounded-md border border-divider bg-surface-raised px-2.5 py-1.5 text-xs text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400';
 
 export function ActionsStatus({ value }: { value: { status: string; conclusion: string | null } }) {
   const status = runState(value);
@@ -26,19 +26,19 @@ export function ActionsRunDetail({ projectId, selected, active, onBack }: { proj
   const attempt = attemptChoice ?? run.attempt;
   const tabs = ['summary', 'jobs', 'logs', 'artifacts'];
   const refs = useRef<Array<HTMLButtonElement | null>>([]);
-  return <section aria-label="Workflow run details" className="min-w-0 rounded-xl border border-white/10 bg-surface-200/50">
-    <header className="space-y-3 border-b border-white/10 p-4">
+  return <section aria-label="Workflow run details" className="min-w-0 rounded-xl border border-divider bg-surface/50">
+    <header className="space-y-3 border-b border-divider p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <button type="button" className={actionsButton} onClick={onBack}><ArrowLeft className="mr-1 inline h-3.5 w-3.5" />Back to runs</button>
         <ActionsStatus value={run} />
       </div>
-      <div><h2 className="break-words text-base font-semibold text-white">{run.name} #{run.number}</h2><p className="mt-1 break-words text-xs text-gray-400">{run.title}</p></div>
-      <p className="break-all font-mono text-xs text-gray-300">{repo} · {run.branch || 'Branch unavailable'} · {run.sha.slice(0, 7)}</p>
+      <div><h2 className="break-words text-base font-semibold text-content">{run.name} #{run.number}</h2><p className="mt-1 break-words text-xs text-content-secondary">{run.title}</p></div>
+      <p className="break-all font-mono text-xs text-content-secondary">{repo} · {run.branch || 'Branch unavailable'} · {run.sha.slice(0, 7)}</p>
       <div className="flex flex-wrap items-center gap-3">
-        <label className="text-xs text-gray-400">Attempt <input aria-label="Run attempt" className={`${actionsInput} w-16`} type="number" min={1} max={run.attempt} value={attempt}
+        <label className="text-xs text-content-secondary">Attempt <input aria-label="Run attempt" className={`${actionsInput} w-16`} type="number" min={1} max={run.attempt} value={attempt}
           onChange={e => { const n = Number(e.target.value); if (Number.isInteger(n) && n >= 1 && n <= run.attempt) setAttempt(n); }} /> of {run.attempt}</label>
         <button type="button" className={actionsButton} disabled={resource.loading} onClick={resource.reload}><RefreshCw className="mr-1 inline h-3 w-3" />Refresh run</button>
-        <a className="text-xs text-gray-400 underline hover:text-white" href={run.url} target="_blank" rel="noreferrer">Open on GitHub <ExternalLink className="inline h-3 w-3" /></a>
+        <a className="text-xs text-content-secondary underline hover:text-content" href={run.url} target="_blank" rel="noreferrer">Open on GitHub <ExternalLink className="inline h-3 w-3" /></a>
       </div>
       {resource.error && <SectionError message={resource.error} onRetry={resource.reload} />}
       <div role="tablist" aria-label="Run detail sections" className="flex gap-1 overflow-x-auto" onKeyDown={event => {
@@ -46,16 +46,16 @@ export function ActionsRunDetail({ projectId, selected, active, onBack }: { proj
         if (next >= 0) { event.preventDefault(); setTab(tabs[next]); refs.current[next]?.focus(); }
       }}>
         {tabs.map((id, index) => <button key={id} ref={el => { refs.current[index] = el; }} type="button" role="tab" id={`run-${run.id}-${id}-tab`} aria-controls={`run-${run.id}-${id}`} aria-selected={tab === id} tabIndex={tab === id ? 0 : -1}
-          onClick={() => setTab(id)} className={`${actionsButton} shrink-0 ${tab === id ? 'bg-brand-500/15 text-brand-200' : ''}`}>{id === 'jobs' ? 'Jobs and steps' : id[0].toUpperCase() + id.slice(1)}</button>)}
+          onClick={() => setTab(id)} className={`${actionsButton} shrink-0 ${tab === id ? 'bg-selected text-selected-content' : ''}`}>{id === 'jobs' ? 'Jobs and steps' : id[0].toUpperCase() + id.slice(1)}</button>)}
       </div>
     </header>
     <div role="tabpanel" id={`run-${run.id}-${tab}`} aria-labelledby={`run-${run.id}-${tab}-tab`} className="min-w-0 p-4">
       {tab === 'summary' && <div className="space-y-4">
         <dl className="grid grid-cols-1 gap-4 text-xs sm:grid-cols-2">
           {Object.entries({ Repository: repo, Branch: run.branch || 'Unavailable', Commit: run.sha, Actor: run.actor || 'Unavailable', Event: run.event,
-            Workflow: run.path || run.name, Created: new Date(run.createdAt).toLocaleString(), Updated: new Date(run.updatedAt).toLocaleString() }).map(([label, value]) => <div key={label}><dt className="text-gray-400">{label}</dt><dd className="mt-1 break-all text-gray-200">{value}</dd></div>)}
+            Workflow: run.path || run.name, Created: new Date(run.createdAt).toLocaleString(), Updated: new Date(run.updatedAt).toLocaleString() }).map(([label, value]) => <div key={label}><dt className="text-content-secondary">{label}</dt><dd className="mt-1 break-all text-content">{value}</dd></div>)}
         </dl>
-        <p className="text-xs text-gray-400">Summary reflects the latest run. Jobs and logs use attempt {attempt}. Select Jobs and steps to inspect individual check results.</p>
+        <p className="text-xs text-content-secondary">Summary reflects the latest run. Jobs and logs use attempt {attempt}. Select Jobs and steps to inspect individual check results.</p>
         <button type="button" className={actionsButton} onClick={() => setTab('jobs')}>Inspect jobs and steps</button>
       </div>}
       {(tab === 'jobs' || tab === 'logs') && <Jobs key={`${run.id}|${attempt}`} projectId={projectId} run={run} attempt={attempt} active={active} logs={tab === 'logs'} />}
@@ -76,14 +76,14 @@ function Jobs({ projectId, run, attempt, active, logs }: { projectId: string; ru
     {jobs.data && list.length === 0 && <SectionEmpty>No jobs have been created for this attempt yet.</SectionEmpty>}
     {!!list.length && <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(160px,0.7fr)_minmax(0,1.3fr)]">
       <div className="min-w-0 space-y-1" aria-label="Workflow jobs">
-        {list.map(j => <button type="button" aria-pressed={job?.id === j.id} key={j.id} onClick={() => selectJob(j.id)} className={`w-full rounded-lg border p-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${job?.id === j.id ? 'border-brand-400/50 bg-brand-500/10' : 'border-white/5 hover:bg-white/5'}`}>
-          <span className="block break-words text-xs text-white">{j.name}</span><span className="mt-1 flex flex-wrap items-center justify-between gap-2"><ActionsStatus value={j} /><span className="text-[11px] text-gray-400">{actionsDuration(j.startedAt, j.completedAt)}</span></span>
+        {list.map(j => <button type="button" aria-pressed={job?.id === j.id} key={j.id} onClick={() => selectJob(j.id)} className={`w-full rounded-lg border p-2.5 text-left focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${job?.id === j.id ? 'border-divider bg-selected' : 'border-divider hover:bg-surface-high'}`}>
+          <span className="block break-words text-xs text-content">{j.name}</span><span className="mt-1 flex flex-wrap items-center justify-between gap-2"><ActionsStatus value={j} /><span className="text-[11px] text-content-secondary">{actionsDuration(j.startedAt, j.completedAt)}</span></span>
         </button>)}
       </div>
       {job && <div className="min-w-0">
-        <h3 className="mb-3 break-words text-sm font-medium text-white">{job.name}</h3>
+        <h3 className="mb-3 break-words text-sm font-medium text-content">{job.name}</h3>
         {logs ? <JobLog key={job.id} projectId={projectId} run={run} job={job} active={active} /> : <ol className="space-y-2">
-          {job.steps.map(step => <li key={step.number} className="flex flex-wrap items-center justify-between gap-2 rounded border border-white/5 p-2 text-xs"><span className="min-w-0 break-words text-gray-200">{step.number}. {step.name}</span><ActionsStatus value={step} /></li>)}
+          {job.steps.map(step => <li key={step.number} className="flex flex-wrap items-center justify-between gap-2 rounded border border-divider p-2 text-xs"><span className="min-w-0 break-words text-content">{step.number}. {step.name}</span><ActionsStatus value={step} /></li>)}
           {!job.steps.length && <SectionEmpty>This job has no reported steps.</SectionEmpty>}
         </ol>}
       </div>}
@@ -103,14 +103,14 @@ function JobLog({ projectId, run, job, active }: { projectId: string; run: Actio
       <button className={actionsButton} type="button" disabled={!text} onClick={() => void navigator.clipboard.writeText(text).then(() => setNotice('Logs copied.'), () => setNotice('Copy was unavailable. Use Download instead.'))}>Copy</button>
       <button className={actionsButton} type="button" disabled={!text} onClick={() => saveActionsFile(new Blob([text], { type: 'text/plain' }), `run-${run.id}-job-${job.id}.txt`)}>Download</button>
     </div>
-    {notice && <p role="status" className="text-xs text-gray-300">{notice}</p>}
+    {notice && <p role="status" className="text-xs text-content-secondary">{notice}</p>}
     {log.error && <SectionError message={log.error} onRetry={log.reload} />}
     {log.loading && !log.data && <SectionLoading label="Loading job logs…" />}
-    {log.data?.state === 'not_ready' && <p role="status" className="text-xs text-gray-400">GitHub has not made these logs available yet. Status refreshes while this page is visible.</p>}
-    {log.data?.state === 'unavailable' && <p className="text-xs text-amber-200">{text}</p>}
+    {log.data?.state === 'not_ready' && <p role="status" className="text-xs text-content-secondary">GitHub has not made these logs available yet. Status refreshes while this page is visible.</p>}
+    {log.data?.state === 'unavailable' && <p className="text-xs text-status-warning">{text}</p>}
     {log.data?.state === 'available' && <>
-      <p className="text-xs text-gray-400">{search ? 'Showing matching lines from the available whole-job log.' : 'Whole-job output from GitHub.'} {log.data.truncated && 'Showing the first 2 MB; output is truncated.'}</p>
-      <pre aria-label="Job log output" tabIndex={0} className="max-h-[65vh] min-w-0 overflow-auto rounded-lg border border-white/10 bg-black/30 p-3 font-mono text-[11px] leading-5 text-gray-200 focus-visible:outline focus-visible:outline-brand-400">{lines || (search ? 'No matching lines.' : 'GitHub returned an empty log.')}</pre>
+      <p className="text-xs text-content-secondary">{search ? 'Showing matching lines from the available whole-job log.' : 'Whole-job output from GitHub.'} {log.data.truncated && 'Showing the first 2 MB; output is truncated.'}</p>
+      <pre aria-label="Job log output" tabIndex={0} className="max-h-[65vh] min-w-0 overflow-auto rounded-lg border border-divider bg-well p-3 font-mono text-[11px] leading-5 text-content focus-visible:outline focus-visible:outline-brand-400">{lines || (search ? 'No matching lines.' : 'GitHub returned an empty log.')}</pre>
     </>}
   </div>;
 }
@@ -132,12 +132,12 @@ function Artifacts({ projectId, run, active }: { projectId: string; run: Actions
     } catch (e) { if (!controller.signal.aborted) setError(actionsError(e)); } finally { if (!controller.signal.aborted) setDownloading(null); }
   };
   return <div className="space-y-3">
-    <p className="text-xs text-gray-400">Artifacts belong to this run. Retention and availability are controlled by GitHub. In-app downloads are limited to 50 MB.</p>
+    <p className="text-xs text-content-secondary">Artifacts belong to this run. Retention and availability are controlled by GitHub. In-app downloads are limited to 50 MB.</p>
     {(artifacts.error || error) && <SectionError message={artifacts.error || error} onRetry={artifacts.reload} />}
     {artifacts.loading && !artifacts.data && <SectionLoading label="Loading artifacts…" />}
     {artifacts.data?.artifacts.length === 0 && <SectionEmpty>No retained artifacts were found for this run.</SectionEmpty>}
-    {artifacts.data?.artifacts.map(a => <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 p-3">
-      <div className="min-w-0"><p className="break-words text-xs text-white">{a.name}</p><p className="mt-1 text-[11px] text-gray-400">{actionsSize(a.size)} · {a.expired ? 'Expired' : `Expires ${new Date(a.expiresAt).toLocaleString()}`}</p></div>
+    {artifacts.data?.artifacts.map(a => <div key={a.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-divider p-3">
+      <div className="min-w-0"><p className="break-words text-xs text-content">{a.name}</p><p className="mt-1 text-[11px] text-content-secondary">{actionsSize(a.size)} · {a.expired ? 'Expired' : `Expires ${new Date(a.expiresAt).toLocaleString()}`}</p></div>
       <button type="button" className={actionsButton} disabled={a.expired || a.size > 50 * 1024 * 1024 || downloading !== null} onClick={() => void download(a)}><Download className="mr-1 inline h-3 w-3" />{downloading === a.id ? 'Downloading…' : 'Download artifact'}</button>
     </div>)}
     <PageControls page={page} nextPage={artifacts.data?.nextPage} loading={artifacts.loading} onPage={setPage} />
@@ -146,6 +146,6 @@ function Artifacts({ projectId, run, active }: { projectId: string; run: Actions
 
 export function PageControls({ page, nextPage, loading, onPage }: { page: number; nextPage?: number | null; loading: boolean; onPage: (page: number) => void }) {
   if (page === 1 && !nextPage) return null;
-  return <div className="flex items-center gap-3 text-xs text-gray-400"><button type="button" disabled={loading || page <= 1} className={actionsButton} onClick={() => onPage(page - 1)}>Previous page</button>
+  return <div className="flex items-center gap-3 text-xs text-content-secondary"><button type="button" disabled={loading || page <= 1} className={actionsButton} onClick={() => onPage(page - 1)}>Previous page</button>
     <span>Page {page}</span><button type="button" disabled={loading || !nextPage} className={actionsButton} onClick={() => nextPage && onPage(nextPage)}>Next page</button></div>;
 }

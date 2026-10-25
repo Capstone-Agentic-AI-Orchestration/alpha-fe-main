@@ -358,13 +358,13 @@ export const SignIn: React.FC<Props> = ({ identity, error }) => {
                   <a
                     href={identity.signInUrl}
                     aria-describedby="sign-in-trust"
-                    className="group flex min-h-[3rem] w-full items-center justify-center gap-2.5 rounded-xl bg-white px-4 py-3 font-semibold text-gray-900 shadow-lg shadow-violet-500/10 transition duration-150 hover:bg-gray-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:scale-[0.99] active:bg-gray-300 motion-reduce:transition-none motion-reduce:active:scale-100"
+                    className="group flex min-h-[3rem] w-full items-center justify-center gap-2.5 rounded-xl bg-content px-4 py-3 font-semibold text-canvas shadow-lg shadow-violet-500/10 transition duration-150 hover:bg-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:scale-[0.99] active:bg-content-muted motion-reduce:transition-none motion-reduce:active:scale-100"
                   >
                     <Github aria-hidden="true" className="h-[18px] w-[18px]" />
                     Continue with GitHub
                     <ArrowRight
                       aria-hidden="true"
-                      className="h-4 w-4 text-gray-500 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-gray-900 motion-reduce:transition-none"
+                      className="h-4 w-4 text-current transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-current motion-reduce:transition-none"
                     />
                   </a>
                 ) : (
@@ -386,11 +386,11 @@ export const SignIn: React.FC<Props> = ({ identity, error }) => {
                       </p>
                       <p className="text-[13px] leading-relaxed text-gray-400">
                         Set{' '}
-                        <code className="rounded bg-black/40 px-1.5 py-0.5 font-mono text-[12px] text-gray-200">
+                        <code className="rounded bg-code px-1.5 py-0.5 font-mono text-[12px] text-code-content">
                           GITHUB_CLIENT_ID
                         </code>{' '}
                         and{' '}
-                        <code className="rounded bg-black/40 px-1.5 py-0.5 font-mono text-[12px] text-gray-200">
+                        <code className="rounded bg-code px-1.5 py-0.5 font-mono text-[12px] text-code-content">
                           GITHUB_CLIENT_SECRET
                         </code>{' '}
                         in the server environment, then restart the server.

@@ -57,40 +57,40 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
   const currentStage = run.stages[run.currentStageIndex];
 
   return (
-    <section className="space-y-3 border-y border-white/[0.07] py-4" aria-label="Agent run progress">
+    <section className="space-y-3 border-y border-divider py-4" aria-label="Agent run progress">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-[11px] font-medium text-gray-500">Agent run</p>
-          <div className="mt-1 flex items-center gap-2 text-xs font-medium text-gray-200">
-            {run.status === 'queued' && <Circle className="h-3.5 w-3.5 text-gray-500" />}
-            {run.status === 'running' && <Loader2 className="h-3.5 w-3.5 animate-spin text-cyan-400" />}
-            {run.status === 'completed' && <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />}
-            {run.status === 'failed' && <AlertCircle className="h-3.5 w-3.5 text-rose-400" />}
-            {['awaiting_approval', 'validating'].includes(run.status) && <Circle className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />}
+          <p className="text-[11px] font-medium text-content-muted">Agent run</p>
+          <div className="mt-1 flex items-center gap-2 text-xs font-medium text-content">
+            {run.status === 'queued' && <Circle className="h-3.5 w-3.5 text-content-muted" />}
+            {run.status === 'running' && <Loader2 className="h-3.5 w-3.5 animate-spin text-status-info" />}
+            {run.status === 'completed' && <CheckCircle2 className="h-3.5 w-3.5 text-status-success" />}
+            {run.status === 'failed' && <AlertCircle className="h-3.5 w-3.5 text-status-danger" />}
+            {['awaiting_approval', 'validating'].includes(run.status) && <Circle className="h-3.5 w-3.5 fill-amber-400 text-status-warning" />}
             <span>{statusCopy[run.status]}</span>
           </div>
         </div>
-        <span className="text-xs tabular-nums text-gray-500">{progress}%</span>
+        <span className="text-xs tabular-nums text-content-muted">{progress}%</span>
       </div>
 
-      <div className="h-0.5 overflow-hidden bg-white/[0.08]">
-        <div className="h-full bg-brand-400 transition-all duration-500" style={{ width: `${progress}%` }} />
+      <div className="h-0.5 overflow-hidden bg-surface-raised">
+        <div className="h-full bg-action transition-all duration-500" style={{ width: `${progress}%` }} />
       </div>
 
       <ol className="space-y-2.5">
         {run.stages.map(stage => (
           <li key={stage.id} className="flex items-start gap-2.5 text-[11px]">
-            {stage.status === 'success' && <Check className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-emerald-400" />}
-            {stage.status === 'running' && <Loader2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 animate-spin text-cyan-400" />}
-            {stage.status === 'failed' && <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-rose-400" />}
-            {stage.status === 'cancelled' && <Square className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-500" />}
-            {stage.status === 'skipped' && <MinusCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-amber-400" />}
-            {stage.status === 'pending' && <Circle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-gray-700" />}
+            {stage.status === 'success' && <Check className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-status-success" />}
+            {stage.status === 'running' && <Loader2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 animate-spin text-status-info" />}
+            {stage.status === 'failed' && <AlertCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-status-danger" />}
+            {stage.status === 'cancelled' && <Square className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-muted" />}
+            {stage.status === 'skipped' && <MinusCircle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-status-warning" />}
+            {stage.status === 'pending' && <Circle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-muted" />}
             <div className="min-w-0">
-              <p className={stage.status === 'pending' ? 'text-gray-600' : stage.status === 'skipped' ? 'text-amber-200/80' : 'text-gray-300'}>
+              <p className={stage.status === 'pending' ? 'text-content-muted' : stage.status === 'skipped' ? 'text-status-warning' : 'text-content-secondary'}>
                 {stage.label}{stage.status === 'skipped' ? ' · not verified' : ''}
               </p>
-              {stage.status === 'running' && <p className="mt-0.5 leading-relaxed text-gray-500">{stage.description}</p>}
+              {stage.status === 'running' && <p className="mt-0.5 leading-relaxed text-content-muted">{stage.description}</p>}
             </div>
           </li>
         ))}
@@ -100,16 +100,16 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
 
       {/* PR and Branch Link */}
       {run.prUrl && (
-        <div className="flex items-center justify-between p-2.5 rounded-lg bg-canvas border border-white/5 text-[11px]">
-          <div className="flex items-center gap-1.5 text-gray-400 font-mono">
-            <GitBranch className="h-3.5 w-3.5 text-indigo-400" />
+        <div className="flex items-center justify-between p-2.5 rounded-lg bg-canvas border border-divider text-[11px]">
+          <div className="flex items-center gap-1.5 text-content-secondary font-mono">
+            <GitBranch className="h-3.5 w-3.5 text-status-info" />
             <span className="truncate">{run.branchName || 'feature-branch'}</span>
           </div>
           <a
             href={run.prUrl}
             target="_blank"
             rel="noreferrer"
-            className="flex items-center gap-1 text-brand-400 hover:text-brand-300 font-medium"
+            className="flex items-center gap-1 text-link hover:text-link-hover font-medium"
           >
             <span>View PR</span>
             <ExternalLink className="h-3 w-3" />
@@ -122,16 +122,16 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
           <button
             type="button"
             onClick={() => setLogsOpen(value => !value)}
-            className="flex items-center gap-1 text-[11px] font-medium text-gray-500 transition-colors hover:text-gray-300"
+            className="flex items-center gap-1 text-[11px] font-medium text-content-muted transition-colors hover:text-content-secondary"
             aria-expanded={logsOpen}
           >
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${logsOpen ? 'rotate-180' : ''}`} />
             Run details
           </button>
           {logsOpen && (
-            <div className="mt-2 space-y-1 bg-canvas p-3 font-mono text-[10px] leading-relaxed text-gray-500">
+            <div className="mt-2 space-y-1 bg-canvas p-3 font-mono text-[10px] leading-relaxed text-content-muted">
               {currentStage?.logs.map(log => <p key={log}>{log}</p>)}
-              {run.testSummary && <p className="text-gray-300">{run.testSummary}</p>}
+              {run.testSummary && <p className="text-content-secondary">{run.testSummary}</p>}
               {run.changedFiles ? <p>+{run.insertions || 0} / -{run.deletions || 0} across {run.changedFiles} files</p> : null}
             </div>
           )}
@@ -140,18 +140,18 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
 
       {['queued', 'running'].includes(run.status) && (
         confirmCancel ? (
-          <div className="space-y-2 text-[11px] text-gray-400">
+          <div className="space-y-2 text-[11px] text-content-secondary">
             <p>Cancel this run?</p>
             <div className="flex gap-3">
-              <button type="button" onClick={() => setConfirmCancel(false)} className="text-gray-400 hover:text-white">Keep running</button>
-              <button type="button" onClick={() => cancelPrototypeRun(run.id)} className="text-rose-400 hover:text-rose-300">Cancel run</button>
+              <button type="button" onClick={() => setConfirmCancel(false)} className="text-content-secondary hover:text-content">Keep running</button>
+              <button type="button" onClick={() => cancelPrototypeRun(run.id)} className="text-status-danger hover:text-status-danger">Cancel run</button>
             </div>
           </div>
         ) : (
           <button
             type="button"
             onClick={() => setConfirmCancel(true)}
-            className="text-[11px] font-medium text-gray-500 transition-colors hover:text-rose-300"
+            className="text-[11px] font-medium text-content-muted transition-colors hover:text-status-danger"
           >
             Cancel run
           </button>
@@ -162,7 +162,7 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
         <button
           type="button"
           onClick={() => retryPrototypeRun(run.id)}
-          className="flex items-center gap-1.5 text-[11px] font-medium text-brand-300 transition-colors hover:text-brand-200"
+          className="flex items-center gap-1.5 text-[11px] font-medium text-link transition-colors hover:text-link-hover"
         >
           <RotateCcw className="h-3.5 w-3.5" />
           Retry run
@@ -173,7 +173,7 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
         <button
           type="button"
           onClick={() => setActiveTab('inbox')}
-          className="text-[11px] font-medium text-brand-300 transition-colors hover:text-brand-200"
+          className="text-[11px] font-medium text-link transition-colors hover:text-link-hover"
         >
           Review output in Inbox →
         </button>
@@ -183,7 +183,7 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
         <button
           type="button"
           onClick={() => setActiveTab('deployments')}
-          className="text-[11px] font-medium text-brand-300 transition-colors hover:text-brand-200"
+          className="text-[11px] font-medium text-link transition-colors hover:text-link-hover"
         >
           Open CI/CD validation →
         </button>

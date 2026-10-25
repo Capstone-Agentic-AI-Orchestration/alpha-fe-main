@@ -23,7 +23,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({ id, branches, va
 
   return (
     <div className="flex items-center gap-2">
-      <label htmlFor={id} className="flex items-center gap-1.5 text-[11px] text-gray-500">
+      <label htmlFor={id} className="flex items-center gap-1.5 text-[11px] text-content-muted">
         <GitBranch className="h-3.5 w-3.5" aria-hidden />
         Branch
       </label>
@@ -32,7 +32,7 @@ export const BranchSwitcher: React.FC<BranchSwitcherProps> = ({ id, branches, va
         value={value ?? ''}
         onChange={event => onChange(event.target.value)}
         disabled={disabled || branches.length === 0}
-        className="max-w-[16rem] rounded-lg border border-white/10 bg-surface px-2.5 py-1.5 font-mono text-xs text-white transition-colors focus:border-brand-500 focus:outline-none disabled:opacity-50"
+        className="max-w-[16rem] rounded-lg border border-control bg-surface px-2.5 py-1.5 font-mono text-xs text-content transition-colors focus:border-control focus:outline-none disabled:opacity-50"
       >
         {branches.length === 0 && <option value="">No branches</option>}
         {groups.pipeline.length > 0 && (

@@ -31,6 +31,10 @@ export interface DesktopBridge {
   checkForUpdates?: () => Promise<UpdateCheck>;
   /** The packaged app's own version. The renderer cannot read package.json. */
   appVersion?: () => Promise<string>;
+  /** Personal appearance, persisted by main independently of the engine's random port. */
+  appearanceThemeId?: string;
+  setAppearanceTheme?: (id: string) => Promise<{ themeId: string }>;
+  onAppearanceThemeChanged?: (listener: (id: string) => void) => () => void;
   localPreview?: (action: 'attach' | 'detach' | 'reload' | 'external' | 'stop', value?: { id: string; capability: string; bounds?: { x: number; y: number; width: number; height: number } }) => Promise<unknown>;
 }
 

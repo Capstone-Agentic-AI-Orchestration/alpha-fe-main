@@ -1,0 +1,26 @@
+{
+  "id": "alpha-violet",
+  "name": "Alpha Violet",
+  "description": "Current theme · default",
+  "mode": "dark",
+  "colors": {
+    "canvas": "#09090B",
+    "shell": "#0D0D11",
+    "surface": "#111117",
+    "raised": "#181820",
+    "high": "#20202A",
+    "well": "#060608",
+    "textPrimary": "#F3F4F6",
+    "textSecondary": "#9CA3AF",
+    "textMuted": "#7C8696",
+    "accent": "#8B5CF6",
+    "action": "#7C3AED",
+    "actionHover": "#6D33D1",
+    "link": "#A78BFA",
+    "linkHover": "#B59EFB",
+    "focus": "#A78BFA",
+    "divider": "#29292E",
+    "control": "#707074",
+    "sceneIdle": "#968CC8"
+  }
+}

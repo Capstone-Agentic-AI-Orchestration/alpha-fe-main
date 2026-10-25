@@ -228,39 +228,39 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
   return (
     <div className="space-y-5">
       <div className="grid gap-3 sm:grid-cols-3">
-        <div className="rounded-2xl border border-white/[0.08] bg-surface-200/60 p-4">
-          <div className="flex items-center gap-2 text-gray-500"><Users className="h-4 w-4" /><span className="text-[11px] uppercase tracking-[0.14em]">Members</span></div>
-          <div className="mt-3 text-2xl font-semibold text-white">{members.length}</div>
-          <p className="mt-1 text-[11px] text-gray-500">Active workspace identities</p>
+        <div className="rounded-2xl border border-divider bg-surface/60 p-4">
+          <div className="flex items-center gap-2 text-content-muted"><Users className="h-4 w-4" /><span className="text-[11px] uppercase tracking-[0.14em]">Members</span></div>
+          <div className="mt-3 text-2xl font-semibold text-content">{members.length}</div>
+          <p className="mt-1 text-[11px] text-content-muted">Active workspace identities</p>
         </div>
-        <div className="rounded-2xl border border-white/[0.08] bg-surface-200/60 p-4">
-          <div className="flex items-center gap-2 text-gray-500"><UserRound className="h-4 w-4" /><span className="text-[11px] uppercase tracking-[0.14em]">Developers</span></div>
-          <div className="mt-3 text-2xl font-semibold text-white">{developers.length}</div>
-          <p className="mt-1 text-[11px] text-gray-500">Eligible for project assignment</p>
+        <div className="rounded-2xl border border-divider bg-surface/60 p-4">
+          <div className="flex items-center gap-2 text-content-muted"><UserRound className="h-4 w-4" /><span className="text-[11px] uppercase tracking-[0.14em]">Developers</span></div>
+          <div className="mt-3 text-2xl font-semibold text-content">{developers.length}</div>
+          <p className="mt-1 text-[11px] text-content-muted">Eligible for project assignment</p>
         </div>
-        <div className="rounded-2xl border border-white/[0.08] bg-surface-200/60 p-4">
-          <div className="flex items-center gap-2 text-gray-500"><Shield className="h-4 w-4" /><span className="text-[11px] uppercase tracking-[0.14em]">Control</span></div>
-          <div className="mt-3 text-sm font-semibold text-white">{canManageMembers ? 'Full control' : 'Read only'}</div>
-          <p className="mt-1 text-[11px] text-gray-500">{activeWorkspace?.name ?? 'Active workspace'}</p>
+        <div className="rounded-2xl border border-divider bg-surface/60 p-4">
+          <div className="flex items-center gap-2 text-content-muted"><Shield className="h-4 w-4" /><span className="text-[11px] uppercase tracking-[0.14em]">Control</span></div>
+          <div className="mt-3 text-sm font-semibold text-content">{canManageMembers ? 'Full control' : 'Read only'}</div>
+          <p className="mt-1 text-[11px] text-content-muted">{activeWorkspace?.name ?? 'Active workspace'}</p>
         </div>
       </div>
 
       {mode === 'members' ? (
-        <section className="overflow-hidden rounded-2xl border border-white/[0.08] bg-surface-200/50">
-          <div className="flex items-center justify-between border-b border-white/[0.07] px-5 py-4">
+        <section className="overflow-hidden rounded-2xl border border-divider bg-surface/50">
+          <div className="flex items-center justify-between border-b border-divider px-5 py-4">
             <div>
-              <h3 className="text-sm font-semibold text-white">Members & roles</h3>
-              <p className="mt-1 text-[11px] text-gray-500">Workspace membership controls what a person can discover and use.</p>
+              <h3 className="text-sm font-semibold text-content">Members & roles</h3>
+              <p className="mt-1 text-[11px] text-content-muted">Workspace membership controls what a person can discover and use.</p>
             </div>
-            <span className="rounded-full border border-brand-400/20 bg-brand-500/10 px-2.5 py-1 text-[10px] font-medium text-brand-200">{canManageMembers ? 'Can add and change' : 'Read only'}</span>
+            <span className="rounded-full border border-divider bg-selected px-2.5 py-1 text-[10px] font-medium text-selected-content">{canManageMembers ? 'Can add and change' : 'Read only'}</span>
           </div>
           {canManageMembers && (
-            <div className="border-b border-white/[0.07] bg-white/[0.02] px-5 py-4">
-              <div className="flex items-center gap-2 text-gray-400">
-                <UserPlus className="h-4 w-4 text-brand-300" />
+            <div className="border-b border-divider bg-surface-raised px-5 py-4">
+              <div className="flex items-center gap-2 text-content-secondary">
+                <UserPlus className="h-4 w-4 text-link" />
                 <span className="text-[11px] font-semibold uppercase tracking-[0.14em]">Add someone</span>
               </div>
-              <p className="mt-1 text-[11px] text-gray-500">
+              <p className="mt-1 text-[11px] text-content-muted">
                 They are in the workspace straight away — there is no code to send and nothing for them to accept.
               </p>
               <form
@@ -275,7 +275,7 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
                   value={invitee}
                   onChange={event => setInvitee(event.target.value)}
                   placeholder={candidates.length ? 'GitHub username' : 'GitHub username (type it in)'}
-                  className="min-w-0 flex-1 rounded-xl border border-white/[0.08] bg-surface-100 px-3 py-2.5 text-xs text-white outline-none placeholder:text-gray-600 focus:border-brand-400/50"
+                  className="min-w-0 flex-1 rounded-xl border border-divider bg-surface-raised px-3 py-2.5 text-xs text-content outline-none placeholder:text-content-muted focus:border-control"
                 />
                 <datalist id="workspace-member-candidates">
                   {candidates.map(person => <option key={person.login} value={person.login} />)}
@@ -283,7 +283,7 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
                 <select
                   value={inviteeRole}
                   onChange={event => setInviteeRole(event.target.value as UserRole)}
-                  className="rounded-xl border border-white/[0.08] bg-surface-100 px-3 py-2.5 text-xs text-white outline-none focus:border-brand-400/50"
+                  className="rounded-xl border border-divider bg-surface-raised px-3 py-2.5 text-xs text-content outline-none focus:border-control"
                 >
                   {/* Only an admin may make another admin; the server refuses the rest. */}
                   {(['dev', 'pm', 'client', ...(role === 'admin' ? ['admin' as UserRole] : [])] as UserRole[]).map(option => (
@@ -293,64 +293,64 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
                 <button
                   type="submit"
                   disabled={adding || !invitee.trim()}
-                  className="rounded-xl bg-brand-500 px-4 py-2.5 text-xs font-medium text-on-accent transition-opacity disabled:opacity-40"
+                  className="rounded-xl bg-action px-4 py-2.5 text-xs font-medium text-on-action transition-opacity disabled:opacity-40"
                 >
                   {adding ? 'Adding…' : 'Add'}
                 </button>
               </form>
               {candidateError && (
-                <p className="mt-2 text-[11px] text-amber-300/80">
+                <p className="mt-2 text-[11px] text-status-warning">
                   Could not list the organisation’s people ({candidateError}). Type a GitHub username instead.
                 </p>
               )}
 
               <div className="mt-5">
-                <div className="flex items-center gap-2 text-gray-400">
-                  <Users className="h-4 w-4 text-brand-300" />
+                <div className="flex items-center gap-2 text-content-secondary">
+                  <Users className="h-4 w-4 text-link" />
                   <span className="text-[11px] font-semibold uppercase tracking-[0.14em]">GitHub teams</span>
                 </div>
-                <p className="mt-1 text-[11px] text-gray-500">
+                <p className="mt-1 text-[11px] text-content-muted">
                   Everyone in the organisation’s teams, and whether they are in this workspace yet.
                 </p>
                 {teamsLoading ? (
-                  <div className="mt-3 text-[11px] text-gray-500">Loading teams…</div>
+                  <div className="mt-3 text-[11px] text-content-muted">Loading teams…</div>
                 ) : teamsError ? (
-                  <p className="mt-3 text-[11px] text-amber-300/80">Could not read the GitHub teams ({teamsError}).</p>
+                  <p className="mt-3 text-[11px] text-status-warning">Could not read the GitHub teams ({teamsError}).</p>
                 ) : teams.length === 0 ? (
-                  <p className="mt-3 text-[11px] text-gray-500">No teams in the organisation grant an Alpha role.</p>
+                  <p className="mt-3 text-[11px] text-content-muted">No teams in the organisation grant an Alpha role.</p>
                 ) : (
                   <div className="mt-3 space-y-3">
                     {teams.map(team => {
                       const joined = team.members.filter(person => person.workspaceRole).length;
                       return (
-                        <div key={team.slug} className="overflow-hidden rounded-xl border border-white/[0.08] bg-surface-100/60">
-                          <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-3.5 py-2.5">
+                        <div key={team.slug} className="overflow-hidden rounded-xl border border-divider bg-surface-raised/60">
+                          <div className="flex items-center justify-between gap-3 border-b border-divider px-3.5 py-2.5">
                             <div className="min-w-0">
-                              <div className="truncate text-xs font-semibold text-white">{team.name}</div>
-                              <div className="mt-0.5 text-[10px] text-gray-500">@{team.slug} · grants {ROLE_LABEL[team.role]}</div>
+                              <div className="truncate text-xs font-semibold text-content">{team.name}</div>
+                              <div className="mt-0.5 text-[10px] text-content-muted">@{team.slug} · grants {ROLE_LABEL[team.role]}</div>
                             </div>
-                            <span className="flex-shrink-0 text-[10px] tabular-nums text-gray-500">
+                            <span className="flex-shrink-0 text-[10px] tabular-nums text-content-muted">
                               {joined} of {team.members.length} here
                             </span>
                           </div>
                           {team.members.length === 0 ? (
-                            <div className="px-3.5 py-3 text-[11px] text-gray-500">Nobody in this team yet.</div>
+                            <div className="px-3.5 py-3 text-[11px] text-content-muted">Nobody in this team yet.</div>
                           ) : (
-                            <div className="divide-y divide-white/[0.05]">
+                            <div className="divide-y divide-divider">
                               {team.members.map(person => {
                                 const joinAs = defaultRoleFor(team.role, role);
                                 return (
                                   <div key={person.login} className="flex items-center gap-3 px-3.5 py-2">
                                     {person.avatarUrl ? (
-                                      <img src={person.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover ring-1 ring-white/10" />
+                                      <img src={person.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover ring-1 ring-content/10" />
                                     ) : (
-                                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-[10px] font-semibold text-gray-300">
+                                      <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-raised text-[10px] font-semibold text-content-secondary">
                                         {person.login.slice(0, 1).toUpperCase()}
                                       </span>
                                     )}
-                                    <span className="min-w-0 flex-1 truncate text-xs text-white">{person.login}</span>
+                                    <span className="min-w-0 flex-1 truncate text-xs text-content">{person.login}</span>
                                     {person.workspaceRole ? (
-                                      <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300">
+                                      <span className="rounded-full bg-status-success-subtle px-2 py-0.5 text-[10px] text-status-success">
                                         Here · {ROLE_LABEL[person.workspaceRole]}
                                       </span>
                                     ) : (
@@ -358,7 +358,7 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
                                         type="button"
                                         disabled={adding}
                                         onClick={() => void addMember(person.login, joinAs)}
-                                        className="rounded-lg border border-brand-400/25 bg-brand-500/10 px-2.5 py-1 text-[10px] font-medium text-brand-200 transition-colors hover:bg-brand-500/20 disabled:opacity-40"
+                                        className="rounded-lg border border-divider bg-selected px-2.5 py-1 text-[10px] font-medium text-selected-content transition-colors hover:bg-selected disabled:opacity-40"
                                       >
                                         Add as {ROLE_LABEL[joinAs]}
                                       </button>
@@ -377,57 +377,57 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
             </div>
           )}
           {loading ? (
-            <div className="px-5 py-10 text-center text-xs text-gray-500">Loading workspace members…</div>
+            <div className="px-5 py-10 text-center text-xs text-content-muted">Loading workspace members…</div>
           ) : members.length === 0 ? (
-            <div className="px-5 py-10 text-center text-xs text-gray-500">No active members found.</div>
+            <div className="px-5 py-10 text-center text-xs text-content-muted">No active members found.</div>
           ) : (
-            <div className="divide-y divide-white/[0.05]">
+            <div className="divide-y divide-divider">
               {members.map(member => (
                 <div key={member.id} className="flex items-center gap-3 px-5 py-3.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.06] text-xs font-semibold text-gray-300">{member.userId.slice(0, 1).toUpperCase()}</div>
+                  <div className="flex h-8 w-8 items-center justify-center rounded-full border border-divider bg-surface-raised text-xs font-semibold text-content-secondary">{member.userId.slice(0, 1).toUpperCase()}</div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-medium text-white">{member.userId}</div>
-                    <div className="mt-0.5 text-[11px] text-gray-500">Added {new Date(member.createdAt).toLocaleDateString()}</div>
+                    <div className="truncate text-xs font-medium text-content">{member.userId}</div>
+                    <div className="mt-0.5 text-[11px] text-content-muted">Added {new Date(member.createdAt).toLocaleDateString()}</div>
                   </div>
                   {canManageMembers ? (
                     <select
                       value={member.role}
                       onChange={event => void updateMemberRole(member, event.target.value as UserRole)}
-                      className="rounded-lg border border-white/[0.08] bg-surface-100 px-2.5 py-1.5 text-[11px] text-gray-200 outline-none focus:border-brand-400/50"
+                      className="rounded-lg border border-divider bg-surface-raised px-2.5 py-1.5 text-[11px] text-content outline-none focus:border-control"
                     >
                       {(['client', 'dev', 'pm', 'admin'] as UserRole[]).map(role => <option key={role} value={role}>{ROLE_LABEL[role]}</option>)}
                     </select>
                   ) : (
-                    <span className="rounded-full bg-white/[0.06] px-2.5 py-1 text-[11px] text-gray-300">{ROLE_LABEL[member.role]}</span>
+                    <span className="rounded-full bg-surface-raised px-2.5 py-1 text-[11px] text-content-secondary">{ROLE_LABEL[member.role]}</span>
                   )}
-                  <span className={`hidden rounded-full px-2 py-1 text-[10px] sm:inline-flex ${member.status === 'active' ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/[0.06] text-gray-500'}`}>{member.status}</span>
+                  <span className={`hidden rounded-full px-2 py-1 text-[10px] sm:inline-flex ${member.status === 'active' ? 'bg-status-success-subtle text-status-success' : 'bg-surface-raised text-content-muted'}`}>{member.status}</span>
                 </div>
               ))}
             </div>
           )}
         </section>
       ) : (
-        <section className="rounded-2xl border border-white/[0.08] bg-surface-200/50">
-          <div className="border-b border-white/[0.07] px-5 py-4">
-            <div className="flex items-center gap-2"><FolderKanban className="h-4 w-4 text-brand-300" /><h3 className="text-sm font-semibold text-white">Project access</h3></div>
-            <p className="mt-1 text-[11px] text-gray-500">Developers see only projects with an active assignment. There is no workspace-wide fallback.</p>
+        <section className="rounded-2xl border border-divider bg-surface/50">
+          <div className="border-b border-divider px-5 py-4">
+            <div className="flex items-center gap-2"><FolderKanban className="h-4 w-4 text-link" /><h3 className="text-sm font-semibold text-content">Project access</h3></div>
+            <p className="mt-1 text-[11px] text-content-muted">Developers see only projects with an active assignment. There is no workspace-wide fallback.</p>
           </div>
-          <div className="border-b border-white/[0.07] px-5 py-4">
-            <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.14em] text-gray-500">Selected project</label>
+          <div className="border-b border-divider px-5 py-4">
+            <label className="mb-2 block text-[10px] font-semibold uppercase tracking-[0.14em] text-content-muted">Selected project</label>
             <select
               value={selectedProjectId}
               onChange={event => setSelectedProjectId(event.target.value)}
-              className="w-full rounded-xl border border-white/[0.08] bg-surface-100 px-3 py-2.5 text-xs text-white outline-none focus:border-brand-400/50"
+              className="w-full rounded-xl border border-divider bg-surface-raised px-3 py-2.5 text-xs text-content outline-none focus:border-control"
             >
               {projects.map(project => <option key={project.id} value={project.id}>{project.name} · {project.key}</option>)}
             </select>
           </div>
           {!selectedProject ? (
-            <div className="px-5 py-10 text-center text-xs text-gray-500">No workspace projects available.</div>
+            <div className="px-5 py-10 text-center text-xs text-content-muted">No workspace projects available.</div>
           ) : developers.length === 0 ? (
-            <div className="px-5 py-10 text-center text-xs text-gray-500">No active developers are available to assign.</div>
+            <div className="px-5 py-10 text-center text-xs text-content-muted">No active developers are available to assign.</div>
           ) : (
-            <div className="divide-y divide-white/[0.05]">
+            <div className="divide-y divide-divider">
               {developers.map(member => {
                 const assigned = activeAssignments.has(member.userId);
                 return (
@@ -436,19 +436,19 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
                     type="button"
                     disabled={!canManageMembers || assignmentLoading}
                     onClick={() => void toggleProjectAccess(member.userId)}
-                    className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.03] disabled:cursor-default disabled:hover:bg-transparent"
+                    className="flex w-full items-center gap-3 px-5 py-3.5 text-left transition-colors hover:bg-surface-high disabled:cursor-default disabled:hover:bg-transparent"
                   >
-                    <span className={`flex h-7 w-7 items-center justify-center rounded-lg border ${assigned ? 'border-brand-400/30 bg-brand-500/15 text-brand-200' : 'border-white/[0.08] bg-white/[0.04] text-gray-500'}`}>
+                    <span className={`flex h-7 w-7 items-center justify-center rounded-lg border ${assigned ? 'border-divider bg-selected text-selected-content' : 'border-divider bg-surface-raised text-content-muted'}`}>
                       {assigned ? <Check className="h-3.5 w-3.5" /> : <UserRound className="h-3.5 w-3.5" />}
                     </span>
-                    <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-white">{member.userId}</span><span className="block text-[11px] text-gray-500">Developer</span></span>
-                    <span className={`text-[11px] ${assigned ? 'text-brand-200' : 'text-gray-600'}`}>{assigned ? 'Assigned' : canManageMembers ? 'Assign' : 'Not assigned'}</span>
+                    <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium text-content">{member.userId}</span><span className="block text-[11px] text-content-muted">Developer</span></span>
+                    <span className={`text-[11px] ${assigned ? 'text-link' : 'text-content-muted'}`}>{assigned ? 'Assigned' : canManageMembers ? 'Assign' : 'Not assigned'}</span>
                   </button>
                 );
               })}
             </div>
           )}
-          {!canManageMembers && <div className="flex items-center gap-2 border-t border-white/[0.07] px-5 py-3 text-[11px] text-gray-500"><LockKeyhole className="h-3.5 w-3.5" />Project assignments are managed by workspace admins.</div>}
+          {!canManageMembers && <div className="flex items-center gap-2 border-t border-divider px-5 py-3 text-[11px] text-content-muted"><LockKeyhole className="h-3.5 w-3.5" />Project assignments are managed by workspace admins.</div>}
         </section>
       )}
     </div>

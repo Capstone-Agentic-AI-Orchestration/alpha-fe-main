@@ -123,12 +123,12 @@ export const GitHubConnectionPanel: React.FC = () => {
   const envInUse = auth?.authenticated && auth.tokenSource === 'env';
 
   return (
-    <div className="p-6 rounded-2xl bg-surface-200/50 border border-white/10 space-y-5">
+    <div className="p-6 rounded-2xl bg-surface/50 border border-divider space-y-5">
       <div className="flex items-start gap-3">
-        <Github className="w-5 h-5 text-white mt-0.5 flex-shrink-0" />
+        <Github className="w-5 h-5 text-content mt-0.5 flex-shrink-0" />
         <div className="flex-1 min-w-0">
-          <h3 className="text-sm font-semibold text-white">GitHub</h3>
-          <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+          <h3 className="text-sm font-semibold text-content">GitHub</h3>
+          <p className="text-xs text-content-secondary mt-1 leading-relaxed">
             Required for creating project repositories, cloning, and pull requests.
             Alpha uses the GitHub account you explicitly confirmed in the profile
             picker, so the active role and repository access stay aligned.
@@ -136,11 +136,11 @@ export const GitHubConnectionPanel: React.FC = () => {
         </div>
 
         {auth?.authenticated ? (
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 rounded-full px-3 py-1 flex-shrink-0">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-status-success bg-status-success-subtle border border-status-success-border rounded-full px-3 py-1 flex-shrink-0">
             <CheckCircle2 className="w-3.5 h-3.5" /> Connected
           </span>
         ) : (
-          <span className="flex items-center gap-1.5 text-xs font-semibold text-gray-400 bg-white/5 border border-white/10 rounded-full px-3 py-1 flex-shrink-0">
+          <span className="flex items-center gap-1.5 text-xs font-semibold text-content-secondary bg-surface-raised border border-divider rounded-full px-3 py-1 flex-shrink-0">
             Not connected
           </span>
         )}
@@ -148,19 +148,19 @@ export const GitHubConnectionPanel: React.FC = () => {
 
       {/* --- GitHub CLI not installed: the first-run state for a teammate --- */}
       {auth?.cliMissing && (
-        <div className="rounded-lg bg-amber-400/10 border border-amber-400/20 p-3 space-y-2">
-          <p className="text-xs text-amber-200 leading-relaxed">
+        <div className="rounded-lg bg-status-warning-subtle border border-status-warning-border p-3 space-y-2">
+          <p className="text-xs text-status-warning leading-relaxed">
             GitHub CLI isn&apos;t installed on this machine. Alpha uses it to sign you in,
             so nothing is stored here — install it once, then come back to this page.
           </p>
-          <code className="block text-[11px] font-mono text-amber-100 bg-black/30 rounded px-2 py-1.5 select-all">
+          <code className="block text-[11px] font-mono text-status-warning bg-well rounded px-2 py-1.5 select-all">
             winget install GitHub.cli
           </code>
           <a
             href="https://cli.github.com"
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-300 hover:text-amber-200"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-status-warning hover:text-status-warning"
           >
             Or download from cli.github.com
             <ExternalLink className="w-3.5 h-3.5" />
@@ -170,23 +170,23 @@ export const GitHubConnectionPanel: React.FC = () => {
 
       {/* --- An environment variable is overriding the keyring --- */}
       {envBlocked && (
-        <div className="rounded-lg bg-red-500/10 border border-red-500/25 p-3 space-y-2">
-          <p className="text-xs text-red-200 leading-relaxed">
+        <div className="rounded-lg bg-status-danger-subtle border border-status-danger-border p-3 space-y-2">
+          <p className="text-xs text-status-danger leading-relaxed">
             <strong>{auth?.envVarName}</strong> is set in this machine&apos;s environment
             and holds a token GitHub rejected. It takes priority over any saved sign-in,
             so connecting again will not help until it is cleared.
           </p>
-          <code className="block text-[11px] font-mono text-red-100 bg-black/30 rounded px-2 py-1.5 select-all">
+          <code className="block text-[11px] font-mono text-status-danger bg-well rounded px-2 py-1.5 select-all">
             PowerShell: Remove-Item Env:\{auth?.envVarName}
           </code>
-          <p className="text-[11px] text-gray-400">
+          <p className="text-[11px] text-content-secondary">
             Then restart Alpha so it no longer inherits the variable.
           </p>
         </div>
       )}
 
       {envInUse && (
-        <p className="text-xs text-gray-400 bg-white/5 border border-white/10 rounded-lg px-3 py-2 leading-relaxed">
+        <p className="text-xs text-content-secondary bg-surface-raised border border-divider rounded-lg px-3 py-2 leading-relaxed">
           Signed in from the <strong className="font-mono">{auth?.envVarName}</strong> environment
           variable rather than a saved sign-in. Disconnect will not remove it — clear the
           variable instead.
@@ -198,17 +198,17 @@ export const GitHubConnectionPanel: React.FC = () => {
         <div className="space-y-4">
           <div className="flex flex-wrap gap-x-8 gap-y-2 text-xs">
             <div>
-              <div className="text-gray-500 uppercase tracking-wider text-[10px] font-semibold">Account</div>
-              <div className="text-white font-mono mt-0.5">{auth.username ?? 'unknown'}</div>
+              <div className="text-content-muted uppercase tracking-wider text-[10px] font-semibold">Account</div>
+              <div className="text-content font-mono mt-0.5">{auth.username ?? 'unknown'}</div>
             </div>
             <div>
-              <div className="text-gray-500 uppercase tracking-wider text-[10px] font-semibold">Git protocol</div>
-              <div className="text-white font-mono mt-0.5">{auth.protocol ?? 'https'}</div>
+              <div className="text-content-muted uppercase tracking-wider text-[10px] font-semibold">Git protocol</div>
+              <div className="text-content font-mono mt-0.5">{auth.protocol ?? 'https'}</div>
             </div>
           </div>
 
           <div>
-            <div className="text-gray-500 uppercase tracking-wider text-[10px] font-semibold mb-2">
+            <div className="text-content-muted uppercase tracking-wider text-[10px] font-semibold mb-2">
               Permissions
             </div>
             <div className="space-y-1.5">
@@ -217,12 +217,12 @@ export const GitHubConnectionPanel: React.FC = () => {
                 return (
                   <div key={scope.id} className="flex items-start gap-2 text-xs">
                     {ok ? (
-                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 mt-0.5 flex-shrink-0" />
+                      <CheckCircle2 className="w-3.5 h-3.5 text-status-success mt-0.5 flex-shrink-0" />
                     ) : (
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-400 mt-0.5 flex-shrink-0" />
+                      <AlertTriangle className="w-3.5 h-3.5 text-status-warning mt-0.5 flex-shrink-0" />
                     )}
-                    <span className={`font-mono ${ok ? 'text-gray-300' : 'text-amber-300'}`}>{scope.id}</span>
-                    <span className="text-gray-500">— {scope.reason}</span>
+                    <span className={`font-mono ${ok ? 'text-content-secondary' : 'text-status-warning'}`}>{scope.id}</span>
+                    <span className="text-content-muted">— {scope.reason}</span>
                   </div>
                 );
               })}
@@ -230,14 +230,14 @@ export const GitHubConnectionPanel: React.FC = () => {
           </div>
 
           {missing.length > 0 && (
-            <div className="rounded-lg bg-amber-400/10 border border-amber-400/20 p-3 space-y-2">
-              <p className="text-xs text-amber-200 leading-relaxed">
+            <div className="rounded-lg bg-status-warning-subtle border border-status-warning-border p-3 space-y-2">
+              <p className="text-xs text-status-warning leading-relaxed">
                 <strong>{missing.map(m => m.id).join(', ')}</strong>{' '}
                 {missing.length === 1 ? 'is' : 'are'} missing. Features that need{' '}
                 {missing.length === 1 ? 'it' : 'them'} will fail until you grant{' '}
                 {missing.length === 1 ? 'it' : 'them'}.
               </p>
-              <code className="block text-[11px] font-mono text-amber-100 bg-black/30 rounded px-2 py-1.5 select-all">
+              <code className="block text-[11px] font-mono text-status-warning bg-well rounded px-2 py-1.5 select-all">
                 gh auth refresh -h github.com -s {missing.map(m => m.id).join(',')}
               </code>
             </div>
@@ -247,7 +247,7 @@ export const GitHubConnectionPanel: React.FC = () => {
             type="button"
             onClick={disconnect}
             disabled={busy}
-            className="flex items-center gap-2 text-xs font-semibold text-gray-300 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 text-xs font-semibold text-content-secondary hover:text-content bg-surface-raised hover:bg-surface-high border border-divider rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
           >
             <LogOut className="w-3.5 h-3.5" />
             Sign out of this profile
@@ -257,24 +257,24 @@ export const GitHubConnectionPanel: React.FC = () => {
 
       {/* --- GitHub authorization in flight --- */}
       {pending && (
-        <div className="rounded-lg bg-brand-500/10 border border-brand-500/30 p-4 space-y-3">
-          <p className="text-xs text-gray-300">
+        <div className="rounded-lg bg-selected border border-divider p-4 space-y-3">
+          <p className="text-xs text-content-secondary">
             {pending.flow === 'oauth'
               ? 'Choose the GitHub account you want to use and approve Alpha. This panel updates itself once you&apos;re done.'
               : 'Enter this one-time code on GitHub. This panel updates itself once you&apos;re done.'}
           </p>
           {pending.flow !== 'oauth' && pending.code && (
             <div className="flex items-center gap-2">
-              <code className="text-lg font-mono font-bold tracking-[0.2em] text-white bg-black/40 rounded-lg px-4 py-2 select-all">
+              <code className="text-lg font-mono font-bold tracking-[0.2em] text-content bg-well rounded-lg px-4 py-2 select-all">
                 {pending.code}
               </code>
               <button
                 type="button"
                 onClick={copyCode}
                 aria-label="Copy code"
-                className="p-2 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white transition-colors"
+                className="p-2 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-content-secondary hover:text-content transition-colors"
               >
-                {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
+                {copied ? <Check className="w-4 h-4 text-status-success" /> : <Copy className="w-4 h-4" />}
               </button>
             </div>
           )}
@@ -282,12 +282,12 @@ export const GitHubConnectionPanel: React.FC = () => {
             href={pending.verificationUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-400 hover:text-brand-300"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-link hover:text-link-hover"
           >
             Open {pending.verificationUrl.replace('https://', '')}
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
+          <div className="flex items-center gap-2 text-xs text-content-muted">
             <Loader2 className="w-3.5 h-3.5 animate-spin" />
             Waiting for you to approve…
           </div>
@@ -300,7 +300,7 @@ export const GitHubConnectionPanel: React.FC = () => {
           type="button"
           onClick={connect}
           disabled={busy}
-          className="flex items-center gap-2 text-xs font-semibold text-on-accent bg-brand-500 hover:bg-brand-600 rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 text-xs font-semibold text-on-action bg-action hover:bg-action-hover rounded-lg px-4 py-2.5 transition-colors disabled:opacity-50"
         >
           {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Github className="w-4 h-4" />}
           Connect to GitHub
@@ -308,13 +308,13 @@ export const GitHubConnectionPanel: React.FC = () => {
       )}
 
       {error && (
-        <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+        <p className="text-xs text-status-danger bg-status-danger-subtle border border-status-danger-border rounded-lg px-3 py-2">
           {error}
         </p>
       )}
 
       {auth === null && !error && (
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-content-muted">
           Can&apos;t reach the local engine — GitHub status is unavailable.
         </p>
       )}

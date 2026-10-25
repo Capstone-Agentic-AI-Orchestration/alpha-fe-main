@@ -1,0 +1,26 @@
+{
+  "id": "ember",
+  "name": "Ember",
+  "description": "Warm charcoal · copper accents",
+  "mode": "dark",
+  "colors": {
+    "canvas": "#15100E",
+    "shell": "#1C1512",
+    "surface": "#241B16",
+    "raised": "#30231C",
+    "high": "#2C211A",
+    "well": "#0F0B0A",
+    "textPrimary": "#F5EEE8",
+    "textSecondary": "#C7B6AA",
+    "textMuted": "#B39B8B",
+    "accent": "#D99058",
+    "action": "#B45309",
+    "actionHover": "#9E4908",
+    "link": "#FBBF79",
+    "linkHover": "#FCC98E",
+    "focus": "#FBBF79",
+    "divider": "#4C392D",
+    "control": "#7C7673",
+    "sceneIdle": "#BEA088"
+  }
+}

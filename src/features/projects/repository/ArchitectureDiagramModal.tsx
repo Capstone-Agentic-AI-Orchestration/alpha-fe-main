@@ -123,7 +123,7 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
   const byId = new Map(layout.nodes.map(node => [node.id, node]));
 
   return (
-    <div className="relative flex min-h-0 flex-1 overflow-auto bg-[#080d14]">
+    <div className="relative flex min-h-0 flex-1 overflow-auto bg-well">
       <svg
         width={layout.width}
         height={layout.height}
@@ -135,10 +135,10 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
       >
         <defs>
           <pattern id="architecture-dots" width="24" height="24" patternUnits="userSpaceOnUse">
-            <circle cx="1.1" cy="1.1" r="1" fill="#233043" opacity=".52" />
+            <circle cx="1.1" cy="1.1" r="1" fill="rgb(var(--ui-control))" opacity=".52" />
           </pattern>
           <marker id="architecture-arrow" markerWidth="10" markerHeight="8" refX="8" refY="4" orient="auto" markerUnits="strokeWidth">
-            <path d="M0,0 L8,4 L0,8 Z" fill="#a8bddb" />
+            <path d="M0,0 L8,4 L0,8 Z" fill="rgb(var(--ui-text-muted))" />
           </marker>
         </defs>
         <rect width={layout.width} height={layout.height} fill="url(#architecture-dots)" />
@@ -161,7 +161,7 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
               key={edge.from + '-' + edge.to + '-' + index}
               d={'M ' + startX + ' ' + startY + ' C ' + firstControl + ' ' + startY + ', ' + secondControl + ' ' + endY + ', ' + endX + ' ' + endY}
               fill="none"
-              stroke="#9cb1d0"
+              stroke="rgb(var(--ui-text-muted))"
               strokeWidth="2.2"
               markerEnd="url(#architecture-arrow)"
               opacity=".92"
@@ -193,10 +193,10 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
               </foreignObject>
               <foreignObject x={node.x + 72} y={node.y + 15} width={NODE_WIDTH - 86} height={NODE_HEIGHT - 24}>
                 <div className="flex h-full flex-col justify-center overflow-hidden" title={node.label + ' — ' + metadata}>
-                  <span className="block truncate text-[15px] font-semibold text-slate-100">{node.label}</span>
-                  <span className="mt-1 block truncate text-xs text-slate-400">{metadata}</span>
+                  <span className="block truncate text-[15px] font-semibold text-content">{node.label}</span>
+                  <span className="mt-1 block truncate text-xs text-content-secondary">{metadata}</span>
                   {node.path && (
-                    <span className="mt-1 block truncate font-mono text-[10px] text-slate-500">{node.path}</span>
+                    <span className="mt-1 block truncate font-mono text-[10px] text-content-muted">{node.path}</span>
                   )}
                 </div>
               </foreignObject>
@@ -205,7 +205,7 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
         })}
       </svg>
       {diagram.truncated && (
-        <p className="sticky bottom-4 left-4 mt-auto w-max max-w-[90%] rounded-lg border border-amber-300/20 bg-black/70 px-3 py-2 text-[11px] text-amber-100/80">
+        <p className="sticky bottom-4 left-4 mt-auto w-max max-w-[90%] rounded-lg border border-status-warning-border bg-well px-3 py-2 text-[11px] text-status-warning">
           Large repository: the diagram uses a representative source sample.
         </p>
       )}
@@ -234,15 +234,15 @@ export const ArchitectureDiagramModal: React.FC<ArchitectureDiagramModalProps> =
   const [owner, name] = repository.split('/');
   const headerMeta = diagram && (
     <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-      <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-[#101722] px-2.5 py-1.5 text-slate-100">
+      <span className="inline-flex items-center gap-2 rounded-xl border border-divider bg-surface-raised px-2.5 py-1.5 text-content">
         <Github className="h-4 w-4" />
         <span>{owner}/{name}</span>
       </span>
-      <span className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-[#101722] px-2.5 py-1.5 text-sky-300">
+      <span className="inline-flex items-center gap-2 rounded-xl border border-divider bg-surface-raised px-2.5 py-1.5 text-status-info">
         <GitBranch className="h-4 w-4" />
         <span>{diagram.branch}</span>
       </span>
-      <span className="rounded-xl border border-white/10 bg-[#101722] px-2.5 py-1.5 font-mono text-slate-400" title={diagram.commit}>
+      <span className="rounded-xl border border-divider bg-surface-raised px-2.5 py-1.5 font-mono text-content-secondary" title={diagram.commit}>
         {diagram.commit.slice(0, 7)}
       </span>
     </div>
@@ -256,21 +256,21 @@ export const ArchitectureDiagramModal: React.FC<ArchitectureDiagramModalProps> =
       headerMeta={headerMeta}
       maxWidth="max-w-[1440px]"
       dialogClassName="h-[84vh]"
-      contentClassName="flex min-h-0 flex-1 flex-col overflow-hidden bg-[#080d14] p-0"
+      contentClassName="flex min-h-0 flex-1 flex-col overflow-hidden bg-well p-0"
     >
       {loading ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-[#080d14] text-sm text-slate-300" aria-live="polite">
-          <LoaderCircle className="h-7 w-7 animate-spin text-brand-400" />
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-well text-sm text-content-secondary" aria-live="polite">
+          <LoaderCircle className="h-7 w-7 animate-spin text-link" />
           <span>Analyzing the current repository commit…</span>
         </div>
       ) : error ? (
-        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-[#080d14] px-6 text-center" role="alert">
-          <CircleAlert className="h-8 w-8 text-rose-300" />
-          <p className="max-w-xl text-sm text-slate-200">{error}</p>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 bg-well px-6 text-center" role="alert">
+          <CircleAlert className="h-8 w-8 text-status-danger" />
+          <p className="max-w-xl text-sm text-content">{error}</p>
           <button
             type="button"
             onClick={() => setAttempt(value => value + 1)}
-            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-slate-100 transition-colors hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-lg border border-divider bg-surface-raised px-3 py-2 text-xs font-medium text-content transition-colors hover:bg-surface-high"
           >
             <RefreshCw className="h-3.5 w-3.5" />
             Try again

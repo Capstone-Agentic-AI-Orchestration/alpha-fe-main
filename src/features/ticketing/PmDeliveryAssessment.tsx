@@ -86,26 +86,26 @@ export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onA
   }
   const inspected = manifest !== null && manifest.files.every(file => read.includes(file.id));
   const available = canAssessTicketDelivery(ticket, clientAccessActive);
-  return <section aria-label="PM result assessment" className="border-b border-white/[0.07] p-4 md:p-5">
-    <h3 className="text-sm font-medium text-gray-100">Review a prepared result</h3>
-    <p className="mt-2 text-[11px] leading-relaxed text-gray-500">These protected candidates are not approved or visible to the client. Inspect the files and client-facing summary against the agreed work.</p>
-    {loading && <p role="status" className="mt-3 text-xs text-gray-500">Checking prepared results…</p>}
-    {!loading && !error && candidates.length === 0 && <p className="mt-3 text-xs text-gray-500">No verified delivery is prepared yet. Completing tasks alone does not create a client delivery.</p>}
-    {error && <p role="alert" className="mt-3 text-xs text-amber-200/80">{error}</p>}
-    {candidates.length > 0 && <label className="mt-3 block text-xs text-gray-300">Prepared result<select aria-label="Prepared result" className={`${input} mt-2`} value={selectedId} disabled={disabled || downloading !== null} onChange={event => { setManifest(null); setRead([]); setAcknowledged(false); setSelectedId(event.target.value); setError(''); }}>
+  return <section aria-label="PM result assessment" className="border-b border-divider p-4 md:p-5">
+    <h3 className="text-sm font-medium text-content">Review a prepared result</h3>
+    <p className="mt-2 text-[11px] leading-relaxed text-content-muted">These protected candidates are not approved or visible to the client. Inspect the files and client-facing summary against the agreed work.</p>
+    {loading && <p role="status" className="mt-3 text-xs text-content-muted">Checking prepared results…</p>}
+    {!loading && !error && candidates.length === 0 && <p className="mt-3 text-xs text-content-muted">No verified delivery is prepared yet. Completing tasks alone does not create a client delivery.</p>}
+    {error && <p role="alert" className="mt-3 text-xs text-status-warning">{error}</p>}
+    {candidates.length > 0 && <label className="mt-3 block text-xs text-content-secondary">Prepared result<select aria-label="Prepared result" className={`${input} mt-2`} value={selectedId} disabled={disabled || downloading !== null} onChange={event => { setManifest(null); setRead([]); setAcknowledged(false); setSelectedId(event.target.value); setError(''); }}>
       {candidates.map((candidate, index) => <option key={candidate.id} value={candidate.id}>Result {index + 1} · {candidate.fileCount} file{candidate.fileCount === 1 ? '' : 's'}</option>)}
     </select></label>}
     {cursor && <button className={`${secondary} mt-2`} disabled={disabled || loadingMore} onClick={() => void more()}>{loadingMore ? 'Loading…' : 'More prepared results'}</button>}
-    {selected && <p className="mt-3 whitespace-pre-wrap break-words rounded-lg border border-white/[0.07] p-3 text-xs leading-relaxed text-gray-300">{selected.summary}</p>}
-    {manifestLoading && <p role="status" className="mt-3 text-xs text-gray-500">Checking protected files…</p>}
-    <div className="mt-3 space-y-2">{manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-white/[0.06] p-2">
-      <span className="min-w-0 break-words text-xs text-gray-300">{file.filename}{read.includes(file.id) ? ' · inspected' : ''}</span>
+    {selected && <p className="mt-3 whitespace-pre-wrap break-words rounded-lg border border-divider p-3 text-xs leading-relaxed text-content-secondary">{selected.summary}</p>}
+    {manifestLoading && <p role="status" className="mt-3 text-xs text-content-muted">Checking protected files…</p>}
+    <div className="mt-3 space-y-2">{manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-divider p-2">
+      <span className="min-w-0 break-words text-xs text-content-secondary">{file.filename}{read.includes(file.id) ? ' · inspected' : ''}</span>
       <button className={`${secondary} shrink-0`} disabled={disabled || downloading !== null} aria-label={`Inspect candidate ${file.filename}`} onClick={() => void download(file)}><Download size={12} />{downloading === file.id ? 'Checking…' : 'Inspect file'}</button>
     </div>)}</div>
     {selected && <div className="mt-3 space-y-3">
-      <label className="flex items-start gap-2 text-[11px] text-gray-300"><input type="checkbox" checked={acknowledged} disabled={disabled || !inspected || Boolean(error)} onChange={event => setAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I inspected all result files and the summary, and confirm they match the agreed work and are suitable to share with the client.</label>
+      <label className="flex items-start gap-2 text-[11px] text-content-secondary"><input type="checkbox" checked={acknowledged} disabled={disabled || !inspected || Boolean(error)} onChange={event => setAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I inspected all result files and the summary, and confirm they match the agreed work and are suitable to share with the client.</label>
       <button className={primary} disabled={disabled || !available || !inspected || !acknowledged || Boolean(error) || downloading !== null} onClick={() => { if (selected && inspected && acknowledged && available && !error) void onAssess(selected.id); }}>Approve result for sharing</button>
-      <p className="text-[10px] text-gray-500">This records PM assessment only. Sharing with the client is a separate action. If work needs fixing, use Return affected tasks above.</p>
+      <p className="text-[10px] text-content-muted">This records PM assessment only. Sharing with the client is a separate action. If work needs fixing, use Return affected tasks above.</p>
     </div>}
     {error && <button className={`${secondary} mt-3`} disabled={disabled || downloading !== null || loading} onClick={() => setRetry(value => value + 1)}>Refresh prepared results</button>}
   </section>;

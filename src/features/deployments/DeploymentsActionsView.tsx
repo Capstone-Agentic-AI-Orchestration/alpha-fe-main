@@ -13,7 +13,7 @@ export function DeploymentsActionsView() {
   const repositories = useActionsResource(() => apiService.getProjectRepos(projectId), `${activeWorkspaceId}|${identity?.login}|${projectId}`,
     isActiveTab && Boolean(project));
   return <div className="space-y-4">
-    <label className="block text-xs text-gray-400">Project
+    <label className="block text-xs text-content-secondary">Project
       <select aria-label="Actions project" value={project?.id || ''} onChange={e => setProject(e.target.value)} className={`${actionsInput} mt-2 block max-w-full`}>
         <option value="">Choose a project</option>{projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
       </select>

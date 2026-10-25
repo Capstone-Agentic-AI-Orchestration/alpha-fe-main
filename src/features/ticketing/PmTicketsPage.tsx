@@ -49,7 +49,7 @@ export function PmTicketsPage() {
         className={section === 'inquiries' ? 'is-active' : ''}>New inquiries</button>
     </nav>}
     <div className="pm-ticket-page__content">
-      {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-gray-400">Loading sample tickets…</p>}><SampleTickets /></Suspense>
+      {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-content-secondary">Loading sample tickets…</p>}><SampleTickets /></Suspense>
         : section === 'inquiries' ? <PmCentralIntakeInbox workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? null}
           workspaceCanReview={activeWorkspace?.role === 'pm'}
           onAccepted={reference => { showToast('Inquiry accepted', `${reference} was created in ${activeWorkspace?.name ?? 'your workspace'}. It is now in Tickets; client invitation and access remain separate.`, 'success'); setSection('tickets'); }} />

@@ -1,0 +1,26 @@
+{
+  "id": "slate-blue",
+  "name": "Slate Blue",
+  "description": "Cool slate · clear blue",
+  "mode": "dark",
+  "colors": {
+    "canvas": "#0D1118",
+    "shell": "#111925",
+    "surface": "#172231",
+    "raised": "#1D2B3D",
+    "high": "#1B2839",
+    "well": "#090C11",
+    "textPrimary": "#EEF3FA",
+    "textSecondary": "#A6B5C8",
+    "textMuted": "#93A3B8",
+    "accent": "#3B82F6",
+    "action": "#2563EB",
+    "actionHover": "#2157CF",
+    "link": "#93B4FF",
+    "linkHover": "#A4C0FF",
+    "focus": "#93B4FF",
+    "divider": "#34445A",
+    "control": "#747A83",
+    "sceneIdle": "#93A6C3"
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "dark": {
+    "success": "#6EE7B7",
+    "warning": "#FCD34D",
+    "danger": "#FDA4AF",
+    "info": "#7DD3FC",
+    "overlay": "#000000"
+  },
+  "light": {
+    "success": "#166534",
+    "warning": "#854D0E",
+    "danger": "#B91C1C",
+    "info": "#075985",
+    "overlay": "#172B4D"
+  }
+}

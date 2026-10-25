@@ -5,13 +5,13 @@ import { Search, Bot, FolderKanban, CheckSquare, Cpu, Rocket, ArrowRight, Sparkl
 import { NavigationTab } from '@/shared/types';
 
 export const CommandPalette: React.FC = () => {
-  const { 
-    commandPaletteOpen, 
-    setCommandPaletteOpen, 
-    setActiveTab, 
-    issues, 
-    agents, 
-    projects, 
+  const {
+    commandPaletteOpen,
+    setCommandPaletteOpen,
+    setActiveTab,
+    issues,
+    agents,
+    projects,
     scanLocalRuntimes,
     triggerDeployment,
     visibleTabs,
@@ -36,7 +36,7 @@ export const CommandPalette: React.FC = () => {
       id: `nav-${item.id}`,
       title: item.title,
       subtitle: item.subtitle,
-      icon: navIcon(item.id, 'w-4 h-4 text-gray-400'),
+      icon: navIcon(item.id, 'w-4 h-4 text-content-secondary'),
       tab: item.id
     }));
 
@@ -78,7 +78,7 @@ export const CommandPalette: React.FC = () => {
           id: `iss-${iss.id}`,
           title: `${iss.identifier}: ${iss.title}`,
           subtitle: `Status: ${iss.status.toUpperCase()} • Priority: ${iss.priority.toUpperCase()}`,
-          icon: <CheckSquare className="w-4 h-4 text-indigo-400" />,
+          icon: <CheckSquare className="w-4 h-4 text-status-info" />,
           type: 'Task',
           action: () => {
             setActiveTab('issues');
@@ -95,7 +95,7 @@ export const CommandPalette: React.FC = () => {
           id: `agent-${agent.id}`,
           title: `${agent.name} (${agent.role})`,
           subtitle: `Model: ${agent.modelName} • ${agent.autonomyLevel}`,
-          icon: <Bot className="w-4 h-4 text-cyan-400" />,
+          icon: <Bot className="w-4 h-4 text-status-info" />,
           type: 'Agent',
           action: () => {
             setActiveTab('agents');
@@ -112,7 +112,7 @@ export const CommandPalette: React.FC = () => {
           id: `proj-${proj.id}`,
           title: `Project: ${proj.name} [${proj.key}]`,
           subtitle: `Progress: ${proj.progressPercentage}% • Target: ${proj.targetDate}`,
-          icon: <FolderKanban className="w-4 h-4 text-blue-400" />,
+          icon: <FolderKanban className="w-4 h-4 text-status-info" />,
           type: 'Project',
           action: () => {
             setActiveTab('projects');
@@ -128,7 +128,7 @@ export const CommandPalette: React.FC = () => {
         id: 'action-scan-runtimes',
         title: 'Action: Scan Local AI Runtimes (Ollama/LM Studio)',
         subtitle: 'Auto-detect local models and check ports 11434 / 1234',
-        icon: <Cpu className="w-4 h-4 text-teal-400" />,
+        icon: <Cpu className="w-4 h-4 text-status-success" />,
         type: 'Quick Action',
         action: () => {
           setActiveTab('runtimes');
@@ -184,15 +184,15 @@ export const CommandPalette: React.FC = () => {
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-20 p-4">
-      <div 
+      <div
         className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity animate-fade-in"
         onClick={() => setCommandPaletteOpen(false)}
       />
 
-      <div className="relative w-full max-w-xl bg-surface-100 border border-white/15 rounded-xl shadow-2xl overflow-hidden z-10 animate-slide-up flex flex-col">
+      <div className="relative w-full max-w-xl bg-surface-raised border border-divider rounded-xl shadow-2xl overflow-hidden z-10 animate-slide-up flex flex-col">
         {/* Search input */}
-        <div className="flex items-center px-4 py-3.5 border-b border-white/10 bg-surface-200">
-          <Search className="w-5 h-5 text-gray-400 mr-3" />
+        <div className="flex items-center px-4 py-3.5 border-b border-divider bg-surface">
+          <Search className="w-5 h-5 text-content-secondary mr-3" />
           <input
             type="text"
             value={query}
@@ -201,10 +201,10 @@ export const CommandPalette: React.FC = () => {
               setSelectedIndex(0);
             }}
             placeholder="Type a command, search tasks, agents, or projects..."
-            className="w-full bg-transparent text-white placeholder-gray-500 text-sm focus:outline-none font-medium"
+            className="w-full bg-transparent text-content placeholder-content-muted text-sm focus:outline-none font-medium"
             autoFocus
           />
-          <kbd className="hidden sm:inline-flex items-center px-2 py-0.5 text-[10px] font-mono text-gray-400 bg-white/5 border border-white/10 rounded">
+          <kbd className="hidden sm:inline-flex items-center px-2 py-0.5 text-[10px] font-mono text-content-secondary bg-surface-raised border border-divider rounded">
             ESC
           </kbd>
         </div>
@@ -212,8 +212,8 @@ export const CommandPalette: React.FC = () => {
         {/* Results List */}
         <div className="max-h-[380px] overflow-y-auto p-2 space-y-1">
           {filteredItems.length === 0 ? (
-            <div className="py-12 text-center text-gray-500">
-              <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-30 text-indigo-400" />
+            <div className="py-12 text-center text-content-muted">
+              <Sparkles className="w-8 h-8 mx-auto mb-2 opacity-30 text-status-info" />
               <p className="text-sm">No matching items or commands found.</p>
             </div>
           ) : (
@@ -225,24 +225,24 @@ export const CommandPalette: React.FC = () => {
                   onClick={item.action}
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left transition-all ${
-                    isSelected ? 'bg-brand-500/20 text-white border border-brand-500/40' : 'text-gray-300 hover:bg-white/5 border border-transparent'
+                    isSelected ? 'bg-selected text-selected-content border border-divider' : 'text-content-secondary hover:bg-surface-high border border-transparent'
                   }`}
                 >
                   <div className="flex items-center gap-3 overflow-hidden">
-                    <div className={`p-1.5 rounded-md ${isSelected ? 'bg-brand-500/30' : 'bg-white/5'}`}>
+                    <div className={`p-1.5 rounded-md ${isSelected ? 'bg-selected' : 'bg-surface-raised'}`}>
                       {item.icon}
                     </div>
                     <div className="truncate">
-                      <div className="text-sm font-medium text-white truncate">{item.title}</div>
-                      <div className="text-xs text-gray-400 truncate">{item.subtitle}</div>
+                      <div className="text-sm font-medium text-content truncate">{item.title}</div>
+                      <div className="text-xs text-content-secondary truncate">{item.subtitle}</div>
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2 pl-3">
-                    <span className="text-[10px] uppercase font-mono tracking-wider px-1.5 py-0.5 rounded bg-white/5 text-gray-400 border border-white/5">
+                    <span className="text-[10px] uppercase font-mono tracking-wider px-1.5 py-0.5 rounded bg-surface-raised text-content-secondary border border-divider">
                       {item.type}
                     </span>
-                    {isSelected && <ArrowRight className="w-4 h-4 text-brand-400 animate-pulse" />}
+                    {isSelected && <ArrowRight className="w-4 h-4 text-link animate-pulse" />}
                   </div>
                 </button>
               );
@@ -251,10 +251,10 @@ export const CommandPalette: React.FC = () => {
         </div>
 
         {/* Footer shortcuts */}
-        <div className="flex items-center justify-between px-4 py-2 bg-surface-300/80 border-t border-white/5 text-[11px] text-gray-400">
+        <div className="flex items-center justify-between px-4 py-2 bg-shell/80 border-t border-divider text-[11px] text-content-secondary">
           <div className="flex items-center gap-3">
-            <span><kbd className="font-mono bg-white/5 px-1 py-0.5 rounded">↑↓</kbd> Navigate</span>
-            <span><kbd className="font-mono bg-white/5 px-1 py-0.5 rounded">↵</kbd> Select</span>
+            <span><kbd className="font-mono bg-surface-raised px-1 py-0.5 rounded">↑↓</kbd> Navigate</span>
+            <span><kbd className="font-mono bg-surface-raised px-1 py-0.5 rounded">↵</kbd> Select</span>
           </div>
           <span>Alpha Orchestration Engine</span>
         </div>

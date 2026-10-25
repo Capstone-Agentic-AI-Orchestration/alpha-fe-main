@@ -41,33 +41,33 @@ export const StatusBadge: React.FC<{ status: IssueStatus; className?: string }> 
   const labels: Record<IssueStatus, LabelProps> = {
     backlog: {
       label: 'Backlog',
-      className: 'text-gray-400',
+      className: 'text-content-secondary',
       icon: <Circle className="h-3 w-3" />,
     },
     todo: {
       label: 'Todo',
-      className: 'text-slate-300',
-      icon: <Clock className="h-3 w-3 text-slate-400" />,
+      className: 'text-content-secondary',
+      icon: <Clock className="h-3 w-3 text-content-secondary" />,
     },
     in_progress: {
       label: 'In progress',
-      className: 'text-amber-300',
-      icon: <PlayCircle className="h-3 w-3 text-amber-400" />,
+      className: 'text-status-warning',
+      icon: <PlayCircle className="h-3 w-3 text-status-warning" />,
     },
     agent_running: {
       label: 'Building',
-      className: 'text-cyan-300',
-      icon: <Bot className="h-3.5 w-3.5 text-cyan-400" />,
+      className: 'text-status-info',
+      icon: <Bot className="h-3.5 w-3.5 text-status-info" />,
     },
     review: {
       label: 'In review',
-      className: 'text-violet-300',
-      icon: <Activity className="h-3 w-3 text-violet-400" />,
+      className: 'text-status-info',
+      icon: <Activity className="h-3 w-3 text-status-info" />,
     },
     done: {
       label: 'Done',
-      className: 'text-emerald-300',
-      icon: <CheckCircle2 className="h-3 w-3 text-emerald-400" />,
+      className: 'text-status-success',
+      icon: <CheckCircle2 className="h-3 w-3 text-status-success" />,
     },
   };
 
@@ -82,27 +82,27 @@ export const PriorityBadge: React.FC<{
   const labels: Record<IssuePriority, LabelProps> = {
     urgent: {
       label: 'Urgent',
-      className: 'text-rose-300',
-      icon: <Flame className="h-3.5 w-3.5 text-rose-400" />,
+      className: 'text-status-danger',
+      icon: <Flame className="h-3.5 w-3.5 text-status-danger" />,
     },
     high: {
       label: 'High',
-      className: 'text-orange-300',
-      icon: <ArrowUp className="h-3.5 w-3.5 text-orange-400" />,
+      className: 'text-status-warning',
+      icon: <ArrowUp className="h-3.5 w-3.5 text-status-warning" />,
     },
     medium: {
       label: 'Medium',
-      className: 'text-amber-300',
-      icon: <ArrowRight className="h-3.5 w-3.5 text-amber-400" />,
+      className: 'text-status-warning',
+      icon: <ArrowRight className="h-3.5 w-3.5 text-status-warning" />,
     },
     low: {
       label: 'Low',
-      className: 'text-blue-300',
-      icon: <ArrowDown className="h-3.5 w-3.5 text-blue-400" />,
+      className: 'text-status-info',
+      icon: <ArrowDown className="h-3.5 w-3.5 text-status-info" />,
     },
     none: {
       label: 'None',
-      className: 'text-gray-500',
+      className: 'text-content-muted',
       icon: <Minus className="h-3.5 w-3.5" />,
     },
   };
@@ -145,7 +145,7 @@ export const RoleBadge: React.FC<{ role: AgentRole; className?: string }> = ({
   };
 
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium text-gray-400 ${className}`}>
+    <span className={`inline-flex items-center gap-1.5 text-[11px] font-medium text-content-secondary ${className}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${colors[role]}`} aria-hidden="true" />
       {role}
     </span>
@@ -157,10 +157,10 @@ export const RuntimeStatusBadge: React.FC<{ status: RuntimeStatus; latencyMs?: n
   latencyMs,
 }) => {
   const state = {
-    online: { dot: 'bg-emerald-400', text: 'text-emerald-300', label: 'Online' },
-    scanning: { dot: 'bg-cyan-400 animate-pulse', text: 'text-cyan-300', label: 'Scanning…' },
-    degraded: { dot: 'bg-amber-400', text: 'text-amber-300', label: 'Degraded' },
-    offline: { dot: 'bg-rose-400', text: 'text-gray-400', label: 'Offline' },
+    online: { dot: 'bg-current text-status-success', text: 'text-status-success', label: 'Online' },
+    scanning: { dot: 'bg-current text-status-info animate-pulse', text: 'text-status-info', label: 'Scanning…' },
+    degraded: { dot: 'bg-current text-status-warning', text: 'text-status-warning', label: 'Degraded' },
+    offline: { dot: 'bg-current text-status-danger', text: 'text-content-secondary', label: 'Offline' },
   }[status];
 
   return (
@@ -168,7 +168,7 @@ export const RuntimeStatusBadge: React.FC<{ status: RuntimeStatus; latencyMs?: n
       <span className={`h-1.5 w-1.5 rounded-full ${state.dot}`} aria-hidden="true" />
       <span>{state.label}</span>
       {status === 'online' && latencyMs !== undefined && (
-        <span className="font-mono text-[10px] text-gray-500">{latencyMs}ms</span>
+        <span className="font-mono text-[10px] text-content-muted">{latencyMs}ms</span>
       )}
     </span>
   );
@@ -178,27 +178,27 @@ export const DeploymentStatusBadge: React.FC<{ status: DeploymentStatus }> = ({ 
   const states: Record<DeploymentStatus, LabelProps> = {
     success: {
       label: 'Deployed',
-      className: 'text-emerald-300',
-      icon: <CheckCircle2 className="h-3 w-3 text-emerald-400" />,
+      className: 'text-status-success',
+      icon: <CheckCircle2 className="h-3 w-3 text-status-success" />,
     },
     building: {
       label: 'Building',
-      className: 'text-cyan-300',
-      icon: <Bot className="h-3 w-3 text-cyan-400" />,
+      className: 'text-status-info',
+      icon: <Bot className="h-3 w-3 text-status-info" />,
     },
     agent_evaluating: {
       label: 'Agent QA',
-      className: 'text-cyan-300',
-      icon: <Bot className="h-3 w-3 text-cyan-400" />,
+      className: 'text-status-info',
+      icon: <Bot className="h-3 w-3 text-status-info" />,
     },
     failed: {
       label: 'Failed',
-      className: 'text-rose-300',
-      icon: <AlertCircle className="h-3 w-3 text-rose-400" />,
+      className: 'text-status-danger',
+      icon: <AlertCircle className="h-3 w-3 text-status-danger" />,
     },
     queued: {
       label: 'Queued',
-      className: 'text-gray-400',
+      className: 'text-content-secondary',
       icon: <Clock className="h-3 w-3" />,
     },
   };

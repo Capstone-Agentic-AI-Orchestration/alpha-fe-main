@@ -29,12 +29,12 @@ const iconFor = (kind: RunActivity['kind'], streaming?: boolean) => {
 
 const toneFor = (kind: RunActivity['kind']) => {
   switch (kind) {
-    case 'assistant': return 'text-gray-200';
-    case 'tool': return 'text-cyan-300';
-    case 'tool_result': return 'text-gray-400';
-    case 'error': return 'text-rose-300';
-    case 'summary': return 'text-emerald-300';
-    default: return 'text-gray-400';
+    case 'assistant': return 'text-content';
+    case 'tool': return 'text-status-info';
+    case 'tool_result': return 'text-content-secondary';
+    case 'error': return 'text-status-danger';
+    case 'summary': return 'text-status-success';
+    default: return 'text-content-secondary';
   }
 };
 
@@ -71,13 +71,13 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities, live = f
   if (!ordered.length) return null;
 
   return (
-    <div className="rounded-lg border border-white/[0.07] bg-canvas/70" aria-live="polite" aria-label="Agent activity feed">
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2">
-        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-gray-500">Agent activity</p>
-        {deliveryLabel && <span className="flex items-center gap-1.5 text-[10px] text-cyan-300"><span className={`h-1.5 w-1.5 rounded-full bg-cyan-300 ${live ? 'animate-pulse' : ''}`} />{deliveryLabel}</span>}
+    <div className="rounded-lg border border-divider bg-canvas/70" aria-live="polite" aria-label="Agent activity feed">
+      <div className="flex items-center justify-between border-b border-divider px-3 py-2">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-content-muted">Agent activity</p>
+        {deliveryLabel && <span className="flex items-center gap-1.5 text-[10px] text-status-info"><span className={`h-1.5 w-1.5 rounded-full bg-cyan-300 ${live ? 'animate-pulse' : ''}`} />{deliveryLabel}</span>}
       </div>
       {hasCompletedOnlyOutput && (
-        <p className="border-b border-white/[0.06] px-3 py-2 text-[10px] leading-relaxed text-gray-500">
+        <p className="border-b border-divider px-3 py-2 text-[10px] leading-relaxed text-content-muted">
           No token deltas were received for this run; assistant messages are shown as completed updates.
         </p>
       )}
@@ -93,10 +93,10 @@ export const ActivityFeed: React.FC<ActivityFeedProps> = ({ activities, live = f
                     {activity.message}
                     {activity.isStreaming && <span className="ml-1 inline-block h-3 w-0.5 animate-pulse bg-cyan-300 align-[-2px]" aria-label="still streaming" />}
                   </p>
-                  <time className="flex-shrink-0 text-[9px] tabular-nums text-gray-700">{timeFor(activity.createdAt)}</time>
+                  <time className="flex-shrink-0 text-[9px] tabular-nums text-content-muted">{timeFor(activity.createdAt)}</time>
                 </div>
                 {activity.detail && (
-                  <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded bg-black/20 p-1.5 font-mono text-[10px] leading-relaxed text-gray-500">
+                  <pre className="mt-1 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded bg-well p-1.5 font-mono text-[10px] leading-relaxed text-content-muted">
                     {activity.detail}
                   </pre>
                 )}

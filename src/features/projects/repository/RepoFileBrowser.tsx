@@ -47,7 +47,7 @@ export const RepoFileBrowser: React.FC<RepoFileBrowserProps> = ({ projectId, rep
     <RepoSection
       id={`repo-files-${repo}`}
       title="Files"
-      icon={<FolderTree className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
+      icon={<FolderTree className="h-3.5 w-3.5 text-link" aria-hidden />}
       actions={<RefreshButton onClick={tree.reload} loading={tree.loading} label="Reload the file tree" />}
     >
       {tree.loading && !tree.data ? (
@@ -59,14 +59,14 @@ export const RepoFileBrowser: React.FC<RepoFileBrowserProps> = ({ projectId, rep
       ) : (
         <>
           {tree.data?.truncated && (
-            <p className="border-b border-white/[0.06] px-3.5 py-2 text-[11px] text-amber-300">
+            <p className="border-b border-divider px-3.5 py-2 text-[11px] text-status-warning">
               This repository is too large to list in full — some files are missing from the tree.
             </p>
           )}
           <div className="grid md:grid-cols-[minmax(12rem,17rem)_minmax(0,1fr)]">
             <nav
               aria-label={`Files on ${branch}`}
-              className="max-h-[30rem] overflow-auto border-b border-white/[0.06] py-1.5 md:border-b-0 md:border-r"
+              className="max-h-[30rem] overflow-auto border-b border-divider py-1.5 md:border-b-0 md:border-r"
             >
               <TreeList
                 nodes={nodes}
@@ -111,16 +111,16 @@ const TreeList: React.FC<{
               onClick={() => onToggle(node.path)}
               aria-expanded={open}
               style={indent}
-              className="flex w-full items-center gap-1.5 py-1 pr-3 text-left font-mono text-[11px] text-gray-300 transition-colors hover:bg-white/[0.04] hover:text-white"
+              className="flex w-full items-center gap-1.5 py-1 pr-3 text-left font-mono text-[11px] text-content-secondary transition-colors hover:bg-surface-high hover:text-content"
             >
               <ChevronRight
-                className={`h-3 w-3 flex-shrink-0 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`}
+                className={`h-3 w-3 flex-shrink-0 text-content-muted transition-transform ${open ? 'rotate-90' : ''}`}
                 aria-hidden
               />
               {open ? (
-                <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-amber-300/80" aria-hidden />
+                <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-status-warning" aria-hidden />
               ) : (
-                <Folder className="h-3.5 w-3.5 flex-shrink-0 text-amber-300/80" aria-hidden />
+                <Folder className="h-3.5 w-3.5 flex-shrink-0 text-status-warning" aria-hidden />
               )}
               <span className="truncate">{node.name}</span>
             </button>
@@ -137,7 +137,7 @@ const TreeList: React.FC<{
               ) : (
                 <p
                   style={{ paddingLeft: `${0.75 + (depth + 1) * 0.85 + 1}rem` }}
-                  className="py-1 text-[11px] italic text-gray-600"
+                  className="py-1 text-[11px] italic text-content-muted"
                 >
                   empty
                 </p>
@@ -155,12 +155,12 @@ const TreeList: React.FC<{
             aria-current={selected ? 'true' : undefined}
             style={indent}
             className={`flex w-full items-center gap-1.5 py-1 pr-3 text-left font-mono text-[11px] transition-colors ${
-              selected ? 'bg-brand-500/15 text-white' : 'text-gray-400 hover:bg-white/[0.04] hover:text-white'
+              selected ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'
             }`}
           >
             {/* Lines up with the folder names, which carry a chevron. */}
             <span className="w-3 flex-shrink-0" aria-hidden />
-            <FileText className="h-3.5 w-3.5 flex-shrink-0 text-gray-500" aria-hidden />
+            <FileText className="h-3.5 w-3.5 flex-shrink-0 text-content-muted" aria-hidden />
             <span className="truncate">{node.name}</span>
           </button>
         </li>
@@ -190,10 +190,10 @@ const FileViewer: React.FC<{ projectId: string; repo: string; branch: string; pa
 
   return (
     <div className="flex min-w-0 flex-col" aria-busy={file.loading}>
-      <div className="flex min-w-0 items-center justify-between gap-2 border-b border-white/[0.06] px-3.5 py-2">
-        <p className="min-w-0 truncate font-mono text-[11px] text-gray-200" title={path}>{path}</p>
+      <div className="flex min-w-0 items-center justify-between gap-2 border-b border-divider px-3.5 py-2">
+        <p className="min-w-0 truncate font-mono text-[11px] text-content" title={path}>{path}</p>
         <div className="flex flex-shrink-0 items-center gap-1.5">
-          {file.data && <span className="text-[10px] tabular-nums text-gray-500">{formatBytes(file.data.size)}</span>}
+          {file.data && <span className="text-[10px] tabular-nums text-content-muted">{formatBytes(file.data.size)}</span>}
           <CopyButton value={path} label="file path" />
           <a
             href={githubBlobUrl(repo, branch, path)}
@@ -201,7 +201,7 @@ const FileViewer: React.FC<{ projectId: string; repo: string; branch: string; pa
             rel="noreferrer"
             aria-label={`Open ${path} on GitHub`}
             title="Open on GitHub"
-            className="rounded-md p-1 text-gray-500 transition-colors hover:bg-white/5 hover:text-white"
+            className="rounded-md p-1 text-content-muted transition-colors hover:bg-surface-high hover:text-content"
           >
             <ExternalLink className="h-3.5 w-3.5" aria-hidden />
           </a>
@@ -219,7 +219,7 @@ const FileViewer: React.FC<{ projectId: string; repo: string; branch: string; pa
       ) : (
         <>
           {file.data.truncated && (
-            <p className="border-b border-white/[0.06] px-3.5 py-1.5 text-[11px] text-amber-300">
+            <p className="border-b border-divider px-3.5 py-1.5 text-[11px] text-status-warning">
               Showing the start of the file only.
             </p>
           )}
@@ -233,11 +233,11 @@ const FileViewer: React.FC<{ projectId: string; repo: string; branch: string; pa
           >
             <pre
               aria-hidden
-              className="sticky left-0 select-none border-r border-white/[0.06] bg-well px-3 py-2 text-right tabular-nums text-gray-600"
+              className="sticky left-0 select-none border-r border-divider bg-well px-3 py-2 text-right tabular-nums text-content-muted"
             >
               {lines.map((_, index) => index + 1).join('\n')}
             </pre>
-            <pre className="flex-1 whitespace-pre px-3 py-2 text-gray-200">
+            <pre className="flex-1 whitespace-pre px-3 py-2 text-content">
               <code>{lines.join('\n')}</code>
             </pre>
           </div>

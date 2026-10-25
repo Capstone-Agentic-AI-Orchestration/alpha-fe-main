@@ -171,8 +171,8 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
           {/* Offer the work left behind, on the one screen that would otherwise
               silently start over on top of it. */}
           {saved && (
-            <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-surface-200 px-4 py-3">
-              <span className="flex w-8 h-8 flex-shrink-0 items-center justify-center rounded-lg bg-white/5 text-gray-400">
+            <div className="flex items-center gap-3 rounded-xl border border-divider bg-surface px-4 py-3">
+              <span className="flex w-8 h-8 flex-shrink-0 items-center justify-center rounded-lg bg-surface-raised text-content-secondary">
                 <History className="w-4 h-4" />
               </span>
 
@@ -181,10 +181,10 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                 onClick={resumeDraft}
                 className="min-w-0 flex-1 text-left group"
               >
-                <div className="text-xs font-medium text-white truncate">
+                <div className="text-xs font-medium text-content truncate">
                   Continue {saved.entry.draft.name.trim() || 'your unfinished agent'}
                 </div>
-                <div className="text-[11px] text-gray-500 truncate">
+                <div className="text-[11px] text-content-muted truncate">
                   {saved.entry.builder?.messages.length
                     ? `Conversation with ${saved.entry.builder.messages.length} messages`
                     : 'Saved configuration'}
@@ -194,7 +194,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
               <button
                 type="button"
                 onClick={resumeDraft}
-                className="flex items-center gap-1 text-xs font-semibold text-brand-400 hover:text-brand-300 transition-colors"
+                className="flex items-center gap-1 text-xs font-semibold text-link hover:text-link-hover transition-colors"
               >
                 <span>Resume</span>
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -203,7 +203,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
               <button
                 type="button"
                 onClick={discardDraft}
-                className="p-1 rounded text-gray-500 hover:text-rose-400 transition-colors"
+                className="p-1 rounded text-content-muted hover:text-status-danger transition-colors"
                 title="Discard this draft"
               >
                 <X className="w-3.5 h-3.5" />
@@ -211,7 +211,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
             </div>
           )}
 
-          <div className="text-xs text-gray-300 font-medium">
+          <div className="text-xs text-content-secondary font-medium">
             How would you like to configure your new agent?
           </div>
 
@@ -220,18 +220,18 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
             <button
               type="button"
               onClick={() => setCreationMode('template')}
-              className="p-5 rounded-2xl bg-surface-200 border border-brand-500/30 hover:border-brand-500/70 hover:bg-brand-500/10 transition-all text-left space-y-3 group"
+              className="p-5 rounded-2xl bg-surface border border-divider hover:border-divider hover:bg-selected transition-all text-left space-y-3 group"
             >
-              <div className="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center group-hover:bg-brand-500 group-hover:text-on-accent transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-selected text-selected-content border border-divider flex items-center justify-center group-hover:bg-action-hover group-hover:text-on-action transition-colors">
                 <Layers className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-white group-hover:text-brand-300">Use a Role Template</h4>
-                <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                <h4 className="text-sm font-semibold text-content group-hover:text-link-hover">Use a Role Template</h4>
+                <p className="text-xs text-content-secondary mt-1 leading-relaxed">
                   Start from one of the ten delivery roles, then tailor its runtime and instructions.
                 </p>
               </div>
-              <div className="text-xs text-brand-400 font-semibold flex items-center gap-1">
+              <div className="text-xs text-link font-semibold flex items-center gap-1">
                 <span>Choose a role</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </div>
@@ -241,18 +241,18 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
             <button
               type="button"
               onClick={() => setCreationMode('blank')}
-              className="p-5 rounded-2xl bg-surface-200 border border-white/10 hover:border-brand-500/50 hover:bg-brand-500/5 transition-all text-left space-y-3 group"
+              className="p-5 rounded-2xl bg-surface border border-divider hover:border-divider hover:bg-selected transition-all text-left space-y-3 group"
             >
-              <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center text-on-accent group-hover:bg-brand-500 transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-surface-raised flex items-center justify-center text-on-action group-hover:bg-action-hover transition-colors">
                 <Bot className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="text-sm font-semibold text-white group-hover:text-brand-300">Start Blank</h4>
-                <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                <h4 className="text-sm font-semibold text-content group-hover:text-link-hover">Start Blank</h4>
+                <p className="text-xs text-content-secondary mt-1 leading-relaxed">
                   Fill in the configuration yourself with sensible default settings.
                 </p>
               </div>
-              <div className="text-xs text-brand-400 font-semibold flex items-center gap-1">
+              <div className="text-xs text-link font-semibold flex items-center gap-1">
                 <span>Configure Form</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </div>
@@ -262,22 +262,22 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
             <button
               type="button"
               onClick={startBuilder}
-              className="p-5 rounded-2xl bg-surface-200 border border-brand-500/30 hover:border-brand-500/70 hover:bg-brand-500/10 transition-all text-left space-y-3 group shadow-glow-brand"
+              className="p-5 rounded-2xl bg-surface border border-divider hover:border-divider hover:bg-selected transition-all text-left space-y-3 group shadow-glow-brand"
             >
-              <div className="w-10 h-10 rounded-xl bg-brand-500/20 text-brand-300 border border-brand-500/30 flex items-center justify-center group-hover:bg-brand-500 group-hover:text-on-accent transition-colors">
+              <div className="w-10 h-10 rounded-xl bg-selected text-selected-content border border-divider flex items-center justify-center group-hover:bg-action-hover group-hover:text-on-action transition-colors">
                 <Wand2 className="w-5 h-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h4 className="text-sm font-semibold text-white group-hover:text-brand-300">Build with AI</h4>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-brand-500/20 text-brand-300">Chat</span>
+                  <h4 className="text-sm font-semibold text-content group-hover:text-link-hover">Build with AI</h4>
+                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-selected text-selected-content">Chat</span>
                 </div>
-                <p className="text-xs text-gray-400 mt-1 leading-relaxed">
+                <p className="text-xs text-content-secondary mt-1 leading-relaxed">
                   Talk it through with a real agent. It writes the instructions, model and skills,
                   and you refine them turn by turn.
                 </p>
               </div>
-              <div className="text-xs text-brand-400 font-semibold flex items-center gap-1">
+              <div className="text-xs text-link font-semibold flex items-center gap-1">
                 <span>Open Builder</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </div>
@@ -287,8 +287,8 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
       ) : creationMode === 'template' ? (
         <div className="space-y-4 py-2">
           <div>
-            <h3 className="text-sm font-semibold text-white">Choose a delivery role</h3>
-            <p className="mt-1 text-xs leading-relaxed text-gray-400">
+            <h3 className="text-sm font-semibold text-content">Choose a delivery role</h3>
+            <p className="mt-1 text-xs leading-relaxed text-content-secondary">
               Templates are editable starting points. Alpha uses the runtime installed on this machine rather than assuming a provider is available.
             </p>
           </div>
@@ -299,25 +299,25 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                 key={template.key}
                 type="button"
                 onClick={() => startTemplate(template)}
-                className="rounded-xl border border-white/10 bg-surface-200 p-4 text-left transition-colors hover:border-brand-500/60 hover:bg-brand-500/5"
+                className="rounded-xl border border-divider bg-surface p-4 text-left transition-colors hover:border-divider hover:bg-selected"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="text-sm font-semibold text-white">{template.name}</div>
-                    <div className="mt-1 text-xs leading-relaxed text-gray-400">{template.description}</div>
+                    <div className="text-sm font-semibold text-content">{template.name}</div>
+                    <div className="mt-1 text-xs leading-relaxed text-content-secondary">{template.description}</div>
                   </div>
-                  <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-brand-400" />
+                  <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-link" />
                 </div>
                 <div className="mt-3 flex items-center gap-2 text-[11px]">
-                  <span className="rounded bg-white/5 px-2 py-1 font-medium text-gray-300">{template.phase}</span>
-                  <span className="truncate text-gray-500">{template.expectedOutput}</span>
+                  <span className="rounded bg-surface-raised px-2 py-1 font-medium text-content-secondary">{template.phase}</span>
+                  <span className="truncate text-content-muted">{template.expectedOutput}</span>
                 </div>
               </button>
             ))}
           </div>
 
-          <div className="border-t border-white/10 pt-4">
-            <button type="button" onClick={goToChoice} className="text-xs text-gray-400 hover:text-white">
+          <div className="border-t border-divider pt-4">
+            <button type="button" onClick={goToChoice} className="text-xs text-content-secondary hover:text-content">
               Back to options
             </button>
           </div>
@@ -340,8 +340,8 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
           {/* Required: Name & Runtime */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
-                Agent Name <span className="text-rose-400">* (Required)</span>
+              <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">
+                Agent Name <span className="text-status-danger">* (Required)</span>
               </label>
               <input
                 type="text"
@@ -349,7 +349,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                 value={draft.name}
                 onChange={(e) => setDraft({ ...draft, name: e.target.value })}
                 placeholder="e.g. Sentinel Prime"
-                className="w-full bg-surface-200 border border-white/10 rounded-lg px-3.5 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface border border-control rounded-lg px-3.5 py-2 text-sm text-content placeholder-content-muted focus:outline-none focus:border-control"
                 autoFocus
               />
             </div>
@@ -358,18 +358,18 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                 a separate "machine" list only invited the two to disagree —
                 the old one held four invented names and set nothing at all. */}
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
-                Machine / Runtime <span className="text-rose-400">* (Required)</span>
+              <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">
+                Machine / Runtime <span className="text-status-danger">* (Required)</span>
               </label>
               {runtimeChoices.length === 0 ? (
-                <p className="px-3 py-2 rounded-lg bg-surface-200 border border-amber-500/30 text-[11px] text-amber-300">
+                <p className="px-3 py-2 rounded-lg bg-surface border border-status-warning-border text-[11px] text-status-warning">
                   No runtimes detected. Scan for runtimes in Settings first.
                 </p>
               ) : (
                 <select
                   value={draft.runtimeId}
                   onChange={(e) => setDraft(applyDraftRuntimeChange(draft, runtimes, e.target.value))}
-                  className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface border border-control rounded-lg px-3 py-2 text-sm text-content focus:outline-none focus:border-control"
                 >
                   {runtimeChoices.map(choice => (
                     <option key={choice.runtimeId} value={choice.runtimeId}>
@@ -383,11 +383,11 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
 
           {/* Description / Specialization */}
           <div>
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5 flex items-center justify-between">
+            <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5 flex items-center justify-between">
               <span>One-Line Specialization</span>
               <span
                 className={`tabular-nums font-normal normal-case tracking-normal ${
-                  descriptionLength > AGENT_DESCRIPTION_MAX_LENGTH ? 'text-rose-400' : 'text-gray-500'
+                  descriptionLength > AGENT_DESCRIPTION_MAX_LENGTH ? 'text-status-danger' : 'text-content-muted'
                 }`}
               >
                 {descriptionLength}/{AGENT_DESCRIPTION_MAX_LENGTH}
@@ -398,20 +398,20 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
               placeholder="e.g. Fullstack TypeScript/Rust developer & reactive WebSockets engineer"
-              className="w-full bg-surface-200 border border-white/10 rounded-lg px-3.5 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+              className="w-full bg-surface border border-control rounded-lg px-3.5 py-2 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control"
             />
           </div>
 
           {/* Role, model and effort. Provider is not asked for — it follows the runtime. */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">
                 Role
               </label>
               <select
                 value={draft.role}
                 onChange={(e) => setDraft({ ...draft, role: e.target.value as AgentRole })}
-                className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface border border-control rounded-lg px-3 py-2 text-xs text-content focus:outline-none focus:border-control"
               >
                 <option value="Architect">Architect</option>
                 <option value="Coder">Coder</option>
@@ -435,7 +435,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">
                 Model
               </label>
               {detectedModels.length === 0 ? (
@@ -445,7 +445,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                   value={draft.modelName}
                   onChange={(e) => setDraft(applyDraftModelChange(draft, e.target.value))}
                   placeholder="no models detected — type an id"
-                  className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface border border-control rounded-lg px-3 py-2 text-xs text-content font-mono focus:outline-none focus:border-control"
                 />
               ) : (
                 <select
@@ -461,7 +461,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                       )
                     );
                   }}
-                  className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                  className="w-full bg-surface border border-control rounded-lg px-3 py-2 text-xs text-content font-mono focus:outline-none focus:border-control"
                 >
                   {draft.modelName && !detectedModels.includes(draft.modelName) && (
                     <option value={draft.modelName}>{draft.modelName} (not detected)</option>
@@ -474,7 +474,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">
                 Reasoning Effort
               </label>
               <select
@@ -485,7 +485,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                     reasoningEffort: e.target.value as ReasoningEffort | ''
                   })
                 }
-                className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface border border-control rounded-lg px-3 py-2 text-xs text-content focus:outline-none focus:border-control"
               >
                 <option value="">Auto (runtime default)</option>
                 {reasoningEfforts.map(effort => (
@@ -494,26 +494,26 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                   </option>
                 ))}
               </select>
-              <p className="mt-1 text-[10px] leading-snug text-gray-500">
+              <p className="mt-1 text-[10px] leading-snug text-content-muted">
                 {reasoningEfforts.length
                   ? 'Higher effort can improve difficult tasks, with more latency or usage.'
                   : 'This runtime does not expose a separate effort flag; Auto keeps its native default.'}
               </p>
               {draft.reasoningEffort && (
-                <p className="mt-1 text-[10px] text-gray-600">
+                <p className="mt-1 text-[10px] text-content-muted">
                   {REASONING_EFFORT_HINTS[draft.reasoningEffort]}
                 </p>
               )}
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">
                 Autonomy
               </label>
               <select
                 value={draft.autonomyLevel}
                 onChange={(e) => setDraft({ ...draft, autonomyLevel: e.target.value as AgentDraft['autonomyLevel'] })}
-                className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface border border-control rounded-lg px-3 py-2 text-xs text-content focus:outline-none focus:border-control"
               >
                 <option value="Supervised">Supervised</option>
                 <option value="Semi-Autonomous (Requires Approval)">Semi-Autonomous</option>
@@ -525,13 +525,13 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
           {/* Access / Who can use them & Concurrency */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">
                 Who Can Use This Agent?
               </label>
               <select
                 value={draft.allowedUsers}
                 onChange={(e) => setDraft({ ...draft, allowedUsers: e.target.value as AgentAccessLevel })}
-                className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface border border-control rounded-lg px-3 py-2 text-xs text-content focus:outline-none focus:border-control"
               >
                 <option value="everyone">Everyone in Workspace</option>
                 <option value="team">Team Members Only</option>
@@ -541,7 +541,7 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+              <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">
                 Concurrency Limit (Tasks)
               </label>
               <input
@@ -553,32 +553,32 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                 // the field to retype it does not snap back to 1 mid-edit.
                 onChange={(e) => setDraft({ ...draft, concurrencyLimit: parseInt(e.target.value, 10) })}
                 onBlur={() => setDraft({ ...draft, concurrencyLimit: clampConcurrency(draft.concurrencyLimit) })}
-                className="w-full bg-surface-200 border border-white/10 rounded-lg px-3 py-2 text-xs text-white font-mono focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface border border-control rounded-lg px-3 py-2 text-xs text-content font-mono focus:outline-none focus:border-control"
               />
             </div>
           </div>
 
           {/* System Prompt */}
           <div>
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">
               System Instructions
             </label>
             <textarea
               rows={3}
               value={draft.systemPrompt}
               onChange={(e) => setDraft({ ...draft, systemPrompt: e.target.value })}
-              className="w-full bg-surface-200 border border-white/10 rounded-lg p-3 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-mono"
+              className="w-full bg-surface border border-control rounded-lg p-3 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control font-mono"
             />
           </div>
 
           {/* Skills Selector */}
           <div>
-            <label className="block text-xs font-semibold text-gray-300 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-2">
               Attached Skills & MCP Tools ({draft.skillIds.length} selected)
             </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto p-1 bg-surface-300/60 rounded-lg border border-white/5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-32 overflow-y-auto p-1 bg-shell/60 rounded-lg border border-divider">
               {skills.length === 0 ? (
-                <p className="p-2 text-[11px] text-gray-500 italic">
+                <p className="p-2 text-[11px] text-content-muted italic">
                   No skills reported by the daemon yet.
                 </p>
               ) : (
@@ -591,8 +591,8 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                       onClick={() => setDraft(toggleDraftSkill(draft, skill.id))}
                       className={`flex items-start gap-2.5 p-2 rounded-lg text-left text-xs transition-all border ${
                         isChecked
-                          ? 'bg-brand-500/20 text-white border-brand-500/40'
-                          : 'bg-surface-200 text-gray-400 border-transparent hover:border-white/10'
+                          ? 'bg-selected text-selected-content border-divider'
+                          : 'bg-surface text-content-secondary border-transparent hover:border-divider'
                       }`}
                     >
                       <input
@@ -602,8 +602,8 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
                         className="mt-0.5 accent-brand-500 rounded"
                       />
                       <div className="truncate">
-                        <div className="font-medium text-white truncate">{skill.name}</div>
-                        <div className="text-[10px] text-gray-400 capitalize">{skill.category}</div>
+                        <div className="font-medium text-content truncate">{skill.name}</div>
+                        <div className="text-[10px] text-content-secondary capitalize">{skill.category}</div>
                       </div>
                     </button>
                   );
@@ -613,11 +613,11 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
           </div>
 
           {/* Submit */}
-          <div className="flex items-center justify-between pt-4 border-t border-white/10">
+          <div className="flex items-center justify-between pt-4 border-t border-divider">
             <button
               type="button"
               onClick={goToChoice}
-              className="text-xs text-gray-400 hover:text-white"
+              className="text-xs text-content-secondary hover:text-content"
             >
               ← Back to options
             </button>
@@ -625,19 +625,19 @@ export const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onCl
               {/* Say why the button is dead instead of leaving the user to
                   guess which of eight fields is the problem. */}
               {validationError && draft.name.trim() && (
-                <span className="text-[11px] text-amber-300">{validationError}</span>
+                <span className="text-[11px] text-status-warning">{validationError}</span>
               )}
               <button
                 type="button"
                 onClick={handleClose}
-                className="px-4 py-2 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                className="px-4 py-2 rounded-lg text-xs text-content-secondary hover:text-content hover:bg-surface-high transition-colors"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={!!validationError}
-                className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-on-accent shadow-glow-brand transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-action hover:bg-action-hover text-on-action shadow-glow-brand transition-all disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Deploy Agent</span>

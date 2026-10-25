@@ -1,8 +1,21 @@
 import { useEffect, useMemo, useRef } from 'react';
-import { useFrame, type ThreeEvent } from '@react-three/fiber';
+import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import { waveAt } from './orchestratorSceneLayout';
+import type { ScenePalette } from '@/shared/theme';
+
+/** Repaint a new palette even when the animation clock is stopped. */
+export function SceneThemeFrame({ palette }: { palette: ScenePalette }) {
+  const { gl, scene, camera, frameloop, invalidate } = useThree();
+  useEffect(() => {
+    gl.setClearColor(palette.background, 0);
+    // Rendering directly keeps a paused scene's transforms and clock untouched.
+    if (frameloop === 'never') gl.render(scene, camera);
+    else invalidate();
+  }, [palette, gl, scene, camera, frameloop, invalidate]);
+  return null;
+}
 
 /** Shared by the chat atom and the live hierarchy so their light and materials stay consistent. */
 export function useAgentGlowTexture(): THREE.Texture {
@@ -11,6 +24,7 @@ export function useAgentGlowTexture(): THREE.Texture {
     canvas.width = canvas.height = 128;
     const context = canvas.getContext('2d')!;
     const gradient = context.createRadialGradient(64, 64, 0, 64, 64, 64);
+    // White is a neutral alpha mask; each sprite material supplies its tint.
     gradient.addColorStop(0, 'rgba(255,255,255,1)');
     gradient.addColorStop(0.25, 'rgba(255,255,255,0.45)');
     gradient.addColorStop(1, 'rgba(255,255,255,0)');
@@ -22,7 +36,8 @@ export function useAgentGlowTexture(): THREE.Texture {
   return texture;
 }
 
-export function AgentSceneOrb({ glow, color, active, engaged = false, selected = false, hovered = false, hub = false, emissiveScale = 1, showRings = true, reduceMotion = false, onPointerOver, onPointerOut, onClick }: {
+export function AgentSceneOrb({ palette, glow, color, active, engaged = false, selected = false, hovered = false, hub = false, emissiveScale = 1, showRings = true, reduceMotion = false, onPointerOver, onPointerOut, onClick }: {
+  palette: ScenePalette;
   glow: THREE.Texture;
   color: THREE.ColorRepresentation;
   active: boolean;
@@ -60,21 +75,21 @@ export function AgentSceneOrb({ glow, color, active, engaged = false, selected =
     <group scale={hovered ? 1.1 : 1}>
       <mesh ref={core} onPointerOver={onPointerOver} onPointerOut={onPointerOut} onClick={onClick}>
         <sphereGeometry args={[radius, 48, 48]} />
-        <meshPhysicalMaterial color={color} emissive={hub ? '#6d28d9' : color} emissiveIntensity={(active ? hub ? 1.1 : 0.95 : lit ? 0.6 : hub ? 0.75 : 0.3) * emissiveScale} roughness={hub ? 0.15 : 0.2} clearcoat={1} clearcoatRoughness={0.1} />
+        <meshPhysicalMaterial color={color} emissive={hub ? palette.hubEmissive : color} emissiveIntensity={(active ? hub ? 1.1 : 0.95 : lit ? 0.6 : hub ? 0.75 : 0.3) * emissiveScale} roughness={hub ? 0.15 : 0.2} clearcoat={1} clearcoatRoughness={0.1} />
       </mesh>
     </group>
     {showRings && <Billboard>
       {hub && <group ref={rings}>{[0, 1].map(i => <mesh key={i}>
         <ringGeometry args={[0.7, 0.73, 64]} />
-        <meshBasicMaterial color="#c4b5fd" transparent opacity={reduceMotion && active ? 0.15 : 0} depthWrite={false} side={THREE.DoubleSide} />
+        <meshBasicMaterial color={palette.ring} transparent opacity={reduceMotion && active ? 0.15 : 0} depthWrite={false} side={THREE.DoubleSide} />
       </mesh>)}</group>}
-      {selected && <mesh><ringGeometry args={hub ? [0.9, 0.94, 64] : [0.4, 0.43, 48]} /><meshBasicMaterial color="#ede9fe" transparent opacity={0.9} depthWrite={false} /></mesh>}
+      {selected && <mesh><ringGeometry args={hub ? [0.9, 0.94, 64] : [0.4, 0.43, 48]} /><meshBasicMaterial color={palette.highlight} transparent opacity={0.9} depthWrite={false} /></mesh>}
     </Billboard>}
   </group>;
 }
 
 /** The original chat wave remains independent of the static live-graph background. */
-export function AgentSceneWave({ working, reduceMotion = false }: { working: boolean; reduceMotion?: boolean }) {
+export function AgentSceneWave({ palette, working, reduceMotion = false }: { palette: ScenePalette; working: boolean; reduceMotion?: boolean }) {
   const columns = 110, rows = 36;
   const geometry = useMemo(() => {
     const next = new THREE.BufferGeometry();
@@ -98,5 +113,5 @@ export function AgentSceneWave({ working, reduceMotion = false }: { working: boo
     }
     geometry.attributes.position.needsUpdate = true;
   });
-  return <points geometry={geometry}><pointsMaterial color={working ? '#a78bfa' : '#8b5cf6'} size={1.8} sizeAttenuation={false} transparent opacity={0.55} depthWrite={false} /></points>;
+  return <points geometry={geometry}><pointsMaterial color={working ? palette.waveActive : palette.wave} size={1.8} sizeAttenuation={false} transparent opacity={0.55} depthWrite={false} /></points>;
 }

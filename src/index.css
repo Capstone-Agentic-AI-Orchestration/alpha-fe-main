@@ -1,47 +1,13 @@
+@import './shared/theme/generated/themes.css';
+@import './shared/theme/typography.css';
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/*
- * Dark-only design tokens.
- *
- * `--c-white` is a role, not a colour: it powers the white-alpha hairlines and
- * hover states used throughout the interface. The app intentionally keeps one
- * palette so the canvas, navigation, tabs, and content always share the same
- * visual hierarchy.
- */
+/* Geometry and interaction styles. Colors come from the generated theme model. */
 @layer base {
   :root {
-    color-scheme: dark;
     font-size: 15px;
-
-    --c-white: 255 255 255;
-    --c-on-accent: 255 255 255;
-
-    /* Near-black canvas with stepped surfaces for clear depth. */
-    --c-canvas: 9 9 11;
-    --c-well: 6 6 8;
-    --c-shell: 13 13 17;
-    --c-surface: 17 17 23;
-    --c-raised: 24 24 32;
-    --c-raised-2: 32 32 42;
-
-    /* Lift secondary values enough for comfortable reading without flattening
-       the hierarchy against the near-black canvas. */
-    --c-gray-50: 249 250 251;
-    --c-gray-100: 243 244 246;
-    --c-gray-200: 229 231 235;
-    --c-gray-300: 209 213 219;
-    --c-gray-400: 156 163 175;
-    --c-gray-500: 124 134 150;
-    --c-gray-600: 93 103 118;
-    --c-gray-700: 63 70 84;
-    --c-gray-800: 31 41 55;
-    --c-gray-900: 17 24 39;
-    --c-gray-950: 3 7 18;
-
-    --c-scrollbar: 255 255 255;
-    --c-glass: 20 21 24;
   }
 
   html {
@@ -55,7 +21,7 @@
   body {
     background-color: rgb(var(--c-canvas));
     color: rgb(var(--c-gray-100));
-    font-family: 'DM Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-family: var(--font-interface);
     font-size: 14px;
     line-height: 1.55;
     letter-spacing: -0.006em;
@@ -93,7 +59,7 @@
   }
 
   :focus-visible {
-    outline: 2px solid rgba(167, 139, 250, 0.78);
+    outline: 2px solid rgb(var(--ui-focus));
     outline-offset: 2px;
   }
 }
@@ -167,12 +133,12 @@ input[type='checkbox'] {
 
 input[type='checkbox']:hover,
 input[type='radio']:hover {
-  border-color: rgba(167, 139, 250, 0.72);
+  border-color: rgb(var(--ui-focus));
 }
 
 input[type='checkbox']:checked {
-  border-color: #8b5cf6;
-  background-color: #8b5cf6;
+  border-color: rgb(var(--ui-action));
+  background-color: rgb(var(--ui-action));
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 10'%3E%3Cpath d='M2 5.2 4.1 7.2 8 2.9' fill='none' stroke='%23fff' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   background-size: 10px 10px;
 }
@@ -182,8 +148,8 @@ input[type='radio'] {
 }
 
 input[type='radio']:checked {
-  border-color: #a78bfa;
-  background-color: #a78bfa;
+  border-color: rgb(var(--ui-action));
+  background-color: rgb(var(--ui-action));
   /* The dot is punched out of the control with the surface behind it, so it has
      to follow the theme rather than stay a fixed near-black. */
   box-shadow: inset 0 0 0 3px rgb(var(--c-surface));
@@ -192,8 +158,8 @@ input[type='radio']:checked {
 input[type='checkbox']:focus-visible,
 input[type='radio']:focus-visible {
   outline: none;
-  border-color: #a78bfa;
-  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.28);
+  border-color: rgb(var(--ui-focus));
+  box-shadow: 0 0 0 3px rgb(var(--ui-focus) / 0.28);
 }
 
 input[type='checkbox']:disabled,
@@ -308,10 +274,10 @@ input[type='radio']:disabled {
   display: none;
 }
 
-/* Static purple dot field; motion belongs to the workflow connections. */
+/* Static theme dot field; motion belongs to the workflow connections. */
 .agent-flow-viewport {
-  background-color: #080b14;
-  background-image: radial-gradient(circle, rgb(167 139 250 / 0.23) 0.85px, transparent 1px);
+  background-color: rgb(var(--ui-well));
+  background-image: radial-gradient(circle, rgb(var(--ui-link) / 0.23) 0.85px, transparent 1px);
   background-size: 20px 20px;
 }
 
@@ -339,7 +305,7 @@ input[type='radio']:disabled {
     height: min(62dvh, 560px);
     max-height: calc(100dvh - 2rem);
     box-shadow: 0 -16px 70px rgb(3 5 12 / 0.65);
-    background-color: #10131e;
+    background-color: rgb(var(--c-raised));
     animation-name: live-agent-sheet-in;
   }
 }

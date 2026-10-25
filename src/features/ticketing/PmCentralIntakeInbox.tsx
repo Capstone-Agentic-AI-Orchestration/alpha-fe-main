@@ -154,30 +154,30 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   return <section className="flex h-full min-h-0 flex-col px-4 pb-4 pt-5 md:px-6" aria-label="Shared PM inquiry inbox">
     <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <div className="flex items-center gap-2"><Inbox size={18} className="text-brand-300" /><h1 className="text-lg font-semibold text-white">New inquiries</h1></div>
-        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-gray-400">One shared intake queue for Alpha. Review an inquiry, then accept it into your current workspace before it becomes a regular ticket.</p>
-        {workspaceName && <p className="mt-2 text-[11px] text-gray-500">Accept destination: <span className="font-medium text-gray-300">{workspaceName}</span></p>}
+        <div className="flex items-center gap-2"><Inbox size={18} className="text-link" /><h1 className="text-lg font-semibold text-content">New inquiries</h1></div>
+        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-content-secondary">One shared intake queue for Alpha. Review an inquiry, then accept it into your current workspace before it becomes a regular ticket.</p>
+        {workspaceName && <p className="mt-2 text-[11px] text-content-muted">Accept destination: <span className="font-medium text-content-secondary">{workspaceName}</span></p>}
       </div>
       <button type="button" className={secondary} onClick={() => void load()} disabled={loading || !workspaceId || !workspaceCanReview}>
         <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
       </button>
     </header>
 
-    {!workspaceId ? <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.05] p-4 text-sm text-amber-100/80">
+    {!workspaceId ? <div className="rounded-xl border border-status-warning-border bg-status-warning-subtle p-4 text-sm text-status-warning">
       Select a workspace where you have PM access to review and accept shared inquiries.
-    </div> : !workspaceCanReview ? <div className="rounded-xl border border-amber-400/20 bg-amber-500/[0.05] p-4 text-sm text-amber-100/80">
+    </div> : !workspaceCanReview ? <div className="rounded-xl border border-status-warning-border bg-status-warning-subtle p-4 text-sm text-status-warning">
       The shared inquiry inbox is available only to PMs in the selected workspace.
     </div> : <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.5fr)]">
-      <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-surface">
-        <div className="border-b border-white/[0.07] px-4 py-3 text-xs text-gray-400">{items.length} loaded {items.length === 1 ? 'inquiry' : 'inquiries'} · Pending PM review{newIds.size > 0 ? ` · ${newIds.size} new` : ''}</div>
+      <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-divider bg-surface">
+        <div className="border-b border-divider px-4 py-3 text-xs text-content-secondary">{items.length} loaded {items.length === 1 ? 'inquiry' : 'inquiries'} · Pending PM review{newIds.size > 0 ? ` · ${newIds.size} new` : ''}</div>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {loading && items.length === 0 ? <p role="status" className="p-5 text-xs text-gray-400">Loading shared inquiries…</p>
-            : items.length === 0 ? <div className="p-5 text-center"><Inbox size={22} className="mx-auto text-gray-600" /><p className="mt-3 text-sm text-gray-300">No inquiries waiting</p><p className="mt-1 text-xs text-gray-500">New client inquiries will appear here for PM review.</p></div>
+          {loading && items.length === 0 ? <p role="status" className="p-5 text-xs text-content-secondary">Loading shared inquiries…</p>
+            : items.length === 0 ? <div className="p-5 text-center"><Inbox size={22} className="mx-auto text-content-muted" /><p className="mt-3 text-sm text-content-secondary">No inquiries waiting</p><p className="mt-1 text-xs text-content-muted">New client inquiries will appear here for PM review.</p></div>
               : items.map(item => <button key={item.id} type="button" onClick={() => { setSelectedId(item.id); setNewIds(current => { const next = new Set(current); next.delete(item.id); return next; }); setDeclineReason(''); }} aria-pressed={selected?.id === item.id}
-                className={`block w-full border-b border-white/[0.06] border-l-2 p-4 text-left transition-colors ${selected?.id === item.id ? 'border-l-brand-400 bg-brand-500/[0.08]' : 'border-l-transparent hover:bg-white/[0.03]'}`}>
-                <span className="flex items-center justify-between gap-2"><span className="block truncate text-sm font-medium text-gray-100">{item.title}</span>{newIds.has(item.id) && <span className="shrink-0 rounded bg-brand-500/15 px-1.5 py-0.5 text-[9px] text-brand-200">New</span>}</span>
-                <span className="mt-1 block truncate text-xs text-gray-400">{item.fullName} · {item.email}</span>
-                <span className="mt-2 flex items-center gap-1 text-[11px] text-amber-300/80"><Clock3 size={12} /> Email not verified</span>
+                className={`block w-full border-b border-divider border-l-2 p-4 text-left transition-colors ${selected?.id === item.id ? 'border-l-divider bg-selected' : 'border-l-transparent hover:bg-surface-high'}`}>
+                <span className="flex items-center justify-between gap-2"><span className="block truncate text-sm font-medium text-content">{item.title}</span>{newIds.has(item.id) && <span className="shrink-0 rounded bg-selected px-1.5 py-0.5 text-[9px] text-selected-content">New</span>}</span>
+                <span className="mt-1 block truncate text-xs text-content-secondary">{item.fullName} · {item.email}</span>
+                <span className="mt-2 flex items-center gap-1 text-[11px] text-status-warning"><Clock3 size={12} /> Email not verified</span>
               </button>)}
         </div>
         {nextCursor && <button type="button" className={`${secondary} m-3 justify-center`} onClick={() => void load(nextCursor)} disabled={loadingMore}>
@@ -185,48 +185,48 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
         </button>}
       </div>
 
-      <div className="flex min-h-0 flex-col overflow-y-auto rounded-xl border border-white/[0.08] bg-surface">
-        {error && <p role="alert" className="m-4 flex items-start gap-2 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-3 text-xs text-rose-200"><AlertCircle size={15} className="mt-0.5 shrink-0" />{error}</p>}
+      <div className="flex min-h-0 flex-col overflow-y-auto rounded-xl border border-divider bg-surface">
+        {error && <p role="alert" className="m-4 flex items-start gap-2 rounded-lg border border-status-danger-border bg-status-danger-subtle p-3 text-xs text-status-danger"><AlertCircle size={15} className="mt-0.5 shrink-0" />{error}</p>}
         {selected ? <>
-          <div className="border-b border-white/[0.07] p-5">
-            <p className="text-[11px] uppercase tracking-wide text-gray-500">Inquiry · Not yet a ticket</p>
-            <h2 className="mt-2 text-lg font-semibold text-white">{selected.title}</h2>
-            {selected.publicReference && <p className="mt-1 font-mono text-[10px] text-gray-500">{selected.publicReference}</p>}
-            <p className="mt-2 text-xs text-gray-500">Received {formatDate(selected.submittedAt)}</p>
+          <div className="border-b border-divider p-5">
+            <p className="text-[11px] uppercase tracking-wide text-content-muted">Inquiry · Not yet a ticket</p>
+            <h2 className="mt-2 text-lg font-semibold text-content">{selected.title}</h2>
+            {selected.publicReference && <p className="mt-1 font-mono text-[10px] text-content-muted">{selected.publicReference}</p>}
+            <p className="mt-2 text-xs text-content-muted">Received {formatDate(selected.submittedAt)}</p>
           </div>
           <div className="grid gap-3 p-5 md:grid-cols-2">
-            <div className="rounded-lg border border-white/[0.07] p-4">
-              <p className="text-[10px] uppercase tracking-wide text-gray-500">Client contact · Unverified</p>
-              <p className="mt-3 flex items-center gap-2 text-sm text-gray-200"><UserRound size={14} />{selected.fullName}</p>
-              <p className="mt-2 flex items-center gap-2 break-all text-xs text-gray-400"><Mail size={14} className="shrink-0" />{selected.email}</p>
-              {selected.company && <p className="mt-2 text-xs text-gray-400">{selected.company}</p>}
+            <div className="rounded-lg border border-divider p-4">
+              <p className="text-[10px] uppercase tracking-wide text-content-muted">Client contact · Unverified</p>
+              <p className="mt-3 flex items-center gap-2 text-sm text-content"><UserRound size={14} />{selected.fullName}</p>
+              <p className="mt-2 flex items-center gap-2 break-all text-xs text-content-secondary"><Mail size={14} className="shrink-0" />{selected.email}</p>
+              {selected.company && <p className="mt-2 text-xs text-content-secondary">{selected.company}</p>}
             </div>
-            <div className="rounded-lg border border-white/[0.07] p-4">
-              <p className="text-[10px] uppercase tracking-wide text-gray-500">Requested date</p>
-              <p className="mt-3 text-sm text-gray-200">{selected.requestedDeadline ?? 'Not specified'}</p>
-              <p className="mt-2 text-xs text-gray-500">The date is a client preference, not a commitment.</p>
+            <div className="rounded-lg border border-divider p-4">
+              <p className="text-[10px] uppercase tracking-wide text-content-muted">Requested date</p>
+              <p className="mt-3 text-sm text-content">{selected.requestedDeadline ?? 'Not specified'}</p>
+              <p className="mt-2 text-xs text-content-muted">The date is a client preference, not a commitment.</p>
             </div>
           </div>
-          <div className="mx-5 rounded-lg border border-white/[0.07] p-4">
-            <p className="text-[10px] uppercase tracking-wide text-gray-500">What they need</p>
-            <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-gray-300">{selected.description}</p>
+          <div className="mx-5 rounded-lg border border-divider p-4">
+            <p className="text-[10px] uppercase tracking-wide text-content-muted">What they need</p>
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-content-secondary">{selected.description}</p>
           </div>
-          <div className="mt-auto border-t border-white/[0.07] p-5">
-            <p className="mb-3 text-xs leading-relaxed text-gray-400">Accepting creates a normal ticket in <span className="font-medium text-gray-200">{workspaceName ?? 'the selected workspace'}</span>. It does not verify the email, create a project, invite the client, or grant portal access.</p>
-            <label className="mb-3 block space-y-1.5"><span className="text-[11px] font-medium text-gray-400">Optional internal decline note</span><textarea maxLength={1000} rows={2} value={declineReason} disabled={declining || accepting} onChange={event => setDeclineReason(event.target.value)} className="w-full rounded-lg border border-white/[0.08] bg-black/20 p-2.5 text-xs text-gray-200 outline-none focus:border-brand-400" placeholder="For your team's records only" /></label>
-            <p className="mb-3 text-[10px] text-gray-500">Declining is recorded for the PM team. The note is not emailed to the client; no ticket or account is created.</p>
+          <div className="mt-auto border-t border-divider p-5">
+            <p className="mb-3 text-xs leading-relaxed text-content-secondary">Accepting creates a normal ticket in <span className="font-medium text-content">{workspaceName ?? 'the selected workspace'}</span>. It does not verify the email, create a project, invite the client, or grant portal access.</p>
+            <label className="mb-3 block space-y-1.5"><span className="text-[11px] font-medium text-content-secondary">Optional internal decline note</span><textarea maxLength={1000} rows={2} value={declineReason} disabled={declining || accepting} onChange={event => setDeclineReason(event.target.value)} className="w-full rounded-lg border border-divider bg-well p-2.5 text-xs text-content outline-none focus:border-control" placeholder="For your team's records only" /></label>
+            <p className="mb-3 text-[10px] text-content-muted">Declining is recorded for the PM team. The note is not emailed to the client; no ticket or account is created.</p>
             <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void decline()} disabled={declining || accepting || !workspaceName}
-              className="inline-flex items-center gap-2 rounded-lg border border-rose-400/20 px-4 py-2.5 text-sm font-medium text-rose-200 hover:bg-rose-500/[0.06] disabled:cursor-not-allowed disabled:opacity-50">
+              className="inline-flex items-center gap-2 rounded-lg border border-status-danger-border px-4 py-2.5 text-sm font-medium text-status-danger hover:bg-status-danger-subtle disabled:cursor-not-allowed disabled:opacity-50">
               {declining ? <RefreshCw size={15} className="animate-spin" /> : <XCircle size={15} />}
               {declining ? 'Declining…' : 'Decline inquiry'}
             </button><button type="button" onClick={() => void accept()} disabled={accepting || declining || !workspaceName}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-brand-500 disabled:cursor-not-allowed disabled:opacity-50">
+              className="inline-flex items-center gap-2 rounded-lg bg-action px-4 py-2.5 text-sm font-medium text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50">
               {accepting ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
               {accepting ? 'Accepting…' : `Accept into ${workspaceName ?? 'workspace'}`}
             </button></div>
           </div>
         </> : <div className="flex min-h-64 flex-1 flex-col items-center justify-center p-6 text-center">
-          {error ? <><AlertCircle size={22} className="text-rose-300" /><p className="mt-3 text-sm text-gray-300">The inbox could not be loaded.</p></> : <><Send size={22} className="text-gray-600" /><p className="mt-3 text-sm text-gray-300">Select an inquiry to review</p></>}
+          {error ? <><AlertCircle size={22} className="text-status-danger" /><p className="mt-3 text-sm text-content-secondary">The inbox could not be loaded.</p></> : <><Send size={22} className="text-content-muted" /><p className="mt-3 text-sm text-content-secondary">Select an inquiry to review</p></>}
         </div>}
       </div>
     </div>}
