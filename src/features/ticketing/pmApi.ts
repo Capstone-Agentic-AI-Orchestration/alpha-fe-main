@@ -173,6 +173,9 @@ export interface PmTicketProjectLinkReceipt extends PmTicketReceipt {
 export interface PmClientRequestAccessReceipt { ticketId: string; acceptsNewRequests: boolean }
 export interface PmPublicInquiryCode { code: string; submissionEnabled: boolean }
 export interface PmCentralIntakeItem {
+  status?: 'pending' | 'accepted' | 'declined';
+  handledAt?: string | null;
+  outcomeEmailStatus?: 'pending' | 'retry' | 'leased' | 'delivered' | 'dead' | null;
   id: string; publicReference?: string; fullName: string; email: string; company: string | null; title: string;
   description: string; requestedDeadline: string | null; submittedAt: string;
 }
@@ -215,8 +218,8 @@ export const pmTicketApi = {
     }
     return { phaseWorkflowEnabled: (value as { phaseWorkflowEnabled: boolean }).phaseWorkflowEnabled };
   },
-  async listCentralIntakes(after: string | null = null): Promise<PmCentralIntakePage> {
-    const value = await apiService.ticketRequest<unknown>(`/tickets/intakes${query({ limit: '50', after })}`);
+  async listCentralIntakes(after: string | null = null, filter: 'pending' | 'handled' = 'pending'): Promise<PmCentralIntakePage> {
+    const value = await apiService.ticketRequest<unknown>(`/tickets/intakes${query({ limit: '50', after, ...(filter === 'handled' ? { filter } : {}) })}`);
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Shared inquiry response is invalid.');
     const page = value as Record<string, unknown>;
     if (!Array.isArray(page.items) || (page.nextCursor !== null && typeof page.nextCursor !== 'string')) {
@@ -225,6 +228,11 @@ export const pmTicketApi = {
     const items = page.items.map((value): PmCentralIntakeItem => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Shared inquiry response is invalid.');
       const row = value as Record<string, unknown>;
+      if ((row.status !== undefined && !['pending', 'accepted', 'declined'].includes(String(row.status)))
+        || (row.handledAt != null && (typeof row.handledAt !== 'string' || !Number.isFinite(Date.parse(row.handledAt))))
+        || (row.outcomeEmailStatus != null && !['pending', 'retry', 'leased', 'delivered', 'dead'].includes(String(row.outcomeEmailStatus)))) {
+        throw new Error('Shared inquiry status is invalid.');
+      }
       if (typeof row.id !== 'string' || !row.id.trim() || typeof row.fullName !== 'string' || !row.fullName.trim()
         || (row.publicReference !== undefined && (typeof row.publicReference !== 'string' || !/^INQ-[A-F0-9]{32}$/.test(row.publicReference)))
         || typeof row.email !== 'string' || !row.email.trim()
@@ -236,7 +244,10 @@ export const pmTicketApi = {
       }
       return { id: row.id, ...(typeof row.publicReference === 'string' ? { publicReference: row.publicReference } : {}), fullName: row.fullName, email: row.email, company: row.company as string | null,
         title: row.title, description: row.description, requestedDeadline: row.requestedDeadline as string | null,
-        submittedAt: row.submittedAt };
+        submittedAt: row.submittedAt,
+        ...(row.status !== undefined ? { status: row.status as PmCentralIntakeItem['status'] } : {}),
+        ...(row.handledAt !== undefined ? { handledAt: row.handledAt as string | null } : {}),
+        ...(row.outcomeEmailStatus !== undefined ? { outcomeEmailStatus: row.outcomeEmailStatus as PmCentralIntakeItem['outcomeEmailStatus'] } : {}) };
     });
     return { items, nextCursor: page.nextCursor as string | null };
   },

@@ -15,6 +15,7 @@ import { clientTicketProgress } from './clientTicketProgress';
 import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink';
 import { secondary, time } from './ticketUi';
 import './clientPortal.css';
+import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
 
 type Filter = NonNullable<Parameters<typeof clientTicketApi.listTickets>[1]>['filter'];
 type PortalState = 'checking' | 'signed_out' | 'unavailable' | 'ready';
@@ -95,6 +96,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const queueGeneration = useRef(0);
   const historyGeneration = useRef(0);
   const writeLock = useRef(false);
+  const queueSnapshot = useRef(queue);
+  queueSnapshot.current = queue;
+  const [refreshError, setRefreshError] = useState('');
   const workflowActionsDisabled = workflowActionsDisabledOverride || !phaseWorkflowEnabled;
   const canCreateRequests = !newRequestsDisabled && !workflowActionsDisabled;
 
@@ -183,7 +187,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }
     let current = true;
     const generation = ++queueGeneration.current;
-    setQueueLoading(true); setQueueMoreLoading(false); setQueueError('');
+    setQueueLoading(true); setQueueMoreLoading(false); setQueueError(''); setRefreshError('');
     api.listTickets(workspaceId, { limit: 50, filter, search }).then(result => {
       if (!current || generation !== queueGeneration.current) return;
       setQueue(result);
@@ -200,8 +204,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   }, [portalState, workspaceId, filter, search, refreshVersion, api]);
 
   const selectedQueueItem = useMemo(
-    () => queue?.items.find(item => item.id === selectedId) ?? null,
-    [queue, selectedId],
+    () => queue?.items.find(item => item.id === selectedId) ?? (detail?.id === selectedId ? detail : null),
+    [queue, selectedId, detail],
   );
 
   useEffect(() => {
@@ -231,6 +235,53 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       if (historyGeneration.current === generation) historyGeneration.current += 1;
     };
   }, [portalState, workspaceId, selectedId, selectedQueueItem?.id, refreshVersion, api, workflowActionsDisabled, communicationEnabled]);
+
+  useEffect(() => {
+    if (inspectionOnly || portalState !== 'ready' || !workspaceId || view !== 'tickets'
+      || writing || pending || signingOut || queueLoading || detailLoading || historyLoading || queueMoreLoading) return;
+    let current = true;
+    const stop = startClientAutoRefresh(async () => {
+      const queueVersion = queueGeneration.current;
+      const historyVersion = historyGeneration.current;
+      try {
+        const loadQueue = async () => {
+          let page = await api.listTickets(workspaceId, { limit: 50, filter, search });
+          const items = [...page.items];
+          const count = queueSnapshot.current?.items.length ?? 50;
+          const cursors = new Set<string>();
+          while (page.nextCursor && items.length < count && !cursors.has(page.nextCursor)) {
+            cursors.add(page.nextCursor);
+            page = await api.listTickets(workspaceId, { limit: 50, filter, search, after: page.nextCursor });
+            items.push(...page.items);
+          }
+          return { ...page, items };
+        };
+        const [freshQueue, freshDetail, freshMessages] = await Promise.all([
+          loadQueue(),
+          selectedId ? api.getTicket(workspaceId, selectedId) : null,
+          selectedId && (!workflowActionsDisabled || communicationEnabled)
+            ? api.getMessages(workspaceId, selectedId, { limit: 50 }) : null,
+        ]);
+        if (!current || writeLock.current || queueVersion !== queueGeneration.current || historyVersion !== historyGeneration.current) return;
+        setQueue(freshQueue);
+        if (freshDetail) setDetail(freshDetail);
+        if (freshMessages) setMessages(previous => mergeClientMessages(previous, freshMessages.items));
+        setRefreshError('');
+      } catch (error) {
+        if (!current || queueVersion !== queueGeneration.current || historyVersion !== historyGeneration.current) return;
+        if (isExpiredClientSession(error)) return;
+        if (error instanceof ClientTicketApiError && (error.status === 403 || error.status === 404)) {
+          setSelectedId(null); setDetail(null); setRefreshVersion(value => value + 1);
+          setRefreshError('This request is no longer available. Choose another request.');
+          return;
+        }
+        setRefreshError('Could not refresh updates. Your message draft is kept. Use Refresh to try again.');
+      }
+    });
+    return () => { current = false; stop(); };
+  }, [api, portalState, workspaceId, selectedId, filter, search, inspectionOnly, view,
+    writing, pending, signingOut, queueLoading, detailLoading, historyLoading, queueMoreLoading,
+    workflowActionsDisabled, communicationEnabled]);
 
   async function loadMoreQueue() {
     if (!workspaceId || !queue?.nextCursor || queueMoreLoading) return;
@@ -414,6 +465,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     <div className="client-portal-main">
       {inspectionOnly && <p role="status" className="client-portal-notice">Fictional sample requests · the same client interface used by Alphaexplora. Submissions, replies, sign-in, uploads and downloads are disabled.</p>}
       {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
+      {refreshError && <div role="status" className="client-portal-error">{refreshError}</div>}
 
       {workspaceOptions.length === 0 ? <section className="client-portal-empty"><EmptyState title={pageError ? 'We could not load your requests' : 'No requests shared yet'} body={pageError ? 'Try again using the button above. If the problem continues, contact your project manager.' : 'Your project manager will share your requests here. If you expected to see one, contact them for help.'} /></section>
         : canCreateRequests && view === 'create' && createContext ? <div className="client-create-view"><ClientCreateTicketForm

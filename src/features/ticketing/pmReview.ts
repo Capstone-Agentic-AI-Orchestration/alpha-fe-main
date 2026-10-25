@@ -17,11 +17,11 @@ export function pmCorrectionMode(ticket: PmTicketDetail, clientAccessActive: boo
 }
 
 /** UI filtering only. The server must recheck run claims, exact revisions,
- * ticket ownership and active assignees in the correction transaction.
+ * ticket ownership and project access in the correction transaction.
  */
 export function isPmCorrectionCandidate(ticket: PmTicketDetail, issue: PmHandoffIssue): boolean {
   return ticket.internal.requiredIssueIds.includes(issue.id) && issue.projectId === ticket.internal.projectId
-    && (issue.status === 'review' || issue.status === 'done') && Boolean(issue.assignedHuman?.trim());
+    && (issue.status === 'review' || issue.status === 'done');
 }
 
 export function validPmCorrectionSelection(ticket: PmTicketDetail, issues: readonly PmHandoffIssue[], draft: PmCorrectionDraft): boolean {
