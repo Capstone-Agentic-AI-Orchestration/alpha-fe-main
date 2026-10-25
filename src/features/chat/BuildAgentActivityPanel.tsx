@@ -40,8 +40,9 @@ export const BuildAgentActivityPanel: React.FC<{
   runId: string;
   /** The codebase of the agent's current task. */
   repository: string;
-  onOpenRoom: () => void;
-}> = ({ agent, projectId, runId, repository, onOpenRoom }) => {
+  onOpenReview: () => void;
+  usage?: React.ReactNode;
+}> = ({ agent, projectId, runId, repository, onOpenReview, usage }) => {
   const timelineRef = useRef<HTMLOListElement>(null);
   const activities = [...(agent.card?.activity ?? [])].sort((a, b) => a.sequence - b.sequence);
   const live = agent.state === 'running';
@@ -74,6 +75,7 @@ export const BuildAgentActivityPanel: React.FC<{
         </div>
       </header>
 
+      {usage && <div className="max-h-48 shrink-0 overflow-y-auto px-5">{usage}</div>}
       <div role="tablist" aria-label={agent.name + ' views'} className="flex shrink-0 gap-4 border-b border-white/[0.07] px-5">
         {(['activity', 'changes'] as const).map(item => <button key={item} type="button" role="tab" aria-selected={view === item} onClick={() => choose(item)}
           className={'-mb-px border-b-2 py-2 text-[11px] font-medium ' + (view === item ? 'border-violet-300 text-white' : 'border-transparent text-gray-500 hover:text-gray-200')}>
@@ -146,7 +148,7 @@ export const BuildAgentActivityPanel: React.FC<{
       </div>}
 
       <footer className="border-t border-white/[0.07] px-5 py-3">
-        <button type="button" onClick={onOpenRoom} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-violet-200 hover:text-violet-100"><Radio className="h-3.5 w-3.5" />Open in Live Build Room</button>
+        <button type="button" onClick={onOpenReview} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-violet-200 hover:text-violet-100"><Radio className="h-3.5 w-3.5" />Show Build review tab</button>
       </footer>
     </section>
   );

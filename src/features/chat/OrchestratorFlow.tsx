@@ -7,6 +7,7 @@ import { AgentModelPanel } from './AgentModelPanel';
 import type { BuildAgentNode, BuildAgentState, BuildHandoff } from './useProjectLiveBuild';
 import type { SceneAgent, SceneLink } from './OrchestratorScene3D';
 import { supportsWebGL } from './orchestratorSceneLayout';
+import { runningFlowAgentCount } from './flowExecution';
 
 // three.js loads only when someone opens the flow, never with the chat itself.
 const OrchestratorScene3D = lazy(() => import('./OrchestratorScene3D'));
@@ -40,6 +41,7 @@ interface OrchestratorFlowProps {
   build?: FlowBuild | null;
   selectedBuildAgentId?: string | null;
   onSelectBuildAgent?: (agentId: string | null) => void;
+  sidePanelOpen?: boolean;
   /** Every agent in the workspace. The 3D view shows them all around the Orchestrator. */
   roster?: Agent[];
   runtimes?: RuntimeEngine[];
@@ -83,8 +85,6 @@ const IDLE_RGB = '150, 140, 200';
 function isOrchestratorAgent(agent: Agent): boolean {
   return agent.templateKey === 'orchestrator' || /orchestrator/i.test(agent.role);
 }
-const SUCCESS_RGB = '52, 211, 153';
-const ERROR_RGB = '244, 63, 94';
 const FLASH_HOLD_MS = 1200;
 const FLASH_FADE_MS = 1800;
 
@@ -344,47 +344,44 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
   return positions;
 }
 
-export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, isWorking, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent, roster = [], runtimes = [], canEditAgents = false, onUpdateAgent }) => {
+export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent, sidePanelOpen = false, roster = [], runtimes = [], canEditAgents = false, onUpdateAgent }) => {
   const [expanded, setExpanded] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const positionsRef = useRef<NodePosition[]>([]);
   const flashRef = useRef<{ rgb: string; start: number } | null>(null);
-  const previousStatusesRef = useRef<Map<string, AgentCall['status']>>(new Map());
-  const wasWorkingRef = useRef(false);
   const panelId = useId();
   const turnCalls = useMemo(() => latestChatTurn(calls), [calls]);
   const orchestratorCall = turnCalls.find(isOrchestratorCall);
   const agentCalls = useMemo(() => turnCalls.filter(call => !isOrchestratorCall(call)), [turnCalls]);
   const activeAgentCall = agentCalls.find(call => call.status === 'running');
   const orchestratorLive = Boolean(orchestratorCall && orchestratorCall.status === 'running');
-  const working = isWorking || orchestratorLive || Boolean(activeAgentCall) || Boolean(build?.running);
+  // Composer activity and approval clicks are not evidence that an agent is executing.
+  const working = orchestratorLive || Boolean(activeAgentCall) || Boolean(build?.running);
   const buildAgents = useMemo(() => build?.agents ?? [], [build]);
   const hubId = orchestratorCall?.id ?? HUB_ID;
   const agentById = useMemo(() => new Map(agents.map(agent => [agent.id, agent])), [agents]);
   const agentName = (call: AgentCall) => agentById.get(call.agentId)?.name ?? call.agentId;
   const hoveredCall = agentCalls.find(call => call.id === hoveredId);
   const hoveredBuildAgent = hoveredId?.startsWith(BUILD_PREFIX) ? buildAgents.find(agent => BUILD_PREFIX + agent.agentId === hoveredId) : undefined;
-  const failedCount = agentCalls.filter(call => call.status === 'failed').length + (orchestratorCall?.status === 'failed' ? 1 : 0);
   // Build agents come first so they keep the places closest to the Orchestrator.
   const waveAgents = useMemo<WaveAgent[]>(() => [
     ...buildAgents.map(agent => ({
       id: BUILD_PREFIX + agent.agentId,
       initial: agent.name.slice(0, 1).toUpperCase(),
-      tone: buildTone(agent.state),
-      active: agent.state === 'running'
+      tone: build?.running && agent.state === 'running' ? buildTone(agent.state) : IDLE_RGB,
+      active: Boolean(build?.running && agent.state === 'running')
     })),
     ...agentCalls.map(call => ({
       id: call.id,
       initial: (agentById.get(call.agentId)?.name ?? call.agentId).slice(0, 1).toUpperCase(),
-      tone: toneFor(call.status),
+      tone: call.status === 'running' ? toneFor(call.status) : IDLE_RGB,
       active: call.status === 'running'
     }))
-  ].slice(0, AGENT_OFFSETS.length), [agentById, agentCalls, buildAgents]);
+  ].slice(0, AGENT_OFFSETS.length), [agentById, agentCalls, buildAgents, build?.running]);
   const selectedId = selectedCallId ?? (selectedBuildAgentId ? BUILD_PREFIX + selectedBuildAgentId : null);
-  const nodeCount = buildAgents.length + agentCalls.length;
-  const failedNodes = failedCount + buildAgents.filter(agent => agent.state === 'failed').length;
+  const runningCount = runningFlowAgentCount(turnCalls, build);
   const [webgl] = useState(() => supportsWebGL());
   const [sceneFailed, setSceneFailed] = useState(false);
   const [maximized, setMaximized] = useState(false);
@@ -409,17 +406,17 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         ...buildAgents.map(agent => ({
           id: BUILD_PREFIX + agent.agentId,
           name: agent.name,
-          tone: buildTone(agent.state),
-          active: agent.state === 'running',
-          engaged: true,
+          tone: build?.running && agent.state === 'running' ? buildTone(agent.state) : IDLE_RGB,
+          active: Boolean(build?.running && agent.state === 'running'),
+          engaged: false,
           detail: [BUILD_STATE_LABEL[agent.state], agent.currentTaskTitle].filter(Boolean).join(' · ')
         })),
         ...agentCalls.map(call => ({
           id: call.id,
           name: agentById.get(call.agentId)?.name ?? call.agentId,
-          tone: toneFor(call.status),
+          tone: call.status === 'running' ? toneFor(call.status) : IDLE_RGB,
           active: call.status === 'running',
-          engaged: true,
+          engaged: false,
           detail: [agentById.get(call.agentId)?.role, callStatus(call.status)].filter(Boolean).join(' · ')
         }))
       ];
@@ -432,21 +429,21 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       return {
         id: ROSTER_PREFIX + agent.id,
         name: agent.name,
-        tone: inBuild ? buildTone(inBuild.state) : call ? toneFor(call.status) : IDLE_RGB,
-        active: inBuild?.state === 'running' || (call ? call.status === 'running' : false),
-        engaged: Boolean(inBuild || call),
+        tone: build?.running && inBuild?.state === 'running' ? buildTone(inBuild.state) : call?.status === 'running' ? toneFor(call.status) : IDLE_RGB,
+        active: Boolean(build?.running && inBuild?.state === 'running') || call?.status === 'running',
+        engaged: false,
         detail: [agent.role, state, inBuild?.changedFiles.length ? inBuild.changedFiles.length + (inBuild.changedFiles.length === 1 ? ' file changed' : ' files changed') : null, agent.modelName].filter(Boolean).join(' · ')
       };
     });
-  }, [agentById, agentCalls, buildAgents, rosterAgents]);
+  }, [agentById, agentCalls, buildAgents, rosterAgents, build?.running]);
   // Agent-to-agent links: who handed work to whom in the open build.
   const sceneLinks = useMemo<SceneLink[]>(() => {
     const sceneId = (agentId: string) => (rosterAgents.length ? ROSTER_PREFIX : BUILD_PREFIX) + agentId;
     const present = new Set(sceneAgents.map(agent => agent.id));
-    return (build?.handoffs ?? [])
+    return (build?.running ? build.handoffs ?? [] : []).filter(handoff => handoff.state === 'active')
       .map(handoff => ({ from: sceneId(handoff.fromAgentId), to: sceneId(handoff.toAgentId), state: handoff.state }))
       .filter(link => present.has(link.from) && present.has(link.to));
-  }, [build?.handoffs, rosterAgents.length, sceneAgents]);
+  }, [build?.handoffs, build?.running, rosterAgents.length, sceneAgents]);
   const agentStatus = (agentId: string): string => {
     if (agentId === orchestratorAgent?.id) return 'Orchestrator · ' + statusText;
     const inBuild = buildAgents.find(node => node.agentId === agentId);
@@ -455,10 +452,11 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     return call ? callStatus(call.status) : 'Idle · not part of the current work';
   };
   const activityFor = (agentId: string): (() => void) | undefined => {
-    if (agentId === orchestratorAgent?.id) return orchestratorCall && onSelectCall ? () => onSelectCall(orchestratorCall.id) : undefined;
+    if (agentId === orchestratorAgent?.id && orchestratorCall && onSelectCall) return () => onSelectCall(orchestratorCall.id);
     if (buildAgents.some(node => node.agentId === agentId) && onSelectBuildAgent) return () => onSelectBuildAgent(agentId);
     const call = agentCalls.find(item => item.agentId === agentId);
-    return call && onSelectCall ? () => onSelectCall(call.id) : undefined;
+    if (call && onSelectCall) return () => onSelectCall(call.id);
+    return onSelectBuildAgent ? () => onSelectBuildAgent(agentId) : undefined;
   };
   useEffect(() => {
     const onVisibility = () => setPageVisible(!document.hidden);
@@ -480,20 +478,22 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   const select = (id: string) => {
     if (id === hubId && orchestratorAgent) {
       setPanelAgentId(previous => (previous === orchestratorAgent.id ? null : orchestratorAgent.id));
+      if (sidePanelOpen) activityFor(orchestratorAgent.id)?.();
       return;
     }
     if (id.startsWith(ROSTER_PREFIX)) {
       const agentId = id.slice(ROSTER_PREFIX.length);
       setPanelAgentId(previous => (previous === agentId ? null : agentId));
+      if (sidePanelOpen) activityFor(agentId)?.();
       return;
     }
     if (id === HUB_ID) return;
     if (id.startsWith(BUILD_PREFIX)) {
       const agentId = id.slice(BUILD_PREFIX.length);
-      onSelectBuildAgent?.(selectedBuildAgentId === agentId ? null : agentId);
+      onSelectBuildAgent?.(agentId);
       return;
     }
-    onSelectCall?.(selectedCallId === id ? null : id);
+    onSelectCall?.(id);
   };
   let statusText: string;
   if (activeAgentCall) statusText = agentName(activeAgentCall) + ' is working';
@@ -513,28 +513,8 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   const stateRef = useRef({ expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: false });
   stateRef.current = { expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: show3D };
 
-  // A finished run tints the wave green, a failed one red; both fade back to purple.
-  useEffect(() => {
-    const previous = previousStatusesRef.current;
-    let outcome: 'success' | 'error' | null = null;
-    for (const call of turnCalls) {
-      const before = previous.get(call.id);
-      if (!before || before === call.status || !LIVE_STATUSES.includes(before)) continue;
-      if (call.status === 'failed') outcome = 'error';
-      else if (call.status === 'completed' && outcome !== 'error') outcome = 'success';
-    }
-    if (outcome) flashRef.current = { rgb: outcome === 'error' ? ERROR_RGB : SUCCESS_RGB, start: performance.now() };
-    previousStatusesRef.current = new Map(turnCalls.map(call => [call.id, call.status]));
-  }, [turnCalls]);
-
-  useEffect(() => {
-    // Plain answers have no call record; their end still counts as a success.
-    const recentFlash = flashRef.current && performance.now() - flashRef.current.start < 1500;
-    if (wasWorkingRef.current && !working && !recentFlash) {
-      flashRef.current = { rgb: SUCCESS_RGB, start: performance.now() };
-    }
-    wasWorkingRef.current = working;
-  }, [working]);
+  // Historical outcomes remain in review/activity. The live scene returns directly to neutral.
+  useEffect(() => { if (!working) flashRef.current = null; }, [working]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -625,13 +605,13 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         runtimes={runtimes}
         canEdit={canEditAgents && Boolean(onUpdateAgent)}
         onUpdate={(id, updates) => onUpdateAgent?.(id, updates)}
-        onViewActivity={activityFor(panelAgent.id)}
+        onViewActivity={sidePanelOpen ? undefined : activityFor(panelAgent.id)}
         changedFiles={buildAgents.find(node => node.agentId === panelAgent.id)?.changedFiles}
         onClose={() => setPanelAgentId(null)}
       />
     </div>}
-    {nodeCount > 0 && <div className="sr-only focus-within:not-sr-only focus-within:absolute focus-within:bottom-8 focus-within:right-4 focus-within:flex focus-within:gap-1.5">
-      {sceneAgents.map(agent => <button key={agent.id} type="button" onClick={() => select(agent.id)} aria-pressed={sceneSelectedId === agent.id} className="rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[11px] text-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{agent.name}</button>)}
+    {sceneAgents.length > 0 && <div className="sr-only focus-within:not-sr-only focus-within:absolute focus-within:bottom-8 focus-within:right-4 focus-within:flex focus-within:gap-1.5">
+      {sceneAgents.map(agent => <button key={agent.id} type="button" data-execution-state={agent.active ? 'running' : 'idle'} onClick={() => select(agent.id)} aria-pressed={sceneSelectedId === agent.id} className="rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[11px] text-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{agent.name}</button>)}
     </div>}
   </>;
 
@@ -652,7 +632,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         </div>
       </div>
     </div>, document.body)}
-    <section id={panelId} className={'absolute inset-x-0 top-0 z-30 overflow-hidden rounded-2xl border border-white/[0.08] bg-shell transition-[height,box-shadow] duration-500 ease-out motion-reduce:transition-none ' + (show3D ? 'h-[560px] shadow-2xl shadow-black/60' : expanded ? 'h-[184px] shadow-2xl shadow-black/60' : 'h-14')}>
+    <section id={panelId} data-execution-state={working ? 'running' : 'idle'} className={'absolute inset-x-0 top-0 z-30 overflow-hidden rounded-2xl border border-white/[0.08] bg-shell transition-[height,box-shadow] duration-500 ease-out motion-reduce:transition-none ' + (show3D ? 'h-[560px] shadow-2xl shadow-black/60' : expanded ? 'h-[184px] shadow-2xl shadow-black/60' : 'h-14')}>
       {show3D && !maximized && <div className="absolute inset-0 select-none">{sceneView}</div>}
       {show3D && maximized && <div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-gray-500">Showing in the enlarged view</div>}
       <canvas
@@ -694,7 +674,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
             <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}</span>
           </span>
         </button>
-        {(failedNodes > 0 || (!expanded && nodeCount > 0)) && <span className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (failedNodes > 0 ? 'border-rose-300/30 text-rose-200' : 'border-violet-300/20 text-violet-200')}>{failedNodes > 0 ? 'Needs attention' : nodeCount + (nodeCount === 1 ? ' assigned agent' : ' assigned agents')}</span>}
+        {!expanded && <span data-agent-execution-count={runningCount} className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (runningCount ? 'border-violet-300/20 text-violet-200' : 'border-white/10 text-gray-500')}>{runningCount ? runningCount + (runningCount === 1 ? ' agent running' : ' agents running') : 'No agents running'}</span>}
         {show3D && <>
           <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
           <button type="button" onClick={() => setMaximized(value => !value)} aria-label={maximized ? 'Restore the 3D view' : 'Enlarge the 3D view'} title={maximized ? 'Restore' : 'Enlarge'} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{maximized ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}</button>

@@ -58,7 +58,7 @@ function stateFor(statuses: string[]): BuildAgentState {
   if (statuses.some(status => status === 'running')) return 'running';
   if (statuses.some(status => status === 'failed' || status === 'blocked')) return 'failed';
   if (statuses.some(status => status === 'submitted')) return 'review';
-  if (statuses.length && statuses.every(status => ['accepted', 'cancelled', 'superseded'].includes(status))) return 'completed';
+  if (statuses.length && statuses.every(status => status === 'accepted')) return 'completed';
   return 'waiting';
 }
 
@@ -147,7 +147,7 @@ export function snapshotBelongsToThread(snapshot: LiveBuildRoomSnapshot | null, 
 /** The originating chat's open Orchestrator build, kept live for its chat bar. */
 export function useProjectLiveBuild(projectId: string | undefined, enabled: boolean, threadId?: string | null) {
   const scopeKey = `${projectId ?? ''}:${threadId ?? ''}`;
-  const [loaded, setLoaded] = useState<{ key: string; snapshot: LiveBuildRoomSnapshot } | null>(null);
+  const [loaded, setLoaded] = useState<{ key: string; snapshot: LiveBuildRoomSnapshot; fresh: boolean } | null>(null);
   // A thread switch hides the previous response synchronously, before effects run.
   const snapshot = loaded?.key === scopeKey ? loaded.snapshot : null;
   const requestRef = useRef(0);
@@ -157,9 +157,10 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
     const request = ++requestRef.current;
     try {
       const next = await apiService.getLiveBuildRoom(projectId, undefined, threadId ?? undefined);
-      if (request === requestRef.current) setLoaded({ key: scopeKey, snapshot: next });
+      if (request === requestRef.current) setLoaded({ key: scopeKey, snapshot: next, fresh: true });
     } catch {
-      // A room that cannot load leaves the bar on the chat's own activity.
+      if (request === requestRef.current) setLoaded(previous => previous?.key === scopeKey ? { ...previous, fresh: false } : previous);
+      // Preserve history while failing closed on live execution styling.
     }
   }, [enabled, projectId, scopeKey, threadId]);
 
@@ -182,7 +183,7 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
 
   const status = snapshot?.orchestration?.run.status;
   const open = Boolean(status && OPEN_BUILD_STATUSES.includes(status));
-  const running = Boolean(status && RUNNING_BUILD_STATUSES.includes(status));
+  const running = Boolean(loaded?.fresh && status && RUNNING_BUILD_STATUSES.includes(status));
 
   useEffect(() => {
     if (!projectId || !enabled) return undefined;
@@ -202,9 +203,9 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [liveRunKey]);
 
-  const build = useMemo<ProjectLiveBuild | null>(() => {
+  const latestBuild = useMemo<ProjectLiveBuild | null>(() => {
     const orchestration = snapshot?.orchestration;
-    if (!snapshot || !orchestration || !open || !snapshotBelongsToThread(snapshot, threadId)) return null;
+    if (!snapshot || !orchestration || !snapshotBelongsToThread(snapshot, threadId)) return null;
     return {
       runId: orchestration.run.id,
       status: orchestration.run.status,
@@ -216,9 +217,9 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
       agents: buildAgentNodes(snapshot),
       orchestration
     };
-  }, [open, running, snapshot, threadId]);
+  }, [running, snapshot, threadId]);
 
-  return { build, refresh };
+  return { build: open ? latestBuild : null, latestBuild, refresh };
 }
 
 const STATUS_LABEL: Partial<Record<LiveBuildOrchestrationStatus, string>> = {

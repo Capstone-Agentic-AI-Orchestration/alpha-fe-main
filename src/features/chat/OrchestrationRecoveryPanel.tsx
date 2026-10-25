@@ -28,6 +28,7 @@ interface OrchestrationRecoveryPanelProps {
   canControl: boolean;
   threadId?: string;
   onOpenRoom?: () => void;
+  onOpenReview?: () => void;
   onActionComplete?: (state?: LiveBuildRecoveryState) => void | Promise<void>;
   compact?: boolean;
 }
@@ -50,7 +51,7 @@ function idempotencyKey(): string {
 }
 
 export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProps> = ({
-  projectId, runId, runRevision, taskRevision, recovery, canControl, threadId, onOpenRoom, onActionComplete, compact = false
+  projectId, runId, runRevision, taskRevision, recovery, canControl, threadId, onOpenRoom, onOpenReview, onActionComplete, compact = false
 }) => {
   const [guidance, setGuidance] = useState('');
   const [showGuidance, setShowGuidance] = useState(false);
@@ -72,7 +73,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
     'plan_final_validation_corrections', 'resume_checkpoint', 'review_saved_changes', 'keep_paused', 'cancel_build'] as LiveBuildRecoveryAction[])
     .filter(action => available.has(action) &&
       (canControl || action === 'explain_failure' || action === 'review_saved_changes') &&
-      (action !== 'review_saved_changes' || Boolean(onOpenRoom)));
+      (action !== 'review_saved_changes' || Boolean(onOpenReview ?? onOpenRoom)));
   const phaseLabel = recovery.phase === 'repairing' ? 'Recovery in progress'
     : recovery.phase === 'ready_to_continue' ? 'Ready to continue' : 'Waiting for your direction';
   const recoveryUsage = recovery.category === 'project_code' && recovery.taskTitle
@@ -109,7 +110,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
       }
       if (action === 'cancel_build') setConfirmCancel(false);
       await onActionComplete?.(result.state);
-      if (action === 'review_saved_changes') onOpenRoom?.();
+      if (action === 'review_saved_changes') (onOpenReview ?? onOpenRoom)?.();
     } catch (caught: any) {
       setError(caught?.message ?? 'Alpha could not complete this recovery action. Refresh the build and try again.');
     } finally {
@@ -150,7 +151,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
               {busyAction === action ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : actionMeta[action].icon}{actionMeta[action].label}
             </button>;
           })}
-          {onOpenRoom && !available.has('review_saved_changes') && <button type="button" onClick={onOpenRoom} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-[10px] font-semibold text-slate-200 hover:bg-white/[0.06]">Open Live Build Room</button>}
+          {!onOpenReview && onOpenRoom && !available.has('review_saved_changes') && <button type="button" onClick={onOpenRoom} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-[10px] font-semibold text-slate-200 hover:bg-white/[0.06]">Open Live Build Room</button>}
         </div>}
         {showGuidance && available.has('provide_guidance') && <div className="mt-3 space-y-2">
           <label htmlFor={`recovery-guidance-${recovery.id}`} className="block text-[10px] font-medium text-slate-300">What should the specialist change or check?</label>

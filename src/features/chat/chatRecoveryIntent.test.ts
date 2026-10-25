@@ -2,6 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { inferRecoveryAction, isBuildDirection, isContinueRequest, isExplicitBuildRetry, isRetryRequest, resolveRecoveryAction } from './chatRecoveryIntent';
 
 describe('chat recovery intent', () => {
+  it('does not consume preview commands or diagnostics as actions on an old build', () => {
+    for (const message of ['now stop the local run', 'stop the preview', 'why did the local server fail?', 'fix the preview error', 'restart npm run dev', 'continue the local preview']) {
+      expect(inferRecoveryAction(message), message).toBeUndefined();
+      expect(isExplicitBuildRetry(message), message).toBe(false);
+      expect(isBuildDirection(message), message).toBe(false);
+      expect(isContinueRequest(message), message).toBe(false);
+    }
+    expect(inferRecoveryAction('Stop the build')).toBe('cancel_build');
+    expect(inferRecoveryAction('Retry the failed build')).toBe('repair_and_continue');
+  });
   it('sends a retry as direction when the build only accepts direction', () => {
     expect(resolveRecoveryAction('repair_and_continue', { category: 'review_input', availableActions: ['explain_failure', 'provide_guidance'] })).toBe('provide_guidance');
     expect(resolveRecoveryAction('repair_and_continue', { category: 'review_input', availableActions: ['recheck_prerequisite', 'provide_guidance'] })).toBe('recheck_prerequisite');

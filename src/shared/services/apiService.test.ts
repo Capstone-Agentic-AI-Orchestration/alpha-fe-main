@@ -5,6 +5,34 @@ import { ApiRequestError, apiService, onWorkspaceRefused, parseApiError, setActi
 afterEach(() => { vi.unstubAllGlobals(); setActiveWorkspaceId(null); onWorkspaceRefused(null); });
 const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
 
+describe('project Actions transport', () => {
+  it('encodes numeric pagination, preserves scope, and supports aborting stale requests', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ runs: [] })); vi.stubGlobal('fetch', fetchMock);
+    setActiveWorkspaceId('workspace-actions'); const controller = new AbortController();
+    await apiService.getActionsRuns('p/1', 'acme/shop', { page: 2, perPage: 30, branch: 'feature/login' }, controller.signal);
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/projects/p%2F1/repos/acme/shop/runs?page=2&perPage=30&branch=feature%2Flogin');
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.signal).toBe(controller.signal); expect(options.credentials).toBe('include');
+    expect(new Headers(options.headers).get('X-Workspace-Id')).toBe('workspace-actions');
+  });
+  it('does not silently filter All branches to dev', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ runs: [] })); vi.stubGlobal('fetch', fetchMock);
+    await apiService.getActionsRuns('p1', 'acme/shop', {});
+    expect(String(fetchMock.mock.calls[0][0])).not.toContain('branch=');
+  });
+  it('reads rate-limit backoff from JSON when cross-origin headers are unavailable', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ error: 'Rate limit', retryAfterSeconds: 90 }, 403)));
+    await expect(apiService.getActionsRuns('p1', 'acme/shop', {})).rejects.toMatchObject({ status: 403, retryAfterSeconds: 90 });
+  });
+  it('downloads binary artifacts with the workspace and credentials, without accepting redirects', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('PK fixture', { headers: { 'Content-Type': 'application/zip' } }));
+    vi.stubGlobal('fetch', fetchMock); setActiveWorkspaceId('workspace-actions');
+    const blob = await apiService.downloadActionsArtifact('p1', 'acme/shop', 11, 7);
+    expect(await blob.text()).toBe('PK fixture');
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ credentials: 'include', redirect: 'error', headers: { 'X-Workspace-Id': 'workspace-actions' } });
+  });
+});
+
 describe('existing API transport compatibility', () => {
   it('preserves existing project request cookies, selected workspace and error message format', async () => {
     setActiveWorkspaceId('workspace-existing');

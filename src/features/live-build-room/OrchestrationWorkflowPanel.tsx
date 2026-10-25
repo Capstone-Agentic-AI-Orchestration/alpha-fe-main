@@ -240,8 +240,8 @@ function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration })
   </section>;
 }
 
-export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string; savedCheckpoint?: boolean }> = ({ projectId, runId, branchName, savedCheckpoint = false }) => {
-  const [open, setOpen] = useState(false);
+export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string; savedCheckpoint?: boolean; expanded?: boolean; onReady?: () => void }> = ({ projectId, runId, branchName, savedCheckpoint = false, expanded = false, onReady }) => {
+  const [open, setOpen] = useState(expanded);
   const [preview, setPreview] = useState<LiveBuildRoomDiffPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -252,6 +252,7 @@ export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName
     setError(null);
     try {
       setPreview(await apiService.getOrchestrationDiffPreview(projectId, runId));
+      onReady?.();
     } catch (caught: any) {
       setError(caught?.message ?? 'The validated changes could not be loaded. Refresh the build and try again.');
     } finally {
@@ -268,8 +269,9 @@ export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName
   useEffect(() => {
     setPreview(null);
     setError(null);
-    setOpen(false);
-  }, [projectId, runId]);
+    setOpen(expanded);
+    if (expanded) void loadPreview();
+  }, [projectId, runId, expanded]);
 
   return <section className="overflow-hidden rounded-xl border border-violet-300/15 bg-violet-300/[0.025]">
     <button type="button" onClick={toggle} aria-expanded={open} className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-white/[0.025] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-200">

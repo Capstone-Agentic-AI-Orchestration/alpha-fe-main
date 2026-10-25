@@ -20,6 +20,7 @@ interface AgentActivityPanelProps {
   /** Overrides for calls that are not a listed agent, such as the Orchestrator itself. */
   name?: string;
   subtitle?: string;
+  usage?: React.ReactNode;
 }
 
 const STATUS: Record<AgentCall['status'], { label: string; tone: string }> = {
@@ -70,7 +71,7 @@ function duration(call: AgentCall): string | null {
 }
 
 /** What one agent is doing, shown beside the chat when its node is chosen. */
-export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, agent, name: nameOverride, subtitle }) => {
+export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, agent, name: nameOverride, subtitle, usage }) => {
   const timelineRef = useRef<HTMLOListElement>(null);
   const activities = [...call.activities].sort((a, b) => a.sequence - b.sequence);
   const live = call.status === 'running' || call.status === 'queued';
@@ -100,6 +101,7 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, ag
       </header>
 
       <div className="flex-1 space-y-6 overflow-y-auto px-5 py-5">
+        {usage}
         <section>
           <h3 className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Asked to</h3>
           <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-200">{call.instruction}</p>

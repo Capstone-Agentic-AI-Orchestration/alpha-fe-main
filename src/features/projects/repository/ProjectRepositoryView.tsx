@@ -9,13 +9,12 @@ import { apiService } from '@/shared/services/apiService';
 import { RepoBranch, RepoPullRequest } from '@/shared/types';
 import { BranchSwitcher } from './BranchSwitcher';
 import { CloneToComputerDialog, canCloneToComputer } from './CloneToComputerDialog';
-import { PipelineStrip } from './PipelineStrip';
 import { RepoFileBrowser } from './RepoFileBrowser';
 import { RepoHostingPanel } from './RepoHostingPanel';
 import { RepoLogsTab, RepoPreviews } from './RepoPreviews';
 import { RepoEnvEditor } from './RepoEnvEditor';
 import { RepoPullsList } from './RepoPullsList';
-import { RepoRunsList } from './RepoRunsList';
+import { ProjectActionsView } from './ProjectActionsView';
 import { defaultBranch } from './repoFormat';
 import { REPO_TABS, isRepoTab, tabForKey, type RepoTab } from './repoTabs';
 import { SectionError, SectionLoading } from './SectionState';
@@ -42,10 +41,13 @@ const TAB_ICONS: Record<RepoTab, LucideIcon> = {
 export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
   projectId, repositories, repositoriesLoading = false, overview, onManageRepositories, initialRepository, onInitialRepositoryApplied
 }) => {
-  const { role, can } = useApp();
+  const { role, can, isActiveTab, activeWorkspaceId, identity } = useApp();
   const [storedTab, setStoredTab] = useTabSessionState<RepoTab>(`projects.workspaceTab:${projectId}`, 'overview');
   const tab = isRepoTab(storedTab) ? storedTab : 'overview';
   const [selectedRepo, setSelectedRepo] = useState<string | null>(repositories[0] ?? null);
+  const [actionsRepo, setActionsRepo] = useState<string | null>(null);
+  const [actionsOpened, setActionsOpened] = useState(tab === 'runs');
+  useEffect(() => { if (tab === 'runs') setActionsOpened(true); }, [tab]);
   const requestedRepository = initialRepository
     ? repositories.find(value => value.toLowerCase() === initialRepository.toLowerCase())
     : undefined;
@@ -109,12 +111,14 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
         {tab !== 'overview' && repo && !repositoryPending && (
           <div className="my-2 flex max-w-full items-center gap-2">
           <div role="group" aria-label="Repository" className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-white/[0.08] bg-surface-raised p-0.5">
+            {tab === 'runs' && <button type="button" aria-pressed={!actionsRepo} onClick={() => setActionsRepo(null)}
+              className={`shrink-0 rounded-md px-3 py-1 text-[11px] focus-visible:outline focus-visible:outline-brand-400 ${!actionsRepo ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}>All repositories</button>}
             {repositories.map(value => (
               <button
-                key={value} type="button" aria-pressed={value === repo}
-                onClick={() => setSelectedRepo(value)} title={value}
+                key={value} type="button" aria-pressed={value === (tab === 'runs' ? actionsRepo : repo)}
+                onClick={() => { setSelectedRepo(value); if (tab === 'runs') setActionsRepo(value); }} title={value}
                 className={`max-w-48 shrink-0 truncate rounded-md px-3 py-1 font-mono text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${
-                  value === repo ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
+                  value === (tab === 'runs' ? actionsRepo : repo) ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
                 }`}
               >{shortName(value)}</button>
             ))}
@@ -132,6 +136,13 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
         hidden={tab !== 'overview'} className={tab === 'overview' ? 'min-h-0 flex-1' : 'hidden'}>
         {overview}
       </div>
+
+      {actionsOpened && repo && !repositoryPending && <div id={panelId('runs')} role="tabpanel" aria-labelledby={tabId('runs')}
+        hidden={tab !== 'runs'} className={tab === 'runs' ? 'min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 select-text' : 'hidden'}>
+        <ProjectActionsView key={`${activeWorkspaceId}|${identity?.login}|${projectId}`} projectId={projectId} repositories={repositories}
+          repository={actionsRepo && repositories.includes(actionsRepo) ? actionsRepo : null} active={tab === 'runs' && isActiveTab}
+          canPromote={role === 'pm' || role === 'admin'} />
+      </div>}
 
       {tab !== 'overview' && (!repo || repositoryPending) && (
         <div id={panelId(tab)} role="tabpanel" aria-labelledby={tabId(tab)} className="min-h-0 flex-1 overflow-y-auto p-5" tabIndex={0}>
@@ -151,7 +162,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
       )}
 
       {repo && !repositoryPending && (repositoryOpened || tab !== 'overview') && (
-        <div hidden={tab === 'overview'} className={tab === 'overview' ? 'hidden' : 'min-h-0 flex-1 overflow-y-auto p-4 select-text sm:p-5'}>
+        <div hidden={tab === 'overview' || tab === 'runs'} className={tab === 'overview' || tab === 'runs' ? 'hidden' : 'min-h-0 flex-1 overflow-y-auto p-4 select-text sm:p-5'}>
           <a href={`https://github.com/${repo}`} target="_blank" rel="noreferrer"
             className="mb-4 inline-flex max-w-full items-center gap-1.5 text-xs text-gray-400 hover:text-white">
             <GitBranch className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -161,8 +172,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
           </a>
           <RepoPanel
             key={`${projectId}|${repo}`} projectId={projectId} repo={repo}
-            tab={tab === 'overview' ? null : tab} idBase={idBase}
-            canPromote={role === 'pm' || role === 'admin'}
+            tab={tab === 'overview' || tab === 'runs' ? null : tab} idBase={idBase}
             canSetUpHosting={can('manage_deployments')}
             canManagePreviewEnv={can('manage_preview_env')}
           />
@@ -177,10 +187,9 @@ const RepoPanel: React.FC<{
   repo: string;
   tab: RepositoryTab | null;
   idBase: string;
-  canPromote: boolean;
   canSetUpHosting: boolean;
   canManagePreviewEnv: boolean;
-}> = ({ projectId, repo, tab, idBase, canPromote, canSetUpHosting, canManagePreviewEnv }) => {
+}> = ({ projectId, repo, tab, idBase, canSetUpHosting, canManagePreviewEnv }) => {
   const branches = useRepoResource<{ branches: RepoBranch[] }>(
     () => apiService.getRepoBranches(projectId, repo), `${projectId}|${repo}|branches`
   );
@@ -212,14 +221,7 @@ const RepoPanel: React.FC<{
       </BranchGate>
     ),
     pulls: () => <RepoPullsList repo={repo} pulls={pulls} />,
-    runs: () => (
-      <BranchGate branches={branches} empty={!branchList.length}>
-        <PipelineStrip projectId={projectId} repo={repo} branchNames={branchNames} selectedBranch={branch}
-          onSelectBranch={setBranch} canPromote={canPromote} onPromoted={pulls.reload} />
-        {branchPicker('runs')}
-        {branch && <RepoRunsList projectId={projectId} repo={repo} branch={branch} />}
-      </BranchGate>
-    ),
+    runs: () => null,
     previews: () => (
       <>
         <div ref={hostingRef}><RepoHostingPanel projectId={projectId} repo={repo} canManage={canSetUpHosting} /></div>

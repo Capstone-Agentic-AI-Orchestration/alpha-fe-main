@@ -58,7 +58,7 @@ export const ChatSidePanel: React.FC<{
     if (next) { onSelect(next.id); document.getElementById('chat-side-tab-' + next.id)?.focus(); }
   };
 
-  return <aside aria-label="Side panel" style={{ width }} className="relative flex h-full shrink-0 flex-col border-l border-white/[0.08] bg-shell">
+  return <aside id="chat-side-panel" aria-label="Side panel" style={{ '--chat-panel-width': width + 'px' } as React.CSSProperties} className="relative flex h-full w-[var(--chat-panel-width)] max-w-full shrink-0 flex-col border-l border-white/[0.08] bg-shell max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-full">
     <div role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabIndex={0}
       onPointerDown={event => { drag.current = { startX: event.clientX, startWidth: width }; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }}
       onKeyDown={event => { if (event.key === 'ArrowLeft') setWidth(value => value + 24); if (event.key === 'ArrowRight') setWidth(value => Math.max(MIN_WIDTH, value - 24)); }}
@@ -79,7 +79,7 @@ export const ChatSidePanel: React.FC<{
           </div>;
         })}
       </div>
-      <button type="button" onClick={onCloseAll} aria-label="Close side panel" title="Close side panel" className="shrink-0 rounded-lg p-1.5 text-gray-500 hover:bg-white/[0.06] hover:text-white"><X className="h-4 w-4" /></button>
+      <button type="button" onClick={onCloseAll} aria-label="Hide side panel" title="Hide side panel" className="shrink-0 rounded-lg p-1.5 text-gray-500 hover:bg-white/[0.06] hover:text-white"><X className="h-4 w-4" /></button>
     </div>
     <div role="tabpanel" aria-labelledby={activeId ? 'chat-side-tab-' + activeId : undefined} className="flex min-h-0 flex-1 flex-col">{children}</div>
   </aside>;

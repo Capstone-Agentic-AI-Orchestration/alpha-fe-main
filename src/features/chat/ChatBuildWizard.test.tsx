@@ -21,7 +21,7 @@ const build = (status: ProjectLiveBuild['status'], stoppedReason?: string): Proj
 const noop = () => undefined;
 const render = (overrides: Partial<ChatBuildWizardProps>) => renderToStaticMarkup(<ChatBuildWizard
   projectId="p1" build={null} failure={null} canStart canApprove canStop busy={null} error={null}
-  onStart={noop} onApprove={noop} onStop={noop} onContinue={noop} onReply={noop} onRetry={noop} onDismiss={noop} onOpenRoom={noop}
+  onStart={noop} onApprove={noop} onStop={noop} onContinue={noop} onReply={noop} onRetry={noop} onDismiss={noop} onOpenReview={noop}
   {...overrides} />);
 
 describe('the build panel above the message box', () => {
@@ -51,15 +51,21 @@ describe('the build panel above the message box', () => {
     expect(html).toContain('Dismiss');
   });
 
-  it('asks for plan approval with numbered choices', () => {
+  it('directs plan approval to its tab without numbered approval questions', () => {
     const html = render({ build: build('awaiting_plan_approval') });
     expect(html).toContain('Plan ready for your approval');
-    expect(html).toContain('Add the login page');
-    expect(html).toContain('Start planned work');
-    expect(html).toContain('Saved plan document');
-    expect(html).toMatch(/disabled=""[^>]*>[\s\S]*?Start planned work/);
-    expect(html).toContain('Stop and plan something else');
+    expect(html).toContain('type start in the Build review tab');
+    expect(html).not.toContain('Start planned work');
+    expect(html).not.toContain('Open the full plan');
     expect(html).toMatch(/aria-current="step"[^>]*>.*Approve/);
+  });
+
+  it('shows review status without combined approval or navigation choices', () => {
+    const html = render({ build: build('awaiting_approval') });
+    expect(html).toContain('Build review tab');
+    expect(html).not.toContain('Approve and open the pull request');
+    expect(html).not.toContain('Open the full review');
+    expect(html).not.toContain('Ask for changes');
   });
 
   it('offers milestone planning retry without treating it as final validation', () => {
