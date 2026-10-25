@@ -42,11 +42,11 @@ const CONCERN_OPTIONS = [
 ];
 
 const field =
-  'w-full bg-surface border border-white/[0.08] rounded-lg px-3.5 py-2.5 text-sm text-white ' +
-  'placeholder-gray-600 focus:outline-none focus:border-brand-500 transition-colors';
+  'w-full bg-surface border border-divider rounded-lg px-3.5 py-2.5 text-sm text-content ' +
+  'placeholder-content-muted focus:outline-none focus:border-control transition-colors';
 
 export const IntakeWizardView: React.FC = () => {
-  const { submitIntake, setActiveTab } = useApp();
+  const { submitIntake, setActiveTab, visibleTabs } = useApp();
 
   const [step, setStep] = useTabSessionState<number>('intake.step', 1);
   const [a, setA] = useTabSessionState<IntakeAnswers>('intake.answers', () => ({ ...EMPTY, capabilities: [...EMPTY.capabilities], concerns: [...EMPTY.concerns], attachments: [...EMPTY.attachments] }));
@@ -90,7 +90,7 @@ export const IntakeWizardView: React.FC = () => {
     await new Promise(r => setTimeout(r, 1600));
     submitIntake({ ...a, capabilities: a.capabilities.filter(c => c.trim()) });
     setSubmitting(false);
-    setActiveTab('documents');
+    setActiveTab(visibleTabs.includes('documents') ? 'documents' : 'portal');
   };
 
   return (
@@ -100,9 +100,9 @@ export const IntakeWizardView: React.FC = () => {
         {/* Header + step rail */}
         <div className="space-y-5">
           <div className="flex items-baseline justify-between gap-4">
-            <h1 className="text-lg font-semibold text-white tracking-tight">Tell us what you need</h1>
-            <span className="text-xs text-gray-500 font-mono">
-              {saved ? <span className="text-emerald-400">{saved}</span> : `Step ${step} of 5`}
+            <h1 className="text-lg font-semibold text-content tracking-tight">Tell us what you need</h1>
+            <span className="text-xs text-content-muted font-mono">
+              {saved ? <span className="text-status-success">{saved}</span> : `Step ${step} of 5`}
             </span>
           </div>
 
@@ -113,7 +113,7 @@ export const IntakeWizardView: React.FC = () => {
                 onClick={() => s.n < step && setStep(s.n)}
                 disabled={s.n > step}
                 className={`h-0.5 flex-1 rounded-full transition-colors ${
-                  s.n < step ? 'bg-brand-500' : s.n === step ? 'bg-brand-400' : 'bg-white/[0.08]'
+                  s.n < step ? 'bg-action' : s.n === step ? 'bg-action' : 'bg-surface-raised'
                 } ${s.n < step ? 'cursor-pointer' : 'cursor-default'}`}
                 aria-label={`Step ${s.n}: ${s.label}`}
               />
@@ -121,8 +121,8 @@ export const IntakeWizardView: React.FC = () => {
           </div>
 
           <div className="flex items-baseline gap-3">
-            <h2 className="text-sm font-semibold text-white">{STEPS[step - 1].label}</h2>
-            <span className="text-xs text-gray-500">{STEPS[step - 1].hint}</span>
+            <h2 className="text-sm font-semibold text-content">{STEPS[step - 1].label}</h2>
+            <span className="text-xs text-content-muted">{STEPS[step - 1].hint}</span>
           </div>
         </div>
 
@@ -130,7 +130,7 @@ export const IntakeWizardView: React.FC = () => {
         {step === 1 && (
           <div className="space-y-6 animate-fade-in">
             <div className="space-y-2">
-              <label className="text-sm text-gray-300 block">What should we call this?</label>
+              <label className="text-sm text-content-secondary block">What should we call this?</label>
               <input
                 autoFocus
                 className={field}
@@ -140,8 +140,8 @@ export const IntakeWizardView: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-gray-300 block">What problem are you facing?</label>
-              <p className="text-xs text-gray-500">Plain language is fine. Describe it the way you would to a colleague.</p>
+              <label className="text-sm text-content-secondary block">What problem are you facing?</label>
+              <p className="text-xs text-content-muted">Plain language is fine. Describe it the way you would to a colleague.</p>
               <textarea
                 rows={4}
                 className={field}
@@ -152,7 +152,7 @@ export const IntakeWizardView: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-2">
-                <label className="text-sm text-gray-300 block">Who does this affect?</label>
+                <label className="text-sm text-content-secondary block">Who does this affect?</label>
                 <input
                   className={field}
                   value={a.affected}
@@ -161,7 +161,7 @@ export const IntakeWizardView: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm text-gray-300 block">How do you handle it today?</label>
+                <label className="text-sm text-content-secondary block">How do you handle it today?</label>
                 <input
                   className={field}
                   value={a.currentWorkaround}
@@ -177,7 +177,7 @@ export const IntakeWizardView: React.FC = () => {
         {step === 2 && (
           <div className="space-y-6 animate-fade-in">
             <div className="space-y-2">
-              <label className="text-sm text-gray-300 block">When this is working, what can someone do that they can't today?</label>
+              <label className="text-sm text-content-secondary block">When this is working, what can someone do that they can't today?</label>
               <textarea
                 autoFocus
                 rows={3}
@@ -188,8 +188,8 @@ export const IntakeWizardView: React.FC = () => {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm text-gray-300 block">How would you know it worked?</label>
-              <p className="text-xs text-gray-500">A number is ideal, but "fewer complaints about X" is a real answer too.</p>
+              <label className="text-sm text-content-secondary block">How would you know it worked?</label>
+              <p className="text-xs text-content-muted">A number is ideal, but "fewer complaints about X" is a real answer too.</p>
               <input
                 className={field}
                 value={a.successMeasure}
@@ -198,7 +198,7 @@ export const IntakeWizardView: React.FC = () => {
               />
             </div>
             <div className="space-y-2.5">
-              <label className="text-sm text-gray-300 block">How urgent is this?</label>
+              <label className="text-sm text-content-secondary block">How urgent is this?</label>
               <div className="flex flex-wrap gap-2">
                 {(['urgent', 'high', 'medium', 'low'] as IssuePriority[]).map(p => (
                   <button
@@ -206,8 +206,8 @@ export const IntakeWizardView: React.FC = () => {
                     onClick={() => set('urgency', p)}
                     className={`px-3.5 py-1.5 rounded-lg text-xs capitalize transition-colors border ${
                       a.urgency === p
-                        ? 'bg-white/[0.10] text-white border-white/20 font-medium'
-                        : 'text-gray-400 border-white/[0.08] hover:text-gray-200 hover:bg-white/[0.04]'
+                        ? 'bg-surface-raised text-content border-divider font-medium'
+                        : 'text-content-secondary border-divider hover:text-content hover:bg-surface-high'
                     }`}
                   >
                     {p}
@@ -222,14 +222,14 @@ export const IntakeWizardView: React.FC = () => {
         {step === 3 && (
           <div className="space-y-6 animate-fade-in">
             <div className="space-y-3">
-              <label className="text-sm text-gray-300 block">What should it do?</label>
-              <p className="text-xs text-gray-500">
+              <label className="text-sm text-content-secondary block">What should it do?</label>
+              <p className="text-xs text-content-muted">
                 One thing per line. Each becomes a clear, testable requirement the team can review with you.
               </p>
               <div className="space-y-2">
                 {a.capabilities.map((c, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <span className="font-mono text-[11px] text-gray-600 w-5 flex-shrink-0">{i + 1}</span>
+                    <span className="font-mono text-[11px] text-content-muted w-5 flex-shrink-0">{i + 1}</span>
                     <input
                       autoFocus={i === a.capabilities.length - 1 && c === ''}
                       className={field}
@@ -243,7 +243,7 @@ export const IntakeWizardView: React.FC = () => {
                     {a.capabilities.length > 1 && (
                       <button
                         onClick={() => removeCapability(i)}
-                        className="text-gray-600 hover:text-rose-400 p-1 transition-colors"
+                        className="text-content-muted hover:text-status-danger p-1 transition-colors"
                         aria-label={`Remove item ${i + 1}`}
                       >
                         <X className="w-4 h-4" />
@@ -254,7 +254,7 @@ export const IntakeWizardView: React.FC = () => {
               </div>
               <button
                 onClick={addCapability}
-                className="flex items-center gap-2 text-xs text-gray-400 hover:text-white transition-colors pl-7"
+                className="flex items-center gap-2 text-xs text-content-secondary hover:text-content transition-colors pl-7"
               >
                 <Plus className="w-3.5 h-3.5" />
                 Add another
@@ -262,8 +262,8 @@ export const IntakeWizardView: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-gray-300 block">What is definitely out of scope?</label>
-              <p className="text-xs text-gray-500">Saying this now prevents an argument later.</p>
+              <label className="text-sm text-content-secondary block">What is definitely out of scope?</label>
+              <p className="text-xs text-content-muted">Saying this now prevents an argument later.</p>
               <input
                 className={field}
                 value={a.outOfScope}
@@ -273,7 +273,7 @@ export const IntakeWizardView: React.FC = () => {
             </div>
 
             <div className="space-y-2.5">
-              <label className="text-sm text-gray-300 block">Anything we must be careful about?</label>
+              <label className="text-sm text-content-secondary block">Anything we must be careful about?</label>
               <div className="flex flex-wrap gap-2">
                 {CONCERN_OPTIONS.map(c => (
                   <button
@@ -281,8 +281,8 @@ export const IntakeWizardView: React.FC = () => {
                     onClick={() => toggleConcern(c)}
                     className={`px-3 py-1.5 rounded-lg text-xs transition-colors border ${
                       a.concerns.includes(c)
-                        ? 'bg-white/[0.10] text-white border-white/20'
-                        : 'text-gray-400 border-white/[0.08] hover:text-gray-200 hover:bg-white/[0.04]'
+                        ? 'bg-surface-raised text-content border-divider'
+                        : 'text-content-secondary border-divider hover:text-content hover:bg-surface-high'
                     }`}
                   >
                     {a.concerns.includes(c) && <Check className="w-3 h-3 inline mr-1.5 -mt-px" />}
@@ -299,7 +299,7 @@ export const IntakeWizardView: React.FC = () => {
           <div className="space-y-6 animate-fade-in">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-2">
-                <label className="text-sm text-gray-300 block">When do you need it?</label>
+                <label className="text-sm text-content-secondary block">When do you need it?</label>
                 <input
                   autoFocus
                   type="date"
@@ -309,15 +309,15 @@ export const IntakeWizardView: React.FC = () => {
                 />
               </div>
               <div className="space-y-2">
-                <label className="text-sm text-gray-300 block">What should we protect first?</label>
-                <p className="text-xs leading-relaxed text-gray-500">Share the most important quality, deadline, or user experience constraint.</p>
+                <label className="text-sm text-content-secondary block">What should we protect first?</label>
+                <p className="text-xs leading-relaxed text-content-muted">Share the most important quality, deadline, or user experience constraint.</p>
                 <input className={field} value={a.concerns[0] ?? ''} onChange={e => set('concerns', e.target.value ? [e.target.value, ...a.concerns.slice(1)] : a.concerns.slice(1))} placeholder="For example: mobile usability" />
               </div>
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-gray-300 block">Roughly how many people will use this each month?</label>
-              <p className="text-xs text-gray-500">
+              <label className="text-sm text-content-secondary block">Roughly how many people will use this each month?</label>
+              <p className="text-xs text-content-muted">
                 This helps the team plan performance and rollout requirements. A rough number is fine.
               </p>
               <input
@@ -329,7 +329,7 @@ export const IntakeWizardView: React.FC = () => {
             </div>
 
             <div className="space-y-2">
-              <label className="text-sm text-gray-300 block">Any existing systems this must work with?</label>
+              <label className="text-sm text-content-secondary block">Any existing systems this must work with?</label>
               <input
                 className={field}
                 value={a.integrations}
@@ -339,7 +339,7 @@ export const IntakeWizardView: React.FC = () => {
             </div>
 
             <div className="space-y-2.5">
-              <label className="text-sm text-gray-300 block">Anything to show us?</label>
+              <label className="text-sm text-content-secondary block">Anything to show us?</label>
               <button
                 onClick={() =>
                   set('attachments', [
@@ -347,21 +347,21 @@ export const IntakeWizardView: React.FC = () => {
                     { id: `att-${Date.now()}`, name: `reference-${a.attachments.length + 1}.png`, sizeKb: 640 }
                   ])
                 }
-                className="flex items-center gap-2.5 w-full px-3.5 py-3 rounded-lg border border-dashed border-white/[0.12] text-sm text-gray-400 hover:text-gray-200 hover:border-white/20 transition-colors"
+                className="flex items-center gap-2.5 w-full px-3.5 py-3 rounded-lg border border-dashed border-divider text-sm text-content-secondary hover:text-content hover:border-divider transition-colors"
               >
                 <Paperclip className="w-4 h-4" />
                 Attach screenshots, documents, or examples
               </button>
               {a.attachments.length > 0 && (
-                <div className="divide-y divide-white/[0.04]">
+                <div className="divide-y divide-divider">
                   {a.attachments.map(f => (
                     <div key={f.id} className="flex items-center justify-between py-2 text-xs">
-                      <span className="font-mono text-gray-300">{f.name}</span>
+                      <span className="font-mono text-content-secondary">{f.name}</span>
                       <div className="flex items-center gap-3">
-                        <span className="font-mono text-gray-600">{f.sizeKb} KB</span>
+                        <span className="font-mono text-content-muted">{f.sizeKb} KB</span>
                         <button
                           onClick={() => set('attachments', a.attachments.filter(x => x.id !== f.id))}
-                          className="text-gray-600 hover:text-rose-400 transition-colors"
+                          className="text-content-muted hover:text-status-danger transition-colors"
                           aria-label={`Remove ${f.name}`}
                         >
                           <X className="w-3.5 h-3.5" />
@@ -379,7 +379,7 @@ export const IntakeWizardView: React.FC = () => {
         {step === 5 && (
           <div className="space-y-6 animate-fade-in">
             <div className="space-y-2">
-              <label className="text-sm text-gray-300 block">Who else needs to approve before we start?</label>
+              <label className="text-sm text-content-secondary block">Who else needs to approve before we start?</label>
               <input
                 autoFocus
                 className={field}
@@ -390,7 +390,7 @@ export const IntakeWizardView: React.FC = () => {
             </div>
 
             <div className="space-y-2.5">
-              <label className="text-sm text-gray-300 block">How often do you want updates?</label>
+              <label className="text-sm text-content-secondary block">How often do you want updates?</label>
               <div className="flex flex-wrap gap-2">
                 {([
                   ['daily', 'Daily'],
@@ -402,8 +402,8 @@ export const IntakeWizardView: React.FC = () => {
                     onClick={() => set('updateCadence', value)}
                     className={`px-3.5 py-1.5 rounded-lg text-xs transition-colors border ${
                       a.updateCadence === value
-                        ? 'bg-white/[0.10] text-white border-white/20 font-medium'
-                        : 'text-gray-400 border-white/[0.08] hover:text-gray-200 hover:bg-white/[0.04]'
+                        ? 'bg-surface-raised text-content border-divider font-medium'
+                        : 'text-content-secondary border-divider hover:text-content hover:bg-surface-high'
                     }`}
                   >
                     {label}
@@ -414,20 +414,20 @@ export const IntakeWizardView: React.FC = () => {
 
             <div className="pt-2 space-y-3">
               <SectionLabel>What happens next</SectionLabel>
-              <ol className="space-y-2.5 text-sm text-gray-400">
+              <ol className="space-y-2.5 text-sm text-content-secondary">
                 <li className="flex gap-3">
-                  <span className="font-mono text-[11px] text-gray-600 pt-0.5">01</span>
+                  <span className="font-mono text-[11px] text-content-muted pt-0.5">01</span>
                   <span>We turn your answers into a written specification — you do not write it.</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="font-mono text-[11px] text-gray-600 pt-0.5">02</span>
+                  <span className="font-mono text-[11px] text-content-muted pt-0.5">02</span>
                   <span>The team will turn each item into acceptance criteria and a delivery plan.</span>
                 </li>
                 <li className="flex gap-3">
-                  <span className="font-mono text-[11px] text-gray-600 pt-0.5">03</span>
+                  <span className="font-mono text-[11px] text-content-muted pt-0.5">03</span>
                   <span>
                     You keep or drop items and watch the total change.
-                    <span className="text-gray-500"> Nothing is built until you approve.</span>
+                    <span className="text-content-muted"> Nothing is built until you approve.</span>
                   </span>
                 </li>
               </ol>
@@ -436,10 +436,10 @@ export const IntakeWizardView: React.FC = () => {
         )}
 
         {/* Footer nav */}
-        <div className="flex items-center justify-between pt-6 border-t border-white/[0.06]">
+        <div className="flex items-center justify-between pt-6 border-t border-divider">
           <button
             onClick={() => (step > 1 ? setStep(step - 1) : setActiveTab('portal'))}
-            className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors"
+            className="flex items-center gap-2 text-sm text-content-secondary hover:text-content transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             {step > 1 ? 'Back' : 'Cancel'}
@@ -449,7 +449,7 @@ export const IntakeWizardView: React.FC = () => {
             <button
               onClick={() => setStep(step + 1)}
               disabled={!canAdvance()}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-30 disabled:cursor-not-allowed text-on-accent text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-action hover:bg-action-hover disabled:opacity-30 disabled:cursor-not-allowed text-on-action text-sm font-medium transition-colors"
             >
               Continue
               <ArrowRight className="w-4 h-4" />
@@ -458,7 +458,7 @@ export const IntakeWizardView: React.FC = () => {
             <button
               onClick={handleSubmit}
               disabled={!canAdvance() || submitting}
-              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-on-accent text-sm font-medium transition-colors"
+              className="flex items-center gap-2 px-5 py-2 rounded-lg bg-action hover:bg-action-hover disabled:opacity-40 text-on-action text-sm font-medium transition-colors"
             >
               {submitting ? (
                 <>

@@ -97,11 +97,11 @@ function PathChip({ href, children }: Readonly<{ href: string; children: ReactNo
       type="button"
       onClick={copy}
       title={copied ? 'Copied' : full}
-      className="inline-flex items-center gap-1 align-baseline max-w-full rounded bg-surface-50 border border-white/10 px-1.5 py-0.5 font-mono text-[0.85em] text-cyan-300 hover:border-white/25 transition-colors"
+      className="inline-flex items-center gap-1 align-baseline max-w-full rounded bg-code text-code-content border border-divider px-1.5 py-0.5 font-mono text-[0.85em] text-code-content hover:border-divider transition-colors"
     >
       <span className="truncate">{children ?? basename(full)}</span>
       {copied
-        ? <Check className="w-3 h-3 shrink-0 text-emerald-400" />
+        ? <Check className="w-3 h-3 shrink-0 text-status-success" />
         : <Copy className="w-3 h-3 shrink-0 opacity-40" />}
     </button>
   );
@@ -129,7 +129,7 @@ export function MessageMarkdown({ content }: Readonly<Props>) {
                 href={href}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="text-brand-400 underline underline-offset-2 hover:text-brand-300"
+                className="text-link underline underline-offset-2 hover:text-link-hover"
               >
                 {children}
               </a>
@@ -144,13 +144,13 @@ export function MessageMarkdown({ content }: Readonly<Props>) {
            * a model that writes four of them per answer would produce something
            * harder to read than the raw hashes were.
            */
-          h1: ({ children }) => <h4 className="text-sm font-semibold text-white pt-1">{children}</h4>,
-          h2: ({ children }) => <h4 className="text-sm font-semibold text-white pt-1">{children}</h4>,
-          h3: ({ children }) => <h4 className="text-sm font-semibold text-white pt-1">{children}</h4>,
-          h4: ({ children }) => <h4 className="text-sm font-semibold text-white pt-1">{children}</h4>,
+          h1: ({ children }) => <h4 className="text-sm font-semibold text-content pt-1">{children}</h4>,
+          h2: ({ children }) => <h4 className="text-sm font-semibold text-content pt-1">{children}</h4>,
+          h3: ({ children }) => <h4 className="text-sm font-semibold text-content pt-1">{children}</h4>,
+          h4: ({ children }) => <h4 className="text-sm font-semibold text-content pt-1">{children}</h4>,
 
           p: ({ children }) => <p>{children}</p>,
-          strong: ({ children }) => <strong className="font-semibold text-white">{children}</strong>,
+          strong: ({ children }) => <strong className="font-semibold text-content">{children}</strong>,
           em: ({ children }) => <em className="italic">{children}</em>,
 
           ul: ({ children }) => <ul className="list-disc pl-5 space-y-1">{children}</ul>,
@@ -158,10 +158,10 @@ export function MessageMarkdown({ content }: Readonly<Props>) {
           li: ({ children }) => <li className="pl-0.5">{children}</li>,
 
           blockquote: ({ children }) => (
-            <blockquote className="border-l-2 border-white/15 pl-3 text-gray-400">{children}</blockquote>
+            <blockquote className="border-l-2 border-divider pl-3 text-content-secondary">{children}</blockquote>
           ),
 
-          hr: () => <hr className="border-white/10" />,
+          hr: () => <hr className="border-divider" />,
 
           /*
            * Fenced blocks scroll rather than wrap.
@@ -171,7 +171,7 @@ export function MessageMarkdown({ content }: Readonly<Props>) {
            * scroll and the bubble keeps its width.
            */
           pre: ({ children }) => (
-            <pre className="bg-surface-50 border border-white/10 rounded-lg p-3 overflow-x-auto text-xs font-mono">
+            <pre className="bg-code text-code-content border border-divider rounded-lg p-3 overflow-x-auto text-xs font-mono">
               {children}
             </pre>
           ),
@@ -182,7 +182,7 @@ export function MessageMarkdown({ content }: Readonly<Props>) {
             const fenced = /language-/.test(className ?? '');
             if (fenced) return <code className={className} {...rest}>{children}</code>;
             return (
-              <code className="bg-surface-50 border border-white/10 rounded px-1 py-0.5 font-mono text-[0.85em] text-cyan-300">
+              <code className="bg-code text-code-content border border-divider rounded px-1 py-0.5 font-mono text-[0.85em] text-status-info">
                 {children}
               </code>
             );
@@ -194,9 +194,9 @@ export function MessageMarkdown({ content }: Readonly<Props>) {
             </div>
           ),
           th: ({ children }) => (
-            <th className="border border-white/10 px-2 py-1 text-left font-semibold text-white">{children}</th>
+            <th className="border border-divider px-2 py-1 text-left font-semibold text-content">{children}</th>
           ),
-          td: ({ children }) => <td className="border border-white/10 px-2 py-1">{children}</td>
+          td: ({ children }) => <td className="border border-divider px-2 py-1">{children}</td>
         }}
       >
         {normalise(content)}

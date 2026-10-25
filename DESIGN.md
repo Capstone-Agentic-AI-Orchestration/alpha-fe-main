@@ -17,6 +17,8 @@ We design for developers, engineering leads, and autonomous AI agents. Every pix
 
 ## 2. Color Palette & Surfaces
 
+The table below records the earlier prototype palette. Current appearance is owned by `src/shared/theme/model/palettes/*.json` and `model/modes.json`, with Alpha Violet as the default among eight themes. Read `src/shared/theme/README.md` for MVVM ownership, semantic utility names, generation, persistence and validation. Do not copy this historical table into new components or maintain a second palette in documentation.
+
 | Token / Usage | Hex / Tailwind | Purpose |
 | :--- | :--- | :--- |
 | **Canvas Background** | `#0D0E10` (`bg-background`) | Primary application backdrop |

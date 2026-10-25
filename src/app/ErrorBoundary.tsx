@@ -64,58 +64,58 @@ export class ErrorBoundary extends React.Component<Props, State> {
 
     if (this.props.internal === false) return (
       <main className="min-h-dvh flex items-center justify-center bg-canvas p-6">
-        <section role="alert" className="max-w-md space-y-4 rounded-xl border border-white/10 bg-surface p-6">
-          <h1 className="text-lg font-semibold text-white">This page could not be displayed</h1>
-          <p className="text-sm text-gray-400">Reload to try again. No ticket submission or approval is confirmed by this error.</p>
-          <button className="rounded-lg bg-brand-500 px-4 py-2 text-sm text-on-accent" onClick={() => window.location.reload()}>Reload page</button>
+        <section role="alert" className="max-w-md space-y-4 rounded-xl border border-divider bg-surface p-6">
+          <h1 className="text-lg font-semibold text-content">This page could not be displayed</h1>
+          <p className="text-sm text-content-secondary">Reload to try again. No ticket submission or approval is confirmed by this error.</p>
+          <button className="rounded-lg bg-action px-4 py-2 text-sm text-on-action" onClick={() => window.location.reload()}>Reload page</button>
         </section>
       </main>
     );
 
     return (
-      <div className="min-h-screen bg-background text-white flex items-center justify-center p-6">
+      <div className="min-h-screen bg-background text-content flex items-center justify-center p-6">
         <div className="w-full max-w-2xl space-y-5">
           <div>
             <h1 className="text-lg font-semibold">Alpha hit a rendering error</h1>
-            <p className="text-sm text-gray-400 mt-1">
+            <p className="text-sm text-content-secondary mt-1">
               The interface stopped instead of showing a blank screen. The cause is below.
             </p>
           </div>
 
-          <div className="rounded-lg border border-rose-500/30 bg-rose-500/5 p-4">
-            <div className="text-xs font-mono uppercase tracking-wider text-rose-300 mb-2">
+          <div className="rounded-lg border border-status-danger-border bg-status-danger-subtle p-4">
+            <div className="text-xs font-mono uppercase tracking-wider text-status-danger mb-2">
               {error.name}
             </div>
-            <div className="text-sm font-mono text-rose-100 break-words">{error.message}</div>
+            <div className="text-sm font-mono text-status-danger break-words">{error.message}</div>
           </div>
 
           {/* Open by default: a collapsed trace is a trace nobody reads, and
               this panel exists precisely for the moments when the console is
               not available. */}
           {info && (
-            <div className="rounded-lg border border-white/10 bg-surface-200 p-4">
-              <div className="text-xs font-medium text-gray-300 mb-2">
+            <div className="rounded-lg border border-divider bg-surface p-4">
+              <div className="text-xs font-medium text-content-secondary mb-2">
                 Component stack — the first entry is where it threw
               </div>
-              <pre className="text-[11px] font-mono text-amber-200/90 whitespace-pre-wrap max-h-40 overflow-y-auto">
+              <pre className="text-[11px] font-mono text-status-warning whitespace-pre-wrap max-h-40 overflow-y-auto">
                 {info.trim().split('\n').slice(0, 8).join('\n')}
               </pre>
             </div>
           )}
 
           {error.stack && (
-            <details className="rounded-lg border border-white/10 bg-surface-200 p-4">
-              <summary className="text-xs font-medium text-gray-300 cursor-pointer">
+            <details className="rounded-lg border border-divider bg-surface p-4">
+              <summary className="text-xs font-medium text-content-secondary cursor-pointer">
                 Full JavaScript stack
               </summary>
-              <pre className="mt-3 text-[11px] font-mono text-gray-400 whitespace-pre-wrap max-h-64 overflow-y-auto">
+              <pre className="mt-3 text-[11px] font-mono text-content-secondary whitespace-pre-wrap max-h-64 overflow-y-auto">
                 {error.stack}
               </pre>
             </details>
           )}
 
-          <div className="rounded-lg border border-white/10 bg-surface-200 p-4 space-y-3">
-            <p className="text-sm text-gray-300">
+          <div className="rounded-lg border border-divider bg-surface p-4 space-y-3">
+            <p className="text-sm text-content-secondary">
               Reloading retries the page. If this started after an update, you can reset Alpha's
               saved browser state. Your projects and agents remain in the local daemon.
             </p>
@@ -123,14 +123,14 @@ export class ErrorBoundary extends React.Component<Props, State> {
               <button
                 type="button"
                 onClick={this.clearLocalState}
-                className="px-3 py-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 text-on-accent text-xs font-medium transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-action hover:bg-action-hover text-on-action text-xs font-medium transition-colors"
               >
                 Reset saved app data and reload
               </button>
               <button
                 type="button"
                 onClick={() => window.location.reload()}
-                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high text-content text-xs font-medium transition-colors"
               >
                 Reload only
               </button>

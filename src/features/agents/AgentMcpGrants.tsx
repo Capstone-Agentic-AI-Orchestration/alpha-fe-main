@@ -70,7 +70,7 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-[11px] text-gray-500 py-2">
+      <div className="flex items-center gap-2 text-[11px] text-content-muted py-2">
         <Loader2 className="w-3.5 h-3.5 animate-spin" />
         Reading catalog...
       </div>
@@ -84,11 +84,11 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }
    */
   if (failed) {
     return (
-      <div className="p-3 rounded-xl bg-well border border-white/5 space-y-1">
-        <div className="font-mono text-xs text-gray-300">
+      <div className="p-3 rounded-xl bg-well border border-divider space-y-1">
+        <div className="font-mono text-xs text-content-secondary">
           {granted.length ? granted.join(', ') : 'None granted'}
         </div>
-        <div className="text-[10px] text-amber-300/80">
+        <div className="text-[10px] text-status-warning">
           Could not reach the daemon, so the catalog is not shown. This is what the
           agent has stored.
         </div>
@@ -98,9 +98,9 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }
 
   if (!servers.length) {
     return (
-      <div className="p-3 rounded-xl bg-well border border-white/5 space-y-1">
-        <div className="text-xs text-gray-400">No MCP servers in the catalog.</div>
-        <div className="text-[10px] text-gray-600 leading-snug">
+      <div className="p-3 rounded-xl bg-well border border-divider space-y-1">
+        <div className="text-xs text-content-secondary">No MCP servers in the catalog.</div>
+        <div className="text-[10px] text-content-muted leading-snug">
           Add one under Settings &rarr; Connected Accounts to make it grantable here.
         </div>
       </div>
@@ -132,15 +132,15 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }
               readOnly ? 'cursor-default opacity-80' : 'cursor-pointer'
             } ${
               isGranted
-                ? 'bg-white/[0.04] border-white/15 text-white'
-                : 'bg-transparent border-white/5 text-gray-500 hover:text-gray-300'
+                ? 'bg-surface-raised border-divider text-content'
+                : 'bg-transparent border-divider text-content-muted hover:text-content-secondary'
             }`}
           >
             <div className="min-w-0 space-y-0.5">
               <div className="flex items-center gap-2">
-                <span className="font-medium text-xs text-white">{server.name}</span>
+                <span className="font-medium text-xs text-content">{server.name}</span>
                 {server.builtin && (
-                  <span className="flex items-center gap-1 text-[10px] text-gray-500 font-mono">
+                  <span className="flex items-center gap-1 text-[10px] text-content-muted font-mono">
                     <Lock className="w-2.5 h-2.5" />
                     built in
                   </span>
@@ -152,7 +152,7 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }
                 one. Joining [command, ...args] for both would print
                 "undefined" for every http entry, which carries no command.
               */}
-              <div className="font-mono text-[10px] text-gray-600 break-all">
+              <div className="font-mono text-[10px] text-content-muted break-all">
                 {server.transport === 'stdio'
                   ? [server.command ?? '', ...(server.args ?? [])].filter(Boolean).join(' ')
                   : server.url}
@@ -161,7 +161,7 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }
 
             <div
               className={`shrink-0 mt-0.5 w-8 h-4 rounded-full transition-colors relative ${
-                isGranted ? 'bg-emerald-500/80' : 'bg-white/10'
+                isGranted ? 'bg-status-success-subtle' : 'bg-surface-raised'
               }`}
             >
               <span
@@ -174,7 +174,7 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }
         );
       })}
 
-      <p className="text-[10px] text-gray-600 leading-snug pt-1">
+      <p className="text-[10px] text-content-muted leading-snug pt-1">
         Agents can only use servers from Alpha&apos;s own catalog. Nothing configured for
         your personal CLI is reachable from a run.
       </p>

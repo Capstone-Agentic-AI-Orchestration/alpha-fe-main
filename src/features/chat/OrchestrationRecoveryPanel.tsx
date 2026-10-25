@@ -34,16 +34,16 @@ interface OrchestrationRecoveryPanelProps {
 }
 
 const actionMeta: Record<LiveBuildRecoveryAction, { label: string; icon: React.ReactNode; tone: string }> = {
-  explain_failure: { label: 'Explain issue', icon: <MessageSquareText className="h-3.5 w-3.5" />, tone: 'border-white/10 text-slate-200 hover:bg-white/[0.06]' },
-  retry_report_format: { label: 'Retry report format', icon: <ClipboardCheck className="h-3.5 w-3.5" />, tone: 'border-sky-300/25 bg-sky-300/[0.07] text-sky-100 hover:bg-sky-300/[0.12]' },
-  repair_and_continue: { label: 'Fix and continue', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-violet-300/25 bg-violet-300/[0.08] text-violet-100 hover:bg-violet-300/[0.14]' },
-  provide_guidance: { label: 'Provide direction', icon: <MessageSquareText className="h-3.5 w-3.5" />, tone: 'border-violet-300/25 bg-violet-300/[0.08] text-violet-100 hover:bg-violet-300/[0.14]' },
-  recheck_prerequisite: { label: 'Recheck and resume', icon: <RefreshCw className="h-3.5 w-3.5" />, tone: 'border-sky-300/25 bg-sky-300/[0.07] text-sky-100 hover:bg-sky-300/[0.12]' },
-  plan_final_validation_corrections: { label: 'Fix failed checks', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-violet-300/25 bg-violet-300/[0.08] text-violet-100 hover:bg-violet-300/[0.14]' },
-  resume_checkpoint: { label: 'Resume saved work', icon: <RotateCcw className="h-3.5 w-3.5" />, tone: 'border-sky-300/25 bg-sky-300/[0.07] text-sky-100 hover:bg-sky-300/[0.12]' },
-  review_saved_changes: { label: 'Review saved changes', icon: <ClipboardCheck className="h-3.5 w-3.5" />, tone: 'border-white/10 text-slate-200 hover:bg-white/[0.06]' },
-  keep_paused: { label: 'Keep paused', icon: <Pause className="h-3.5 w-3.5" />, tone: 'border-amber-300/20 text-amber-100 hover:bg-amber-300/[0.08]' },
-  cancel_build: { label: 'Cancel build', icon: <Square className="h-3.5 w-3.5" />, tone: 'border-rose-300/20 text-rose-100 hover:bg-rose-300/[0.08]' }
+  explain_failure: { label: 'Explain issue', icon: <MessageSquareText className="h-3.5 w-3.5" />, tone: 'border-divider text-content hover:bg-surface-high' },
+  retry_report_format: { label: 'Retry report format', icon: <ClipboardCheck className="h-3.5 w-3.5" />, tone: 'border-status-info-border bg-status-info-subtle text-status-info hover:bg-status-info-subtle' },
+  repair_and_continue: { label: 'Fix and continue', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
+  provide_guidance: { label: 'Provide direction', icon: <MessageSquareText className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
+  recheck_prerequisite: { label: 'Recheck and resume', icon: <RefreshCw className="h-3.5 w-3.5" />, tone: 'border-status-info-border bg-status-info-subtle text-status-info hover:bg-status-info-subtle' },
+  plan_final_validation_corrections: { label: 'Fix failed checks', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
+  resume_checkpoint: { label: 'Resume saved work', icon: <RotateCcw className="h-3.5 w-3.5" />, tone: 'border-status-info-border bg-status-info-subtle text-status-info hover:bg-status-info-subtle' },
+  review_saved_changes: { label: 'Review saved changes', icon: <ClipboardCheck className="h-3.5 w-3.5" />, tone: 'border-divider text-content hover:bg-surface-high' },
+  keep_paused: { label: 'Keep paused', icon: <Pause className="h-3.5 w-3.5" />, tone: 'border-status-warning-border text-status-warning hover:bg-status-warning-subtle' },
+  cancel_build: { label: 'Cancel build', icon: <Square className="h-3.5 w-3.5" />, tone: 'border-status-danger-border text-status-danger hover:bg-status-danger-subtle' }
 };
 
 function idempotencyKey(): string {
@@ -118,23 +118,23 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
     }
   };
 
-  return <section aria-label="Build recovery" className={`overflow-hidden rounded-xl border ${active ? 'border-amber-300/20 bg-amber-300/[0.035]' : 'border-emerald-300/15 bg-emerald-300/[0.025]'}`}>
+  return <section aria-label="Build recovery" className={`overflow-hidden rounded-xl border ${active ? 'border-status-warning-border bg-status-warning-subtle' : 'border-status-success-border bg-status-success-subtle'}`}>
     <div className={`flex items-start gap-3 ${compact ? 'p-3' : 'p-4'}`}>
-      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${active ? 'border-amber-200/15 bg-amber-200/[0.06] text-amber-200' : 'border-emerald-200/15 bg-emerald-200/[0.06] text-emerald-200'}`}>
+      <span className={`mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border ${active ? 'border-status-warning-border bg-status-warning-subtle text-status-warning' : 'border-status-success-border bg-status-success-subtle text-status-success'}`}>
         {active ? recovery.phase === 'repairing' ? <Loader2 className="h-4 w-4 animate-spin" /> : <AlertTriangle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
       </span>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className={`text-xs font-semibold ${active ? 'text-amber-100' : 'text-emerald-100'}`}>{phaseLabel}</h3>
-          <span className="rounded border border-white/[0.08] bg-black/[0.12] px-1.5 py-0.5 text-[9px] capitalize text-slate-400">{recovery.category.replace(/_/g, ' ')}</span>
-          {recovery.taskTitle && <span className="min-w-0 truncate text-[10px] text-slate-400">· {recovery.taskTitle}</span>}
+          <h3 className={`text-xs font-semibold ${active ? 'text-status-warning' : 'text-status-success'}`}>{phaseLabel}</h3>
+          <span className="rounded border border-divider bg-well px-1.5 py-0.5 text-[9px] capitalize text-content-secondary">{recovery.category.replace(/_/g, ' ')}</span>
+          {recovery.taskTitle && <span className="min-w-0 truncate text-[10px] text-content-secondary">· {recovery.taskTitle}</span>}
         </div>
-        <p className="mt-1.5 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-300">{recovery.summary}</p>
-        {active && availabilityNote && <p className="mt-1 text-[10px] leading-4 text-slate-500">{availabilityNote}</p>}
-        {active && <p className="mt-1 text-[9px] text-slate-500">Recovery {recovery.episodeNumber}{recoveryUsage ? ` · ${recoveryUsage}` : ''}</p>}
-        {explanation && <div role="status" className="mt-3 rounded-lg border border-violet-300/15 bg-violet-300/[0.045] p-3 text-[11px] leading-5 text-violet-50">{explanation}</div>}
-        {message && <p role="status" className="mt-2 text-[10px] leading-4 text-emerald-200">{message}</p>}
-        {error && <p role="alert" className="mt-2 text-[10px] leading-4 text-rose-200">{error}</p>}
+        <p className="mt-1.5 whitespace-pre-wrap break-words text-[11px] leading-5 text-content-secondary">{recovery.summary}</p>
+        {active && availabilityNote && <p className="mt-1 text-[10px] leading-4 text-content-muted">{availabilityNote}</p>}
+        {active && <p className="mt-1 text-[9px] text-content-muted">Recovery {recovery.episodeNumber}{recoveryUsage ? ` · ${recoveryUsage}` : ''}</p>}
+        {explanation && <div role="status" className="mt-3 rounded-lg border border-divider bg-selected p-3 text-[11px] leading-5 text-selected-content">{explanation}</div>}
+        {message && <p role="status" className="mt-2 text-[10px] leading-4 text-status-success">{message}</p>}
+        {error && <p role="alert" className="mt-2 text-[10px] leading-4 text-status-danger">{error}</p>}
         {actions.length > 0 && <div className="mt-3 flex flex-wrap gap-2">
           {actions.map(action => {
             if (action === 'provide_guidance' && !showGuidance) return <button key={action} type="button" onClick={() => { setShowGuidance(true); setConfirmCancel(false); }} disabled={Boolean(busyAction)} className={`inline-flex min-h-8 items-center gap-1.5 rounded-lg border px-2.5 text-[10px] font-semibold transition disabled:opacity-50 ${actionMeta[action].tone}`}>
@@ -151,15 +151,15 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
               {busyAction === action ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : actionMeta[action].icon}{actionMeta[action].label}
             </button>;
           })}
-          {!onOpenReview && onOpenRoom && !available.has('review_saved_changes') && <button type="button" onClick={onOpenRoom} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-white/10 px-2.5 text-[10px] font-semibold text-slate-200 hover:bg-white/[0.06]">Open Live Build Room</button>}
+          {!onOpenReview && onOpenRoom && !available.has('review_saved_changes') && <button type="button" onClick={onOpenRoom} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-divider px-2.5 text-[10px] font-semibold text-content hover:bg-surface-high">Open Live Build Room</button>}
         </div>}
         {showGuidance && available.has('provide_guidance') && <div className="mt-3 space-y-2">
-          <label htmlFor={`recovery-guidance-${recovery.id}`} className="block text-[10px] font-medium text-slate-300">What should the specialist change or check?</label>
-          <textarea id={`recovery-guidance-${recovery.id}`} value={guidance} onChange={event => setGuidance(event.target.value.slice(0, 2_000))} maxLength={2_000} rows={3} placeholder="Describe the correction. Alpha keeps the original task and file boundaries." className="w-full resize-y rounded-lg border border-violet-200/15 bg-[#0d1019] px-3 py-2 text-[11px] leading-5 text-white placeholder:text-slate-600 outline-none focus:border-violet-200/35 focus:ring-2 focus:ring-violet-300/10" />
-          <div className="flex flex-wrap items-center justify-between gap-3 text-[9px] text-slate-500"><span>Guidance cannot expand the approved task scope. Avoid passwords or access tokens.</span><span>{guidance.length}/2,000</span></div>
-          <button type="button" onClick={() => { setShowGuidance(false); setGuidance(''); setError(''); }} className="text-[10px] text-slate-500 hover:text-slate-300">Clear direction</button>
+          <label htmlFor={`recovery-guidance-${recovery.id}`} className="block text-[10px] font-medium text-content-secondary">What should the specialist change or check?</label>
+          <textarea id={`recovery-guidance-${recovery.id}`} value={guidance} onChange={event => setGuidance(event.target.value.slice(0, 2_000))} maxLength={2_000} rows={3} placeholder="Describe the correction. Alpha keeps the original task and file boundaries." className="w-full resize-y rounded-lg border border-control bg-well px-3 py-2 text-[11px] leading-5 text-content placeholder:text-content-muted outline-none focus:border-control focus:ring-2 focus:ring-focus" />
+          <div className="flex flex-wrap items-center justify-between gap-3 text-[9px] text-content-muted"><span>Guidance cannot expand the approved task scope. Avoid passwords or access tokens.</span><span>{guidance.length}/2,000</span></div>
+          <button type="button" onClick={() => { setShowGuidance(false); setGuidance(''); setError(''); }} className="text-[10px] text-content-muted hover:text-content-secondary">Clear direction</button>
         </div>}
-        {confirmCancel && <div className="mt-2 flex flex-wrap items-center gap-2"><p role="alert" className="mr-auto text-[10px] text-rose-100">Alpha will stop this build and preserve its saved work.</p><button type="button" onClick={() => setConfirmCancel(false)} className="min-h-8 rounded-lg px-2.5 text-[10px] text-slate-400 hover:text-white">Keep build</button></div>}
+        {confirmCancel && <div className="mt-2 flex flex-wrap items-center gap-2"><p role="alert" className="mr-auto text-[10px] text-status-danger">Alpha will stop this build and preserve its saved work.</p><button type="button" onClick={() => setConfirmCancel(false)} className="min-h-8 rounded-lg px-2.5 text-[10px] text-content-secondary hover:text-content">Keep build</button></div>}
       </div>
     </div>
   </section>;

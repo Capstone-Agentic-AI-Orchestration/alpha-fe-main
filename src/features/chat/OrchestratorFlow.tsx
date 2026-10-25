@@ -2,6 +2,8 @@ import React, { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } fr
 import { createPortal } from 'react-dom';
 import { ChevronDown, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
 
+import { useTheme, rgbChannels, type ScenePalette } from '@/shared/theme';
+
 import { Agent, AgentCall, ProjectChatAgent, RuntimeEngine } from '@/shared/types';
 import { AgentModelPanel } from './AgentModelPanel';
 import type { BuildAgentNode, BuildAgentState, BuildHandoff } from './useProjectLiveBuild';
@@ -59,6 +61,7 @@ interface WaveAgent {
 }
 
 interface WaveState {
+  palette: ScenePalette;
   expanded: boolean;
   working: boolean;
   agents: WaveAgent[];
@@ -80,7 +83,6 @@ const LIVE_STATUSES: AgentCall['status'][] = ['queued', 'running', 'awaiting_con
 const HUB_ID = 'orchestrator-hub';
 const BUILD_PREFIX = 'build:';
 const ROSTER_PREFIX = 'agent:';
-const IDLE_RGB = '150, 140, 200';
 
 function isOrchestratorAgent(agent: Agent): boolean {
   return agent.templateKey === 'orchestrator' || /orchestrator/i.test(agent.role);
@@ -145,19 +147,12 @@ function mix(base: string, target: string | null, amount: number): string {
 // Agents sit on alternating sides of the Orchestrator, moving outward.
 const AGENT_OFFSETS = [0.18, -0.18, 0.3, -0.3, 0.4, -0.4, 0.24, -0.24];
 
-function toneFor(status: AgentCall['status']): string {
-  if (status === 'failed') return '251, 113, 133';
-  if (status === 'completed') return '110, 231, 183';
-  if (status === 'awaiting_confirmation') return '252, 211, 77';
-  return '167, 139, 250';
+function toneFor(status: AgentCall['status'], palette: ScenePalette): string {
+  return rgbChannels(status === 'failed' ? palette.danger : status === 'completed' ? palette.success : status === 'awaiting_confirmation' ? palette.warning : palette.hub);
 }
 
-function buildTone(state: BuildAgentState): string {
-  if (state === 'failed') return '251, 113, 133';
-  if (state === 'completed') return '110, 231, 183';
-  if (state === 'review') return '252, 211, 77';
-  if (state === 'waiting') return '125, 211, 252';
-  return '167, 139, 250';
+function buildTone(state: BuildAgentState, palette: ScenePalette): string {
+  return rgbChannels(state === 'failed' ? palette.danger : state === 'completed' ? palette.success : state === 'review' ? palette.warning : state === 'waiting' ? palette.info : palette.hub);
 }
 
 const BUILD_STATE_LABEL: Record<BuildAgentState, string> = {
@@ -170,12 +165,12 @@ const BUILD_STATE_LABEL: Record<BuildAgentState, string> = {
 
 
 /** A soft glass sphere: light from the upper left, colour toward the rim. */
-function drawOrb(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, tone: string, highlight = 'rgba(255, 255, 255, 0.95)') {
+function drawOrb(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, tone: string, palette: ScenePalette) {
   const body = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.05, x, y, r);
-  body.addColorStop(0, highlight);
+  body.addColorStop(0, `rgba(${rgbChannels(palette.highlight)}, 0.95)`);
   body.addColorStop(0.28, 'rgba(' + tone + ', 0.95)');
   body.addColorStop(0.75, 'rgba(' + tone + ', 0.55)');
-  body.addColorStop(1, 'rgba(46, 16, 101, 0.85)');
+  body.addColorStop(1, `rgba(${rgbChannels(palette.hubEmissive)}, 0.85)`);
   ctx.fillStyle = body;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
@@ -196,15 +191,15 @@ function drawGlow(ctx: CanvasRenderingContext2D, x: number, y: number, r: number
   ctx.fill();
 }
 
-function drawRing(ctx: CanvasRenderingContext2D, x: number, y: number, r: number) {
-  ctx.strokeStyle = 'rgba(221, 214, 254, 0.85)';
+function drawRing(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, palette: ScenePalette) {
+  ctx.strokeStyle = `rgba(${rgbChannels(palette.ring)}, 0.85)`;
   ctx.lineWidth = 1.4;
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.stroke();
 }
 
-function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number): NodePosition[] {
+export function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number): NodePosition[] {
   const rect = canvas.getBoundingClientRect();
   const width = rect.width;
   const height = rect.height;
@@ -221,7 +216,7 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
 
-  const { expanded, working, agents, hoveredId, selectedId, hubId, flashRgb, flashAmount } = state;
+  const { palette, expanded, working, agents, hoveredId, selectedId, hubId, flashRgb, flashAmount } = state;
   const t = seconds * (working ? 1.5 : 0.65);
   const cols = Math.max(24, Math.min(170, Math.floor(width / 8)));
   const rows = expanded ? 24 : 7;
@@ -237,8 +232,8 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
     };
   };
 
-  // The wave is purple, lighter while working, and briefly takes the outcome colour.
-  ctx.fillStyle = 'rgb(' + mix(working ? '167, 139, 250' : '139, 92, 246', flashRgb, flashAmount) + ')';
+  // The wave follows the palette and briefly takes the outcome colour.
+  ctx.fillStyle = 'rgb(' + mix(rgbChannels(working ? palette.waveActive : palette.wave), flashRgb, flashAmount) + ')';
   for (let j = 0; j < rows; j++) {
     const v = j / (rows - 1);
     for (let i = 0; i < cols; i++) {
@@ -272,7 +267,7 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
     const midX = (hub.x + node.x) / 2;
     const midY = Math.min(hub.y, node.y) - 26;
     const line = ctx.createLinearGradient(hub.x, hub.y, node.x, node.y);
-    line.addColorStop(0, 'rgba(196, 181, 253, ' + (active ? 0.55 : 0.22) + ')');
+    line.addColorStop(0, 'rgba(' + rgbChannels(palette.orbit) + ', ' + (active ? 0.55 : 0.22) + ')');
     line.addColorStop(1, 'rgba(' + tone + ', ' + (active ? 0.7 : 0.3) + ')');
     ctx.strokeStyle = line;
     ctx.lineWidth = agent.id === hoveredId ? 1.6 : 1.1;
@@ -287,7 +282,7 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
         if (p < 0) continue;
         const px = (1 - p) * (1 - p) * hub.x + 2 * (1 - p) * p * midX + p * p * node.x;
         const py = (1 - p) * (1 - p) * hub.y + 2 * (1 - p) * p * midY + p * p * node.y;
-        ctx.fillStyle = 'rgba(237, 233, 254, ' + (0.9 - k * 0.22) + ')';
+        ctx.fillStyle = 'rgba(' + rgbChannels(palette.highlight) + ', ' + (0.9 - k * 0.22) + ')';
         ctx.beginPath();
         ctx.arc(px, py, 2.2 - k * 0.4, 0, Math.PI * 2);
         ctx.fill();
@@ -300,9 +295,9 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
     const { tone, active } = agent;
     const hovered = agent.id === hoveredId;
     drawGlow(ctx, node.x, node.y, node.r * (active || hovered ? 2.6 : 2), tone, active || hovered ? 0.4 : 0.22);
-    drawOrb(ctx, node.x, node.y, node.r, tone, 'rgba(245, 243, 255, 0.9)');
-    if (agent.id === selectedId) drawRing(ctx, node.x, node.y, node.r + 5);
-    ctx.fillStyle = 'rgba(30, 16, 60, 0.9)';
+    drawOrb(ctx, node.x, node.y, node.r, tone, palette);
+    if (agent.id === selectedId) drawRing(ctx, node.x, node.y, node.r + 5, palette);
+    ctx.fillStyle = `rgba(${rgbChannels(palette.labelForeground)}, 0.9)`;
     ctx.font = '700 10px ui-sans-serif, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -310,9 +305,9 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
   });
 
   // The Orchestrator: a breathing glass orb with soft ripples and two satellites.
-  const hubGlow = mix('139, 92, 246', flashRgb, flashAmount);
-  const hubTone = mix('167, 139, 250', flashRgb, flashAmount);
-  const ringTone = mix('196, 181, 253', flashRgb, flashAmount);
+  const hubGlow = mix(rgbChannels(palette.glow), flashRgb, flashAmount);
+  const hubTone = mix(rgbChannels(palette.hub), flashRgb, flashAmount);
+  const ringTone = mix(rgbChannels(palette.ring), flashRgb, flashAmount);
   drawGlow(ctx, hub.x, hub.y, core * 4.4, hubGlow, (working ? 0.34 : 0.24) + flashAmount * 0.2);
   const ripples = working ? 3 : 2;
   for (let k = 0; k < ripples; k++) {
@@ -328,14 +323,14 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
   ctx.beginPath();
   ctx.arc(hub.x, hub.y, core * 1.9, 0, Math.PI * 2);
   ctx.stroke();
-  drawOrb(ctx, hub.x, hub.y, core, hubTone);
-  if (selectedId === hubId) drawRing(ctx, hub.x, hub.y, core + 6);
+  drawOrb(ctx, hub.x, hub.y, core, hubTone, palette);
+  if (selectedId === hubId) drawRing(ctx, hub.x, hub.y, core + 6, palette);
   for (let k = 0; k < 2; k++) {
     const angle = seconds * (working ? 1.6 : 0.7) + k * Math.PI;
     const sx = hub.x + Math.cos(angle) * core * 1.9;
     const sy = hub.y + Math.sin(angle) * core * 1.9;
     drawGlow(ctx, sx, sy, 7, ringTone, 0.5);
-    ctx.fillStyle = 'rgba(245, 243, 255, 0.95)';
+    ctx.fillStyle = `rgba(${rgbChannels(palette.highlight)}, 0.95)`;
     ctx.beginPath();
     ctx.arc(sx, sy, 1.8, 0, Math.PI * 2);
     ctx.fill();
@@ -345,11 +340,16 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
 }
 
 export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent, sidePanelOpen = false, roster = [], runtimes = [], canEditAgents = false, onUpdateAgent }) => {
+  const { theme } = useTheme();
+  const palette = theme.scene;
+  const idleRgb = rgbChannels(palette.idle);
+  const sceneStyle = Object.fromEntries(Object.entries(palette).map(([role, color]) => [`--scene-${role}`, rgbChannels(color)])) as React.CSSProperties;
   const [expanded, setExpanded] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const positionsRef = useRef<NodePosition[]>([]);
+  const paintSecondsRef = useRef(0);
   const flashRef = useRef<{ rgb: string; start: number } | null>(null);
   const panelId = useId();
   const turnCalls = useMemo(() => latestChatTurn(calls), [calls]);
@@ -370,16 +370,16 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     ...buildAgents.map(agent => ({
       id: BUILD_PREFIX + agent.agentId,
       initial: agent.name.slice(0, 1).toUpperCase(),
-      tone: build?.running && agent.state === 'running' ? buildTone(agent.state) : IDLE_RGB,
+      tone: build?.running && agent.state === 'running' ? buildTone(agent.state, palette) : idleRgb,
       active: Boolean(build?.running && agent.state === 'running')
     })),
     ...agentCalls.map(call => ({
       id: call.id,
       initial: (agentById.get(call.agentId)?.name ?? call.agentId).slice(0, 1).toUpperCase(),
-      tone: call.status === 'running' ? toneFor(call.status) : IDLE_RGB,
+      tone: call.status === 'running' ? toneFor(call.status, palette) : idleRgb,
       active: call.status === 'running'
     }))
-  ].slice(0, AGENT_OFFSETS.length), [agentById, agentCalls, buildAgents, build?.running]);
+  ].slice(0, AGENT_OFFSETS.length), [agentById, agentCalls, buildAgents, build?.running, palette, idleRgb]);
   const selectedId = selectedCallId ?? (selectedBuildAgentId ? BUILD_PREFIX + selectedBuildAgentId : null);
   const runningCount = runningFlowAgentCount(turnCalls, build);
   const [webgl] = useState(() => supportsWebGL());
@@ -406,7 +406,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         ...buildAgents.map(agent => ({
           id: BUILD_PREFIX + agent.agentId,
           name: agent.name,
-          tone: build?.running && agent.state === 'running' ? buildTone(agent.state) : IDLE_RGB,
+          tone: build?.running && agent.state === 'running' ? buildTone(agent.state, palette) : idleRgb,
           active: Boolean(build?.running && agent.state === 'running'),
           engaged: false,
           detail: [BUILD_STATE_LABEL[agent.state], agent.currentTaskTitle].filter(Boolean).join(' · ')
@@ -414,7 +414,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         ...agentCalls.map(call => ({
           id: call.id,
           name: agentById.get(call.agentId)?.name ?? call.agentId,
-          tone: call.status === 'running' ? toneFor(call.status) : IDLE_RGB,
+          tone: call.status === 'running' ? toneFor(call.status, palette) : idleRgb,
           active: call.status === 'running',
           engaged: false,
           detail: [agentById.get(call.agentId)?.role, callStatus(call.status)].filter(Boolean).join(' · ')
@@ -429,13 +429,13 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       return {
         id: ROSTER_PREFIX + agent.id,
         name: agent.name,
-        tone: build?.running && inBuild?.state === 'running' ? buildTone(inBuild.state) : call?.status === 'running' ? toneFor(call.status) : IDLE_RGB,
+        tone: build?.running && inBuild?.state === 'running' ? buildTone(inBuild.state, palette) : call?.status === 'running' ? toneFor(call.status, palette) : idleRgb,
         active: Boolean(build?.running && inBuild?.state === 'running') || call?.status === 'running',
         engaged: false,
         detail: [agent.role, state, inBuild?.changedFiles.length ? inBuild.changedFiles.length + (inBuild.changedFiles.length === 1 ? ' file changed' : ' files changed') : null, agent.modelName].filter(Boolean).join(' · ')
       };
     });
-  }, [agentById, agentCalls, buildAgents, rosterAgents, build?.running]);
+  }, [agentById, agentCalls, buildAgents, rosterAgents, build?.running, palette, idleRgb]);
   // Agent-to-agent links: who handed work to whom in the open build.
   const sceneLinks = useMemo<SceneLink[]>(() => {
     const sceneId = (agentId: string) => (rosterAgents.length ? ROSTER_PREFIX : BUILD_PREFIX) + agentId;
@@ -510,8 +510,8 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   }, [build?.runId, build?.running]);
 
   // The animation loop reads the latest state from a ref so it never restarts.
-  const stateRef = useRef({ expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: false });
-  stateRef.current = { expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: show3D };
+  const stateRef = useRef({ palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: false });
+  stateRef.current = { palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: show3D };
 
   // Historical outcomes remain in review/activity. The live scene returns directly to neutral.
   useEffect(() => { if (!working) flashRef.current = null; }, [working]);
@@ -522,6 +522,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let frame = 0;
     const paint = (seconds: number, now: number) => {
+      paintSecondsRef.current = seconds;
       const flash = flashRef.current;
       let flashAmount = 0;
       if (flash && !reduceMotion) {
@@ -553,12 +554,12 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   }, []);
 
   useEffect(() => {
-    // Keeps the still frame current when motion is reduced.
+    // Refresh appearance without restarting the loop or advancing a still frame.
     const canvas = canvasRef.current;
-    if (canvas && window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-      positionsRef.current = drawWave(canvas, { ...stateRef.current, flashRgb: null, flashAmount: 0 }, 0);
+    if (canvas) {
+      positionsRef.current = drawWave(canvas, { ...stateRef.current, flashRgb: null, flashAmount: 0 }, reduceMotion ? 0 : paintSecondsRef.current);
     }
-  }, [expanded, working, waveAgents, hoveredId, selectedId, hubId]);
+  }, [expanded, working, waveAgents, hoveredId, selectedId, hubId, palette, reduceMotion]);
 
   useEffect(() => {
     if (!expanded) setHoveredId(null);
@@ -580,7 +581,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   // One 3D view, shown inline or in the enlarged layer; only one is mounted at a time.
   const sceneView = <>
     <SceneBoundary onError={() => setSceneFailed(true)}>
-      <Suspense fallback={<div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-gray-500">Loading the 3D view…</div>}>
+      <Suspense fallback={<div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-[rgba(var(--scene-labelForeground),0.65)]">Loading the 3D view…</div>}>
         <OrchestratorScene3D
           agents={sceneAgents}
           links={sceneLinks}
@@ -597,7 +598,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         />
       </Suspense>
     </SceneBoundary>
-    <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[10px] text-gray-500">Drag to look around · scroll to zoom · right-drag to pan · {rosterAgents.length ? 'click an agent to see and change its model' : 'click an orb for its live activity'}</p>
+    <p className="pointer-events-none absolute inset-x-0 bottom-3 text-center text-[10px] text-[rgba(var(--scene-labelForeground),0.65)]">Drag to look around · scroll to zoom · right-drag to pan · {rosterAgents.length ? 'click an agent to see and change its model' : 'click an orb for its live activity'}</p>
     {panelAgent && <div className="absolute bottom-9 left-3 top-16 z-10 flex items-start">
       <AgentModelPanel
         agent={panelAgent}
@@ -611,30 +612,30 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       />
     </div>}
     {sceneAgents.length > 0 && <div className="sr-only focus-within:not-sr-only focus-within:absolute focus-within:bottom-8 focus-within:right-4 focus-within:flex focus-within:gap-1.5">
-      {sceneAgents.map(agent => <button key={agent.id} type="button" data-execution-state={agent.active ? 'running' : 'idle'} onClick={() => select(agent.id)} aria-pressed={sceneSelectedId === agent.id} className="rounded-full border border-white/15 bg-black/60 px-2.5 py-1 text-[11px] text-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{agent.name}</button>)}
+      {sceneAgents.map(agent => <button key={agent.id} type="button" data-execution-state={agent.active ? 'running' : 'idle'} onClick={() => select(agent.id)} aria-pressed={sceneSelectedId === agent.id} className="rounded-full border border-[rgba(var(--scene-labelForeground),0.15)] bg-[rgba(var(--scene-background),0.6)] px-2.5 py-1 text-[11px] text-[rgba(var(--scene-labelForeground),0.9)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]">{agent.name}</button>)}
     </div>}
   </>;
 
   return (
     // The slot keeps the collapsed height, so opening the panel overlays the chat instead of pushing it down.
-    <div className="relative h-14 w-full">
-    {show3D && maximized && createPortal(<div className="fixed inset-0 z-[1000]">
-      <div aria-hidden="true" onClick={() => setMaximized(false)} className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
-      <div role="dialog" aria-label={title + ' agents in 3D'} className="absolute inset-6 select-none overflow-hidden rounded-2xl border border-white/[0.08] bg-shell shadow-2xl shadow-black/70">
+    <div style={sceneStyle} className="relative h-14 w-full">
+    {show3D && maximized && createPortal(<div style={sceneStyle} className="fixed inset-0 z-[1000]">
+      <div aria-hidden="true" onClick={() => setMaximized(false)} className="absolute inset-0 bg-[rgba(var(--scene-background),0.7)] backdrop-blur-sm" />
+      <div role="dialog" aria-label={title + ' agents in 3D'} className="absolute inset-6 select-none overflow-hidden rounded-2xl border border-[rgba(var(--scene-labelForeground),0.08)] bg-[rgba(var(--scene-background),1)] shadow-2xl shadow-[rgba(var(--scene-background),0.7)]">
         {sceneView}
-        <div className="absolute inset-x-0 top-0 flex h-14 items-center gap-3 bg-gradient-to-b from-shell to-transparent px-5">
+        <div className="absolute inset-x-0 top-0 flex h-14 items-center gap-3 bg-gradient-to-b from-[rgba(var(--scene-background),1)] to-transparent px-5">
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-xs font-semibold text-white">{title}</span>
-            <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}</span>
+            <span className="block truncate text-xs font-semibold text-[rgba(var(--scene-labelForeground),1)]">{title}</span>
+            <span className={'block truncate text-[11px] ' + (working ? 'text-[rgba(var(--scene-hub),1)]' : 'text-[rgba(var(--scene-labelForeground),0.65)]')}>Orchestrator · {statusText}</span>
           </span>
-          <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
-          <button type="button" onClick={() => setMaximized(false)} aria-label="Restore the 3D view" title="Restore (Esc)" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><Minimize2 className="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="rounded-lg p-1.5 text-[rgba(var(--scene-labelForeground),0.65)] hover:bg-[rgba(var(--scene-labelForeground),0.06)] hover:text-[rgba(var(--scene-labelForeground),1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" onClick={() => setMaximized(false)} aria-label="Restore the 3D view" title="Restore (Esc)" className="rounded-lg p-1.5 text-[rgba(var(--scene-labelForeground),0.65)] hover:bg-[rgba(var(--scene-labelForeground),0.06)] hover:text-[rgba(var(--scene-labelForeground),1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]"><Minimize2 className="h-4 w-4" aria-hidden="true" /></button>
         </div>
       </div>
     </div>, document.body)}
-    <section id={panelId} data-execution-state={working ? 'running' : 'idle'} className={'absolute inset-x-0 top-0 z-30 overflow-hidden rounded-2xl border border-white/[0.08] bg-shell transition-[height,box-shadow] duration-500 ease-out motion-reduce:transition-none ' + (show3D ? 'h-[560px] shadow-2xl shadow-black/60' : expanded ? 'h-[184px] shadow-2xl shadow-black/60' : 'h-14')}>
+    <section id={panelId} data-execution-state={working ? 'running' : 'idle'} className={'absolute inset-x-0 top-0 z-30 overflow-hidden rounded-2xl border border-[rgba(var(--scene-labelForeground),0.08)] bg-[rgba(var(--scene-background),1)] transition-[height,box-shadow] duration-500 ease-out motion-reduce:transition-none ' + (show3D ? 'h-[560px] shadow-2xl shadow-[rgba(var(--scene-background),0.6)]' : expanded ? 'h-[184px] shadow-2xl shadow-[rgba(var(--scene-background),0.6)]' : 'h-14')}>
       {show3D && !maximized && <div className="absolute inset-0 select-none">{sceneView}</div>}
-      {show3D && maximized && <div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-gray-500">Showing in the enlarged view</div>}
+      {show3D && maximized && <div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-[rgba(var(--scene-labelForeground),0.65)]">Showing in the enlarged view</div>}
       <canvas
         ref={canvasRef}
         aria-hidden="true"
@@ -643,17 +644,17 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         onClick={event => { const id = nodeAt(event); if (id) select(id); }}
         className={(show3D ? 'hidden ' : '') + 'absolute inset-0 h-full w-full ' + (hoveredCall || hoveredBuildAgent || (hubHovered && hubClickable) ? 'cursor-pointer' : '')}
       />
-      <div aria-hidden="true" className={'pointer-events-none absolute left-0 top-0 w-72 bg-gradient-to-r from-shell via-shell/70 to-transparent ' + (show3D ? 'h-14' : 'bottom-0')} />
-      {expanded && !show3D && (hoveredCall || hoveredBuildAgent || hubHovered) && <div ref={tooltipRef} role="tooltip" style={{ visibility: 'hidden' }} className="pointer-events-none absolute left-0 top-0 z-20 whitespace-nowrap rounded-xl border border-violet-300/20 bg-surface-raised/95 px-3 py-2 shadow-xl shadow-black/40 backdrop-blur">
+      <div aria-hidden="true" className={'pointer-events-none absolute left-0 top-0 w-72 bg-gradient-to-r from-[rgba(var(--scene-background),1)] via-[rgba(var(--scene-background),0.7)] to-transparent ' + (show3D ? 'h-14' : 'bottom-0')} />
+      {expanded && !show3D && (hoveredCall || hoveredBuildAgent || hubHovered) && <div ref={tooltipRef} role="tooltip" style={{ visibility: 'hidden' }} className="pointer-events-none absolute left-0 top-0 z-20 whitespace-nowrap rounded-xl border border-[rgba(var(--scene-hub),0.2)] bg-[rgba(var(--scene-labelBackground),0.95)] px-3 py-2 shadow-xl shadow-[rgba(var(--scene-background),0.4)] backdrop-blur">
         {hoveredBuildAgent ? <>
-          <span className="block text-xs font-semibold text-white">{hoveredBuildAgent.name}</span>
-          <span className="block max-w-72 truncate text-[10px] text-gray-400">{[BUILD_STATE_LABEL[hoveredBuildAgent.state], hoveredBuildAgent.currentTaskTitle, 'Click to see live activity'].filter(Boolean).join(' · ')}</span>
+          <span className="block text-xs font-semibold text-[rgba(var(--scene-labelForeground),1)]">{hoveredBuildAgent.name}</span>
+          <span className="block max-w-72 truncate text-[10px] text-[rgba(var(--scene-labelForeground),0.65)]">{[BUILD_STATE_LABEL[hoveredBuildAgent.state], hoveredBuildAgent.currentTaskTitle, 'Click to see live activity'].filter(Boolean).join(' · ')}</span>
         </> : hoveredCall ? <>
-          <span className="block text-xs font-semibold text-white">{agentName(hoveredCall)}</span>
-          <span className="block text-[10px] text-gray-400">{[agentById.get(hoveredCall.agentId)?.role, callStatus(hoveredCall.status), 'Click to see activity'].filter(Boolean).join(' · ')}</span>
+          <span className="block text-xs font-semibold text-[rgba(var(--scene-labelForeground),1)]">{agentName(hoveredCall)}</span>
+          <span className="block text-[10px] text-[rgba(var(--scene-labelForeground),0.65)]">{[agentById.get(hoveredCall.agentId)?.role, callStatus(hoveredCall.status), 'Click to see activity'].filter(Boolean).join(' · ')}</span>
         </> : <>
-          <span className="block text-xs font-semibold text-white">Orchestrator</span>
-          <span className="block text-[10px] text-gray-400">{[title, statusText, hubClickable ? 'Click to see activity' : null].filter(Boolean).join(' · ')}</span>
+          <span className="block text-xs font-semibold text-[rgba(var(--scene-labelForeground),1)]">Orchestrator</span>
+          <span className="block text-[10px] text-[rgba(var(--scene-labelForeground),0.65)]">{[title, statusText, hubClickable ? 'Click to see activity' : null].filter(Boolean).join(' · ')}</span>
         </>}
       </div>}
 
@@ -663,23 +664,23 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
           aria-expanded={expanded}
           aria-controls={panelId}
           onClick={() => setExpanded(value => !value)}
-          className="flex min-w-0 flex-1 items-center gap-3 self-stretch text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-300/60"
+          className="flex min-w-0 flex-1 items-center gap-3 self-stretch text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[rgba(var(--scene-hub),0.6)]"
         >
           <span className="relative grid h-3 w-3 shrink-0 place-items-center" aria-hidden="true">
-            {working && <span className="absolute inset-0 rounded-full bg-violet-400/60 motion-safe:animate-ping" />}
-            <span className={'relative h-2 w-2 rounded-full ' + (working ? 'bg-violet-300 shadow-[0_0_10px_rgba(167,139,250,0.9)]' : 'bg-violet-400/70')} />
+            {working && <span className="absolute inset-0 rounded-full bg-[rgba(var(--scene-hub),0.6)] motion-safe:animate-ping" />}
+            <span className={'relative h-2 w-2 rounded-full ' + (working ? 'bg-[rgba(var(--scene-hub),1)] shadow-[0_0_10px_rgba(var(--scene-glow),0.9)]' : 'bg-[rgba(var(--scene-hub),0.7)]')} />
           </span>
           <span className="min-w-0">
-            <span className="block truncate text-xs font-semibold tracking-wide text-white">{title}</span>
-            <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}</span>
+            <span className="block truncate text-xs font-semibold tracking-wide text-[rgba(var(--scene-labelForeground),1)]">{title}</span>
+            <span className={'block truncate text-[11px] ' + (working ? 'text-[rgba(var(--scene-hub),1)]' : 'text-[rgba(var(--scene-labelForeground),0.65)]')}>Orchestrator · {statusText}</span>
           </span>
         </button>
-        {!expanded && <span data-agent-execution-count={runningCount} className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (runningCount ? 'border-violet-300/20 text-violet-200' : 'border-white/10 text-gray-500')}>{runningCount ? runningCount + (runningCount === 1 ? ' agent running' : ' agents running') : 'No agents running'}</span>}
+        {!expanded && <span data-agent-execution-count={runningCount} className={'shrink-0 rounded-full border bg-[rgba(var(--scene-background),0.4)] px-2.5 py-1 text-[10px] ' + (runningCount ? 'border-[rgba(var(--scene-hub),0.2)] text-[rgba(var(--scene-hub),1)]' : 'border-[rgba(var(--scene-labelForeground),0.1)] text-[rgba(var(--scene-labelForeground),0.65)]')}>{runningCount ? runningCount + (runningCount === 1 ? ' agent running' : ' agents running') : 'No agents running'}</span>}
         {show3D && <>
-          <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
-          <button type="button" onClick={() => setMaximized(value => !value)} aria-label={maximized ? 'Restore the 3D view' : 'Enlarge the 3D view'} title={maximized ? 'Restore' : 'Enlarge'} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">{maximized ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}</button>
+          <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="shrink-0 rounded-lg p-1 text-[rgba(var(--scene-labelForeground),0.65)] hover:bg-[rgba(var(--scene-labelForeground),0.06)] hover:text-[rgba(var(--scene-labelForeground),1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
+          <button type="button" onClick={() => setMaximized(value => !value)} aria-label={maximized ? 'Restore the 3D view' : 'Enlarge the 3D view'} title={maximized ? 'Restore' : 'Enlarge'} className="shrink-0 rounded-lg p-1 text-[rgba(var(--scene-labelForeground),0.65)] hover:bg-[rgba(var(--scene-labelForeground),0.06)] hover:text-[rgba(var(--scene-labelForeground),1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]">{maximized ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}</button>
         </>}
-        <button type="button" onClick={() => setExpanded(value => !value)} aria-label={expanded ? 'Collapse orchestrator' : 'Expand orchestrator'} className="shrink-0 rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60">
+        <button type="button" onClick={() => setExpanded(value => !value)} aria-label={expanded ? 'Collapse orchestrator' : 'Expand orchestrator'} className="shrink-0 rounded-lg p-1 text-[rgba(var(--scene-labelForeground),0.65)] hover:bg-[rgba(var(--scene-labelForeground),0.06)] hover:text-[rgba(var(--scene-labelForeground),1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]">
           <ChevronDown className={'h-4 w-4 transition-transform ' + (expanded ? 'rotate-180' : '')} aria-hidden="true" />
         </button>
       </div>

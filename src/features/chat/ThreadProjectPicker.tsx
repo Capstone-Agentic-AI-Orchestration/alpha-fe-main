@@ -128,8 +128,8 @@ export function ThreadProjectPicker({ threadId, projectId, buttonLabel }: Readon
   const optionClass = (isSelected: boolean) =>
     `w-full flex items-center gap-2.5 px-3 py-2 text-left text-[11px] transition-colors ${
       isSelected
-        ? 'bg-brand-500/15 text-white'
-        : 'text-gray-300 hover:bg-white/[0.06] hover:text-white'
+        ? 'bg-selected text-selected-content'
+        : 'text-content-secondary hover:bg-surface-high hover:text-content'
     }`;
 
   return (
@@ -146,24 +146,24 @@ export function ThreadProjectPicker({ threadId, projectId, buttonLabel }: Readon
               ? `Agents in this thread read ${workspaceDir}`
               : 'Agents in this thread read the managed workspace root'
           }
-          className="h-8 min-w-[174px] max-w-[220px] flex items-center gap-2 rounded-md border border-white/[0.10] bg-surface-100/80 px-2.5 text-[11px] text-gray-200 transition-colors hover:border-white/20 focus:outline-none focus:border-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+          className="h-8 min-w-[174px] max-w-[220px] flex items-center gap-2 rounded-md border border-divider bg-surface-raised/80 px-2.5 text-[11px] text-content transition-colors hover:border-divider focus:outline-none focus:border-control disabled:cursor-not-allowed disabled:opacity-50"
         >
-          <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+          <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-content-muted" />
           <span className="min-w-0 flex-1 truncate text-left">{buttonLabel ?? selectedLabel}</span>
-          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-gray-500 transition-transform ${open ? 'rotate-180' : ''}`} />
+          <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-content-muted transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
         {open && (
           <div
             role="menu"
             aria-label="Choose a project for this thread"
-            className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-white/[0.12] bg-surface-raised shadow-2xl shadow-black/40 animate-slide-up"
+            className="absolute right-0 top-full z-50 mt-1 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-lg border border-divider bg-surface-raised shadow-2xl shadow-black/40 animate-slide-up"
           >
-            <div className="border-b border-white/[0.08] px-3 py-2">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+            <div className="border-b border-divider px-3 py-2">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-content-muted">
                 Thread project
               </div>
-              <div className="mt-0.5 text-[11px] text-gray-600">
+              <div className="mt-0.5 text-[11px] text-content-muted">
                 Agents read from this project's working copy.
               </div>
             </div>
@@ -176,13 +176,13 @@ export function ThreadProjectPicker({ threadId, projectId, buttonLabel }: Readon
                 onClick={() => void choose('')}
                 className={optionClass(!selected)}
               >
-                <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-gray-500" />
+                <FolderGit2 className="h-3.5 w-3.5 shrink-0 text-content-muted" />
                 <span className="min-w-0 flex-1 truncate">No project</span>
-                {!selected && <Check className="h-3.5 w-3.5 shrink-0 text-brand-400" />}
+                {!selected && <Check className="h-3.5 w-3.5 shrink-0 text-link" />}
               </button>
 
               {pickable.length > 0 && (
-                <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-gray-500">
+                <div className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-content-muted">
                   My projects
                 </div>
               )}
@@ -198,20 +198,20 @@ export function ThreadProjectPicker({ threadId, projectId, buttonLabel }: Readon
                     onClick={() => void choose(project.id)}
                     className={optionClass(isSelected)}
                   >
-                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-brand-500/15 text-[10px] font-semibold text-brand-300">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded bg-selected text-[10px] font-semibold text-selected-content">
                       {project.key.slice(0, 1)}
                     </span>
                     <span className="min-w-0 flex-1 truncate">
                       <span className="font-medium">{project.key}</span>
-                      <span className="text-gray-500"> · {project.name}</span>
+                      <span className="text-content-muted"> · {project.name}</span>
                     </span>
-                    {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-brand-400" />}
+                    {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-link" />}
                   </button>
                 );
               })}
 
               {pickable.length === 0 && (
-                <div className="px-3 py-3 text-[11px] text-gray-600">
+                <div className="px-3 py-3 text-[11px] text-content-muted">
                   {projects.length === 0
                     ? 'No projects available.'
                     : 'You are not assigned to a project yet. Ask a project manager to add you.'}
@@ -232,7 +232,7 @@ export function ThreadProjectPicker({ threadId, projectId, buttonLabel }: Readon
             ? `Project working copy: ${workspaceDir}`
             : 'Choose a project with a connected working copy for code-aware agent calls.'
         }
-        className="bg-transparent border border-white/10 rounded-lg px-2 py-1 text-[11px] text-gray-300 hover:border-white/20 focus:outline-none focus:border-white/30 disabled:opacity-50 max-w-[180px] truncate"
+        className="bg-transparent border border-control rounded-lg px-2 py-1 text-[11px] text-content-secondary hover:border-control focus:outline-none focus:border-control disabled:opacity-50 max-w-[180px] truncate"
       >
         {!selected && <option value="" disabled>Select project</option>}
         {pickable.map(p => (
@@ -242,7 +242,7 @@ export function ThreadProjectPicker({ threadId, projectId, buttonLabel }: Readon
         ))}
       </select>
 
-      {busy && <Loader2 className="w-3 h-3 animate-spin text-gray-500" />}
+      {busy && <Loader2 className="w-3 h-3 animate-spin text-content-muted" />}
 
       {/* The directory, once known. Truncated from the left: the tail is the
           part that distinguishes one working copy from another. */}
@@ -250,13 +250,13 @@ export function ThreadProjectPicker({ threadId, projectId, buttonLabel }: Readon
         <span
           dir="rtl"
           title={workspaceDir}
-          className="font-mono text-[10px] text-gray-600 truncate max-w-[200px] hidden lg:inline"
+          className="font-mono text-[10px] text-content-muted truncate max-w-[200px] hidden lg:inline"
         >
           {workspaceDir}
         </span>
       )}
       {workspaceDir && !busy && (
-        <span className="hidden xl:inline text-[10px] text-gray-500">
+        <span className="hidden xl:inline text-[10px] text-content-muted">
           {workspaceManaged ? 'managed copy' : 'attached folder'}
         </span>
       )}

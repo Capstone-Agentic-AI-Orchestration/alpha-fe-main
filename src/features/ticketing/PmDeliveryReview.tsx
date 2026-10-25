@@ -52,20 +52,20 @@ export function PmDeliveryReview({ ticket, clientAccessActive, disabled, onShare
   }
 
   const shareAvailable = canShareAssessedDelivery(ticket, clientAccessActive);
-  return <section aria-label="PM result inspection" className="border-b border-white/[0.07] p-4 md:p-5">
-    <h3 className="text-sm font-medium text-gray-100">{delivery.shared ? 'Shared result' : 'Assessed result · not shared yet'}</h3>
-    <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-300">{delivery.summary}</p>
-    {loading && <p role="status" className="mt-3 text-[11px] text-gray-500">Checking protected delivery…</p>}
-    {error && <p role="alert" className="mt-3 text-[11px] text-amber-200/80">{error}</p>}
-    <div className="mt-3 space-y-2">{manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-white/[0.06] p-2">
-      <span className="min-w-0 break-words text-xs text-gray-300">{file.filename}</span><button className={`${secondary} shrink-0`} disabled={disabled || downloading !== null} onClick={() => void download(file)} aria-label={`Inspect ${file.filename}`}>
+  return <section aria-label="PM result inspection" className="border-b border-divider p-4 md:p-5">
+    <h3 className="text-sm font-medium text-content">{delivery.shared ? 'Shared result' : 'Assessed result · not shared yet'}</h3>
+    <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{delivery.summary}</p>
+    {loading && <p role="status" className="mt-3 text-[11px] text-content-muted">Checking protected delivery…</p>}
+    {error && <p role="alert" className="mt-3 text-[11px] text-status-warning">{error}</p>}
+    <div className="mt-3 space-y-2">{manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-divider p-2">
+      <span className="min-w-0 break-words text-xs text-content-secondary">{file.filename}</span><button className={`${secondary} shrink-0`} disabled={disabled || downloading !== null} onClick={() => void download(file)} aria-label={`Inspect ${file.filename}`}>
         <Download size={12} />{downloading === file.id ? 'Checking…' : 'Inspect file'}</button></div>)}</div>
     {error && <button className={`${secondary} mt-2`} disabled={disabled || downloading !== null || loading} onClick={() => setRetry(value => value + 1)}>Refresh result files</button>}
     {shareAvailable && <div className="mt-3 space-y-3">
-      <p className="text-[11px] text-gray-500">Inspect the pinned result before sharing. Only the displayed client-facing summary and permitted files will be shared, not private notes or repository access.</p>
-      <label className="flex items-start gap-2 text-[11px] text-gray-300"><input type="checkbox" checked={acknowledged} disabled={disabled || !read || Boolean(error)} onChange={event => setAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I reviewed this result and its client-facing content against the agreed work.</label>
+      <p className="text-[11px] text-content-muted">Inspect the pinned result before sharing. Only the displayed client-facing summary and permitted files will be shared, not private notes or repository access.</p>
+      <label className="flex items-start gap-2 text-[11px] text-content-secondary"><input type="checkbox" checked={acknowledged} disabled={disabled || !read || Boolean(error)} onChange={event => setAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I reviewed this result and its client-facing content against the agreed work.</label>
       <button className={primary} disabled={disabled || !read || !acknowledged || Boolean(error) || downloading !== null} onClick={() => void onShare()}>Share result with client</button>
-      <p className="text-[10px] text-gray-500">Sharing asks for client review. It does not close the ticket, complete the project, merge code or deploy.</p>
+      <p className="text-[10px] text-content-muted">Sharing asks for client review. It does not close the ticket, complete the project, merge code or deploy.</p>
     </div>}
   </section>;
 }

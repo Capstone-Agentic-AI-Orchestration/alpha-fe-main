@@ -1,6 +1,7 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'node:fs';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -26,7 +27,16 @@ export default defineConfig(({ mode }) => {
     // every script and stylesheet 404s — a blank window with no error.
     // Harmless for web hosting, which serves from the same directory anyway.
     base: './',
-    plugins: [react()],
+    plugins: [
+      {
+        name: 'alpha-theme-first-paint',
+        transformIndexHtml(html: string) {
+          const startup = fs.readFileSync(path.resolve(__dirname, 'public/theme-startup.js'), 'utf8');
+          return html.replace('<!-- alpha:theme-startup -->', `<script>${startup}</script>`);
+        },
+      },
+      react(),
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),

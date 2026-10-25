@@ -4,6 +4,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
+    "theme:generate": "node scripts/build-themes.mjs",
+    "theme:check": "node scripts/build-themes.mjs --check && node scripts/check-theme-usage.mjs",
+    "predev": "npm run theme:generate",
+    "prebuild": "npm run theme:generate",
+    "pretest": "npm run theme:check",
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",

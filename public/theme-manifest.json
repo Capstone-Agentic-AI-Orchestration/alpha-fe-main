@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "defaultId": "alpha-violet",
+  "themes": {
+    "alpha-violet": {
+      "id": "alpha-violet",
+      "mode": "dark",
+      "canvas": "#09090B",
+      "shell": "#0D0D11",
+      "symbol": "#9CA3AF"
+    },
+    "slate-blue": {
+      "id": "slate-blue",
+      "mode": "dark",
+      "canvas": "#0D1118",
+      "shell": "#111925",
+      "symbol": "#A6B5C8"
+    },
+    "forest": {
+      "id": "forest",
+      "mode": "dark",
+      "canvas": "#0B1210",
+      "shell": "#0F1915",
+      "symbol": "#A9BCAF"
+    },
+    "ember": {
+      "id": "ember",
+      "mode": "dark",
+      "canvas": "#15100E",
+      "shell": "#1C1512",
+      "symbol": "#C7B6AA"
+    },
+    "pearl": {
+      "id": "pearl",
+      "mode": "light",
+      "canvas": "#F5F6FA",
+      "shell": "#ECEEF5",
+      "symbol": "#565D73"
+    },
+    "sand": {
+      "id": "sand",
+      "mode": "light",
+      "canvas": "#F5F1E9",
+      "shell": "#EBE5D9",
+      "symbol": "#62594E"
+    },
+    "graphite": {
+      "id": "graphite",
+      "mode": "dark",
+      "canvas": "#242426",
+      "shell": "#29292D",
+      "symbol": "#D0D0D5"
+    },
+    "mist": {
+      "id": "mist",
+      "mode": "light",
+      "canvas": "#EFF6FF",
+      "shell": "#E2EDFC",
+      "symbol": "#425B7A"
+    }
+  }
+}

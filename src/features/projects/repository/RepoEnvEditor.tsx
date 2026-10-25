@@ -12,7 +12,7 @@ import { useRepoResource } from './useRepoResource';
 const ALPHA_MANAGED = ['NODE_ENV', 'CORS_ORIGINS', 'FRONTEND_URL', 'VITE_API_URL', 'NEXT_PUBLIC_API_URL'];
 
 const inputClass =
-  'min-w-0 rounded-md border border-white/[0.08] bg-black/30 px-2 py-1 font-mono text-[11px] text-gray-200 placeholder:text-gray-600 focus:border-brand-500 focus:outline-none';
+  'min-w-0 rounded-md border border-divider bg-well px-2 py-1 font-mono text-[11px] text-content placeholder:text-content-muted focus:border-control focus:outline-none';
 
 /**
  * A hosted repository's environment variables, per environment.
@@ -38,7 +38,7 @@ export const RepoEnvEditor: React.FC<{
     <RepoSection
       id={`repo-env-${repo}`}
       title="Variables"
-      icon={<KeyRound className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
+      icon={<KeyRound className="h-3.5 w-3.5 text-link" aria-hidden />}
       actions={<RefreshButton onClick={env.reload} loading={env.loading} label="Refresh variables" />}
     >
       {env.loading && !data ? (
@@ -49,7 +49,7 @@ export const RepoEnvEditor: React.FC<{
         <SectionEmpty>{data?.error ?? 'Set up hosting first; variables live on the hosted environments.'}</SectionEmpty>
       ) : (
         <>
-          <div role="tablist" aria-label="Environment" className="flex gap-1 border-b border-white/[0.06] px-3.5 py-2">
+          <div role="tablist" aria-label="Environment" className="flex gap-1 border-b border-divider px-3.5 py-2">
             {data.environments.map(name => (
               <button
                 key={name}
@@ -58,11 +58,11 @@ export const RepoEnvEditor: React.FC<{
                 aria-selected={name === environment}
                 onClick={() => setSelected(name)}
                 className={`rounded-md px-2 py-1 font-mono text-[11px] transition-colors ${
-                  name === environment ? 'bg-brand-500/20 text-brand-100' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                  name === environment ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'
                 }`}
               >
                 {name}
-                {name === 'main' && <span className="ml-1 font-sans text-[10px] text-gray-500">production</span>}
+                {name === 'main' && <span className="ml-1 font-sans text-[10px] text-content-muted">production</span>}
               </button>
             ))}
           </div>
@@ -166,25 +166,25 @@ const EnvironmentPanel: React.FC<{
   };
 
   return (
-    <div className="divide-y divide-white/[0.06]">
-      <ul aria-label={`${environment} variables`} className="divide-y divide-white/[0.04]">
-        {vars.length === 0 && <li className="px-3.5 py-3 text-[11px] text-gray-500">No variables in {environment} yet.</li>}
+    <div className="divide-y divide-divider">
+      <ul aria-label={`${environment} variables`} className="divide-y divide-divider">
+        {vars.length === 0 && <li className="px-3.5 py-3 text-[11px] text-content-muted">No variables in {environment} yet.</li>}
         {vars.map(v => (
           <li key={`${v.environment}-${v.key}`} className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2">
             <span className="flex min-w-0 items-center gap-1.5">
-              <code className="truncate font-mono text-[11px] text-gray-200">{v.key}</code>
+              <code className="truncate font-mono text-[11px] text-content">{v.key}</code>
               {v.environment === 'all-previews' && (
-                <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-gray-400">every preview</span>
+                <span className="rounded bg-surface-raised px-1.5 py-0.5 text-[10px] text-content-secondary">every preview</span>
               )}
               {v.managedByAlpha && (
-                <span className="rounded bg-brand-500/15 px-1.5 py-px text-[10px] text-brand-400">Set by Alpha</span>
+                <span className="rounded bg-selected px-1.5 py-px text-[10px] text-selected-content">Set by Alpha</span>
               )}
             </span>
             <span className="flex items-center gap-2">
               {v.managedByAlpha && v.value ? (
-                <code className="max-w-[14rem] truncate font-mono text-[11px] text-gray-400" title={v.value}>{v.value}</code>
+                <code className="max-w-[14rem] truncate font-mono text-[11px] text-content-secondary" title={v.value}>{v.value}</code>
               ) : (
-                <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                <span className="flex items-center gap-1 text-[11px] text-content-muted">
                   <Lock className="h-3 w-3" aria-hidden /> set
                 </span>
               )}
@@ -194,7 +194,7 @@ const EnvironmentPanel: React.FC<{
                   onClick={() => void remove(v.key)}
                   disabled={busy !== null}
                   className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] transition-colors disabled:opacity-50 ${
-                    confirmDelete === v.key ? 'bg-rose-500/20 text-rose-200' : 'text-gray-500 hover:bg-white/5 hover:text-rose-300'
+                    confirmDelete === v.key ? 'bg-status-danger-subtle text-status-danger' : 'text-content-muted hover:bg-surface-high hover:text-status-danger'
                   }`}
                 >
                   {busy === v.key ? <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden /> : <Trash2 className="h-3 w-3" aria-hidden />}
@@ -214,7 +214,7 @@ const EnvironmentPanel: React.FC<{
             void save();
           }}
         >
-          <p className="text-[10px] text-gray-500">
+          <p className="text-[10px] text-content-muted">
             Add or replace variables in <span className="font-mono">{environment}</span>. Values are stored as secrets and
             cannot be read back.
           </p>
@@ -229,9 +229,9 @@ const EnvironmentPanel: React.FC<{
                     value={row.key}
                     onChange={e => setRows(rows.map((r, i) => (i === index ? { ...r, key: e.target.value.toUpperCase() } : r)))}
                     aria-invalid={Boolean(keyError)}
-                    className={`${inputClass} w-48 ${keyError ? 'border-rose-400/60' : ''}`}
+                    className={`${inputClass} w-48 ${keyError ? 'border-status-danger-border' : ''}`}
                   />
-                  {keyError && <span className="mt-0.5 text-[10px] text-rose-300">{keyError}</span>}
+                  {keyError && <span className="mt-0.5 text-[10px] text-status-danger">{keyError}</span>}
                 </div>
                 <input
                   aria-label={`Value of ${row.key || 'variable'}`}
@@ -247,7 +247,7 @@ const EnvironmentPanel: React.FC<{
                   type="button"
                   aria-label="Remove row"
                   onClick={() => setRows(rows.length > 1 ? rows.filter((_, i) => i !== index) : [{ key: '', value: '' }])}
-                  className="rounded-md p-1.5 text-gray-500 hover:bg-white/5 hover:text-white"
+                  className="rounded-md p-1.5 text-content-muted hover:bg-surface-high hover:text-content"
                 >
                   <X className="h-3 w-3" aria-hidden />
                 </button>
@@ -266,12 +266,12 @@ const EnvironmentPanel: React.FC<{
                 placeholder={'KEY=value\nOTHER_KEY="value"'}
                 className={`${inputClass} w-full`}
               />
-              <p className="text-[10px] text-gray-500">Read here in your browser; the text itself is never sent.</p>
+              <p className="text-[10px] text-content-muted">Read here in your browser; the text itself is never sent.</p>
               <div className="flex gap-2">
-                <button type="button" onClick={applyPaste} className="rounded-md bg-white/[0.06] px-2 py-1 text-[11px] text-gray-200 hover:bg-white/10">
+                <button type="button" onClick={applyPaste} className="rounded-md bg-surface-raised px-2 py-1 text-[11px] text-content hover:bg-surface-high">
                   Add these
                 </button>
-                <button type="button" onClick={() => { setPasting(false); setPasteText(''); }} className="px-2 py-1 text-[11px] text-gray-500 hover:text-white">
+                <button type="button" onClick={() => { setPasting(false); setPasteText(''); }} className="px-2 py-1 text-[11px] text-content-muted hover:text-content">
                   Cancel
                 </button>
               </div>
@@ -282,32 +282,32 @@ const EnvironmentPanel: React.FC<{
             <button
               type="button"
               onClick={() => setRows([...rows, { key: '', value: '' }])}
-              className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-white"
+              className="inline-flex items-center gap-1 text-[11px] text-content-secondary hover:text-content"
             >
               <Plus className="h-3 w-3" aria-hidden /> Add variable
             </button>
             {!pasting && (
-              <button type="button" onClick={() => setPasting(true)} className="inline-flex items-center gap-1 text-[11px] text-gray-400 hover:text-white">
+              <button type="button" onClick={() => setPasting(true)} className="inline-flex items-center gap-1 text-[11px] text-content-secondary hover:text-content">
                 <ClipboardPaste className="h-3 w-3" aria-hidden /> Paste .env
               </button>
             )}
-            <label className="inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-content-secondary">
               <input type="checkbox" checked={redeploy} onChange={e => setRedeploy(e.target.checked)} className="accent-brand-500" />
               Redeploy {environment} so it takes effect now
             </label>
             <button
               type="submit"
               disabled={busy !== null || filled.length === 0 || Boolean(problem)}
-              className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-2.5 py-1.5 text-[11px] font-medium text-on-accent transition-colors hover:bg-brand-600 disabled:opacity-50"
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-action px-2.5 py-1.5 text-[11px] font-medium text-on-action transition-colors hover:bg-action-hover disabled:opacity-50"
             >
               {busy === 'save' && <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden />}
               Save to {environment}
             </button>
           </div>
-          {problem && filled.length > 0 && <p className="text-[11px] text-amber-300">{problem}</p>}
+          {problem && filled.length > 0 && <p className="text-[11px] text-status-warning">{problem}</p>}
         </form>
       ) : (
-        <p className="px-3.5 py-3 text-[11px] text-gray-500">
+        <p className="px-3.5 py-3 text-[11px] text-content-muted">
           {environment === 'main'
             ? 'Only a project manager or admin can change production variables.'
             : 'Your role cannot change hosting variables.'}
@@ -315,7 +315,7 @@ const EnvironmentPanel: React.FC<{
       )}
 
       {result && (
-        <p role="status" className={`px-3.5 py-2.5 text-[11px] leading-relaxed ${result.tone === 'ok' ? 'text-emerald-300' : 'text-amber-300'}`}>
+        <p role="status" className={`px-3.5 py-2.5 text-[11px] leading-relaxed ${result.tone === 'ok' ? 'text-status-success' : 'text-status-warning'}`}>
           {result.text}
         </p>
       )}

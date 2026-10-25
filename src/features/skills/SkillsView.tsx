@@ -1,22 +1,22 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
-import { 
-  Terminal, 
-  Search, 
-  Code, 
-  Globe, 
-  FolderKanban, 
-  Command, 
-  GitBranch, 
-  Box, 
-  ToggleLeft, 
-  ToggleRight, 
-  Copy, 
-  Check, 
-  Filter, 
-  ArrowDown, 
-  ArrowUp, 
-  Table as TableIcon, 
+import {
+  Terminal,
+  Search,
+  Code,
+  Globe,
+  FolderKanban,
+  Command,
+  GitBranch,
+  Box,
+  ToggleLeft,
+  ToggleRight,
+  Copy,
+  Check,
+  Filter,
+  ArrowDown,
+  ArrowUp,
+  Table as TableIcon,
   X,
   RefreshCw
 } from 'lucide-react';
@@ -25,21 +25,21 @@ import { SkillCategory } from '@/shared/types';
 export const SkillsView: React.FC = () => {
   const { skills, toggleSkill, agents, scanInstalledSkills, isScanningSkills, can } = useApp();
   const canManageSkills = can('manage_skills');
-  
+
   // Selected skill for centered popup modal
   const [selectedSkillId, setSelectedSkillId] = useTabSessionState<string | null>('skills.selectedSkill', null);
-  
+
   // Search & Filter state
   const [searchQuery, setSearchQuery] = useTabSessionState<string>('skills.search', '');
   const [selectedCategory, setSelectedCategory] = useTabSessionState<string>('skills.category', 'all');
   const [statusFilter, setStatusFilter] = useTabSessionState<'all' | 'enabled' | 'disabled'>('skills.statusFilter', 'all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
-  
+
   // Sort state
   const [sortBy, setSortBy] = useTabSessionState<'name' | 'category' | 'agents'>('skills.sortBy', 'name');
   const [sortOrder, setSortOrder] = useTabSessionState<'asc' | 'desc'>('skills.sortOrder', 'asc');
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
-  
+
   // Copied indicator
   const [copiedSkillId, setCopiedSkillId] = useState<string | null>(null);
 
@@ -62,13 +62,13 @@ export const SkillsView: React.FC = () => {
 
   const getCategoryIcon = (cat: SkillCategory) => {
     switch (cat) {
-      case 'File Operations': return <FolderKanban className="w-3.5 h-3.5 text-cyan-400" />;
-      case 'Code Execution': return <Code className="w-3.5 h-3.5 text-emerald-400" />;
-      case 'Browser & Web': return <Globe className="w-3.5 h-3.5 text-blue-400" />;
-      case 'Terminal & Shell': return <Command className="w-3.5 h-3.5 text-amber-400" />;
-      case 'Git & GitHub': return <GitBranch className="w-3.5 h-3.5 text-purple-400" />;
-      case 'Cloud & API': return <Box className="w-3.5 h-3.5 text-indigo-400" />;
-      default: return <Terminal className="w-3.5 h-3.5 text-gray-400" />;
+      case 'File Operations': return <FolderKanban className="w-3.5 h-3.5 text-status-info" />;
+      case 'Code Execution': return <Code className="w-3.5 h-3.5 text-status-success" />;
+      case 'Browser & Web': return <Globe className="w-3.5 h-3.5 text-status-info" />;
+      case 'Terminal & Shell': return <Command className="w-3.5 h-3.5 text-status-warning" />;
+      case 'Git & GitHub': return <GitBranch className="w-3.5 h-3.5 text-link" />;
+      case 'Cloud & API': return <Box className="w-3.5 h-3.5 text-status-info" />;
+      default: return <Terminal className="w-3.5 h-3.5 text-content-secondary" />;
     }
   };
 
@@ -124,21 +124,21 @@ export const SkillsView: React.FC = () => {
   };
 
   return (
-    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-gray-300 select-none font-sans lg:p-6">
-      
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-content-secondary select-none font-sans lg:p-6">
+
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-gray-400" />
-          <h1 className="text-base font-semibold tracking-tight text-white">Skills & Tools</h1>
-          <span className="text-xs text-gray-500 font-mono">{enabledCount}/{skills.length} enabled</span>
+          <Terminal className="w-4 h-4 text-content-secondary" />
+          <h1 className="text-base font-semibold tracking-tight text-content">Skills & Tools</h1>
+          <span className="text-xs text-content-muted font-mono">{enabledCount}/{skills.length} enabled</span>
         </div>
 
         {canManageSkills && (
           <button
             onClick={() => void scanInstalledSkills()}
             disabled={isScanningSkills}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-white/10 bg-surface hover:bg-surface-raised text-xs font-medium text-gray-300 hover:text-white disabled:opacity-60 disabled:cursor-wait transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-divider bg-surface hover:bg-surface-raised text-xs font-medium text-content-secondary hover:text-content disabled:opacity-60 disabled:cursor-wait transition-colors"
             title="Scan the installed SKILL.md folders on this machine"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isScanningSkills ? 'animate-spin' : ''}`} />
@@ -148,11 +148,11 @@ export const SkillsView: React.FC = () => {
 
       </div>
 
-      <div className="-mt-4 flex items-center gap-2 text-[11px] text-gray-500 font-mono">
+      <div className="-mt-4 flex items-center gap-2 text-[11px] text-content-muted font-mono">
         <span>{installedCount} installed on this machine</span>
-        <span className="text-gray-700">•</span>
+        <span className="text-content-muted">•</span>
         <span>Codex, agent, project, and plugin folders</span>
-        <span className="text-gray-700">•</span>
+        <span className="text-content-muted">•</span>
         <span>Detection is read-only; toggles control Alpha access</span>
       </div>
 
@@ -160,19 +160,19 @@ export const SkillsView: React.FC = () => {
       <div className="flex items-center justify-between gap-4">
         {/* Left: Search Input */}
         <div className="relative flex-1 max-w-xs">
-          <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-content-muted absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search skills..."
-            className="w-full bg-surface border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-surface border border-control rounded-xl pl-8 pr-3 py-1.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control transition-colors"
           />
         </div>
 
         {/* Right Actions: Filter, Sort, Table indicator */}
         <div className="flex items-center gap-2 relative">
-          
+
           {/* Filter Popover */}
           <div className="relative">
             <button
@@ -182,8 +182,8 @@ export const SkillsView: React.FC = () => {
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 selectedCategory !== 'all' || statusFilter !== 'all'
-                  ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
-                  : 'bg-surface hover:bg-surface-raised text-gray-400 hover:text-white border-white/5'
+                  ? 'bg-selected text-selected-content border-divider'
+                  : 'bg-surface hover:bg-surface-raised text-content-secondary hover:text-content border-divider'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -191,8 +191,8 @@ export const SkillsView: React.FC = () => {
             </button>
 
             {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
-                <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Category</div>
+              <div className="absolute right-0 mt-1.5 w-52 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-2 text-xs">
+                <div className="text-[10px] font-mono uppercase text-content-secondary px-2 py-1">Category</div>
                 {['all', ...categories].map((cat) => (
                   <button
                     key={cat}
@@ -201,15 +201,15 @@ export const SkillsView: React.FC = () => {
                       setFilterDropdownOpen(false);
                     }}
                     className={`w-full text-left px-2.5 py-1 rounded-lg flex items-center justify-between ${
-                      selectedCategory === cat ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                      selectedCategory === cat ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content'
                     }`}
                   >
                     <span>{cat === 'all' ? 'All Categories' : cat}</span>
-                    {selectedCategory === cat && <Check className="w-3 h-3 text-emerald-400" />}
+                    {selectedCategory === cat && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
 
-                <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1 pt-2 border-t border-white/5">Status</div>
+                <div className="text-[10px] font-mono uppercase text-content-secondary px-2 py-1 pt-2 border-t border-divider">Status</div>
                 {(['all', 'enabled', 'disabled'] as const).map((st) => (
                   <button
                     key={st}
@@ -218,11 +218,11 @@ export const SkillsView: React.FC = () => {
                       setFilterDropdownOpen(false);
                     }}
                     className={`w-full text-left px-2.5 py-1 rounded-lg capitalize flex items-center justify-between ${
-                      statusFilter === st ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                      statusFilter === st ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content'
                     }`}
                   >
                     <span>{st === 'all' ? 'All' : st === 'enabled' ? 'Active' : 'Disabled'}</span>
-                    {statusFilter === st && <Check className="w-3 h-3 text-emerald-400" />}
+                    {statusFilter === st && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
               </div>
@@ -236,14 +236,14 @@ export const SkillsView: React.FC = () => {
                 setSortDropdownOpen(prev => !prev);
                 setFilterDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-divider text-xs font-medium text-content-secondary hover:text-content transition-colors"
             >
               {sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
               <span>{sortBy === 'name' ? 'Name' : sortBy === 'category' ? 'Category' : 'Agents'}</span>
             </button>
 
             {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
+              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-1 text-xs">
                 {(['name', 'category', 'agents'] as const).map((field) => (
                   <button
                     key={field}
@@ -252,23 +252,23 @@ export const SkillsView: React.FC = () => {
                       setSortDropdownOpen(false);
                     }}
                     className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between ${
-                      sortBy === field ? 'bg-white/10 text-white font-semibold' : 'text-gray-300 hover:text-white hover:bg-white/5'
+                      sortBy === field ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content hover:bg-surface-high'
                     }`}
                   >
                     <span className="capitalize">{field === 'agents' ? 'Agent Count' : field}</span>
-                    {sortBy === field && <Check className="w-3 h-3 text-emerald-400" />}
+                    {sortBy === field && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
-                <div className="pt-1 border-t border-white/5">
+                <div className="pt-1 border-t border-divider">
                   <button
                     onClick={() => {
                       setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
                       setSortDropdownOpen(false);
                     }}
-                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 flex items-center justify-between"
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-content-secondary hover:text-content hover:bg-surface-high flex items-center justify-between"
                   >
                     <span>Direction</span>
-                    <span className="font-mono text-[10px] text-brand-400 uppercase">{sortOrder}</span>
+                    <span className="font-mono text-[10px] text-link uppercase">{sortOrder}</span>
                   </button>
                 </div>
               </div>
@@ -277,7 +277,7 @@ export const SkillsView: React.FC = () => {
 
           {/* Table View Button */}
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-divider text-xs font-medium text-content-secondary shadow-sm cursor-default"
           >
             <TableIcon className="w-3.5 h-3.5" />
             <span>Table</span>
@@ -288,7 +288,7 @@ export const SkillsView: React.FC = () => {
       {/* ================= STREAMLINED CLEAN SKILLS TABLE ================= */}
       <div className="w-full">
         {/* Table Column Headers */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-gray-500 border-b border-white/[0.04] items-center">
+        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-content-muted border-b border-divider items-center">
           <div className="col-span-4">Tool & Schema</div>
           <div className="col-span-4">Description</div>
           <div className="col-span-2">Active in Agents</div>
@@ -296,7 +296,7 @@ export const SkillsView: React.FC = () => {
         </div>
 
         {/* Table Rows (No Pills / Clean Typography) */}
-        <div className="divide-y divide-white/[0.02]">
+        <div className="divide-y divide-divider">
           {filteredSkills.map((skill) => {
             const isSelected = selectedSkillId === skill.id;
             const isCopied = copiedSkillId === skill.id;
@@ -306,36 +306,36 @@ export const SkillsView: React.FC = () => {
               <div
                 key={skill.id}
                 onClick={() => setSelectedSkillId(skill.id)}
-                className={`grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-xs hover:bg-white/[0.02] cursor-pointer transition-colors group ${
-                  isSelected ? 'bg-white/[0.04]' : ''
+                className={`grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-xs hover:bg-surface-high cursor-pointer transition-colors group ${
+                  isSelected ? 'bg-surface-raised' : ''
                 } ${!skill.enabled ? 'opacity-60' : ''}`}
               >
                 {/* 1. Tool Name & Command Schema with 1-Click Copy */}
                 <div className="col-span-4 flex items-start gap-3 min-w-0">
-                  <div className="p-2 rounded-xl bg-surface border border-white/5 flex-shrink-0 mt-0.5">
+                  <div className="p-2 rounded-xl bg-surface border border-divider flex-shrink-0 mt-0.5">
                     {getCategoryIcon(skill.category)}
                   </div>
 
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-white truncate group-hover:text-gray-200">
+                      <span className="font-medium text-content truncate group-hover:text-content">
                         {skill.name}
                       </span>
                     </div>
 
-                    <div className="text-[10px] font-mono text-gray-500 capitalize truncate" title={skill.path || undefined}>
+                    <div className="text-[10px] font-mono text-content-muted capitalize truncate" title={skill.path || undefined}>
                       {sourceLabel(skill)}
                     </div>
 
                     {skill.commandExample && (
-                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-gray-400 group/cmd max-w-sm">
-                        <span className="truncate text-gray-400 hover:text-gray-200">{skill.commandExample}</span>
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono text-content-secondary group/cmd max-w-sm">
+                        <span className="truncate text-content-secondary hover:text-content">{skill.commandExample}</span>
                         <button
                           onClick={(e) => handleCopyCommand(skill.id, skill.commandExample!, e)}
-                          className="text-gray-500 hover:text-white transition-colors p-0.5 flex-shrink-0"
+                          className="text-content-muted hover:text-content transition-colors p-0.5 flex-shrink-0"
                           title="Copy invocation schema"
                         >
-                          {isCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                          {isCopied ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
                         </button>
                       </div>
                     )}
@@ -344,7 +344,7 @@ export const SkillsView: React.FC = () => {
 
                 {/* 2. Plain Text Description */}
                 <div className="col-span-4 min-w-0 pr-4">
-                  <p className="text-gray-400 text-xs leading-relaxed line-clamp-2">
+                  <p className="text-content-secondary text-xs leading-relaxed line-clamp-2">
                     {skill.description}
                   </p>
                 </div>
@@ -364,12 +364,12 @@ export const SkillsView: React.FC = () => {
                           />
                         ))}
                       </div>
-                      <span className="text-[11px] text-gray-400 font-mono truncate">
+                      <span className="text-[11px] text-content-secondary font-mono truncate">
                         {boundAgents.length} {boundAgents.length === 1 ? 'agent' : 'agents'}
                       </span>
                     </>
                   ) : (
-                    <span className="text-[11px] text-gray-600 font-mono">—</span>
+                    <span className="text-[11px] text-content-muted font-mono">—</span>
                   )}
                 </div>
 
@@ -377,7 +377,7 @@ export const SkillsView: React.FC = () => {
                 <div className="col-span-2 flex items-center justify-end gap-3 text-right">
                   <div className="flex items-center gap-1.5 text-[11px] font-mono">
                     <span className={`w-1.5 h-1.5 rounded-full ${skill.enabled ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-                    <span className={skill.enabled ? 'text-gray-300' : 'text-gray-500'}>
+                    <span className={skill.enabled ? 'text-content-secondary' : 'text-content-muted'}>
                       {statusLabel(skill)}
                     </span>
                   </div>
@@ -387,12 +387,12 @@ export const SkillsView: React.FC = () => {
                       e.stopPropagation();
                       toggleSkill(skill.id);
                     }}
-                    className="p-1 text-gray-400 hover:text-white transition-colors"
+                    className="p-1 text-content-secondary hover:text-content transition-colors"
                   >
                     {skill.enabled ? (
-                      <ToggleRight className="w-6 h-6 text-brand-400" />
+                      <ToggleRight className="w-6 h-6 text-link" />
                     ) : (
-                      <ToggleLeft className="w-6 h-6 text-gray-600" />
+                      <ToggleLeft className="w-6 h-6 text-content-muted" />
                     )}
                   </button>
                 </div>
@@ -406,38 +406,38 @@ export const SkillsView: React.FC = () => {
       {selectedSkill && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop Overlay */}
-          <div 
+          <div
             className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity animate-fade-in"
             onClick={() => setSelectedSkillId(null)}
           />
 
           {/* Centered Modal Container */}
-          <div className="relative w-full max-w-2xl bg-shell border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
-            
+          <div className="relative w-full max-w-2xl bg-shell border border-divider rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
+
             {/* Modal Header */}
-            <div className="p-5 border-b border-white/5 flex items-start justify-between bg-surface">
+            <div className="p-5 border-b border-divider flex items-start justify-between bg-surface">
               <div className="flex items-start gap-3.5 min-w-0">
-                <div className="p-2.5 rounded-xl bg-well border border-white/10 flex-shrink-0">
+                <div className="p-2.5 rounded-xl bg-well border border-divider flex-shrink-0">
                   {getCategoryIcon(selectedSkill.category)}
                 </div>
 
                 <div className="min-w-0 space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-semibold text-white truncate">{selectedSkill.name}</h2>
-                    <span className="text-xs text-gray-400 font-mono">• {selectedSkill.category}</span>
+                    <h2 className="text-base font-semibold text-content truncate">{selectedSkill.name}</h2>
+                    <span className="text-xs text-content-secondary font-mono">• {selectedSkill.category}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs font-mono">
                     <span className={`w-1.5 h-1.5 rounded-full ${selectedSkill.enabled ? 'bg-emerald-400' : 'bg-gray-600'}`} />
-                    <span className={selectedSkill.enabled ? 'text-gray-300' : 'text-gray-500'}>
+                    <span className={selectedSkill.enabled ? 'text-content-secondary' : 'text-content-muted'}>
                       {selectedSkill.enabled
                         ? selectedSkill.installed ? 'Detected in installed folders' : 'Active for Agents'
                         : 'Disabled'}
                     </span>
-                    <span className="text-gray-600">•</span>
-                    <span className="text-gray-400 capitalize">{sourceLabel(selectedSkill)}</span>
+                    <span className="text-content-muted">•</span>
+                    <span className="text-content-secondary capitalize">{sourceLabel(selectedSkill)}</span>
                   </div>
                   {selectedSkill.path && (
-                    <div className="mt-1 max-w-xl truncate text-[10px] text-gray-500 font-mono" title={selectedSkill.path}>
+                    <div className="mt-1 max-w-xl truncate text-[10px] text-content-muted font-mono" title={selectedSkill.path}>
                       {selectedSkill.path}
                     </div>
                   )}
@@ -449,15 +449,15 @@ export const SkillsView: React.FC = () => {
                   onClick={() => toggleSkill(selectedSkill.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     selectedSkill.enabled
-                      ? 'bg-rose-500/10 text-rose-300 hover:bg-rose-500/20 border border-rose-500/20'
-                      : 'bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 border border-emerald-500/20'
+                      ? 'bg-status-danger-subtle text-status-danger hover:bg-status-danger-subtle border border-status-danger-border'
+                      : 'bg-status-success-subtle text-status-success hover:bg-status-success-subtle border border-status-success-border'
                   }`}
                 >
                   {selectedSkill.enabled ? 'Disable Tool' : 'Enable Tool'}
                 </button>
                 <button
                   onClick={() => setSelectedSkillId(null)}
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-surface-high text-content-secondary hover:text-content transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -465,12 +465,12 @@ export const SkillsView: React.FC = () => {
             </div>
 
             {/* Modal Body */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs text-gray-300">
-              
+            <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs text-content-secondary">
+
               {/* Description */}
               <div className="space-y-1.5">
-                <label className="text-[11px] font-medium text-gray-400">Tool Purpose & Capability</label>
-                <p className="text-white leading-relaxed bg-well p-3 rounded-xl border border-white/5">
+                <label className="text-[11px] font-medium text-content-secondary">Tool Purpose & Capability</label>
+                <p className="text-content leading-relaxed bg-well p-3 rounded-xl border border-divider">
                   {selectedSkill.description}
                 </p>
               </div>
@@ -479,16 +479,16 @@ export const SkillsView: React.FC = () => {
               {selectedSkill.commandExample && (
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-medium text-gray-400">Invocation Command Schema</label>
+                    <label className="text-[11px] font-medium text-content-secondary">Invocation Command Schema</label>
                     <button
                       onClick={() => handleCopyCommand(selectedSkill.id, selectedSkill.commandExample!)}
-                      className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-white font-mono"
+                      className="flex items-center gap-1 text-[10px] text-content-secondary hover:text-content font-mono"
                     >
-                      {copiedSkillId === selectedSkill.id ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                      {copiedSkillId === selectedSkill.id ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
                       <span>{copiedSkillId === selectedSkill.id ? 'Copied' : 'Copy'}</span>
                     </button>
                   </div>
-                  <div className="font-mono text-cyan-300 bg-well p-3 rounded-xl border border-white/5 overflow-x-auto leading-relaxed">
+                  <div className="font-mono text-status-info bg-well p-3 rounded-xl border border-divider overflow-x-auto leading-relaxed">
                     {selectedSkill.commandExample}
                   </div>
                 </div>
@@ -496,18 +496,18 @@ export const SkillsView: React.FC = () => {
 
               {/* Bound Agents List */}
               <div className="space-y-2">
-                <label className="text-[11px] font-medium text-gray-400">
+                <label className="text-[11px] font-medium text-content-secondary">
                   Active in Agents ({agents.filter(a => (a.skills || []).includes(selectedSkill.id)).length})
                 </label>
                 <div className="flex flex-wrap gap-2">
                   {agents.filter(a => (a.skills || []).includes(selectedSkill.id)).length === 0 ? (
-                    <p className="text-gray-500 italic">No agents are currently using this skill.</p>
+                    <p className="text-content-muted italic">No agents are currently using this skill.</p>
                   ) : (
                     agents.filter(a => (a.skills || []).includes(selectedSkill.id)).map(agent => (
-                      <div key={agent.id} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-well border border-white/5 text-xs text-white">
+                      <div key={agent.id} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-well border border-divider text-xs text-content">
                         <img src={agent.avatar} alt="" className="w-4 h-4 rounded-full object-cover" />
                         <span>{agent.name}</span>
-                        <span className="text-[10px] text-gray-500 font-mono">• {agent.role}</span>
+                        <span className="text-[10px] text-content-muted font-mono">• {agent.role}</span>
                       </div>
                     ))
                   )}
@@ -517,11 +517,11 @@ export const SkillsView: React.FC = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 border-t border-white/5 bg-surface flex items-center justify-between text-xs font-mono text-gray-500">
+            <div className="p-4 border-t border-divider bg-surface flex items-center justify-between text-xs font-mono text-content-muted">
               <span>{selectedSkill.category}</span>
               <button
                 onClick={() => setSelectedSkillId(null)}
-                className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high text-content font-medium transition-colors"
               >
                 Close
               </button>

@@ -164,21 +164,21 @@ export function McpServersPanel() {
     <div className="space-y-4">
       <div className="flex items-start justify-between gap-4">
         <div className="space-y-1 min-w-0">
-          <h3 className="text-sm font-semibold text-white flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-content flex items-center gap-2">
             <Database className="w-4 h-4 text-pink-400" />
             MCP Servers
           </h3>
-          <p className="text-[11px] text-gray-500 leading-snug max-w-xl">
+          <p className="text-[11px] text-content-muted leading-snug max-w-xl">
             Tools your agents can be granted. Agents can only use servers listed here —
             nothing configured for your personal CLI is reachable from a run. Stored in{' '}
-            <span className="font-mono text-gray-400">~/.alpha/mcp.json</span>.
+            <span className="font-mono text-content-secondary">~/.alpha/mcp.json</span>.
           </p>
         </div>
 
         <button
           onClick={() => setDraft(EMPTY_DRAFT)}
           disabled={!canManageMcp || busy || !!draft}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/[0.06] hover:bg-white/[0.1] disabled:opacity-40 border border-white/10 text-xs font-medium text-white transition-colors"
+          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high disabled:opacity-40 border border-divider text-xs font-medium text-content transition-colors"
         >
           <Plus className="w-3.5 h-3.5" />
           Add server
@@ -186,7 +186,7 @@ export function McpServersPanel() {
       </div>
 
       {loading ? (
-        <div className="flex items-center gap-2 text-[11px] text-gray-500 py-6">
+        <div className="flex items-center gap-2 text-[11px] text-content-muted py-6">
           <Loader2 className="w-3.5 h-3.5 animate-spin" />
           Reading catalog...
         </div>
@@ -199,44 +199,44 @@ export function McpServersPanel() {
             return (
               <div
                 key={server.name}
-                className="p-3 rounded-xl bg-well border border-white/5"
+                className="p-3 rounded-xl bg-well border border-divider"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0 space-y-1">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-medium text-xs text-white">{server.name}</span>
+                      <span className="font-medium text-xs text-content">{server.name}</span>
                       {server.builtin && (
-                        <span className="flex items-center gap-1 text-[10px] text-gray-500 font-mono">
+                        <span className="flex items-center gap-1 text-[10px] text-content-muted font-mono">
                           <Lock className="w-2.5 h-2.5" />
                           built in
                         </span>
                       )}
                       {server.overridden && (
-                        <span className="text-[10px] text-amber-300 font-mono">overridden</span>
+                        <span className="text-[10px] text-status-warning font-mono">overridden</span>
                       )}
-                      <span className="text-[10px] text-gray-600 font-mono">
+                      <span className="text-[10px] text-content-muted font-mono">
                         {server.transport}
                       </span>
                     </div>
 
                     {/* What Alpha will spawn, or the endpoint it will connect to. */}
-                    <div className="font-mono text-[10px] text-gray-500 break-all">
+                    <div className="font-mono text-[10px] text-content-muted break-all">
                       {describeServer(server)}
                     </div>
 
                     {(server.envKeys?.length ?? 0) > 0 && (
-                      <div className="font-mono text-[10px] text-gray-600">
+                      <div className="font-mono text-[10px] text-content-muted">
                         env: {server.envKeys!.join(', ')}
                       </div>
                     )}
 
                     {(server.headerKeys?.length ?? 0) > 0 && (
-                      <div className="font-mono text-[10px] text-gray-600">
+                      <div className="font-mono text-[10px] text-content-muted">
                         headers: {server.headerKeys!.join(', ')}
                       </div>
                     )}
 
-                    <div className="text-[10px] text-gray-600">
+                    <div className="text-[10px] text-content-muted">
                       {granted.length
                         ? `Granted to ${granted.join(', ')}`
                         : 'Not granted to any agent'}
@@ -258,7 +258,7 @@ export function McpServersPanel() {
                         })
                       }
                       disabled={busy || !!draft}
-                      className="px-2 py-1 rounded-lg text-[10px] text-gray-400 hover:text-white hover:bg-white/[0.06] disabled:opacity-40 transition-colors"
+                      className="px-2 py-1 rounded-lg text-[10px] text-content-secondary hover:text-content hover:bg-surface-high disabled:opacity-40 transition-colors"
                     >
                       {protectedBuiltin ? 'Override' : 'Edit'}
                     </button>
@@ -270,7 +270,7 @@ export function McpServersPanel() {
                           ? 'Ships with Alpha — cannot be removed'
                           : 'Remove from catalog'
                       }
-                      className="p-1.5 rounded-lg text-gray-500 hover:text-rose-300 hover:bg-rose-500/10 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-500 transition-colors"
+                      className="p-1.5 rounded-lg text-content-muted hover:text-status-danger hover:bg-status-danger-subtle disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-content-muted transition-colors"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -283,21 +283,21 @@ export function McpServersPanel() {
       )}
 
       {draft && (
-        <div className="p-3 rounded-xl bg-well border border-white/10 space-y-3">
+        <div className="p-3 rounded-xl bg-well border border-divider space-y-3">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-gray-300">
+            <span className="text-[11px] font-medium text-content-secondary">
               {draft.editing ? `Edit ${draft.editing}` : 'New MCP server'}
             </span>
             <button
               onClick={() => setDraft(null)}
-              className="p-1 rounded text-gray-500 hover:text-white transition-colors"
+              className="p-1 rounded text-content-muted hover:text-content transition-colors"
             >
               <X className="w-3.5 h-3.5" />
             </button>
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+            <label className="text-[10px] font-medium text-content-muted uppercase tracking-wider">
               Name
             </label>
             <input
@@ -307,12 +307,12 @@ export function McpServersPanel() {
               disabled={!!draft.editing}
               onChange={e => setDraft({ ...draft, name: e.target.value })}
               placeholder="my-postgres"
-              className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs disabled:opacity-50 focus:outline-none focus:border-white/30"
+              className="w-full bg-surface border border-control rounded-lg px-2.5 py-1.5 text-content font-mono text-xs disabled:opacity-50 focus:outline-none focus:border-control"
             />
           </div>
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+            <label className="text-[10px] font-medium text-content-muted uppercase tracking-wider">
               Transport
             </label>
             <div className="flex gap-1.5">
@@ -322,15 +322,15 @@ export function McpServersPanel() {
                   onClick={() => setDraft({ ...draft, transport: t })}
                   className={`px-2.5 py-1 rounded-lg text-[11px] font-mono border transition-colors ${
                     draft.transport === t || (t === 'http' && draft.transport === 'sse')
-                      ? 'bg-white/[0.08] border-white/20 text-white'
-                      : 'bg-transparent border-white/5 text-gray-500 hover:text-gray-300'
+                      ? 'bg-surface-raised border-divider text-content'
+                      : 'bg-transparent border-divider text-content-muted hover:text-content-secondary'
                   }`}
                 >
                   {t}
                 </button>
               ))}
             </div>
-            <p className="text-[10px] text-gray-600 leading-snug">
+            <p className="text-[10px] text-content-muted leading-snug">
               {draft.transport === 'stdio'
                 ? 'Alpha spawns this as a child process on every turn the server is used.'
                 : 'Alpha connects to a URL. Nothing is installed, and it cannot fail offline mid-run.'}
@@ -340,19 +340,19 @@ export function McpServersPanel() {
           {draft.transport === 'stdio' ? (
             <>
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                <label className="text-[10px] font-medium text-content-muted uppercase tracking-wider">
                   Command
                 </label>
                 <input
                   value={draft.command}
                   onChange={e => setDraft({ ...draft, command: e.target.value })}
                   placeholder="npx"
-                  className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                  className="w-full bg-surface border border-control rounded-lg px-2.5 py-1.5 text-content font-mono text-xs focus:outline-none focus:border-control"
                 />
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+                <label className="text-[10px] font-medium text-content-muted uppercase tracking-wider">
                   Arguments — one per line
                 </label>
                 <textarea
@@ -360,26 +360,26 @@ export function McpServersPanel() {
                   onChange={e => setDraft({ ...draft, argsText: e.target.value })}
                   rows={3}
                   placeholder={'-y\n@modelcontextprotocol/server-memory'}
-                  className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs resize-y focus:outline-none focus:border-white/30"
+                  className="w-full bg-surface border border-control rounded-lg px-2.5 py-1.5 text-content font-mono text-xs resize-y focus:outline-none focus:border-control"
                 />
               </div>
             </>
           ) : (
             <div className="space-y-1.5">
-              <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+              <label className="text-[10px] font-medium text-content-muted uppercase tracking-wider">
                 URL
               </label>
               <input
                 value={draft.url}
                 onChange={e => setDraft({ ...draft, url: e.target.value })}
                 placeholder="https://mcp.context7.com/mcp"
-                className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                className="w-full bg-surface border border-control rounded-lg px-2.5 py-1.5 text-content font-mono text-xs focus:outline-none focus:border-control"
               />
             </div>
           )}
 
           <div className="space-y-1.5">
-            <label className="text-[10px] font-medium text-gray-500 uppercase tracking-wider">
+            <label className="text-[10px] font-medium text-content-muted uppercase tracking-wider">
               {draft.transport === 'stdio' ? 'Environment' : 'Headers'} — KEY=value per line
             </label>
             <textarea
@@ -391,9 +391,9 @@ export function McpServersPanel() {
                   ? 'DATABASE_URL=postgres://...'
                   : 'Authorization=Bearer ...'
               }
-              className="w-full bg-surface border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs resize-y focus:outline-none focus:border-white/30"
+              className="w-full bg-surface border border-control rounded-lg px-2.5 py-1.5 text-content font-mono text-xs resize-y focus:outline-none focus:border-control"
             />
-            <p className="text-[10px] text-gray-600 leading-snug">
+            <p className="text-[10px] text-content-muted leading-snug">
               {draft.editing
                 ? 'Values are never read back, so leaving this empty clears what is stored. Re-enter anything you want to keep.'
                 : 'Stored in ~/.alpha/mcp.json as plain text, and never returned to this page once saved.'}
@@ -402,11 +402,11 @@ export function McpServersPanel() {
 
           {/* What will actually happen, assembled from the fields above. */}
           {(draft.transport === 'stdio' ? draft.command.trim() : draft.url.trim()) && (
-            <div className="p-2 rounded-lg bg-black/40 border border-white/5">
-              <div className="text-[10px] text-gray-600 mb-1">
+            <div className="p-2 rounded-lg bg-well border border-divider">
+              <div className="text-[10px] text-content-muted mb-1">
                 {draft.transport === 'stdio' ? 'Alpha will run:' : 'Alpha will connect to:'}
               </div>
-              <div className="font-mono text-[10px] text-gray-300 break-all">
+              <div className="font-mono text-[10px] text-content-secondary break-all">
                 {describeServer({
                   transport: draft.transport,
                   command: draft.command.trim(),
@@ -434,7 +434,7 @@ export function McpServersPanel() {
             </button>
             <button
               onClick={() => setDraft(null)}
-              className="px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white transition-colors"
+              className="px-3 py-1.5 rounded-lg text-xs text-content-secondary hover:text-content transition-colors"
             >
               Cancel
             </button>
@@ -443,15 +443,15 @@ export function McpServersPanel() {
       )}
 
       {confirmDelete && (
-        <div className="p-3 rounded-xl bg-rose-500/5 border border-rose-500/20 space-y-2">
+        <div className="p-3 rounded-xl bg-status-danger-subtle border border-status-danger-border space-y-2">
           <div className="flex items-start gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-300 mt-0.5 shrink-0" />
-            <div className="space-y-1 text-[11px] text-rose-100">
+            <AlertTriangle className="w-3.5 h-3.5 text-status-danger mt-0.5 shrink-0" />
+            <div className="space-y-1 text-[11px] text-status-danger">
               <div>
                 Remove <span className="font-mono">{confirmDelete.name}</span> from the catalog?
               </div>
               {grantedNames(confirmDelete).length > 0 && (
-                <div className="text-rose-200/80 leading-snug">
+                <div className="text-status-danger leading-snug">
                   {grantedNames(confirmDelete).join(', ')}{' '}
                   {grantedNames(confirmDelete).length === 1 ? 'is' : 'are'} granted this server
                   and will lose the tool on the next turn. The grant itself is left in place,
@@ -464,13 +464,13 @@ export function McpServersPanel() {
             <button
               onClick={() => void remove(confirmDelete)}
               disabled={busy}
-              className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/30 text-xs font-medium text-rose-100 disabled:opacity-40 transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-status-danger-subtle hover:bg-status-danger-subtle border border-status-danger-border text-xs font-medium text-status-danger disabled:opacity-40 transition-colors"
             >
               {busy ? 'Removing...' : 'Remove'}
             </button>
             <button
               onClick={() => setConfirmDelete(null)}
-              className="px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white transition-colors"
+              className="px-3 py-1.5 rounded-lg text-xs text-content-secondary hover:text-content transition-colors"
             >
               Cancel
             </button>

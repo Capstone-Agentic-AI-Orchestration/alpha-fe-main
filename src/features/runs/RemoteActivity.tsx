@@ -70,10 +70,10 @@ export function RemoteActivity({ runId }: Readonly<Props>) {
   if (!actions.length) return null;
 
   return (
-    <div className="space-y-2 rounded-xl border border-white/5 bg-well p-3">
+    <div className="space-y-2 rounded-xl border border-divider bg-well p-3">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-medium text-gray-400">Remote activity</span>
-        <span className="font-mono text-[10px] text-gray-500">{actions.length}</span>
+        <span className="text-[11px] font-medium text-content-secondary">Remote activity</span>
+        <span className="font-mono text-[10px] text-content-muted">{actions.length}</span>
       </div>
 
       <div className="space-y-1">
@@ -90,7 +90,7 @@ export function RemoteActivity({ runId }: Readonly<Props>) {
           return (
             <div key={a.id} className="flex items-start gap-2">
               <span
-                className={`mt-0.5 shrink-0 ${a.succeeded ? 'text-gray-500' : 'text-rose-400'}`}
+                className={`mt-0.5 shrink-0 ${a.succeeded ? 'text-content-muted' : 'text-status-danger'}`}
                 title={a.succeeded ? a.action : `${a.action} failed`}
               >
                 {a.succeeded ? <Icon className="w-3 h-3" /> : <ShieldAlert className="w-3 h-3" />}
@@ -98,21 +98,21 @@ export function RemoteActivity({ runId }: Readonly<Props>) {
 
               <div className="min-w-0 flex-1 leading-snug">
                 <div className="flex items-center gap-1 text-[11px]">
-                  <ActorIcon className="w-2.5 h-2.5 shrink-0 text-gray-600" />
-                  <span className={a.succeeded ? 'text-gray-300' : 'text-rose-200'}>
+                  <ActorIcon className="w-2.5 h-2.5 shrink-0 text-content-muted" />
+                  <span className={a.succeeded ? 'text-content-secondary' : 'text-status-danger'}>
                     {who} {a.succeeded ? LABELS[a.action] ?? a.action : `could not ${LABELS[a.action] ?? a.action}`}
                   </span>
                 </div>
 
                 {a.target && (
-                  <div className="truncate font-mono text-[10px] text-gray-500">
+                  <div className="truncate font-mono text-[10px] text-content-muted">
                     {/* A pull request URL is worth following; a branch name is not a link. */}
                     {a.target.startsWith('http') ? (
                       <a
                         href={a.target}
                         target="_blank"
                         rel="noreferrer"
-                        className="hover:text-brand-400 hover:underline"
+                        className="hover:text-link-hover hover:underline"
                       >
                         {a.target}
                       </a>
@@ -123,7 +123,7 @@ export function RemoteActivity({ runId }: Readonly<Props>) {
                 )}
 
                 {a.detail && (
-                  <div className={`text-[10px] ${a.succeeded ? 'text-gray-600' : 'text-rose-300/70'}`}>
+                  <div className={`text-[10px] ${a.succeeded ? 'text-content-muted' : 'text-status-danger'}`}>
                     {a.detail}
                   </div>
                 )}

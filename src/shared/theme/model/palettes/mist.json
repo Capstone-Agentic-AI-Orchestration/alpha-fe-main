@@ -1,0 +1,26 @@
+{
+  "id": "mist",
+  "name": "Mist",
+  "description": "Pale blue · clear blue accents",
+  "mode": "light",
+  "colors": {
+    "canvas": "#EFF6FF",
+    "shell": "#E2EDFC",
+    "surface": "#FFFFFF",
+    "raised": "#E7F0FD",
+    "high": "#EEF5FE",
+    "well": "#F4F9FF",
+    "textPrimary": "#172B4D",
+    "textSecondary": "#425B7A",
+    "textMuted": "#526987",
+    "accent": "#2563EB",
+    "action": "#2563EB",
+    "actionHover": "#2157CF",
+    "link": "#1D4ED8",
+    "linkHover": "#1A45BE",
+    "focus": "#1D4ED8",
+    "divider": "#C5D7F0",
+    "control": "#9099AA",
+    "sceneIdle": "#4A6593"
+  }
+}

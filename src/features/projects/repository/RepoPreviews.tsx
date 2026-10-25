@@ -69,7 +69,7 @@ export const RepoPreviews: React.FC<{
     <RepoSection
       id={`repo-previews-${repo}`}
       title="Previews"
-      icon={<MonitorPlay className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
+      icon={<MonitorPlay className="h-3.5 w-3.5 text-link" aria-hidden />}
       actions={<RefreshButton onClick={previews.reload} loading={previews.loading} label="Refresh previews" />}
     >
       <div aria-busy={previews.loading}>
@@ -79,7 +79,7 @@ export const RepoPreviews: React.FC<{
           <SectionError message={previews.error} onRetry={previews.reload} />
         ) : !data || sorted.length === 0 ? (
           <div className="space-y-2 px-3.5 py-4">
-            <p className="text-[11px] text-gray-500">
+            <p className="text-[11px] text-content-muted">
               {data?.state === 'unavailable'
                 ? (data.error ?? 'Hosting is not available here.')
                 : data?.state === 'failed'
@@ -94,7 +94,7 @@ export const RepoPreviews: React.FC<{
               <button
                 type="button"
                 onClick={onOpenHosting}
-                className="rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-gray-200 transition-colors hover:bg-white/10"
+                className="rounded-lg bg-surface-raised px-2.5 py-1.5 text-[11px] font-medium text-content transition-colors hover:bg-surface-high"
               >
                 Review hosting setup
               </button>
@@ -103,8 +103,8 @@ export const RepoPreviews: React.FC<{
         ) : (
           <div className="space-y-2">
             {shouldAutoRefresh && (
-              <p role="status" className="flex items-center gap-1.5 px-3.5 pt-3 text-[11px] text-gray-400">
-                <Loader2 className="h-3 w-3 motion-safe:animate-spin text-brand-400" aria-hidden />
+              <p role="status" className="flex items-center gap-1.5 px-3.5 pt-3 text-[11px] text-content-secondary">
+                <Loader2 className="h-3 w-3 motion-safe:animate-spin text-link" aria-hidden />
                 {trackedPreview?.deployStatus
                   ? `${trackedPreview.branch} is ${humanize(trackedPreview.deployStatus).toLowerCase()}.`
                   : `Preparing the ${trackedPreview?.branch ?? 'dev'} preview.`}{' '}
@@ -112,7 +112,7 @@ export const RepoPreviews: React.FC<{
               </p>
             )}
             {!shouldAutoRefresh && autoRefreshCount.current >= 18 && trackedPreview && !trackedPreview.ready && !terminalDeploy && (
-              <p role="status" className="px-3.5 pt-3 text-[11px] text-amber-300">
+              <p role="status" className="px-3.5 pt-3 text-[11px] text-status-warning">
                 The first preview is taking longer than expected. Use Refresh previews to check again.
               </p>
             )}
@@ -154,7 +154,7 @@ export const RepoLogsTab: React.FC<{ projectId: string; repo: string; active: bo
     <RepoSection
       id={`repo-logs-${repo}`}
       title="Logs"
-      icon={<ScrollText className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
+      icon={<ScrollText className="h-3.5 w-3.5 text-link" aria-hidden />}
       actions={<RefreshButton onClick={previews.reload} loading={previews.loading} label="Refresh logs" />}
     >
       {previews.loading && !previews.data ? (
@@ -174,8 +174,8 @@ export const RepoLogsTab: React.FC<{ projectId: string; repo: string; active: bo
 
 const CardHeader: React.FC<{ preview: BranchPreview }> = ({ preview }) => (
   <div className="flex items-center justify-between gap-2 px-3 py-2">
-    <span className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-gray-300">{preview.branch}</span>
-    <span className={`flex items-center gap-1.5 text-[11px] ${preview.ready ? 'text-emerald-300' : 'text-gray-500'}`}>
+    <span className="rounded bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-content-secondary">{preview.branch}</span>
+    <span className={`flex items-center gap-1.5 text-[11px] ${preview.ready ? 'text-status-success' : 'text-content-muted'}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${preview.ready ? 'bg-emerald-400' : 'bg-gray-600'}`} aria-hidden />
       {preview.ready ? 'Live' : preview.deployStatus ? humanize(preview.deployStatus) : 'Not deployed'}
     </span>
@@ -190,7 +190,7 @@ const CardLinks: React.FC<{ preview: BranchPreview }> = ({ preview }) =>
         target="_blank"
         rel="noreferrer"
         title={preview.url}
-        className="inline-flex min-w-0 items-center gap-1 truncate text-[11px] text-brand-400 transition-colors hover:text-brand-100"
+        className="inline-flex min-w-0 items-center gap-1 truncate text-[11px] text-link transition-colors hover:text-link-hover"
       >
         <span className="truncate">{preview.url.replace(/^https?:\/\//, '')}</span>
         <ExternalLink className="h-3 w-3 flex-shrink-0" aria-hidden />
@@ -225,11 +225,11 @@ const PageCard: React.FC<{ preview: BranchPreview }> = ({ preview }) => {
   const sandbox = preview.url ? previewFrameSandbox(preview.url, window.location.origin) : '';
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-lg border border-white/[0.06] bg-black/20">
+    <article className="min-w-0 overflow-hidden rounded-lg border border-divider bg-well">
       <CardHeader preview={preview} />
       {framable && preview.url ? (
         expanded ? (
-          <div className="relative border-y border-white/[0.06]">
+          <div className="relative border-y border-divider">
             <iframe
               title={`${preview.branch} preview`}
               src={preview.url}
@@ -240,7 +240,7 @@ const PageCard: React.FC<{ preview: BranchPreview }> = ({ preview }) => {
             <button
               type="button"
               onClick={() => setExpanded(false)}
-              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-[11px] text-gray-200 hover:bg-black/90"
+              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-well px-2 py-1 text-[11px] text-content hover:bg-well"
             >
               <Minimize2 className="h-3 w-3" aria-hidden /> Shrink
             </button>
@@ -248,11 +248,11 @@ const PageCard: React.FC<{ preview: BranchPreview }> = ({ preview }) => {
         ) : (
           <div
             ref={boxRef}
-            className="relative overflow-hidden border-y border-white/[0.06] bg-white/[0.02]"
+            className="relative overflow-hidden border-y border-divider bg-surface-raised"
             style={{ height: THUMB_LAYOUT_HEIGHT * scale }}
           >
             {!loaded && (
-              <p className="absolute inset-0 flex items-center justify-center gap-1.5 text-[11px] text-gray-500">
+              <p className="absolute inset-0 flex items-center justify-center gap-1.5 text-[11px] text-content-muted">
                 <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden /> Loading preview…
               </p>
             )}
@@ -273,15 +273,15 @@ const PageCard: React.FC<{ preview: BranchPreview }> = ({ preview }) => {
             <button
               type="button"
               onClick={() => setExpanded(true)}
-              className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-black/70 px-2 py-1 text-[11px] text-gray-200 hover:bg-black/90"
+              className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-well px-2 py-1 text-[11px] text-content hover:bg-well"
             >
               <Maximize2 className="h-3 w-3" aria-hidden /> Open here
             </button>
           </div>
         )
       ) : (
-        <p className="flex items-start gap-1.5 border-y border-white/[0.06] bg-white/[0.02] px-3 py-6 text-[11px] leading-relaxed text-gray-400">
-          <Eye className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-500" aria-hidden />
+        <p className="flex items-start gap-1.5 border-y border-divider bg-surface-raised px-3 py-6 text-[11px] leading-relaxed text-content-secondary">
+          <Eye className="mt-0.5 h-3 w-3 flex-shrink-0 text-content-muted" aria-hidden />
           {previewUnavailableReason(preview)}
         </p>
       )}
@@ -312,19 +312,19 @@ const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPre
   };
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-lg border border-white/[0.06] bg-black/20">
+    <article className="min-w-0 overflow-hidden rounded-lg border border-divider bg-well">
       <CardHeader preview={preview} />
-      <div className="space-y-2 border-y border-white/[0.06] bg-white/[0.02] px-3 py-3">
-        <p className="text-[11px] leading-relaxed text-gray-400">
+      <div className="space-y-2 border-y border-divider bg-surface-raised px-3 py-3">
+        <p className="text-[11px] leading-relaxed text-content-secondary">
           A backend has no page to show. Check that it answers on{' '}
-          <code className="font-mono text-gray-300">/health</code> — a sleeping free-tier service can take up to a
+          <code className="font-mono text-content-secondary">/health</code> — a sleeping free-tier service can take up to a
           minute to wake.
         </p>
         <button
           type="button"
           onClick={() => void check()}
           disabled={checking || !preview.url}
-          className="inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-2.5 py-1.5 text-[11px] font-medium text-gray-200 transition-colors hover:bg-white/10 disabled:opacity-50"
+          className="inline-flex items-center gap-1.5 rounded-lg bg-surface-raised px-2.5 py-1.5 text-[11px] font-medium text-content transition-colors hover:bg-surface-high disabled:opacity-50"
         >
           {checking ? (
             <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden />
@@ -335,13 +335,13 @@ const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPre
         </button>
         <div aria-live="polite">
           {result && (
-            <p className={`text-[11px] ${result.ok ? 'text-emerald-300' : 'text-amber-300'}`}>
+            <p className={`text-[11px] ${result.ok ? 'text-status-success' : 'text-status-warning'}`}>
               {result.ok
                 ? `Healthy — answered ${result.status} in ${(result.latencyMs / 1000).toFixed(1)}s.`
                 : (result.error ?? `Unhealthy — answered ${result.status ?? 'nothing'}.`)}
             </p>
           )}
-          {error && <p className="text-[11px] text-amber-300">{error}</p>}
+          {error && <p className="text-[11px] text-status-warning">{error}</p>}
         </div>
       </div>
       <CardLinks preview={preview} />

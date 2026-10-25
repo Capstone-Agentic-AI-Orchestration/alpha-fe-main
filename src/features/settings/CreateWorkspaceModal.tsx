@@ -121,55 +121,55 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({ isOp
           value={name}
           onChange={event => setName(event.target.value)}
           placeholder="Workspace name"
-          className="w-full rounded-xl border border-white/[0.10] bg-surface-100 px-3 py-2.5 text-sm text-white outline-none placeholder:text-gray-600 focus:border-brand-400/60"
+          className="w-full rounded-xl border border-control bg-surface-raised px-3 py-2.5 text-sm text-content outline-none placeholder:text-content-muted focus:border-control"
         />
 
         <div>
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-gray-400">
-              <Users className="h-4 w-4 text-brand-300" />
+            <div className="flex items-center gap-2 text-content-secondary">
+              <Users className="h-4 w-4 text-link" />
               <span className="text-[11px] font-semibold uppercase tracking-[0.14em]">Members</span>
             </div>
-            <span className="text-[11px] tabular-nums text-gray-500">
+            <span className="text-[11px] tabular-nums text-content-muted">
               {members.length ? `${members.length} chosen` : 'You can also add people later'}
             </span>
           </div>
 
           <div className="mt-2 max-h-72 space-y-3 overflow-y-auto pr-1">
             {teamsLoading ? (
-              <div className="py-4 text-[11px] text-gray-500">Loading GitHub teams…</div>
+              <div className="py-4 text-[11px] text-content-muted">Loading GitHub teams…</div>
             ) : teamsError ? (
-              <p className="py-2 text-[11px] text-amber-300/80">
+              <p className="py-2 text-[11px] text-status-warning">
                 Could not read the GitHub teams ({teamsError}). Create the workspace and add people from Settings.
               </p>
             ) : teams.length === 0 ? (
-              <p className="py-2 text-[11px] text-gray-500">No teams in the organisation grant an Alpha role.</p>
+              <p className="py-2 text-[11px] text-content-muted">No teams in the organisation grant an Alpha role.</p>
             ) : (
               teams.map(team => {
                 const joinAs = defaultRoleFor(team.role, callerRole);
                 const people = team.members.filter(person => person.login.toLowerCase() !== self);
                 const picked = people.filter(person => chosen.has(person.login.toLowerCase())).length;
                 return (
-                  <div key={team.slug} className="overflow-hidden rounded-xl border border-white/[0.08] bg-surface-100/60">
-                    <div className="flex items-center justify-between gap-3 border-b border-white/[0.06] px-3.5 py-2.5">
+                  <div key={team.slug} className="overflow-hidden rounded-xl border border-divider bg-surface-raised/60">
+                    <div className="flex items-center justify-between gap-3 border-b border-divider px-3.5 py-2.5">
                       <div className="min-w-0">
-                        <div className="truncate text-xs font-semibold text-white">{team.name}</div>
-                        <div className="mt-0.5 text-[10px] text-gray-500">Join as {ROLE_LABEL[joinAs]}</div>
+                        <div className="truncate text-xs font-semibold text-content">{team.name}</div>
+                        <div className="mt-0.5 text-[10px] text-content-muted">Join as {ROLE_LABEL[joinAs]}</div>
                       </div>
                       {people.length > 0 && (
                         <button
                           type="button"
                           onClick={() => toggleTeam(team)}
-                          className="flex-shrink-0 rounded-lg px-2 py-1 text-[10px] font-medium text-brand-200 hover:bg-brand-500/10"
+                          className="flex-shrink-0 rounded-lg px-2 py-1 text-[10px] font-medium text-selected-content hover:bg-selected"
                         >
                           {picked === people.length ? 'Clear' : 'Add all'}
                         </button>
                       )}
                     </div>
                     {people.length === 0 ? (
-                      <div className="px-3.5 py-3 text-[11px] text-gray-500">Nobody else in this team.</div>
+                      <div className="px-3.5 py-3 text-[11px] text-content-muted">Nobody else in this team.</div>
                     ) : (
-                      <div className="divide-y divide-white/[0.05]">
+                      <div className="divide-y divide-divider">
                         {people.map(person => {
                           const on = chosen.has(person.login.toLowerCase());
                           return (
@@ -178,19 +178,19 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({ isOp
                               type="button"
                               onClick={() => toggle(person.login, joinAs)}
                               aria-pressed={on}
-                              className="flex w-full items-center gap-3 px-3.5 py-2 text-left transition-colors hover:bg-white/[0.03]"
+                              className="flex w-full items-center gap-3 px-3.5 py-2 text-left transition-colors hover:bg-surface-high"
                             >
-                              <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${on ? 'border-brand-400 bg-brand-500 text-on-accent' : 'border-white/20'}`}>
+                              <span className={`flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border ${on ? 'border-divider bg-action text-on-action' : 'border-divider'}`}>
                                 {on && <Check className="h-3 w-3" />}
                               </span>
                               {person.avatarUrl ? (
-                                <img src={person.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover ring-1 ring-white/10" />
+                                <img src={person.avatarUrl} alt="" className="h-6 w-6 rounded-full object-cover ring-1 ring-content/10" />
                               ) : (
-                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white/[0.06] text-[10px] font-semibold text-gray-300">
+                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-surface-raised text-[10px] font-semibold text-content-secondary">
                                   {person.login.slice(0, 1).toUpperCase()}
                                 </span>
                               )}
-                              <span className="min-w-0 flex-1 truncate text-xs text-white">{person.login}</span>
+                              <span className="min-w-0 flex-1 truncate text-xs text-content">{person.login}</span>
                             </button>
                           );
                         })}
@@ -203,14 +203,14 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({ isOp
           </div>
         </div>
 
-        <div className="flex items-center justify-end gap-2 border-t border-white/[0.06] pt-3">
-          <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-xs text-gray-400 hover:text-gray-200">
+        <div className="flex items-center justify-end gap-2 border-t border-divider pt-3">
+          <button type="button" onClick={onClose} className="rounded-lg px-3 py-2 text-xs text-content-secondary hover:text-content">
             Cancel
           </button>
           <button
             type="submit"
             disabled={busy || !name.trim()}
-            className="rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-medium text-on-accent disabled:opacity-40"
+            className="rounded-lg bg-action px-3.5 py-2 text-xs font-medium text-on-action disabled:opacity-40"
           >
             {busy ? 'Creating…' : members.length ? `Create with ${members.length} ${members.length === 1 ? 'person' : 'people'}` : 'Create'}
           </button>

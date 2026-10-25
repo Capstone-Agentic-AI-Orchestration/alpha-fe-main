@@ -84,7 +84,7 @@ export const CheckoutSummary: React.FC<{
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between gap-2 text-[11px]">
-        <span className={`inline-flex items-center gap-1.5 ${missing.length ? 'text-amber-300' : 'text-emerald-300'}`}>
+        <span className={`inline-flex items-center gap-1.5 ${missing.length ? 'text-status-warning' : 'text-status-success'}`}>
           <Monitor className="h-3.5 w-3.5" aria-hidden />
           {onMachine} of {total} on this machine
         </span>
@@ -94,7 +94,7 @@ export const CheckoutSummary: React.FC<{
               type="button"
               onClick={() => void cloneMissing()}
               disabled={busy}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-2.5 py-1 text-[11px] font-medium text-on-accent transition-colors hover:bg-brand-600 disabled:opacity-40"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-action px-2.5 py-1 text-[11px] font-medium text-on-action transition-colors hover:bg-action-hover disabled:opacity-40"
             >
               {busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Download className="h-3 w-3" aria-hidden />}
               {busy ? 'Cloning…' : `Clone all ${missing.length}`}
@@ -103,7 +103,7 @@ export const CheckoutSummary: React.FC<{
           <button
             type="button"
             onClick={() => void checkouts.reload()}
-            className="rounded-lg p-1 text-gray-500 hover:bg-white/[0.05] hover:text-gray-200"
+            className="rounded-lg p-1 text-content-muted hover:bg-surface-high hover:text-content"
             title="Check again"
             aria-label="Check this machine's checkouts again"
           >
@@ -112,7 +112,7 @@ export const CheckoutSummary: React.FC<{
         </div>
       </div>
       {problem && (
-        <p role="alert" className="flex items-start gap-1.5 text-[11px] text-amber-300">
+        <p role="alert" className="flex items-start gap-1.5 text-[11px] text-status-warning">
           <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" aria-hidden /> {problem}
         </p>
       )}
@@ -155,31 +155,31 @@ export const RepoCheckoutLine: React.FC<{
   const here = Boolean(checkout?.localDir);
 
   return (
-    <div className="space-y-1.5 border-t border-white/[0.04] px-2.5 pb-2 pt-1.5 font-sans text-[11px]">
+    <div className="space-y-1.5 border-t border-divider px-2.5 pb-2 pt-1.5 font-sans text-[11px]">
       {checkouts.loading && !checkout ? (
-        <span className="text-gray-500">Checking this machine…</span>
+        <span className="text-content-muted">Checking this machine…</span>
       ) : here && checkout ? (
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           {status?.exists === false ? (
-            <span className="inline-flex items-center gap-1 text-amber-300">
+            <span className="inline-flex items-center gap-1 text-status-warning">
               <AlertTriangle className="h-3 w-3" aria-hidden /> The folder is not there any more
             </span>
           ) : (
             <>
-              <span className="inline-flex items-center gap-1 text-emerald-300">
+              <span className="inline-flex items-center gap-1 text-status-success">
                 <Check className="h-3 w-3" aria-hidden /> On this machine
               </span>
               {status?.branch && (
-                <span className="inline-flex items-center gap-1 text-gray-400">
+                <span className="inline-flex items-center gap-1 text-content-secondary">
                   <GitBranch className="h-3 w-3" aria-hidden /> {status.branch}
                 </span>
               )}
-              {status && !status.clean && <span className="text-amber-300">uncommitted changes</span>}
-              {(status?.ahead ?? 0) > 0 && <span className="text-gray-400">{status?.ahead} not pushed</span>}
-              {(status?.behind ?? 0) > 0 && <span className="text-gray-400">{status?.behind} behind</span>}
+              {status && !status.clean && <span className="text-status-warning">uncommitted changes</span>}
+              {(status?.ahead ?? 0) > 0 && <span className="text-content-secondary">{status?.ahead} not pushed</span>}
+              {(status?.behind ?? 0) > 0 && <span className="text-content-secondary">{status?.behind} behind</span>}
             </>
           )}
-          <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-gray-500" title={checkout.localDir ?? undefined}>
+          <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-content-muted" title={checkout.localDir ?? undefined}>
             {checkout.localDir}
           </span>
           {canBind && (
@@ -187,7 +187,7 @@ export const RepoCheckoutLine: React.FC<{
               type="button"
               onClick={() => void run('forget', () => apiService.unbindProject(projectId, repo))}
               disabled={busy !== null}
-              className="p-0.5 text-gray-500 transition-colors hover:text-gray-200 disabled:opacity-40"
+              className="p-0.5 text-content-muted transition-colors hover:text-content disabled:opacity-40"
               title="Forget this folder (nothing is deleted)"
               aria-label={`Forget the folder of ${repo} on this machine`}
             >
@@ -197,14 +197,14 @@ export const RepoCheckoutLine: React.FC<{
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-amber-300">Not on this machine</span>
+          <span className="text-status-warning">Not on this machine</span>
           {canBind && (
             <>
               <button
                 type="button"
                 onClick={() => void run('clone', () => apiService.cloneProject(projectId, repo))}
                 disabled={busy !== null}
-                className="inline-flex items-center gap-1 rounded-md bg-brand-500/15 px-2 py-0.5 font-medium text-brand-200 transition-colors hover:bg-brand-500/25 disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-md bg-selected px-2 py-0.5 font-medium text-selected-content transition-colors hover:bg-selected disabled:opacity-40"
               >
                 {busy === 'clone' ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Download className="h-3 w-3" aria-hidden />}
                 {busy === 'clone' ? 'Cloning…' : 'Clone'}
@@ -214,7 +214,7 @@ export const RepoCheckoutLine: React.FC<{
                 onClick={() => setLinking(open => !open)}
                 disabled={busy !== null}
                 aria-expanded={linking}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white disabled:opacity-40"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-content-secondary transition-colors hover:bg-surface-high hover:text-content disabled:opacity-40"
               >
                 <FolderInput className="h-3 w-3" aria-hidden /> Link a folder
               </button>
@@ -237,12 +237,12 @@ export const RepoCheckoutLine: React.FC<{
             placeholder={`Where you cloned ${repo.split('/')[1]}`}
             aria-label={`Folder that holds ${repo}`}
             autoFocus
-            className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-well px-2.5 py-1 font-mono text-[11px] text-white outline-none placeholder:font-sans placeholder:text-gray-600 focus:border-brand-400/50"
+            className="min-w-0 flex-1 rounded-lg border border-divider bg-well px-2.5 py-1 font-mono text-[11px] text-content outline-none placeholder:font-sans placeholder:text-content-muted focus:border-control"
           />
           <button
             type="submit"
             disabled={busy !== null || !folder.trim()}
-            className="rounded-lg border border-white/[0.10] px-2.5 py-1 text-gray-200 hover:bg-white/[0.05] disabled:opacity-40"
+            className="rounded-lg border border-divider px-2.5 py-1 text-content hover:bg-surface-high disabled:opacity-40"
           >
             {busy === 'link' ? 'Linking…' : 'Link'}
           </button>
@@ -250,7 +250,7 @@ export const RepoCheckoutLine: React.FC<{
       )}
 
       {problem && (
-        <p role="alert" className="flex items-start gap-1.5 text-amber-300">
+        <p role="alert" className="flex items-start gap-1.5 text-status-warning">
           <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" aria-hidden /> {problem}
         </p>
       )}

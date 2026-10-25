@@ -1,0 +1,26 @@
+{
+  "id": "pearl",
+  "name": "Pearl",
+  "description": "Soft white · quiet violet",
+  "mode": "light",
+  "colors": {
+    "canvas": "#F5F6FA",
+    "shell": "#ECEEF5",
+    "surface": "#FFFFFF",
+    "raised": "#F0F1F8",
+    "high": "#F5F5FA",
+    "well": "#F8F9FC",
+    "textPrimary": "#202331",
+    "textSecondary": "#565D73",
+    "textMuted": "#626A80",
+    "accent": "#5B46C8",
+    "action": "#5B46C8",
+    "actionHover": "#503EB0",
+    "link": "#5B46C8",
+    "linkHover": "#503EB0",
+    "focus": "#5B46C8",
+    "divider": "#D6D9E5",
+    "control": "#94959C",
+    "sceneIdle": "#61658B"
+  }
+}

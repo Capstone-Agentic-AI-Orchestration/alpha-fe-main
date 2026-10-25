@@ -3,7 +3,9 @@ import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { Html, Line, OrbitControls, QuadraticBezierLine, Sparkles } from '@react-three/drei';
 
-import { AgentSceneOrb, AgentSceneWave, useAgentGlowTexture } from './AgentScenePrimitives';
+import { useTheme, rgbChannels, type ScenePalette } from '@/shared/theme';
+
+import { AgentSceneOrb, AgentSceneWave, SceneThemeFrame, useAgentGlowTexture } from './AgentScenePrimitives';
 
 import { atomPositions, CAMERA_FOV, CAMERA_START, orbitPath, ORBIT_COUNT, type Vec3 } from './orchestratorSceneLayout';
 
@@ -45,48 +47,44 @@ export interface OrchestratorSceneProps {
   resetToken: number;
 }
 
-const SHELL = '#0d0d11';
-
 /** The three orbit lines of the atom. */
-function Orbits({ working }: { working: boolean }) {
+function Orbits({ working, palette }: { working: boolean; palette: ScenePalette }) {
   const paths = useMemo(() => Array.from({ length: ORBIT_COUNT }, (_, orbit) => orbitPath(orbit)), []);
-  return <>{paths.map((points, orbit) => <Line key={orbit} points={points} color="#a78bfa" lineWidth={1.1} transparent opacity={working ? 0.42 : 0.3} depthWrite={false} />)}</>;
+  return <>{paths.map((points, orbit) => <Line key={orbit} points={points} color={palette.orbit} lineWidth={1.1} transparent opacity={working ? 0.42 : 0.3} depthWrite={false} />)}</>;
 }
 
-function Hub({ glow, working, selected, clickable, onOver, onOut, onClick }: {
-  glow: THREE.Texture; working: boolean; selected: boolean; clickable: boolean;
+function Hub({ palette, reduceMotion, glow, working, selected, clickable, onOver, onOut, onClick }: {
+  palette: ScenePalette; reduceMotion: boolean; glow: THREE.Texture; working: boolean; selected: boolean; clickable: boolean;
   onOver: () => void; onOut: () => void; onClick: () => void;
 }) {
-  return <AgentSceneOrb glow={glow} color="#a78bfa" hub active={working} selected={selected}
+  return <AgentSceneOrb palette={palette} reduceMotion={reduceMotion} glow={glow} color={palette.hub} hub active={working} selected={selected}
     onPointerOver={event => { event.stopPropagation(); onOver(); }} onPointerOut={onOut}
     onClick={event => { event.stopPropagation(); if (clickable) onClick(); }} />;
 }
 
 /** A link from the Orchestrator, drawn only while the agent takes part in the work. */
-function Link({ end, tone, active }: { end: Vec3; tone: string; active: boolean }) {
+function Link({ palette, end, tone, active, reduceMotion }: { palette: ScenePalette; end: Vec3; tone: string; active: boolean; reduceMotion: boolean }) {
   const line = useRef<any>(null);
   const spark = useRef<THREE.Mesh>(null);
   const mid = useMemo<Vec3>(() => [end[0] / 2, end[1] / 2 + 0.6, end[2] / 2], [end]);
   const curve = useMemo(() => new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(...mid), new THREE.Vector3(...end)), [end, mid]);
   useFrame(({ clock }, delta) => {
-    if (!active) return;
+    if (!active || reduceMotion) return;
     if (line.current?.material) line.current.material.dashOffset -= delta * 1.4;
     if (spark.current) spark.current.position.copy(curve.getPoint((clock.getElapsedTime() * 0.45) % 1));
   });
   return <>
     <QuadraticBezierLine ref={line} start={[0, 0, 0]} end={end} mid={mid} color={'rgb(' + tone + ')'} lineWidth={active ? 1.8 : 1} transparent opacity={active ? 0.9 : 0.45} dashed={active} dashSize={0.3} gapSize={0.18} />
-    {active && <mesh ref={spark}><sphereGeometry args={[0.06, 12, 12]} /><meshBasicMaterial color="#f5f3ff" /></mesh>}
+    {active && <mesh ref={spark}><sphereGeometry args={[0.06, 12, 12]} /><meshBasicMaterial color={palette.highlight} /></mesh>}
   </>;
 }
-
-const HANDOFF_COLOR: Record<SceneLink['state'], string> = { active: '#c4b5fd', done: '#6ee7b7', pending: '#9ca3af' };
 
 /**
  * One agent handing work to another: an arc lifted above the orbits so it reads
  * apart from the Orchestrator's links. While the receiver works on what it was
  * given, a spark runs from the sender to the receiver.
  */
-function HandoffLink({ start, end, state, reduceMotion }: { start: Vec3; end: Vec3; state: SceneLink['state']; reduceMotion: boolean }) {
+function HandoffLink({ palette, start, end, state, reduceMotion }: { palette: ScenePalette; start: Vec3; end: Vec3; state: SceneLink['state']; reduceMotion: boolean }) {
   const line = useRef<any>(null);
   const spark = useRef<THREE.Mesh>(null);
   const mid = useMemo<Vec3>(() => {
@@ -95,44 +93,45 @@ function HandoffLink({ start, end, state, reduceMotion }: { start: Vec3; end: Ve
   }, [start, end]);
   const curve = useMemo(() => new THREE.QuadraticBezierCurve3(new THREE.Vector3(...start), new THREE.Vector3(...mid), new THREE.Vector3(...end)), [start, mid, end]);
   const active = state === 'active';
+  const color = active ? palette.ring : state === 'done' ? palette.success : palette.idle;
   useFrame(({ clock }, delta) => {
     if (!active || reduceMotion) return;
     if (line.current?.material) line.current.material.dashOffset -= delta * 1.2;
     if (spark.current) spark.current.position.copy(curve.getPoint((clock.getElapsedTime() * 0.35) % 1));
   });
   return <>
-    <QuadraticBezierLine ref={line} start={start} end={end} mid={mid} color={HANDOFF_COLOR[state]}
+    <QuadraticBezierLine ref={line} start={start} end={end} mid={mid} color={color}
       lineWidth={active ? 2 : 1.2} transparent opacity={active ? 0.95 : state === 'done' ? 0.55 : 0.3}
       dashed={state !== 'done'} dashSize={active ? 0.28 : 0.12} gapSize={active ? 0.16 : 0.14} depthWrite={false} />
-    {active && <mesh ref={spark} position={start}><sphereGeometry args={[0.07, 12, 12]} /><meshBasicMaterial color="#ffffff" /></mesh>}
+    {active && <mesh ref={spark} position={start}><sphereGeometry args={[0.07, 12, 12]} /><meshBasicMaterial color={palette.highlight} /></mesh>}
     {/* A small head at the receiving end shows which way the work went. */}
-    <mesh position={curve.getPoint(0.92)}><sphereGeometry args={[0.045, 10, 10]} /><meshBasicMaterial color={HANDOFF_COLOR[state]} transparent opacity={state === 'pending' ? 0.5 : 0.9} /></mesh>
+    <mesh position={curve.getPoint(0.92)}><sphereGeometry args={[0.045, 10, 10]} /><meshBasicMaterial color={color} transparent opacity={state === 'pending' ? 0.5 : 0.9} /></mesh>
   </>;
 }
 
-function AgentOrb({ agent, position, glow, selected, hovered, onOver, onOut, onClick }: {
-  agent: SceneAgent; position: Vec3; glow: THREE.Texture; selected: boolean; hovered: boolean;
+function AgentOrb({ palette, reduceMotion, agent, position, glow, selected, hovered, onOver, onOut, onClick }: {
+  palette: ScenePalette; reduceMotion: boolean; agent: SceneAgent; position: Vec3; glow: THREE.Texture; selected: boolean; hovered: boolean;
   onOver: (event: ThreeEvent<PointerEvent>) => void; onOut: () => void; onClick: (event: ThreeEvent<MouseEvent>) => void;
 }) {
   const color = useMemo(() => new THREE.Color('rgb(' + agent.tone + ')'), [agent.tone]);
   const lit = agent.active || agent.engaged;
   return <group position={position}>
-    <AgentSceneOrb glow={glow} color={color} active={agent.active} engaged={agent.engaged} selected={selected} hovered={hovered}
+    <AgentSceneOrb palette={palette} reduceMotion={reduceMotion} glow={glow} color={color} active={agent.active} engaged={agent.engaged} selected={selected} hovered={hovered}
       onPointerOver={onOver} onPointerOut={onOut} onClick={onClick} />
     <Html center position={[0, -0.46, 0]} zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
-      <div className={'whitespace-nowrap rounded-full px-1.5 py-px text-[8.5px] font-medium leading-3 ' + (selected ? 'bg-violet-400/30 text-white' : lit ? 'bg-black/60 text-gray-100' : 'bg-black/40 text-gray-400')}>{agent.name}</div>
+      <div style={{ backgroundColor: `rgba(${rgbChannels(selected ? palette.orbit : palette.labelBackground)}, ${selected ? 0.3 : lit ? 0.6 : 0.4})`, color: palette.labelForeground }} className="whitespace-nowrap rounded-full px-1.5 py-px text-[8.5px] font-medium leading-3">{agent.name}</div>
     </Html>
     {hovered && agent.detail && <Html center position={[0, 0.72, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
-      <div className="w-max min-w-44 max-w-80 rounded-xl border border-violet-300/20 bg-[#16161d]/95 px-3 py-2 text-left shadow-xl shadow-black/40">
-        <div className="whitespace-nowrap text-xs font-semibold text-white">{agent.name}</div>
-        {agent.detail.split(' · ').map(line => <div key={line} className="whitespace-nowrap text-[10px] leading-4 text-gray-400">{line}</div>)}
-        <div className="mt-1 whitespace-nowrap text-[10px] text-violet-200">Click to see and change its model</div>
+      <div style={{ backgroundColor: `rgba(${rgbChannels(palette.labelBackground)}, 0.95)`, borderColor: `rgba(${rgbChannels(palette.ring)}, 0.2)`, color: palette.labelForeground }} className="w-max min-w-44 max-w-80 rounded-xl border px-3 py-2 text-left shadow-xl">
+        <div className="whitespace-nowrap text-xs font-semibold">{agent.name}</div>
+        {agent.detail.split(' · ').map(line => <div key={line} className="whitespace-nowrap text-[10px] leading-4 opacity-70">{line}</div>)}
+        <div className="mt-1 whitespace-nowrap text-[10px]">Click to see and change its model</div>
       </div>
     </Html>}
   </group>;
 }
 
-function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, working, selectedId, onSelect, reduceMotion, resetToken }: OrchestratorSceneProps) {
+function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, working, selectedId, onSelect, reduceMotion, resetToken, palette }: OrchestratorSceneProps & { palette: ScenePalette }) {
   const glow = useAgentGlowTexture();
   const { gl } = useThree();
   const controls = useThree(state => state.controls) as unknown as { reset?: () => void } | null;
@@ -149,31 +148,32 @@ function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, w
   }, [gl, hoveredId, hubClickable, hubId]);
 
   return <>
-    <fog attach="fog" args={[SHELL, 11, 26]} />
-    <ambientLight intensity={0.45} />
-    <pointLight position={[0, 0, 0]} intensity={28} distance={14} color="#a78bfa" />
-    <directionalLight position={[5, 8, 6]} intensity={0.9} />
-    <AgentSceneWave working={working} reduceMotion={reduceMotion} />
-    {!reduceMotion && <Sparkles count={60} scale={[16, 8, 9]} size={1.4} speed={0.2} opacity={0.4} color="#c4b5fd" />}
-    <Orbits working={working} />
+    <SceneThemeFrame palette={palette} />
+    <fog attach="fog" args={[palette.background, 11, 26]} />
+    <ambientLight intensity={0.45} color={palette.highlight} />
+    <pointLight position={[0, 0, 0]} intensity={28} distance={14} color={palette.glow} />
+    <directionalLight position={[5, 8, 6]} intensity={0.9} color={palette.highlight} />
+    <AgentSceneWave palette={palette} working={working} reduceMotion={reduceMotion} />
+    {!reduceMotion && <Sparkles count={60} scale={[16, 8, 9]} size={1.4} speed={0.2} opacity={0.4} color={palette.ring} />}
+    <Orbits palette={palette} working={working} />
     {agents.map((agent, index) => (agent.active || agent.engaged) &&
-      <Link key={'link-' + agent.id} end={positions[index]} tone={agent.tone} active={agent.active} />)}
+      <Link palette={palette} reduceMotion={reduceMotion} key={'link-' + agent.id} end={positions[index]} tone={agent.tone} active={agent.active} />)}
     {links.map(link => {
       const from = indexById.get(link.from);
       const to = indexById.get(link.to);
       return from === undefined || to === undefined ? null
-        : <HandoffLink key={'handoff-' + link.from + '-' + link.to} start={positions[from]} end={positions[to]} state={link.state} reduceMotion={reduceMotion} />;
+        : <HandoffLink palette={palette} key={'handoff-' + link.from + '-' + link.to} start={positions[from]} end={positions[to]} state={link.state} reduceMotion={reduceMotion} />;
     })}
-    <Hub glow={glow} working={working} selected={selectedId === hubId} clickable={hubClickable}
+    <Hub palette={palette} reduceMotion={reduceMotion} glow={glow} working={working} selected={selectedId === hubId} clickable={hubClickable}
       onOver={() => setHoveredId(hubId)} onOut={() => setHoveredId(previous => (previous === hubId ? null : previous))}
       onClick={() => onSelect(hubId)} />
     {hoveredId === hubId && <Html center position={[0, 1.15, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
-      <div className="w-max min-w-44 max-w-80 rounded-xl border border-violet-300/20 bg-[#16161d]/95 px-3 py-2 shadow-xl shadow-black/40">
-        <div className="whitespace-nowrap text-xs font-semibold text-white">{hubLabel}</div>
-        {hubDetail.split(' · ').map(line => <div key={line} className="whitespace-nowrap text-[10px] leading-4 text-gray-400">{line}</div>)}
+      <div style={{ backgroundColor: `rgba(${rgbChannels(palette.labelBackground)}, 0.95)`, borderColor: `rgba(${rgbChannels(palette.ring)}, 0.2)`, color: palette.labelForeground }} className="w-max min-w-44 max-w-80 rounded-xl border px-3 py-2 shadow-xl">
+        <div className="whitespace-nowrap text-xs font-semibold">{hubLabel}</div>
+        {hubDetail.split(' · ').map(line => <div key={line} className="whitespace-nowrap text-[10px] leading-4 opacity-70">{line}</div>)}
       </div>
     </Html>}
-    {agents.map((agent, index) => <AgentOrb key={agent.id} agent={agent} position={positions[index]} glow={glow}
+    {agents.map((agent, index) => <AgentOrb palette={palette} reduceMotion={reduceMotion} key={agent.id} agent={agent} position={positions[index]} glow={glow}
       selected={selectedId === agent.id} hovered={hoveredId === agent.id}
       onOver={event => { event.stopPropagation(); setHoveredId(agent.id); }}
       onOut={() => setHoveredId(previous => (previous === agent.id ? null : previous))}
@@ -191,15 +191,16 @@ function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, w
  * for three.js until it is used.
  */
 export default function OrchestratorScene3D(props: OrchestratorSceneProps) {
+  const { theme } = useTheme();
+  const palette = theme.scene;
   return <Canvas
     dpr={[1, 2]}
     camera={{ position: CAMERA_START, fov: CAMERA_FOV }}
     gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}
     frameloop={props.paused ? 'never' : props.reduceMotion ? 'demand' : 'always'}
-    onCreated={({ gl }) => gl.setClearColor(0x000000, 0)}
     aria-label="Orchestrator and agents in 3D"
   >
-    <Scene {...props} />
+    <Scene {...props} palette={palette} />
   </Canvas>;
 }
 

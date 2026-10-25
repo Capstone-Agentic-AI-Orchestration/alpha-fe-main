@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 1,
+  "defaultId": "alpha-violet",
+  "themes": {
+    "alpha-violet": "palettes/alpha-violet.json",
+    "slate-blue": "palettes/slate-blue.json",
+    "forest": "palettes/forest.json",
+    "ember": "palettes/ember.json",
+    "pearl": "palettes/pearl.json",
+    "sand": "palettes/sand.json",
+    "graphite": "palettes/graphite.json",
+    "mist": "palettes/mist.json"
+  }
+}

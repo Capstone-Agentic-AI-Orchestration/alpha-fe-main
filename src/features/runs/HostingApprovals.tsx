@@ -70,10 +70,10 @@ export function HostingApprovals({ runId }: Readonly<{ runId: string }>) {
   if (!isDesktop || (approvals.length === 0 && !message)) return null;
 
   return (
-    <div className="space-y-2 rounded-lg border border-amber-400/30 bg-amber-400/[0.06] p-3">
+    <div className="space-y-2 rounded-lg border border-status-warning-border bg-status-warning-subtle p-3">
       {approvals.map(approval => (
         <div key={approval.id} className="space-y-2">
-          <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-amber-200">
+          <p className="flex items-start gap-1.5 text-[11px] leading-relaxed text-status-warning">
             <KeyRound className="mt-0.5 h-3 w-3 flex-shrink-0" aria-hidden />
             <span>
               The agent wants to set <span className="font-mono">{approval.keys.join(', ')}</span> on{' '}
@@ -87,7 +87,7 @@ export function HostingApprovals({ runId }: Readonly<{ runId: string }>) {
                 type="button"
                 onClick={() => void decide(approval, 'approve')}
                 disabled={busy !== null}
-                className="inline-flex items-center gap-1 rounded-md bg-amber-400/20 px-2 py-1 text-[11px] font-medium text-amber-100 hover:bg-amber-400/30 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-md bg-status-warning-subtle px-2 py-1 text-[11px] font-medium text-status-warning hover:bg-status-warning-subtle disabled:opacity-50"
               >
                 {busy === approval.id ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Check className="h-3 w-3" aria-hidden />}
                 Approve and apply
@@ -96,18 +96,18 @@ export function HostingApprovals({ runId }: Readonly<{ runId: string }>) {
                 type="button"
                 onClick={() => void decide(approval, 'reject')}
                 disabled={busy !== null}
-                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-gray-300 hover:bg-white/5 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-content-secondary hover:bg-surface-high disabled:opacity-50"
               >
                 <X className="h-3 w-3" aria-hidden /> Reject
               </button>
             </div>
           ) : (
-            <p className="text-[11px] text-gray-400">A project manager or admin has to approve production changes.</p>
+            <p className="text-[11px] text-content-secondary">A project manager or admin has to approve production changes.</p>
           )}
         </div>
       ))}
       {message && (
-        <p role="status" className={`text-[11px] ${message.tone === 'ok' ? 'text-emerald-300' : 'text-amber-300'}`}>
+        <p role="status" className={`text-[11px] ${message.tone === 'ok' ? 'text-status-success' : 'text-status-warning'}`}>
           {message.text}
         </p>
       )}

@@ -40,9 +40,9 @@ export const CopyButton: React.FC<CopyButtonProps> = ({ value, label, className 
       onClick={() => void copy()}
       aria-label={`Copy ${label}`}
       title={`Copy ${label}`}
-      className={`inline-flex items-center gap-1 rounded-md bg-white/5 px-2 py-0.5 text-[10px] text-gray-400 transition-colors hover:bg-white/10 hover:text-white ${className}`}
+      className={`inline-flex items-center gap-1 rounded-md bg-surface-raised px-2 py-0.5 text-[10px] text-content-secondary transition-colors hover:bg-surface-high hover:text-content ${className}`}
     >
-      {state === 'copied' ? <Check className="h-3 w-3 text-emerald-400" aria-hidden /> : <Copy className="h-3 w-3" aria-hidden />}
+      {state === 'copied' ? <Check className="h-3 w-3 text-status-success" aria-hidden /> : <Copy className="h-3 w-3" aria-hidden />}
       <span aria-live="polite">{state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : 'Copy'}</span>
     </button>
   );

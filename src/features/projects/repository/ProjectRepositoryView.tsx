@@ -83,7 +83,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 border-b border-white/[0.06] px-4 sm:px-5">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 border-b border-divider px-4 sm:px-5">
         <div role="tablist" aria-label="Project sections" className="-mb-px flex min-w-0 max-w-full overflow-x-auto" onKeyDown={onTabKeyDown}>
           {REPO_TABS.map(({ id, label }) => {
             const Icon = TAB_ICONS[id];
@@ -100,7 +100,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
                 tabIndex={selected ? 0 : -1}
                 onClick={() => setStoredTab(id)}
                 className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-3 text-xs font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${
-                  selected ? 'border-brand-400 text-white' : 'border-transparent text-gray-400 hover:text-white'
+                  selected ? 'border-divider text-content' : 'border-transparent text-content-secondary hover:text-content'
                 }`}
               >
                 <Icon className="h-3.5 w-3.5" aria-hidden />{label}
@@ -110,21 +110,21 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
         </div>
         {tab !== 'overview' && repo && !repositoryPending && (
           <div className="my-2 flex max-w-full items-center gap-2">
-          <div role="group" aria-label="Repository" className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-white/[0.08] bg-surface-raised p-0.5">
+          <div role="group" aria-label="Repository" className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-divider bg-surface-raised p-0.5">
             {tab === 'runs' && <button type="button" aria-pressed={!actionsRepo} onClick={() => setActionsRepo(null)}
-              className={`shrink-0 rounded-md px-3 py-1 text-[11px] focus-visible:outline focus-visible:outline-brand-400 ${!actionsRepo ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'}`}>All repositories</button>}
+              className={`shrink-0 rounded-md px-3 py-1 text-[11px] focus-visible:outline focus-visible:outline-brand-400 ${!actionsRepo ? 'bg-surface-raised text-content' : 'text-content-secondary hover:text-content'}`}>All repositories</button>}
             {repositories.map(value => (
               <button
                 key={value} type="button" aria-pressed={value === (tab === 'runs' ? actionsRepo : repo)}
                 onClick={() => { setSelectedRepo(value); if (tab === 'runs') setActionsRepo(value); }} title={value}
                 className={`max-w-48 shrink-0 truncate rounded-md px-3 py-1 font-mono text-[11px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400 ${
-                  value === (tab === 'runs' ? actionsRepo : repo) ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white'
+                  value === (tab === 'runs' ? actionsRepo : repo) ? 'bg-surface-raised text-content' : 'text-content-secondary hover:text-content'
                 }`}
               >{shortName(value)}</button>
             ))}
           </div>
           {canClone && <button type="button" onClick={() => setCloneOpen(true)} title="Clone the project's repositories to a folder on this computer"
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-white/[0.08] bg-surface-raised px-3 py-1.5 text-[11px] font-medium text-gray-200 hover:bg-white/[0.06] focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-3 py-1.5 text-[11px] font-medium text-content hover:bg-surface-high focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
             <Download className="h-3.5 w-3.5" aria-hidden />Clone to computer
           </button>}
           </div>
@@ -147,12 +147,12 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
       {tab !== 'overview' && (!repo || repositoryPending) && (
         <div id={panelId(tab)} role="tabpanel" aria-labelledby={tabId(tab)} className="min-h-0 flex-1 overflow-y-auto p-5" tabIndex={0}>
           {repositoriesLoading || repositoryPending ? <SectionLoading label={repositoryPending ? "Connecting the new repository and opening its preview…" : "Loading repositories…"} /> : (
-            <div className="rounded-xl border border-white/[0.08] p-8 text-center">
-              <GitBranch className="mx-auto h-6 w-6 text-gray-500" aria-hidden />
-              <h2 className="mt-3 text-sm font-semibold text-white">No accessible repositories</h2>
-              <p className="mt-2 text-xs text-gray-400">Attach a repository or check your access to an existing one.</p>
+            <div className="rounded-xl border border-divider p-8 text-center">
+              <GitBranch className="mx-auto h-6 w-6 text-content-muted" aria-hidden />
+              <h2 className="mt-3 text-sm font-semibold text-content">No accessible repositories</h2>
+              <p className="mt-2 text-xs text-content-secondary">Attach a repository or check your access to an existing one.</p>
               {onManageRepositories && (
-                <button type="button" onClick={onManageRepositories} className="mt-4 rounded-lg bg-brand-500 px-3 py-2 text-xs font-medium text-on-accent hover:bg-brand-600">
+                <button type="button" onClick={onManageRepositories} className="mt-4 rounded-lg bg-action px-3 py-2 text-xs font-medium text-on-action hover:bg-action-hover">
                   Manage repositories
                 </button>
               )}
@@ -164,7 +164,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
       {repo && !repositoryPending && (repositoryOpened || tab !== 'overview') && (
         <div hidden={tab === 'overview' || tab === 'runs'} className={tab === 'overview' || tab === 'runs' ? 'hidden' : 'min-h-0 flex-1 overflow-y-auto p-4 select-text sm:p-5'}>
           <a href={`https://github.com/${repo}`} target="_blank" rel="noreferrer"
-            className="mb-4 inline-flex max-w-full items-center gap-1.5 text-xs text-gray-400 hover:text-white">
+            className="mb-4 inline-flex max-w-full items-center gap-1.5 text-xs text-content-secondary hover:text-content">
             <GitBranch className="h-3.5 w-3.5 shrink-0" aria-hidden />
             <span className="truncate font-mono">{repo}</span>
             <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
@@ -252,21 +252,21 @@ const BranchGate: React.FC<{
 }> = ({ branches, empty, children }) => {
   if (branches.loading && !branches.data) {
     return (
-      <div className="rounded-xl border border-white/[0.06] bg-surface-200/50">
+      <div className="rounded-xl border border-divider bg-surface/50">
         <SectionLoading label="Loading branches…" />
       </div>
     );
   }
   if (branches.error) {
     return (
-      <div className="rounded-xl border border-white/[0.06] bg-surface-200/50">
+      <div className="rounded-xl border border-divider bg-surface/50">
         <SectionError message={branches.error} onRetry={branches.reload} />
       </div>
     );
   }
   if (empty) {
     return (
-      <p className="rounded-xl border border-white/[0.06] bg-surface-200/50 px-3.5 py-4 text-[11px] text-gray-500">
+      <p className="rounded-xl border border-divider bg-surface/50 px-3.5 py-4 text-[11px] text-content-muted">
         This repository has no branches yet — push a first commit to dev.
       </p>
     );

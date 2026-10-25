@@ -329,10 +329,10 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
     <div className="space-y-3 text-xs">
       {/* Create a GitHub repository for this project */}
       {isFull && !readOnly && canCreateRepository && (
-        <div className="p-3 rounded-xl bg-well border border-white/5 space-y-2.5">
+        <div className="p-3 rounded-xl bg-well border border-divider space-y-2.5">
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-medium text-gray-300 flex items-center gap-1.5">
-              <GitBranch className="w-3.5 h-3.5 text-brand-400" />
+            <span className="text-[11px] font-medium text-content-secondary flex items-center gap-1.5">
+              <GitBranch className="w-3.5 h-3.5 text-link" />
               Create a GitHub repository
             </span>
             {ghAuth && (
@@ -340,7 +340,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                 <span
                   className={`w-1.5 h-1.5 rounded-full ${ghAuth.authenticated ? 'bg-emerald-400' : 'bg-rose-400'}`}
                 />
-                <span className={ghAuth.authenticated ? 'text-gray-400' : 'text-rose-300'}>
+                <span className={ghAuth.authenticated ? 'text-content-secondary' : 'text-status-danger'}>
                   {ghAuth.authenticated ? `gh: ${ghAuth.username ?? 'signed in'}` : 'gh not signed in'}
                 </span>
               </span>
@@ -348,16 +348,16 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
           </div>
 
           {ghAuth && !ghAuth.authenticated ? (
-            <p className="text-[11px] text-gray-500">
-              Run <code className="text-gray-300">gh auth login</code> in a terminal, then reopen this
+            <p className="text-[11px] text-content-muted">
+              Run <code className="text-content-secondary">gh auth login</code> in a terminal, then reopen this
               project. Alpha uses your own GitHub session and never stores a token.
             </p>
           ) : (
             <>
               {/* Shape first: it decides what the name means and which stacks apply. */}
               <fieldset disabled={ghBusy}>
-                <legend className="text-[11px] text-gray-500 mb-1.5">Repository shape</legend>
-                <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/10 bg-surface p-0.5">
+                <legend className="text-[11px] text-content-muted mb-1.5">Repository shape</legend>
+                <div className="grid grid-cols-2 gap-1 rounded-xl border border-divider bg-surface p-0.5">
                   {([
                     { value: 'standalone', label: 'Single repository' },
                     { value: 'paired', label: 'Frontend + backend (paired)' }
@@ -371,7 +371,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                         onChange={() => setGhShape(option.value)}
                         className="peer sr-only"
                       />
-                      <span className="block rounded-lg px-2.5 py-1.5 text-center text-[11px] text-gray-400 transition-colors hover:text-white peer-checked:bg-white/10 peer-checked:font-medium peer-checked:text-white peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand-400">
+                      <span className="block rounded-lg px-2.5 py-1.5 text-center text-[11px] text-content-secondary transition-colors hover:text-content peer-checked:bg-surface-raised peer-checked:font-medium peer-checked:text-content peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-brand-400">
                         {option.label}
                       </span>
                     </label>
@@ -385,7 +385,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   // value is a label, so it reads as one.
                   <span
                     title="Every repository in this project belongs to this organization"
-                    className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-gray-300 max-w-[11rem] truncate"
+                    className="bg-surface border border-divider rounded-xl px-2.5 py-1.5 text-xs font-mono text-content-secondary max-w-[11rem] truncate"
                   >
                     {githubOrg}
                   </span>
@@ -395,7 +395,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                     onChange={(e) => setGhOwner(e.target.value)}
                     disabled={ghBusy || ghOrgs.length === 0}
                     title="Owning organization"
-                    className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs font-mono text-white focus:outline-none focus:border-brand-500 disabled:opacity-50 max-w-[11rem]"
+                    className="bg-surface border border-control rounded-xl px-2.5 py-1.5 text-xs font-mono text-content focus:outline-none focus:border-control disabled:opacity-50 max-w-[11rem]"
                   >
                     <option value="" disabled>Organization…</option>
                     {ghOrgs.map(o => (
@@ -403,7 +403,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                     ))}
                   </select>
                 )}
-                <span className="text-xs text-gray-500 flex-shrink-0">/</span>
+                <span className="text-xs text-content-muted flex-shrink-0">/</span>
                 <input
                   type="text"
                   value={ghRepoName}
@@ -418,23 +418,23 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   aria-label={isPaired ? 'Base name for the paired repositories' : 'Repository name'}
                   aria-describedby={isPaired ? `gh-paired-hint-${projectId}` : undefined}
                   disabled={ghBusy}
-                  className="flex-1 min-w-0 bg-surface border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                  className="flex-1 min-w-0 bg-surface border border-control rounded-xl px-3 py-1.5 text-xs font-mono text-content placeholder-content-muted focus:outline-none focus:border-control disabled:opacity-50"
                 />
                 <button
                   type="button"
                   onClick={handleCreateRepo}
                   disabled={ghBusy || !ghRepoName.trim() || !effectiveOrg}
-                  className="px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-medium text-on-accent disabled:opacity-40 transition-colors flex-shrink-0"
+                  className="px-3 py-1.5 rounded-xl bg-action hover:bg-action-hover text-xs font-medium text-on-action disabled:opacity-40 transition-colors flex-shrink-0"
                 >
                   {ghBusy ? 'Creating…' : 'Create'}
                 </button>
               </div>
 
               {isPaired && (
-                <p id={`gh-paired-hint-${projectId}`} className="text-[11px] text-gray-500">
+                <p id={`gh-paired-hint-${projectId}`} className="text-[11px] text-content-muted">
                   Creates{' '}
-                  <code className="font-mono text-gray-300">{`${ghRepoName.trim() || 'name'}-fe`}</code> and{' '}
-                  <code className="font-mono text-gray-300">{`${ghRepoName.trim() || 'name'}-be`}</code>.
+                  <code className="font-mono text-content-secondary">{`${ghRepoName.trim() || 'name'}-fe`}</code> and{' '}
+                  <code className="font-mono text-content-secondary">{`${ghRepoName.trim() || 'name'}-be`}</code>.
                 </p>
               )}
 
@@ -443,7 +443,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
               <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
                 {isPaired ? (
                   <>
-                    <label htmlFor={`gh-fe-stack-${projectId}`} className="text-[11px] text-gray-500 flex-shrink-0">
+                    <label htmlFor={`gh-fe-stack-${projectId}`} className="text-[11px] text-content-muted flex-shrink-0">
                       Frontend
                     </label>
                     <select
@@ -451,13 +451,13 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                       value={ghFrontendStack}
                       onChange={(e) => setGhFrontendStack(e.target.value as ScaffoldFrontendStack)}
                       disabled={ghBusy}
-                      className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                      className="bg-surface border border-control rounded-xl px-2.5 py-1.5 text-xs text-content focus:outline-none focus:border-control disabled:opacity-50"
                     >
                       <option value="react">React</option>
                       <option value="nextjs">Next.js</option>
                     </select>
 
-                    <label htmlFor={`gh-be-stack-${projectId}`} className="text-[11px] text-gray-500 flex-shrink-0 ml-1">
+                    <label htmlFor={`gh-be-stack-${projectId}`} className="text-[11px] text-content-muted flex-shrink-0 ml-1">
                       Backend
                     </label>
                     <select
@@ -465,7 +465,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                       value={ghBackendStack}
                       onChange={(e) => setGhBackendStack(e.target.value as ScaffoldBackendStack)}
                       disabled={ghBusy}
-                      className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                      className="bg-surface border border-control rounded-xl px-2.5 py-1.5 text-xs text-content focus:outline-none focus:border-control disabled:opacity-50"
                     >
                       <option value="nodejs">Node.js</option>
                       <option value="nestjs">NestJS</option>
@@ -473,7 +473,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   </>
                 ) : (
                   <>
-                    <label htmlFor={`gh-stack-${projectId}`} className="text-[11px] text-gray-500 flex-shrink-0">
+                    <label htmlFor={`gh-stack-${projectId}`} className="text-[11px] text-content-muted flex-shrink-0">
                       Stack
                     </label>
                     <select
@@ -481,7 +481,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                       value={ghStack}
                       onChange={(e) => setGhStack(e.target.value as ScaffoldStack)}
                       disabled={ghBusy}
-                      className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                      className="bg-surface border border-control rounded-xl px-2.5 py-1.5 text-xs text-content focus:outline-none focus:border-control disabled:opacity-50"
                     >
                       <option value="react">React</option>
                       <option value="nextjs">Next.js</option>
@@ -491,7 +491,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   </>
                 )}
 
-                <label htmlFor={`gh-visibility-${projectId}`} className="text-[11px] text-gray-500 flex-shrink-0 ml-1">
+                <label htmlFor={`gh-visibility-${projectId}`} className="text-[11px] text-content-muted flex-shrink-0 ml-1">
                   Visibility
                 </label>
                 <select
@@ -499,7 +499,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   value={ghVisibility}
                   onChange={(e) => setGhVisibility(e.target.value as 'private' | 'public')}
                   disabled={ghBusy}
-                  className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 disabled:opacity-50"
+                  className="bg-surface border border-control rounded-xl px-2.5 py-1.5 text-xs text-content focus:outline-none focus:border-control disabled:opacity-50"
                 >
                   <option value="private">Private</option>
                   <option value="public">Public</option>
@@ -517,17 +517,17 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   className="mt-0.5 h-3.5 w-3.5 flex-shrink-0"
                 />
                 <div className="space-y-0.5">
-                  <label htmlFor={`gh-deploy-${projectId}`} className="block text-[11px] text-gray-300 cursor-pointer">
+                  <label htmlFor={`gh-deploy-${projectId}`} className="block text-[11px] text-content-secondary cursor-pointer">
                     Automatically create hosting and a live preview
                   </label>
-                  <p id={`gh-deploy-help-${projectId}`} className="text-[11px] leading-relaxed text-gray-500">
+                  <p id={`gh-deploy-help-${projectId}`} className="text-[11px] leading-relaxed text-content-muted">
                     Alpha sets up Render for backends or Vercel for frontends. React and Next.js show a live page;
                     backend repositories show a health check. Paired repositories are connected automatically.
                   </p>
                 </div>
               </div>
 
-              <p className="text-[11px] text-gray-500">
+              <p className="text-[11px] text-content-muted">
                 Creates the repository with a starter structure (package.json, tsconfig, lint, tests, a README and
                 a CI workflow) on dev, uat and main branches. Work lands on dev.
               </p>
@@ -536,9 +536,9 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   creation at all — and the usual cause is a missing scope, not
                   a missing membership. Say which. */}
               {!orgLocked && ghOrgs.length === 0 && (
-                <p className="text-[11px] text-amber-300">
+                <p className="text-[11px] text-status-warning">
                   No organizations found. Run{' '}
-                  <code className="text-gray-300">gh auth refresh -s read:org</code> and reopen this
+                  <code className="text-content-secondary">gh auth refresh -s read:org</code> and reopen this
                   dialog — Alpha only creates repositories in an organization.
                 </p>
               )}
@@ -546,14 +546,14 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
               {/* Plain members may be blocked by org policy, which is not
                   visible from the API — warn rather than fail at submit. */}
               {showMemberWarning && (
-                <p className="text-[11px] text-amber-300">
+                <p className="text-[11px] text-status-warning">
                   You are a member of {effectiveOrg}, not an owner. Some organizations
                   only let owners create repositories.
                 </p>
               )}
 
               {ghError && (
-                <p role="alert" className="text-[11px] text-rose-300 font-mono break-words">{ghError}</p>
+                <p role="alert" className="text-[11px] text-status-danger font-mono break-words">{ghError}</p>
               )}
             </>
           )}
@@ -585,7 +585,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       {/* Attached resources */}
       <div className={`space-y-2 overflow-y-auto ${deletingId ? 'max-h-[28rem]' : 'max-h-72'}`}>
         {resources.length === 0 ? (
-          <p className="p-3 text-gray-500 italic bg-well rounded-xl border border-white/5">
+          <p className="p-3 text-content-muted italic bg-well rounded-xl border border-divider">
             {showAgentSetup
               ? 'Nothing attached yet. Agents need a working copy before they can run — attach a folder below.'
               : 'No repositories yet.'}
@@ -596,29 +596,29 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
             return (
               <div key={res.id}>
                 {/* One card per resource: the row, and for a repository whether this machine has it. */}
-                <div className="rounded-xl bg-surface border border-white/5">
+                <div className="rounded-xl bg-surface border border-divider">
                   <div
                     className="flex items-center justify-between p-2.5 font-mono text-xs"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       {res.type === 'github_repo' ? (
-                        <div className="flex items-center gap-1.5 text-brand-300 min-w-0">
+                        <div className="flex items-center gap-1.5 text-link min-w-0">
                           <GitBranch className="w-3.5 h-3.5 flex-shrink-0" />
                           <span className="font-medium truncate">{res.pathOrUrl}</span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-1.5 text-amber-300 min-w-0">
+                        <div className="flex items-center gap-1.5 text-status-warning min-w-0">
                           <Folder className="w-3.5 h-3.5 flex-shrink-0" />
                           <span className="font-medium truncate">{res.pathOrUrl}</span>
                         </div>
                       )}
-                      <span className="text-[10px] text-gray-500 font-sans flex-shrink-0">({res.branchOrMachine})</span>
+                      <span className="text-[10px] text-content-muted font-sans flex-shrink-0">({res.branchOrMachine})</span>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
                       <button
                         type="button"
                         onClick={() => navigator.clipboard.writeText(res.pathOrUrl)}
-                        className="text-gray-400 hover:text-white px-2 py-0.5 rounded bg-white/5 hover:bg-white/10 transition-colors text-[10px]"
+                        className="text-content-secondary hover:text-content px-2 py-0.5 rounded bg-surface-raised hover:bg-surface-high transition-colors text-[10px]"
                         title="Copy path"
                       >
                         Copy
@@ -627,7 +627,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                         <button
                           type="button"
                           onClick={() => handleRemoveResource(res.id)}
-                          className="p-1 text-gray-500 hover:text-white transition-colors"
+                          className="p-1 text-content-muted hover:text-content transition-colors"
                           title="Detach from this project (nothing is deleted)"
                           aria-label={`Detach ${res.name}`}
                         >
@@ -638,7 +638,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                         <button
                           type="button"
                           onClick={() => setDeletingId(current => (current === res.id ? null : res.id))}
-                          className="p-1 text-gray-500 hover:text-rose-400 transition-colors"
+                          className="p-1 text-content-muted hover:text-status-danger transition-colors"
                           title="Delete the repository and its hosting"
                           aria-label={`Delete ${repo}`}
                           aria-expanded={deletingId === res.id}
@@ -649,11 +649,11 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                     </div>
                   </div>
                   {repo && variant === 'inline' && role === 'dev' && (
-                    <div className="border-t border-white/[0.06] px-2.5 py-2">
+                    <div className="border-t border-divider px-2.5 py-2">
                       <button
                         type="button"
                         onClick={() => setArchitectureRepo(repo)}
-                        className="inline-flex items-center gap-2 rounded-lg border border-brand-400/20 bg-brand-500/[0.07] px-2.5 py-1.5 font-sans text-[11px] font-medium text-brand-200 transition-colors hover:border-brand-400/40 hover:bg-brand-500/[0.13] hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400"
+                        className="inline-flex items-center gap-2 rounded-lg border border-divider bg-selected px-2.5 py-1.5 font-sans text-[11px] font-medium text-selected-content transition-colors hover:border-divider hover:bg-selected hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400"
                         aria-label={`View current architecture for ${repo}`}
                       >
                         <Network className="h-3.5 w-3.5" />
@@ -683,7 +683,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
           is chosen — an agent scheduled elsewhere fails at checkout, and
           nothing else in the UI explains why. */}
       {hasLocalDir && (
-        <p className="text-[11px] text-amber-300/90">
+        <p className="text-[11px] text-status-warning">
           Agents on other machines cannot see a local path — they will fail to start.
           Use a repository for shared work.
         </p>
@@ -701,8 +701,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
           />
 
           {/* Attach an existing repository or directory */}
-          <div className="p-3.5 rounded-xl bg-well border border-white/5 space-y-2.5">
-            <span className="text-[11px] font-medium text-gray-300">Attach Resource</span>
+          <div className="p-3.5 rounded-xl bg-well border border-divider space-y-2.5">
+            <span className="text-[11px] font-medium text-content-secondary">Attach Resource</span>
             <div className="flex items-center gap-2">
               <select
                 value={newResType}
@@ -710,7 +710,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   setNewResType(e.target.value as 'github_repo' | 'local_dir');
                   setNewResPath('');
                 }}
-                className="bg-surface border border-white/10 rounded-xl px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-brand-500 w-32 flex-shrink-0"
+                className="bg-surface border border-control rounded-xl px-2.5 py-1.5 text-xs text-content focus:outline-none focus:border-control w-32 flex-shrink-0"
               >
                 <option value="local_dir">Local Folder</option>
                 <option value="github_repo">GitHub Repo</option>
@@ -727,17 +727,17 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   }
                 }}
                 placeholder={newResType === 'local_dir' ? 'C:/path/to/local/project or Browse...' : 'github.com/owner/repo'}
-                className="flex-1 min-w-0 bg-surface border border-white/10 rounded-xl px-3 py-1.5 text-xs font-mono text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                className="flex-1 min-w-0 bg-surface border border-control rounded-xl px-3 py-1.5 text-xs font-mono text-content placeholder-content-muted focus:outline-none focus:border-control"
               />
 
               {newResType === 'local_dir' && (
                 <button
                   type="button"
                   onClick={handleOpenFolderPicker}
-                  className="px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-xs font-medium text-gray-200 hover:text-white transition-colors flex-shrink-0 flex items-center gap-1.5"
+                  className="px-3 py-1.5 rounded-xl bg-surface-raised hover:bg-surface-high text-xs font-medium text-content hover:text-content transition-colors flex-shrink-0 flex items-center gap-1.5"
                   title="Open OS file dialog to pick a folder"
                 >
-                  <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                  <FolderOpen className="w-3.5 h-3.5 text-status-warning" />
                   <span>Browse...</span>
                 </button>
               )}
@@ -745,7 +745,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
               <button
                 type="button"
                 onClick={handleAddResource}
-                className="px-3.5 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-xs font-semibold text-on-accent transition-colors flex-shrink-0 flex items-center gap-1 shadow-sm"
+                className="px-3.5 py-1.5 rounded-xl bg-action hover:bg-action-hover text-xs font-semibold text-on-action transition-colors flex-shrink-0 flex items-center gap-1 shadow-sm"
                 title="Add resource"
               >
                 <Plus className="w-3.5 h-3.5" />

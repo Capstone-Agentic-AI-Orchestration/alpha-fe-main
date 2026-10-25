@@ -1,17 +1,17 @@
 import React from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { InboxNotification } from '@/shared/types';
-import { 
-  Inbox, 
-  MoreHorizontal, 
-  Flame, 
-  Archive, 
-  ChevronRight, 
-  CheckCircle2, 
-  XCircle, 
-  Clock, 
-  Bot, 
-  GitBranch, 
+import {
+  Inbox,
+  MoreHorizontal,
+  Flame,
+  Archive,
+  ChevronRight,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Bot,
+  GitBranch,
   ExternalLink,
   MessageSquare,
   AlertTriangle,
@@ -19,10 +19,10 @@ import {
 } from 'lucide-react';
 
 export const InboxView: React.FC = () => {
-  const { 
-    inbox, 
-    handleApproval, 
-    markNotificationRead, 
+  const {
+    inbox,
+    handleApproval,
+    markNotificationRead,
     archiveNotification,
     setActiveTab,
     runAgentOnIssue,
@@ -54,29 +54,29 @@ export const InboxView: React.FC = () => {
 
   const getStatusIcon = (notif: InboxNotification) => {
     if (notif.type === 'agent_approval') {
-      return <Clock className="w-4 h-4 text-amber-400" />;
+      return <Clock className="w-4 h-4 text-status-warning" />;
     }
     if (notif.type === 'agent_failed') {
-      return <XCircle className="w-4 h-4 text-rose-400" />;
+      return <XCircle className="w-4 h-4 text-status-danger" />;
     }
     if (notif.type === 'agent_completed') {
-      return <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+      return <CheckCircle2 className="w-4 h-4 text-status-success" />;
     }
-    return <Clock className="w-4 h-4 text-gray-500" />;
+    return <Clock className="w-4 h-4 text-content-muted" />;
   };
 
   return (
-    <div className="h-full flex overflow-hidden bg-shell text-gray-200 text-sm">
+    <div className="h-full flex overflow-hidden bg-shell text-content text-sm">
       {/* Left Column: Notifications Feed (Spacious & Scaled) */}
-      <div className="flex w-80 flex-shrink-0 flex-col border-r border-white/[0.06] bg-shell md:w-96">
+      <div className="flex w-80 flex-shrink-0 flex-col border-r border-divider bg-shell md:w-96">
         {/* Inbox Header */}
-        <div className="h-14 px-5 border-b border-white/[0.06] flex items-center justify-between">
+        <div className="h-14 px-5 border-b border-divider flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <h2 className="text-base font-semibold text-white">
+            <h2 className="text-base font-semibold text-content">
               {showArchived ? 'Archived Notifications' : 'Inbox'}
             </h2>
             {activeNotifications.length > 0 && !showArchived && (
-              <span className="text-xs tabular-nums text-gray-500">
+              <span className="text-xs tabular-nums text-content-muted">
                 {activeNotifications.length}
               </span>
             )}
@@ -85,7 +85,7 @@ export const InboxView: React.FC = () => {
           <div className="flex items-center gap-1">
             <button
               onClick={() => setShowArchived(!showArchived)}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 transition-colors text-xs font-medium"
+              className="p-1.5 rounded-lg text-content-secondary hover:text-content hover:bg-surface-high transition-colors text-xs font-medium"
               title={showArchived ? 'View Active Inbox' : 'View Archived'}
             >
               {showArchived ? 'Active Inbox' : <MoreHorizontal className="w-5 h-5" />}
@@ -94,10 +94,10 @@ export const InboxView: React.FC = () => {
         </div>
 
         {/* Notifications List */}
-        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.04]">
+        <div className="flex-1 overflow-y-auto divide-y divide-divider">
           {displayList.length === 0 ? (
-            <div className="p-10 text-center text-sm text-gray-500 space-y-3">
-              <Inbox className="w-10 h-10 mx-auto text-gray-600 opacity-60" />
+            <div className="p-10 text-center text-sm text-content-muted space-y-3">
+              <Inbox className="w-10 h-10 mx-auto text-content-muted opacity-60" />
               <p>No notifications in {showArchived ? 'archive' : 'inbox'}.</p>
             </div>
           ) : (
@@ -112,30 +112,30 @@ export const InboxView: React.FC = () => {
                     if (!notif.read) markNotificationRead(notif.id);
                   }}
                   className={`p-4 px-5 flex items-start gap-3.5 border-l-2 transition-colors cursor-pointer select-none ${
-                    isSelected 
-                      ? 'border-brand-400 bg-white/[0.045]'
+                    isSelected
+                      ? 'border-divider bg-surface-raised'
                       : notif.read
-                        ? 'border-transparent hover:bg-white/[0.025] opacity-75'
-                        : 'border-transparent hover:bg-white/[0.035]'
+                        ? 'border-transparent hover:bg-surface-high opacity-75'
+                        : 'border-transparent hover:bg-surface-high'
                   }`}
                 >
                   {/* Left Flame / Status Avatar */}
                   <div className="w-7 h-7 flex items-center justify-center text-base flex-shrink-0 mt-0.5">
-                    <Flame className="w-4.5 h-4.5 text-orange-400 fill-orange-400/20" />
+                    <Flame className="w-4.5 h-4.5 text-status-warning fill-orange-400/20" />
                   </div>
 
                   {/* Middle Content */}
                   <div className="flex-1 min-w-0 space-y-1">
                     <div className="flex items-center justify-between gap-2">
-                      <h4 className="text-sm font-semibold text-white truncate">
+                      <h4 className="text-sm font-semibold text-content truncate">
                         {notif.title}
                       </h4>
-                      <span className="text-xs font-mono text-gray-400 flex-shrink-0">
+                      <span className="text-xs font-mono text-content-secondary flex-shrink-0">
                         {getTimeAgo(notif.timestamp)}
                       </span>
                     </div>
 
-                    <p className="text-xs text-gray-400 truncate leading-relaxed">
+                    <p className="text-xs text-content-secondary truncate leading-relaxed">
                       {notif.message}
                     </p>
                   </div>
@@ -152,17 +152,17 @@ export const InboxView: React.FC = () => {
 
         {/* Bottom Archived Row */}
         {!showArchived && (
-          <div 
+          <div
             onClick={() => setShowArchived(true)}
-            className="p-4 px-5 border-t border-white/[0.06] flex items-center justify-between text-sm text-gray-400 hover:text-white hover:bg-white/[0.03] transition-colors cursor-pointer font-medium"
+            className="p-4 px-5 border-t border-divider flex items-center justify-between text-sm text-content-secondary hover:text-content hover:bg-surface-high transition-colors cursor-pointer font-medium"
           >
             <div className="flex items-center gap-3">
-              <Archive className="w-4.5 h-4.5 text-gray-500" />
+              <Archive className="w-4.5 h-4.5 text-content-muted" />
               <span>Archived</span>
             </div>
-            <div className="flex items-center gap-2 font-mono text-gray-500">
+            <div className="flex items-center gap-2 font-mono text-content-muted">
               <span>{archivedNotifications.length}</span>
-              <ChevronRight className="w-4 h-4 text-gray-600" />
+              <ChevronRight className="w-4 h-4 text-content-muted" />
             </div>
           </div>
         )}
@@ -173,25 +173,25 @@ export const InboxView: React.FC = () => {
         {selectedNotif ? (
           <div className="max-w-3xl space-y-6 p-6 animate-fade-in md:p-8">
             {/* Top Row: Title + Author */}
-            <div className="flex items-start justify-between gap-4 border-b border-white/[0.06] pb-6">
+            <div className="flex items-start justify-between gap-4 border-b border-divider pb-6">
               <div className="space-y-2.5">
-                <div className="flex items-center gap-2 text-xs text-gray-500">
+                <div className="flex items-center gap-2 text-xs text-content-muted">
                   <span className={`h-1.5 w-1.5 rounded-full ${
                     selectedNotif.type === 'agent_approval' ? 'bg-amber-400' :
                     selectedNotif.type === 'agent_failed' ? 'bg-rose-400' :
                     'bg-emerald-400'
                   }`} aria-hidden="true" />
-                  <span className="font-medium capitalize text-gray-400">
+                  <span className="font-medium capitalize text-content-secondary">
                     {selectedNotif.type.replace('_', ' ')}
                   </span>
                   <span>•</span>
-                  <span className="text-gray-400">{new Date(selectedNotif.timestamp).toLocaleString()}</span>
+                  <span className="text-content-secondary">{new Date(selectedNotif.timestamp).toLocaleString()}</span>
                 </div>
 
-                <h1 className="text-xl sm:text-2xl font-semibold text-white">
+                <h1 className="text-xl sm:text-2xl font-semibold text-content">
                   {selectedNotif.title}
                 </h1>
-                <p className="text-sm text-gray-300 leading-relaxed">
+                <p className="text-sm text-content-secondary leading-relaxed">
                   {selectedNotif.message}
                 </p>
               </div>
@@ -199,7 +199,7 @@ export const InboxView: React.FC = () => {
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={() => archiveNotification(selectedNotif.id)}
-                  className="px-2 py-2 rounded-md hover:bg-white/[0.035] text-gray-400 hover:text-white transition-colors text-xs font-medium flex items-center gap-2"
+                  className="px-2 py-2 rounded-md hover:bg-surface-high text-content-secondary hover:text-content transition-colors text-xs font-medium flex items-center gap-2"
                   title="Archive Notification"
                 >
                   <Archive className="w-4 h-4" />
@@ -210,12 +210,12 @@ export const InboxView: React.FC = () => {
 
             {/* If Failure: Retry Task Button */}
             {selectedNotif.type === 'agent_failed' && (
-              <div className="p-5 rounded-lg bg-rose-950/15 border border-rose-500/20 space-y-3.5">
-                <div className="flex items-center gap-2 text-sm font-semibold text-rose-300">
+              <div className="p-5 rounded-lg bg-status-danger-subtle border border-status-danger-border space-y-3.5">
+                <div className="flex items-center gap-2 text-sm font-semibold text-status-danger">
                   <AlertTriangle className="w-4.5 h-4.5" />
                   <span>Agent Execution Exception</span>
                 </div>
-                <p className="text-xs text-rose-200/90 leading-relaxed font-mono">
+                <p className="text-xs text-status-danger leading-relaxed font-mono">
                   {selectedNotif.message}
                 </p>
                 {canRunAgents && selectedNotif.entityType === 'issue' && selectedNotif.entityId && (
@@ -238,9 +238,9 @@ export const InboxView: React.FC = () => {
 
             {/* Approval Diff Card (Human-in-the-Loop) */}
             {selectedNotif.type === 'agent_approval' && (
-              <div className="py-5 border-y border-white/[0.07] space-y-5">
+              <div className="py-5 border-y border-divider space-y-5">
                 <div className="flex items-center justify-between text-sm">
-                  <div className="flex items-center gap-2 text-indigo-300 font-semibold">
+                  <div className="flex items-center gap-2 text-status-info font-semibold">
                     <Bot className="w-4.5 h-4.5" />
                     <span>Agent Pull Request & Patch Review</span>
                   </div>
@@ -248,9 +248,9 @@ export const InboxView: React.FC = () => {
 
                 {/* Git branch & PR */}
                 {selectedNotif.meta?.issueIdentifier && (
-                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-100 border border-white/5 font-mono text-xs text-gray-300">
+                  <div className="flex items-center justify-between p-3.5 rounded-xl bg-surface-raised border border-divider font-mono text-xs text-content-secondary">
                     <div className="flex items-center gap-2">
-                      <GitBranch className="w-4 h-4 text-indigo-400" />
+                      <GitBranch className="w-4 h-4 text-status-info" />
                       <span>{selectedNotif.meta.issueIdentifier}</span>
                     </div>
                   </div>
@@ -259,10 +259,10 @@ export const InboxView: React.FC = () => {
                 {/* Diff Preview */}
                 {selectedNotif.meta?.proposedChanges && (
                   <div className="space-y-2">
-                    <label className="text-xs font-mono uppercase text-gray-400 tracking-wider">
+                    <label className="text-xs font-mono uppercase text-content-secondary tracking-wider">
                       Proposed Code Modifications
                     </label>
-                    <pre className="p-4.5 rounded-xl bg-black/50 border border-white/5 text-emerald-300 font-mono text-xs overflow-x-auto leading-relaxed whitespace-pre-wrap">
+                    <pre className="p-4.5 rounded-xl bg-well border border-divider text-status-success font-mono text-xs overflow-x-auto leading-relaxed whitespace-pre-wrap">
                       {selectedNotif.meta.proposedChanges}
                     </pre>
                   </div>
@@ -270,10 +270,10 @@ export const InboxView: React.FC = () => {
 
                 {/* Approve / Reject Actions */}
                 {canApprove && (!selectedNotif.approvalStatus || selectedNotif.approvalStatus === 'pending') ? (
-                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-white/5">
+                  <div className="flex items-center justify-end gap-3 pt-3 border-t border-divider">
                     <button
                       onClick={() => handleApproval(selectedNotif.id, 'rejected')}
-                      className="flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-gray-300 transition-colors hover:text-rose-300"
+                      className="flex items-center gap-2 px-5 py-2.5 text-xs font-semibold text-content-secondary transition-colors hover:text-status-danger"
                     >
                       <XCircle className="w-4 h-4" />
                       <span>Request changes</span>
@@ -287,14 +287,14 @@ export const InboxView: React.FC = () => {
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between gap-4 border-t border-white/[0.06] pt-4 text-xs">
-                    <span className={selectedNotif.approvalStatus === 'approved' ? 'text-emerald-300' : 'text-amber-300'}>
+                  <div className="flex items-center justify-between gap-4 border-t border-divider pt-4 text-xs">
+                    <span className={selectedNotif.approvalStatus === 'approved' ? 'text-status-success' : 'text-status-warning'}>
                       {selectedNotif.approvalStatus === 'approved' ? 'Approved · Preview validation started' : 'Changes requested'}
                     </span>
                     <button
                       type="button"
                       onClick={() => setActiveTab(selectedNotif.approvalStatus === 'approved' ? 'deployments' : 'issues')}
-                      className="font-medium text-brand-300 hover:text-brand-200"
+                      className="font-medium text-link hover:text-link-hover"
                     >
                       {selectedNotif.approvalStatus === 'approved' ? 'Open CI/CD →' : 'Return to issue →'}
                     </button>
@@ -308,7 +308,7 @@ export const InboxView: React.FC = () => {
               <div className="pt-2">
                 <button
                   onClick={() => setActiveTab('issues')}
-                  className="flex items-center gap-2 text-sm text-brand-400 hover:text-brand-300 font-semibold transition-colors"
+                  className="flex items-center gap-2 text-sm text-link hover:text-link-hover font-semibold transition-colors"
                 >
                   <span>Go to related task tracker</span>
                   <ExternalLink className="w-4 h-4" />
@@ -318,11 +318,11 @@ export const InboxView: React.FC = () => {
           </div>
         ) : (
           /* Empty State Placeholder */
-          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-4 text-gray-500 select-none">
-            <div className="w-20 h-20 rounded-2xl bg-surface-200/50 border border-white/5 flex items-center justify-center text-gray-500 shadow-inner">
+          <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-4 text-content-muted select-none">
+            <div className="w-20 h-20 rounded-2xl bg-surface/50 border border-divider flex items-center justify-center text-content-muted shadow-inner">
               <Inbox className="w-10 h-10" />
             </div>
-            <p className="text-base font-medium text-gray-400">
+            <p className="text-base font-medium text-content-secondary">
               Select a notification to view details
             </p>
           </div>
@@ -331,7 +331,7 @@ export const InboxView: React.FC = () => {
         {/* Floating Chat Bubble Button in bottom right */}
         <button
           onClick={() => setActiveTab('chat')}
-          className="absolute bottom-8 right-8 w-12 h-12 rounded-full bg-surface-200 hover:bg-surface-100 border border-white/15 text-gray-300 hover:text-white flex items-center justify-center shadow-2xl transition-all"
+          className="absolute bottom-8 right-8 w-12 h-12 rounded-full bg-surface hover:bg-surface-raised border border-divider text-content-secondary hover:text-content flex items-center justify-center shadow-2xl transition-all"
           title="Open Agent Chat"
         >
           <MessageSquare className="w-5 h-5" />

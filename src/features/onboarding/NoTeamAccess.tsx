@@ -99,7 +99,7 @@ export const NoTeamAccess: React.FC<Props> = ({ identity, onRetry }) => {
             type="button"
             onClick={retry}
             disabled={checking}
-            className="flex items-center gap-1.5 rounded-lg bg-brand-500 px-3.5 py-2 text-xs font-semibold text-on-accent transition-colors hover:bg-brand-600 disabled:opacity-50"
+            className="flex items-center gap-1.5 rounded-lg bg-action px-3.5 py-2 text-xs font-semibold text-on-action transition-colors hover:bg-action-hover disabled:opacity-50"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${checking ? 'animate-spin' : ''}`} />
             {checking ? 'Checking…' : 'Check again'}

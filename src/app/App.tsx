@@ -398,9 +398,9 @@ export const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-dvh w-full bg-background text-gray-100 font-sans overflow-hidden text-sm">
+    <div className="flex h-dvh w-full bg-background text-content font-sans overflow-hidden text-sm">
       {/* Sidebar */}
-      <Sidebar 
+      <Sidebar
         collapsed={sidebarCollapsed}
         setCollapsed={setSidebarCollapsed}
         onOpenNewIssue={() => setTabSessionState(activeTabId, 'issueModal.open', true)}
@@ -417,7 +417,7 @@ export const App: React.FC = () => {
         {nativeWindowControls && <div aria-hidden="true" className="app-drag-region absolute inset-x-0 top-0 z-20 h-3 sm:h-4" />}
         {/* Floating workspace toolbar */}
         <div className={`pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4 ${nativeWindowControls ? 'pr-[9.5rem] sm:pr-[9.5rem]' : ''}`}>
-          <div className={`pointer-events-auto mx-auto flex w-full max-w-[1800px] items-center gap-1.5 rounded-2xl border border-white/[0.10] bg-surface-200/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-white/[0.04] ${nativeWindowControls ? 'app-drag-region' : ''}`}>
+          <div className={`pointer-events-auto mx-auto flex w-full max-w-[1800px] items-center gap-1.5 rounded-2xl border border-divider bg-surface/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-content/[0.04] ${nativeWindowControls ? 'app-drag-region' : ''}`}>
             {/* Scrollable Open Tabs List */}
             <div
               role="tablist"
@@ -449,11 +449,11 @@ export const App: React.FC = () => {
                   title={title}
                   className={`group flex h-9 min-w-[112px] max-w-[220px] cursor-pointer select-none items-center gap-2 rounded-xl border px-3 text-xs font-medium transition-all ${
                     isActive
-                      ? 'border-brand-400/30 bg-brand-500/15 text-white shadow-sm'
-                      : 'border-transparent text-gray-500 hover:bg-white/[0.05] hover:text-gray-200'
+                      ? 'border-divider bg-selected text-selected-content shadow-sm'
+                      : 'border-transparent text-content-muted hover:bg-surface-high hover:text-content'
                   }`}
                 >
-                  <span className={`flex-shrink-0 ${isActive ? 'text-brand-400' : 'text-gray-500 group-hover:text-gray-400'}`}>
+                  <span className={`flex-shrink-0 ${isActive ? 'text-link' : 'text-content-muted group-hover:text-content-secondary'}`}>
                     {getTabIcon(resolveView(tab.view))}
                   </span>
                   <span className="truncate flex-1 text-left">{title}</span>
@@ -463,7 +463,7 @@ export const App: React.FC = () => {
                         e.stopPropagation();
                         closeWorkspaceTab(tab.id);
                       }}
-                      className="rounded-md p-1 text-gray-500 opacity-0 transition-all hover:bg-white/10 hover:text-white focus:opacity-100 group-hover:opacity-100"
+                      className="rounded-md p-1 text-content-muted opacity-0 transition-all hover:bg-surface-high hover:text-content focus:opacity-100 group-hover:opacity-100"
                       title="Close tab"
                       aria-label={`Close ${title} tab`}
                     >
@@ -482,8 +482,8 @@ export const App: React.FC = () => {
                 onClick={() => setNewTabMenuOpen(prev => !prev)}
                 className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
                   newTabMenuOpen
-                    ? 'bg-brand-500/15 text-brand-400'
-                    : 'text-gray-400 hover:bg-white/[0.06] hover:text-white'
+                    ? 'bg-selected text-selected-content'
+                    : 'text-content-secondary hover:bg-surface-high hover:text-content'
                 }`}
                 title="Open new tab"
                 aria-label="Open new tab"
@@ -506,9 +506,9 @@ export const App: React.FC = () => {
                   left: newTabMenuPosition.left,
                   width: newTabMenuPosition.width,
                 }}
-                className="fixed z-[60] space-y-1 rounded-2xl border border-white/[0.10] bg-surface p-2 shadow-2xl animate-slide-up"
+                className="fixed z-[60] space-y-1 rounded-2xl border border-divider bg-surface p-2 shadow-2xl animate-slide-up"
               >
-                <div className="px-2.5 py-1 text-xs font-medium text-gray-500">
+                <div className="px-2.5 py-1 text-xs font-medium text-content-muted">
                   Open new tab
                 </div>
                 <div className="max-h-80 space-y-0.5 overflow-y-auto">
@@ -522,15 +522,15 @@ export const App: React.FC = () => {
                           setMountedTabIds(previous => new Set(previous).add(tabId));
                           setNewTabMenuOpen(false);
                         }}
-                        className="flex w-full items-center justify-between rounded-xl p-2 text-left text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
+                        className="flex w-full items-center justify-between rounded-xl p-2 text-left text-content-secondary transition-colors hover:bg-surface-high hover:text-content"
                       >
                         <div className="flex min-w-0 items-center gap-2.5">
-                          <div className="flex-shrink-0 p-1 text-gray-500">
+                          <div className="flex-shrink-0 p-1 text-content-muted">
                             {navIcon(item.id)}
                           </div>
                           <div className="min-w-0">
                             <div className="truncate text-xs font-medium">{item.title}</div>
-                            <div className="truncate text-[10px] text-gray-500">{item.subtitle}</div>
+                            <div className="truncate text-[10px] text-content-muted">{item.subtitle}</div>
                           </div>
                         </div>
                       </button>

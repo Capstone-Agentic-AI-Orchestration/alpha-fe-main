@@ -14,11 +14,11 @@ const PLATFORM_LABEL: Record<'render' | 'vercel', string> = {
 };
 
 const STATE_PILL: Record<HostingStatus['state'], { label: string; className: string }> = {
-  ready: { label: 'Ready', className: 'bg-emerald-400/15 text-emerald-300' },
-  partial: { label: 'Partially set up', className: 'bg-amber-400/15 text-amber-300' },
-  not_set_up: { label: 'Not set up', className: 'bg-white/10 text-gray-400' },
-  failed: { label: 'Failed', className: 'bg-rose-400/15 text-rose-300' },
-  unavailable: { label: 'Unavailable', className: 'bg-white/10 text-gray-500' }
+  ready: { label: 'Ready', className: 'bg-status-success-subtle text-status-success' },
+  partial: { label: 'Partially set up', className: 'bg-status-warning-subtle text-status-warning' },
+  not_set_up: { label: 'Not set up', className: 'bg-surface-raised text-content-secondary' },
+  failed: { label: 'Failed', className: 'bg-status-danger-subtle text-status-danger' },
+  unavailable: { label: 'Unavailable', className: 'bg-surface-raised text-content-muted' }
 };
 
 /**
@@ -90,11 +90,11 @@ export const RepoHostingPanel: React.FC<RepoHostingPanelProps> = ({ projectId, r
     <RepoSection
       id={`repo-hosting-${repo}`}
       title="Hosting"
-      icon={<Rocket className="h-3.5 w-3.5 text-brand-400" aria-hidden />}
+      icon={<Rocket className="h-3.5 w-3.5 text-link" aria-hidden />}
       actions={
         <>
           {data?.platform && (
-            <span className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-gray-300">
+            <span className="rounded bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-content-secondary">
               {PLATFORM_LABEL[data.platform]}
             </span>
           )}
@@ -141,7 +141,7 @@ const CiGateNote: React.FC<{ data: HostingStatus }> = ({ data }) => {
     const ungated = data.environments.filter(env => env.waitsForCi === false).map(env => env.branch);
     if (!ungated.length) return null;
     return (
-      <p className="flex items-start gap-1.5 px-3.5 py-2.5 text-[11px] leading-relaxed text-amber-300">
+      <p className="flex items-start gap-1.5 px-3.5 py-2.5 text-[11px] leading-relaxed text-status-warning">
         <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" aria-hidden />
         <span>
           {ungated.join(' and ')} deploy{ungated.length === 1 ? 's' : ''} on every push without waiting for CI. In
@@ -152,8 +152,8 @@ const CiGateNote: React.FC<{ data: HostingStatus }> = ({ data }) => {
   }
   if (data.platform === 'vercel' && data.state !== 'unavailable') {
     return (
-      <p className="flex items-start gap-1.5 px-3.5 py-2.5 text-[11px] leading-relaxed text-gray-400">
-        <Info className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-500" aria-hidden />
+      <p className="flex items-start gap-1.5 px-3.5 py-2.5 text-[11px] leading-relaxed text-content-secondary">
+        <Info className="mt-0.5 h-3 w-3 flex-shrink-0 text-content-muted" aria-hidden />
         <span>
           Production goes live as soon as Vercel builds it. To hold it until CI passes, turn on Deployment Checks in the
           Vercel project (Settings → Build and Deployment) and require the Frontend CI jobs.
@@ -177,10 +177,10 @@ const HostingBody: React.FC<{
   );
 
   return (
-    <div className="divide-y divide-white/[0.06]">
+    <div className="divide-y divide-divider">
       {data.state === 'unavailable' && (
-        <p className="flex items-start gap-1.5 px-3.5 py-3 text-[11px] leading-relaxed text-gray-400">
-          <Info className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-500" aria-hidden />
+        <p className="flex items-start gap-1.5 px-3.5 py-3 text-[11px] leading-relaxed text-content-secondary">
+          <Info className="mt-0.5 h-3 w-3 flex-shrink-0 text-content-muted" aria-hidden />
           Hosting isn't configured on the Alpha server yet (Render/Vercel tokens missing). An admin adds them to the
           Alpha API service.
         </p>
@@ -190,13 +190,13 @@ const HostingBody: React.FC<{
         <div className="space-y-2 px-3.5 py-3">
           <p
             className={`flex items-start gap-1.5 text-[11px] leading-relaxed ${
-              data.state === 'failed' ? 'text-amber-300' : 'text-gray-400'
+              data.state === 'failed' ? 'text-status-warning' : 'text-content-secondary'
             }`}
           >
             {data.state === 'failed' ? (
               <AlertTriangle className="mt-0.5 h-3 w-3 flex-shrink-0" aria-hidden />
             ) : (
-              <Info className="mt-0.5 h-3 w-3 flex-shrink-0 text-gray-500" aria-hidden />
+              <Info className="mt-0.5 h-3 w-3 flex-shrink-0 text-content-muted" aria-hidden />
             )}
             <span className="break-words">
               {data.state === 'not_set_up' &&
@@ -213,7 +213,7 @@ const HostingBody: React.FC<{
               type="button"
               onClick={onSetUp}
               disabled={running}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-brand-500 px-2.5 py-1.5 text-[11px] font-medium text-on-accent transition-colors hover:bg-brand-600 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-action px-2.5 py-1.5 text-[11px] font-medium text-on-action transition-colors hover:bg-action-hover disabled:opacity-50"
             >
               {running ? (
                 <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden />
@@ -223,7 +223,7 @@ const HostingBody: React.FC<{
               {running ? 'Setting up… this can take up to a minute' : data.state === 'not_set_up' ? 'Set up hosting' : 'Retry'}
             </button>
           ) : (
-            <p className="text-[11px] text-gray-500">Only a project manager or admin can set up hosting.</p>
+            <p className="text-[11px] text-content-muted">Only a project manager or admin can set up hosting.</p>
           )}
         </div>
       )}
@@ -231,20 +231,20 @@ const HostingBody: React.FC<{
       {/* Outside the set-up block: a partner that could not be wired is reported
           even when this repository's own hosting came up ready. */}
       {actionError && (
-        <p role="alert" className="px-3.5 py-2.5 text-[11px] leading-relaxed text-amber-300">
+        <p role="alert" className="px-3.5 py-2.5 text-[11px] leading-relaxed text-status-warning">
           {actionError}
         </p>
       )}
 
       {showSections && (
         <>
-          <ul className="divide-y divide-white/[0.04]">
+          <ul className="divide-y divide-divider">
             {environments.map(env => {
               const tone = env.latestDeploy ? RUN_TONE_CLASS[deployTone(env.latestDeploy.status)] : null;
               return (
                 <li key={env.branch} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3.5 py-2">
                   <span className="flex min-w-0 items-center gap-2">
-                    <span className="flex-shrink-0 rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-gray-300">
+                    <span className="flex-shrink-0 rounded bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-content-secondary">
                       {env.branch}
                     </span>
                     {env.url ? (
@@ -253,7 +253,7 @@ const HostingBody: React.FC<{
                           href={env.url}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex min-w-0 items-center gap-1 truncate text-[11px] text-brand-400 transition-colors hover:text-brand-100"
+                          className="inline-flex min-w-0 items-center gap-1 truncate text-[11px] text-link transition-colors hover:text-link-hover"
                           title={env.url}
                         >
                           <span className="truncate">{env.url.replace(/^https?:\/\//, '')}</span>
@@ -263,7 +263,7 @@ const HostingBody: React.FC<{
                         <CopyButton value={env.url} label={`${env.branch} URL`} />
                       </span>
                     ) : (
-                      <span className="text-[11px] text-gray-500">No live URL yet</span>
+                      <span className="text-[11px] text-content-muted">No live URL yet</span>
                     )}
                   </span>
                   <span className="flex flex-shrink-0 items-center gap-3">
@@ -279,7 +279,7 @@ const HostingBody: React.FC<{
                         href={env.dashboardUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] text-gray-400 transition-colors hover:text-white"
+                        className="inline-flex items-center gap-1 text-[11px] text-content-secondary transition-colors hover:text-content"
                       >
                         Dashboard
                         <ExternalLink className="h-3 w-3" aria-hidden />
@@ -291,16 +291,16 @@ const HostingBody: React.FC<{
               );
             })}
             {environments.length === 0 && (
-              <li className="px-3.5 py-3 text-[11px] text-gray-500">No environments reported yet.</li>
+              <li className="px-3.5 py-3 text-[11px] text-content-muted">No environments reported yet.</li>
             )}
           </ul>
 
           <CiGateNote data={data} />
 
-          <p className="px-3.5 py-2.5 text-[11px] leading-relaxed text-gray-400">
+          <p className="px-3.5 py-2.5 text-[11px] leading-relaxed text-content-secondary">
             {data.partner ? (
               <>
-                Connected to <span className="font-mono text-gray-300">{data.partner}</span> —{' '}
+                Connected to <span className="font-mono text-content-secondary">{data.partner}</span> —{' '}
                 {data.role === 'frontend'
                   ? 'this frontend calls that backend.'
                   : data.role === 'backend'
@@ -314,15 +314,15 @@ const HostingBody: React.FC<{
 
           {/* Variables are listed and edited in their own section (RepoEnvEditor). */}
           <div className="space-y-1.5 px-3.5 py-2.5">
-            <p className="text-[10px] text-gray-500">GitHub Actions</p>
+            <p className="text-[10px] text-content-muted">GitHub Actions</p>
             {data.github.secrets.length === 0 && data.github.variables.length === 0 ? (
-              <p className="text-[11px] text-gray-500">None.</p>
+              <p className="text-[11px] text-content-muted">None.</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {data.github.secrets.map(name => (
                   <span
                     key={name}
-                    className="inline-flex items-center gap-1 rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-gray-300"
+                    className="inline-flex items-center gap-1 rounded bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-content-secondary"
                   >
                     <Lock className="h-2.5 w-2.5" aria-hidden /> {name} — set
                   </span>
@@ -330,7 +330,7 @@ const HostingBody: React.FC<{
                 {data.github.variables.map(v => (
                   <span
                     key={v.name}
-                    className="max-w-full truncate rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[10px] text-gray-300"
+                    className="max-w-full truncate rounded bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-content-secondary"
                     title={`${v.name}=${v.value}`}
                   >
                     {v.name}={v.value}

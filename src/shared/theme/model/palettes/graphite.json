@@ -1,0 +1,26 @@
+{
+  "id": "graphite",
+  "name": "Graphite",
+  "description": "Medium charcoal · neutral silver",
+  "mode": "dark",
+  "colors": {
+    "canvas": "#242426",
+    "shell": "#29292D",
+    "surface": "#303034",
+    "raised": "#3A3A40",
+    "high": "#37373C",
+    "well": "#19191B",
+    "textPrimary": "#F4F4F5",
+    "textSecondary": "#D0D0D5",
+    "textMuted": "#B4B4BF",
+    "accent": "#A1A1AA",
+    "action": "#52525B",
+    "actionHover": "#484850",
+    "link": "#D4D4D8",
+    "linkHover": "#DBDBDE",
+    "focus": "#E4E4E7",
+    "divider": "#57575F",
+    "control": "#838385",
+    "sceneIdle": "#B9B9C3"
+  }
+}

@@ -128,39 +128,39 @@ export const AgentRunModal: React.FC = () => {
       maxWidth="max-w-3xl"
     >
       <div className="space-y-5">
-        <div className="grid gap-4 border-b border-white/[0.06] pb-5 sm:grid-cols-2">
+        <div className="grid gap-4 border-b border-divider pb-5 sm:grid-cols-2">
           <div>
-            <p className="text-[11px] font-medium text-gray-500">Task</p>
-            <p className="mt-1 text-sm font-medium text-white">{issue.title}</p>
-            <p className="mt-1 text-xs text-gray-500">{project?.name || 'Unassigned project'}</p>
+            <p className="text-[11px] font-medium text-content-muted">Task</p>
+            <p className="mt-1 text-sm font-medium text-content">{issue.title}</p>
+            <p className="mt-1 text-xs text-content-muted">{project?.name || 'Unassigned project'}</p>
           </div>
           <div>
-            <label htmlFor="prototype-run-agent" className="text-[11px] font-medium text-gray-500">
+            <label htmlFor="prototype-run-agent" className="text-[11px] font-medium text-content-muted">
               Assigned agent
             </label>
             <div className="relative mt-1">
-              <Bot className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+              <Bot className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted" />
               <select
                 id="prototype-run-agent"
                 value={selectedAgentId}
                 onChange={event => setSelectedAgentId(event.target.value)}
-                className="w-full appearance-none border border-white/[0.08] bg-shell py-2 pl-9 pr-8 text-sm text-white focus:border-brand-400 focus:outline-none"
+                className="w-full appearance-none border border-divider bg-shell py-2 pl-9 pr-8 text-sm text-content focus:border-control focus:outline-none"
               >
                 <option value="">Select an agent</option>
                 {agents.filter(agent => !agent.isArchived).map(agent => (
                   <option key={agent.id} value={agent.id}>{agent.name} · {agent.role}</option>
                 ))}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-500" />
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-content-muted" />
             </div>
           </div>
         </div>
 
         <div className="flex items-start gap-3 text-xs leading-relaxed">
-          <GitBranch className="mt-0.5 h-4 w-4 flex-shrink-0 text-cyan-400" />
+          <GitBranch className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-info" />
           <div>
-            <p className="font-medium text-gray-300">Repository context</p>
-            <p className="mt-0.5 text-gray-500">
+            <p className="font-medium text-content-secondary">Repository context</p>
+            <p className="mt-0.5 text-content-muted">
               {repository
                 ? `${repository.name} · ${repository.branchOrMachine || 'default branch'}`
                 : 'No local working copy is attached to this project.'}
@@ -169,8 +169,8 @@ export const AgentRunModal: React.FC = () => {
         </div>
 
         {(!issue.description.trim() || !hasWorkspace) && (
-          <div className="flex items-start gap-3 border-y border-amber-400/15 py-3 text-xs leading-relaxed text-amber-200/80">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-400" />
+          <div className="flex items-start gap-3 border-y border-status-warning-border py-3 text-xs leading-relaxed text-status-warning">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-warning" />
             <p>
               {!hasWorkspace
                 ? 'Attach or clone a local repository before starting. You can still save this plan for later.'
@@ -182,32 +182,32 @@ export const AgentRunModal: React.FC = () => {
         <section aria-labelledby="generated-plan-title">
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-brand-400" />
-              <h4 id="generated-plan-title" className="text-sm font-semibold text-white">
+              <Sparkles className="h-4 w-4 text-link" />
+              <h4 id="generated-plan-title" className="text-sm font-semibold text-content">
                 {planningStep === 'draft' ? 'Draft execution plan' : 'Plan ready for approval'}
               </h4>
             </div>
-            <span className="text-[11px] text-gray-500">
+            <span className="text-[11px] text-content-muted">
               {planningStep === 'draft' ? 'Edit before review' : 'Nothing runs until approval'}
             </span>
           </div>
 
           {!planReady ? (
-            <div className="flex min-h-36 items-center justify-center gap-2 border-y border-white/[0.06] text-sm text-gray-400">
-              <Loader2 className="h-4 w-4 animate-spin text-brand-400" />
+            <div className="flex min-h-36 items-center justify-center gap-2 border-y border-divider text-sm text-content-secondary">
+              <Loader2 className="h-4 w-4 animate-spin text-link" />
               Preparing a focused plan…
             </div>
           ) : planningStep === 'draft' ? (
-            <div className="space-y-2 border-y border-white/[0.06] py-2">
+            <div className="space-y-2 border-y border-divider py-2">
               {planItems.map((item, index) => (
-                <div key={`plan-step-${index}`} className="flex items-start gap-3 border-b border-white/[0.06] py-2 last:border-b-0">
-                  <span className="w-5 flex-shrink-0 pt-2 text-center text-xs tabular-nums text-gray-600">{index + 1}</span>
+                <div key={`plan-step-${index}`} className="flex items-start gap-3 border-b border-divider py-2 last:border-b-0">
+                  <span className="w-5 flex-shrink-0 pt-2 text-center text-xs tabular-nums text-content-muted">{index + 1}</span>
                   <textarea
                     aria-label={`Plan step ${index + 1}`}
                     value={item}
                     onChange={event => updatePlanItem(index, event.target.value)}
                     rows={2}
-                    className="min-h-16 flex-1 resize-y border border-white/[0.08] bg-shell px-3 py-2 text-sm leading-relaxed text-gray-200 outline-none transition-colors placeholder:text-gray-600 focus:border-brand-400"
+                    className="min-h-16 flex-1 resize-y border border-divider bg-shell px-3 py-2 text-sm leading-relaxed text-content outline-none transition-colors placeholder:text-content-muted focus:border-control"
                     placeholder="Describe what the agent should do"
                   />
                   <button
@@ -216,7 +216,7 @@ export const AgentRunModal: React.FC = () => {
                     title="Remove step"
                     onClick={() => removePlanItem(index)}
                     disabled={planItems.length === 1}
-                    className="mt-2 p-1 text-gray-500 transition-colors hover:text-rose-300 disabled:cursor-not-allowed disabled:opacity-30"
+                    className="mt-2 p-1 text-content-muted transition-colors hover:text-status-danger disabled:cursor-not-allowed disabled:opacity-30"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -225,17 +225,17 @@ export const AgentRunModal: React.FC = () => {
               <button
                 type="button"
                 onClick={addPlanItem}
-                className="flex items-center gap-1.5 px-2 py-2 text-xs font-medium text-brand-300 transition-colors hover:text-brand-200"
+                className="flex items-center gap-1.5 px-2 py-2 text-xs font-medium text-link transition-colors hover:text-link-hover"
               >
                 <Plus className="h-3.5 w-3.5" />
                 Add plan step
               </button>
             </div>
           ) : (
-            <ol className="divide-y divide-white/[0.06] border-y border-white/[0.06]">
+            <ol className="divide-y divide-divider border-y border-divider">
               {normalizedPlan.map((item, index) => (
-                <li key={`approved-plan-step-${index}`} className="flex gap-3 py-3 text-sm leading-relaxed text-gray-300">
-                  <span className="w-5 flex-shrink-0 text-xs tabular-nums text-gray-600">{index + 1}</span>
+                <li key={`approved-plan-step-${index}`} className="flex gap-3 py-3 text-sm leading-relaxed text-content-secondary">
+                  <span className="w-5 flex-shrink-0 text-xs tabular-nums text-content-muted">{index + 1}</span>
                   <span>{item}</span>
                 </li>
               ))}
@@ -244,17 +244,17 @@ export const AgentRunModal: React.FC = () => {
         </section>
 
         {planningStep === 'approval' && (
-          <p className="border-y border-brand-400/15 py-3 text-xs leading-relaxed text-brand-100/80">
+          <p className="border-y border-divider py-3 text-xs leading-relaxed text-link">
             This plan is saved locally for this issue. Approving starts the real agent run on the attached workspace;
             closing this dialog leaves the saved plan untouched.
           </p>
         )}
 
-        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-white/[0.06] pt-4">
+        <div className="flex flex-wrap items-center justify-end gap-3 border-t border-divider pt-4">
           <button
             type="button"
             onClick={closeRunSetup}
-            className="px-3 py-2 text-xs font-medium text-gray-400 transition-colors hover:text-white"
+            className="px-3 py-2 text-xs font-medium text-content-secondary transition-colors hover:text-content"
           >
             Cancel
           </button>
@@ -262,7 +262,7 @@ export const AgentRunModal: React.FC = () => {
             <button
               type="button"
               onClick={() => setPlanningStep('draft')}
-              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-gray-400 transition-colors hover:text-white"
+              className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-content-secondary transition-colors hover:text-content"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               Back to edit
@@ -272,7 +272,7 @@ export const AgentRunModal: React.FC = () => {
             type="button"
             disabled={!canReview}
             onClick={saveForLater}
-            className="flex items-center gap-1.5 border border-white/[0.1] px-3 py-2 text-xs font-medium text-gray-300 transition-colors hover:border-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex items-center gap-1.5 border border-divider px-3 py-2 text-xs font-medium text-content-secondary transition-colors hover:border-divider hover:text-content disabled:cursor-not-allowed disabled:opacity-40"
           >
             <Save className="h-3.5 w-3.5" />
             Save plan for later
@@ -282,7 +282,7 @@ export const AgentRunModal: React.FC = () => {
               type="button"
               disabled={!canReview}
               onClick={reviewPlan}
-              className="flex items-center gap-2 bg-brand-500 px-4 py-2 text-xs font-medium text-on-accent transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center gap-2 bg-action px-4 py-2 text-xs font-medium text-on-action transition-colors hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-40"
             >
               <Check className="h-4 w-4" />
               Review plan
@@ -292,7 +292,7 @@ export const AgentRunModal: React.FC = () => {
               type="button"
               disabled={!canStart}
               onClick={startRun}
-              className="flex items-center gap-2 bg-brand-500 px-4 py-2 text-xs font-medium text-on-accent transition-colors hover:bg-brand-600 disabled:cursor-not-allowed disabled:opacity-40"
+              className="flex items-center gap-2 bg-action px-4 py-2 text-xs font-medium text-on-action transition-colors hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-40"
               title={!hasWorkspace ? 'Attach or clone a repository before starting' : undefined}
             >
               <Check className="h-4 w-4" />

@@ -6,13 +6,13 @@ import { StatusBadge, PriorityBadge } from '@/shared/components/Badge';
 import { AgentRunProgress } from '@/features/runs/AgentRunProgress';
 import { apiService, type IssueBuildStatus } from '@/shared/services/apiService';
 import { isDesktop } from '@/shared/desktop';
-import { 
-  Kanban, 
-  List, 
-  Plus, 
-  Search, 
-  Bot, 
-  CheckCircle2, 
+import {
+  Kanban,
+  List,
+  Plus,
+  Search,
+  Bot,
+  CheckCircle2,
   Sparkles,
   Radio,
   ExternalLink,
@@ -46,13 +46,13 @@ const ACTIVE_BUILD_STATUSES = new Set([
   'awaiting_approval', 'publishing', 'cancelling', 'blocked', 'recovery_required'
 ]);
 
-const CHIP_INFO = 'border-sky-400/30 bg-sky-500/10 text-sky-200';
-const CHIP_REVIEW = 'border-violet-400/30 bg-violet-500/10 text-violet-200';
-const CHIP_ACTIVE = 'border-cyan-400/30 bg-cyan-500/10 text-cyan-200';
-const CHIP_WAIT = 'border-amber-400/30 bg-amber-500/10 text-amber-200';
-const CHIP_MUTED = 'border-white/15 bg-white/[0.04] text-gray-300';
-const CHIP_ALERT = 'border-rose-400/30 bg-rose-500/10 text-rose-200';
-const CHIP_DONE = 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200';
+const CHIP_INFO = 'border-status-info-border bg-status-info-subtle text-status-info';
+const CHIP_REVIEW = 'border-divider bg-selected text-selected-content';
+const CHIP_ACTIVE = 'border-status-info-border bg-status-info-subtle text-status-info';
+const CHIP_WAIT = 'border-status-warning-border bg-status-warning-subtle text-status-warning';
+const CHIP_MUTED = 'border-divider bg-surface-raised text-content-secondary';
+const CHIP_ALERT = 'border-status-danger-border bg-status-danger-subtle text-status-danger';
+const CHIP_DONE = 'border-status-success-border bg-status-success-subtle text-status-success';
 
 const BUILD_CHIPS: Record<string, { label: string; className: string }> = {
   planning: { label: 'Planning', className: CHIP_INFO },
@@ -103,12 +103,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   lockedProjectId,
   embedded = false
 }) => {
-  const { 
-    issues, 
-    updateIssueStatus, 
+  const {
+    issues,
+    updateIssueStatus,
     updateIssue,
-    addIssueComment, 
-    projects, 
+    addIssueComment,
+    projects,
     startIssueBuild,
     identity,
     localMode,
@@ -118,6 +118,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     lastSyncedAt,
     can,
     role,
+    visibleTabs,
     setActiveTab,
     activeTabId,
     setTabSessionState
@@ -191,7 +192,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     canRunBuilds && issue.status !== 'done' && issue.status !== 'agent_running' && !hasActiveBuild(issue);
   const boardColumnFor = (issue: Issue): IssueStatus =>
     issue.status !== 'done' && issue.status !== 'review' && hasActiveBuild(issue) ? 'agent_running' : issue.status;
-  
+
   // Collapsed status sections state (Jira style)
   const [collapsedSections, setCollapsedSections] = useTabSessionState<Record<string, boolean>>(`${sessionPrefix}.collapsedSections`, {});
 
@@ -208,56 +209,56 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   };
 
   const columns: { id: IssueStatus; title: string; color: string }[] = [
-    { id: 'backlog', title: 'Backlog', color: 'border-gray-700' },
-    { id: 'todo', title: 'Todo', color: 'border-slate-600' },
-    { id: 'in_progress', title: 'In Progress', color: 'border-amber-500/50' },
-    { id: 'agent_running', title: 'Building', color: 'border-cyan-500/50' },
-    { id: 'review', title: 'In Review', color: 'border-purple-500/50' },
-    { id: 'done', title: 'Done', color: 'border-emerald-500/50' },
+    { id: 'backlog', title: 'Backlog', color: 'border-divider' },
+    { id: 'todo', title: 'Todo', color: 'border-divider' },
+    { id: 'in_progress', title: 'In Progress', color: 'border-status-warning-border' },
+    { id: 'agent_running', title: 'Building', color: 'border-status-info-border' },
+    { id: 'review', title: 'In Review', color: 'border-divider' },
+    { id: 'done', title: 'Done', color: 'border-status-success-border' },
   ];
 
   // Jira-like Status Groups for List View
-  const statusGroups: { 
-    id: string; 
-    label: string; 
-    statusMatch: (s: IssueStatus) => boolean; 
+  const statusGroups: {
+    id: string;
+    label: string;
+    statusMatch: (s: IssueStatus) => boolean;
     iconColor: string;
     icon: React.ReactNode;
   }[] = [
-    { 
-      id: 'backlog', 
-      label: 'Backlog', 
-      statusMatch: s => s === 'backlog', 
-      iconColor: 'text-gray-400',
-      icon: <span className="w-2.5 h-2.5 rounded-full border border-gray-500 inline-block" />
+    {
+      id: 'backlog',
+      label: 'Backlog',
+      statusMatch: s => s === 'backlog',
+      iconColor: 'text-content-secondary',
+      icon: <span className="w-2.5 h-2.5 rounded-full border border-divider inline-block" />
     },
-    { 
-      id: 'todo', 
-      label: 'Todo', 
-      statusMatch: s => s === 'todo', 
-      iconColor: 'text-slate-400',
-      icon: <span className="w-2.5 h-2.5 rounded-full border border-slate-400 inline-block" />
+    {
+      id: 'todo',
+      label: 'Todo',
+      statusMatch: s => s === 'todo',
+      iconColor: 'text-content-secondary',
+      icon: <span className="w-2.5 h-2.5 rounded-full border border-divider inline-block" />
     },
-    { 
-      id: 'in_progress', 
-      label: 'In Progress', 
-      statusMatch: s => s === 'in_progress' || s === 'agent_running', 
-      iconColor: 'text-amber-400',
+    {
+      id: 'in_progress',
+      label: 'In Progress',
+      statusMatch: s => s === 'in_progress' || s === 'agent_running',
+      iconColor: 'text-status-warning',
       icon: <span className="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block" />
     },
-    { 
-      id: 'review', 
-      label: 'In Review', 
-      statusMatch: s => s === 'review', 
-      iconColor: 'text-emerald-400',
-      icon: <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+    {
+      id: 'review',
+      label: 'In Review',
+      statusMatch: s => s === 'review',
+      iconColor: 'text-status-success',
+      icon: <CheckCircle2 className="w-3.5 h-3.5 text-status-success" />
     },
-    { 
-      id: 'done', 
-      label: 'Done', 
-      statusMatch: s => s === 'done', 
-      iconColor: 'text-sky-400',
-      icon: <CheckCircle2 className="w-3.5 h-3.5 text-sky-400" />
+    {
+      id: 'done',
+      label: 'Done',
+      statusMatch: s => s === 'done',
+      iconColor: 'text-status-info',
+      icon: <CheckCircle2 className="w-3.5 h-3.5 text-status-info" />
     }
   ];
 
@@ -413,19 +414,19 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
       case 'urgent':
         return (
           <span title="Urgent">
-            <Flame className="w-3.5 h-3.5 text-rose-400 fill-rose-400/20" />
+            <Flame className="w-3.5 h-3.5 text-status-danger fill-rose-400/20" />
           </span>
         );
       case 'high':
         return (
           <span title="High Priority">
-            <BarChart2 className="w-3.5 h-3.5 text-amber-400 rotate-90" />
+            <BarChart2 className="w-3.5 h-3.5 text-status-warning rotate-90" />
           </span>
         );
       case 'medium':
         return (
           <span title="Medium Priority">
-            <BarChart2 className="w-3.5 h-3.5 text-amber-400/80 rotate-90" />
+            <BarChart2 className="w-3.5 h-3.5 text-status-warning rotate-90" />
           </span>
         );
       case 'low':
@@ -433,7 +434,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
       default:
         return (
           <span title="Low / None Priority">
-            <Minus className="w-3.5 h-3.5 text-gray-500" />
+            <Minus className="w-3.5 h-3.5 text-content-muted" />
           </span>
         );
     }
@@ -445,7 +446,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     if (!person) return null;
     const initials = person.replace(/[^a-zA-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
     return (
-      <div className="w-6 h-6 rounded-full bg-surface-raised border border-white/10 flex items-center justify-center text-[10px] font-semibold text-gray-200" title={`Assignee: ${person}`}>
+      <div className="w-6 h-6 rounded-full bg-surface-raised border border-divider flex items-center justify-center text-[10px] font-semibold text-content" title={`Assignee: ${person}`}>
         {initials}
       </div>
     );
@@ -465,9 +466,9 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-shell text-sm text-gray-200">
+    <div className="h-full flex flex-col overflow-hidden bg-shell text-sm text-content">
       {/* Header & Jira-like Control Bar */}
-      <div className="space-y-2 border-b border-white/[0.06] bg-shell px-5 py-3">
+      <div className="space-y-2 border-b border-divider bg-shell px-5 py-3">
         {/* Top Row: Title, Filters & Controls */}
         <div className={`flex flex-col justify-between gap-4 ${embedded ? 'xl:flex-row xl:flex-wrap xl:items-center' : 'sm:flex-row sm:items-center'}`}>
           {/* Left: Tasks title & category pills */}
@@ -480,23 +481,23 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             */}
             {!embedded && (
               <div className="flex items-center gap-2">
-                <CheckSquare className="w-4 h-4 text-gray-400" />
-                <h1 className="text-base font-semibold text-white">
+                <CheckSquare className="w-4 h-4 text-content-secondary" />
+                <h1 className="text-base font-semibold text-content">
                   Tasks
                 </h1>
               </div>
             )}
 
             {/* Scope is a compact text control, not a second container inside the header. */}
-            <div className={`flex items-center gap-1 text-xs ${role === 'dev' ? 'rounded-lg border border-white/[0.08] bg-white/[0.025] p-1' : ''}`} role={role === 'dev' ? 'tablist' : undefined} aria-label={role === 'dev' ? 'Task scope' : undefined}>
+            <div className={`flex items-center gap-1 text-xs ${role === 'dev' ? 'rounded-lg border border-divider bg-surface-raised p-1' : ''}`} role={role === 'dev' ? 'tablist' : undefined} aria-label={role === 'dev' ? 'Task scope' : undefined}>
               <button
                 onClick={() => setFilterCategory('all')}
                 role={role === 'dev' ? 'tab' : undefined}
                 aria-selected={role === 'dev' ? filterCategory === 'all' : undefined}
                 className={`${role === 'dev' ? 'rounded-md px-3 py-1.5' : 'px-2 py-1 border-b'} font-medium transition-colors ${
                   filterCategory === 'all'
-                    ? 'border-brand-400 bg-brand-500/15 text-white'
-                    : 'border-transparent text-gray-500 hover:text-white'
+                    ? 'border-divider bg-selected text-selected-content'
+                    : 'border-transparent text-content-muted hover:text-content'
                 }`}
               >
                 {role === 'dev' ? 'Assigned project tasks' : 'All'}
@@ -508,8 +509,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 aria-selected={role === 'dev' ? filterCategory === 'mine' : undefined}
                 className={`${role === 'dev' ? 'rounded-md px-3 py-1.5' : 'px-2 py-1 border-b'} font-medium transition-colors ${
                   filterCategory === 'mine'
-                    ? 'border-brand-400 bg-brand-500/15 text-white'
-                    : 'border-transparent text-gray-500 hover:text-white'
+                    ? 'border-divider bg-selected text-selected-content'
+                    : 'border-transparent text-content-muted hover:text-content'
                 }`}
               >
                 {role === 'dev' ? 'Assigned to me' : 'Mine'}
@@ -519,8 +520,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   onClick={() => setFilterCategory('members')}
                   className={`px-2 py-1 border-b font-medium transition-colors ${
                     filterCategory === 'members'
-                      ? 'border-brand-400 text-white'
-                      : 'border-transparent text-gray-500 hover:text-white'
+                      ? 'border-divider text-content'
+                      : 'border-transparent text-content-muted hover:text-content'
                   }`}
                 >
                   Members
@@ -528,7 +529,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               </>}
               <button
                 onClick={() => setFilterCategory('all')}
-                className="p-1 text-gray-500 hover:text-white transition-colors"
+                className="p-1 text-content-muted hover:text-content transition-colors"
                 title="Group / Stack options"
               >
                 <Layers className="w-3.5 h-3.5" />
@@ -539,11 +540,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
           {/* Right: Actions, Status telemetry & View switches */}
           <div className="flex flex-wrap items-center gap-2.5">
             {/* Active work remains visible as plain status text. */}
-            <div className="flex items-center gap-1.5 px-1 py-1.5 text-xs text-gray-500">
+            <div className="flex items-center gap-1.5 px-1 py-1.5 text-xs text-content-muted">
               {runningAgentsCount > 0 ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                  <span className="text-cyan-300 font-medium">{runningAgentsCount} building</span>
+                  <span className="text-status-info font-medium">{runningAgentsCount} building</span>
                 </>
               ) : (
                 <span>Nothing building</span>
@@ -555,8 +556,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               onClick={() => setShowFilterBar(!showFilterBar)}
               className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
                 showFilterBar || selectedProject !== 'all' || selectedPriority !== 'all'
-                  ? 'bg-white/[0.05] text-white'
-                  : 'text-gray-400 hover:text-white hover:bg-white/[0.03]'
+                  ? 'bg-surface-raised text-content'
+                  : 'text-content-secondary hover:text-content hover:bg-surface-high'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -566,7 +567,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             {/* Display Button */}
             <button
               onClick={() => setShowFilterBar(!showFilterBar)}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-white hover:bg-white/[0.03] transition-colors"
+              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-content-secondary hover:text-content hover:bg-surface-high transition-colors"
             >
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>Display</span>
@@ -577,7 +578,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <button
                 onClick={() => setViewMode('list')}
                 className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md font-medium transition-colors ${
-                  viewMode === 'list' ? 'bg-white/[0.05] text-white' : 'text-gray-500 hover:text-white'
+                  viewMode === 'list' ? 'bg-surface-raised text-content' : 'text-content-muted hover:text-content'
                 }`}
                 title="List View"
               >
@@ -587,7 +588,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <button
                 onClick={() => setViewMode('board')}
                 className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md font-medium transition-colors ${
-                  viewMode === 'board' ? 'bg-white/[0.05] text-white' : 'text-gray-500 hover:text-white'
+                  viewMode === 'board' ? 'bg-surface-raised text-content' : 'text-content-muted hover:text-content'
                 }`}
                 title="Board View"
               >
@@ -604,7 +605,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             {localMode ? (
               <span
                 title="GitHub sync is off while Alpha is in local mode"
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-white/10 text-gray-500 font-medium text-xs"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-divider text-content-muted font-medium text-xs"
               >
                 <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
                 <span className="hidden sm:inline">Local board</span>
@@ -618,7 +619,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     ? `Last synced ${new Date(lastSyncedAt).toLocaleTimeString()}`
                     : 'Not synced yet'
                 }
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-white/10 text-gray-400 hover:text-white hover:bg-white/5 font-medium text-xs transition-colors disabled:opacity-50"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-divider text-content-secondary hover:text-content hover:bg-surface-high font-medium text-xs transition-colors disabled:opacity-50"
               >
                 <RefreshCw className={`w-3.5 h-3.5 ${syncing ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline">
@@ -630,7 +631,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             {/* New Task Button */}
             <button
               onClick={onOpenNewIssue}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-on-accent font-medium text-xs transition-colors"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-action hover:bg-action-hover text-on-action font-medium text-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>New Task</span>
@@ -642,13 +643,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
         {showFilterBar && (
           <div className="flex flex-wrap items-center gap-3 pt-2 text-xs">
             <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-2.5" />
+              <Search className="w-3.5 h-3.5 text-content-secondary absolute left-3 top-2.5" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search tasks, identifiers, labels..."
-                className="w-full bg-surface-100 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                className="w-full bg-surface-raised border border-control rounded-lg pl-8 pr-3 py-1.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control"
               />
             </div>
 
@@ -661,7 +662,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <select
                 value={selectedProject}
                 onChange={(e) => setSelectedProject(e.target.value)}
-                className="bg-surface-100 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-brand-500"
+                className="bg-surface-raised border border-control rounded-lg px-2.5 py-1.5 text-xs text-content-secondary focus:outline-none focus:border-control"
               >
                 <option value="all">All Projects</option>
                 {projects.map(p => (
@@ -673,7 +674,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             <select
               value={selectedPriority}
               onChange={(e) => setSelectedPriority(e.target.value)}
-              className="bg-surface-100 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-gray-300 focus:outline-none focus:border-brand-500"
+              className="bg-surface-raised border border-control rounded-lg px-2.5 py-1.5 text-xs text-content-secondary focus:outline-none focus:border-control"
             >
               <option value="all">All Priorities</option>
               <option value="urgent">Urgent</option>
@@ -705,8 +706,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   onDrop={event => handleIssueDrop(event, column.id)}
                   className={`w-80 flex-shrink-0 flex flex-col rounded-2xl border overflow-hidden transition-colors ${
                     dragOverColumn === column.id
-                      ? 'border-brand-500/60 bg-brand-500/[0.05] ring-1 ring-brand-500/30'
-                      : 'border-white/5 bg-surface-200/40'
+                      ? 'border-divider bg-selected ring-1 ring-selected-content/30'
+                      : 'border-divider bg-surface/40'
                   }`}
                   aria-label={
                     column.id === 'agent_running'
@@ -716,10 +717,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                         : `Drop tasks here to move them to ${column.title}`
                   }
                 >
-                  <div className={`p-3.5 border-b border-white/5 flex items-center justify-between bg-surface-100/60 ${column.color}`}>
+                  <div className={`p-3.5 border-b border-divider flex items-center justify-between bg-surface-raised/60 ${column.color}`}>
                     <div className="flex items-center gap-2">
                       <StatusBadge status={column.id} />
-                      <span className="text-xs font-mono text-gray-400">({colIssues.length})</span>
+                      <span className="text-xs font-mono text-content-secondary">({colIssues.length})</span>
                     </div>
                     {/*
                       Quick add needs a project to create into, and "All
@@ -734,7 +735,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                             ? (setQuickAddStatus(column.id), setQuickAddTitle(''))
                             : onOpenNewIssue()
                         }
-                        className="text-gray-500 hover:text-white p-1 rounded hover:bg-white/5"
+                        className="text-content-muted hover:text-content p-1 rounded hover:bg-surface-high"
                         title={canQuickAdd ? 'Add a task to this column' : 'New task'}
                       >
                         <Plus className="w-4 h-4" />
@@ -744,7 +745,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
                   <div className="flex-1 overflow-y-auto p-3 space-y-3">
                     {quickAddStatus === column.id && (
-                      <div className="rounded-xl border border-brand-500/40 bg-surface-100 p-2">
+                      <div className="rounded-xl border border-divider bg-surface-raised p-2">
                         <input
                           autoFocus
                           value={quickAddTitle}
@@ -755,12 +756,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                           }}
                           onBlur={() => !quickAddTitle.trim() && setQuickAddStatus(null)}
                           placeholder="Task title, then Enter"
-                          className="w-full bg-transparent text-xs text-white placeholder:text-gray-600 focus:outline-none"
+                          className="w-full bg-transparent text-xs text-content placeholder:text-content-muted focus:outline-none"
                         />
                         <div className="mt-1.5 flex items-center justify-between">
                           {/* The daemon assigns the real identifier; promising
                               one here is what produced TES-107. */}
-                          <span className="font-mono text-[10px] text-gray-600">
+                          <span className="font-mono text-[10px] text-content-muted">
                             {projects.find(p => p.id === selectedProject)?.key ?? ''}
                           </span>
                           <button
@@ -768,7 +769,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                             onMouseDown={e => e.preventDefault()}
                             onClick={() => submitQuickAdd(column.id)}
                             disabled={!quickAddTitle.trim()}
-                            className="rounded px-2 py-0.5 text-[10px] font-semibold text-brand-300 hover:bg-white/5 disabled:opacity-30"
+                            className="rounded px-2 py-0.5 text-[10px] font-semibold text-link hover:bg-surface-high disabled:opacity-30"
                           >
                             Add
                           </button>
@@ -786,33 +787,33 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                           onDragStart={event => handleIssueDragStart(event, issue.id)}
                           onDragEnd={clearDragState}
                           aria-label={`Drag task ${issue.identifier} to move its status`}
-                          className={`p-4 rounded-xl bg-surface-100 border transition-all cursor-grab active:cursor-grabbing space-y-3 group shadow-sm hover:shadow-glow-brand ${
+                          className={`p-4 rounded-xl bg-surface-raised border transition-all cursor-grab active:cursor-grabbing space-y-3 group shadow-sm hover:shadow-glow-brand ${
                             draggedIssueId === issue.id ? 'opacity-50' : ''
                           } ${
-                            selectedIssueId === issue.id 
-                              ? 'border-brand-500 shadow-glow-brand bg-brand-500/10' 
-                              : 'border-white/10 hover:border-brand-500/40'
+                            selectedIssueId === issue.id
+                              ? 'border-divider shadow-glow-brand bg-selected'
+                              : 'border-divider hover:border-divider'
                           }`}
                         >
                           <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-mono font-bold text-brand-400">
+                            <span className="text-xs font-mono font-bold text-link">
                               {issue.identifier}
                             </span>
                             <PriorityBadge priority={issue.priority} showLabel={false} />
                           </div>
 
-                          <h4 className="text-sm font-semibold text-white line-clamp-2 group-hover:text-brand-300 transition-colors">
+                          <h4 className="text-sm font-semibold text-content line-clamp-2 group-hover:text-link-hover transition-colors">
                             {issue.title}
                           </h4>
 
                           {issue.subtasks.length > 0 && (
-                            <div className="flex items-center gap-1.5 text-xs font-mono text-gray-400 bg-surface-200 px-2.5 py-1 rounded-lg w-fit">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                            <div className="flex items-center gap-1.5 text-xs font-mono text-content-secondary bg-surface px-2.5 py-1 rounded-lg w-fit">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-status-success" />
                               <span>{completedSubtasks}/{issue.subtasks.length} subtasks</span>
                             </div>
                           )}
 
-                          <div className="flex items-center justify-between pt-2 border-t border-white/5 text-xs text-gray-400">
+                          <div className="flex items-center justify-between pt-2 border-t border-divider text-xs text-content-secondary">
                             <div className="flex min-w-0 items-center gap-2">
                               {getAssigneeVisual(issue)}
                               <BuildChip build={issueBuilds[issue.id]} />
@@ -823,9 +824,9 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                                   e.stopPropagation();
                                   setPendingBuildIssueId(issue.id);
                                 }}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-brand-500/20 hover:bg-brand-500/40 text-brand-300 text-xs font-semibold border border-brand-500/30 transition-all opacity-80 group-hover:opacity-100"
+                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-selected hover:bg-selected text-selected-content text-xs font-semibold border border-divider transition-all opacity-80 group-hover:opacity-100"
                               >
-                                <Sparkles className="w-3 h-3 text-brand-400" />
+                                <Sparkles className="w-3 h-3 text-link" />
                                 <span>Build</span>
                               </button>
                             )}
@@ -850,7 +851,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                   {/* Jira Section Header Bar */}
                   <div
                     onClick={() => toggleSection(group.id)}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/[0.04] cursor-pointer select-none transition-colors"
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider cursor-pointer select-none transition-colors"
                   >
                     {/* Checkbox */}
                     <input
@@ -858,11 +859,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       checked={false}
                       onChange={() => {}}
                       onClick={(e) => e.stopPropagation()}
-                      className="rounded bg-transparent border-white/20 text-brand-500 focus:ring-0 cursor-pointer"
+                      className="rounded bg-transparent border-control text-link focus:ring-0 cursor-pointer"
                     />
 
                     {/* Collapse Chevron */}
-                    <button className="text-gray-400 hover:text-white p-0.5">
+                    <button className="text-content-secondary hover:text-content p-0.5">
                       {isCollapsed ? (
                         <ChevronRight className="w-3.5 h-3.5" />
                       ) : (
@@ -873,8 +874,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     {/* Status Circle & Title + Count */}
                     <div className="flex items-center gap-2">
                       <span className="flex items-center justify-center">{group.icon}</span>
-                      <span className="text-xs font-semibold text-white tracking-tight">{group.label}</span>
-                      <span className="text-xs font-mono text-gray-500 font-normal">{groupIssues.length}</span>
+                      <span className="text-xs font-semibold text-content tracking-tight">{group.label}</span>
+                      <span className="text-xs font-mono text-content-muted font-normal">{groupIssues.length}</span>
                     </div>
                   </div>
 
@@ -883,7 +884,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     <div className="space-y-0.5 pl-2">
                       {groupIssues.length === 0 ? (
                         /* Empty state placeholder for section */
-                        <div className="py-2.5 text-center font-mono text-xs text-gray-500">
+                        <div className="py-2.5 text-center font-mono text-xs text-content-muted">
                           No tasks
                         </div>
                       ) : (
@@ -897,36 +898,36 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                               key={issue.id}
                               onClick={() => setSelectedIssueId(issue.id)}
                               className={`group px-3 py-2.5 rounded-lg flex items-center justify-between gap-4 transition-colors cursor-pointer ${
-                                selectedIssueId === issue.id 
-                                  ? 'bg-white/[0.08] border border-white/10' 
-                                  : 'hover:bg-white/[0.04] border border-transparent'
+                                selectedIssueId === issue.id
+                                  ? 'bg-surface-raised border border-divider'
+                                  : 'hover:bg-surface-high border border-transparent'
                               }`}
                             >
                               {/* Left: Checkbox, Priority, Key, Title, Subtasks Ring */}
                               <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <div className="text-gray-500 flex-shrink-0">
+                                <div className="text-content-muted flex-shrink-0">
                                   {getPriorityIcon(issue.priority)}
                                 </div>
 
-                                <span className="font-mono text-xs font-medium text-gray-400 w-16 flex-shrink-0">
+                                <span className="font-mono text-xs font-medium text-content-secondary w-16 flex-shrink-0">
                                   {issue.identifier}
                                 </span>
 
-                                <span className="text-xs sm:text-sm font-medium text-white truncate max-w-2xl group-hover:text-brand-300 transition-colors">
+                                <span className="text-xs sm:text-sm font-medium text-content truncate max-w-2xl group-hover:text-link-hover transition-colors">
                                   {issue.title}
                                 </span>
 
                                 {/* Subtasks fraction ring if subtasks exist */}
                                 {totalSubtasks > 0 && (
-                                  <div className="flex items-center gap-1 text-[11px] font-mono text-gray-400 flex-shrink-0">
+                                  <div className="flex items-center gap-1 text-[11px] font-mono text-content-secondary flex-shrink-0">
                                     {completedSubtasks === totalSubtasks ? (
-                                      <span className="text-sky-400 flex items-center gap-1">
-                                        <span className="w-2.5 h-2.5 rounded-full border-2 border-sky-400 bg-sky-400/30 inline-block" />
+                                      <span className="text-status-info flex items-center gap-1">
+                                        <span className="w-2.5 h-2.5 rounded-full border-2 border-status-info-border bg-status-info-subtle inline-block" />
                                         <span>{completedSubtasks}/{totalSubtasks}</span>
                                       </span>
                                     ) : (
-                                      <span className="text-gray-500 flex items-center gap-1">
-                                        <span className="w-2.5 h-2.5 rounded-full border border-gray-500 inline-block" />
+                                      <span className="text-content-muted flex items-center gap-1">
+                                        <span className="w-2.5 h-2.5 rounded-full border border-divider inline-block" />
                                         <span>{completedSubtasks}/{totalSubtasks}</span>
                                       </span>
                                     )}
@@ -937,8 +938,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                               {/* Right: Project folder tag & Assignee visual */}
                               <div className="flex items-center gap-4 flex-shrink-0">
                                 {project && (
-                                  <div className="flex items-center gap-1.5 text-xs text-gray-400 font-mono">
-                                    <FolderKanban className="w-3.5 h-3.5 text-gray-500" />
+                                  <div className="flex items-center gap-1.5 text-xs text-content-secondary font-mono">
+                                    <FolderKanban className="w-3.5 h-3.5 text-content-muted" />
                                     <span>{project.name}</span>
                                   </div>
                                 )}
@@ -962,22 +963,22 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
         {/* 2-Column Slide-Over Inspector Drawer */}
         {selectedIssue && (
-          <div className="absolute inset-y-0 right-0 w-full max-w-4xl bg-surface-100 border-l border-white/15 shadow-2xl z-30 flex flex-col animate-slide-up text-sm">
-            <div className="h-14 border-b border-white/10 px-6 flex items-center justify-between bg-surface-200/80">
-              <div className="flex items-center gap-3 font-mono text-sm text-gray-400">
-                <span className="text-brand-400 font-bold">{selectedIssue.identifier}</span>
+          <div className="absolute inset-y-0 right-0 w-full max-w-4xl bg-surface-raised border-l border-divider shadow-2xl z-30 flex flex-col animate-slide-up text-sm">
+            <div className="h-14 border-b border-divider px-6 flex items-center justify-between bg-surface/80">
+              <div className="flex items-center gap-3 font-mono text-sm text-content-secondary">
+                <span className="text-link font-bold">{selectedIssue.identifier}</span>
                 <span>/</span>
                 <span>Task Details & Execution Pipeline</span>
               </div>
               <button
                 onClick={() => setSelectedIssueId(null)}
-                className="text-gray-400 hover:text-white p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                className="text-content-secondary hover:text-content p-1.5 rounded-lg hover:bg-surface-high transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-white/10">
+            <div className="flex-1 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-divider">
               {/* Left Content */}
               <div className="flex-1 overflow-y-auto p-7 space-y-7">
                 <div>
@@ -985,26 +986,26 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     type="text"
                     value={selectedIssue.title}
                     onChange={(e) => updateIssue(selectedIssue.id, { title: e.target.value })}
-                    className="w-full select-text cursor-text bg-transparent text-xl font-bold text-white focus:outline-none focus:ring-1 focus:ring-brand-500 rounded p-1.5"
+                    className="w-full select-text cursor-text bg-transparent text-xl font-bold text-content focus:outline-none focus:ring-1 focus:ring-focus rounded p-1.5"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
+                  <label className="text-xs font-semibold text-content-secondary uppercase tracking-wider block">
                     Description & Specifications
                   </label>
                   <textarea
                     rows={5}
                     value={selectedIssue.description}
                     onChange={(e) => updateIssue(selectedIssue.id, { description: e.target.value })}
-                    className="w-full select-text cursor-text bg-surface-200 border border-white/10 rounded-xl p-4 text-sm text-gray-200 font-mono leading-relaxed focus:outline-none focus:border-brand-500"
+                    className="w-full select-text cursor-text bg-surface border border-control rounded-xl p-4 text-sm text-content font-mono leading-relaxed focus:outline-none focus:border-control"
                   />
                 </div>
 
                 {/* Subtasks */}
                 <div className="space-y-3.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-gray-400 uppercase tracking-wider block">
+                    <label className="text-xs font-semibold text-content-secondary uppercase tracking-wider block">
                       Subtasks Checklist ({selectedIssue.subtasks.filter(s => s.completed).length}/{selectedIssue.subtasks.length})
                     </label>
                   </div>
@@ -1014,15 +1015,15 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       <div
                         key={st.id}
                         onClick={() => handleToggleSubtask(selectedIssue.id, st.id)}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-surface-200/60 border border-white/5 hover:border-white/15 cursor-pointer transition-colors"
+                        className="flex items-center gap-3 p-3 rounded-xl bg-surface/60 border border-divider hover:border-divider cursor-pointer transition-colors"
                       >
                         <input
                           type="checkbox"
                           checked={st.completed}
                           onChange={() => {}}
-                          className="rounded bg-surface-100 border-white/20 text-brand-500 focus:ring-0"
+                          className="rounded bg-surface-raised border-control text-link focus:ring-0"
                         />
-                        <span className={`text-sm flex-1 ${st.completed ? 'line-through text-gray-500' : 'text-gray-200'}`}>
+                        <span className={`text-sm flex-1 ${st.completed ? 'line-through text-content-muted' : 'text-content'}`}>
                           {st.title}
                         </span>
                       </div>
@@ -1035,12 +1036,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       value={newSubtaskTitle}
                       onChange={(e) => setNewSubtaskTitle(e.target.value)}
                       placeholder="Add a new subtask..."
-                      className="flex-1 select-text cursor-text bg-surface-200 border border-white/10 rounded-xl px-4 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                      className="flex-1 select-text cursor-text bg-surface border border-control rounded-xl px-4 py-2 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control"
                     />
                     <button
                       type="submit"
                       disabled={!newSubtaskTitle.trim()}
-                      className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 disabled:opacity-40 text-xs font-semibold text-white transition-colors"
+                      className="px-3.5 py-2 rounded-xl bg-surface-raised hover:bg-surface-high disabled:opacity-40 text-xs font-semibold text-content transition-colors"
                     >
                       Add
                     </button>
@@ -1048,24 +1049,24 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 </div>
 
                 {/* Comments & Activity Stream */}
-                <div className="space-y-4 pt-4 border-t border-white/10">
-                  <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wider">
+                <div className="space-y-4 pt-4 border-t border-divider">
+                  <h4 className="text-xs font-semibold text-content-secondary uppercase tracking-wider">
                     Agent Activity & Discussion Stream
                   </h4>
 
                   <div className="space-y-3">
                     {selectedIssue.comments.map(c => (
-                      <div key={c.id} className="p-4 rounded-xl bg-surface-200/70 border border-white/5 space-y-2">
+                      <div key={c.id} className="p-4 rounded-xl bg-surface/70 border border-divider space-y-2">
                         <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-white flex items-center gap-2">
-                            {c.authorType === 'agent' && <Bot className="w-3.5 h-3.5 text-cyan-400" />}
+                          <span className="font-bold text-content flex items-center gap-2">
+                            {c.authorType === 'agent' && <Bot className="w-3.5 h-3.5 text-status-info" />}
                             <span>{c.authorName}</span>
                           </span>
-                          <span className="text-gray-500 font-mono">
+                          <span className="text-content-muted font-mono">
                             {new Date(c.createdAt).toLocaleTimeString()}
                           </span>
                         </div>
-                        <p className="text-xs text-gray-300 leading-relaxed font-mono whitespace-pre-wrap">
+                        <p className="text-xs text-content-secondary leading-relaxed font-mono whitespace-pre-wrap">
                           {c.content}
                         </p>
                       </div>
@@ -1078,12 +1079,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       value={newCommentContent}
                       onChange={(e) => setNewCommentContent(e.target.value)}
                       placeholder="Leave a comment or instruction for the agent..."
-                      className="flex-1 select-text cursor-text bg-surface-200 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500"
+                      className="flex-1 select-text cursor-text bg-surface border border-control rounded-xl px-4 py-2.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control"
                     />
                     <button
                       type="submit"
                       disabled={!newCommentContent.trim()}
-                      className="px-4 py-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-40 text-xs font-semibold text-on-accent transition-colors flex items-center gap-1.5"
+                      className="px-4 py-2.5 rounded-xl bg-action hover:bg-action-hover disabled:opacity-40 text-xs font-semibold text-on-action transition-colors flex items-center gap-1.5"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>Post</span>
@@ -1093,12 +1094,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               </div>
 
               {/* Right Sidebar Metadata */}
-              <div className="w-full md:w-80 bg-surface-200/40 p-6 space-y-6 flex-shrink-0 text-xs">
+              <div className="w-full md:w-80 bg-surface/40 p-6 space-y-6 flex-shrink-0 text-xs">
                 {/* Orchestrator build: the Orchestrator picks an agent for each task. */}
                 {canRunBuilds && selectedIssue.status !== 'done' && !hasActiveBuild(selectedIssue) && (
                   <button
                     onClick={() => setPendingBuildIssueId(selectedIssue.id)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-bold text-sm shadow-glow-brand transition-all"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-action hover:bg-action-hover text-on-action font-bold text-sm shadow-glow-brand transition-all"
                   >
                     <Sparkles className="w-4 h-4" />
                     <span>Build with Orchestrator</span>
@@ -1106,16 +1107,16 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 )}
 
                 {issueBuilds[selectedIssue.id] && (
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-surface-100 px-3.5 py-2.5">
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-divider bg-surface-raised px-3.5 py-2.5">
                     <BuildChip build={issueBuilds[selectedIssue.id]} />
-                    <button
+                    {visibleTabs.includes('live_build_room') && <button
                       type="button"
                       onClick={() => openBuildRoom(selectedIssue)}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-medium text-brand-300 hover:text-brand-200"
+                      className="inline-flex items-center gap-1.5 text-[11px] font-medium text-link hover:text-link-hover"
                     >
                       <Radio className="h-3.5 w-3.5" />
                       Open Live Build Room
-                    </button>
+                    </button>}
                   </div>
                 )}
 
@@ -1123,11 +1124,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
                 {/* Status Picker */}
                 <div className="space-y-1.5">
-                  <label className="text-gray-400 font-medium">Status</label>
+                  <label className="text-content-secondary font-medium">Status</label>
                   <select
                     value={selectedIssue.status}
                     onChange={(e) => requestIssueStatusChange(selectedIssue, e.target.value as IssueStatus)}
-                    className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500 font-medium"
+                    className="w-full bg-surface-raised border border-control rounded-xl px-3.5 py-2 text-content focus:outline-none focus:border-control font-medium"
                   >
                     <option value="backlog">Backlog</option>
                     <option value="todo">Todo</option>
@@ -1140,11 +1141,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
                 {/* Priority */}
                 <div className="space-y-1.5">
-                  <label className="text-gray-400 font-medium">Priority</label>
+                  <label className="text-content-secondary font-medium">Priority</label>
                   <select
                     value={selectedIssue.priority}
                     onChange={(e) => updateIssue(selectedIssue.id, { priority: e.target.value as IssuePriority })}
-                    className="w-full bg-surface-100 border border-white/10 rounded-xl px-3.5 py-2 text-white focus:outline-none focus:border-brand-500 font-medium"
+                    className="w-full bg-surface-raised border border-control rounded-xl px-3.5 py-2 text-content focus:outline-none focus:border-control font-medium"
                   >
                     <option value="urgent">Urgent</option>
                     <option value="high">High</option>
@@ -1155,28 +1156,28 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-gray-400 font-medium">Assignee</label>
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-surface-100 px-3.5 py-2">
-                    <span className="truncate text-gray-200">{selectedIssue.assignedHuman || 'Unassigned'}</span>
+                  <label className="text-content-secondary font-medium">Assignee</label>
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-divider bg-surface-raised px-3.5 py-2">
+                    <span className="truncate text-content">{selectedIssue.assignedHuman || 'Unassigned'}</span>
                     {canManageIssues && identity && (
                       selectedIssue.assignedHuman === identity.login ? (
-                        <button type="button" onClick={() => updateIssue(selectedIssue.id, { assignedHuman: '' })} className="shrink-0 text-[11px] font-medium text-gray-400 hover:text-white">Unassign</button>
+                        <button type="button" onClick={() => updateIssue(selectedIssue.id, { assignedHuman: '' })} className="shrink-0 text-[11px] font-medium text-content-secondary hover:text-content">Unassign</button>
                       ) : (
-                        <button type="button" onClick={() => updateIssue(selectedIssue.id, { assignedHuman: identity.login })} className="shrink-0 text-[11px] font-medium text-brand-300 hover:text-brand-200">Assign to me</button>
+                        <button type="button" onClick={() => updateIssue(selectedIssue.id, { assignedHuman: identity.login })} className="shrink-0 text-[11px] font-medium text-link hover:text-link-hover">Assign to me</button>
                       )
                     )}
                   </div>
                 </div>
-                <div className="border-t border-white/5 pt-4 text-xs text-gray-500">
+                <div className="border-t border-divider pt-4 text-xs text-content-muted">
                   <span className="block text-[11px] mb-1">Project</span>
-                  <span className="text-gray-300">{projects.find(project => project.id === selectedIssue.projectId)?.name ?? selectedIssue.projectId}</span>
+                  <span className="text-content-secondary">{projects.find(project => project.id === selectedIssue.projectId)?.name ?? selectedIssue.projectId}</span>
                 </div>
 
                 {/* Git branch info */}
                 {selectedIssue.branchName && (
-                  <div className="p-3.5 rounded-xl bg-surface-100 border border-white/5 space-y-1 font-mono">
-                    <div className="text-gray-500 text-[10px] uppercase">Active Branch</div>
-                    <div className="text-cyan-300 flex items-center gap-1.5 truncate">
+                  <div className="p-3.5 rounded-xl bg-surface-raised border border-divider space-y-1 font-mono">
+                    <div className="text-content-muted text-[10px] uppercase">Active Branch</div>
+                    <div className="text-status-info flex items-center gap-1.5 truncate">
                       <GitBranch className="w-3.5 h-3.5" />
                       <span className="truncate">{selectedIssue.branchName}</span>
                     </div>
@@ -1185,7 +1186,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                         href={selectedIssue.prUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-brand-400 hover:underline pt-1 text-[11px]"
+                        className="inline-flex items-center gap-1 text-link hover:underline pt-1 text-[11px]"
                       >
                         <span>Open GitHub PR</span>
                         <ExternalLink className="w-3 h-3" />
@@ -1202,25 +1203,25 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
       {pendingBuildIssue && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPendingBuildIssueId(null)} />
-          <div role="dialog" aria-modal="true" aria-labelledby="confirm-build-title" className="relative w-full max-w-md rounded-2xl border border-white/10 bg-surface-100 p-6 shadow-2xl">
+          <div role="dialog" aria-modal="true" aria-labelledby="confirm-build-title" className="relative w-full max-w-md rounded-2xl border border-divider bg-surface-raised p-6 shadow-2xl">
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-brand-500/15 text-brand-300">
+              <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-selected text-selected-content">
                 <Sparkles className="h-5 w-5" />
               </div>
               <div className="space-y-1.5">
-                <h2 id="confirm-build-title" className="text-base font-semibold text-white">
+                <h2 id="confirm-build-title" className="text-base font-semibold text-content">
                   Build task {pendingBuildIssue.identifier} with the Orchestrator?
                 </h2>
-                <p className="text-sm leading-relaxed text-gray-400">
-                  Alpha opens a project chat for this task and plans the work, choosing an agent for each task by role. Nothing changes in the code until you review the plan and choose <span className="font-semibold text-gray-200">Start planned work</span>.
+                <p className="text-sm leading-relaxed text-content-secondary">
+                  Alpha opens a project chat for this task and plans the work, choosing an agent for each task by role. Nothing changes in the code until you review the plan and choose <span className="font-semibold text-content">Start planned work</span>.
                 </p>
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={() => setPendingBuildIssueId(null)} className="rounded-lg border border-white/10 px-3.5 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white">
+              <button type="button" onClick={() => setPendingBuildIssueId(null)} className="rounded-lg border border-divider px-3.5 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content">
                 Cancel
               </button>
-              <button type="button" onClick={confirmIssueBuild} className="rounded-lg bg-brand-500 px-3.5 py-2 text-sm font-semibold text-on-accent transition-colors hover:bg-brand-400">
+              <button type="button" onClick={confirmIssueBuild} className="rounded-lg bg-action px-3.5 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover">
                 Plan the build
               </button>
             </div>
@@ -1238,18 +1239,18 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             role="dialog"
             aria-modal="true"
             aria-labelledby="confirm-done-title"
-            className="relative w-full max-w-md rounded-2xl border border-white/10 bg-surface-100 p-6 shadow-2xl"
+            className="relative w-full max-w-md rounded-2xl border border-divider bg-surface-raised p-6 shadow-2xl"
           >
             <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-300">
+              <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-status-success-subtle text-status-success">
                 <CheckCircle2 className="h-5 w-5" />
               </div>
               <div className="space-y-1.5">
-                <h2 id="confirm-done-title" className="text-base font-semibold text-white">
+                <h2 id="confirm-done-title" className="text-base font-semibold text-content">
                   Mark task as done?
                 </h2>
-                <p className="text-sm leading-relaxed text-gray-400">
-                  This skips the normal review checkpoint for <span className="font-semibold text-gray-200">{pendingDoneIssue.identifier}</span>. Continue only if the work has already been reviewed.
+                <p className="text-sm leading-relaxed text-content-secondary">
+                  This skips the normal review checkpoint for <span className="font-semibold text-content">{pendingDoneIssue.identifier}</span>. Continue only if the work has already been reviewed.
                 </p>
               </div>
             </div>
@@ -1257,14 +1258,14 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <button
                 type="button"
                 onClick={() => setPendingDoneIssueId(null)}
-                className="rounded-lg border border-white/10 px-3.5 py-2 text-sm font-medium text-gray-300 transition-colors hover:bg-white/5 hover:text-white"
+                className="rounded-lg border border-divider px-3.5 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content"
               >
                 Keep in {pendingDoneIssue.status === 'review' ? 'Review' : 'current status'}
               </button>
               <button
                 type="button"
                 onClick={confirmDoneStatusChange}
-                className="rounded-lg bg-emerald-500 px-3.5 py-2 text-sm font-semibold text-gray-950 transition-colors hover:bg-emerald-400"
+                className="rounded-lg bg-emerald-500 px-3.5 py-2 text-sm font-semibold text-content-muted transition-colors hover:bg-emerald-400"
               >
                 Mark done
               </button>

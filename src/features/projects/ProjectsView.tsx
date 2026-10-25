@@ -1,18 +1,18 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
-import { 
-  Plus, 
+import {
+  Plus,
   Folder,
-  Search, 
-  Filter, 
-  ArrowDown, 
-  ArrowUp, 
-  Check, 
-  Edit3, 
-  Trash2, 
-  GitBranch, 
-  Sparkles, 
-  Flame, 
+  Search,
+  Filter,
+  ArrowDown,
+  ArrowUp,
+  Check,
+  Edit3,
+  Trash2,
+  GitBranch,
+  Sparkles,
+  Flame,
   Minus,
   Workflow,
   ChevronLeft,
@@ -41,11 +41,11 @@ interface ProjectsViewProps {
 }
 
 export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) => {
-  const { 
-    projects, 
-    issues, 
-    updateProject, 
-    deleteProject, 
+  const {
+    projects,
+    issues,
+    updateProject,
+    deleteProject,
     showToast,
 
 
@@ -61,10 +61,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const canProvisionRepositories = can('provision_repositories');
   const canManageIssues = can('manage_issues');
   const showAi = aiFeaturesEnabled(role);
-  
+
   // Selected Project for dedicated Workspace Kanban View
   const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string | null>('projects.selectedProject', null);
-  
+
   // Modals
   const [createModalOpen, setCreateModalOpen] = useState<boolean>(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -188,10 +188,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const renderProgressRing = (done: number, total: number) => {
     if (total === 0) {
       return (
-        <span className="text-gray-500 font-mono text-sm">—</span>
+        <span className="text-content-muted font-mono text-sm">—</span>
       );
     }
-    
+
     const percentage = Math.min(100, Math.round((done / total) * 100));
     const radius = 6;
     const circumference = 2 * Math.PI * radius;
@@ -220,7 +220,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             fill="transparent"
           />
         </svg>
-        <span className="text-xs text-gray-300 font-mono">
+        <span className="text-xs text-content-secondary font-mono">
           {done}/{total}
         </span>
       </div>
@@ -236,41 +236,41 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     const progressPercent = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
 
     return (
-      <div className="h-full flex flex-col overflow-hidden bg-shell text-gray-300 select-none font-sans">
-        
+      <div className="h-full flex flex-col overflow-hidden bg-shell text-content-secondary select-none font-sans">
+
         {/* ================= WORKSPACE TOP BREADCRUMB & ACTION BAR ================= */}
-        <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] bg-shell px-4 py-3 sm:px-5">
-          
+        <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-divider bg-shell px-4 py-3 sm:px-5">
+
           {/* Left: Breadcrumbs navigation */}
           <div className="flex items-center gap-3 min-w-0">
             <button
               onClick={() => setSelectedProjectId(null)}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-1 text-xs text-content-secondary hover:text-content transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
               <span>Projects</span>
             </button>
 
-            <span className="text-gray-600 font-mono">/</span>
+            <span className="text-content-muted font-mono">/</span>
 
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-base flex-shrink-0">{selectedProject.icon || '⚡'}</span>
-              <h1 className="truncate text-base font-semibold tracking-tight text-white">
+              <h1 className="truncate text-base font-semibold tracking-tight text-content">
                 {selectedProject.name}
               </h1>
-              <span className="text-xs text-gray-500 font-mono">#{selectedProject.key}</span>
+              <span className="text-xs text-content-muted font-mono">#{selectedProject.key}</span>
             </div>
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            <span className="text-xs tabular-nums text-emerald-400" aria-label="Project progress">
+            <span className="text-xs tabular-nums text-status-success" aria-label="Project progress">
               {doneCount}/{totalCount} done ({progressPercent}%)
             </span>
             {/* Edit Project */}
             {canEditProjects && (
               <button
                 onClick={() => setEditingProject(selectedProject)}
-                className="p-1.5 rounded-xl bg-surface-raised hover:bg-surface-high border border-white/5 text-gray-400 hover:text-white transition-colors"
+                className="p-1.5 rounded-xl bg-surface-raised hover:bg-surface-high border border-divider text-content-secondary hover:text-content transition-colors"
                 title="Edit Project Details"
               >
                 <Edit3 className="w-4 h-4" />
@@ -290,34 +290,34 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
           onManageRepositories={canEditProjects ? () => setResourcesModalOpen(true) : undefined}
           overview={(
             <div className="flex h-full min-h-0 flex-col">
-              <details className="group shrink-0 border-b border-white/[0.06] text-xs">
-                <summary className="cursor-pointer px-5 py-3 text-gray-400 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
+              <details className="group shrink-0 border-b border-divider text-xs">
+                <summary className="cursor-pointer px-5 py-3 text-content-secondary transition-colors hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
                   <span className="ml-1 font-medium">Project details</span>
-                  <span className="ml-3 capitalize text-gray-500">{selectedProject.status.replace('_', ' ')}</span>
-                  <span className="ml-3 text-gray-500">{projectRepos.length} repositories</span>
+                  <span className="ml-3 capitalize text-content-muted">{selectedProject.status.replace('_', ' ')}</span>
+                  <span className="ml-3 text-content-muted">{projectRepos.length} repositories</span>
                 </summary>
                 <div className="grid max-h-[45vh] gap-5 overflow-y-auto px-5 pb-5 md:grid-cols-2 xl:grid-cols-3">
                   <section className="space-y-3">
-                    <h2 className="font-medium text-gray-300">Properties</h2>
+                    <h2 className="font-medium text-content-secondary">Properties</h2>
                     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-3">
-                      <dt className="text-gray-500">Status</dt>
+                      <dt className="text-content-muted">Status</dt>
                       <dd className="capitalize">{selectedProject.status.replace('_', ' ')}</dd>
-                      <dt className="text-gray-500">Priority</dt>
+                      <dt className="text-content-muted">Priority</dt>
                       <dd className="capitalize">{selectedProject.priority || 'Medium'}</dd>
-                      <dt className="text-gray-500">Build lead</dt>
+                      <dt className="text-content-muted">Build lead</dt>
                       <dd className="flex min-w-0 items-center gap-1.5">
-                        <Workflow className="h-3.5 w-3.5 shrink-0 text-violet-300" aria-hidden />
+                        <Workflow className="h-3.5 w-3.5 shrink-0 text-link" aria-hidden />
                         <span>Orchestrator</span>
                       </dd>
-                      <dt className="text-gray-500">Target date</dt>
+                      <dt className="text-content-muted">Target date</dt>
                       <dd>{selectedProject.targetDate || 'No deadline'}</dd>
                     </dl>
                     {showAi && boundAgents.length > 0 && (
                       <div className="space-y-2 pt-2">
-                        <h3 className="text-gray-400">Active agents ({boundAgents.length})</h3>
+                        <h3 className="text-content-secondary">Active agents ({boundAgents.length})</h3>
                         <div className="flex flex-wrap gap-2">
                           {boundAgents.map(agent => (
-                            <div key={agent.id} className="flex min-w-0 items-center gap-2 rounded-lg border border-white/5 px-2 py-1.5" title={agent.role}>
+                            <div key={agent.id} className="flex min-w-0 items-center gap-2 rounded-lg border border-divider px-2 py-1.5" title={agent.role}>
                               <img src={agent.avatar} alt="" className="h-5 w-5 rounded-full object-cover" />
                               <span className="truncate">{agent.name}</span>
                             </div>
@@ -327,35 +327,35 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                     )}
                   </section>
                   <section className="space-y-2">
-                    {showAi && <section aria-label="Orchestrated build workflow" className="space-y-2 rounded-xl border border-violet-400/15 bg-violet-500/[0.045] p-3">
+                    {showAi && <section aria-label="Orchestrated build workflow" className="space-y-2 rounded-xl border border-divider bg-selected p-3">
                       <div className="flex items-center gap-2">
-                        <Workflow className="h-3.5 w-3.5 text-violet-300" aria-hidden />
-                        <h2 className="font-semibold text-gray-200">Orchestrator builds</h2>
-                        {orchestrationSettings?.available && <span className="ml-auto rounded-full border border-emerald-400/20 bg-emerald-400/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">ALWAYS ON</span>}
+                        <Workflow className="h-3.5 w-3.5 text-link" aria-hidden />
+                        <h2 className="font-semibold text-content">Orchestrator builds</h2>
+                        {orchestrationSettings?.available && <span className="ml-auto rounded-full border border-status-success-border bg-status-success-subtle px-1.5 py-0.5 text-[9px] font-semibold text-status-success">ALWAYS ON</span>}
                       </div>
-                      <p className="text-[11px] leading-relaxed text-gray-400">
+                      <p className="text-[11px] leading-relaxed text-content-secondary">
                         The Orchestrator leads every desktop product build. It shows its plan and specialist assignments first, then coordinates the selected codebases together. You review the finished change before it is sent to GitHub.
                       </p>
-                      <p className="text-[10px] leading-relaxed text-gray-500">
+                      <p className="text-[10px] leading-relaxed text-content-muted">
                         {orchestrationSettingsLoading ? 'Checking this desktop…'
                           : orchestrationSettings?.available ? 'Always enabled. One product plan can cover the frontend, backend, and other selected codebases.'
                             : orchestrationSettings?.reason ?? 'The Orchestrator is unavailable in this environment.'}
                       </p>
                     </section>}
-                    <h2 className="flex items-center gap-1.5 font-medium text-gray-300">
-                      <Sparkles className="h-3.5 w-3.5 text-brand-400" aria-hidden />Ground Rules &amp; Context
+                    <h2 className="flex items-center gap-1.5 font-medium text-content-secondary">
+                      <Sparkles className="h-3.5 w-3.5 text-link" aria-hidden />Ground Rules &amp; Context
                     </h2>
-                    <p className="select-text whitespace-pre-wrap break-words rounded-xl border border-white/5 bg-well p-3 font-mono text-[11px] leading-relaxed">
+                    <p className="select-text whitespace-pre-wrap break-words rounded-xl border border-divider bg-well p-3 font-mono text-[11px] leading-relaxed">
                       {selectedProject.description || 'No specific ground rules configured.'}
                     </p>
                   </section>
                   <section className="space-y-2 md:col-span-2 xl:col-span-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h2 className="flex items-center gap-1.5 font-medium text-gray-300">
-                        <GitBranch className="h-3.5 w-3.5 text-cyan-400" aria-hidden />Connected Repositories
+                      <h2 className="flex items-center gap-1.5 font-medium text-content-secondary">
+                        <GitBranch className="h-3.5 w-3.5 text-status-info" aria-hidden />Connected Repositories
                       </h2>
                       {canEditProjects && (
-                        <button type="button" onClick={() => setResourcesModalOpen(true)} className="inline-flex items-center gap-1 text-gray-400 hover:text-white">
+                        <button type="button" onClick={() => setResourcesModalOpen(true)} className="inline-flex items-center gap-1 text-content-secondary hover:text-content">
                           <Plus className="h-3 w-3" aria-hidden />
                           {canProvisionRepositories ? 'Add repository' : 'Attach existing'}
                         </button>
@@ -445,18 +445,18 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   these three, so this is where they stay editable. */}
               <div className="flex items-start gap-3">
                 <div className="space-y-1">
-                  <label className="block text-[11px] font-medium text-gray-400">Icon</label>
+                  <label className="block text-[11px] font-medium text-content-secondary">Icon</label>
                   <div className="relative group">
-                    <div className="w-12 h-[38px] rounded-xl bg-surface-raised border border-white/10 flex items-center justify-center text-xl cursor-pointer hover:border-brand-500/50 transition-colors">
+                    <div className="w-12 h-[38px] rounded-xl bg-surface-raised border border-divider flex items-center justify-center text-xl cursor-pointer hover:border-divider transition-colors">
                       {editingProject.icon || '⚡'}
                     </div>
-                    <div className="absolute top-full left-0 mt-1 p-2 bg-surface-100 border border-white/15 rounded-xl shadow-2xl z-30 hidden group-hover:grid grid-cols-4 gap-1.5 w-40">
+                    <div className="absolute top-full left-0 mt-1 p-2 bg-surface-raised border border-divider rounded-xl shadow-2xl z-30 hidden group-hover:grid grid-cols-4 gap-1.5 w-40">
                       {['⚡', '🎨', '🚀', '🛡️', '💳', '🧠', '📦', '🌐', '⚙️', '🎯', '📱', '🔒'].map(emoji => (
                         <button
                           key={emoji}
                           type="button"
                           onClick={() => setEditingProject({ ...editingProject, icon: emoji })}
-                          className="w-8 h-8 rounded-lg hover:bg-white/10 flex items-center justify-center text-lg transition-colors"
+                          className="w-8 h-8 rounded-lg hover:bg-surface-high flex items-center justify-center text-lg transition-colors"
                         >
                           {emoji}
                         </button>
@@ -466,23 +466,23 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 <div className="flex-1">
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Project Name</label>
+                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Project Name</label>
                   <input
                     type="text"
                     value={editingProject.name}
                     onChange={(e) => setEditingProject({ ...editingProject, name: e.target.value })}
-                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content focus:outline-none focus:border-control"
                   />
                 </div>
 
                 <div className="w-24">
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Key</label>
+                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Key</label>
                   <input
                     type="text"
                     maxLength={5}
                     value={editingProject.key}
                     onChange={(e) => setEditingProject({ ...editingProject, key: e.target.value.toUpperCase() })}
-                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white font-mono uppercase text-center focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content font-mono uppercase text-center focus:outline-none focus:border-control"
                   />
                 </div>
               </div>
@@ -490,7 +490,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               {/* The daemon enforces UNIQUE on key, and the write fails silently
                   from the user's side. Catch the clash before they hit Save. */}
               {keyCollision && (
-                <p className="text-[11px] text-amber-300">
+                <p className="text-[11px] text-status-warning">
                   Key <span className="font-mono">{editingProject.key.toUpperCase()}</span> is already
                   used by another project. Saving will fail — try{' '}
                   <span className="font-mono">
@@ -500,7 +500,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               )}
 
               <div>
-                <label className="block text-[11px] font-medium text-gray-400 mb-1">
+                <label className="block text-[11px] font-medium text-content-secondary mb-1">
                   Goal & Ground Rules (Agent Context)
                 </label>
                 <textarea
@@ -508,18 +508,18 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   maxLength={8000}
                   value={editingProject.description ?? ''}
                   onChange={(e) => setEditingProject({ ...editingProject, description: e.target.value })}
-                  className="w-full bg-surface-raised border border-white/10 rounded-xl p-3 text-white focus:outline-none focus:border-brand-500 font-mono text-[11px]"
+                  className="w-full bg-surface-raised border border-control rounded-xl p-3 text-content focus:outline-none focus:border-control font-mono text-[11px]"
                 />
-                <p className="mt-1 text-right text-[10px] text-gray-500">{(editingProject.description ?? '').length.toLocaleString()} / 8,000 characters</p>
+                <p className="mt-1 text-right text-[10px] text-content-muted">{(editingProject.description ?? '').length.toLocaleString()} / 8,000 characters</p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Status</label>
+                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Status</label>
                   <select
                     value={editingProject.status}
                     onChange={(e) => setEditingProject({ ...editingProject, status: e.target.value as ProjectStatus })}
-                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content focus:outline-none focus:border-control"
                   >
                     <option value="planned">Planned</option>
                     <option value="in_progress">In progress</option>
@@ -530,11 +530,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Priority</label>
+                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Priority</label>
                   <select
                     value={editingProject.priority || 'none'}
                     onChange={(e) => setEditingProject({ ...editingProject, priority: e.target.value as ProjectPriority })}
-                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content focus:outline-none focus:border-control"
                   >
                     <option value="none">No priority</option>
                     <option value="urgent">Urgent</option>
@@ -545,31 +545,31 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
               </div>
 
-              <div className="flex items-start gap-3 rounded-xl border border-violet-300/15 bg-violet-300/[0.045] p-3"><Workflow className="mt-0.5 h-4 w-4 shrink-0 text-violet-200" /><div><div className="text-xs font-medium text-violet-100">Orchestrator leads every product build</div><p className="mt-1 text-[11px] leading-5 text-gray-400">It prepares the work plan, chooses specialists, and shows the assignments before they start.</p></div></div>
+              <div className="flex items-start gap-3 rounded-xl border border-divider bg-selected p-3"><Workflow className="mt-0.5 h-4 w-4 shrink-0 text-link" /><div><div className="text-xs font-medium text-link">Orchestrator leads every product build</div><p className="mt-1 text-[11px] leading-5 text-content-secondary">It prepares the work plan, chooses specialists, and shows the assignments before they start.</p></div></div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Start Date</label>
+                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Start Date</label>
                   <input
                     type="date"
                     value={editingProject.startDate || ''}
                     onChange={(e) => setEditingProject({ ...editingProject, startDate: e.target.value })}
-                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content font-mono focus:outline-none focus:border-control"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-gray-400 mb-1">Target Date</label>
+                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Target Date</label>
                   <input
                     type="date"
                     value={editingProject.targetDate || ''}
                     onChange={(e) => setEditingProject({ ...editingProject, targetDate: e.target.value })}
-                    className="w-full bg-surface-raised border border-white/10 rounded-xl px-3 py-2 text-white font-mono focus:outline-none focus:border-brand-500"
+                    className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content font-mono focus:outline-none focus:border-control"
                   />
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-4 border-t border-white/10">
+              <div className="flex items-center justify-between pt-4 border-t border-divider">
                 <button
                   type="button"
                   disabled={savingProject}
@@ -578,7 +578,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                     setSelectedProjectId(null);
                     setEditingProject(null);
                   }}
-                  className="flex items-center gap-1 text-rose-400 hover:text-rose-300"
+                  className="flex items-center gap-1 text-status-danger hover:text-status-danger"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                   <span>Delete Project</span>
@@ -589,14 +589,14 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                     type="button"
                     onClick={() => setEditingProject(null)}
                     disabled={savingProject}
-                    className="px-3 py-1.5 rounded-xl text-gray-400 hover:text-white"
+                    className="px-3 py-1.5 rounded-xl text-content-secondary hover:text-content"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={savingProject || keyCollision}
-                    className="px-4 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent font-medium"
+                    className="px-4 py-1.5 rounded-xl bg-action hover:bg-action-hover text-on-action font-medium"
                   >
                     {savingProject ? 'Saving…' : 'Save'}
                   </button>
@@ -614,24 +614,24 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   // VIEW 2: MAIN PROJECTS TABLE LIST
   // =========================================================================
   return (
-    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-shell p-5 text-gray-300 select-none font-sans lg:p-6">
-      
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-shell p-5 text-content-secondary select-none font-sans lg:p-6">
+
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <Folder className="w-4 h-4 text-gray-400" />
-            <h1 className="text-base font-semibold text-white">Projects</h1>
-            <span className="text-xs tabular-nums text-gray-500">{projects.length}</span>
+            <Folder className="w-4 h-4 text-content-secondary" />
+            <h1 className="text-base font-semibold text-content">Projects</h1>
+            <span className="text-xs tabular-nums text-content-muted">{projects.length}</span>
           </div>
-          <p className="mt-1 text-xs text-gray-500">{showAi ? 'Choose a project, then open a task to prepare an agent run.' : 'Choose a project to view its board and manage tasks.'}</p>
+          <p className="mt-1 text-xs text-content-muted">{showAi ? 'Choose a project, then open a task to prepare an agent run.' : 'Choose a project to view its board and manage tasks.'}</p>
         </div>
 
         {/* + New project button */}
         {canManageProjects && (
           <button
             onClick={() => setCreateModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-brand-500 hover:bg-brand-600 text-xs font-medium text-on-accent transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-action hover:bg-action-hover text-xs font-medium text-on-action transition-colors"
           >
             <Plus className="w-3.5 h-3.5" />
             <span>New project</span>
@@ -644,19 +644,19 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       <div className="flex items-center justify-between gap-4">
         {/* Left: Search input */}
         <div className="relative flex-1 max-w-xs">
-          <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-content-muted absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search projects..."
-            className="w-full bg-surface border border-white/[0.07] rounded-md pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-surface border border-divider rounded-md pl-8 pr-3 py-1.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control transition-colors"
           />
         </div>
 
         {/* Right: Action Buttons (Filter, Created Sort, Table view) */}
         <div className="flex items-center gap-2 relative">
-          
+
           {/* Filter Button */}
           <div className="relative">
             <button
@@ -665,9 +665,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 setSortDropdownOpen(false);
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
-                statusFilter !== 'all' || priorityFilter !== 'all' 
-                  ? 'bg-brand-500/20 text-brand-300 border-brand-500/40' 
-                  : 'bg-transparent hover:bg-white/[0.03] text-gray-400 hover:text-white border-transparent'
+                statusFilter !== 'all' || priorityFilter !== 'all'
+                  ? 'bg-selected text-selected-content border-divider'
+                  : 'bg-transparent hover:bg-surface-high text-content-secondary hover:text-content border-transparent'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -676,9 +676,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
             {/* Filter Dropdown */}
             {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
+              <div className="absolute right-0 mt-1.5 w-52 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-2 text-xs">
                 <div>
-                  <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Status</div>
+                  <div className="text-[10px] font-mono uppercase text-content-secondary px-2 py-1">Status</div>
                   {['all', 'in_progress', 'planned', 'paused', 'completed'].map((st) => (
                     <button
                       key={st}
@@ -687,17 +687,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                         setFilterDropdownOpen(false);
                       }}
                       className={`w-full text-left px-2.5 py-1 rounded-lg capitalize flex items-center justify-between ${
-                        statusFilter === st ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                        statusFilter === st ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content'
                       }`}
                     >
                       <span>{st.replace('_', ' ')}</span>
-                      {statusFilter === st && <Check className="w-3 h-3 text-emerald-400" />}
+                      {statusFilter === st && <Check className="w-3 h-3 text-status-success" />}
                     </button>
                   ))}
                 </div>
 
-                <div className="pt-1 border-t border-white/5">
-                  <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Priority</div>
+                <div className="pt-1 border-t border-divider">
+                  <div className="text-[10px] font-mono uppercase text-content-secondary px-2 py-1">Priority</div>
                   {['all', 'urgent', 'high', 'medium', 'low', 'none'].map((pr) => (
                     <button
                       key={pr}
@@ -706,11 +706,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                         setFilterDropdownOpen(false);
                       }}
                       className={`w-full text-left px-2.5 py-1 rounded-lg capitalize flex items-center justify-between ${
-                        priorityFilter === pr ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                        priorityFilter === pr ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content'
                       }`}
                     >
                       <span>{pr === 'all' ? 'All priorities' : pr}</span>
-                      {priorityFilter === pr && <Check className="w-3 h-3 text-emerald-400" />}
+                      {priorityFilter === pr && <Check className="w-3 h-3 text-status-success" />}
                     </button>
                   ))}
                 </div>
@@ -725,7 +725,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 setSortDropdownOpen(prev => !prev);
                 setFilterDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-gray-400 hover:text-white hover:bg-white/[0.03] transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium text-content-secondary hover:text-content hover:bg-surface-high transition-colors"
             >
               {sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
               <span>{sortBy === 'name' ? 'Name' : sortBy === 'progress' ? 'Progress' : sortBy === 'targetDate' ? 'Target date' : 'Created'}</span>
@@ -733,7 +733,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
             {/* Sort Dropdown */}
             {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
+              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-1 text-xs">
                 {(['createdAt', 'name', 'progress', 'targetDate'] as const).map((field) => (
                   <button
                     key={field}
@@ -742,23 +742,23 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                       setSortDropdownOpen(false);
                     }}
                     className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between ${
-                      sortBy === field ? 'bg-white/10 text-white font-semibold' : 'text-gray-300 hover:text-white hover:bg-white/5'
+                      sortBy === field ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content hover:bg-surface-high'
                     }`}
                   >
                     <span className="capitalize">{field === 'createdAt' ? 'Created time' : field === 'targetDate' ? 'Target date' : field}</span>
-                    {sortBy === field && <Check className="w-3 h-3 text-emerald-400" />}
+                    {sortBy === field && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
-                <div className="pt-1 border-t border-white/5">
+                <div className="pt-1 border-t border-divider">
                   <button
                     onClick={() => {
                       setSortOrder(prev => (prev === 'asc' ? 'desc' : 'asc'));
                       setSortDropdownOpen(false);
                     }}
-                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 flex items-center justify-between"
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-content-secondary hover:text-content hover:bg-surface-high flex items-center justify-between"
                   >
                     <span>Direction</span>
-                    <span className="font-mono text-[10px] text-brand-400 uppercase">{sortOrder}</span>
+                    <span className="font-mono text-[10px] text-link uppercase">{sortOrder}</span>
                   </button>
                 </div>
               </div>
@@ -771,16 +771,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
       {/* ================= MINIMALIST PROJECTS TABLE ================= */}
       {filteredProjects.length === 0 ? (
-        <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-white/[0.08] bg-surface/30 px-6 py-12 text-center">
-          <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-500/10 text-brand-300 ring-1 ring-inset ring-brand-400/20">
+        <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-divider bg-surface/30 px-6 py-12 text-center">
+          <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-selected text-selected-content ring-1 ring-inset ring-selected-content/20">
             <Folder className="h-5 w-5" />
           </span>
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-sm font-semibold text-content">
             {projects.length === 0
               ? (canManageProjects ? 'Start with a project' : 'Waiting for a PM to create a project')
               : 'No projects match your filters'}
           </h2>
-          <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-gray-500">
+          <p className="mt-1.5 max-w-sm text-xs leading-relaxed text-content-muted">
             {projects.length === 0
               ? (canManageProjects
                 ? (showAi ? 'Projects keep tasks, agents, and connected resources organized in one place.' : 'Projects keep your tasks and delivery progress organized in one place.')
@@ -791,7 +791,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             canManageProjects ? (
               <button
                 onClick={() => setCreateModalOpen(true)}
-                className="mt-5 flex items-center gap-1.5 rounded-lg bg-brand-500 px-3 py-1.5 text-xs font-semibold text-on-accent transition-colors hover:bg-brand-600"
+                className="mt-5 flex items-center gap-1.5 rounded-lg bg-action px-3 py-1.5 text-xs font-semibold text-on-action transition-colors hover:bg-action-hover"
               >
                 <Plus className="h-3.5 w-3.5" />
                 <span>Create project</span>
@@ -804,7 +804,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 setStatusFilter('all');
                 setPriorityFilter('all');
               }}
-              className="mt-5 rounded-lg border border-white/[0.1] px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-white/[0.05] hover:text-white"
+              className="mt-5 rounded-lg border border-divider px-3 py-1.5 text-xs font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content"
             >
               Clear filters
             </button>
@@ -813,42 +813,42 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       ) : (
         <div className="w-full">
           {/* Table Column Headers */}
-          <div className="grid grid-cols-12 gap-4 border-b border-white/[0.04] px-4 py-2 text-xs font-normal text-gray-500">
+          <div className="grid grid-cols-12 gap-4 border-b border-divider px-4 py-2 text-xs font-normal text-content-muted">
             <div className="col-span-5">Name</div>
             <div className="col-span-2">Status</div>
             <div className="col-span-2">Priority</div>
             <div className="col-span-1 text-left">Progress</div>
             <div className="col-span-2 flex items-center justify-end gap-1 text-right">
               <span>Created</span>
-              <ArrowDown className="h-3 w-3 text-gray-500" />
+              <ArrowDown className="h-3 w-3 text-content-muted" />
             </div>
           </div>
 
           {/* Table Rows */}
-          <div className="divide-y divide-white/[0.02]">
+          <div className="divide-y divide-divider">
             {filteredProjects.map((project) => {
             const prIssues = issues.filter(i => i.projectId === project.id);
             const totalIssues = prIssues.length || project.totalIssues || 0;
             const doneIssues = prIssues.length > 0
-              ? prIssues.filter(i => i.status === 'done').length 
+              ? prIssues.filter(i => i.status === 'done').length
               : (project.completedIssues || 0);
 
               return (
                 <div
                   key={project.id}
                   onClick={() => setSelectedProjectId(project.id)}
-                  className="group grid grid-cols-12 items-center gap-4 px-4 py-3.5 text-xs transition-colors hover:bg-white/[0.02]"
+                  className="group grid grid-cols-12 items-center gap-4 px-4 py-3.5 text-xs transition-colors hover:bg-surface-high"
                 >
                 {/* 1. Name with Emoji / Icon */}
                 <div className="col-span-5 flex items-center gap-3 min-w-0">
                   <span className="text-base flex-shrink-0">{project.icon || '⚡'}</span>
-                  <span className="font-medium text-white truncate group-hover:text-gray-200">
+                  <span className="font-medium text-content truncate group-hover:text-content">
                     {project.name}
                   </span>
                 </div>
 
                 {/* 2. Status Dot */}
-                <div className="col-span-2 flex items-center gap-1.5 text-gray-300 font-mono text-[11px]">
+                <div className="col-span-2 flex items-center gap-1.5 text-content-secondary font-mono text-[11px]">
                   <span className={`w-1.5 h-1.5 rounded-full ${
                     project.status === 'in_progress' ? 'bg-cyan-400' :
                     project.status === 'completed' ? 'bg-emerald-400' :
@@ -860,20 +860,20 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 {/* 3. Priority */}
-                <div className="col-span-2 flex items-center gap-1.5 text-gray-400">
+                <div className="col-span-2 flex items-center gap-1.5 text-content-secondary">
                   {project.priority === 'urgent' ? (
-                    <div className="flex items-center gap-1.5 text-rose-400">
+                    <div className="flex items-center gap-1.5 text-status-danger">
                       <Flame className="w-3.5 h-3.5" />
                       <span>Urgent</span>
                     </div>
                   ) : project.priority === 'high' ? (
-                    <span className="text-amber-400">High</span>
+                    <span className="text-status-warning">High</span>
                   ) : project.priority === 'medium' ? (
-                    <span className="text-blue-400">Medium</span>
+                    <span className="text-status-info">Medium</span>
                   ) : project.priority === 'low' ? (
-                    <span className="text-gray-400">Low</span>
+                    <span className="text-content-secondary">Low</span>
                   ) : (
-                    <div className="flex items-center gap-1.5 text-gray-500">
+                    <div className="flex items-center gap-1.5 text-content-muted">
                       <Minus className="w-3.5 h-3.5" />
                       <span>No priority</span>
                     </div>
@@ -886,7 +886,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 {/* 6. Created */}
-                <div className="col-span-2 text-right text-xs text-gray-500 tabular-nums">
+                <div className="col-span-2 text-right text-xs text-content-muted tabular-nums">
                   {project.createdAt ? new Date(project.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
                 </div>
                 </div>

@@ -188,8 +188,8 @@ export function ClientTicketDetail({
           })}
           {messageCursor && <button onClick={onLoadMore} disabled={historyLoading} className="client-load-messages">{historyLoading ? 'Loading…' : 'Load earlier messages'}</button>}
         </div> : <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <h3 className="text-sm font-medium text-gray-100">About this conversation</h3>
-          <p className="mt-2 text-xs leading-relaxed text-gray-400">The conversation and result review are not available for this request yet. Try again later or contact your project manager.</p>
+          <h3 className="text-sm font-medium text-content">About this conversation</h3>
+          <p className="mt-2 text-xs leading-relaxed text-content-secondary">The conversation and result review are not available for this request yet. Try again later or contact your project manager.</p>
         </div>}
         {showConversationFeed && (canReply ? <form onSubmit={submitReply} className="client-reply-form">
           <label className="sr-only" htmlFor="client-ticket-reply">Message to your project manager</label>
@@ -200,7 +200,7 @@ export function ClientTicketDetail({
             <button type="submit" aria-label="Send reply" disabled={busy || !body.trim()} className="client-send-reply"><Send size={15} /><span>Send</span></button>
           </div>
           <p className="client-reply-note">Only you and your project manager can see this. Enter sends · Shift + Enter starts a new line.</p>
-        </form> : <p className="shrink-0 border-t border-white/[0.07] px-4 py-3 text-center text-xs text-gray-400">{terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.'}</p>)}
+        </form> : <p className="shrink-0 border-t border-divider px-4 py-3 text-center text-xs text-content-secondary">{terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.'}</p>)}
       </section>
 
       <div className={`client-other-panels ${tab === 'conversation' ? 'hidden' : ''}`}>
@@ -208,50 +208,50 @@ export function ClientTicketDetail({
           <h2 className="sr-only">Request details</h2>
           <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-1">
             <InfoCard title="Your request" icon={<FileText size={14} />}>
-              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-300">{ticket.description}</p>
-              {ticket.request?.requestedDeadline && <p className="mt-3 text-xs text-gray-400">Requested date: {ticket.request.requestedDeadline} · not guaranteed</p>}
+              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.description}</p>
+              {ticket.request?.requestedDeadline && <p className="mt-3 text-xs text-content-secondary">Requested date: {ticket.request.requestedDeadline} · not guaranteed</p>}
             </InfoCard>
             <InfoCard title="Shared project" icon={<FolderKanban size={14} />}>
-              {ticket.sharedProjectName ? <><p className="text-xs font-medium text-gray-200">{ticket.sharedProjectName}</p><p className="mt-1 text-xs leading-relaxed text-gray-400">This is a limited project preview. Private project work and files are not shown here.</p>
-                {ticket.sharedProjectPreviewUrl && <div className="mt-3 rounded-lg border border-white/[0.07] p-3"><a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-brand-300 hover:bg-white/[0.04] hover:text-brand-200">Open hosted project preview <ExternalLink size={12} /></a><p className="mt-1.5 text-xs leading-relaxed text-amber-100">This opens the hosted site. Anyone with the link may be able to see it. It does not open your private Alphaexplora requests.</p></div>}</>
-                : <p className="text-xs leading-relaxed text-gray-400">Your project manager has not shared a project preview for this request yet. They will update you here if that changes.</p>}
-              {ticket.relatedTicket && <p className="mt-3 text-xs leading-relaxed text-gray-400">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
+              {ticket.sharedProjectName ? <><p className="text-xs font-medium text-content">{ticket.sharedProjectName}</p><p className="mt-1 text-xs leading-relaxed text-content-secondary">This is a limited project preview. Private project work and files are not shown here.</p>
+                {ticket.sharedProjectPreviewUrl && <div className="mt-3 rounded-lg border border-divider p-3"><a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-link hover:bg-surface-high hover:text-link-hover">Open hosted project preview <ExternalLink size={12} /></a><p className="mt-1.5 text-xs leading-relaxed text-status-warning">This opens the hosted site. Anyone with the link may be able to see it. It does not open your private Alphaexplora requests.</p></div>}</>
+                : <p className="text-xs leading-relaxed text-content-secondary">Your project manager has not shared a project preview for this request yet. They will update you here if that changes.</p>}
+              {ticket.relatedTicket && <p className="mt-3 text-xs leading-relaxed text-content-secondary">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
             </InfoCard>
             {!workflowActionsDisabled && ticket.scope && <InfoCard title="Agreed work" icon={<ShieldCheck size={14} />}>
-              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-300">{ticket.scope.summary}</p>
-              <p className="mt-2 text-xs text-gray-400">{ticket.scope.agreed ? 'You agreed to this work.' : 'Waiting for your decision.'}</p>
+              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.scope.summary}</p>
+              <p className="mt-2 text-xs text-content-secondary">{ticket.scope.agreed ? 'You agreed to this work.' : 'Waiting for your decision.'}</p>
               {scopeDecision && canReply && <div className="mt-3 flex flex-wrap gap-2">
                 <button onClick={() => { setScopeChangeOpen(false); setConfirming(scopeDecision); }} disabled={busy} className={`${primary} min-h-[44px]`}><CheckCircle2 size={14} />Agree to proposed work</button>
                 <button onClick={() => { setConfirming(null); setScopeChangeOpen(value => !value); }} disabled={busy} className={`${secondary} min-h-[44px]`}>{scopeChangeOpen ? 'Cancel' : 'Request changes'}</button>
               </div>}
               {scopeDecision && canReply && scopeChangeOpen && <form className="mt-3 space-y-2" onSubmit={submitScopeChange}>
-                <label htmlFor="client-scope-change" className="block text-xs text-gray-300">What would you like changed about this proposed work?</label>
+                <label htmlFor="client-scope-change" className="block text-xs text-content-secondary">What would you like changed about this proposed work?</label>
                 <textarea id="client-scope-change" rows={3} maxLength={SCOPE_CHANGE_MAX_LENGTH} disabled={busy} value={scopeChangeBody} onChange={event => setScopeChangeBody(event.target.value)} className={input} />
-                <p className="text-xs leading-relaxed text-gray-400">Sent to your project manager in this request’s conversation. Nothing is agreed yet. They can reply or send you an updated proposal.</p>
+                <p className="text-xs leading-relaxed text-content-secondary">Sent to your project manager in this request’s conversation. Nothing is agreed yet. They can reply or send you an updated proposal.</p>
                 <button type="submit" disabled={busy || !scopeChangeText} className={`${primary} min-h-[44px]`}><Send size={13} />Send to my project manager</button>
               </form>}
             </InfoCard>}
             {!workflowActionsDisabled && ticket.delivery && <InfoCard title="Result summary" icon={<CheckCircle2 size={14} />}>
-              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-gray-300">{ticket.delivery.summary}</p>
-              <p className="mt-2 text-[10px] text-gray-500">Shared {time(ticket.delivery.sharedAt)}{ticket.delivery.accepted ? ' · accepted' : ''}</p>
+              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.delivery.summary}</p>
+              <p className="mt-2 text-[10px] text-content-muted">Shared {time(ticket.delivery.sharedAt)}{ticket.delivery.accepted ? ' · accepted' : ''}</p>
               <ClientDeliveryFiles key={JSON.stringify([workspaceId, ticket.id, ticket.delivery.id, ticket.delivery.scopeVersionId])}
                 workspaceId={workspaceId} ticketId={ticket.id} deliveryId={ticket.delivery.id} scopeVersionId={ticket.delivery.scopeVersionId} onInspectionChange={inspected} api={api} />
-              {!ticket.delivery.accepted && !canReview && <p className="mt-3 flex items-start gap-1.5 text-[10px] leading-relaxed text-amber-200/70"><LockKeyhole size={12} className="mt-0.5 shrink-0" />{clientReviewLockMessage(Boolean(ticket.sharedProjectPreviewUrl))}</p>}
+              {!ticket.delivery.accepted && !canReview && <p className="mt-3 flex items-start gap-1.5 text-[10px] leading-relaxed text-status-warning"><LockKeyhole size={12} className="mt-0.5 shrink-0" />{clientReviewLockMessage(Boolean(ticket.sharedProjectPreviewUrl))}</p>}
               {canReview && <div className="mt-3 space-y-3">
-                <label className="flex items-start gap-2 text-[11px] leading-relaxed text-gray-300"><input type="checkbox" checked={reviewAcknowledged} disabled={busy} onChange={event => setReviewAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I reviewed the shared result against the agreed work.</label>
+                <label className="flex items-start gap-2 text-[11px] leading-relaxed text-content-secondary"><input type="checkbox" checked={reviewAcknowledged} disabled={busy} onChange={event => setReviewAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I reviewed the shared result against the agreed work.</label>
                 <div className="flex flex-wrap gap-2"><button disabled={busy || !reviewAcknowledged} onClick={() => { setCorrectionOpen(false); setConfirming({ type: 'accept_delivery', deliveryId: ticket.delivery!.id }); }} className={`${primary} min-h-[44px]`}>Accept result</button>
                   <button disabled={busy} onClick={() => { setConfirming(null); setCorrectionOpen(value => !value); }} className={`${secondary} min-h-[44px]`}>{correctionOpen ? 'Cancel feedback' : 'Needs a fix'}</button></div>
                 {correctionOpen && <form className="space-y-2" onSubmit={async event => {
                   event.preventDefault(); if (!canReview || busy || !correctionBody.trim()) return;
                   try { await onCorrection(correctionBody.trim(), ticket.delivery!.id); setCorrectionBody(''); setCorrectionOpen(false); }
                   catch { /* Preserve this draft while the original operation is reconciled. */ }
-                }}><label htmlFor="client-result-feedback" className="block text-[11px] text-gray-400">What does not match the agreed work?</label>
+                }}><label htmlFor="client-result-feedback" className="block text-[11px] text-content-secondary">What does not match the agreed work?</label>
                   <textarea id="client-result-feedback" rows={3} maxLength={4000} disabled={busy} value={correctionBody} onChange={event => setCorrectionBody(event.target.value)} className={input} />
-                  <p className="text-xs leading-relaxed text-gray-400">Your project manager will review your feedback and let you know the next step.</p>
+                  <p className="text-xs leading-relaxed text-content-secondary">Your project manager will review your feedback and let you know the next step.</p>
                   <button type="submit" disabled={busy || !correctionBody.trim()} className={`${primary} min-h-[44px]`}>Send correction feedback</button></form>}
               </div>}
-              {ticket.delivery.accepted && <p className="mt-2 text-xs text-gray-400">{clientAcceptedResultNote(ticket.status === 'closed')}</p>}
-              {!ticket.delivery.accepted && <p className="mt-2 text-xs text-gray-400">Use this request’s conversation to discuss the result with your project manager.</p>}
+              {ticket.delivery.accepted && <p className="mt-2 text-xs text-content-secondary">{clientAcceptedResultNote(ticket.status === 'closed')}</p>}
+              {!ticket.delivery.accepted && <p className="mt-2 text-xs text-content-secondary">Use this request’s conversation to discuss the result with your project manager.</p>}
             </InfoCard>}
           </div>
         </section>
@@ -264,9 +264,9 @@ export function ClientTicketDetail({
     </div>
 
     {!workflowActionsDisabled && confirming && <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setConfirming(null); }}>
-      <section role="dialog" aria-modal="true" aria-labelledby="client-ticket-confirm-title" className="w-full max-w-md rounded-xl border border-white/10 bg-surface p-5 shadow-2xl">
-        <h2 id="client-ticket-confirm-title" className="text-base font-semibold text-white">{confirming.type === 'accept_delivery' ? 'Accept this exact result?' : 'Agree to this proposed work?'}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-gray-400">{confirming.type === 'accept_delivery' ? 'This records that you accept the shared result. Your project manager will close the request afterwards, and you do not need to do anything else.' : 'This records your agreement to the proposed work. Your project manager still needs to approve and schedule it before work begins.'}</p>
+      <section role="dialog" aria-modal="true" aria-labelledby="client-ticket-confirm-title" className="w-full max-w-md rounded-xl border border-divider bg-surface p-5 shadow-2xl">
+        <h2 id="client-ticket-confirm-title" className="text-base font-semibold text-content">{confirming.type === 'accept_delivery' ? 'Accept this exact result?' : 'Agree to this proposed work?'}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-content-secondary">{confirming.type === 'accept_delivery' ? 'This records that you accept the shared result. Your project manager will close the request afterwards, and you do not need to do anything else.' : 'This records your agreement to the proposed work. Your project manager still needs to approve and schedule it before work begins.'}</p>
         <div className="mt-5 flex justify-end gap-2"><button onClick={() => setConfirming(null)} disabled={busy} className={`${secondary} min-h-[44px]`}>Cancel</button><button onClick={() => {
           if (confirming.type === 'accept_delivery' && (!canReview || !reviewAcknowledged || confirming.deliveryId !== ticket.delivery?.id)) return;
           if (confirming.type === 'agree_scope' && confirming.scopeVersionId !== ticket.scope?.id) return;

@@ -60,11 +60,11 @@ function ciStateLabel(state: BuildBranchPreview['ci']['state']): string {
 }
 
 function ciStateTone(state: BuildBranchPreview['ci']['state']): string {
-  return state === 'passed' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200' :
-    state === 'failed' ? 'border-rose-400/25 bg-rose-400/10 text-rose-200' :
-      state === 'running' ? 'border-sky-400/25 bg-sky-400/10 text-sky-100' :
-        state === 'unknown' ? 'border-white/10 bg-white/[0.04] text-slate-300' :
-          'border-amber-400/25 bg-amber-400/10 text-amber-100';
+  return state === 'passed' ? 'border-status-success-border bg-status-success-subtle text-status-success' :
+    state === 'failed' ? 'border-status-danger-border bg-status-danger-subtle text-status-danger' :
+      state === 'running' ? 'border-status-info-border bg-status-info-subtle text-status-info' :
+        state === 'unknown' ? 'border-divider bg-surface-raised text-content-secondary' :
+          'border-status-warning-border bg-status-warning-subtle text-status-warning';
 }
 
 const statusMeta: Record<LiveBuildRoomCardStatus, {
@@ -77,43 +77,43 @@ const statusMeta: Record<LiveBuildRoomCardStatus, {
   completed: {
     label: 'Completed',
     dot: 'bg-emerald-400',
-    text: 'text-emerald-300',
-    border: 'border-emerald-400/30',
+    text: 'text-status-success',
+    border: 'border-status-success-border',
     icon: <CheckCircle2 className="h-3.5 w-3.5" />
   },
   running: {
     label: 'Running',
     dot: 'bg-violet-400',
-    text: 'text-violet-200',
-    border: 'border-violet-400/30',
+    text: 'text-link',
+    border: 'border-divider',
     icon: <RadioTower className="h-3.5 w-3.5" />
   },
   waiting: {
     label: 'Waiting',
     dot: 'bg-sky-400',
-    text: 'text-sky-200',
-    border: 'border-sky-400/20',
+    text: 'text-status-info',
+    border: 'border-status-info-border',
     icon: <Clock3 className="h-3.5 w-3.5" />
   },
   review: {
     label: 'Review',
     dot: 'bg-amber-400',
-    text: 'text-amber-200',
-    border: 'border-amber-400/30',
+    text: 'text-status-warning',
+    border: 'border-status-warning-border',
     icon: <ShieldAlert className="h-3.5 w-3.5" />
   },
   failed: {
     label: 'Stopped',
     dot: 'bg-rose-400',
-    text: 'text-rose-200',
-    border: 'border-rose-400/30',
+    text: 'text-status-danger',
+    border: 'border-status-danger-border',
     icon: <AlertTriangle className="h-3.5 w-3.5" />
   },
   idle: {
     label: 'Ready',
     dot: 'bg-slate-500',
-    text: 'text-slate-300',
-    border: 'border-white/10',
+    text: 'text-content-secondary',
+    border: 'border-divider',
     icon: <Circle className="h-3.5 w-3.5" />
   }
 };
@@ -267,11 +267,11 @@ function executionTimeline(snapshot: LiveBuildRoomSnapshot, card: LiveBuildRoomA
 }
 
 function phaseClasses(phase: LiveBuildRoomPhase): string {
-  if (phase.status === 'completed') return 'border-emerald-400/30 bg-emerald-400/[0.035]';
-  if (phase.status === 'running') return 'border-violet-400/50 bg-violet-400/[0.07] shadow-[0_0_28px_rgba(139,92,246,0.12)]';
-  if (phase.status === 'review') return 'border-amber-400/30 bg-amber-400/[0.035]';
-  if (phase.status === 'failed') return 'border-rose-400/30 bg-rose-400/[0.035]';
-  return 'border-white/[0.08] bg-white/[0.015]';
+  if (phase.status === 'completed') return 'border-status-success-border bg-status-success-subtle';
+  if (phase.status === 'running') return 'border-divider bg-selected shadow-[0_0_28px_rgb(var(--ui-accent)/0.12)]';
+  if (phase.status === 'review') return 'border-status-warning-border bg-status-warning-subtle';
+  if (phase.status === 'failed') return 'border-status-danger-border bg-status-danger-subtle';
+  return 'border-divider bg-surface-raised';
 }
 
 const PhaseTimeline: React.FC<{ phases: LiveBuildRoomPhase[] }> = ({ phases }) => (
@@ -281,23 +281,23 @@ const PhaseTimeline: React.FC<{ phases: LiveBuildRoomPhase[] }> = ({ phases }) =
           <div className="flex items-center gap-2">
             <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[10px] ${
               phase.status === 'completed'
-                ? 'border-emerald-400/50 text-emerald-300'
+                ? 'border-status-success-border text-status-success'
                 : phase.status === 'running'
-                  ? 'border-violet-400/60 text-violet-200'
+                  ? 'border-divider text-link'
                   : phase.status === 'review'
-                    ? 'border-amber-400/50 text-amber-200'
+                    ? 'border-status-warning-border text-status-warning'
                   : phase.status === 'failed'
-                    ? 'border-rose-400/50 text-rose-200'
-                    : 'border-white/15 text-slate-500'
+                    ? 'border-status-danger-border text-status-danger'
+                    : 'border-divider text-content-muted'
             }`}>
               {phase.status === 'completed' ? <Check className="h-3.5 w-3.5" /> : index + 1}
             </span>
             <div className="min-w-0">
-              <div className="truncate text-[11px] font-semibold text-slate-200">{phase.label}</div>
-              <div className="text-[10px] text-slate-500">{phase.status === 'completed' ? 'Completed' : phase.status === 'running' ? 'In progress' : phase.status === 'review' ? 'Awaiting approval' : phase.status === 'failed' ? 'Needs attention' : 'Pending'}</div>
+              <div className="truncate text-[11px] font-semibold text-content">{phase.label}</div>
+              <div className="text-[10px] text-content-muted">{phase.status === 'completed' ? 'Completed' : phase.status === 'running' ? 'In progress' : phase.status === 'review' ? 'Awaiting approval' : phase.status === 'failed' ? 'Needs attention' : 'Pending'}</div>
             </div>
           </div>
-          {phase.progress > 0 && <div className="mt-2 h-1 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${phase.status === 'completed' ? 'bg-emerald-400' : phase.status === 'review' ? 'bg-amber-400' : phase.status === 'failed' ? 'bg-rose-400' : 'bg-violet-400'}`} style={{ width: `${Math.max(0, Math.min(100, phase.progress))}%` }} /></div>}
+          {phase.progress > 0 && <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-raised"><div className={`h-full rounded-full ${phase.status === 'completed' ? 'bg-emerald-400' : phase.status === 'review' ? 'bg-amber-400' : phase.status === 'failed' ? 'bg-rose-400' : 'bg-violet-400'}`} style={{ width: `${Math.max(0, Math.min(100, phase.progress))}%` }} /></div>}
       </div>
     ))}
   </div>
@@ -348,57 +348,57 @@ export const LiveAgentActivityInspector: React.FC<{
   };
 
   return (
-    <aside aria-label={`${card.agentName} activity`} className="live-agent-inspector flex min-h-0 max-h-[80dvh] flex-col overflow-hidden rounded-2xl border border-white/[0.10] bg-surface-100/90 shadow-2xl shadow-black/20 xl:sticky xl:top-0 xl:max-h-none xl:h-[calc(100dvh-8.5rem)]">
-      <div className="border-b border-white/[0.08] p-4">
+    <aside aria-label={`${card.agentName} activity`} className="live-agent-inspector flex min-h-0 max-h-[80dvh] flex-col overflow-hidden rounded-2xl border border-divider bg-surface-raised/90 shadow-2xl shadow-black/20 xl:sticky xl:top-0 xl:max-h-none xl:h-[calc(100dvh-8.5rem)]">
+      <div className="border-b border-divider p-4">
         <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-500/15 text-violet-200"><Layers3 className="h-4 w-4" /></div>
-          <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-white">{card.agentName}</div><div className="mt-0.5 truncate text-[11px] text-slate-500">{card.agentRole || 'Specialist agent'}</div></div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200" aria-label="Close agent activity"><X className="h-4 w-4" /></button>
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-selected text-selected-content"><Layers3 className="h-4 w-4" /></div>
+          <div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-content">{card.agentName}</div><div className="mt-0.5 truncate text-[11px] text-content-muted">{card.agentRole || 'Specialist agent'}</div></div>
+          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-content-muted hover:bg-surface-high hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" aria-label="Close agent activity"><X className="h-4 w-4" /></button>
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-semibold ${meta.border} ${meta.text}`}><span className={`h-1.5 w-1.5 rounded-full ${meta.dot}`} />{meta.label}</span>
-          {card.isStale && <span className="text-[10px] text-amber-200">No recent signal</span>}
-          {assignedTaskId && <button type="button" onClick={() => onViewAssignedTask?.(assignedTaskId)} className="ml-auto inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-[10px] font-medium text-slate-400 hover:bg-white/[0.04] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><Workflow className="h-3 w-3" />View assigned task</button>}
+          {card.isStale && <span className="text-[10px] text-status-warning">No recent signal</span>}
+          {assignedTaskId && <button type="button" onClick={() => onViewAssignedTask?.(assignedTaskId)} className="ml-auto inline-flex min-h-8 items-center gap-1.5 rounded-lg px-2 text-[10px] font-medium text-content-secondary hover:bg-surface-high hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"><Workflow className="h-3 w-3" />View assigned task</button>}
         </div>
       </div>
 
-      <div className="border-b border-white/[0.08] px-4 py-3">
-        <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500"><span>{selectedTask ? 'Selected task' : executionOnly ? 'Selected execution' : 'All assigned tasks'}</span>
-          {(selectedTask || executionOnly) && <button type="button" onClick={onClearTask} className="rounded px-1.5 py-1 text-violet-200 hover:bg-violet-300/10 focus-visible:ring-2 focus-visible:ring-violet-200">All agent activity</button>}
+      <div className="border-b border-divider px-4 py-3">
+        <div className="flex items-center justify-between gap-2 text-[10px] text-content-muted"><span>{selectedTask ? 'Selected task' : executionOnly ? 'Selected execution' : 'All assigned tasks'}</span>
+          {(selectedTask || executionOnly) && <button type="button" onClick={onClearTask} className="rounded px-1.5 py-1 text-selected-content hover:bg-selected focus-visible:ring-2 focus-visible:ring-focus">All agent activity</button>}
         </div>
-        <p className="mt-1 text-xs leading-5 text-slate-300">{selectedTask?.title || card.currentTask}</p>
-        {selectedTask ? <p className="mt-1 text-[10px] text-slate-500">Task status · {selectedTask.status.replace(/_/g, ' ')}</p> : snapshot.orchestration && <p className="mt-1 text-[10px] tabular-nums text-slate-500">{snapshot.orchestration.tasks.filter(task => task.ownerAgentId === card.agentId && task.status === 'accepted').length} / {snapshot.orchestration.tasks.filter(task => task.ownerAgentId === card.agentId).length} tasks complete</p>}
+        <p className="mt-1 text-xs leading-5 text-content-secondary">{selectedTask?.title || card.currentTask}</p>
+        {selectedTask ? <p className="mt-1 text-[10px] text-content-muted">Task status · {selectedTask.status.replace(/_/g, ' ')}</p> : snapshot.orchestration && <p className="mt-1 text-[10px] tabular-nums text-content-muted">{snapshot.orchestration.tasks.filter(task => task.ownerAgentId === card.agentId && task.status === 'accepted').length} / {snapshot.orchestration.tasks.filter(task => task.ownerAgentId === card.agentId).length} tasks complete</p>}
       </div>
-      <div className="flex gap-1 border-b border-white/[0.08] px-3 pt-2" role="tablist" aria-label="Agent activity details">
+      <div className="flex gap-1 border-b border-divider px-3 pt-2" role="tablist" aria-label="Agent activity details">
         {tabs.map(item => (
-          <button key={item.id} id={`${detailTabsId}-${item.id}-tab`} type="button" role="tab" tabIndex={tab === item.id ? 0 : -1} aria-selected={tab === item.id} aria-controls={`${detailTabsId}-panel`} onClick={() => setTab(item.id)} onKeyDown={handleDetailTabKeyDown} className={`border-b-2 px-2 py-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-200 ${tab === item.id ? 'border-violet-400 text-white' : 'border-transparent text-slate-500 hover:text-slate-200'}`}>{item.label}</button>
+          <button key={item.id} id={`${detailTabsId}-${item.id}-tab`} type="button" role="tab" tabIndex={tab === item.id ? 0 : -1} aria-selected={tab === item.id} aria-controls={`${detailTabsId}-panel`} onClick={() => setTab(item.id)} onKeyDown={handleDetailTabKeyDown} className={`border-b-2 px-2 py-2 text-[11px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus ${tab === item.id ? 'border-divider text-content' : 'border-transparent text-content-muted hover:text-content'}`}>{item.label}</button>
         ))}
       </div>
 
-      <div id={`${detailTabsId}-panel`} role="tabpanel" aria-labelledby={`${detailTabsId}-${tab}-tab`} tabIndex={0} className="min-h-0 flex-1 overflow-y-auto p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-violet-200">
+      <div id={`${detailTabsId}-panel`} role="tabpanel" aria-labelledby={`${detailTabsId}-${tab}-tab`} tabIndex={0} className="min-h-0 flex-1 overflow-y-auto p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
         {tab === 'activity' && (
           <div className="space-y-4">
             <div>
-              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">{assignmentLabel({ ...card, status: taskStatus })}</div>
-              <div className="mt-1 text-sm font-medium text-white">{activityCard.currentTask}</div>
+              <div className="text-[10px] uppercase tracking-[0.16em] text-content-muted">{assignmentLabel({ ...card, status: taskStatus })}</div>
+              <div className="mt-1 text-sm font-medium text-content">{activityCard.currentTask}</div>
             </div>
-            {latestRunTaskId && latestRunTaskId !== assignedTaskId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] px-3 py-2">
-              <span className="min-w-0 text-[10px] text-slate-500">Latest run worked on <span className="text-slate-300">{latestRunTaskTitle || 'another assigned task'}</span></span>
-              <button type="button" onClick={() => onViewAssignedTask?.(latestRunTaskId)} className="min-h-7 shrink-0 rounded-md px-2 text-[10px] font-medium text-violet-200 hover:bg-violet-300/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200">View run task</button>
+            {latestRunTaskId && latestRunTaskId !== assignedTaskId && <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-divider bg-surface-raised px-3 py-2">
+              <span className="min-w-0 text-[10px] text-content-muted">Latest run worked on <span className="text-content-secondary">{latestRunTaskTitle || 'another assigned task'}</span></span>
+              <button type="button" onClick={() => onViewAssignedTask?.(latestRunTaskId)} className="min-h-7 shrink-0 rounded-md px-2 text-[10px] font-medium text-selected-content hover:bg-selected focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">View run task</button>
             </div>}
-            {!selectedTask && card.progress > 0 ? <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.08]"><div className="h-full rounded-full bg-violet-400" style={{ width: `${card.progress}%` }} /></div> : taskStatus === 'running' ? <div className="text-[11px] text-slate-500">Progress will appear after Alpha confirms a completed stage.</div> : null}
-            <div className="space-y-3 border-t border-white/[0.08] pt-4">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-slate-500">Execution timeline</div>
+            {!selectedTask && card.progress > 0 ? <div className="h-1.5 overflow-hidden rounded-full bg-surface-raised"><div className="h-full rounded-full bg-violet-400" style={{ width: `${card.progress}%` }} /></div> : taskStatus === 'running' ? <div className="text-[11px] text-content-muted">Progress will appear after Alpha confirms a completed stage.</div> : null}
+            <div className="space-y-3 border-t border-divider pt-4">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.15em] text-content-muted">Execution timeline</div>
               {timeline.length ? timeline.map(event => (
                 <div key={event.id} className="flex gap-3">
                   <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${event.tone}`} />
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] text-slate-500">{event.label}{event.isStreaming && <span className="inline-flex items-center gap-1 rounded border border-violet-300/20 bg-violet-300/[0.06] px-1.5 py-0.5 font-medium text-violet-100"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}<span>· {timeAgo(event.createdAt)}</span></div>
-                    <div className="mt-1 break-words text-xs leading-5 text-slate-300">{event.message}</div>
-                    {event.detail && <div className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-4 text-slate-500">{event.detail}</div>}
+                    <div className="flex flex-wrap items-center gap-x-1.5 text-[10px] text-content-muted">{event.label}{event.isStreaming && <span className="inline-flex items-center gap-1 rounded border border-divider bg-selected px-1.5 py-0.5 font-medium text-selected-content"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}<span>· {timeAgo(event.createdAt)}</span></div>
+                    <div className="mt-1 break-words text-xs leading-5 text-content-secondary">{event.message}</div>
+                    {event.detail && <div className="mt-1 whitespace-pre-wrap break-words text-[11px] leading-4 text-content-muted">{event.detail}</div>}
                   </div>
                 </div>
-              )) : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">Invocations, handoffs, tool calls, and completions will appear here as the build runs.</div>}
+              )) : <div className="rounded-xl border border-dashed border-divider p-4 text-xs leading-5 text-content-muted">Invocations, handoffs, tool calls, and completions will appear here as the build runs.</div>}
             </div>
           </div>
         )}
@@ -406,32 +406,32 @@ export const LiveAgentActivityInspector: React.FC<{
         {tab === 'handoff' && (
           <div className="space-y-4">
             <div>
-              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Handoff history</div>
-              <p className="mt-1 text-[11px] leading-5 text-slate-400">See what moved between agents and when this execution received it.</p>
+              <div className="text-[10px] uppercase tracking-[0.16em] text-content-muted">Handoff history</div>
+              <p className="mt-1 text-[11px] leading-5 text-content-secondary">See what moved between agents and when this execution received it.</p>
             </div>
-            {card.squadRunId === snapshot.activeRun?.id && snapshot.handoff.next && <div className="rounded-xl border border-violet-400/25 bg-violet-400/[0.06] p-3 text-xs text-slate-300"><span className="font-medium text-white">Next in sequence:</span> {snapshot.handoff.next}</div>}
+            {card.squadRunId === snapshot.activeRun?.id && snapshot.handoff.next && <div className="rounded-xl border border-divider bg-selected p-3 text-xs text-content-secondary"><span className="font-medium text-content">Next in sequence:</span> {snapshot.handoff.next}</div>}
             {handoffs.length ? <div className="space-y-3">
               {handoffs.map(handoff => (
-                <div key={handoff.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3">
+                <div key={handoff.id} className="rounded-xl border border-divider bg-surface-raised p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <div className="flex min-w-0 items-center gap-2 text-xs"><span className="truncate font-medium text-slate-200">{handoff.from}</span><ArrowRight className="h-3.5 w-3.5 shrink-0 text-violet-300" /><span className="truncate font-semibold text-white">{handoff.to}</span></div>
-                    <time className="shrink-0 text-[10px] text-slate-500">{timeAgo(handoff.createdAt)}</time>
+                    <div className="flex min-w-0 items-center gap-2 text-xs"><span className="truncate font-medium text-content">{handoff.from}</span><ArrowRight className="h-3.5 w-3.5 shrink-0 text-link" /><span className="truncate font-semibold text-content">{handoff.to}</span></div>
+                    <time className="shrink-0 text-[10px] text-content-muted">{timeAgo(handoff.createdAt)}</time>
                   </div>
-                  <p className="mt-2 break-words text-[11px] leading-5 text-slate-400">{handoff.summary}</p>
-                  {handoff.branchName && <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500"><GitBranch className="h-3 w-3 shrink-0" /><span className="break-all">{handoff.branchName}</span></div>}
+                  <p className="mt-2 break-words text-[11px] leading-5 text-content-secondary">{handoff.summary}</p>
+                  {handoff.branchName && <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[10px] text-content-muted"><GitBranch className="h-3 w-3 shrink-0" /><span className="break-all">{handoff.branchName}</span></div>}
                 </div>
               ))}
-            </div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No handoff has reached this execution yet. Transfers will appear here as the project moves between agents.</div>}
+            </div> : <div className="rounded-xl border border-dashed border-divider p-4 text-xs leading-5 text-content-muted">No handoff has reached this execution yet. Transfers will appear here as the project moves between agents.</div>}
           </div>
         )}
 
         {tab === 'files' && (
           <div className="space-y-3">
-            <div><div className="text-[10px] uppercase tracking-[0.16em] text-slate-500">Files and outputs</div><p className="mt-1 text-[11px] leading-5 text-slate-400">Paths come from recorded project activity.</p></div>
-            {filePaths.length ? <div className="space-y-2">{filePaths.map(file => <div key={file} className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] p-3 text-xs text-slate-200"><FileCode2 className="h-4 w-4 shrink-0 text-violet-300" /><code className="min-w-0 break-all">{file}</code></div>)}</div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No changed file paths have been recorded for this execution yet.</div>}
-            {outputCard?.output ? <div className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="flex items-center gap-2 text-xs font-medium text-white"><FileCode2 className="h-4 w-4 text-violet-300" />{outputCard?.output.label}</div><div className="mt-2 break-all text-[11px] text-slate-500">{outputCard?.output.value}</div></div> : <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs leading-5 text-slate-500">No output has been recorded for this agent yet.</div>}
-            {outputCard?.branchName && <div className="flex items-center gap-2 text-xs text-slate-400"><GitBranch className="h-3.5 w-3.5" /><span className="truncate">{outputCard?.branchName}</span></div>}
-            {snapshot.artifacts.filter(artifact => artifact.runId && relatedCards.some(item => item.runId === artifact.runId)).map(artifact => <div key={artifact.id} className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3"><div className="text-xs font-medium text-white">{artifact.name}</div><div className="mt-1 break-all text-[11px] text-slate-500">{artifact.detail}</div></div>)}
+            <div><div className="text-[10px] uppercase tracking-[0.16em] text-content-muted">Files and outputs</div><p className="mt-1 text-[11px] leading-5 text-content-secondary">Paths come from recorded project activity.</p></div>
+            {filePaths.length ? <div className="space-y-2">{filePaths.map(file => <div key={file} className="flex min-w-0 items-center gap-2 rounded-xl border border-divider bg-surface-raised p-3 text-xs text-content"><FileCode2 className="h-4 w-4 shrink-0 text-link" /><code className="min-w-0 break-all">{file}</code></div>)}</div> : <div className="rounded-xl border border-dashed border-divider p-4 text-xs leading-5 text-content-muted">No changed file paths have been recorded for this execution yet.</div>}
+            {outputCard?.output ? <div className="rounded-xl border border-divider bg-surface-raised p-3"><div className="flex items-center gap-2 text-xs font-medium text-content"><FileCode2 className="h-4 w-4 text-link" />{outputCard?.output.label}</div><div className="mt-2 break-all text-[11px] text-content-muted">{outputCard?.output.value}</div></div> : <div className="rounded-xl border border-dashed border-divider p-4 text-xs leading-5 text-content-muted">No output has been recorded for this agent yet.</div>}
+            {outputCard?.branchName && <div className="flex items-center gap-2 text-xs text-content-secondary"><GitBranch className="h-3.5 w-3.5" /><span className="truncate">{outputCard?.branchName}</span></div>}
+            {snapshot.artifacts.filter(artifact => artifact.runId && relatedCards.some(item => item.runId === artifact.runId)).map(artifact => <div key={artifact.id} className="rounded-xl border border-divider bg-surface-raised p-3"><div className="text-xs font-medium text-content">{artifact.name}</div><div className="mt-1 break-all text-[11px] text-content-muted">{artifact.detail}</div></div>)}
           </div>
         )}
 
@@ -443,9 +443,9 @@ export const LiveAgentActivityInspector: React.FC<{
 
 const ContextBlock: React.FC<{ title: string; empty: string; children?: React.ReactNode }> = ({ title, empty, children }) => {
   const content = React.Children.toArray(children);
-  return <section className="rounded-xl border border-white/[0.08] bg-white/[0.025] p-3.5">
-    <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-slate-500">{title}</div>
-    <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-300">{content.length ? content : <span className="text-slate-500">{empty}</span>}</div>
+  return <section className="rounded-xl border border-divider bg-surface-raised p-3.5">
+    <div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-content-muted">{title}</div>
+    <div className="mt-2 whitespace-pre-wrap break-words text-[11px] leading-5 text-content-secondary">{content.length ? content : <span className="text-content-muted">{empty}</span>}</div>
   </section>;
 };
 
@@ -480,29 +480,29 @@ const HandoffContextPanel: React.FC<{
   const incomingContext = handoff?.summary || task?.description || snapshot.orchestration?.run.goal;
   const routingReason = task?.assignmentReason;
 
-  return <aside className="live-agent-inspector flex min-h-0 flex-col overflow-hidden rounded-2xl border border-violet-300/20 bg-surface-100/90 shadow-2xl shadow-black/25 xl:sticky xl:top-0 xl:h-[calc(100vh-8.5rem)]" aria-labelledby="handoff-context-title">
-    <div className="flex items-start justify-between gap-3 border-b border-white/[0.08] p-4">
+  return <aside className="live-agent-inspector flex min-h-0 flex-col overflow-hidden rounded-2xl border border-divider bg-surface-raised/90 shadow-2xl shadow-black/25 xl:sticky xl:top-0 xl:h-[calc(100vh-8.5rem)]" aria-labelledby="handoff-context-title">
+    <div className="flex items-start justify-between gap-3 border-b border-divider p-4">
       <div className="min-w-0">
-        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-violet-200"><Layers3 className="h-3.5 w-3.5" />Context transfer</div>
-        <h3 id="handoff-context-title" className="mt-1 truncate text-base font-semibold text-white">{handoff ? 'Handoff details' : selection.kind === 'orchestrator' ? 'Orchestrator route' : 'Dependency context'}</h3>
-        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-400"><span className="truncate">{sourceName}</span><ArrowRight className="h-3 w-3 shrink-0 text-violet-300" /><span className="truncate font-medium text-slate-200">{destinationName}</span></div>
+        <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-link"><Layers3 className="h-3.5 w-3.5" />Context transfer</div>
+        <h3 id="handoff-context-title" className="mt-1 truncate text-base font-semibold text-content">{handoff ? 'Handoff details' : selection.kind === 'orchestrator' ? 'Orchestrator route' : 'Dependency context'}</h3>
+        <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] text-content-secondary"><span className="truncate">{sourceName}</span><ArrowRight className="h-3 w-3 shrink-0 text-link" /><span className="truncate font-medium text-content">{destinationName}</span></div>
       </div>
-      <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200" aria-label="Close context inspector"><X className="h-4 w-4" /></button>
+      <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-content-muted hover:bg-surface-high hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus" aria-label="Close context inspector"><X className="h-4 w-4" /></button>
     </div>
 
     <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded-full border px-2 py-1 text-[9px] font-semibold ${handoff ? 'border-cyan-300/25 bg-cyan-300/[0.06] text-cyan-100' : 'border-violet-300/25 bg-violet-300/[0.06] text-violet-100'}`}>{handoff ? 'Recorded handoff' : selection.kind === 'orchestrator' ? 'Root assignment' : 'Planned dependency'}</span>
-        {handoff && <time className="text-[10px] text-slate-500">{timeAgo(handoff.createdAt)}</time>}
-        {task && <span className="ml-auto text-[10px] text-slate-500">Task · {task.status.replace(/_/g, ' ')}</span>}
+        <span className={`rounded-full border px-2 py-1 text-[9px] font-semibold ${handoff ? 'border-status-info-border bg-status-info-subtle text-status-info' : 'border-divider bg-selected text-selected-content'}`}>{handoff ? 'Recorded handoff' : selection.kind === 'orchestrator' ? 'Root assignment' : 'Planned dependency'}</span>
+        {handoff && <time className="text-[10px] text-content-muted">{timeAgo(handoff.createdAt)}</time>}
+        {task && <span className="ml-auto text-[10px] text-content-muted">Task · {task.status.replace(/_/g, ' ')}</span>}
       </div>
 
-      {task && <section className="rounded-xl border border-violet-300/15 bg-violet-300/[0.035] p-3.5">
+      {task && <section className="rounded-xl border border-divider bg-selected p-3.5">
         <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0"><div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-violet-200/75">Orchestrator routing</div><div className="mt-1 break-words text-xs font-semibold text-white">{task.title}</div></div>
-          <button type="button" onClick={() => onViewAssignedTask?.(task.id)} className="min-h-8 shrink-0 rounded-lg border border-white/10 px-2 text-[9px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200"><Workflow className="mr-1 inline h-3 w-3" />Plan</button>
+          <div className="min-w-0"><div className="text-[9px] font-semibold uppercase tracking-[0.15em] text-link">Orchestrator routing</div><div className="mt-1 break-words text-xs font-semibold text-content">{task.title}</div></div>
+          <button type="button" onClick={() => onViewAssignedTask?.(task.id)} className="min-h-8 shrink-0 rounded-lg border border-divider px-2 text-[9px] font-medium text-content-secondary hover:bg-surface-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"><Workflow className="mr-1 inline h-3 w-3" />Plan</button>
         </div>
-        <div className="mt-2 text-[10px] leading-4 text-slate-400">Selected {task.ownerName} · {task.assignmentReason || 'No separate assignment reason was recorded.'}</div>
+        <div className="mt-2 text-[10px] leading-4 text-content-secondary">Selected {task.ownerName} · {task.assignmentReason || 'No separate assignment reason was recorded.'}</div>
       </section>}
 
       <ContextBlock title={handoff ? 'Handoff reason' : 'Routing reason'} empty={handoff ? 'A separate handoff reason was not recorded. The transfer summary and context are shown below.' : 'A separate routing reason was not recorded for this connection.'}>{routingReason}</ContextBlock>
@@ -512,15 +512,15 @@ const HandoffContextPanel: React.FC<{
       <ContextBlock title="Outgoing payload" empty="No structured payload is exposed on the handoff record.">
         {handoff?.summary ? `Recorded transfer: ${handoff.summary}` : undefined}
         {selection.kind === 'orchestrator' && task && <div className="space-y-2">
-          <div className="font-medium text-violet-100">Assignment package · {task.title}</div>
-          {task.acceptanceCriteria.length > 0 && <div><div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">Acceptance criteria</div><ul className="list-disc space-y-1 pl-4">{task.acceptanceCriteria.map((criterion, index) => <li key={`${task.id}-criterion-${index}`}>{criterion}</li>)}</ul></div>}
-          {task.requiredChecks.length > 0 && <div><div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-500">Required checks</div><ul className="list-disc space-y-1 pl-4">{task.requiredChecks.map(check => <li key={check}>{check}</li>)}</ul></div>}
+          <div className="font-medium text-link">Assignment package · {task.title}</div>
+          {task.acceptanceCriteria.length > 0 && <div><div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-content-muted">Acceptance criteria</div><ul className="list-disc space-y-1 pl-4">{task.acceptanceCriteria.map((criterion, index) => <li key={`${task.id}-criterion-${index}`}>{criterion}</li>)}</ul></div>}
+          {task.requiredChecks.length > 0 && <div><div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-content-muted">Required checks</div><ul className="list-disc space-y-1 pl-4">{task.requiredChecks.map(check => <li key={check}>{check}</li>)}</ul></div>}
         </div>}
-        {Boolean(outgoingFiles.length) && <div className="mt-2 space-y-1.5">{outgoingFiles.map(path => <div key={path} className="flex min-w-0 items-start gap-1.5 text-[10px] text-slate-400"><FileCode2 className="mt-0.5 h-3 w-3 shrink-0 text-violet-300" /><code className="break-all">{path}</code></div>)}</div>}
-        {source?.branchName && <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[10px] text-slate-500"><GitBranch className="h-3 w-3 shrink-0" /><span className="break-all">{source.branchName}</span></div>}
+        {Boolean(outgoingFiles.length) && <div className="mt-2 space-y-1.5">{outgoingFiles.map(path => <div key={path} className="flex min-w-0 items-start gap-1.5 text-[10px] text-content-secondary"><FileCode2 className="mt-0.5 h-3 w-3 shrink-0 text-link" /><code className="break-all">{path}</code></div>)}</div>}
+        {source?.branchName && <div className="mt-2 flex min-w-0 items-center gap-1.5 text-[10px] text-content-muted"><GitBranch className="h-3 w-3 shrink-0" /><span className="break-all">{source.branchName}</span></div>}
       </ContextBlock>
       <ContextBlock title="Receiving agent output" empty={destination ? 'The receiving agent has not recorded an output yet.' : 'The receiving agent is not available in the current snapshot.'}>{destinationOutput}</ContextBlock>
-      {handoff?.branchName && <div className="flex min-w-0 items-center gap-2 rounded-lg border border-white/[0.07] px-3 py-2 text-[10px] text-slate-500"><GitBranch className="h-3.5 w-3.5 shrink-0" /><span className="break-all">Shared branch · {handoff.branchName}</span></div>}
+      {handoff?.branchName && <div className="flex min-w-0 items-center gap-2 rounded-lg border border-divider px-3 py-2 text-[10px] text-content-muted"><GitBranch className="h-3.5 w-3.5 shrink-0" /><span className="break-all">Shared branch · {handoff.branchName}</span></div>}
     </div>
   </aside>;
 };
@@ -1139,10 +1139,10 @@ export const LiveBuildRoomView: React.FC = () => {
   if (!eligibleRole) {
     return (
       <div className="flex h-full items-center justify-center bg-shell p-6 text-center">
-        <div className="max-w-md rounded-2xl border border-white/[0.08] bg-surface-100 p-8">
-          <ShieldAlert className="mx-auto h-8 w-8 text-slate-500" />
-          <h1 className="mt-4 text-lg font-semibold text-white">Live Build Room is an internal view</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Project agent activity is available to developers, project managers, and workspace administrators. Client progress remains available in the project portal.</p>
+        <div className="max-w-md rounded-2xl border border-divider bg-surface-raised p-8">
+          <ShieldAlert className="mx-auto h-8 w-8 text-content-muted" />
+          <h1 className="mt-4 text-lg font-semibold text-content">Live Build Room is an internal view</h1>
+          <p className="mt-2 text-sm leading-6 text-content-secondary">Project agent activity is available to developers, project managers, and workspace administrators. Client progress remains available in the project portal.</p>
         </div>
       </div>
     );
@@ -1151,10 +1151,10 @@ export const LiveBuildRoomView: React.FC = () => {
   if (!projects.length) {
     return (
       <div className="flex h-full items-center justify-center bg-shell p-6 text-center">
-        <div className="max-w-md rounded-2xl border border-white/[0.08] bg-surface-100 p-8">
-          <Layers3 className="mx-auto h-8 w-8 text-slate-500" />
-          <h1 className="mt-4 text-lg font-semibold text-white">No projects available</h1>
-          <p className="mt-2 text-sm leading-6 text-slate-400">Projects you can access will appear here with their live agent activity.</p>
+        <div className="max-w-md rounded-2xl border border-divider bg-surface-raised p-8">
+          <Layers3 className="mx-auto h-8 w-8 text-content-muted" />
+          <h1 className="mt-4 text-lg font-semibold text-content">No projects available</h1>
+          <p className="mt-2 text-sm leading-6 text-content-secondary">Projects you can access will appear here with their live agent activity.</p>
         </div>
       </div>
     );
@@ -1162,20 +1162,20 @@ export const LiveBuildRoomView: React.FC = () => {
 
   if (error || (!loading && !snapshot)) {
     return (
-      <div className="h-full overflow-y-auto bg-shell p-4 text-slate-200 sm:p-6">
+      <div className="h-full overflow-y-auto bg-shell p-4 text-content sm:p-6">
         <div className="mx-auto flex min-h-full max-w-[1800px] flex-col">
-          <div className="flex flex-col gap-4 border-b border-white/[0.08] pb-4 sm:flex-row sm:items-end sm:justify-between">
-            <div><h1 className="text-xl font-semibold tracking-tight text-white">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">Project agent activity and execution details.</p></div>
-            <label className="relative flex min-w-[220px] items-center rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2"><span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-500">Project</span><select value={selectedProjectId} onChange={event => handleProjectChange(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none">{projects.map(project => <option key={project.id} value={project.id} className="bg-surface-100">{project.key} · {project.name}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-500" /></label>
+          <div className="flex flex-col gap-4 border-b border-divider pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div><h1 className="text-xl font-semibold tracking-tight text-content">Live Build Room</h1><p className="mt-1 text-xs text-content-secondary">Project agent activity and execution details.</p></div>
+            <label className="relative flex min-w-[220px] items-center rounded-xl border border-divider bg-surface-raised/80 px-3 py-2"><span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-content-muted">Project</span><select value={selectedProjectId} onChange={event => handleProjectChange(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-content outline-none">{projects.map(project => <option key={project.id} value={project.id} className="bg-surface-raised">{project.key} · {project.name}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-content-muted" /></label>
           </div>
           <div className="flex flex-1 items-center justify-center p-6 text-center">
-            <div className="max-w-lg rounded-2xl border border-white/[0.08] bg-surface-100 p-8">
-              <AlertTriangle className="mx-auto h-8 w-8 text-amber-300" />
-              <h2 className="mt-4 text-lg font-semibold text-white">Could not load this project room</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-400">{error || 'The room could not be loaded. Check your project access and try again.'}</p>
+            <div className="max-w-lg rounded-2xl border border-divider bg-surface-raised p-8">
+              <AlertTriangle className="mx-auto h-8 w-8 text-status-warning" />
+              <h2 className="mt-4 text-lg font-semibold text-content">Could not load this project room</h2>
+              <p className="mt-2 text-sm leading-6 text-content-secondary">{error || 'The room could not be loaded. Check your project access and try again.'}</p>
               <div className="mt-5 flex justify-center gap-2">
-                <button type="button" onClick={() => void loadRoom()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/[0.06]"><RefreshCw className="h-3.5 w-3.5" />Retry</button>
-                <button type="button" onClick={() => setActiveTab('projects')} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/[0.06]"><Layers3 className="h-3.5 w-3.5" />Projects</button>
+                <button type="button" onClick={() => void loadRoom()} className="inline-flex items-center gap-2 rounded-xl border border-divider px-3 py-2 text-xs font-medium text-content hover:bg-surface-high"><RefreshCw className="h-3.5 w-3.5" />Retry</button>
+                <button type="button" onClick={() => setActiveTab('projects')} className="inline-flex items-center gap-2 rounded-xl border border-divider px-3 py-2 text-xs font-medium text-content hover:bg-surface-high"><Layers3 className="h-3.5 w-3.5" />Projects</button>
               </div>
             </div>
           </div>
@@ -1186,16 +1186,16 @@ export const LiveBuildRoomView: React.FC = () => {
 
   if (loading || !snapshot) {
     return (
-      <div className="h-full overflow-y-auto bg-shell p-4 text-slate-200 sm:p-6">
+      <div className="h-full overflow-y-auto bg-shell p-4 text-content sm:p-6">
         <div className="mx-auto max-w-[1800px] space-y-4">
-          <div className="flex flex-col gap-4 border-b border-white/[0.08] pb-4 sm:flex-row sm:items-end sm:justify-between">
-            <div><h1 className="text-xl font-semibold tracking-tight text-white">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">Loading project agents and recent activity…</p></div>
-            <label className="relative flex min-w-[220px] items-center rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2"><span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-500">Project</span><select value={selectedProjectId} onChange={event => handleProjectChange(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none">{projects.map(project => <option key={project.id} value={project.id} className="bg-surface-100">{project.key} · {project.name}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-500" /></label>
+          <div className="flex flex-col gap-4 border-b border-divider pb-4 sm:flex-row sm:items-end sm:justify-between">
+            <div><h1 className="text-xl font-semibold tracking-tight text-content">Live Build Room</h1><p className="mt-1 text-xs text-content-secondary">Loading project agents and recent activity…</p></div>
+            <label className="relative flex min-w-[220px] items-center rounded-xl border border-divider bg-surface-raised/80 px-3 py-2"><span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-content-muted">Project</span><select value={selectedProjectId} onChange={event => handleProjectChange(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-content outline-none">{projects.map(project => <option key={project.id} value={project.id} className="bg-surface-raised">{project.key} · {project.name}</option>)}</select><ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-content-muted" /></label>
           </div>
           <div className="animate-pulse space-y-4" aria-label="Loading project room" role="status">
-          <div className="h-24 rounded-2xl border border-white/[0.08] bg-surface-100/60" />
-          <div className="h-24 rounded-2xl border border-white/[0.08] bg-surface-100/60" />
-          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="h-52 rounded-2xl border border-white/[0.08] bg-surface-100/60" />)}</div>
+          <div className="h-24 rounded-2xl border border-divider bg-surface-raised/60" />
+          <div className="h-24 rounded-2xl border border-divider bg-surface-raised/60" />
+          <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-3">{Array.from({ length: 6 }, (_, index) => <div key={index} className="h-52 rounded-2xl border border-divider bg-surface-raised/60" />)}</div>
           <span className="sr-only">Loading project activity…</span>
           </div>
         </div>
@@ -1240,18 +1240,18 @@ export const LiveBuildRoomView: React.FC = () => {
           ? 'Agents queued'
           : snapshot.status === 'idle' ? 'Ready for a build' : 'Build in progress';
   const roomStatusTone = roomStatus === 'Needs attention'
-    ? 'text-rose-300 bg-rose-400/10 border-rose-400/25'
+    ? 'text-status-danger bg-status-danger-subtle border-status-danger-border'
     : roomStatus === 'Review required'
-      ? 'text-amber-200 bg-amber-400/10 border-amber-400/25'
+      ? 'text-status-warning bg-status-warning-subtle border-status-warning-border'
       : roomStatus === 'Pull request update pending' || roomStatus === 'Opening pull requests'
-        ? 'text-amber-200 bg-amber-400/10 border-amber-400/25'
+        ? 'text-status-warning bg-status-warning-subtle border-status-warning-border'
       : roomStatus === 'Ready for review' || roomStatus === 'Build complete'
-          ? 'text-emerald-200 bg-emerald-400/10 border-emerald-400/25'
+          ? 'text-status-success bg-status-success-subtle border-status-success-border'
       : roomStatus === 'Signal delayed'
-        ? 'text-amber-200 bg-amber-400/10 border-amber-400/25'
+        ? 'text-status-warning bg-status-warning-subtle border-status-warning-border'
       : roomStatus === 'Ready for a build'
-        ? 'text-slate-300 bg-white/[0.04] border-white/10'
-        : 'text-violet-200 bg-violet-400/10 border-violet-400/25';
+        ? 'text-content-secondary bg-surface-raised border-divider'
+        : 'text-selected-content bg-selected border-divider';
 
   const handleRoomPanelKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
     if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight' && event.key !== 'Home' && event.key !== 'End') return;
@@ -1262,35 +1262,35 @@ export const LiveBuildRoomView: React.FC = () => {
   };
 
   return (
-    <div className="h-full overflow-y-auto bg-shell text-slate-200">
+    <div className="h-full overflow-y-auto bg-shell text-content">
       <div className="mx-auto flex max-w-[1800px] flex-col gap-4 p-4 pb-8 sm:p-6">
-        <div className="flex flex-col gap-4 border-b border-white/[0.08] pb-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="flex flex-col gap-4 border-b border-divider pb-4 xl:flex-row xl:items-end xl:justify-between">
           <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500"><span>Workspace</span><span>/</span><span className="text-slate-300">{activeProject?.name || snapshot.project.name}</span><span>/</span><span>Automation</span></div>
+            <div className="flex flex-wrap items-center gap-2 text-[11px] text-content-muted"><span>Workspace</span><span>/</span><span className="text-content-secondary">{activeProject?.name || snapshot.project.name}</span><span>/</span><span>Automation</span></div>
             <div className="mt-3 flex flex-wrap items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-violet-500/15 text-violet-200"><RadioTower className="h-5 w-5" /></div>
-              <div><h1 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-slate-400">{snapshot.planningRecoveries?.some(recovery => recovery.state !== 'retained') ? 'Review the preserved work before starting another build.' : snapshot.orchestration ? 'Follow the Orchestrator’s plan, specialist assignments, checks, and progress.' : 'See Orchestrator builds and direct agent work across this project.'}</p></div>
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-selected text-selected-content"><RadioTower className="h-5 w-5" /></div>
+              <div><h1 className="text-xl font-semibold tracking-tight text-content sm:text-2xl">Live Build Room</h1><p className="mt-1 text-xs text-content-secondary">{snapshot.planningRecoveries?.some(recovery => recovery.state !== 'retained') ? 'Review the preserved work before starting another build.' : snapshot.orchestration ? 'Follow the Orchestrator’s plan, specialist assignments, checks, and progress.' : 'See Orchestrator builds and direct agent work across this project.'}</p></div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <label className="relative flex min-w-[220px] items-center rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2">
-              <span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-500">Project</span>
-              <select value={selectedProjectId} onChange={event => handleProjectChange(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none">
-                {projects.map(project => <option key={project.id} value={project.id} className="bg-surface-100">{project.key} · {project.name}</option>)}
+            <label className="relative flex min-w-[220px] items-center rounded-xl border border-divider bg-surface-raised/80 px-3 py-2">
+              <span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-content-muted">Project</span>
+              <select value={selectedProjectId} onChange={event => handleProjectChange(event.target.value)} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-content outline-none">
+                {projects.map(project => <option key={project.id} value={project.id} className="bg-surface-raised">{project.key} · {project.name}</option>)}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-500" />
+              <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-content-muted" />
             </label>
-            {snapshot.buildRuns.length > 1 && <label className="relative flex min-w-[220px] items-center rounded-xl border border-violet-400/20 bg-violet-500/[0.06] px-3 py-2">
-              <span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-slate-400">Build</span>
-              <select aria-label="Choose project build" value={selectedBuildRunId || snapshot.orchestration?.run.id || snapshot.activeRun?.id || ''} onChange={event => { setSelectedConnection(null); setSelectedBuildRunId(event.target.value); }} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-violet-200">
-                {snapshot.buildRuns.map(run => <option key={run.id} value={run.id} className="bg-surface-100 text-white">{[run.kind === 'orchestration' ? 'Orchestrator build' : 'Earlier build', run.repository, run.issueIdentifier, run.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') || 'Project build'}</option>)}
+            {snapshot.buildRuns.length > 1 && <label className="relative flex min-w-[220px] items-center rounded-xl border border-divider bg-selected px-3 py-2">
+              <span className="mr-2 text-[10px] uppercase tracking-[0.12em] text-content-secondary">Build</span>
+              <select aria-label="Choose project build" value={selectedBuildRunId || snapshot.orchestration?.run.id || snapshot.activeRun?.id || ''} onChange={event => { setSelectedConnection(null); setSelectedBuildRunId(event.target.value); }} className="min-w-0 flex-1 appearance-none bg-transparent pr-6 text-xs font-semibold text-content outline-none focus-visible:ring-2 focus-visible:ring-focus">
+                {snapshot.buildRuns.map(run => <option key={run.id} value={run.id} className="bg-surface-raised text-content">{[run.kind === 'orchestration' ? 'Orchestrator build' : 'Earlier build', run.repository, run.issueIdentifier, run.status.replace(/_/g, ' ')].filter(Boolean).join(' · ') || 'Project build'}</option>)}
               </select>
-              <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-slate-400" />
+              <ChevronDown className="pointer-events-none absolute right-3 h-3.5 w-3.5 text-content-secondary" />
             </label>}
-            <div className="flex items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 text-xs">{snapshot.orchestration ? <Activity className="h-3.5 w-3.5 text-violet-300" /> : <Workflow className="h-3.5 w-3.5 text-violet-300" />}<span className="text-slate-400">{snapshot.orchestration ? 'Orchestrator' : 'Build lead'}</span><span className="font-semibold text-white">{snapshot.orchestration ? `${snapshot.orchestration.tasks.length} planned tasks` : 'Orchestrator'}</span></div>
-            {!snapshot.orchestration && <button type="button" onClick={() => { setDetailOpen(true); setDetailTab('activity'); }} className="inline-flex items-center gap-2 rounded-xl border border-white/[0.10] px-3 py-2.5 text-xs font-medium text-slate-300 hover:bg-white/[0.06] hover:text-white"><TerminalSquare className="h-3.5 w-3.5" />View logs</button>}
-            <button type="button" onClick={() => void loadRoom(true)} className="rounded-xl border border-white/[0.10] p-2.5 text-slate-400 hover:bg-white/[0.06] hover:text-white" title="Refresh room" aria-label="Refresh room"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button>
-            <span className="w-full text-right text-[10px] text-slate-500 xl:w-auto">{lastSyncedAt ? `Synced ${timeAgo(lastSyncedAt)}` : 'Waiting for first sync'}</span>
+            <div className="flex items-center gap-2 rounded-xl border border-divider bg-surface-raised/80 px-3 py-2 text-xs">{snapshot.orchestration ? <Activity className="h-3.5 w-3.5 text-link" /> : <Workflow className="h-3.5 w-3.5 text-link" />}<span className="text-content-secondary">{snapshot.orchestration ? 'Orchestrator' : 'Build lead'}</span><span className="font-semibold text-content">{snapshot.orchestration ? `${snapshot.orchestration.tasks.length} planned tasks` : 'Orchestrator'}</span></div>
+            {!snapshot.orchestration && <button type="button" onClick={() => { setDetailOpen(true); setDetailTab('activity'); }} className="inline-flex items-center gap-2 rounded-xl border border-divider px-3 py-2.5 text-xs font-medium text-content-secondary hover:bg-surface-high hover:text-content"><TerminalSquare className="h-3.5 w-3.5" />View logs</button>}
+            <button type="button" onClick={() => void loadRoom(true)} className="rounded-xl border border-divider p-2.5 text-content-secondary hover:bg-surface-high hover:text-content" title="Refresh room" aria-label="Refresh room"><RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} /></button>
+            <span className="w-full text-right text-[10px] text-content-muted xl:w-auto">{lastSyncedAt ? `Synced ${timeAgo(lastSyncedAt)}` : 'Waiting for first sync'}</span>
           </div>
         </div>
 
@@ -1313,14 +1313,14 @@ export const LiveBuildRoomView: React.FC = () => {
           onActionComplete={() => loadRoom(true)}
         />}
 
-        {snapshot.orchestration && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/[0.08] bg-surface-100/50 p-1.5" role="tablist" aria-label="Build room views">
-          <button id={`${roomPanelId}-plan-tab`} type="button" role="tab" tabIndex={buildRoomPanel === 'plan' ? 0 : -1} aria-controls={`${roomPanelId}-plan-panel`} aria-selected={buildRoomPanel === 'plan'} onClick={() => setBuildRoomPanel('plan')} onKeyDown={handleRoomPanelKeyDown} className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${buildRoomPanel === 'plan' ? 'bg-violet-400/[0.12] text-violet-100 shadow-sm' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`}>
-            Orchestrator build<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'plan' ? 'bg-violet-300/10 text-violet-100/80' : 'bg-white/[0.04] text-slate-500'}`}>{snapshot.orchestration.tasks.length}</span>
+        {snapshot.orchestration && <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-divider bg-surface-raised/50 p-1.5" role="tablist" aria-label="Build room views">
+          <button id={`${roomPanelId}-plan-tab`} type="button" role="tab" tabIndex={buildRoomPanel === 'plan' ? 0 : -1} aria-controls={`${roomPanelId}-plan-panel`} aria-selected={buildRoomPanel === 'plan'} onClick={() => setBuildRoomPanel('plan')} onKeyDown={handleRoomPanelKeyDown} className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${buildRoomPanel === 'plan' ? 'bg-selected text-selected-content shadow-sm' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>
+            Orchestrator build<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'plan' ? 'bg-selected text-selected-content' : 'bg-surface-raised text-content-muted'}`}>{snapshot.orchestration.tasks.length}</span>
           </button>
-          <button id={`${roomPanelId}-live-tab`} type="button" role="tab" tabIndex={buildRoomPanel === 'live' ? 0 : -1} aria-controls={`${roomPanelId}-live-panel`} aria-selected={buildRoomPanel === 'live'} onClick={() => setBuildRoomPanel('live')} onKeyDown={handleRoomPanelKeyDown} className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 ${buildRoomPanel === 'live' ? 'bg-violet-400/[0.12] text-violet-100 shadow-sm' : 'text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`}>
-            Live agent workflows &amp; actions<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'live' ? 'bg-violet-300/10 text-violet-100/80' : 'bg-white/[0.04] text-slate-500'}`}>{agentCardsForBuild.length}</span>
+          <button id={`${roomPanelId}-live-tab`} type="button" role="tab" tabIndex={buildRoomPanel === 'live' ? 0 : -1} aria-controls={`${roomPanelId}-live-panel`} aria-selected={buildRoomPanel === 'live'} onClick={() => setBuildRoomPanel('live')} onKeyDown={handleRoomPanelKeyDown} className={`flex min-h-10 items-center gap-2 rounded-lg px-3.5 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${buildRoomPanel === 'live' ? 'bg-selected text-selected-content shadow-sm' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>
+            Live agent workflows &amp; actions<span className={`rounded-md px-1.5 py-0.5 text-[9px] tabular-nums ${buildRoomPanel === 'live' ? 'bg-selected text-selected-content' : 'bg-surface-raised text-content-muted'}`}>{agentCardsForBuild.length}</span>
           </button>
-          <span className="ml-auto hidden pr-2 text-[10px] text-slate-500 sm:block">Switch views without losing this build</span>
+          <span className="ml-auto hidden pr-2 text-[10px] text-content-muted sm:block">Switch views without losing this build</span>
         </div>}
 
         {snapshot.orchestration && <div id={`${roomPanelId}-plan-panel`} role="tabpanel" aria-labelledby={`${roomPanelId}-plan-tab`} hidden={buildRoomPanel !== 'plan'}>
@@ -1345,156 +1345,156 @@ export const LiveBuildRoomView: React.FC = () => {
         />
         </div>}
 
-        <section className={`order-5 rounded-2xl border border-violet-400/20 bg-surface-100/60 p-4 sm:p-5 ${snapshot.orchestration ? 'hidden' : ''}`}>
-          <div className="flex flex-col gap-3 border-b border-white/[0.07] pb-4 lg:flex-row lg:items-end lg:justify-between">
-            <div><div className="flex items-center gap-2 text-sm font-semibold text-white"><MessageSquare className="h-4 w-4 text-violet-300" />Recent project chat activity</div><p className="mt-1 text-xs text-slate-500">Completed and past chat agent calls. Active calls are shown with the live project agents above.</p></div>
+        <section className={`order-5 rounded-2xl border border-divider bg-surface-raised/60 p-4 sm:p-5 ${snapshot.orchestration ? 'hidden' : ''}`}>
+          <div className="flex flex-col gap-3 border-b border-divider pb-4 lg:flex-row lg:items-end lg:justify-between">
+            <div><div className="flex items-center gap-2 text-sm font-semibold text-content"><MessageSquare className="h-4 w-4 text-link" />Recent project chat activity</div><p className="mt-1 text-xs text-content-muted">Completed and past chat agent calls. Active calls are shown with the live project agents above.</p></div>
             <div className="flex flex-wrap gap-2">
-              <select aria-label="Filter by chat" value={chatFilter} onChange={event => setChatFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All chats</option>{chatOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
-              <select aria-label="Filter by agent" value={chatAgentFilter} onChange={event => setChatAgentFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All agents</option>{[...new Map(recentChatCalls.map(call => [call.agentId, call] as const)).values()].map(call => <option key={call.agentId} value={call.agentId}>{call.agentName}</option>)}</select>
-              <select aria-label="Filter by status" value={chatStatusFilter} onChange={event => setChatStatusFilter(event.target.value)} className="rounded-lg border border-white/10 bg-surface-100 px-2.5 py-2 text-[11px] text-slate-300 outline-none"><option value="all">All statuses</option>{['awaiting_confirmation', 'queued', 'running', 'completed', 'failed', 'cancelled'].map(status => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}</select>
+              <select aria-label="Filter by chat" value={chatFilter} onChange={event => setChatFilter(event.target.value)} className="rounded-lg border border-control bg-surface-raised px-2.5 py-2 text-[11px] text-content-secondary outline-none"><option value="all">All chats</option>{chatOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}</select>
+              <select aria-label="Filter by agent" value={chatAgentFilter} onChange={event => setChatAgentFilter(event.target.value)} className="rounded-lg border border-control bg-surface-raised px-2.5 py-2 text-[11px] text-content-secondary outline-none"><option value="all">All agents</option>{[...new Map(recentChatCalls.map(call => [call.agentId, call] as const)).values()].map(call => <option key={call.agentId} value={call.agentId}>{call.agentName}</option>)}</select>
+              <select aria-label="Filter by status" value={chatStatusFilter} onChange={event => setChatStatusFilter(event.target.value)} className="rounded-lg border border-control bg-surface-raised px-2.5 py-2 text-[11px] text-content-secondary outline-none"><option value="all">All statuses</option>{['awaiting_confirmation', 'queued', 'running', 'completed', 'failed', 'cancelled'].map(status => <option key={status} value={status}>{status.replace(/_/g, ' ')}</option>)}</select>
             </div>
           </div>
           {recentChatCalls.length === 0 ? (
-            <div className="mt-4 rounded-xl border border-dashed border-white/10 px-4 py-7 text-center"><div className="text-sm font-medium text-slate-300">{(snapshot.chatCalls ?? []).length ? 'Active chat calls are in the agent overview' : 'No project chat activity yet'}</div><p className="mt-1 text-xs text-slate-500">{(snapshot.chatCalls ?? []).length ? 'Select a running project chat agent above to inspect its current work.' : 'Past calls will appear here after a project agent is used in chat.'}</p><button type="button" onClick={() => setActiveTab('chat')} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/[0.06]"><MessageSquare className="h-3.5 w-3.5" />Open project chat</button></div>
+            <div className="mt-4 rounded-xl border border-dashed border-divider px-4 py-7 text-center"><div className="text-sm font-medium text-content-secondary">{(snapshot.chatCalls ?? []).length ? 'Active chat calls are in the agent overview' : 'No project chat activity yet'}</div><p className="mt-1 text-xs text-content-muted">{(snapshot.chatCalls ?? []).length ? 'Select a running project chat agent above to inspect its current work.' : 'Past calls will appear here after a project agent is used in chat.'}</p><button type="button" onClick={() => setActiveTab('chat')} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-divider px-3 py-2 text-xs text-content hover:bg-surface-high"><MessageSquare className="h-3.5 w-3.5" />Open project chat</button></div>
           ) : (
             <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(260px,0.75fr)_minmax(0,1.5fr)]">
               <div className="space-y-2">
                 {visibleChatCalls.map(call => {
                   const active = call.status === 'running' || call.status === 'queued';
                   const selected = selectedChatCall?.id === call.id;
-                  const tone = call.status === 'completed' ? 'text-emerald-300' : call.status === 'failed' || call.status === 'cancelled' ? 'text-rose-300' : call.status === 'awaiting_confirmation' ? 'text-amber-200' : 'text-violet-200';
-                  return <button key={call.id} type="button" onClick={() => { setSelectedChatCallId(call.id); setPatchPreview(null); }} aria-pressed={selected} className={`w-full rounded-xl border p-3 text-left transition ${selected ? 'border-violet-400/50 bg-violet-400/[0.07]' : 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.045]'}`}>
-                    <div className="flex items-center justify-between gap-3"><span className="truncate text-xs font-semibold text-white">{call.agentName}</span><span className={`flex shrink-0 items-center gap-1.5 text-[10px] font-medium ${tone}`}><span className={`h-1.5 w-1.5 rounded-full bg-current ${active ? 'animate-pulse' : ''}`} />{call.status.replace(/_/g, ' ')}</span></div>
-                    <div className="mt-1 truncate text-[11px] text-slate-400">{call.origin === 'chat_turn' ? 'Chat message' : 'Agent call'} · {call.chatLabel} · {call.operationMode}</div>
-                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-slate-500"><span className="truncate">{call.target?.label || call.target?.type || 'No target'}</span><span className="shrink-0">{timeAgo(call.startedAt || call.createdAt)}</span></div>
+                  const tone = call.status === 'completed' ? 'text-status-success' : call.status === 'failed' || call.status === 'cancelled' ? 'text-status-danger' : call.status === 'awaiting_confirmation' ? 'text-status-warning' : 'text-link';
+                  return <button key={call.id} type="button" onClick={() => { setSelectedChatCallId(call.id); setPatchPreview(null); }} aria-pressed={selected} className={`w-full rounded-xl border p-3 text-left transition ${selected ? 'border-divider bg-selected' : 'border-divider bg-surface-raised hover:bg-surface-high'}`}>
+                    <div className="flex items-center justify-between gap-3"><span className="truncate text-xs font-semibold text-content">{call.agentName}</span><span className={`flex shrink-0 items-center gap-1.5 text-[10px] font-medium ${tone}`}><span className={`h-1.5 w-1.5 rounded-full bg-current ${active ? 'animate-pulse' : ''}`} />{call.status.replace(/_/g, ' ')}</span></div>
+                    <div className="mt-1 truncate text-[11px] text-content-secondary">{call.origin === 'chat_turn' ? 'Chat message' : 'Agent call'} · {call.chatLabel} · {call.operationMode}</div>
+                    <div className="mt-2 flex items-center justify-between gap-2 text-[10px] text-content-muted"><span className="truncate">{call.target?.label || call.target?.type || 'No target'}</span><span className="shrink-0">{timeAgo(call.startedAt || call.createdAt)}</span></div>
                   </button>;
                 })}
-                {visibleChatCalls.length === 0 && <div className="rounded-xl border border-dashed border-white/10 p-4 text-xs text-slate-500">No calls match these filters.</div>}
+                {visibleChatCalls.length === 0 && <div className="rounded-xl border border-dashed border-divider p-4 text-xs text-content-muted">No calls match these filters.</div>}
               </div>
-              {selectedChatCall ? <div className="min-w-0 rounded-xl border border-white/[0.08] bg-black/10 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-semibold text-white">{selectedChatCall.agentName}<span className="font-normal text-slate-400"> · {selectedChatCall.agentRole}</span></div><div className="mt-1 text-xs text-slate-500">{selectedChatCall.origin === 'chat_turn' ? 'Chat message' : 'Agent call'} · {selectedChatCall.chatLabel} · {selectedChatCall.operationMode} · {selectedChatCall.target?.label || selectedChatCall.target?.type || 'Project chat'}</div></div><div className="flex flex-wrap gap-2">{selectedChatCall.canOpenChat && selectedChatCall.threadId && <button type="button" onClick={() => { setActiveThreadId(selectedChatCall.threadId!); setActiveTab('chat'); }} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-2 text-[11px] text-slate-200 hover:bg-white/[0.06]"><MessageSquare className="h-3.5 w-3.5" />Open chat</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && <button type="button" onClick={() => void reviewChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-violet-400/30 px-2.5 py-2 text-[11px] text-violet-200 hover:bg-violet-400/10"><FileCode2 className="h-3.5 w-3.5" />{patchPreview?.callId === selectedChatCall.id ? 'Refresh diff' : 'Review diff'}</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && selectedChatCall.status === 'completed' && can('run_agents') && !selectedChatCall.patchApplied && <button type="button" disabled={patchBusyCallId === selectedChatCall.id} onClick={() => void applyChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 px-2.5 py-2 text-[11px] text-emerald-200 hover:bg-emerald-400/10 disabled:opacity-50"><Check className="h-3.5 w-3.5" />{patchBusyCallId === selectedChatCall.id ? 'Applying…' : 'Apply patch'}</button>}{selectedChatCall.patchApplied && <span className="self-center text-[10px] text-emerald-300">Patch applied</span>}</div></div>
-                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-slate-500"><span>Working copy: {selectedChatCall.workingCopyId?.split(':').at(-1) || 'project workspace'}</span>{selectedChatCall.workingBranch && <span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" />{selectedChatCall.workingBranch}</span>}{selectedChatCall.target?.type === 'issue' && <span>Task: {selectedChatCall.target.label || selectedChatCall.target.id}</span>}{selectedChatCall.target?.type === 'pull_request' && selectedChatCall.target.id && <a href={selectedChatCall.target.id} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-violet-300 hover:text-violet-200">{selectedChatCall.target.label || 'Pull request'}<ExternalLink className="h-3 w-3" /></a>}</div>
-                <div className="mt-4 max-h-[360px] space-y-3 overflow-y-auto border-t border-white/[0.07] pt-3">
-                  {selectedChatCall.activities.length ? selectedChatCall.activities.slice().reverse().map(activity => <div key={activity.id} className="flex gap-3"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'tool' || activity.kind === 'tool_result' ? 'bg-sky-400' : 'bg-violet-400'}`} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-slate-200">{activity.toolName && <span className="font-medium text-violet-200">{activity.toolName} · </span>}{activity.message}</span><time className="text-[10px] text-slate-500">{timeAgo(activity.createdAt)}</time></div>{activity.detail && <div className="mt-1 text-[11px] leading-4 text-slate-500">{activity.detail}</div>}{activity.paths?.length ? <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <code key={file} className="rounded bg-white/[0.05] px-1.5 py-1 text-[10px] text-slate-300">{file}</code>)}</div> : null}</div></div>) : <div className="text-xs text-slate-500">Waiting for the first activity event.</div>}
+              {selectedChatCall ? <div className="min-w-0 rounded-xl border border-divider bg-well p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><div className="text-sm font-semibold text-content">{selectedChatCall.agentName}<span className="font-normal text-content-secondary"> · {selectedChatCall.agentRole}</span></div><div className="mt-1 text-xs text-content-muted">{selectedChatCall.origin === 'chat_turn' ? 'Chat message' : 'Agent call'} · {selectedChatCall.chatLabel} · {selectedChatCall.operationMode} · {selectedChatCall.target?.label || selectedChatCall.target?.type || 'Project chat'}</div></div><div className="flex flex-wrap gap-2">{selectedChatCall.canOpenChat && selectedChatCall.threadId && <button type="button" onClick={() => { setActiveThreadId(selectedChatCall.threadId!); setActiveTab('chat'); }} className="inline-flex items-center gap-1.5 rounded-lg border border-divider px-2.5 py-2 text-[11px] text-content hover:bg-surface-high"><MessageSquare className="h-3.5 w-3.5" />Open chat</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && <button type="button" onClick={() => void reviewChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-divider px-2.5 py-2 text-[11px] text-selected-content hover:bg-selected"><FileCode2 className="h-3.5 w-3.5" />{patchPreview?.callId === selectedChatCall.id ? 'Refresh diff' : 'Review diff'}</button>}{selectedChatCall.canOpenChat && selectedChatCall.hasPatch && selectedChatCall.status === 'completed' && can('run_agents') && !selectedChatCall.patchApplied && <button type="button" disabled={patchBusyCallId === selectedChatCall.id} onClick={() => void applyChatPatch(selectedChatCall)} className="inline-flex items-center gap-1.5 rounded-lg border border-status-success-border px-2.5 py-2 text-[11px] text-status-success hover:bg-status-success-subtle disabled:opacity-50"><Check className="h-3.5 w-3.5" />{patchBusyCallId === selectedChatCall.id ? 'Applying…' : 'Apply patch'}</button>}{selectedChatCall.patchApplied && <span className="self-center text-[10px] text-status-success">Patch applied</span>}</div></div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-content-muted"><span>Working copy: {selectedChatCall.workingCopyId?.split(':').at(-1) || 'project workspace'}</span>{selectedChatCall.workingBranch && <span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" />{selectedChatCall.workingBranch}</span>}{selectedChatCall.target?.type === 'issue' && <span>Task: {selectedChatCall.target.label || selectedChatCall.target.id}</span>}{selectedChatCall.target?.type === 'pull_request' && selectedChatCall.target.id && <a href={selectedChatCall.target.id} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-link hover:text-link-hover">{selectedChatCall.target.label || 'Pull request'}<ExternalLink className="h-3 w-3" /></a>}</div>
+                <div className="mt-4 max-h-[360px] space-y-3 overflow-y-auto border-t border-divider pt-3">
+                  {selectedChatCall.activities.length ? selectedChatCall.activities.slice().reverse().map(activity => <div key={activity.id} className="flex gap-3"><span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'tool' || activity.kind === 'tool_result' ? 'bg-sky-400' : 'bg-violet-400'}`} /><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs text-content">{activity.toolName && <span className="font-medium text-link">{activity.toolName} · </span>}{activity.message}</span><time className="text-[10px] text-content-muted">{timeAgo(activity.createdAt)}</time></div>{activity.detail && <div className="mt-1 text-[11px] leading-4 text-content-muted">{activity.detail}</div>}{activity.paths?.length ? <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <code key={file} className="rounded bg-surface-raised px-1.5 py-1 text-[10px] text-content-secondary">{file}</code>)}</div> : null}</div></div>) : <div className="text-xs text-content-muted">Waiting for the first activity event.</div>}
                 </div>
-                {patchPreview?.callId === selectedChatCall.id && <div className="mt-4 border-t border-white/[0.07] pt-3"><div className="mb-2 flex items-center justify-between"><div className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Proposed diff</div><button type="button" onClick={() => setPatchPreview(null)} className="text-[10px] text-slate-500 hover:text-slate-200">Close</button></div><pre className="max-h-[420px] overflow-auto rounded-lg border border-white/[0.07] bg-black/30 p-3 text-[10px] leading-5 text-slate-300">{patchPreview.content}</pre></div>}
-              </div> : <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-white/10 text-xs text-slate-500">Select an agent call to inspect its activity.</div>}
+                {patchPreview?.callId === selectedChatCall.id && <div className="mt-4 border-t border-divider pt-3"><div className="mb-2 flex items-center justify-between"><div className="text-[10px] uppercase tracking-[0.14em] text-content-muted">Proposed diff</div><button type="button" onClick={() => setPatchPreview(null)} className="text-[10px] text-content-muted hover:text-content">Close</button></div><pre className="max-h-[420px] overflow-auto rounded-lg border border-divider bg-well p-3 text-[10px] leading-5 text-content-secondary">{patchPreview.content}</pre></div>}
+              </div> : <div className="flex min-h-48 items-center justify-center rounded-xl border border-dashed border-divider text-xs text-content-muted">Select an agent call to inspect its activity.</div>}
             </div>
           )}
         </section>
 
-        <div className={`order-1 flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4 lg:flex-row lg:items-center lg:justify-between ${snapshot.orchestration ? 'hidden' : ''}`}>
-          <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-violet-400/10 text-violet-200"><Workflow className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-white">{snapshot.activeRun?.status === 'running' ? 'Earlier build in progress' : 'Start a coordinated product build'}</div><div className="mt-1 text-xs text-slate-400">{snapshot.activeRun?.status === 'running' ? 'This build is using the previous workflow. Stop it before starting a new Orchestrator build.' : 'Describe the change in Project chat. The Orchestrator will plan work across selected codebases and show its assignments before anyone starts.'}</div></div></div>
-          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.activeRun?.status === 'running' ? <button type="button" onClick={() => void handleStopBuild()} disabled={!snapshot.canRun || stoppingRun} title="Stop the earlier build." className="inline-flex items-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3.5 py-2.5 text-xs font-semibold text-rose-200 transition hover:border-rose-300/50 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-45"><Square className={`h-3.5 w-3.5 ${stoppingRun ? 'animate-pulse' : 'fill-current'}`} />{stoppingRun ? 'Stopping…' : 'Stop earlier build'}</button> : <button type="button" onClick={openOrchestratorBuild} disabled={!can('run_agents')} title={!can('run_agents') ? 'You do not have permission to start project builds.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-violet-400 px-3.5 py-2.5 text-xs font-semibold text-[#171224] shadow-lg shadow-violet-500/15 transition hover:bg-violet-300 disabled:cursor-not-allowed disabled:opacity-45"><Workflow className="h-3.5 w-3.5" />Start Orchestrator build</button>}</div>
+        <div className={`order-1 flex flex-col gap-3 rounded-2xl border border-divider bg-surface-raised/60 p-4 lg:flex-row lg:items-center lg:justify-between ${snapshot.orchestration ? 'hidden' : ''}`}>
+          <div className="flex min-w-0 items-center gap-3"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-selected text-selected-content"><Workflow className="h-4 w-4" /></div><div className="min-w-0"><div className="truncate text-sm font-medium text-content">{snapshot.activeRun?.status === 'running' ? 'Earlier build in progress' : 'Start a coordinated product build'}</div><div className="mt-1 text-xs text-content-secondary">{snapshot.activeRun?.status === 'running' ? 'This build is using the previous workflow. Stop it before starting a new Orchestrator build.' : 'Describe the change in Project chat. The Orchestrator will plan work across selected codebases and show its assignments before anyone starts.'}</div></div></div>
+          <div className="flex shrink-0 items-center gap-2"><span className={`inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs font-medium ${roomStatusTone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{roomStatus}</span>{snapshot.activeRun?.status === 'running' ? <button type="button" onClick={() => void handleStopBuild()} disabled={!snapshot.canRun || stoppingRun} title="Stop the earlier build." className="inline-flex items-center gap-2 rounded-xl border border-status-danger-border bg-status-danger-subtle px-3.5 py-2.5 text-xs font-semibold text-status-danger transition hover:border-status-danger-border hover:bg-status-danger-subtle disabled:cursor-not-allowed disabled:opacity-45"><Square className={`h-3.5 w-3.5 ${stoppingRun ? 'animate-pulse' : 'fill-current'}`} />{stoppingRun ? 'Stopping…' : 'Stop earlier build'}</button> : <button type="button" onClick={openOrchestratorBuild} disabled={!can('run_agents')} title={!can('run_agents') ? 'You do not have permission to start project builds.' : undefined} className="inline-flex items-center gap-2 rounded-xl bg-action px-3.5 py-2.5 text-xs font-semibold text-on-action shadow-lg shadow-violet-500/15 transition hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-45"><Workflow className="h-3.5 w-3.5" />Start Orchestrator build</button>}</div>
         </div>
 
-        {buildRepository && buildBranch && <section className="order-2 flex flex-col gap-4 rounded-2xl border border-sky-400/20 bg-gradient-to-r from-sky-500/[0.07] to-surface-100/50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-live="polite">
+        {buildRepository && buildBranch && <section className="order-2 flex flex-col gap-4 rounded-2xl border border-status-info-border bg-gradient-to-r from-sky-500/[0.07] to-surface-100/50 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5" aria-live="polite">
           <div className="flex min-w-0 items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-sky-400/10 text-sky-200"><Globe2 className="h-5 w-5" /></div>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-status-info-subtle text-status-info"><Globe2 className="h-5 w-5" /></div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-sm font-semibold text-white">Build preview</h2>
+                <h2 className="text-sm font-semibold text-content">Build preview</h2>
                 <span className={`rounded-full border px-2 py-1 text-[10px] font-medium ${
-                  buildPreview?.state === 'ready' ? 'border-emerald-400/25 bg-emerald-400/10 text-emerald-200'
-                    : buildPreview?.state === 'failed' || previewError ? 'border-rose-400/25 bg-rose-400/10 text-rose-200'
-                      : buildPreview?.state === 'unsupported' ? 'border-white/10 bg-white/[0.04] text-slate-300'
-                        : 'border-amber-400/25 bg-amber-400/10 text-amber-100'
+                  buildPreview?.state === 'ready' ? 'border-status-success-border bg-status-success-subtle text-status-success'
+                    : buildPreview?.state === 'failed' || previewError ? 'border-status-danger-border bg-status-danger-subtle text-status-danger'
+                      : buildPreview?.state === 'unsupported' ? 'border-divider bg-surface-raised text-content-secondary'
+                        : 'border-status-warning-border bg-status-warning-subtle text-status-warning'
                 }`}>
                   {previewLoading ? 'Checking host…' : previewError ? 'Status unavailable' : buildPreview?.state === 'ready' ? 'Ready' : buildPreview?.state === 'building' ? 'Deploying' : buildPreview?.state === 'failed' ? 'Deployment failed' : buildPreview?.state === 'unsupported' ? 'Provider limitation' : buildPreview?.state === 'unavailable' ? 'Host unavailable' : 'Waiting for preview'}
                 </span>
                 {buildPreview?.ci && <span className={`rounded-full border px-2 py-1 text-[10px] font-medium ${ciStateTone(buildPreview.ci.state)}`}>CI {ciStateLabel(buildPreview.ci.state)}</span>}
               </div>
-              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
-                <span className="truncate">{buildRepository}</span><span className="text-slate-600">·</span><span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" />{buildBranch}</span>
-                {buildPreview?.platform && <><span className="text-slate-600">·</span><span className="capitalize">{buildPreview.platform}</span></>}
-                {buildPreview?.ci && <><span className="text-slate-600">·</span><span>{buildPreview.ci.checks.length ? `${buildPreview.ci.checks.length} CI checks` : 'No CI checks reported yet'}</span>{buildPreview.ci.commitSha && <code className="text-slate-500">{buildPreview.ci.commitSha.slice(0, 7)}</code>}</>}
+              <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-content-secondary">
+                <span className="truncate">{buildRepository}</span><span className="text-content-muted">·</span><span className="inline-flex items-center gap-1"><GitBranch className="h-3 w-3" />{buildBranch}</span>
+                {buildPreview?.platform && <><span className="text-content-muted">·</span><span className="capitalize">{buildPreview.platform}</span></>}
+                {buildPreview?.ci && <><span className="text-content-muted">·</span><span>{buildPreview.ci.checks.length ? `${buildPreview.ci.checks.length} CI checks` : 'No CI checks reported yet'}</span>{buildPreview.ci.commitSha && <code className="text-content-muted">{buildPreview.ci.commitSha.slice(0, 7)}</code>}</>}
               </div>
               {buildPreview?.ci?.checks.length ? <div className="mt-2 flex flex-wrap gap-1.5" aria-label="Latest GitHub CI checks">
                 {buildPreview.ci.checks.slice(0, 3).map((check, index) => {
-                  const tone = check.state === 'failed' ? 'border-rose-400/20 bg-rose-400/[0.06] text-rose-200' :
-                    check.state === 'passed' || check.state === 'skipped' ? 'border-emerald-400/20 bg-emerald-400/[0.06] text-emerald-200' :
-                      check.state === 'running' || check.state === 'queued' ? 'border-sky-400/20 bg-sky-400/[0.06] text-sky-100' :
-                        'border-white/[0.08] bg-white/[0.03] text-slate-300';
+                  const tone = check.state === 'failed' ? 'border-status-danger-border bg-status-danger-subtle text-status-danger' :
+                    check.state === 'passed' || check.state === 'skipped' ? 'border-status-success-border bg-status-success-subtle text-status-success' :
+                      check.state === 'running' || check.state === 'queued' ? 'border-status-info-border bg-status-info-subtle text-status-info' :
+                        'border-divider bg-surface-raised text-content-secondary';
                   const label = check.state === 'passed' ? 'passed' : check.state === 'failed' ? 'failed' : check.state === 'running' ? 'running' : check.state === 'queued' ? 'queued' : check.state === 'skipped' ? 'skipped' : 'unknown';
                   const content = <>{check.name} · {label}</>;
                   return check.url
-                    ? <a key={`${check.name}-${index}`} href={check.url} target="_blank" rel="noreferrer" title={check.name} className={`max-w-full truncate rounded-md border px-2 py-1 text-[10px] ${tone} hover:bg-white/[0.08]`}>{content}</a>
+                    ? <a key={`${check.name}-${index}`} href={check.url} target="_blank" rel="noreferrer" title={check.name} className={`max-w-full truncate rounded-md border px-2 py-1 text-[10px] ${tone} hover:bg-surface-high`}>{content}</a>
                     : <span key={`${check.name}-${index}`} title={check.name} className={`max-w-full truncate rounded-md border px-2 py-1 text-[10px] ${tone}`}>{content}</span>;
                 })}
-                {buildPreview.ci.checks.length > 3 && <span className="rounded-md border border-white/[0.08] px-2 py-1 text-[10px] text-slate-500">+{buildPreview.ci.checks.length - 3} more</span>}
+                {buildPreview.ci.checks.length > 3 && <span className="rounded-md border border-divider px-2 py-1 text-[10px] text-content-muted">+{buildPreview.ci.checks.length - 3} more</span>}
               </div> : null}
-              {(previewError || buildPreview?.error) && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-400">{previewError || buildPreview?.error}</p>}
-              {buildPreview?.ci?.state === 'not_run' && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">GitHub has not reported checks for this branch yet. Repository CI commonly starts when the build pull request opens.</p>}
-              {buildPreview?.ci?.error && <p className="mt-2 max-w-2xl text-xs leading-5 text-amber-200/80">CI status could not be read: {buildPreview.ci.error}</p>}
-              {previewHealth && <p className={`mt-2 text-xs ${previewHealth.ok ? 'text-emerald-200' : 'text-amber-200'}`} role="status">
+              {(previewError || buildPreview?.error) && <p className="mt-2 max-w-2xl text-xs leading-5 text-content-secondary">{previewError || buildPreview?.error}</p>}
+              {buildPreview?.ci?.state === 'not_run' && <p className="mt-2 max-w-2xl text-xs leading-5 text-content-muted">GitHub has not reported checks for this branch yet. Repository CI commonly starts when the build pull request opens.</p>}
+              {buildPreview?.ci?.error && <p className="mt-2 max-w-2xl text-xs leading-5 text-status-warning">CI status could not be read: {buildPreview.ci.error}</p>}
+              {previewHealth && <p className={`mt-2 text-xs ${previewHealth.ok ? 'text-status-success' : 'text-status-warning'}`} role="status">
                 {previewHealth.ok ? `Preview responds · HTTP ${previewHealth.status} · ${previewHealth.latencyMs} ms` : `Preview did not respond${previewHealth.status ? ` · HTTP ${previewHealth.status}` : ''}${previewHealth.error ? ` · ${previewHealth.error}` : ''}`}
               </p>}
-              {canOfferPreviewHosting && <p className="mt-2 max-w-2xl text-xs leading-5 text-slate-500">This creates or reuses the repository’s Vercel project. Hosting usage may incur charges on your provider account.</p>}
-              {previewHostingSetupError && <p className="mt-2 max-w-2xl text-xs leading-5 text-rose-200">{previewHostingSetupError}</p>}
-              {!buildPreview && !previewError && !previewLoading && <p className="mt-2 text-xs text-slate-500">Checking the hosting provider for this build’s branch deployment.</p>}
+              {canOfferPreviewHosting && <p className="mt-2 max-w-2xl text-xs leading-5 text-content-muted">This creates or reuses the repository’s Vercel project. Hosting usage may incur charges on your provider account.</p>}
+              {previewHostingSetupError && <p className="mt-2 max-w-2xl text-xs leading-5 text-status-danger">{previewHostingSetupError}</p>}
+              {!buildPreview && !previewError && !previewLoading && <p className="mt-2 text-xs text-content-muted">Checking the hosting provider for this build’s branch deployment.</p>}
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {canOfferPreviewHosting && <button type="button" onClick={() => void handleSetUpPreviewHosting()} disabled={settingUpPreviewHosting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-sky-300/25 bg-sky-300/[0.08] px-3.5 py-2.5 text-xs font-semibold text-sky-100 transition hover:bg-sky-300/[0.14] disabled:cursor-wait disabled:opacity-60">
+            {canOfferPreviewHosting && <button type="button" onClick={() => void handleSetUpPreviewHosting()} disabled={settingUpPreviewHosting} className="inline-flex items-center justify-center gap-2 rounded-xl border border-status-info-border bg-status-info-subtle px-3.5 py-2.5 text-xs font-semibold text-status-info transition hover:bg-status-info-subtle disabled:cursor-wait disabled:opacity-60">
               {settingUpPreviewHosting ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Globe2 className="h-3.5 w-3.5" />}{settingUpPreviewHosting ? 'Setting up…' : 'Set up preview hosting'}
             </button>}
-            {buildPreview?.state === 'ready' && buildPreview.platform === 'vercel' && buildPreview.url && <button type="button" onClick={() => void handleCheckPreviewHealth()} disabled={checkingPreviewHealth} className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-300/20 px-3.5 py-2.5 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-300/[0.07] disabled:cursor-wait disabled:opacity-60">
+            {buildPreview?.state === 'ready' && buildPreview.platform === 'vercel' && buildPreview.url && <button type="button" onClick={() => void handleCheckPreviewHealth()} disabled={checkingPreviewHealth} className="inline-flex items-center justify-center gap-2 rounded-xl border border-status-success-border px-3.5 py-2.5 text-xs font-semibold text-status-success transition hover:bg-status-success-subtle disabled:cursor-wait disabled:opacity-60">
               {checkingPreviewHealth ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}{checkingPreviewHealth ? 'Checking…' : 'Check live URL'}
             </button>}
-            {buildPreview?.platform === 'vercel' && buildPreview.url && <button type="button" onClick={() => void handleToggleBuildLogs()} disabled={buildLogsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.05] disabled:cursor-wait disabled:opacity-60">
+            {buildPreview?.platform === 'vercel' && buildPreview.url && <button type="button" onClick={() => void handleToggleBuildLogs()} disabled={buildLogsLoading} className="inline-flex items-center justify-center gap-2 rounded-xl border border-divider px-3.5 py-2.5 text-xs font-semibold text-content-secondary transition hover:bg-surface-high disabled:cursor-wait disabled:opacity-60">
               {buildLogsLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <TerminalSquare className="h-3.5 w-3.5" />}{buildLogsLoading ? 'Loading logs…' : showBuildLogs ? 'Hide build logs' : 'View build logs'}
             </button>}
-            {buildPreview?.ci?.checksUrl && <a href={buildPreview.ci.checksUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-3.5 py-2.5 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.05]">View CI<ExternalLink className="h-3.5 w-3.5" /></a>}
-            {buildPreview?.url && <a href={buildPreview.url} target="_blank" rel="noreferrer" className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition ${buildPreview.state === 'ready' ? 'border-sky-300/30 bg-sky-300/10 text-sky-100 hover:bg-sky-300/15' : 'border-white/10 text-slate-300 hover:bg-white/[0.05]'}`}>
+            {buildPreview?.ci?.checksUrl && <a href={buildPreview.ci.checksUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl border border-divider px-3.5 py-2.5 text-xs font-semibold text-content-secondary transition hover:bg-surface-high">View CI<ExternalLink className="h-3.5 w-3.5" /></a>}
+            {buildPreview?.url && <a href={buildPreview.url} target="_blank" rel="noreferrer" className={`inline-flex items-center justify-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-semibold transition ${buildPreview.state === 'ready' ? 'border-status-info-border bg-status-info-subtle text-status-info hover:bg-status-info-subtle' : 'border-divider text-content-secondary hover:bg-surface-high'}`}>
               {buildPreview.state === 'ready' ? 'Open preview' : 'View deployment'}<ExternalLink className="h-3.5 w-3.5" />
             </a>}
           </div>
         </section>}
 
-        {!snapshot.orchestration && showBuildLogs && <section className="order-2 overflow-hidden rounded-2xl border border-white/[0.08] bg-black/25" aria-label="Vercel build logs" aria-live="polite">
-          <div className="flex items-center justify-between gap-3 border-b border-white/[0.07] px-4 py-3">
-            <div className="flex items-center gap-2 text-xs font-semibold text-slate-200"><ScrollText className="h-3.5 w-3.5 text-sky-200" />Preview build output <span className="font-normal text-slate-500">· {buildBranch}</span></div>
-            <button type="button" onClick={() => void handleToggleBuildLogs()} className="text-[11px] text-slate-400 hover:text-white">Close</button>
+        {!snapshot.orchestration && showBuildLogs && <section className="order-2 overflow-hidden rounded-2xl border border-divider bg-well" aria-label="Vercel build logs" aria-live="polite">
+          <div className="flex items-center justify-between gap-3 border-b border-divider px-4 py-3">
+            <div className="flex items-center gap-2 text-xs font-semibold text-content"><ScrollText className="h-3.5 w-3.5 text-status-info" />Preview build output <span className="font-normal text-content-muted">· {buildBranch}</span></div>
+            <button type="button" onClick={() => void handleToggleBuildLogs()} className="text-[11px] text-content-secondary hover:text-content">Close</button>
           </div>
-          {buildLogsLoading ? <div className="px-4 py-5 text-xs text-slate-500">Loading build output from Vercel…</div> : buildLogsError ? <div className="px-4 py-4 text-xs text-amber-200" role="alert">{buildLogsError}</div> : buildLogs?.logs.length ? <div className="max-h-64 space-y-1 overflow-auto p-3 font-mono text-[10px] leading-5">
-            {buildLogs.logs.slice(-40).map(line => <div key={line.id} className={line.level === 'error' ? 'text-rose-200' : line.level === 'warn' ? 'text-amber-200' : 'text-slate-300'}><span className="mr-2 text-slate-600">{Number.isNaN(Date.parse(line.timestamp)) ? '' : new Date(line.timestamp).toLocaleTimeString()}</span>{line.message}</div>)}
-          </div> : <div className="px-4 py-5 text-xs text-slate-500">No build output has been reported for this deployment.</div>}
+          {buildLogsLoading ? <div className="px-4 py-5 text-xs text-content-muted">Loading build output from Vercel…</div> : buildLogsError ? <div className="px-4 py-4 text-xs text-status-warning" role="alert">{buildLogsError}</div> : buildLogs?.logs.length ? <div className="max-h-64 space-y-1 overflow-auto p-3 font-mono text-[10px] leading-5">
+            {buildLogs.logs.slice(-40).map(line => <div key={line.id} className={line.level === 'error' ? 'text-status-danger' : line.level === 'warn' ? 'text-status-warning' : 'text-content-secondary'}><span className="mr-2 text-content-muted">{Number.isNaN(Date.parse(line.timestamp)) ? '' : new Date(line.timestamp).toLocaleTimeString()}</span>{line.message}</div>)}
+          </div> : <div className="px-4 py-5 text-xs text-content-muted">No build output has been reported for this deployment.</div>}
         </section>}
 
         {!snapshot.orchestration && snapshot.phases.length > 0 && <div className="order-3"><PhaseTimeline phases={snapshot.phases} /></div>}
 
         {<div id={snapshot.orchestration ? `${roomPanelId}-live-panel` : undefined} role={snapshot.orchestration ? 'tabpanel' : undefined} aria-labelledby={snapshot.orchestration ? `${roomPanelId}-live-tab` : undefined} hidden={Boolean(snapshot.orchestration && buildRoomPanel !== 'live')} className="space-y-4">
-        {snapshot.orchestration && orchestrationBlocked && buildRoomPanel === 'live' && <section className="order-1 rounded-xl border border-amber-300/20 bg-amber-300/[0.045] px-4 py-3.5" role="status" aria-live="polite">
+        {snapshot.orchestration && orchestrationBlocked && buildRoomPanel === 'live' && <section className="order-1 rounded-xl border border-status-warning-border bg-status-warning-subtle px-4 py-3.5" role="status" aria-live="polite">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
-              <div className="flex items-center gap-2 text-sm font-semibold text-amber-100"><AlertTriangle className="h-4 w-4" />Build needs attention</div>
-              <p className="mt-1 text-xs text-slate-300">{stoppedTask ? `${stoppedTask.title} · ${stoppedTask.ownerName}` : 'The Orchestrator stopped before the next handoff.'}</p>
-              <p className="mt-2 max-w-4xl break-words text-xs leading-5 text-amber-100/75">{latestStoppedAttempt?.failureReason || snapshot.orchestration.run.stoppedReason || 'Review the build plan for the saved failure details.'}</p>
-              {latestStoppedAttempt?.failureReason?.toLowerCase().includes('report') && <p className="mt-1 text-[11px] text-slate-400">Alpha’s checks do not replace an independent review. This report must be accepted before the build can continue.</p>}
+              <div className="flex items-center gap-2 text-sm font-semibold text-status-warning"><AlertTriangle className="h-4 w-4" />Build needs attention</div>
+              <p className="mt-1 text-xs text-content-secondary">{stoppedTask ? `${stoppedTask.title} · ${stoppedTask.ownerName}` : 'The Orchestrator stopped before the next handoff.'}</p>
+              <p className="mt-2 max-w-4xl break-words text-xs leading-5 text-status-warning">{latestStoppedAttempt?.failureReason || snapshot.orchestration.run.stoppedReason || 'Review the build plan for the saved failure details.'}</p>
+              {latestStoppedAttempt?.failureReason?.toLowerCase().includes('report') && <p className="mt-1 text-[11px] text-content-secondary">Alpha’s checks do not replace an independent review. This report must be accepted before the build can continue.</p>}
             </div>
-            <button type="button" onClick={() => setBuildRoomPanel('plan')} className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-amber-200/20 px-3 text-xs font-semibold text-amber-100 hover:bg-amber-100/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200">Review build plan<ArrowRight className="h-3.5 w-3.5" /></button>
+            <button type="button" onClick={() => setBuildRoomPanel('plan')} className="inline-flex min-h-9 shrink-0 items-center gap-2 rounded-lg border border-status-warning-border px-3 text-xs font-semibold text-status-warning hover:bg-status-warning-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">Review build plan<ArrowRight className="h-3.5 w-3.5" /></button>
           </div>
         </section>}
 
         <div className={`order-2 grid gap-4 ${detailOpen && (selectedCard || selectedConnection || inspectorOrchestratorOpen) ? 'xl:grid-cols-[minmax(0,1fr)_minmax(340px,390px)]' : 'xl:grid-cols-1'}`}>
           <div className="min-w-0 space-y-4">
-            <div className="flex flex-col gap-3 rounded-2xl border border-white/[0.08] bg-surface-100/45 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-2xl border border-divider bg-surface-raised/45 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <div className="text-sm font-semibold text-white">{snapshot.orchestration ? 'Live agent actions' : 'Project agent activity'}</div>
-                <div className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">{snapshot.orchestration ? `${agentCardsForBuild.length} assigned ${agentCardsForBuild.length === 1 ? 'specialist' : 'specialists'} · ${snapshot.orchestration.tasks.length} tasks. Expand an agent to see its tasks; select a node to follow its commands and actions.` : `Agent activity and recorded handoffs for ${activeProject?.name || snapshot.project.name}.`}</div>
+                <div className="text-sm font-semibold text-content">{snapshot.orchestration ? 'Live agent actions' : 'Project agent activity'}</div>
+                <div className="mt-1 max-w-3xl text-xs leading-5 text-content-muted">{snapshot.orchestration ? `${agentCardsForBuild.length} assigned ${agentCardsForBuild.length === 1 ? 'specialist' : 'specialists'} · ${snapshot.orchestration.tasks.length} tasks. Expand an agent to see its tasks; select a node to follow its commands and actions.` : `Agent activity and recorded handoffs for ${activeProject?.name || snapshot.project.name}.`}</div>
               </div>
-              {agentCardsForBuild.length > 0 && <label className="flex min-w-0 items-center gap-2 rounded-xl border border-white/[0.10] bg-surface-100/80 px-3 py-2 sm:w-72">
+              {agentCardsForBuild.length > 0 && <label className="flex min-w-0 items-center gap-2 rounded-xl border border-divider bg-surface-raised/80 px-3 py-2 sm:w-72">
                 <span className="sr-only">Search live agents</span>
-                <Code2 className="h-3.5 w-3.5 shrink-0 text-slate-500" />
-                <input value={agentSearch} onChange={event => setAgentSearch(event.target.value)} placeholder="Search agents or current work" className="min-w-0 flex-1 bg-transparent text-xs text-white placeholder:text-slate-500 outline-none" />
+                <Code2 className="h-3.5 w-3.5 shrink-0 text-content-muted" />
+                <input value={agentSearch} onChange={event => setAgentSearch(event.target.value)} placeholder="Search agents or current work" className="min-w-0 flex-1 bg-transparent text-xs text-content placeholder:text-content-muted outline-none" />
               </label>}
             </div>
             {agentCardsForBuild.length > 0 && <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filter project agents by status">
               {(['all', 'running', 'waiting', 'review', 'failed', 'stale', 'completed', 'idle'] as AgentStatusFilter[]).map(status => {
                 const label = status === 'all' ? 'All' : status === 'stale' ? 'No signal' : statusMeta[status].label;
                 const count = status === 'all' ? agentCardsForBuild.length : status === 'stale' ? agentStatusCounts.stale : agentStatusCounts[status];
-                return <button key={status} type="button" onClick={() => setAgentStatusFilter(status)} aria-pressed={agentStatusFilter === status} className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${agentStatusFilter === status ? 'border-violet-400/40 bg-violet-400/10 text-violet-100' : 'border-white/[0.08] text-slate-400 hover:bg-white/[0.04] hover:text-slate-200'}`}>
-                  {label}<span className="ml-1.5 text-slate-500">{count}</span>
+                return <button key={status} type="button" onClick={() => setAgentStatusFilter(status)} aria-pressed={agentStatusFilter === status} className={`rounded-full border px-3 py-1.5 text-[11px] font-medium transition ${agentStatusFilter === status ? 'border-divider bg-selected text-selected-content' : 'border-divider text-content-secondary hover:bg-surface-high hover:text-content'}`}>
+                  {label}<span className="ml-1.5 text-content-muted">{count}</span>
                 </button>;
               })}
             </div>}
@@ -1512,15 +1512,15 @@ export const LiveBuildRoomView: React.FC = () => {
               onSelectConnection={(selection, trigger) => { setInspectorOrchestratorOpen(false); setInspectorTaskId(null); inspectorTriggerRef.current = trigger; setSelectedConnection(selection); setSelectedExecutionId(selection.toExecutionId); setInspectorRunOverrideId(null); setDetailOpen(true); }}
               onSelectOrchestrator={snapshot.orchestration ? trigger => { inspectorTriggerRef.current = trigger; setSelectedConnection(null); setInspectorTaskId(null); setInspectorOrchestratorOpen(true); setDetailOpen(true); } : undefined}
               onClearFilters={() => { setAgentSearch(''); setAgentStatusFilter('all'); }}
-            /> : <div className="rounded-2xl border border-dashed border-white/10 px-5 py-9 text-center">
-              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-white/[0.04] text-slate-400"><Users className="h-5 w-5" /></div>
-              <div className="mt-3 text-sm font-medium text-slate-200">{snapshot.orchestration ? 'Waiting for the specialist to start' : 'No visible agent activity'}</div>
-              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-slate-500">{snapshot.orchestration ? 'The assignment is recorded. Agent updates, commands, and changed files will appear here as the specialist works.' : 'Orchestrator build activity and direct agent work appear here. Start a product change from Project chat to see the plan, specialist assignments, and progress.'}</p>
-              {!snapshot.orchestration && <button type="button" onClick={openOrchestratorBuild} disabled={!can('run_agents')} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-violet-300/20 bg-violet-300/[0.05] px-3 py-2 text-xs font-semibold text-violet-100 hover:bg-violet-300/[0.1] disabled:cursor-not-allowed disabled:opacity-45"><Workflow className="h-3.5 w-3.5" />Start Orchestrator build</button>}
+            /> : <div className="rounded-2xl border border-dashed border-divider px-5 py-9 text-center">
+              <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-xl bg-surface-raised text-content-secondary"><Users className="h-5 w-5" /></div>
+              <div className="mt-3 text-sm font-medium text-content">{snapshot.orchestration ? 'Waiting for the specialist to start' : 'No visible agent activity'}</div>
+              <p className="mx-auto mt-1 max-w-md text-xs leading-5 text-content-muted">{snapshot.orchestration ? 'The assignment is recorded. Agent updates, commands, and changed files will appear here as the specialist works.' : 'Orchestrator build activity and direct agent work appear here. Start a product change from Project chat to see the plan, specialist assignments, and progress.'}</p>
+              {!snapshot.orchestration && <button type="button" onClick={openOrchestratorBuild} disabled={!can('run_agents')} className="mt-4 inline-flex items-center gap-2 rounded-lg border border-divider bg-selected px-3 py-2 text-xs font-semibold text-selected-content hover:bg-selected disabled:cursor-not-allowed disabled:opacity-45"><Workflow className="h-3.5 w-3.5" />Start Orchestrator build</button>}
             </div>}
-            <div className="rounded-2xl border border-white/[0.08] bg-surface-100/60 p-4">
+            <div className="rounded-2xl border border-divider bg-surface-raised/60 p-4">
               <div className="flex items-center justify-between gap-3">
-                <div><div className="text-sm font-semibold text-white">Build artifacts</div><div className="mt-1 text-xs text-slate-500">Recorded outputs for this build. Choose an item’s producer to inspect its files.</div></div>
+                <div><div className="text-sm font-semibold text-content">Build artifacts</div><div className="mt-1 text-xs text-content-muted">Recorded outputs for this build. Choose an item’s producer to inspect its files.</div></div>
               </div>
               <div className="mt-3 max-h-[min(65vh,640px)] min-w-0 space-y-2 overflow-y-auto pr-1">
                 {snapshot.artifacts.length ? visibleArtifacts.map(artifact => {
@@ -1528,14 +1528,14 @@ export const LiveBuildRoomView: React.FC = () => {
                   const producer = snapshot.orchestration && producingRun
                     ? agentCardsForBuild.find(card => card.agentId === producingRun.agentId) ?? producingRun
                     : producingRun;
-                  return <div key={artifact.id} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 rounded-xl border border-white/[0.07] bg-white/[0.02] p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/10 text-violet-200">{artifact.kind === 'pull_request' ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}</div>
-                    <div className="min-w-0"><div className="break-words text-xs font-medium text-slate-200 [overflow-wrap:anywhere]">{artifact.name}</div><div className="mt-0.5 break-all text-[10px] leading-4 text-slate-500">{artifact.detail}</div></div>
-                    {producer ? <button type="button" aria-label={snapshot.orchestration ? `Inspect the run that produced ${artifact.name}` : `View ${producer.agentName}`} onClick={event => { inspectorTriggerRef.current = event.currentTarget; setSelectedConnection(null); setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(producer.executionId); setInspectorOrchestratorOpen(false); setInspectorTaskId(null); setInspectorRunOverrideId(snapshot.orchestration ? producingRun?.runId ?? null : null); setDetailTab('files'); setDetailOpen(true); }} className="col-span-2 inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-white/10 px-2.5 text-[10px] font-medium text-slate-300 hover:bg-white/[0.06] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200 sm:col-span-1 sm:justify-self-end">{snapshot.orchestration ? 'Inspect producing run' : `View ${producer.agentName}`}<ExternalLink className="h-3 w-3 shrink-0" /></button>
-                      : <span className="text-[10px] text-slate-600">Producer unavailable in this view</span>}
+                  return <div key={artifact.id} className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-2 rounded-xl border border-divider bg-surface-raised p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-selected text-selected-content">{artifact.kind === 'pull_request' ? <GitBranch className="h-4 w-4" /> : <FileCode2 className="h-4 w-4" />}</div>
+                    <div className="min-w-0"><div className="break-words text-xs font-medium text-content [overflow-wrap:anywhere]">{artifact.name}</div><div className="mt-0.5 break-all text-[10px] leading-4 text-content-muted">{artifact.detail}</div></div>
+                    {producer ? <button type="button" aria-label={snapshot.orchestration ? `Inspect the run that produced ${artifact.name}` : `View ${producer.agentName}`} onClick={event => { inspectorTriggerRef.current = event.currentTarget; setSelectedConnection(null); setAgentSearch(''); setAgentStatusFilter('all'); setSelectedExecutionId(producer.executionId); setInspectorOrchestratorOpen(false); setInspectorTaskId(null); setInspectorRunOverrideId(snapshot.orchestration ? producingRun?.runId ?? null : null); setDetailTab('files'); setDetailOpen(true); }} className="col-span-2 inline-flex min-h-9 max-w-full items-center justify-center gap-1.5 justify-self-start rounded-lg border border-divider px-2.5 text-[10px] font-medium text-content-secondary hover:bg-surface-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus sm:col-span-1 sm:justify-self-end">{snapshot.orchestration ? 'Inspect producing run' : `View ${producer.agentName}`}<ExternalLink className="h-3 w-3 shrink-0" /></button>
+                      : <span className="text-[10px] text-content-muted">Producer unavailable in this view</span>}
                   </div>;
-                }) : <div className="rounded-xl border border-dashed border-white/10 px-3 py-5 text-center text-xs text-slate-500">Artifacts will appear as agents produce outputs.</div>}
-                {snapshot.artifacts.length > 8 && <button type="button" onClick={() => setShowAllArtifacts(value => !value)} className="min-h-9 w-full rounded-lg border border-white/[0.08] px-3 text-xs font-medium text-slate-300 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-200">{showAllArtifacts ? 'Show fewer artifacts' : `Show ${snapshot.artifacts.length - 8} more artifacts`}</button>}
+                }) : <div className="rounded-xl border border-dashed border-divider px-3 py-5 text-center text-xs text-content-muted">Artifacts will appear as agents produce outputs.</div>}
+                {snapshot.artifacts.length > 8 && <button type="button" onClick={() => setShowAllArtifacts(value => !value)} className="min-h-9 w-full rounded-lg border border-divider px-3 text-xs font-medium text-content-secondary hover:bg-surface-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">{showAllArtifacts ? 'Show fewer artifacts' : `Show ${snapshot.artifacts.length - 8} more artifacts`}</button>}
               </div>
             </div>
           </div>

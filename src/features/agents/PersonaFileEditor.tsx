@@ -125,7 +125,7 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-gray-500 text-xs py-8 justify-center">
+      <div className="flex items-center gap-2 text-content-muted text-xs py-8 justify-center">
         <Loader2 size={14} className="animate-spin" />
         Loading persona file...
       </div>
@@ -136,12 +136,12 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
     <div className="space-y-3">
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1 min-w-0">
-          <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-400">
+          <div className="flex items-center gap-1.5 text-[11px] font-medium text-content-secondary">
             <FileText size={12} />
             Persona File
           </div>
           <div
-            className="text-[10px] text-gray-600 font-mono truncate"
+            className="text-[10px] text-content-muted font-mono truncate"
             title={file?.path}
           >
             {file?.path}
@@ -149,9 +149,9 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
         </div>
 
         <div className="flex items-center gap-2 shrink-0">
-          {dirty && <span className="text-[10px] text-amber-300 font-mono">unsaved</span>}
+          {dirty && <span className="text-[10px] text-status-warning font-mono">unsaved</span>}
           {!dirty && savedAt && (
-            <span className="flex items-center gap-1 text-[10px] text-emerald-400 font-mono">
+            <span className="flex items-center gap-1 text-[10px] text-status-success font-mono">
               <Check size={11} /> saved
             </span>
           )}
@@ -160,7 +160,7 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
             onClick={exportFile}
             disabled={!file?.exists}
             title="Download this persona file to share with a teammate"
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border border-white/10 text-gray-400 hover:text-white hover:border-white/30 disabled:opacity-30 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border border-divider text-content-secondary hover:text-content hover:border-divider disabled:opacity-30 transition-colors"
           >
             <Download size={11} /> Export
           </button>
@@ -171,7 +171,7 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
               setError(null);
             }}
             disabled={!dirty || saving}
-            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border border-white/10 text-gray-400 hover:text-white hover:border-white/30 disabled:opacity-30 disabled:hover:text-gray-400 disabled:hover:border-white/10 transition-colors"
+            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] border border-divider text-content-secondary hover:text-content hover:border-divider disabled:opacity-30 disabled:hover:text-content-secondary disabled:hover:border-divider transition-colors"
           >
             <RotateCcw size={11} /> Revert
           </button>}
@@ -188,25 +188,25 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
       </div>
 
       {!file?.exists && (
-        <div className="text-[11px] text-gray-500 bg-white/5 border border-white/10 rounded-lg px-3 py-2">
+        <div className="text-[11px] text-content-muted bg-surface-raised border border-divider rounded-lg px-3 py-2">
           No file yet. Saving creates one — the daemon also writes it on startup.
         </div>
       )}
 
       {error && (
-        <div className="flex items-start gap-2 text-[11px] text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+        <div className="flex items-start gap-2 text-[11px] text-status-danger bg-status-danger-subtle border border-status-danger-border rounded-lg px-3 py-2">
           <AlertTriangle size={12} className="mt-0.5 shrink-0" />
           <span>{error}</span>
         </div>
       )}
 
       {!!file?.warnings.length && (
-        <div className="space-y-1 text-[11px] text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+        <div className="space-y-1 text-[11px] text-status-warning bg-status-warning-subtle border border-status-warning-border rounded-lg px-3 py-2">
           <div className="flex items-center gap-1.5 font-medium">
             <AlertTriangle size={12} />
             Saved, but some values were ignored
           </div>
-          <ul className="list-disc list-inside space-y-0.5 text-amber-200/80">
+          <ul className="list-disc list-inside space-y-0.5 text-status-warning">
             {file.warnings.map((w) => (
               <li key={w}>{w}</li>
             ))}
@@ -222,12 +222,12 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
         readOnly={readOnly}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={onKeyDown}
-        className="w-full bg-well border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30 resize-y"
+        className="w-full bg-well border border-control rounded-xl p-3 text-content text-xs leading-relaxed font-mono focus:outline-none focus:border-control resize-y"
       />
 
       {file && (
-        <div className="space-y-1.5 border border-white/10 rounded-xl p-3 bg-well">
-          <div className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">
+        <div className="space-y-1.5 border border-divider rounded-xl p-3 bg-well">
+          <div className="text-[10px] text-content-muted font-mono uppercase tracking-wider">
             Effective on next run
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 text-[11px]">
@@ -239,7 +239,7 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
             <Field label="Prompt size" value={`${file.effective.systemPromptChars} chars`} />
             <Field label="MCP" value={file.effective.mcpServers.join(', ') || 'none'} />
           </div>
-          <p className="text-[10px] text-gray-600 pt-1">
+          <p className="text-[10px] text-content-muted pt-1">
             Frontmatter here overrides the Instructions tab. Delete a key to fall back to it.
           </p>
         </div>
@@ -251,8 +251,8 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
 function Field({ label, value }: { label: string; value: string }) {
   return (
     <div className="min-w-0">
-      <div className="text-[10px] text-gray-600">{label}</div>
-      <div className="text-gray-300 font-mono truncate" title={value}>
+      <div className="text-[10px] text-content-muted">{label}</div>
+      <div className="text-content-secondary font-mono truncate" title={value}>
         {value}
       </div>
     </div>

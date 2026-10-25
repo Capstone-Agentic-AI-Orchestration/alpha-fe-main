@@ -38,7 +38,7 @@ export function greetingName(name: string): string {
   return first ? first.charAt(0).toUpperCase() + first.slice(1) : '';
 }
 
-/** A dark project menu; the native select opened as a white system list that clashed with the app. */
+/** A project menu that follows the selected palette, including its open options. */
 function ProjectPicker({ projects, projectId, onChange }: {
   projects: Array<{ id: string; name: string }>;
   projectId: string | null;
@@ -60,21 +60,21 @@ function ProjectPicker({ projects, projectId, onChange }: {
 
   return <div ref={rootRef} className="relative">
     <button type="button" onClick={() => setOpen(value => !value)} aria-haspopup="listbox" aria-expanded={open} aria-label={'Project: ' + selected.name}
-      className={'flex max-w-60 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50 '
-        + (projectId ? 'border-violet-300/30 bg-violet-400/10 text-violet-100 hover:bg-violet-400/15' : 'border-white/10 bg-white/[0.03] text-gray-300 hover:bg-white/[0.06]')}>
-      <FolderOpen className={'h-3.5 w-3.5 shrink-0 ' + (projectId ? 'text-violet-200' : 'text-gray-400')} aria-hidden="true" />
+      className={'flex max-w-60 items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus '
+        + (projectId ? 'border-divider bg-selected text-selected-content hover:bg-selected' : 'border-divider bg-surface-raised text-content-secondary hover:bg-surface-high')}>
+      <FolderOpen className={'h-3.5 w-3.5 shrink-0 ' + (projectId ? 'text-link' : 'text-content-secondary')} aria-hidden="true" />
       <span className="truncate">{selected.name}</span>
-      <ChevronDown className={'h-3.5 w-3.5 shrink-0 text-gray-400 transition-transform ' + (open ? 'rotate-180' : '')} aria-hidden="true" />
+      <ChevronDown className={'h-3.5 w-3.5 shrink-0 text-content-secondary transition-transform ' + (open ? 'rotate-180' : '')} aria-hidden="true" />
     </button>
-    {open && <ul role="listbox" aria-label="Project" className="absolute left-0 top-full z-40 mt-1.5 max-h-64 w-60 overflow-y-auto rounded-xl border border-white/10 bg-[#17171f] p-1 shadow-2xl shadow-black/60">
+    {open && <ul role="listbox" aria-label="Project" className="absolute left-0 top-full z-40 mt-1.5 max-h-64 w-60 overflow-y-auto rounded-xl border border-divider bg-surface-high p-1 shadow-2xl shadow-black/60">
       {options.map(option => {
         const active = option.id === selected.id;
         return <li key={option.id ?? 'none'} role="option" aria-selected={active}>
           <button type="button" onClick={() => choose(option.id)}
-            className={'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ' + (active ? 'bg-violet-400/15 text-white' : 'text-gray-300 hover:bg-white/[0.06] hover:text-white')}>
-            <FolderOpen className={'h-3.5 w-3.5 shrink-0 ' + (option.id ? 'text-gray-400' : 'text-gray-600')} aria-hidden="true" />
+            className={'flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-xs transition-colors ' + (active ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content')}>
+            <FolderOpen className={'h-3.5 w-3.5 shrink-0 ' + (option.id ? 'text-content-secondary' : 'text-content-muted')} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">{option.name}</span>
-            {active && <Check className="h-3.5 w-3.5 shrink-0 text-violet-200" aria-hidden="true" />}
+            {active && <Check className="h-3.5 w-3.5 shrink-0 text-link" aria-hidden="true" />}
           </button>
         </li>;
       })}
@@ -119,11 +119,11 @@ export function ChatHome({
   return <div className="flex h-full min-h-0 flex-col overflow-y-auto">
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col justify-center px-6 py-10">
       <div className="mb-7 flex items-center justify-center gap-3">
-        <img src={alphaMarkUrl} alt="" aria-hidden="true" className="h-11 w-11 rounded-xl object-contain" />
-        <h1 className="text-3xl font-semibold tracking-tight text-white">{name ? 'Ready to code, ' + name + '?' : 'Ready to code?'}</h1>
+        <img src={alphaMarkUrl} alt="" aria-hidden="true" className="h-11 w-11 rounded-xl bg-action object-contain" />
+        <h1 className="text-3xl font-semibold tracking-tight text-content">{name ? 'Ready to code, ' + name + '?' : 'Ready to code?'}</h1>
       </div>
 
-      <form onSubmit={submit} className="rounded-2xl border border-white/10 bg-surface-100/95 p-3 shadow-2xl shadow-black/40 transition-colors focus-within:border-brand-400/40">
+      <form onSubmit={submit} className="rounded-2xl border border-divider bg-surface-raised/95 p-3 shadow-2xl shadow-black/40 transition-colors focus-within:border-control">
         <label htmlFor="chat-home-message" className="sr-only">Message Alpha</label>
         <textarea
           id="chat-home-message"
@@ -133,35 +133,35 @@ export function ChatHome({
           onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }}
           rows={2}
           placeholder="Ask Alpha anything or describe what to build…"
-          className="max-h-56 min-h-14 w-full resize-none bg-transparent px-1.5 py-1 text-sm text-white placeholder-gray-500 outline-none"
+          className="max-h-56 min-h-14 w-full resize-none bg-transparent px-1.5 py-1 text-sm text-content placeholder-content-muted outline-none"
         />
         <div className="mt-2 flex items-center gap-2">
           <ProjectPicker projects={projects} projectId={projectId} onChange={onProjectChange} />
           <label className="sr-only" htmlFor="chat-home-approval-mode">Model access</label>
           <span className="relative flex items-center">
-            <select id="chat-home-approval-mode" aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => onApprovalModeChange(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-40 cursor-pointer appearance-none rounded-md bg-transparent py-1.5 pl-2 pr-5 text-[11px] text-gray-400 outline-none hover:text-white focus-visible:text-white focus-visible:ring-2 focus-visible:ring-violet-300/50 [&>option]:bg-[#17171f] [&>option]:text-gray-200">
+            <select id="chat-home-approval-mode" aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => onApprovalModeChange(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-40 cursor-pointer appearance-none rounded-md bg-transparent py-1.5 pl-2 pr-5 text-[11px] text-content-secondary outline-none hover:text-content focus-visible:text-content focus-visible:ring-2 focus-visible:ring-focus [&>option]:bg-surface-high [&>option]:text-content">
               <option value="ask">Ask for approval</option>
               <option value="approve">Approve for me</option>
               <option value="full">Full access</option>
             </select>
-            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-1 h-3 w-3 text-gray-500" />
+            <ChevronDown aria-hidden="true" className="pointer-events-none absolute right-1 h-3 w-3 text-content-muted" />
           </span>
-          <span className="min-w-0 flex-1 truncate text-[10px] text-gray-500">{blockedReason ?? (projectId ? 'Builds run in this project’s codebases.' : 'Not connected to a project. Pick one when you want Alpha to build.')}</span>
-          <button type="submit" disabled={!ready} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-on-accent hover:bg-brand-400 disabled:opacity-30">
+          <span className="min-w-0 flex-1 truncate text-[10px] text-content-muted">{blockedReason ?? (projectId ? 'Builds run in this project’s codebases.' : 'Not connected to a project. Pick one when you want Alpha to build.')}</span>
+          <button type="submit" disabled={!ready} aria-label="Send message" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-action text-on-action hover:bg-action-hover disabled:opacity-30">
             <ArrowUp className="h-4 w-4" />
           </button>
         </div>
       </form>
 
       {recent.length > 0 && <section aria-label="Recent chats" className="mt-8">
-        <h2 className="mb-1.5 px-1 text-[11px] font-medium text-gray-500">Recent</h2>
-        <ul className="divide-y divide-white/[0.06]">
+        <h2 className="mb-1.5 px-1 text-[11px] font-medium text-content-muted">Recent</h2>
+        <ul className="divide-y divide-divider">
           {recent.map(thread => <li key={thread.id}>
-            <button type="button" onClick={() => onOpenRecent(thread.id)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50">
-              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-gray-500" aria-hidden="true" />
+            <button type="button" onClick={() => onOpenRecent(thread.id)} className="flex w-full items-center gap-3 rounded-lg px-2 py-2.5 text-left hover:bg-surface-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+              <MessageSquare className="h-3.5 w-3.5 shrink-0 text-content-muted" aria-hidden="true" />
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs text-gray-200">{thread.title}</span>
-                <span className="block truncate text-[10px] text-gray-500">{[thread.projectName, timeAgo(thread.lastMessageAt)].filter(Boolean).join(' · ')}</span>
+                <span className="block truncate text-xs text-content">{thread.title}</span>
+                <span className="block truncate text-[10px] text-content-muted">{[thread.projectName, timeAgo(thread.lastMessageAt)].filter(Boolean).join(' · ')}</span>
               </span>
             </button>
           </li>)}

@@ -73,7 +73,7 @@ export const Modal: React.FC<ModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/75 backdrop-blur-sm transition-opacity animate-fade-in"
         onClick={closeDisabled ? undefined : onClose}
         aria-hidden="true"
@@ -87,19 +87,19 @@ export const Modal: React.FC<ModalProps> = ({
         aria-labelledby={titleId}
         tabIndex={-1}
         style={{ width: 'calc(100vw - 2rem)' }}
-        className={`relative ${maxWidth} ${dialogClassName} bg-surface-100 border border-white/10 rounded-xl shadow-2xl overflow-hidden z-10 animate-slide-up flex flex-col max-h-[90vh] focus:outline-none`}
+        className={`relative ${maxWidth} ${dialogClassName} bg-surface-raised border border-divider rounded-xl shadow-2xl overflow-hidden z-10 animate-slide-up flex flex-col max-h-[90vh] focus:outline-none`}
       >
         {/* Header */}
-        <div className="flex shrink-0 items-start justify-between p-5 border-b border-white/10 bg-surface-200/50">
+        <div className="flex shrink-0 items-start justify-between p-5 border-b border-divider bg-surface/50">
           <div>
-            <h3 id={titleId} className="text-lg font-semibold text-white tracking-tight">{title}</h3>
-            {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+            <h3 id={titleId} className="text-lg font-semibold text-content tracking-tight">{title}</h3>
+            {subtitle && <p className="text-xs text-content-secondary mt-0.5">{subtitle}</p>}
             {headerMeta}
           </div>
           <button
             onClick={onClose}
             disabled={closeDisabled}
-            className="text-gray-400 hover:text-white p-1 rounded-lg hover:bg-white/5 transition-colors"
+            className="text-content-secondary hover:text-content p-1 rounded-lg hover:bg-surface-high transition-colors"
             aria-label="Close dialog"
           >
             <X className="w-5 h-5" />
@@ -110,7 +110,7 @@ export const Modal: React.FC<ModalProps> = ({
         <div className={`min-h-0 ${contentClassName ?? 'p-5 sm:p-6 overflow-y-auto overscroll-contain space-y-4'}`}>
           {children}
         </div>
-        {footer && <div className="shrink-0 border-t border-white/10 bg-surface-200/50 px-5 py-4 sm:px-6">{footer}</div>}
+        {footer && <div className="shrink-0 border-t border-divider bg-surface/50 px-5 py-4 sm:px-6">{footer}</div>}
       </div>
     </div>
   );

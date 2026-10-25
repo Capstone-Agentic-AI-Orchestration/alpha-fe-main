@@ -5,6 +5,7 @@ import { selectAppEntry } from '@/features/ticketing/entry';
 import { ErrorBoundary } from '@/app/ErrorBoundary';
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import './index.css';
+import { ThemeProvider } from '@/shared/theme';
 
 // Keep the browser tab and the sidebar on the same source of truth for the
 // brand mark. The imported asset is transformed correctly for both Vite's web
@@ -27,9 +28,9 @@ function ApplicationRoot() {
     };
   }, []);
 
-  return <ErrorBoundary key={entry} internal={entry === 'internal'}>
-    <AppEntry entry={entry} />
-  </ErrorBoundary>;
+  return <ThemeProvider enabled={['internal','client-portal','preview-client','preview-pm'].includes(entry)}>
+    <ErrorBoundary key={entry} internal={entry === 'internal'}><AppEntry entry={entry} /></ErrorBoundary>
+  </ThemeProvider>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

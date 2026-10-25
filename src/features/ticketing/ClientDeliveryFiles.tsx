@@ -63,16 +63,16 @@ export function ClientDeliveryFiles({ workspaceId, ticketId, deliveryId, scopeVe
     }
   }
 
-  return <section aria-label="Protected delivery files" className="mt-3 space-y-2 border-t border-white/[0.07] pt-3">
-    {loading && <p role="status" className="text-[11px] text-gray-400">Checking protected result files…</p>}
-    {error && <div role="alert" className="space-y-2 text-[11px] text-amber-200/80"><p>{error}</p>
+  return <section aria-label="Protected delivery files" className="mt-3 space-y-2 border-t border-divider pt-3">
+    {loading && <p role="status" className="text-[11px] text-content-secondary">Checking protected result files…</p>}
+    {error && <div role="alert" className="space-y-2 text-[11px] text-status-warning"><p>{error}</p>
       <button onClick={() => setRetry(value => value + 1)} disabled={loading || downloading !== null} className={secondary}><RefreshCw size={12} />Refresh files</button></div>}
-    {manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-white/[0.06] p-2">
-      <div className="min-w-0"><p className="break-words text-xs text-gray-200">{file.filename}</p>
-        <p className="text-[10px] text-gray-500">{new Intl.NumberFormat().format(file.byteLength)} bytes · pinned result</p></div>
+    {manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-divider p-2">
+      <div className="min-w-0"><p className="break-words text-xs text-content">{file.filename}</p>
+        <p className="text-[10px] text-content-muted">{new Intl.NumberFormat().format(file.byteLength)} bytes · pinned result</p></div>
       <button onClick={() => void download(file)} disabled={downloading !== null} className={`${secondary} shrink-0`} aria-label={`Download ${file.filename}`}>
         <Download size={12} />{downloading === file.id ? 'Checking…' : 'Download'}</button>
     </div>)}
-    {manifest && <p className="text-[10px] leading-relaxed text-gray-500">Downloads are checked against this shared result. These files do not grant repository or internal project access.</p>}
+    {manifest && <p className="text-[10px] leading-relaxed text-content-muted">Downloads are checked against this shared result. These files do not grant repository or internal project access.</p>}
   </section>;
 }

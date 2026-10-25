@@ -34,7 +34,7 @@ export function FileManagedBadge({ onOpenFile }: Props) {
     <button
       onClick={onOpenFile}
       title="This value lives in the agent's persona file. Editing here updates that file — click to open it."
-      className="flex items-center gap-1 text-[10px] text-gray-500 hover:text-gray-300 transition-colors"
+      className="flex items-center gap-1 text-[10px] text-content-muted hover:text-content-secondary transition-colors"
     >
       <FileText size={10} />
       <span className="underline underline-offset-2">in file</span>

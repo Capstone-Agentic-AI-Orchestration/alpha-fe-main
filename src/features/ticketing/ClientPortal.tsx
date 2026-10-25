@@ -517,8 +517,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
             <section className={`client-request-detail-pane ${selectedId ? '' : 'client-mobile-hidden'}`} aria-label="Selected request">
         {!selectedId || !selectedQueueItem ? <EmptyState title="Choose a request" body={workflowActionsDisabled ? 'Select a request to see its latest status.' : 'Select a request to see its status, messages, and any action your project manager needs from you.'} />
-          : detailLoading ? <p role="status" className="p-8 text-center text-sm text-gray-400">Loading request…</p>
-            : detailError ? <div role="alert" className="m-4 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-4 text-xs text-rose-200">{detailError}</div>
+          : detailLoading ? <p role="status" className="p-8 text-center text-sm text-content-secondary">Loading request…</p>
+            : detailError ? <div role="alert" className="m-4 rounded-lg border border-status-danger-border bg-status-danger-subtle p-4 text-xs text-status-danger">{detailError}</div>
               : detail && <ClientTicketDetail
                 workspaceId={workspaceId}
                 api={api}
@@ -545,7 +545,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </section>
         </div>}
 
-    {pending && <div role="status" className="fixed bottom-4 left-4 right-4 z-40 flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/20 bg-shell p-4 text-sm text-amber-100 shadow-xl sm:left-auto sm:right-4">
+    {pending && <div role="status" className="fixed bottom-4 left-4 right-4 z-40 flex max-w-lg flex-wrap items-center justify-between gap-3 rounded-xl border border-status-warning-border bg-shell p-4 text-sm text-status-warning shadow-xl sm:left-auto sm:right-4">
       <span>We’re checking whether your update was saved. Please don’t send it again yet.</span>
       <button onClick={() => void performWrite(pending).catch(() => undefined)} disabled={writing} className={`${secondary} min-h-[44px]`}>{writing ? 'Checking…' : 'Check update status'}</button>
     </div>}
@@ -555,7 +555,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 }
 
 function FullPageState({ title }: { title: string }) {
-  return <main className="flex min-h-dvh items-center justify-center bg-canvas p-6 text-sm text-gray-400" role="status"><RefreshCw size={15} className="mr-2 animate-spin" />{title}</main>;
+  return <main className="flex min-h-dvh items-center justify-center bg-canvas p-6 text-sm text-content-secondary" role="status"><RefreshCw size={15} className="mr-2 animate-spin" />{title}</main>;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {

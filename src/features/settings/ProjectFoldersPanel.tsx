@@ -48,36 +48,36 @@ export const ProjectFoldersPanel: React.FC = () => {
   const sample = setting ? setting.codeFolder.replace(/[\\/]+$/, '') + '\\<project>\\<repository>' : '';
 
   return (
-    <div className="p-4 rounded-xl bg-well border border-white/10 space-y-3">
+    <div className="p-4 rounded-xl bg-well border border-divider space-y-3">
       <div>
-        <div className="text-xs font-semibold text-white flex items-center gap-2">
-          <FolderOpen className="h-3.5 w-3.5 text-amber-300" aria-hidden />
+        <div className="text-xs font-semibold text-content flex items-center gap-2">
+          <FolderOpen className="h-3.5 w-3.5 text-status-warning" aria-hidden />
           Projects folder
         </div>
-        <p className="text-[11px] text-gray-400 leading-relaxed mt-1">
+        <p className="text-[11px] text-content-secondary leading-relaxed mt-1">
           Each project gets its own folder here. Alpha and the Orchestrator clone a project&apos;s repositories into it, and
           chats on that project read the code from it.
         </p>
       </div>
-      <div className="rounded-lg border border-white/10 bg-black/30 px-3 py-2 font-mono text-[11px] text-gray-100 break-all" title={setting?.codeFolder}>
+      <div className="rounded-lg border border-divider bg-well px-3 py-2 font-mono text-[11px] text-content break-all" title={setting?.codeFolder}>
         {setting ? setting.codeFolder : 'Reading…'}
       </div>
-      {setting && <p className="text-[10px] text-gray-500 font-mono break-all">{sample}</p>}
+      {setting && <p className="text-[10px] text-content-muted font-mono break-all">{sample}</p>}
       <div className="flex flex-wrap items-center gap-2">
         <button type="button" onClick={() => void change()} disabled={busy || !setting}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-xs text-white font-medium transition-colors disabled:opacity-50">
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high text-xs text-content font-medium transition-colors disabled:opacity-50">
           <FolderOpen className="h-3.5 w-3.5" aria-hidden />
           {busy ? 'Saving…' : 'Change folder…'}
         </button>
         {!isDefault && (
           <button type="button" onClick={() => void save(null)} disabled={busy}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-300 hover:bg-white/5 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-content-secondary hover:bg-surface-high disabled:opacity-50">
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
             Use the default
           </button>
         )}
       </div>
-      {error && <p role="alert" className="text-[11px] text-rose-300">{error}</p>}
+      {error && <p role="alert" className="text-[11px] text-status-danger">{error}</p>}
     </div>
   );
 };

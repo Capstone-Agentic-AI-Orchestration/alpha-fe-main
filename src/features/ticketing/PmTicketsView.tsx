@@ -128,12 +128,12 @@ function EmptyPanel({ title, detail }: { title: string; detail: string }) {
 /** Display only a server-reported verification fact, never delivery/access state. */
 export function PmContactVerification({ verification }: { verification: unknown }) {
   if (verification === 'verified') {
-    return <span className="text-emerald-300/80">Email verified</span>;
+    return <span className="text-status-success">Email verified</span>;
   }
   if (verification === 'unverified_submission') {
-    return <span className="text-amber-300/80">Pending email verification</span>;
+    return <span className="text-status-warning">Pending email verification</span>;
   }
-  return <span className="text-gray-500">Unable to verify status</span>;
+  return <span className="text-content-muted">Unable to verify status</span>;
 }
 
 export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false }: {
@@ -727,7 +727,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
         <div className="pm-tickets__queue-scroll">
           {requestAccessError && <p role="alert" className="pm-tickets__error">{requestAccessError}</p>}
           {!intakeEnabled ? <EmptyPanel title="Live tickets are not connected yet" detail="No ticket data is loaded while ticketing is disabled." />
-            : queueLoading && !queue ? <div className="p-6 text-center text-xs text-gray-500">Loading tickets…</div>
+            : queueLoading && !queue ? <div className="p-6 text-center text-xs text-content-muted">Loading tickets…</div>
             : queue && queue.items.length > 0 ? <PmTicketQueueList items={queue.items} selectedId={selectedId}
               disabled={Boolean(pending)} requestAccessSaving={requestAccessSaving}
               onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDraft(''); setWriteError(''); }}
@@ -737,15 +737,15 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
         </div>
         {queue && <div className="pm-tickets__queue-footer">
           <span>Showing {queue.items.length} ticket{queue.items.length === 1 ? '' : 's'}</span>
-          {queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading} className="text-brand-300 hover:text-brand-200 disabled:opacity-50">{queueMoreLoading ? 'Loading…' : 'Load more'}</button>}
+          {queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading} className="text-link hover:text-link-hover disabled:opacity-50">{queueMoreLoading ? 'Loading…' : 'Load more'}</button>}
         </div>}
       </div>
 
       <div role="region" aria-label="Ticket detail panel" className={`pm-tickets__detail${selectedId ? ' pm-tickets__detail--selected' : ''}`}>
         {!intakeEnabled ? <EmptyPanel title="Ticketing is coming soon" detail="Ticket details and conversations will be available when ticketing is connected." />
           : !selectedId || !selectedQueueItem ? <EmptyPanel title={queueError ? 'Ticket queue unavailable' : 'Select a ticket'} detail={queueError ? 'No ticket data is shown when the service cannot be reached.' : 'Choose a request from the queue to review its details and conversation.'} />
-          : detailLoading ? <div role="status" className="p-8 text-center text-xs text-gray-500">Loading ticket…</div>
-            : detailError ? <div role="alert" className="m-4 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-4 text-xs text-rose-200">{detailError}</div>
+          : detailLoading ? <div role="status" className="p-8 text-center text-xs text-content-muted">Loading ticket…</div>
+            : detailError ? <div role="alert" className="m-4 rounded-lg border border-status-danger-border bg-status-danger-subtle p-4 text-xs text-status-danger">{detailError}</div>
               : detail && selectedQueueItem && <div className="pm-tickets__detail-shell">
                 <header className="pm-tickets__detail-header">
                   <div className="pm-tickets__detail-meta">
@@ -850,7 +850,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                 </div>
 
                 {projectLinkOpen && <div className="pm-tickets__action-form">
-                  {projectLinkError && <p role="alert" className="mb-3 rounded-lg border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-[11px] text-rose-200">{projectLinkError}</p>}
+                  {projectLinkError && <p role="alert" className="mb-3 rounded-lg border border-status-danger-border bg-status-danger-subtle p-2.5 text-[11px] text-status-danger">{projectLinkError}</p>}
                   <PmProjectLinkForm key={`${detail.id}:${detail.version}:${detail.internal.projectId ?? ''}:${detail.internal.projectClientVisible === true}`}
                     initialProjectId={detail.internal.projectId}
                     initialClientVisible={detail.internal.projectClientVisible === true}
@@ -861,8 +861,8 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                 </div>}
 
                 {declineOpen && ['received', 'under_review'].includes(detail.status) && <form aria-label="Decline inquiry" className="pm-tickets__action-form pm-tickets__action-form--decline" onSubmit={event => { event.preventDefault(); declineTicket(); }}>
-                  <label className="block text-xs text-gray-300">Reason for declining (required)<textarea required maxLength={4000} value={declineReason} onChange={event => setDeclineReason(event.target.value)} disabled={writing || Boolean(pending)} className={`${input} mt-2`} /></label>
-                  <p className="text-xs text-gray-500">Saved in private PM history. No email is sent in this phase.</p>
+                  <label className="block text-xs text-content-secondary">Reason for declining (required)<textarea required maxLength={4000} value={declineReason} onChange={event => setDeclineReason(event.target.value)} disabled={writing || Boolean(pending)} className={`${input} mt-2`} /></label>
+                  <p className="text-xs text-content-muted">Saved in private PM history. No email is sent in this phase.</p>
                   <button type="button" onClick={() => setDeclineOpen(false)} className={secondary}>Cancel</button>
                   <button type="submit" className={primary} disabled={writing || Boolean(pending) || !declineReason.trim()}>Confirm decline</button>
                 </form>}
@@ -884,8 +884,8 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   disabled={writing || Boolean(pending)} onCancel={() => setReviewAction(null)} onSubmit={value => void submitCorrection(value)} />
               </div>}
               {reviewAction === 'close' && canCloseAcceptedTicket(detail, selectedQueueItem.internal.clientAccessActive) && <section aria-label="Confirm accepted ticket closure" className="pm-tickets__action-form pm-tickets__action-form--confirm">
-                <h3 className="text-sm font-medium text-gray-100">Close this accepted ticket?</h3>
-                <p className="mt-2 text-[11px] leading-relaxed text-gray-400">The client accepted this result. Closing makes this ticket read-only; its conversation and delivery history remain available. This does not complete the project or approve a deployment.</p>
+                <h3 className="text-sm font-medium text-content">Close this accepted ticket?</h3>
+                <p className="mt-2 text-[11px] leading-relaxed text-content-secondary">The client accepted this result. Closing makes this ticket read-only; its conversation and delivery history remain available. This does not complete the project or approve a deployment.</p>
                 <div className="mt-3 flex justify-end gap-2"><button className={secondary} disabled={writing || Boolean(pending)} onClick={() => setReviewAction(null)}>Cancel</button>
                   <button className={primary} disabled={writing || Boolean(pending)} onClick={() => void closeAcceptedTicket()}>Confirm ticket closure</button></div>
               </section>}

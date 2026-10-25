@@ -58,28 +58,28 @@ export const ChatSidePanel: React.FC<{
     if (next) { onSelect(next.id); document.getElementById('chat-side-tab-' + next.id)?.focus(); }
   };
 
-  return <aside id="chat-side-panel" aria-label="Side panel" style={{ '--chat-panel-width': width + 'px' } as React.CSSProperties} className="relative flex h-full w-[var(--chat-panel-width)] max-w-full shrink-0 flex-col border-l border-white/[0.08] bg-shell max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-full">
+  return <aside id="chat-side-panel" aria-label="Side panel" style={{ '--chat-panel-width': width + 'px' } as React.CSSProperties} className="relative flex h-full w-[var(--chat-panel-width)] max-w-full shrink-0 flex-col border-l border-divider bg-shell max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-full">
     <div role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabIndex={0}
       onPointerDown={event => { drag.current = { startX: event.clientX, startWidth: width }; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }}
       onKeyDown={event => { if (event.key === 'ArrowLeft') setWidth(value => value + 24); if (event.key === 'ArrowRight') setWidth(value => Math.max(MIN_WIDTH, value - 24)); }}
-      className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-violet-300/20 focus-visible:bg-violet-300/30 focus-visible:outline-none" />
-    <div className="flex shrink-0 items-center gap-1 border-b border-white/[0.07] px-2 py-1.5">
+      className="absolute inset-y-0 -left-1 z-10 w-2 cursor-col-resize hover:bg-selected focus-visible:bg-selected focus-visible:outline-none" />
+    <div className="flex shrink-0 items-center gap-1 border-b border-divider px-2 py-1.5">
       <div role="tablist" aria-label="Open panels" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
         {tabs.map((tab, index) => {
           const active = tab.id === activeId;
-          return <div key={tab.id} className={'group flex min-w-0 max-w-[13rem] shrink-0 items-center rounded-lg border text-[11px] transition-colors ' + (active ? 'border-white/[0.12] bg-white/[0.07] text-white' : 'border-transparent text-gray-400 hover:bg-white/[0.04] hover:text-gray-200')}>
+          return <div key={tab.id} className={'group flex min-w-0 max-w-[13rem] shrink-0 items-center rounded-lg border text-[11px] transition-colors ' + (active ? 'border-divider bg-surface-raised text-content' : 'border-transparent text-content-secondary hover:bg-surface-high hover:text-content')}>
             <button type="button" role="tab" id={'chat-side-tab-' + tab.id} aria-selected={active} tabIndex={active ? 0 : -1} onClick={() => onSelect(tab.id)} onKeyDown={event => onTabKeyDown(event, index)}
               onAuxClick={event => { if (event.button === 1) onClose(tab.id); }}
-              className="flex min-w-0 items-center gap-1.5 py-1.5 pl-2.5 pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/50 rounded-l-lg">
-              <span className="shrink-0 text-gray-400">{tab.icon}</span>
+              className="flex min-w-0 items-center gap-1.5 py-1.5 pl-2.5 pr-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus rounded-l-lg">
+              <span className="shrink-0 text-content-secondary">{tab.icon}</span>
               <span className={'truncate ' + (active ? '' : '')}>{tab.title}</span>
               {tab.live && <span aria-label="working" className="h-1.5 w-1.5 shrink-0 rounded-full bg-violet-300 motion-safe:animate-pulse" />}
             </button>
-            <button type="button" onClick={() => onClose(tab.id)} aria-label={'Close ' + tab.title} className={'mr-1 shrink-0 rounded p-0.5 text-gray-500 hover:bg-white/10 hover:text-white ' + (active ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100')}><X className="h-3 w-3" /></button>
+            <button type="button" onClick={() => onClose(tab.id)} aria-label={'Close ' + tab.title} className={'mr-1 shrink-0 rounded p-0.5 text-content-muted hover:bg-surface-high hover:text-content ' + (active ? '' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100')}><X className="h-3 w-3" /></button>
           </div>;
         })}
       </div>
-      <button type="button" onClick={onCloseAll} aria-label="Hide side panel" title="Hide side panel" className="shrink-0 rounded-lg p-1.5 text-gray-500 hover:bg-white/[0.06] hover:text-white"><X className="h-4 w-4" /></button>
+      <button type="button" onClick={onCloseAll} aria-label="Hide side panel" title="Hide side panel" className="shrink-0 rounded-lg p-1.5 text-content-muted hover:bg-surface-high hover:text-content"><X className="h-4 w-4" /></button>
     </div>
     <div role="tabpanel" aria-labelledby={activeId ? 'chat-side-tab-' + activeId : undefined} className="flex min-h-0 flex-1 flex-col">{children}</div>
   </aside>;

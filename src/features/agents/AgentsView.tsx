@@ -1,22 +1,22 @@
 import React, { useState, useMemo } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
-import { 
-  Bot, 
-  Plus, 
-  Search, 
-  Filter, 
-  ArrowDown, 
-  ArrowUp, 
-  Table as TableIcon, 
-  Check, 
-  X, 
-  Copy, 
-  Archive, 
-  RotateCcw, 
-  MessageSquare, 
-  Server, 
-  Eye, 
-  EyeOff, 
+import {
+  Bot,
+  Plus,
+  Search,
+  Filter,
+  ArrowDown,
+  ArrowUp,
+  Table as TableIcon,
+  Check,
+  X,
+  Copy,
+  Archive,
+  RotateCcw,
+  MessageSquare,
+  Server,
+  Eye,
+  EyeOff,
   Trash2,
   Upload,
   Share2,
@@ -47,18 +47,18 @@ import {
 } from '@/shared/lib/providers';
 
 export const AgentsView: React.FC = () => {
-  const { 
-    agents, 
-    runtimes, 
-    skills, 
-    updateAgent, 
+  const {
+    agents,
+    runtimes,
+    skills,
+    updateAgent,
     setAgentSharing,
-    duplicateAgent, 
-    archiveAgent, 
-    restoreAgent, 
-    bulkUpdateAgents, 
-    bulkArchiveAgents, 
-    setActiveTab, 
+    duplicateAgent,
+    archiveAgent,
+    restoreAgent,
+    bulkUpdateAgents,
+    bulkArchiveAgents,
+    setActiveTab,
     importAgent,
     setActiveChatAgentId,
     can
@@ -75,7 +75,7 @@ export const AgentsView: React.FC = () => {
   const [statusFilter, setStatusFilter] = useTabSessionState<string>('agents.statusFilter', 'all');
   const [accessFilter, setAccessFilter] = useTabSessionState<string>('agents.accessFilter', 'all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
-  
+
   // Sorting state
   const [sortBy, setSortBy] = useTabSessionState<'lastActive' | 'name' | 'runs'>('agents.sortBy', 'lastActive');
   const [sortOrder, setSortOrder] = useTabSessionState<'desc' | 'asc'>('agents.sortOrder', 'desc');
@@ -180,7 +180,7 @@ export const AgentsView: React.FC = () => {
   // Selection handlers
   const toggleSelectAgent = (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setSelectedAgentIds(prev => 
+    setSelectedAgentIds(prev =>
       prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
     );
   };
@@ -203,7 +203,7 @@ export const AgentsView: React.FC = () => {
   const renderStatus = (agent: Agent) => {
     if (agent.isArchived) {
       return (
-        <div className="flex items-center gap-1.5 text-xs text-gray-500 font-medium">
+        <div className="flex items-center gap-1.5 text-xs text-content-muted font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-gray-600" />
           <span>Archived</span>
         </div>
@@ -212,7 +212,7 @@ export const AgentsView: React.FC = () => {
 
     if (agent.machineStatus === 'offline') {
       return (
-        <div className="flex items-center gap-1.5 text-xs text-gray-400 font-medium">
+        <div className="flex items-center gap-1.5 text-xs text-content-secondary font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
           <span>Offline</span>
         </div>
@@ -221,7 +221,7 @@ export const AgentsView: React.FC = () => {
 
     if (agent.machineStatus === 'unstable') {
       return (
-        <div className="flex items-center gap-1.5 text-xs text-amber-300 font-medium">
+        <div className="flex items-center gap-1.5 text-xs text-status-warning font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
           <span>Unstable</span>
         </div>
@@ -230,7 +230,7 @@ export const AgentsView: React.FC = () => {
 
     if (agent.workStatus === 'working') {
       return (
-        <div className="flex items-center gap-1.5 text-xs text-cyan-300 font-medium">
+        <div className="flex items-center gap-1.5 text-xs text-status-info font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
           <span>Working</span>
         </div>
@@ -239,7 +239,7 @@ export const AgentsView: React.FC = () => {
 
     if (agent.workStatus === 'queued') {
       return (
-        <div className="flex items-center gap-1.5 text-xs text-purple-300 font-medium">
+        <div className="flex items-center gap-1.5 text-xs text-link font-medium">
           <span className="w-1.5 h-1.5 rounded-full bg-purple-400" />
           <span>Queued</span>
         </div>
@@ -247,7 +247,7 @@ export const AgentsView: React.FC = () => {
     }
 
     return (
-      <div className="flex items-center gap-1.5 text-xs text-gray-300 font-medium">
+      <div className="flex items-center gap-1.5 text-xs text-content-secondary font-medium">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
         <span>Idle</span>
       </div>
@@ -275,14 +275,14 @@ export const AgentsView: React.FC = () => {
   };
 
   return (
-    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-gray-300 select-none font-sans lg:p-6">
-      
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-content-secondary select-none font-sans lg:p-6">
+
       {/* ================= TOP HEADER BAR ================= */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Bot className="w-4 h-4 text-gray-400" />
-          <h1 className="text-base font-semibold tracking-tight text-white">Agents</h1>
-          <span className="text-xs text-gray-500 font-mono">{agents.length}</span>
+          <Bot className="w-4 h-4 text-content-secondary" />
+          <h1 className="text-base font-semibold tracking-tight text-content">Agents</h1>
+          <span className="text-xs text-content-muted font-mono">{agents.length}</span>
         </div>
 
         {canManageAgents && (
@@ -299,7 +299,7 @@ export const AgentsView: React.FC = () => {
               onClick={() => importInputRef.current?.click()}
               disabled={importing}
               title="Import an agent from a persona file a teammate shared"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-gray-300 hover:text-white transition-colors shadow-sm disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content-secondary hover:text-content transition-colors shadow-sm disabled:opacity-40"
             >
               <Upload className="w-3.5 h-3.5" />
               <span>{importing ? 'Importing...' : 'Import'}</span>
@@ -308,7 +308,7 @@ export const AgentsView: React.FC = () => {
             {/* + New agent button */}
             <button
               onClick={() => setCreateModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-white/10 text-xs font-medium text-white transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content transition-colors shadow-sm"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>New agent</span>
@@ -321,19 +321,19 @@ export const AgentsView: React.FC = () => {
       <div className="flex items-center justify-between gap-4">
         {/* Left: Search Input */}
         <div className="relative flex-1 max-w-xs">
-          <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-3.5 h-3.5 text-content-muted absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search agents, roles, models..."
-            className="w-full bg-surface border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
+            className="w-full bg-surface border border-control rounded-xl pl-8 pr-3 py-1.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control transition-colors"
           />
         </div>
 
         {/* Right Actions: Filter, Sort, Table indicator */}
         <div className="flex items-center gap-2 relative">
-          
+
           {/* Filter Popover */}
           <div className="relative">
             <button
@@ -343,8 +343,8 @@ export const AgentsView: React.FC = () => {
               }}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 scopeTab !== 'all' || statusFilter !== 'all' || accessFilter !== 'all'
-                  ? 'bg-brand-500/20 text-brand-300 border-brand-500/40'
-                  : 'bg-surface hover:bg-surface-raised text-gray-400 hover:text-white border-white/5'
+                  ? 'bg-selected text-selected-content border-divider'
+                  : 'bg-surface hover:bg-surface-raised text-content-secondary hover:text-content border-divider'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
@@ -352,8 +352,8 @@ export const AgentsView: React.FC = () => {
             </button>
 
             {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-2 text-xs">
-                <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1">Scope</div>
+              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-2 text-xs">
+                <div className="text-[10px] font-mono uppercase text-content-secondary px-2 py-1">Scope</div>
                 {(['all', 'mine', 'archived'] as const).map((sc) => (
                   <button
                     key={sc}
@@ -362,15 +362,15 @@ export const AgentsView: React.FC = () => {
                       setFilterDropdownOpen(false);
                     }}
                     className={`w-full text-left px-2.5 py-1 rounded-lg capitalize flex items-center justify-between ${
-                      scopeTab === sc ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                      scopeTab === sc ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content'
                     }`}
                   >
                     <span>{sc === 'all' ? 'All Agents' : sc === 'mine' ? 'My Agents' : 'Archived'}</span>
-                    {scopeTab === sc && <Check className="w-3 h-3 text-emerald-400" />}
+                    {scopeTab === sc && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
 
-                <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1 pt-2 border-t border-white/5">Status</div>
+                <div className="text-[10px] font-mono uppercase text-content-secondary px-2 py-1 pt-2 border-t border-divider">Status</div>
                 {['all', 'online', 'offline', 'working', 'idle'].map((st) => (
                   <button
                     key={st}
@@ -379,15 +379,15 @@ export const AgentsView: React.FC = () => {
                       setFilterDropdownOpen(false);
                     }}
                     className={`w-full text-left px-2.5 py-1 rounded-lg capitalize flex items-center justify-between ${
-                      statusFilter === st ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                      statusFilter === st ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content'
                     }`}
                   >
                     <span>{st}</span>
-                    {statusFilter === st && <Check className="w-3 h-3 text-emerald-400" />}
+                    {statusFilter === st && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
 
-                <div className="text-[10px] font-mono uppercase text-gray-400 px-2 py-1 pt-2 border-t border-white/5">Access Tier</div>
+                <div className="text-[10px] font-mono uppercase text-content-secondary px-2 py-1 pt-2 border-t border-divider">Access Tier</div>
                 {['all', 'team', 'private', 'everyone'].map((acc) => (
                   <button
                     key={acc}
@@ -396,11 +396,11 @@ export const AgentsView: React.FC = () => {
                       setFilterDropdownOpen(false);
                     }}
                     className={`w-full text-left px-2.5 py-1 rounded-lg capitalize flex items-center justify-between ${
-                      accessFilter === acc ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
+                      accessFilter === acc ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content'
                     }`}
                   >
                     <span>{acc === 'all' ? 'All Access' : acc}</span>
-                    {accessFilter === acc && <Check className="w-3 h-3 text-emerald-400" />}
+                    {accessFilter === acc && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
               </div>
@@ -414,14 +414,14 @@ export const AgentsView: React.FC = () => {
                 setSortDropdownOpen(prev => !prev);
                 setFilterDropdownOpen(false);
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-white/5 text-xs font-medium text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-divider text-xs font-medium text-content-secondary hover:text-content transition-colors"
             >
               {sortOrder === 'desc' ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />}
               <span>{sortBy === 'lastActive' ? 'Active' : sortBy === 'runs' ? 'Runs' : 'Name'}</span>
             </button>
 
             {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-white/10 shadow-2xl z-30 space-y-1 text-xs">
+              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-1 text-xs">
                 {(['lastActive', 'runs', 'name'] as const).map((field) => (
                   <button
                     key={field}
@@ -430,23 +430,23 @@ export const AgentsView: React.FC = () => {
                       setSortDropdownOpen(false);
                     }}
                     className={`w-full text-left px-2.5 py-1.5 rounded-lg flex items-center justify-between ${
-                      sortBy === field ? 'bg-white/10 text-white font-semibold' : 'text-gray-300 hover:text-white hover:bg-white/5'
+                      sortBy === field ? 'bg-surface-raised text-content font-semibold' : 'text-content-secondary hover:text-content hover:bg-surface-high'
                     }`}
                   >
                     <span className="capitalize">{field === 'lastActive' ? 'Last Active' : field === 'runs' ? 'Total Runs' : field}</span>
-                    {sortBy === field && <Check className="w-3 h-3 text-emerald-400" />}
+                    {sortBy === field && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
-                <div className="pt-1 border-t border-white/5">
+                <div className="pt-1 border-t border-divider">
                   <button
                     onClick={() => {
                       setSortOrder(prev => (prev === 'desc' ? 'asc' : 'desc'));
                       setSortDropdownOpen(false);
                     }}
-                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-white/5 flex items-center justify-between"
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg text-content-secondary hover:text-content hover:bg-surface-high flex items-center justify-between"
                   >
                     <span>Direction</span>
-                    <span className="font-mono text-[10px] text-brand-400 uppercase">{sortOrder}</span>
+                    <span className="font-mono text-[10px] text-link uppercase">{sortOrder}</span>
                   </button>
                 </div>
               </div>
@@ -455,7 +455,7 @@ export const AgentsView: React.FC = () => {
 
           {/* Table View Button */}
           <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-white/5 text-xs font-medium text-gray-400 shadow-sm cursor-default"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-divider text-xs font-medium text-content-secondary shadow-sm cursor-default"
           >
             <TableIcon className="w-3.5 h-3.5" />
             <span>Table</span>
@@ -466,13 +466,13 @@ export const AgentsView: React.FC = () => {
       {/* ================= MINIMALIST CLEAN AGENTS TABLE ================= */}
       <div className="w-full">
         {/* Table Column Headers */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-gray-500 border-b border-white/[0.04] items-center">
+        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-content-muted border-b border-divider items-center">
           <div className="col-span-4 flex items-center gap-3">
             <input
               type="checkbox"
               checked={selectedAgentIds.length > 0 && selectedAgentIds.length === filteredAgents.length}
               onChange={selectAllFiltered}
-              className="rounded bg-surface-raised border-white/10 text-brand-500 focus:ring-0 cursor-pointer"
+              className="rounded bg-surface-raised border-control text-link focus:ring-0 cursor-pointer"
             />
             <span>Agent</span>
           </div>
@@ -484,7 +484,7 @@ export const AgentsView: React.FC = () => {
         </div>
 
         {/* Table Rows (No Pills / Clean Typography) */}
-        <div className="divide-y divide-white/[0.02]">
+        <div className="divide-y divide-divider">
           {filteredAgents.map((agent) => {
             const isSelected = selectedAgentIds.includes(agent.id);
             const detectedModels = modelsForProvider(runtimes, agent.modelProvider);
@@ -494,8 +494,8 @@ export const AgentsView: React.FC = () => {
               <div
                 key={agent.id}
                 onClick={() => setSelectedAgentId(agent.id)}
-                className={`grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-xs hover:bg-white/[0.02] cursor-pointer transition-colors group ${
-                  selectedAgentId === agent.id ? 'bg-white/[0.04]' : ''
+                className={`grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-xs hover:bg-surface-high cursor-pointer transition-colors group ${
+                  selectedAgentId === agent.id ? 'bg-surface-raised' : ''
                 }`}
               >
                 {/* 1. Avatar, Name, Role, Description */}
@@ -505,16 +505,16 @@ export const AgentsView: React.FC = () => {
                     checked={isSelected}
                     onClick={(e) => toggleSelectAgent(agent.id, e)}
                     onChange={() => {}}
-                    className="rounded bg-surface-raised border-white/10 text-brand-500 focus:ring-0 cursor-pointer flex-shrink-0"
+                    className="rounded bg-surface-raised border-control text-link focus:ring-0 cursor-pointer flex-shrink-0"
                   />
-                  
+
                   <div className="relative flex-shrink-0">
                     <img
                       src={agent.avatar}
                       alt=""
-                      className="w-8 h-8 rounded-full object-cover ring-1 ring-white/10"
+                      className="w-8 h-8 rounded-full object-cover ring-1 ring-content/10"
                     />
-                    <span 
+                    <span
                       className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-canvas ${
                         agent.machineStatus === 'online' ? 'bg-emerald-400' :
                         agent.machineStatus === 'unstable' ? 'bg-amber-400' : 'bg-rose-400'
@@ -524,14 +524,14 @@ export const AgentsView: React.FC = () => {
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-white truncate group-hover:text-gray-200">
+                      <span className="font-medium text-content truncate group-hover:text-content">
                         {agent.name}
                       </span>
-                      <span className="text-[11px] text-gray-500 font-mono">
+                      <span className="text-[11px] text-content-muted font-mono">
                         • {agent.role}
                       </span>
                     </div>
-                    <p className="text-[11px] text-gray-500 truncate mt-0.5 font-mono">
+                    <p className="text-[11px] text-content-muted truncate mt-0.5 font-mono">
                       {agent.description || `${agent.role} autonomous assistant`}
                     </p>
                   </div>
@@ -545,21 +545,21 @@ export const AgentsView: React.FC = () => {
 
                 {/* 3. Machine & Model (Plain Text) */}
                 <div className="col-span-2 min-w-0 space-y-0.5 font-mono">
-                  <div className="flex items-center gap-1.5 text-gray-300 truncate text-[11px]">
-                    <Server className="w-3 h-3 text-gray-500 flex-shrink-0" />
+                  <div className="flex items-center gap-1.5 text-content-secondary truncate text-[11px]">
+                    <Server className="w-3 h-3 text-content-muted flex-shrink-0" />
                     <span className="truncate">{agent.machineName || 'Host Node'}</span>
                   </div>
                   <div
-                    className="text-[10px] text-gray-500 truncate"
+                    className="text-[10px] text-content-muted truncate"
                     title={detectedModelLabel || agent.modelName}
                   >
                     {agent.modelName} ({agent.modelProvider})
                   </div>
-                  <div className="text-[9px] text-gray-600 truncate">
+                  <div className="text-[9px] text-content-muted truncate">
                     Reasoning: {agent.reasoningEffort ? REASONING_EFFORT_LABELS[agent.reasoningEffort] : 'Auto'}
                   </div>
                   {detectedModels.length > 1 && (
-                    <div className="text-[9px] text-teal-300/70 truncate">
+                    <div className="text-[9px] text-status-success truncate">
                       {detectedModels.length} models available on this runtime
                     </div>
                   )}
@@ -567,16 +567,16 @@ export const AgentsView: React.FC = () => {
 
                 {/* 4. Runs & Last Active */}
                 <div className="col-span-2 space-y-0.5 font-mono">
-                  <div className="text-white text-[11px]">
+                  <div className="text-content text-[11px]">
                     {agent.stats?.totalRuns || 0} tasks done
                   </div>
-                  <div className="text-[10px] text-gray-500">
+                  <div className="text-[10px] text-content-muted">
                     {agent.lastActive ? `Last active ${agent.lastActive}` : 'No recorded activity'}
                   </div>
                 </div>
 
                 {/* 5. Access (Plain Text) */}
-                <div className="col-span-1 text-[11px] text-gray-400 font-mono capitalize">
+                <div className="col-span-1 text-[11px] text-content-secondary font-mono capitalize">
                   {agent.allowedUsers || 'team'}
                 </div>
 
@@ -584,7 +584,7 @@ export const AgentsView: React.FC = () => {
                 <div className="col-span-1 text-right">
                   <button
                     onClick={(e) => handleChatWithAgent(agent.id, e)}
-                    className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/5 transition-colors"
+                    className="p-1.5 rounded-lg text-content-muted hover:text-content hover:bg-surface-high transition-colors"
                     title="Direct Chat"
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
@@ -600,24 +600,24 @@ export const AgentsView: React.FC = () => {
       {selectedAgent && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           {/* Backdrop Overlay */}
-          <div 
+          <div
             className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity animate-fade-in"
             onClick={() => setSelectedAgentId(null)}
           />
 
           {/* Centered Modal Container */}
-          <div className="relative w-full max-w-2xl bg-shell border border-white/10 rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
-            
+          <div className="relative w-full max-w-2xl bg-shell border border-divider rounded-2xl shadow-2xl overflow-hidden z-10 animate-scale-in flex flex-col max-h-[85vh] font-sans">
+
             {/* Modal Header */}
-            <div className="p-5 border-b border-white/5 flex items-start justify-between bg-surface">
+            <div className="p-5 border-b border-divider flex items-start justify-between bg-surface">
               <div className="flex items-start gap-3.5 min-w-0">
                 <div className="relative flex-shrink-0">
                   <img
                     src={selectedAgent.avatar}
                     alt=""
-                    className="w-11 h-11 rounded-full object-cover ring-1 ring-white/10"
+                    className="w-11 h-11 rounded-full object-cover ring-1 ring-content/10"
                   />
-                  <span 
+                  <span
                     className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-surface ${
                       selectedAgent.machineStatus === 'online' ? 'bg-emerald-400' :
                       selectedAgent.machineStatus === 'unstable' ? 'bg-amber-400' : 'bg-rose-400'
@@ -627,14 +627,14 @@ export const AgentsView: React.FC = () => {
 
                 <div className="min-w-0 space-y-0.5">
                   <div className="flex items-center gap-2">
-                    <h2 className="text-base font-semibold text-white truncate">{selectedAgent.name}</h2>
-                    <span className="text-xs text-gray-400 font-mono">• {selectedAgent.role}</span>
+                    <h2 className="text-base font-semibold text-content truncate">{selectedAgent.name}</h2>
+                    <span className="text-xs text-content-secondary font-mono">• {selectedAgent.role}</span>
                   </div>
                   <div className="flex items-center gap-2 text-xs">
                     {renderStatus(selectedAgent)}
-                    {selectedAgent.sharedKey && <span className="inline-flex items-center gap-1 text-violet-300"><Share2 className="h-3 w-3" />Shared across workspaces</span>}
-                    <span className="text-gray-600 font-mono">•</span>
-                    <span className="text-gray-400 font-mono text-[11px] truncate">
+                    {selectedAgent.sharedKey && <span className="inline-flex items-center gap-1 text-link"><Share2 className="h-3 w-3" />Shared across workspaces</span>}
+                    <span className="text-content-muted font-mono">•</span>
+                    <span className="text-content-secondary font-mono text-[11px] truncate">
                       {selectedAgent.machineName || 'Host Node'}
                     </span>
                   </div>
@@ -647,14 +647,14 @@ export const AgentsView: React.FC = () => {
                     handleChatWithAgent(selectedAgent.id);
                     setSelectedAgentId(null);
                   }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high text-content font-medium text-xs transition-colors"
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
                   <span>Chat</span>
                 </button>
                 <button
                   onClick={() => setSelectedAgentId(null)}
-                  className="p-1.5 rounded-lg hover:bg-white/5 text-gray-400 hover:text-white transition-colors"
+                  className="p-1.5 rounded-lg hover:bg-surface-high text-content-secondary hover:text-content transition-colors"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -662,7 +662,7 @@ export const AgentsView: React.FC = () => {
             </div>
 
             {/* Sub-tab Navigation */}
-            <div className="flex items-center gap-1 px-5 pt-2 border-b border-white/5 bg-surface text-xs">
+            <div className="flex items-center gap-1 px-5 pt-2 border-b border-divider bg-surface text-xs">
               {[
                 { id: 'instructions', label: 'Instructions' },
                 { id: 'persona', label: 'Persona File' },
@@ -677,8 +677,8 @@ export const AgentsView: React.FC = () => {
                   onClick={() => setProfileTab(tab.id as any)}
                   className={`px-3 py-2 border-b-2 font-medium transition-colors whitespace-nowrap ${
                     profileTab === tab.id
-                      ? 'border-white text-white font-semibold'
-                      : 'border-transparent text-gray-400 hover:text-white'
+                      ? 'border-divider text-content font-semibold'
+                      : 'border-transparent text-content-secondary hover:text-content'
                   }`}
                 >
                   {tab.label}
@@ -687,20 +687,20 @@ export const AgentsView: React.FC = () => {
             </div>
 
             {/* Modal Body Content */}
-            <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs text-gray-300">
+            <div className="flex-1 overflow-y-auto p-5 space-y-5 text-xs text-content-secondary">
               {/* Said before any tab, because it decides whether the rest of
                   this profile can do anything at all. */}
               <AgentReadinessNotice
                 agent={selectedAgent}
                 onOpenRuntimes={() => setActiveTab('runtimes')}
               />
-              
+
               {/* Tab 1: Instructions & Persona */}
               {profileTab === 'instructions' && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-medium text-gray-400">Specialization Description</label>
+                      <label className="text-[11px] font-medium text-content-secondary">Specialization Description</label>
                       {isManagedByFile(selectedAgent, 'description') && (
                         <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
                       )}
@@ -709,17 +709,17 @@ export const AgentsView: React.FC = () => {
                       type="text"
                       value={selectedAgent.description || ''}
                       onChange={(e) => updateAgent(selectedAgent.id, { description: e.target.value })}
-                      className="w-full bg-well border border-white/10 rounded-xl px-3 py-2 text-white text-xs focus:outline-none focus:border-white/30 font-mono"
+                      className="w-full bg-well border border-control rounded-xl px-3 py-2 text-content text-xs focus:outline-none focus:border-control font-mono"
                     />
                   </div>
 
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <label className="text-[11px] font-medium text-gray-400">System Prompt & Persona</label>
+                      <label className="text-[11px] font-medium text-content-secondary">System Prompt & Persona</label>
                       {isManagedByFile(selectedAgent, 'systemPrompt') ? (
                         <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
                       ) : (
-                        <span className="text-[10px] text-gray-500 font-mono">Auto-saved</span>
+                        <span className="text-[10px] text-content-muted font-mono">Auto-saved</span>
                       )}
                     </div>
                     <textarea
@@ -727,7 +727,7 @@ export const AgentsView: React.FC = () => {
                       value={selectedAgent.systemPrompt || ''}
                       readOnly={isManagedByFile(selectedAgent, 'systemPrompt')}
                       onChange={(e) => updateAgent(selectedAgent.id, { systemPrompt: e.target.value })}
-                      className={`w-full bg-well border border-white/10 rounded-xl p-3 text-white text-xs leading-relaxed font-mono focus:outline-none focus:border-white/30 ${
+                      className={`w-full bg-well border border-control rounded-xl p-3 text-content text-xs leading-relaxed font-mono focus:outline-none focus:border-control ${
                         isManagedByFile(selectedAgent, 'systemPrompt') ? MANAGED_INPUT_CLASS : ''
                       }`}
                     />
@@ -735,7 +735,7 @@ export const AgentsView: React.FC = () => {
                         wonder why the agent ignored it. */}
                     <button
                       onClick={() => setProfileTab('persona')}
-                      className="text-[10px] text-gray-500 hover:text-gray-300 transition-colors text-left"
+                      className="text-[10px] text-content-muted hover:text-content-secondary transition-colors text-left"
                     >
                       The agent&apos;s persona file overrides this when it has a body —
                       <span className="underline underline-offset-2 ml-1">open Persona File</span>
@@ -745,7 +745,7 @@ export const AgentsView: React.FC = () => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] text-gray-500 font-mono uppercase">Runs on</label>
+                        <label className="text-[10px] text-content-muted font-mono uppercase">Runs on</label>
                         {isManagedByFile(selectedAgent, 'modelProvider') && (
                           <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
                         )}
@@ -767,7 +767,7 @@ export const AgentsView: React.FC = () => {
                                 : null
                           });
                         }}
-                        className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-white/30"
+                        className="w-full bg-well border border-control rounded-lg px-2.5 py-1.5 text-content text-xs focus:outline-none focus:border-control"
                       >
                         {providerOptions(runtimes).map(opt => (
                           <option key={opt.provider} value={opt.provider}>{opt.label}</option>
@@ -777,7 +777,7 @@ export const AgentsView: React.FC = () => {
 
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] text-gray-500 font-mono uppercase">Model Name</label>
+                        <label className="text-[10px] text-content-muted font-mono uppercase">Model Name</label>
                         {isManagedByFile(selectedAgent, 'modelName') && (
                           <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
                         )}
@@ -794,7 +794,7 @@ export const AgentsView: React.FC = () => {
                               value={selectedAgent.modelName || ''}
                               onChange={(e) => updateAgent(selectedAgent.id, { modelName: e.target.value })}
                               placeholder="no models detected — type an id"
-                              className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                              className="w-full bg-well border border-control rounded-lg px-2.5 py-1.5 text-content font-mono text-xs focus:outline-none focus:border-control"
                             />
                           );
                         }
@@ -816,7 +816,7 @@ export const AgentsView: React.FC = () => {
                                     : null
                               });
                             }}
-                            className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                            className="w-full bg-well border border-control rounded-lg px-2.5 py-1.5 text-content font-mono text-xs focus:outline-none focus:border-control"
                           >
                             {/* Keep a stored model that is no longer offered
                                 visible, rather than silently switching it. */}
@@ -830,7 +830,7 @@ export const AgentsView: React.FC = () => {
                         );
                       })()}
                       {selectedAgent.modelName && (
-                        <p className="mt-1 text-[10px] leading-4 text-gray-500">
+                        <p className="mt-1 text-[10px] leading-4 text-content-muted">
                           {modelSourceNote(runtimes, selectedAgent.modelProvider, selectedAgent.modelName)}
                         </p>
                       )}
@@ -838,7 +838,7 @@ export const AgentsView: React.FC = () => {
 
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] text-gray-500 font-mono uppercase">Reasoning Effort</label>
+                        <label className="text-[10px] text-content-muted font-mono uppercase">Reasoning Effort</label>
                         {isManagedByFile(selectedAgent, 'reasoningEffort') && (
                           <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
                         )}
@@ -861,7 +861,7 @@ export const AgentsView: React.FC = () => {
                                 reasoningEffort: (e.target.value || null) as ReasoningEffort | null
                               })
                             }
-                            className={`w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-white/30 ${
+                            className={`w-full bg-well border border-control rounded-lg px-2.5 py-1.5 text-content text-xs focus:outline-none focus:border-control ${
                               isManagedByFile(selectedAgent, 'reasoningEffort') ? MANAGED_INPUT_CLASS : ''
                             }`}
                           >
@@ -875,14 +875,14 @@ export const AgentsView: React.FC = () => {
                           </select>
                         );
                       })()}
-                      <p className="mt-1 text-[10px] text-gray-600">
+                      <p className="mt-1 text-[10px] text-content-muted">
                         Auto uses the selected model&apos;s native default.
                       </p>
                     </div>
 
                     <div>
                       <div className="flex items-center justify-between mb-1">
-                        <label className="text-[10px] text-gray-500 font-mono uppercase">Autonomy Level</label>
+                        <label className="text-[10px] text-content-muted font-mono uppercase">Autonomy Level</label>
                         {isManagedByFile(selectedAgent, 'autonomyLevel') && (
                           <FileManagedBadge onOpenFile={() => setProfileTab('persona')} />
                         )}
@@ -890,7 +890,7 @@ export const AgentsView: React.FC = () => {
                       <select
                         value={selectedAgent.autonomyLevel || 'Semi-Autonomous (Requires Approval)'}
                         onChange={(e) => updateAgent(selectedAgent.id, { autonomyLevel: e.target.value as any })}
-                        className="w-full bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-white text-xs focus:outline-none focus:border-white/30"
+                        className="w-full bg-well border border-control rounded-lg px-2.5 py-1.5 text-content text-xs focus:outline-none focus:border-control"
                       >
                         <option value="Supervised">Supervised</option>
                         <option value="Semi-Autonomous (Requires Approval)">Semi-Autonomous</option>
@@ -909,7 +909,7 @@ export const AgentsView: React.FC = () => {
               {/* Tab 3: Skills & MCP Tools */}
               {profileTab === 'skills' && (
                 <div className="space-y-3">
-                  <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                  <div className="text-[11px] font-medium text-content-secondary uppercase tracking-wider">
                     Skills
                   </div>
 
@@ -928,19 +928,19 @@ export const AgentsView: React.FC = () => {
                           }}
                           className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
                             isEnabled
-                              ? 'bg-white/[0.04] border-white/15 text-white'
-                              : 'bg-transparent border-white/5 text-gray-500 hover:text-gray-300'
+                              ? 'bg-surface-raised border-divider text-content'
+                              : 'bg-transparent border-divider text-content-muted hover:text-content-secondary'
                           }`}
                         >
                           <div className="space-y-0.5 min-w-0">
-                            <div className="font-medium text-xs text-white">{skill.name}</div>
-                            <div className="text-[11px] text-gray-400 truncate">{skill.description}</div>
+                            <div className="font-medium text-xs text-content">{skill.name}</div>
+                            <div className="text-[11px] text-content-secondary truncate">{skill.description}</div>
                           </div>
                           <input
                             type="checkbox"
                             checked={isEnabled}
                             onChange={() => {}}
-                            className="rounded bg-surface-raised border-white/10 text-brand-500 focus:ring-0 ml-3"
+                            className="rounded bg-surface-raised border-control text-link focus:ring-0 ml-3"
                           />
                         </div>
                       );
@@ -952,15 +952,15 @@ export const AgentsView: React.FC = () => {
               {/* Tab 3: Environment Variables & Secrets */}
               {profileTab === 'env' && (
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between text-[11px] font-medium text-gray-400">
+                  <div className="flex items-center justify-between text-[11px] font-medium text-content-secondary">
                     <span>Injected Variables & Secrets</span>
-                    <span className="text-gray-500 font-mono">{(selectedAgent.envVars || []).length} keys</span>
+                    <span className="text-content-muted font-mono">{(selectedAgent.envVars || []).length} keys</span>
                   </div>
 
                   {/* Key-Value Rows */}
                   <div className="space-y-1.5">
                     {(selectedAgent.envVars || []).length === 0 ? (
-                      <p className="p-3 text-gray-500 italic">No environment variables configured.</p>
+                      <p className="p-3 text-content-muted italic">No environment variables configured.</p>
                     ) : (
                       (selectedAgent.envVars || []).map((ev) => {
                         const isRevealed = revealedEnvKeys[ev.key] ?? false;
@@ -968,12 +968,12 @@ export const AgentsView: React.FC = () => {
                         return (
                           <div
                             key={ev.key}
-                            className="p-2.5 rounded-xl bg-well border border-white/5 flex items-center justify-between font-mono text-xs"
+                            className="p-2.5 rounded-xl bg-well border border-divider flex items-center justify-between font-mono text-xs"
                           >
                             <div className="flex items-center gap-2 min-w-0">
-                              <span className="text-white font-medium">{ev.key}</span>
-                              <span className="text-gray-600">=</span>
-                              <span className="text-gray-400 truncate">
+                              <span className="text-content font-medium">{ev.key}</span>
+                              <span className="text-content-muted">=</span>
+                              <span className="text-content-secondary truncate">
                                 {ev.isSecret && !isRevealed ? '••••••••••••••••' : ev.value}
                               </span>
                             </div>
@@ -982,14 +982,14 @@ export const AgentsView: React.FC = () => {
                               {ev.isSecret && (
                                 <button
                                   onClick={() => setRevealedEnvKeys(prev => ({ ...prev, [ev.key]: !isRevealed }))}
-                                  className="p-1 text-gray-400 hover:text-white"
+                                  className="p-1 text-content-secondary hover:text-content"
                                 >
                                   {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                 </button>
                               )}
                               <button
                                 onClick={() => handleRemoveEnvVar(selectedAgent.id, ev.key)}
-                                className="p-1 text-gray-500 hover:text-rose-400"
+                                className="p-1 text-content-muted hover:text-status-danger"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1001,38 +1001,38 @@ export const AgentsView: React.FC = () => {
                   </div>
 
                   {/* Add New Key */}
-                  <div className="p-3 rounded-xl bg-white/[0.02] border border-white/5 space-y-2">
-                    <div className="text-[11px] font-medium text-gray-300">Add Variable</div>
+                  <div className="p-3 rounded-xl bg-surface-raised border border-divider space-y-2">
+                    <div className="text-[11px] font-medium text-content-secondary">Add Variable</div>
                     <div className="grid grid-cols-2 gap-2">
                       <input
                         type="text"
                         value={newEnvKey}
                         onChange={(e) => setNewEnvKey(e.target.value)}
                         placeholder="KEY_NAME"
-                        className="bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white uppercase font-mono focus:outline-none focus:border-white/30"
+                        className="bg-well border border-control rounded-lg px-2.5 py-1.5 text-xs text-content uppercase font-mono focus:outline-none focus:border-control"
                       />
                       <input
                         type="text"
                         value={newEnvValue}
                         onChange={(e) => setNewEnvValue(e.target.value)}
                         placeholder="value"
-                        className="bg-well border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-white font-mono focus:outline-none focus:border-white/30"
+                        className="bg-well border border-control rounded-lg px-2.5 py-1.5 text-xs text-content font-mono focus:outline-none focus:border-control"
                       />
                     </div>
                     <div className="flex items-center justify-between pt-1">
-                      <label className="flex items-center gap-1.5 text-[11px] text-gray-400 cursor-pointer">
+                      <label className="flex items-center gap-1.5 text-[11px] text-content-secondary cursor-pointer">
                         <input
                           type="checkbox"
                           checked={newEnvIsSecret}
                           onChange={(e) => setNewEnvIsSecret(e.target.checked)}
-                          className="rounded bg-surface-raised border-white/10 text-brand-500 focus:ring-0"
+                          className="rounded bg-surface-raised border-control text-link focus:ring-0"
                         />
                         <span>Treat as masked secret</span>
                       </label>
                       <button
                         type="button"
                         onClick={() => handleAddEnvVar(selectedAgent.id)}
-                        className="px-3 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white font-medium text-xs transition-colors"
+                        className="px-3 py-1 rounded-lg bg-surface-raised hover:bg-surface-high text-content font-medium text-xs transition-colors"
                       >
                         Add Key
                       </button>
@@ -1045,7 +1045,7 @@ export const AgentsView: React.FC = () => {
               {profileTab === 'mcp' && (
                 <div className="space-y-4">
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">MCP Servers</label>
+                    <label className="text-[11px] font-medium text-content-secondary">MCP Servers</label>
                     <AgentMcpGrants
                       agent={selectedAgent}
                       onChange={next => updateAgent(selectedAgent.id, { mcpServers: next })}
@@ -1055,18 +1055,18 @@ export const AgentsView: React.FC = () => {
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-[11px] font-medium text-gray-400">Custom CLI Arguments</label>
+                    <label className="text-[11px] font-medium text-content-secondary">Custom CLI Arguments</label>
                     <input
                       type="text"
                       value={selectedAgent.customCliArgs || ''}
                       onChange={(e) => updateAgent(selectedAgent.id, { customCliArgs: e.target.value })}
                       placeholder="e.g. --debug --fallback-model haiku"
-                      className="w-full bg-well border border-white/10 rounded-xl px-3 py-2 text-white font-mono text-xs focus:outline-none focus:border-white/30"
+                      className="w-full bg-well border border-control rounded-xl px-3 py-2 text-content font-mono text-xs focus:outline-none focus:border-control"
                     />
                     {/* These flags are now actually passed to the CLI, so say
                         which ones will not be — a refused flag is otherwise
                         indistinguishable from one that did nothing. */}
-                    <p className="text-[10px] text-gray-600 leading-snug">
+                    <p className="text-[10px] text-content-muted leading-snug">
                       Passed to the agent&apos;s CLI. Flags Alpha sets itself are ignored —
                       model, session, output format, tool permissions, MCP config and the
                       system prompt.
@@ -1078,28 +1078,28 @@ export const AgentsView: React.FC = () => {
               {/* Tab 5: Run History Logs */}
               {profileTab === 'history' && (
                 <div className="space-y-3">
-                  <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                  <div className="text-[11px] font-medium text-content-secondary uppercase tracking-wider">
                     Audit Execution Trail
                   </div>
 
                   {(selectedAgent.runHistory || []).length === 0 ? (
-                    <p className="p-3 text-gray-500 italic">No execution history recorded yet.</p>
+                    <p className="p-3 text-content-muted italic">No execution history recorded yet.</p>
                   ) : (
                     <div className="space-y-2">
                       {(selectedAgent.runHistory || []).map((run) => (
                         <div
                           key={run.id}
-                          className="p-3 rounded-xl bg-well border border-white/5 space-y-1.5 font-mono text-xs"
+                          className="p-3 rounded-xl bg-well border border-divider space-y-1.5 font-mono text-xs"
                         >
                           <div className="flex items-center justify-between text-[11px]">
-                            <span className="text-white font-semibold">{run.issueKey}</span>
-                            <span className="text-gray-500">{run.timestamp}</span>
+                            <span className="text-content font-semibold">{run.issueKey}</span>
+                            <span className="text-content-muted">{run.timestamp}</span>
                           </div>
-                          <div className="text-gray-300 text-[11px] bg-black/40 p-2 rounded border border-white/5">
+                          <div className="text-content-secondary text-[11px] bg-well p-2 rounded border border-divider">
                             {run.command}
                           </div>
-                          <div className="flex items-center justify-between text-[10px] text-gray-500 pt-0.5">
-                            <span className="text-emerald-400">{run.status}</span>
+                          <div className="flex items-center justify-between text-[10px] text-content-muted pt-0.5">
+                            <span className="text-status-success">{run.status}</span>
                             <span>{run.durationMs}ms</span>
                           </div>
                         </div>
@@ -1113,13 +1113,13 @@ export const AgentsView: React.FC = () => {
 
             {/* Modal Footer: Duplicate / Archive */}
             {canManageAgents && (
-              <div className="p-4 border-t border-white/5 bg-surface flex items-center justify-between text-xs">
+              <div className="p-4 border-t border-divider bg-surface flex items-center justify-between text-xs">
                 <button
                   onClick={() => {
                     duplicateAgent(selectedAgent.id);
                     setSelectedAgentId(null);
                   }}
-                  className="flex items-center gap-1.5 text-gray-400 hover:text-white transition-colors"
+                  className="flex items-center gap-1.5 text-content-secondary hover:text-content transition-colors"
                 >
                   <Copy className="w-3.5 h-3.5" />
                   <span>Duplicate Agent</span>
@@ -1134,7 +1134,7 @@ export const AgentsView: React.FC = () => {
                       await setAgentSharing(selectedAgent.id, !selectedAgent.sharedKey);
                       setSharingAgent(false);
                     }}
-                    className={`flex items-center gap-1.5 transition-colors disabled:opacity-50 ${selectedAgent.sharedKey ? 'text-amber-300 hover:text-amber-200' : 'text-violet-300 hover:text-violet-200'}`}
+                    className={`flex items-center gap-1.5 transition-colors disabled:opacity-50 ${selectedAgent.sharedKey ? 'text-status-warning hover:text-status-warning' : 'text-link hover:text-link-hover'}`}
                   >
                     {selectedAgent.sharedKey ? <Unlink className="w-3.5 h-3.5" /> : <Share2 className="w-3.5 h-3.5" />}
                     <span>{sharingAgent ? 'Saving…' : selectedAgent.sharedKey ? 'Stop sharing' : 'Share with my workspaces'}</span>
@@ -1147,7 +1147,7 @@ export const AgentsView: React.FC = () => {
                       restoreAgent(selectedAgent.id);
                       setSelectedAgentId(null);
                     }}
-                    className="flex items-center gap-1.5 text-emerald-400 hover:text-emerald-300 transition-colors"
+                    className="flex items-center gap-1.5 text-status-success hover:text-status-success transition-colors"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Restore Agent</span>
@@ -1158,7 +1158,7 @@ export const AgentsView: React.FC = () => {
                       archiveAgent(selectedAgent.id);
                       setSelectedAgentId(null);
                     }}
-                    className="flex items-center gap-1.5 text-rose-400 hover:text-rose-300 transition-colors"
+                    className="flex items-center gap-1.5 text-status-danger hover:text-status-danger transition-colors"
                   >
                     <Archive className="w-3.5 h-3.5" />
                     <span>Archive Agent</span>
@@ -1173,24 +1173,24 @@ export const AgentsView: React.FC = () => {
 
       {/* ================= FLOATING BULK ACTIONS TOOLBAR ================= */}
       {selectedAgentIds.length > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface-raised border border-white/10 rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-4 z-40 animate-slide-up text-xs">
-          <span className="font-mono text-white font-medium">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface-raised border border-divider rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-4 z-40 animate-slide-up text-xs">
+          <span className="font-mono text-content font-medium">
             {selectedAgentIds.length} agents selected
           </span>
 
-          <div className="h-4 w-px bg-white/10" />
+          <div className="h-4 w-px bg-surface-raised" />
 
           {/* Change Access Dropdown */}
           <div className="relative">
             <button
               onClick={() => setBulkAccessMenuOpen(prev => !prev)}
-              className="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-white font-medium transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high text-content font-medium transition-colors"
             >
               Change Access
             </button>
 
             {bulkAccessMenuOpen && (
-              <div className="absolute bottom-full mb-2 left-0 w-36 bg-surface-raised border border-white/10 rounded-xl shadow-2xl p-1.5 space-y-1">
+              <div className="absolute bottom-full mb-2 left-0 w-36 bg-surface-raised border border-divider rounded-xl shadow-2xl p-1.5 space-y-1">
                 {(['team', 'private', 'everyone'] as AgentAccessLevel[]).map(tier => (
                   <button
                     key={tier}
@@ -1198,7 +1198,7 @@ export const AgentsView: React.FC = () => {
                       bulkUpdateAgents(selectedAgentIds, { allowedUsers: tier });
                       setBulkAccessMenuOpen(false);
                     }}
-                    className="w-full text-left px-2.5 py-1 rounded-lg text-xs capitalize text-gray-300 hover:text-white hover:bg-white/10"
+                    className="w-full text-left px-2.5 py-1 rounded-lg text-xs capitalize text-content-secondary hover:text-content hover:bg-surface-high"
                   >
                     {tier}
                   </button>
@@ -1212,14 +1212,14 @@ export const AgentsView: React.FC = () => {
               bulkArchiveAgents(selectedAgentIds);
               setSelectedAgentIds([]);
             }}
-            className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 text-rose-300 font-medium transition-colors"
+            className="px-3 py-1.5 rounded-lg bg-status-danger-subtle hover:bg-status-danger-subtle text-status-danger font-medium transition-colors"
           >
             Bulk Archive
           </button>
 
           <button
             onClick={() => setSelectedAgentIds([])}
-            className="text-gray-400 hover:text-white"
+            className="text-content-secondary hover:text-content"
           >
             Deselect All
           </button>

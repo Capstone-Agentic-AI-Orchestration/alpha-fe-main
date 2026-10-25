@@ -80,48 +80,48 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
   const selected = projects.find(project => project.id === projectId);
   const currentMissing = Boolean(initialProjectId && !projects.some(project => project.id === initialProjectId));
   const valid = projectId === '' || projects.some(project => project.id === projectId);
-  return <form aria-label="Link request to project" className="space-y-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4"
+  return <form aria-label="Link request to project" className="space-y-4 rounded-xl border border-divider bg-surface-raised p-4"
     onSubmit={event => { event.preventDefault(); if (!disabled && valid) onSubmit({ projectId: projectId || null,
       clientVisible: Boolean(projectId) && clientVisible,
       projectPreview: projectId && clientVisible ? previews.find(preview => `${preview.repository}|${preview.branch}` === previewKey) ?? null : null }); }}>
     <div className="flex items-start justify-between gap-3">
       <div>
-        <h3 className="text-sm font-medium text-gray-100">Organize this request</h3>
-        <p className="mt-1 text-[11px] leading-relaxed text-gray-500">Link it to a project to keep this client’s requests together. This does not expose the project or its tasks to the client.</p>
+        <h3 className="text-sm font-medium text-content">Organize this request</h3>
+        <p className="mt-1 text-[11px] leading-relaxed text-content-muted">Link it to a project to keep this client’s requests together. This does not expose the project or its tasks to the client.</p>
       </div>
       <button type="button" className={secondary} disabled={disabled || loading} onClick={() => setRefresh(value => value + 1)} aria-label="Refresh workspace projects"><RefreshCw size={13} /></button>
     </div>
-    {loading && <p role="status" className="text-xs text-gray-500">Loading projects from this workspace…</p>}
-    {failed && <p role="alert" className="rounded-md border border-rose-400/20 bg-rose-500/[0.06] p-2.5 text-xs text-rose-200">Could not load workspace projects. Refresh to try again.</p>}
-    {currentMissing && <p role="status" className="rounded-md border border-amber-400/15 bg-amber-500/[0.04] p-2.5 text-xs text-amber-100/80">The linked project is not in the current project list. Refresh or choose another project if this request has no authorized work.</p>}
+    {loading && <p role="status" className="text-xs text-content-muted">Loading projects from this workspace…</p>}
+    {failed && <p role="alert" className="rounded-md border border-status-danger-border bg-status-danger-subtle p-2.5 text-xs text-status-danger">Could not load workspace projects. Refresh to try again.</p>}
+    {currentMissing && <p role="status" className="rounded-md border border-status-warning-border bg-status-warning-subtle p-2.5 text-xs text-status-warning">The linked project is not in the current project list. Refresh or choose another project if this request has no authorized work.</p>}
     <label className="block space-y-1.5">
-      <span className="text-[11px] font-medium text-gray-300">Project</span>
+      <span className="text-[11px] font-medium text-content-secondary">Project</span>
       <select aria-label="Project" className={input} value={projectId} disabled={disabled || loading || projectLocked} onChange={event => { setProjectId(event.target.value); setPreviewKey(''); }}>
         <option value="">Not linked to a project</option>
         {currentMissing && initialProjectId && <option value={initialProjectId}>Existing project link (unavailable)</option>}
         {projects.map(project => <option key={project.id} value={project.id}>{project.key} · {project.name}</option>)}
       </select>
-      {projectLocked && <span className="block text-[10px] text-gray-500">This request already has authorized work. Its project cannot be changed.</span>}
-      {selected && <span className="block text-[10px] text-gray-500">{selected.name} · workspace project</span>}
+      {projectLocked && <span className="block text-[10px] text-content-muted">This request already has authorized work. Its project cannot be changed.</span>}
+      {selected && <span className="block text-[10px] text-content-muted">{selected.name} · workspace project</span>}
     </label>
-    <label className={`flex items-start gap-2 rounded-lg border border-white/[0.07] bg-white/[0.02] p-3 text-[11px] leading-relaxed ${projectId ? 'text-gray-300' : 'text-gray-600'}`}>
+    <label className={`flex items-start gap-2 rounded-lg border border-divider bg-surface-raised p-3 text-[11px] leading-relaxed ${projectId ? 'text-content-secondary' : 'text-content-muted'}`}>
       <input type="checkbox" className="mt-0.5 accent-brand-500" checked={clientVisible} disabled={disabled || !projectId}
         onChange={event => setClientVisible(event.target.checked)} />
       Show the project name on this ticket in the client portal. This never grants access to tasks, project files, or other requests.
     </label>
     <label className={`block space-y-1.5 ${projectId && clientVisible ? '' : 'opacity-50'}`}>
-      <span className="text-[11px] font-medium text-gray-300">Optional hosted preview</span>
+      <span className="text-[11px] font-medium text-content-secondary">Optional hosted preview</span>
       <select aria-label="Hosted project preview" className={input} value={previewKey} disabled={disabled || loading || previewLoading || !projectId || !clientVisible}
         onChange={event => setPreviewKey(event.target.value)}>
         <option value="">Do not share a hosted preview</option>
         {previews.map(preview => <option key={`${preview.repository}|${preview.branch}`} value={`${preview.repository}|${preview.branch}`}>{preview.repository} · {preview.branch}</option>)}
       </select>
-      {previewLoading && <span role="status" className="block text-[10px] text-gray-500">Checking ready hosted frontend previews…</span>}
-      {previewError && <span role="alert" className="block text-[10px] text-amber-200">Hosted previews could not be checked. You can still save the project link without sharing one.</span>}
-      {!previewLoading && !previewError && projectId && previews.length === 0 && <span className="block text-[10px] text-gray-500">No ready, embeddable main or uat frontend preview was found.</span>}
-      <span className="block text-[10px] text-gray-500">Only ready hosted frontend previews are offered. The link may be publicly accessible; the client gets no repository, task, or internal project access.</span>
+      {previewLoading && <span role="status" className="block text-[10px] text-content-muted">Checking ready hosted frontend previews…</span>}
+      {previewError && <span role="alert" className="block text-[10px] text-status-warning">Hosted previews could not be checked. You can still save the project link without sharing one.</span>}
+      {!previewLoading && !previewError && projectId && previews.length === 0 && <span className="block text-[10px] text-content-muted">No ready, embeddable main or uat frontend preview was found.</span>}
+      <span className="block text-[10px] text-content-muted">Only ready hosted frontend previews are offered. The link may be publicly accessible; the client gets no repository, task, or internal project access.</span>
     </label>
-    <div className="flex flex-wrap justify-end gap-2 border-t border-white/[0.06] pt-3">
+    <div className="flex flex-wrap justify-end gap-2 border-t border-divider pt-3">
       <button type="button" disabled={disabled} onClick={onCancel} className={secondary}>Cancel</button>
       <button type="submit" disabled={disabled || loading || failed || !valid} className={primary}>Save project link</button>
     </div>

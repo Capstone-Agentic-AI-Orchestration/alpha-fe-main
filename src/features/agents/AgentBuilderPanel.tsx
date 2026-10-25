@@ -157,32 +157,32 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
   if (!started) {
     return (
       <div className="space-y-4 py-2">
-        <section className="space-y-3 rounded-xl border border-white/10 bg-surface-200/40 p-4">
-          <div><h4 className="text-sm font-medium text-white">Choose your builder</h4><p className="mt-1 text-xs leading-relaxed text-gray-400">This model helps you design the agent. You can choose a different model for the finished agent.</p></div>
+        <section className="space-y-3 rounded-xl border border-divider bg-surface/40 p-4">
+          <div><h4 className="text-sm font-medium text-content">Choose your builder</h4><p className="mt-1 text-xs leading-relaxed text-content-secondary">This model helps you design the agent. You can choose a different model for the finished agent.</p></div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="space-y-1.5"><label htmlFor="builder-runtime" className="text-xs font-medium text-gray-300">Builder runtime</label>
+            <div className="space-y-1.5"><label htmlFor="builder-runtime" className="text-xs font-medium text-content-secondary">Builder runtime</label>
               <select id="builder-runtime" value={builderRuntimeId} onChange={e => {
                 const runtimeId = e.target.value;
                 const next = builderChoices.find(c => c.runtimeId === runtimeId);
                 onSessionChange({ ...session, runtimeId, modelName: next?.models[0] ?? '' });
-              }} className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2.5 text-sm text-white focus:border-brand-400 focus:outline-none">
+              }} className="w-full rounded-lg border border-control bg-surface px-3 py-2.5 text-sm text-content focus:border-control focus:outline-none">
                 {!builderChoices.length && <option value="">No supported runtimes detected</option>}
                 {builderChoices.map(c => <option key={c.runtimeId} value={c.runtimeId}>{c.label}</option>)}
               </select>
             </div>
-            <div className="space-y-1.5"><label htmlFor="builder-model" className="text-xs font-medium text-gray-300">Builder model</label>
-              <select id="builder-model" value={builderModelName} disabled={!builderModels.length} onChange={e => onSessionChange({ ...configuredSession, modelName: e.target.value })} className="w-full rounded-lg border border-white/10 bg-surface px-3 py-2.5 text-sm text-white focus:border-brand-400 focus:outline-none disabled:opacity-50">
+            <div className="space-y-1.5"><label htmlFor="builder-model" className="text-xs font-medium text-content-secondary">Builder model</label>
+              <select id="builder-model" value={builderModelName} disabled={!builderModels.length} onChange={e => onSessionChange({ ...configuredSession, modelName: e.target.value })} className="w-full rounded-lg border border-control bg-surface px-3 py-2.5 text-sm text-content focus:border-control focus:outline-none disabled:opacity-50">
                 {!builderModels.includes(builderModelName) && <option value={builderModelName}>{builderModelName || 'No models available'}</option>}
                 {builderModels.map(model => <option key={model} value={model}>{model}</option>)}
               </select>
             </div>
           </div>
-          {!builderReady && <p role="status" className="text-xs text-amber-300">{!builderRuntime?.available ? 'Connect a supported runtime on the Runtimes page to continue.' : 'Refresh this runtime’s model catalog and choose an available model.'}</p>}
+          {!builderReady && <p role="status" className="text-xs text-status-warning">{!builderRuntime?.available ? 'Connect a supported runtime on the Runtimes page to continue.' : 'Refresh this runtime’s model catalog and choose an available model.'}</p>}
         </section>
 
         <div>
-          <label htmlFor="builder-description" className="block text-xs font-semibold text-gray-300 mb-1.5 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-brand-400" />
+          <label htmlFor="builder-description" className="block text-xs font-semibold text-content-secondary mb-1.5 flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-link" />
             <span>Describe the agent you need</span>
           </label>
           <textarea
@@ -197,19 +197,19 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
               }
             }}
             placeholder="e.g. A senior frontend reviewer who checks React & Tailwind components for accessibility, state performance, and clean TypeScript props."
-            className="w-full bg-surface-200 border border-white/10 rounded-xl p-3.5 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 font-sans"
+            className="w-full bg-surface border border-control rounded-xl p-3.5 text-sm text-content placeholder-content-muted focus:outline-none focus:border-control font-sans"
             autoFocus
           />
         </div>
 
-        <div className="flex flex-wrap gap-2 text-xs text-gray-400">
-          <span className="text-gray-500">Quick ideas:</span>
+        <div className="flex flex-wrap gap-2 text-xs text-content-secondary">
+          <span className="text-content-muted">Quick ideas:</span>
           {QUICK_IDEAS.map(idea => (
             <button
               key={idea}
               type="button"
               onClick={() => setComposer(idea)}
-              className="px-2.5 py-1 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 hover:text-white transition-colors"
+              className="px-2.5 py-1 rounded-lg bg-surface-raised hover:bg-surface-high text-content-secondary hover:text-content transition-colors"
             >
               {idea.split(' ').slice(0, 4).join(' ')}…
             </button>
@@ -218,11 +218,11 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
 
         {error && <BuilderError message={error} />}
 
-        <div className="flex items-center justify-between pt-4 border-t border-white/10">
+        <div className="flex items-center justify-between pt-4 border-t border-divider">
           <button
             type="button"
             onClick={onBack}
-            className="px-4 py-2 rounded-lg text-xs text-gray-400 hover:text-white"
+            className="px-4 py-2 rounded-lg text-xs text-content-secondary hover:text-content"
           >
             ← Back
           </button>
@@ -230,7 +230,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
             type="button"
             onClick={() => void send(composer)}
             disabled={busy || !composer.trim() || !builderReady}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-on-accent shadow-glow-brand transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-5 py-2 rounded-lg text-xs font-semibold bg-action hover:bg-action-hover text-on-action shadow-glow-brand transition-all disabled:opacity-50"
           >
             {busy ? (
               <>
@@ -262,8 +262,8 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
               key={message.id}
               className={
                 message.author === 'you'
-                  ? 'ml-auto max-w-[85%] rounded-xl rounded-br-sm bg-brand-500/15 border border-brand-500/25 px-3 py-2 text-xs text-white whitespace-pre-wrap'
-                  : 'mr-auto max-w-[90%] rounded-xl rounded-bl-sm bg-surface-200 border border-white/5 px-3 py-2 text-xs text-gray-200 whitespace-pre-wrap leading-relaxed'
+                  ? 'ml-auto max-w-[85%] rounded-xl rounded-br-sm bg-selected border border-divider px-3 py-2 text-xs text-selected-content whitespace-pre-wrap'
+                  : 'mr-auto max-w-[90%] rounded-xl rounded-bl-sm bg-surface border border-divider px-3 py-2 text-xs text-content whitespace-pre-wrap leading-relaxed'
               }
             >
               {message.text}
@@ -271,8 +271,8 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
           ))}
 
           {busy && (
-            <div className="mr-auto flex items-center gap-2 px-3 py-2 text-xs text-gray-500">
-              <Sparkles className="w-3.5 h-3.5 animate-spin text-brand-400" />
+            <div className="mr-auto flex items-center gap-2 px-3 py-2 text-xs text-content-muted">
+              <Sparkles className="w-3.5 h-3.5 animate-spin text-link" />
               <span>Thinking…</span>
             </div>
           )}
@@ -280,7 +280,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
           {error && <BuilderError message={error} />}
         </div>
 
-        <div className="pt-3 mt-3 border-t border-white/10 flex items-end gap-2">
+        <div className="pt-3 mt-3 border-t border-divider flex items-end gap-2">
           <textarea
             rows={2}
             value={composer}
@@ -295,14 +295,14 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
             }}
             placeholder="Refine it — “make it stricter about tests”, “drop the browser skill”…"
             disabled={busy}
-            className="flex-1 min-w-0 resize-none bg-surface-200 border border-white/10 rounded-xl px-3 py-2 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-brand-500 disabled:opacity-50"
+            className="flex-1 min-w-0 resize-none bg-surface border border-control rounded-xl px-3 py-2 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control disabled:opacity-50"
             autoFocus
           />
           <button
             type="button"
             onClick={() => void send(composer)}
             disabled={busy || !composer.trim() || !builderReady}
-            className="p-2.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent transition-colors disabled:opacity-40"
+            className="p-2.5 rounded-xl bg-action hover:bg-action-hover text-on-action transition-colors disabled:opacity-40"
             title="Send"
           >
             <Send className="w-4 h-4" />
@@ -311,10 +311,10 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
       </div>
 
       {/* Live draft */}
-      <div className="flex flex-col min-h-0 lg:w-1/2 rounded-xl border border-white/10 bg-well">
-        <div className="flex items-center justify-between px-4 py-2.5 border-b border-white/5">
-          <span className="text-[11px] font-medium text-gray-400">Configuration</span>
-          <span className="truncate text-[10px] text-gray-400" title={`${runtimeLabel} · ${builderModelName}`}>Builder: {builderModelName}</span>
+      <div className="flex flex-col min-h-0 lg:w-1/2 rounded-xl border border-divider bg-well">
+        <div className="flex items-center justify-between px-4 py-2.5 border-b border-divider">
+          <span className="text-[11px] font-medium text-content-secondary">Configuration</span>
+          <span className="truncate text-[10px] text-content-secondary" title={`${runtimeLabel} · ${builderModelName}`}>Builder: {builderModelName}</span>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3 text-xs">
@@ -331,15 +331,15 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
           <DraftBlock label="Instructions" value={draft.systemPrompt} mono />
 
           <div className="space-y-1.5">
-            <span className="text-gray-500">Skills ({draft.skillIds.length})</span>
+            <span className="text-content-muted">Skills ({draft.skillIds.length})</span>
             {draft.skillIds.length === 0 ? (
-              <p className="text-gray-600 italic">None attached yet.</p>
+              <p className="text-content-muted italic">None attached yet.</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {draft.skillIds.map(id => (
                   <span
                     key={id}
-                    className="px-2 py-0.5 rounded-md bg-brand-500/15 border border-brand-500/25 text-brand-200"
+                    className="px-2 py-0.5 rounded-md bg-selected border border-divider text-selected-content"
                   >
                     {skills.find(s => s.id === id)?.name ?? id}
                   </span>
@@ -349,11 +349,11 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
           </div>
         </div>
 
-        <div className="px-4 py-3 border-t border-white/5 flex items-center justify-between">
+        <div className="px-4 py-3 border-t border-divider flex items-center justify-between">
           <button
             type="button"
             onClick={onBack}
-            className="text-xs text-gray-400 hover:text-white"
+            className="text-xs text-content-secondary hover:text-content"
           >
             ← Back to options
           </button>
@@ -361,7 +361,7 @@ export const AgentBuilderPanel: React.FC<AgentBuilderPanelProps> = ({
             type="button"
             onClick={onReview}
             disabled={!draft.name.trim()}
-            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-brand-500 hover:bg-brand-600 text-on-accent transition-colors disabled:opacity-40"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold bg-action hover:bg-action-hover text-on-action transition-colors disabled:opacity-40"
           >
             <span>Review &amp; deploy</span>
             <ArrowRight className="w-3.5 h-3.5" />
@@ -378,9 +378,9 @@ const DraftRow: React.FC<{ label: string; value: string; mono?: boolean }> = ({
   mono
 }) => (
   <div className="flex items-baseline justify-between gap-3">
-    <span className="text-gray-500 flex-shrink-0">{label}</span>
-    <span className={`text-gray-200 text-right truncate ${mono ? 'font-mono' : 'capitalize'}`}>
-      {value || <span className="text-gray-600 italic normal-case">not set</span>}
+    <span className="text-content-muted flex-shrink-0">{label}</span>
+    <span className={`text-content text-right truncate ${mono ? 'font-mono' : 'capitalize'}`}>
+      {value || <span className="text-content-muted italic normal-case">not set</span>}
     </span>
   </div>
 );
@@ -391,17 +391,17 @@ const DraftBlock: React.FC<{ label: string; value: string; mono?: boolean }> = (
   mono
 }) => (
   <div className="space-y-1">
-    <span className="text-gray-500 block">{label}</span>
+    <span className="text-content-muted block">{label}</span>
     <p
-      className={`text-gray-300 leading-relaxed whitespace-pre-wrap ${mono ? 'font-mono text-[11px]' : ''}`}
+      className={`text-content-secondary leading-relaxed whitespace-pre-wrap ${mono ? 'font-mono text-[11px]' : ''}`}
     >
-      {value || <span className="text-gray-600 italic">not set</span>}
+      {value || <span className="text-content-muted italic">not set</span>}
     </p>
   </div>
 );
 
 const BuilderError: React.FC<{ message: string }> = ({ message }) => (
-  <div className="flex items-start gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-[11px] text-rose-200">
+  <div className="flex items-start gap-2 rounded-xl border border-status-danger-border bg-status-danger-subtle px-3 py-2 text-[11px] text-status-danger">
     <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
     <span className="break-words">{message}</span>
   </div>

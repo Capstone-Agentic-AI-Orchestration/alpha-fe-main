@@ -48,7 +48,7 @@ export function AgentReadinessDot({ agent }: { agent: Pick<Agent, 'readiness'> }
   return (
     <span
       title={agent.readiness?.detail}
-      className="flex items-center gap-1 text-[10px] text-amber-300 font-medium whitespace-nowrap"
+      className="flex items-center gap-1 text-[10px] text-status-warning font-medium whitespace-nowrap"
     >
       <Icon size={10} />
       {label}
@@ -69,17 +69,17 @@ export function AgentReadinessNotice({ agent, onOpenRuntimes }: NoticeProps) {
   const { detail, command } = agent.readiness ?? {};
 
   return (
-    <div className="flex items-start gap-2 text-[11px] text-amber-200 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+    <div className="flex items-start gap-2 text-[11px] text-status-warning bg-status-warning-subtle border border-status-warning-border rounded-lg px-3 py-2">
       <AlertTriangle size={12} className="mt-0.5 shrink-0" />
       <div className="space-y-1 min-w-0">
         <div>{detail}</div>
         {command && (
-          <div className="font-mono text-[10px] text-amber-200/70 break-all">{command}</div>
+          <div className="font-mono text-[10px] text-status-warning break-all">{command}</div>
         )}
         {onOpenRuntimes && (
           <button
             onClick={onOpenRuntimes}
-            className="text-[10px] underline underline-offset-2 hover:text-amber-100 transition-colors"
+            className="text-[10px] underline underline-offset-2 hover:text-status-warning transition-colors"
           >
             Open Runtimes
           </button>

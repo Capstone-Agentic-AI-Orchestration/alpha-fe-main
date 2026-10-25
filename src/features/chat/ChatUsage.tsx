@@ -88,14 +88,14 @@ export function WorkUsageRow({ entries, now, names = {} }: { entries: UsageEntry
   const running = entries.some(entry => entry.status === 'running');
   const latest = [...entries].sort((a, b) => a.startedAt.localeCompare(b.startedAt)).at(-1)!;
   const label = running ? 'Working for' : latest.status === 'stopped' ? 'Stopped after' : latest.status === 'failed' ? 'Failed after' : latest.status === 'interrupted' ? 'Interrupted after' : 'Worked for';
-  return <div className="mt-3 border-b border-white/[0.06] pb-2 text-[11px] text-gray-500">
-    <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="inline-flex flex-wrap items-center gap-2 py-1 text-left hover:text-gray-300">
+  return <div className="mt-3 border-b border-divider pb-2 text-[11px] text-content-muted">
+    <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="inline-flex flex-wrap items-center gap-2 py-1 text-left hover:text-content-secondary">
       <span>{label} {duration(workDuration(entries, now))}</span>
       <span>· {tokens(entries)}</span><ChevronRight className={'h-3 w-3 transition-transform ' + (expanded ? 'rotate-90' : '')} />
     </button>
     {expanded && <div className="space-y-2 py-2">
       {entries.map(entry => <div key={entry.id} className="space-y-1">
-        <div className="text-gray-300">{names[entry.agentId ?? ''] ?? (entry.agentId === 'alpha-assistant' ? 'Orchestrator' : 'Agent')} · {entry.model ?? entry.provider} · {entry.status}</div>
+        <div className="text-content-secondary">{names[entry.agentId ?? ''] ?? (entry.agentId === 'alpha-assistant' ? 'Orchestrator' : 'Agent')} · {entry.model ?? entry.provider} · {entry.status}</div>
         <div>{tokens([entry])} · {duration(workDuration([entry], now))}{entry.usage.totalTokens !== undefined ? ` · Last reported ${new Date(entry.updatedAt).toLocaleTimeString()}` : entry.status === 'running' ? ' · Awaiting provider usage' : ''}</div>
         <div className="flex flex-wrap gap-x-3 gap-y-1">{Object.entries(entry.usage).filter(([key]) => key !== 'totalTokens').map(([key, value]) => <span key={key}>{key.replace(/Tokens$/, '').replace(/([A-Z])/g, ' $1').toLowerCase()}: {value?.toLocaleString()}</span>)}</div>
       </div>)}

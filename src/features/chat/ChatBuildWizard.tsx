@@ -62,14 +62,14 @@ const Options: React.FC<{ options: Option[] }> = ({ options }) => (
   <div className="flex flex-wrap gap-2">
     {options.map(option => <div key={option.label}>
       <button type="button" onClick={option.onSelect} disabled={option.disabled || option.busy}
-        className={'group flex w-full items-start gap-2.5 rounded-xl border px-3 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60 ' +
-          (option.tone === 'primary' ? 'border-violet-300/30 bg-violet-400/[0.12] hover:bg-violet-400/[0.2]'
-            : option.tone === 'danger' ? 'border-white/[0.07] bg-white/[0.02] hover:border-rose-300/30 hover:bg-rose-400/[0.08]'
-              : 'border-white/[0.07] bg-white/[0.02] hover:bg-white/[0.05]')}>
+        className={'group flex w-full items-start gap-2.5 rounded-xl border px-3 py-1.5 text-left transition-colors disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ' +
+          (option.tone === 'primary' ? 'border-divider bg-selected hover:bg-selected'
+            : option.tone === 'danger' ? 'border-divider bg-surface-raised hover:border-status-danger-border hover:bg-status-danger-subtle'
+              : 'border-divider bg-surface-raised hover:bg-surface-high')}>
         {option.busy && <LoaderCircle className="h-3 w-3 animate-spin" />}
         <span className="min-w-0 flex-1">
-          <span className={'block text-xs font-medium ' + (option.tone === 'danger' ? 'text-gray-200 group-hover:text-rose-100' : 'text-white')}>{option.label}</span>
-          {option.hint && <span className="block text-[11px] leading-4 text-gray-400">{option.hint}</span>}
+          <span className={'block text-xs font-medium ' + (option.tone === 'danger' ? 'text-content group-hover:text-status-danger' : 'text-content')}>{option.label}</span>
+          {option.hint && <span className="block text-[11px] leading-4 text-content-secondary">{option.hint}</span>}
         </span>
       </button>
     </div>)}
@@ -84,10 +84,10 @@ const Stepper: React.FC<{ step: WizardStep; attention: boolean; failed: boolean 
       const done = index < current;
       const active = index === current;
       return <li key={item.id} aria-current={active ? 'step' : undefined} className={'flex min-w-0 items-center ' + (index > 0 ? 'flex-1' : '')}>
-        {index > 0 && <span aria-hidden="true" className={'mx-2 h-px min-w-3 flex-1 ' + (done || active ? 'bg-violet-300/50' : 'bg-white/10')} />}
+        {index > 0 && <span aria-hidden="true" className={'mx-2 h-px min-w-3 flex-1 ' + (done || active ? 'bg-selected' : 'bg-surface-raised')} />}
         <span className={'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium ' +
-          (active ? (failed ? 'bg-rose-400/15 text-rose-100' : attention ? 'bg-amber-300/15 text-amber-100' : 'bg-violet-400/15 text-violet-100')
-            : done ? 'text-violet-200/80' : 'text-gray-500')}>
+          (active ? (failed ? 'bg-status-danger-subtle text-status-danger' : attention ? 'bg-status-warning-subtle text-status-warning' : 'bg-selected text-selected-content')
+            : done ? 'text-link' : 'text-content-muted')}>
           {done ? <Check className="h-3 w-3" /> : active ? (failed ? <AlertTriangle className="h-3 w-3" /> : attention ? <CircleDot className="h-3 w-3" /> : <LoaderCircle className="h-3 w-3 animate-spin" />) : null}
           {item.label}
         </span>
@@ -97,11 +97,11 @@ const Stepper: React.FC<{ step: WizardStep; attention: boolean; failed: boolean 
 };
 
 const TASK_TONE: Record<string, string> = {
-  accepted: 'text-emerald-200',
-  running: 'text-violet-200',
-  submitted: 'text-sky-200',
-  failed: 'text-rose-200',
-  blocked: 'text-amber-200'
+  accepted: 'text-status-success',
+  running: 'text-link',
+  submitted: 'text-status-info',
+  failed: 'text-status-danger',
+  blocked: 'text-status-warning'
 };
 
 const shortRepo = (repository: string) => repository.split('/').pop() || repository;
@@ -177,33 +177,33 @@ export const OrchestratorReport: React.FC<{ build: ProjectLiveBuild }> = ({ buil
         const done = task.status === 'accepted';
         return <li key={task.id} className="text-[11px] leading-4">
           <div className="flex items-start justify-between gap-3">
-            <span className="min-w-0 text-gray-100">{task.status === 'running' && <LoaderCircle className="mr-1.5 inline h-3 w-3 animate-spin text-violet-200" />}{task.title} <span className="text-gray-500">· {task.ownerName}</span></span>
-            <span className={'shrink-0 capitalize ' + (TASK_TONE[task.status] ?? 'text-gray-500')}>{done ? 'done' : task.status.replace(/_/g, ' ')}</span>
+            <span className="min-w-0 text-content">{task.status === 'running' && <LoaderCircle className="mr-1.5 inline h-3 w-3 animate-spin text-link" />}{task.title} <span className="text-content-muted">· {task.ownerName}</span></span>
+            <span className={'shrink-0 capitalize ' + (TASK_TONE[task.status] ?? 'text-content-muted')}>{done ? 'done' : task.status.replace(/_/g, ' ')}</span>
           </div>
-          {attempt?.summary && <p className="mt-0.5 line-clamp-2 text-gray-400">{attempt.summary}</p>}
-          {!done && attempt?.failureReason && <p className="mt-0.5 text-rose-200/80">{attempt.failureReason}</p>}
-          {attempt && attempt.changedPaths.length > 0 && <p className="mt-0.5 text-[10px] text-gray-500">{attempt.changedPaths.length} {attempt.changedPaths.length === 1 ? 'file' : 'files'} changed</p>}
+          {attempt?.summary && <p className="mt-0.5 line-clamp-2 text-content-secondary">{attempt.summary}</p>}
+          {!done && attempt?.failureReason && <p className="mt-0.5 text-status-danger">{attempt.failureReason}</p>}
+          {attempt && attempt.changedPaths.length > 0 && <p className="mt-0.5 text-[10px] text-content-muted">{attempt.changedPaths.length} {attempt.changedPaths.length === 1 ? 'file' : 'files'} changed</p>}
         </li>;
       })}
     </ul>
-    {checkGroups.length > 0 && <div className="rounded-xl border border-white/[0.07] bg-black/20 px-3 py-2 text-[11px]">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">Final checks</div>
+    {checkGroups.length > 0 && <div className="rounded-xl border border-divider bg-well px-3 py-2 text-[11px]">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-content-muted">Final checks</div>
       {checkGroups.map((group, index) => {
         const failedCommands = group.commands.filter(command => command.exitCode !== 0 || command.signal !== null);
         const passed = group.status === 'passed' && !failedCommands.length && !group.missingScripts.length;
         return <div key={group.repository || index} className="mt-1 flex items-start justify-between gap-3">
-          <span className="min-w-0 text-gray-300">{group.repository ? shortRepo(group.repository) : 'All codebases'}{!passed && failedCommands.length > 0 && <span className="text-rose-200/80"> · {failedCommands.map(command => command.display ?? command.script ?? 'check').join(', ')}</span>}{group.missingScripts.length > 0 && <span className="text-amber-200/80"> · not set up: {group.missingScripts.join(', ')}</span>}</span>
-          <span className={'shrink-0 ' + (passed ? 'text-emerald-200' : 'text-rose-200')}>{passed ? 'passed' : 'failed'}</span>
+          <span className="min-w-0 text-content-secondary">{group.repository ? shortRepo(group.repository) : 'All codebases'}{!passed && failedCommands.length > 0 && <span className="text-status-danger"> · {failedCommands.map(command => command.display ?? command.script ?? 'check').join(', ')}</span>}{group.missingScripts.length > 0 && <span className="text-status-warning"> · not set up: {group.missingScripts.join(', ')}</span>}</span>
+          <span className={'shrink-0 ' + (passed ? 'text-status-success' : 'text-status-danger')}>{passed ? 'passed' : 'failed'}</span>
         </div>;
       })}
     </div>}
-    {blocking.length > 0 && <div className="rounded-xl border border-rose-300/15 bg-rose-500/[0.05] px-3 py-2 text-[11px] text-rose-50/90">
+    {blocking.length > 0 && <div className="rounded-xl border border-status-danger-border bg-status-danger-subtle px-3 py-2 text-[11px] text-status-danger">
       <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />{blocking.length} blocking {blocking.length === 1 ? 'finding' : 'findings'}</div>
       <ul className="mt-1 list-disc space-y-0.5 pl-5">{blocking.slice(0, 5).map(finding => <li key={finding.id}>{findingLabel(finding)}</li>)}</ul>
     </div>}
-    {warnings.length > 0 && <details className="group rounded-xl border border-amber-300/15 bg-amber-400/[0.04] px-3 py-2 text-[11px] text-amber-50/90">
-      <summary className="cursor-pointer list-none font-medium [&::-webkit-details-marker]:hidden">{warnings.length} review {warnings.length === 1 ? 'warning' : 'warnings'} <span className="text-amber-100/60">· do not block the build</span></summary>
-      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-amber-100/80">{warnings.slice(0, 8).map(finding => <li key={finding.id}>{findingLabel(finding)}</li>)}</ul>
+    {warnings.length > 0 && <details className="group rounded-xl border border-status-warning-border bg-status-warning-subtle px-3 py-2 text-[11px] text-status-warning">
+      <summary className="cursor-pointer list-none font-medium [&::-webkit-details-marker]:hidden">{warnings.length} review {warnings.length === 1 ? 'warning' : 'warnings'} <span className="text-status-warning">· do not block the build</span></summary>
+      <ul className="mt-1 list-disc space-y-0.5 pl-5 text-status-warning">{warnings.slice(0, 8).map(finding => <li key={finding.id}>{findingLabel(finding)}</li>)}</ul>
     </details>}
   </div>;
 };
@@ -212,7 +212,7 @@ const Progress: React.FC<{ build: ProjectLiveBuild }> = ({ build }) => {
   const tasks = build.orchestration.tasks;
   const done = tasks.filter(task => task.status === 'accepted').length;
   return <div className="space-y-2">
-    <div className="h-1.5 overflow-hidden rounded-full bg-white/[0.06]"><div className="h-full rounded-full bg-violet-300/70 transition-all" style={{ width: (tasks.length ? Math.round(done / tasks.length * 100) : 0) + '%' }} /></div>
+    <div className="h-1.5 overflow-hidden rounded-full bg-surface-raised"><div className="h-full rounded-full bg-action transition-all" style={{ width: (tasks.length ? Math.round(done / tasks.length * 100) : 0) + '%' }} /></div>
     <OrchestratorReport build={build} />
   </div>;
 };
@@ -261,7 +261,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   if (!build && failure) {
     title = 'Build not started';
     subtitle = 'Planning stopped before any agent changed code.';
-    body = <p className="whitespace-pre-wrap rounded-xl border border-rose-300/15 bg-rose-500/[0.05] px-3 py-2.5 text-[11px] leading-5 text-rose-50/90">{failure.reason}</p>;
+    body = <p className="whitespace-pre-wrap rounded-xl border border-status-danger-border bg-status-danger-subtle px-3 py-2.5 text-[11px] leading-5 text-status-danger">{failure.reason}</p>;
     options = [
       ...(failure.request ? [{ label: 'Try again', hint: 'Plan the same request again.', onSelect: props.onRetry, tone: 'primary' as const, busy: busy === 'retry' }] : []),
       { label: 'Change the request', hint: 'Describe what you want in the message box.', onSelect: () => props.onReply() },
@@ -278,7 +278,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'awaiting_plan_approval':
         title = 'Plan ready for your approval';
         subtitle = build.orchestration.tasks.length + (build.orchestration.tasks.length === 1 ? ' task' : ' tasks') + ' · ' + buildRepositoriesLabel(build) + '. No code has changed yet.';
-        body = <p className="text-xs text-gray-300">{props.canStart ? 'Review the saved plan and type start in the Build review tab.' : 'Your workspace role cannot start builds.'}</p>;
+        body = <p className="text-xs text-content-secondary">{props.canStart ? 'Review the saved plan and type start in the Build review tab.' : 'Your workspace role cannot start builds.'}</p>;
         options = [];
         break;
       case 'paused':
@@ -295,8 +295,8 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
           ? recovery.actionReasons.provide_guidance ?? Object.values(recovery.actionReasons).find(Boolean)
           : undefined;
         body = <>
-          {reason && <p className="whitespace-pre-wrap rounded-xl border border-amber-300/20 bg-amber-400/[0.06] px-3 py-2.5 text-[11px] leading-5 text-amber-50/90">{reason}</p>}
-          {noAutomaticStep && <p className="text-[11px] leading-4 text-gray-400">{noAutomaticStep}</p>}
+          {reason && <p className="whitespace-pre-wrap rounded-xl border border-status-warning-border bg-status-warning-subtle px-3 py-2.5 text-[11px] leading-5 text-status-warning">{reason}</p>}
+          {noAutomaticStep && <p className="text-[11px] leading-4 text-content-secondary">{noAutomaticStep}</p>}
           <Progress build={build} />
         </>;
         options = [
@@ -311,7 +311,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'publishing':
         title = build.status === 'publishing' ? 'Opening the pull request' : 'Build ready for your review';
         subtitle = buildRepositoriesLabel(build);
-        body = <p className="text-xs text-gray-300">{build.status === 'publishing' ? 'Publication progress is in the Build review tab.' : 'Checks, findings, code changes and approval are in the Build review tab.'}</p>;
+        body = <p className="text-xs text-content-secondary">{build.status === 'publishing' ? 'Publication progress is in the Build review tab.' : 'Checks, findings, code changes and approval are in the Build review tab.'}</p>;
         options = [];
         break;
       default: {
@@ -328,25 +328,25 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
     return null;
   }
 
-  const border = failed ? 'border-rose-300/25' : attention ? 'border-amber-300/25' : 'border-white/10';
+  const border = failed ? 'border-status-danger-border' : attention ? 'border-status-warning-border' : 'border-divider';
   const details = !collapsed && Boolean((build && build.status !== 'planning') || body || options.length || props.error);
   return <section aria-label={title} className="space-y-2">
     <div className="flex items-center gap-3 px-3">
       <Stepper step={step} attention={attention} failed={failed} />
       <span className="flex shrink-0 items-center gap-1">
-        {build && <button type="button" onClick={props.onOpenReview} aria-label="Show Build review tab" title="Show Build review tab" className="rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white"><ExternalLink className="h-3.5 w-3.5" /></button>}
-        <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? 'Show build details' : 'Hide build details'} className="rounded-lg p-1 text-gray-400 hover:bg-white/[0.06] hover:text-white"><ChevronDown className={'h-4 w-4 transition-transform ' + (collapsed ? '' : 'rotate-180')} /></button>
+        {build && <button type="button" onClick={props.onOpenReview} aria-label="Show Build review tab" title="Show Build review tab" className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ExternalLink className="h-3.5 w-3.5" /></button>}
+        <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? 'Show build details' : 'Hide build details'} className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ChevronDown className={'h-4 w-4 transition-transform ' + (collapsed ? '' : 'rotate-180')} /></button>
       </span>
     </div>
     {details && <div className={'overflow-hidden rounded-2xl border bg-surface-raised/95 shadow-xl shadow-black/50 backdrop-blur ' + border}>
       {needsYou && <div className="px-4 pb-2 pt-3">
-        <div className="text-xs font-semibold text-white">{title}</div>
-        <div className="truncate text-[11px] text-gray-400">{subtitle}</div>
+        <div className="text-xs font-semibold text-content">{title}</div>
+        <div className="truncate text-[11px] text-content-secondary">{subtitle}</div>
       </div>}
       {build && !['planning', 'awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(build.status) && <div className={'px-4 pb-3 ' + (needsYou ? '' : 'pt-3')}><OrchestrationPlanPreview key={build.runId} projectId={props.projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={build.status === 'executing'} /></div>}
-      {body && <div className="max-h-[22vh] space-y-3 overflow-y-auto border-t border-white/[0.07] px-4 py-3">{body}</div>}
-      {options.length > 0 && <div className="border-t border-white/[0.07] px-3 py-2.5"><Options options={options} /></div>}
-      {props.error && <p role="alert" className="border-t border-rose-300/15 bg-rose-500/[0.06] px-4 py-2 text-[11px] text-rose-100">{props.error}</p>}
+      {body && <div className="max-h-[22vh] space-y-3 overflow-y-auto border-t border-divider px-4 py-3">{body}</div>}
+      {options.length > 0 && <div className="border-t border-divider px-3 py-2.5"><Options options={options} /></div>}
+      {props.error && <p role="alert" className="border-t border-status-danger-border bg-status-danger-subtle px-4 py-2 text-[11px] text-status-danger">{props.error}</p>}
     </div>}
   </section>;
 };
