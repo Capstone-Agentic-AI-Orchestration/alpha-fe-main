@@ -2,23 +2,19 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IssueStatus, IssuePriority, Issue
 } from '@/shared/types';
-import { StatusBadge, PriorityBadge } from '@/shared/components/Badge';
-import { AgentRunProgress } from '@/features/runs/AgentRunProgress';
+import { PriorityBadge } from '@/shared/components/Badge';
 import { apiService, type IssueBuildStatus } from '@/shared/services/apiService';
 import { isDesktop } from '@/shared/desktop';
+import { ACTIVE_BUILD_STATUSES, BuildChip } from './BuildChip';
+import { TaskDetailDrawer } from './TaskDetailDrawer';
+import { BUILD_DECISION_STATUSES, initialsOf, taskHandoffMessage } from './taskFlow';
 import {
   Kanban,
   List,
   Plus,
   Search,
-  Bot,
   CheckCircle2,
   Sparkles,
-  Radio,
-  ExternalLink,
-  GitBranch,
-  X,
-  Send,
   ChevronDown,
   ChevronRight,
   Filter,
@@ -39,46 +35,6 @@ function syncAgo(iso: string): string {
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
   return `${Math.round(seconds / 3600)}h ago`;
 }
-
-/** Builds that still occupy the Building column, whatever the issue's stored status. */
-const ACTIVE_BUILD_STATUSES = new Set([
-  'planning', 'awaiting_plan_approval', 'executing', 'paused', 'validating',
-  'awaiting_approval', 'publishing', 'cancelling', 'blocked', 'recovery_required'
-]);
-
-const CHIP_INFO = 'border-status-info-border bg-status-info-subtle text-status-info';
-const CHIP_REVIEW = 'border-divider bg-selected text-selected-content';
-const CHIP_ACTIVE = 'border-status-info-border bg-status-info-subtle text-status-info';
-const CHIP_WAIT = 'border-status-warning-border bg-status-warning-subtle text-status-warning';
-const CHIP_MUTED = 'border-divider bg-surface-raised text-content-secondary';
-const CHIP_ALERT = 'border-status-danger-border bg-status-danger-subtle text-status-danger';
-const CHIP_DONE = 'border-status-success-border bg-status-success-subtle text-status-success';
-
-const BUILD_CHIPS: Record<string, { label: string; className: string }> = {
-  planning: { label: 'Planning', className: CHIP_INFO },
-  awaiting_plan_approval: { label: 'Plan ready', className: CHIP_REVIEW },
-  executing: { label: 'Building', className: CHIP_ACTIVE },
-  validating: { label: 'Checking', className: CHIP_ACTIVE },
-  publishing: { label: 'Publishing', className: CHIP_ACTIVE },
-  paused: { label: 'Paused', className: CHIP_WAIT },
-  cancelling: { label: 'Stopping', className: CHIP_MUTED },
-  blocked: { label: 'Needs you', className: CHIP_ALERT },
-  recovery_required: { label: 'Needs you', className: CHIP_ALERT },
-  awaiting_approval: { label: 'Ready for review', className: CHIP_REVIEW },
-  completed: { label: 'Built', className: CHIP_DONE },
-  failed: { label: 'Build failed', className: CHIP_ALERT }
-};
-
-const BuildChip: React.FC<{ build?: IssueBuildStatus }> = ({ build }) => {
-  const chip = build ? BUILD_CHIPS[build.status] : undefined;
-  if (!chip) return null;
-  return (
-    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${chip.className}`} title={`Orchestrator build: ${chip.label}`}>
-      <Sparkles className="h-3 w-3" />
-      {chip.label}
-    </span>
-  );
-};
 
 interface IssuesViewProps {
   onOpenNewIssue: () => void;
@@ -106,8 +62,6 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const {
     issues,
     updateIssueStatus,
-    updateIssue,
-    addIssueComment,
     projects,
     startIssueBuild,
     identity,
@@ -121,7 +75,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     visibleTabs,
     setActiveTab,
     activeTabId,
-    setTabSessionState
+    setTabSessionState,
+    chatThreads,
+    createNewThread,
+    setActiveThreadId
   } = useApp();
 
   const sessionPrefix = embedded ? `projectIssues:${lockedProjectId ?? 'project'}` : 'issues';
@@ -198,8 +155,6 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
   // Slide-over drawer state
   const [selectedIssueId, setSelectedIssueId] = useTabSessionState<string | null>(`${sessionPrefix}.selectedIssue`, null);
-  const [newSubtaskTitle, setNewSubtaskTitle] = useTabSessionState<string>(`${sessionPrefix}.newSubtaskTitle`, '');
-  const [newCommentContent, setNewCommentContent] = useTabSessionState<string>(`${sessionPrefix}.newComment`, '');
 
   const toggleSection = (sectionKey: string) => {
     setCollapsedSections(prev => ({
@@ -208,12 +163,21 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     }));
   };
 
+  const COLUMN_DOTS: Record<IssueStatus, string> = {
+    backlog: 'h-2.5 w-2.5 rounded-full border border-dashed border-content-muted',
+    todo: 'h-2.5 w-2.5 rounded-full border border-control',
+    in_progress: 'h-2.5 w-2.5 rounded-full bg-status-warning',
+    agent_running: 'h-2.5 w-2.5 rounded-full bg-status-info animate-pulse',
+    review: 'h-2.5 w-2.5 rounded-full bg-selected-content',
+    done: 'h-2.5 w-2.5 rounded-full bg-status-success'
+  };
+
   const columns: { id: IssueStatus; title: string; color: string }[] = [
     { id: 'backlog', title: 'Backlog', color: 'border-divider' },
     { id: 'todo', title: 'Todo', color: 'border-divider' },
-    { id: 'in_progress', title: 'In Progress', color: 'border-status-warning-border' },
+    { id: 'in_progress', title: 'In progress', color: 'border-status-warning-border' },
     { id: 'agent_running', title: 'Building', color: 'border-status-info-border' },
-    { id: 'review', title: 'In Review', color: 'border-divider' },
+    { id: 'review', title: 'In review', color: 'border-divider' },
     { id: 'done', title: 'Done', color: 'border-status-success-border' },
   ];
 
@@ -327,7 +291,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     setDragOverColumn(null);
   };
 
-  const handleIssueDragStart = (event: React.DragEvent<HTMLDivElement>, issueId: string) => {
+  const handleIssueDragStart = (event: React.DragEvent<HTMLElement>, issueId: string) => {
     event.dataTransfer.effectAllowed = 'move';
     event.dataTransfer.setData('text/plain', issueId);
     setDraggedIssueId(issueId);
@@ -376,39 +340,6 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
   const selectedIssue = issues.find(i => i.id === selectedIssueId);
 
-  const handleToggleSubtask = (issueId: string, subtaskId: string) => {
-    const issue = issues.find(i => i.id === issueId);
-    if (!issue) return;
-    const updated = issue.subtasks.map(st => st.id === subtaskId ? { ...st, completed: !st.completed } : st);
-    updateIssue(issueId, { subtasks: updated });
-  };
-
-  const handleAddSubtask = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedIssue || !newSubtaskTitle.trim()) return;
-    const newSt = {
-      id: `sub-${Date.now()}`,
-      title: newSubtaskTitle.trim(),
-      completed: false
-    };
-    updateIssue(selectedIssue.id, { subtasks: [...selectedIssue.subtasks, newSt] });
-    setNewSubtaskTitle('');
-  };
-
-  const handleAddComment = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedIssue || !newCommentContent.trim()) return;
-    const newComment = {
-      id: `comm-${Date.now()}`,
-      authorType: 'user' as const,
-      authorName: 'Lead Engineer (You)',
-      content: newCommentContent.trim(),
-      createdAt: new Date().toISOString()
-    };
-    addIssueComment(selectedIssue.id, newComment);
-    setNewCommentContent('');
-  };
-
   const getPriorityIcon = (priority: IssuePriority) => {
     switch (priority) {
       case 'urgent':
@@ -444,11 +375,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const getAssigneeVisual = (issue: Issue) => {
     const person = issue.assignedHuman?.trim();
     if (!person) return null;
-    const initials = person.replace(/[^a-zA-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';
     return (
-      <div className="w-6 h-6 rounded-full bg-surface-raised border border-divider flex items-center justify-center text-[10px] font-semibold text-content" title={`Assignee: ${person}`}>
-        {initials}
-      </div>
+      <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full border border-divider bg-surface-high text-[9px] font-semibold text-content-secondary" title={`Assignee: ${person}`}>
+        {initialsOf(person)}
+      </span>
     );
   };
 
@@ -458,11 +388,51 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     setPendingBuildIssueId(null);
     void startIssueBuild(pendingBuildIssue.id);
   };
-  const openBuildRoom = (issue: Issue) => {
+  const chatAvailable = visibleTabs.includes('chat');
+
+  /** The project chat a task's build was started in, newest first. */
+  const buildChatFor = (issue: Issue) =>
+    [...chatThreads].reverse().find(thread => thread.title === `Build ${issue.identifier}` && thread.projectId === issue.projectId);
+
+  const openBuildChat = (issue: Issue) => {
+    const thread = buildChatFor(issue);
+    if (!thread) return;
+    setActiveThreadId(thread.id);
+    setActiveTab('chat');
+  };
+
+  /**
+   * Hand a task to the developer's project chat.
+   *
+   * Opens a new conversation in the task's project with a short request already
+   * typed and the task attached. Nothing is sent: the developer reads it, adds
+   * to it if they want, and presses Send.
+   */
+  const handOffToChat = (issue: Issue) => {
+    const threadId = createNewThread(`Work on ${issue.identifier}`, issue.projectId);
+    if (!threadId) return;
+    setTabSessionState(activeTabId, `chat.session.${threadId}.draft`, taskHandoffMessage(issue));
+    setTabSessionState(activeTabId, `chat.session.${threadId}.taskRef`, issue.id);
+    setSelectedIssueId(null);
+    setActiveTab('chat');
+  };
+  // Project managers plan and approve; developers do the work, so they get the hand-off.
+  const canHandOff = chatAvailable && can('manage_chat') && (role === 'dev' || role === 'admin');
+
+  /** Tasks waiting on a person: a plan or finished build to approve, a stuck build, or work to review. */
+  const needsYou = useMemo(() => filteredIssues.filter(issue => {
     const build = issueBuilds[issue.id];
-    setTabSessionState(activeTabId, 'liveBuildProjectId', issue.projectId);
-    if (build) setTabSessionState(activeTabId, 'liveBuildRunId', build.runId);
-    setActiveTab('live_build_room');
+    if (build && BUILD_DECISION_STATUSES.has(build.status)) return can('run_builds');
+    return issue.status === 'review' && !hasActiveBuild(issue) && canManageIssues;
+  }), [filteredIssues, issueBuilds, canManageIssues]);
+  const needsYouLabel = (issue: Issue) => {
+    switch (issueBuilds[issue.id]?.status) {
+      case 'awaiting_plan_approval': return 'Plan ready to approve';
+      case 'awaiting_approval': return 'Build ready for review';
+      case 'blocked':
+      case 'recovery_required': return 'Build needs direction';
+      default: return 'Ready for review';
+    }
   };
 
   return (
@@ -634,7 +604,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-action hover:bg-action-hover text-on-action font-medium text-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
-              <span>New Task</span>
+              <span>New task</span>
             </button>
           </div>
         </div>
@@ -687,11 +657,27 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
         )}
       </div>
 
+      {needsYou.length > 0 && (
+        <div role="status" className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-b border-divider bg-status-warning-subtle px-5 py-2 text-[12.5px]">
+          <span className="inline-flex items-center gap-2 font-semibold text-status-warning">
+            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-status-warning" />
+            {needsYou.length === 1 ? '1 task needs you' : `${needsYou.length} tasks need you`}
+          </span>
+          {needsYou.slice(0, 4).map(issue => (
+            <button key={issue.id} type="button" onClick={() => setSelectedIssueId(issue.id)} className="inline-flex items-center gap-2 text-content-secondary hover:text-content">
+              <span className="font-mono text-[11px] text-content-muted">{issue.identifier}</span>
+              {needsYouLabel(issue)}
+            </button>
+          ))}
+          {needsYou.length > 4 && <span className="text-content-muted">and {needsYou.length - 4} more</span>}
+        </div>
+      )}
+
       {/* Main Issue Canvas */}
       <div className="flex-1 flex overflow-hidden relative bg-surface">
         {viewMode === 'board' ? (
           /* Kanban Board Mode */
-          <div className="flex-1 overflow-x-auto p-4 sm:p-6 flex gap-5">
+          <div className="flex flex-1 overflow-x-auto">
             {columns.map(column => {
               const colIssues = filteredIssues.filter(i => boardColumnFor(i) === column.id);
 
@@ -704,10 +690,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     setDragOverColumn(column.id);
                   }}
                   onDrop={event => handleIssueDrop(event, column.id)}
-                  className={`w-80 flex-shrink-0 flex flex-col rounded-2xl border overflow-hidden transition-colors ${
-                    dragOverColumn === column.id
-                      ? 'border-divider bg-selected ring-1 ring-selected-content/30'
-                      : 'border-divider bg-surface/40'
+                  className={`flex w-[272px] flex-shrink-0 flex-col border-r border-divider transition-colors ${
+                    dragOverColumn === column.id ? 'bg-selected' : ''
                   }`}
                   aria-label={
                     column.id === 'agent_running'
@@ -717,10 +701,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                         : `Drop tasks here to move them to ${column.title}`
                   }
                 >
-                  <div className={`p-3.5 border-b border-divider flex items-center justify-between bg-surface-raised/60 ${column.color}`}>
+                  <div className="flex h-11 shrink-0 items-center justify-between pl-4 pr-2">
                     <div className="flex items-center gap-2">
-                      <StatusBadge status={column.id} />
-                      <span className="text-xs font-mono text-content-secondary">({colIssues.length})</span>
+                      <span aria-hidden="true" className={COLUMN_DOTS[column.id]} />
+                      <h2 className="text-[12.5px] font-semibold text-content-secondary">{column.title}</h2>
+                      <span className="text-[11.25px] tabular-nums text-content-muted">{colIssues.length}</span>
                     </div>
                     {/*
                       Quick add needs a project to create into, and "All
@@ -737,13 +722,14 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                         }
                         className="text-content-muted hover:text-content p-1 rounded hover:bg-surface-high"
                         title={canQuickAdd ? 'Add a task to this column' : 'New task'}
+                        aria-label={canQuickAdd ? `Add a task to ${column.title}` : 'New task'}
                       >
                         <Plus className="w-4 h-4" />
                       </button>
                     )}
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-3 space-y-3">
+                  <div className="flex-1 space-y-2 overflow-y-auto px-2.5 pb-3">
                     {quickAddStatus === column.id && (
                       <div className="rounded-xl border border-divider bg-surface-raised p-2">
                         <input
@@ -780,58 +766,41 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       const completedSubtasks = issue.subtasks.filter(s => s.completed).length;
 
                       return (
-                        <div
+                        <button
+                          type="button"
                           key={issue.id}
                           onClick={() => setSelectedIssueId(issue.id)}
                           draggable
                           onDragStart={event => handleIssueDragStart(event, issue.id)}
                           onDragEnd={clearDragState}
-                          aria-label={`Drag task ${issue.identifier} to move its status`}
-                          className={`p-4 rounded-xl bg-surface-raised border transition-all cursor-grab active:cursor-grabbing space-y-3 group shadow-sm hover:shadow-glow-brand ${
+                          aria-pressed={selectedIssueId === issue.id}
+                          className={`block w-full cursor-grab rounded-lg border bg-surface-raised px-3 pb-2.5 pt-3 text-left transition-colors active:cursor-grabbing ${
                             draggedIssueId === issue.id ? 'opacity-50' : ''
                           } ${
                             selectedIssueId === issue.id
-                              ? 'border-divider shadow-glow-brand bg-selected'
-                              : 'border-divider hover:border-divider'
+                              ? 'border-link ring-1 ring-selected'
+                              : 'border-divider hover:border-control hover:bg-surface-high'
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="text-xs font-mono font-bold text-link">
-                              {issue.identifier}
-                            </span>
+                          <span className="flex items-center justify-between gap-2">
+                            <span className="font-mono text-[11px] text-content-muted">{issue.identifier}</span>
                             <PriorityBadge priority={issue.priority} showLabel={false} />
-                          </div>
-
-                          <h4 className="text-sm font-semibold text-content line-clamp-2 group-hover:text-link-hover transition-colors">
-                            {issue.title}
-                          </h4>
-
-                          {issue.subtasks.length > 0 && (
-                            <div className="flex items-center gap-1.5 text-xs font-mono text-content-secondary bg-surface px-2.5 py-1 rounded-lg w-fit">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-status-success" />
-                              <span>{completedSubtasks}/{issue.subtasks.length} subtasks</span>
-                            </div>
-                          )}
-
-                          <div className="flex items-center justify-between pt-2 border-t border-divider text-xs text-content-secondary">
-                            <div className="flex min-w-0 items-center gap-2">
-                              {getAssigneeVisual(issue)}
-                              <BuildChip build={issueBuilds[issue.id]} />
-                            </div>
-                            {canStartBuild(issue) && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPendingBuildIssueId(issue.id);
-                                }}
-                                className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-selected hover:bg-selected text-selected-content text-xs font-semibold border border-divider transition-all opacity-80 group-hover:opacity-100"
-                              >
-                                <Sparkles className="w-3 h-3 text-link" />
-                                <span>Build</span>
-                              </button>
+                          </span>
+                          <span className="mb-2.5 mt-1.5 block text-[13px] font-medium leading-snug text-content line-clamp-2">{issue.title}</span>
+                          <span className="flex min-h-5 items-center gap-2.5 text-[11.25px] text-content-muted">
+                            {issue.subtasks.length > 0 && (
+                              <span className="inline-flex items-center gap-1.5 tabular-nums" title={`${completedSubtasks} of ${issue.subtasks.length} subtasks done`}>
+                                <span aria-hidden="true" className="relative h-[3px] w-7 overflow-hidden rounded-full bg-surface-high">
+                                  <span className="absolute inset-y-0 left-0 rounded-full bg-status-success" style={{ width: `${Math.round((completedSubtasks / issue.subtasks.length) * 100)}%` }} />
+                                </span>
+                                {completedSubtasks}/{issue.subtasks.length}
+                              </span>
                             )}
-                          </div>
-                        </div>
+                            <BuildChip build={issueBuilds[issue.id]} />
+                            {!issueBuilds[issue.id] && issue.labels[0] && <span className="truncate">{issue.labels[0]}</span>}
+                            <span className="ml-auto">{getAssigneeVisual(issue)}</span>
+                          </span>
+                        </button>
                       );
                     })}
                   </div>
@@ -961,242 +930,19 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
           </div>
         )}
 
-        {/* 2-Column Slide-Over Inspector Drawer */}
         {selectedIssue && (
-          <div className="absolute inset-y-0 right-0 w-full max-w-4xl bg-surface-raised border-l border-divider shadow-2xl z-30 flex flex-col animate-slide-up text-sm">
-            <div className="h-14 border-b border-divider px-6 flex items-center justify-between bg-surface/80">
-              <div className="flex items-center gap-3 font-mono text-sm text-content-secondary">
-                <span className="text-link font-bold">{selectedIssue.identifier}</span>
-                <span>/</span>
-                <span>Task Details & Execution Pipeline</span>
-              </div>
-              <button
-                onClick={() => setSelectedIssueId(null)}
-                className="text-content-secondary hover:text-content p-1.5 rounded-lg hover:bg-surface-high transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="flex-1 flex flex-col md:flex-row overflow-hidden divide-y md:divide-y-0 md:divide-x divide-divider">
-              {/* Left Content */}
-              <div className="flex-1 overflow-y-auto p-7 space-y-7">
-                <div>
-                  <input
-                    type="text"
-                    value={selectedIssue.title}
-                    onChange={(e) => updateIssue(selectedIssue.id, { title: e.target.value })}
-                    className="w-full select-text cursor-text bg-transparent text-xl font-bold text-content focus:outline-none focus:ring-1 focus:ring-focus rounded p-1.5"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-xs font-semibold text-content-secondary uppercase tracking-wider block">
-                    Description & Specifications
-                  </label>
-                  <textarea
-                    rows={5}
-                    value={selectedIssue.description}
-                    onChange={(e) => updateIssue(selectedIssue.id, { description: e.target.value })}
-                    className="w-full select-text cursor-text bg-surface border border-control rounded-xl p-4 text-sm text-content font-mono leading-relaxed focus:outline-none focus:border-control"
-                  />
-                </div>
-
-                {/* Subtasks */}
-                <div className="space-y-3.5">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-semibold text-content-secondary uppercase tracking-wider block">
-                      Subtasks Checklist ({selectedIssue.subtasks.filter(s => s.completed).length}/{selectedIssue.subtasks.length})
-                    </label>
-                  </div>
-
-                  <div className="space-y-2">
-                    {selectedIssue.subtasks.map(st => (
-                      <div
-                        key={st.id}
-                        onClick={() => handleToggleSubtask(selectedIssue.id, st.id)}
-                        className="flex items-center gap-3 p-3 rounded-xl bg-surface/60 border border-divider hover:border-divider cursor-pointer transition-colors"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={st.completed}
-                          onChange={() => {}}
-                          className="rounded bg-surface-raised border-control text-link focus:ring-0"
-                        />
-                        <span className={`text-sm flex-1 ${st.completed ? 'line-through text-content-muted' : 'text-content'}`}>
-                          {st.title}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <form onSubmit={handleAddSubtask} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newSubtaskTitle}
-                      onChange={(e) => setNewSubtaskTitle(e.target.value)}
-                      placeholder="Add a new subtask..."
-                      className="flex-1 select-text cursor-text bg-surface border border-control rounded-xl px-4 py-2 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newSubtaskTitle.trim()}
-                      className="px-3.5 py-2 rounded-xl bg-surface-raised hover:bg-surface-high disabled:opacity-40 text-xs font-semibold text-content transition-colors"
-                    >
-                      Add
-                    </button>
-                  </form>
-                </div>
-
-                {/* Comments & Activity Stream */}
-                <div className="space-y-4 pt-4 border-t border-divider">
-                  <h4 className="text-xs font-semibold text-content-secondary uppercase tracking-wider">
-                    Agent Activity & Discussion Stream
-                  </h4>
-
-                  <div className="space-y-3">
-                    {selectedIssue.comments.map(c => (
-                      <div key={c.id} className="p-4 rounded-xl bg-surface/70 border border-divider space-y-2">
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="font-bold text-content flex items-center gap-2">
-                            {c.authorType === 'agent' && <Bot className="w-3.5 h-3.5 text-status-info" />}
-                            <span>{c.authorName}</span>
-                          </span>
-                          <span className="text-content-muted font-mono">
-                            {new Date(c.createdAt).toLocaleTimeString()}
-                          </span>
-                        </div>
-                        <p className="text-xs text-content-secondary leading-relaxed font-mono whitespace-pre-wrap">
-                          {c.content}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <form onSubmit={handleAddComment} className="flex gap-2">
-                    <input
-                      type="text"
-                      value={newCommentContent}
-                      onChange={(e) => setNewCommentContent(e.target.value)}
-                      placeholder="Leave a comment or instruction for the agent..."
-                      className="flex-1 select-text cursor-text bg-surface border border-control rounded-xl px-4 py-2.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control"
-                    />
-                    <button
-                      type="submit"
-                      disabled={!newCommentContent.trim()}
-                      className="px-4 py-2.5 rounded-xl bg-action hover:bg-action-hover disabled:opacity-40 text-xs font-semibold text-on-action transition-colors flex items-center gap-1.5"
-                    >
-                      <Send className="w-3.5 h-3.5" />
-                      <span>Post</span>
-                    </button>
-                  </form>
-                </div>
-              </div>
-
-              {/* Right Sidebar Metadata */}
-              <div className="w-full md:w-80 bg-surface/40 p-6 space-y-6 flex-shrink-0 text-xs">
-                {/* Orchestrator build: the Orchestrator picks an agent for each task. */}
-                {canRunBuilds && selectedIssue.status !== 'done' && !hasActiveBuild(selectedIssue) && (
-                  <button
-                    onClick={() => setPendingBuildIssueId(selectedIssue.id)}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-action hover:bg-action-hover text-on-action font-bold text-sm shadow-glow-brand transition-all"
-                  >
-                    <Sparkles className="w-4 h-4" />
-                    <span>Build with Orchestrator</span>
-                  </button>
-                )}
-
-                {issueBuilds[selectedIssue.id] && (
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-divider bg-surface-raised px-3.5 py-2.5">
-                    <BuildChip build={issueBuilds[selectedIssue.id]} />
-                    {visibleTabs.includes('live_build_room') && <button
-                      type="button"
-                      onClick={() => openBuildRoom(selectedIssue)}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-medium text-link hover:text-link-hover"
-                    >
-                      <Radio className="h-3.5 w-3.5" />
-                      Open Live Build Room
-                    </button>}
-                  </div>
-                )}
-
-                <AgentRunProgress issueId={selectedIssue.id} />
-
-                {/* Status Picker */}
-                <div className="space-y-1.5">
-                  <label className="text-content-secondary font-medium">Status</label>
-                  <select
-                    value={selectedIssue.status}
-                    onChange={(e) => requestIssueStatusChange(selectedIssue, e.target.value as IssueStatus)}
-                    className="w-full bg-surface-raised border border-control rounded-xl px-3.5 py-2 text-content focus:outline-none focus:border-control font-medium"
-                  >
-                    <option value="backlog">Backlog</option>
-                    <option value="todo">Todo</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="agent_running">Building</option>
-                    <option value="review">In Review</option>
-                    <option value="done">Done</option>
-                  </select>
-                </div>
-
-                {/* Priority */}
-                <div className="space-y-1.5">
-                  <label className="text-content-secondary font-medium">Priority</label>
-                  <select
-                    value={selectedIssue.priority}
-                    onChange={(e) => updateIssue(selectedIssue.id, { priority: e.target.value as IssuePriority })}
-                    className="w-full bg-surface-raised border border-control rounded-xl px-3.5 py-2 text-content focus:outline-none focus:border-control font-medium"
-                  >
-                    <option value="urgent">Urgent</option>
-                    <option value="high">High</option>
-                    <option value="medium">Medium</option>
-                    <option value="low">Low</option>
-                    <option value="none">None</option>
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-content-secondary font-medium">Assignee</label>
-                  <div className="flex items-center justify-between gap-2 rounded-xl border border-divider bg-surface-raised px-3.5 py-2">
-                    <span className="truncate text-content">{selectedIssue.assignedHuman || 'Unassigned'}</span>
-                    {canManageIssues && identity && (
-                      selectedIssue.assignedHuman === identity.login ? (
-                        <button type="button" onClick={() => updateIssue(selectedIssue.id, { assignedHuman: '' })} className="shrink-0 text-[11px] font-medium text-content-secondary hover:text-content">Unassign</button>
-                      ) : (
-                        <button type="button" onClick={() => updateIssue(selectedIssue.id, { assignedHuman: identity.login })} className="shrink-0 text-[11px] font-medium text-link hover:text-link-hover">Assign to me</button>
-                      )
-                    )}
-                  </div>
-                </div>
-                <div className="border-t border-divider pt-4 text-xs text-content-muted">
-                  <span className="block text-[11px] mb-1">Project</span>
-                  <span className="text-content-secondary">{projects.find(project => project.id === selectedIssue.projectId)?.name ?? selectedIssue.projectId}</span>
-                </div>
-
-                {/* Git branch info */}
-                {selectedIssue.branchName && (
-                  <div className="p-3.5 rounded-xl bg-surface-raised border border-divider space-y-1 font-mono">
-                    <div className="text-content-muted text-[10px] uppercase">Active Branch</div>
-                    <div className="text-status-info flex items-center gap-1.5 truncate">
-                      <GitBranch className="w-3.5 h-3.5" />
-                      <span className="truncate">{selectedIssue.branchName}</span>
-                    </div>
-                    {selectedIssue.prUrl && (
-                      <a
-                        href={selectedIssue.prUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-link hover:underline pt-1 text-[11px]"
-                      >
-                        <span>Open GitHub PR</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+          <TaskDetailDrawer
+            issue={selectedIssue}
+            sessionPrefix={sessionPrefix}
+            build={issueBuilds[selectedIssue.id]}
+            buildActive={hasActiveBuild(selectedIssue)}
+            canStartBuild={canStartBuild(selectedIssue)}
+            onClose={() => setSelectedIssueId(null)}
+            onRequestStatus={requestIssueStatusChange}
+            onPlanBuild={issue => setPendingBuildIssueId(issue.id)}
+            onOpenBuildChat={chatAvailable && buildChatFor(selectedIssue) ? openBuildChat : undefined}
+            onHandOff={canHandOff ? handOffToChat : undefined}
+          />
         )}
       </div>
 

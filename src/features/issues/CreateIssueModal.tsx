@@ -1,38 +1,41 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useId } from 'react';
+import { Plus, Sparkles, X } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IssuePriority, IssueStatus } from '@/shared/types';
-import {
-  X,
-  Maximize2,
-  Paperclip,
-  ArrowLeftRight,
-  Folder,
-  MoreHorizontal,
-  Users,
-  Bot,
-  Tag,
-  Circle,
-  Clock,
-  PlayCircle,
-  CheckCircle2,
-  Flame,
-  ArrowUp,
-  ArrowRight,
-  ArrowDown,
-  Minus,
-  Check
-} from 'lucide-react';
+import { Modal } from '@/shared/components/Modal';
+import { TASK_PRIORITIES, TASK_STATUSES, suggestSubtasks } from './taskFlow';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
   onClose: () => void;
   /** Optional context supplied by a project execution view. */
   initialProjectId?: string;
+  /** Free text to start from: its first line becomes the title, the rest the description. */
   initialPrompt?: string;
   initialTitle?: string;
   initialDescription?: string;
 }
 
+interface DraftSubtask {
+  key: string;
+  title: string;
+  keep: boolean;
+  suggested: boolean;
+}
+
+const AVAILABLE_LABELS = ['frontend', 'backend', 'UI/UX', 'bug', 'feature', 'performance', 'core', 'runtime'];
+
+const fieldClass = 'h-8 w-full rounded-md border border-control bg-well px-2 text-[13px] text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
+
+/**
+ * One form for a new task.
+ *
+ * It used to have two modes. "Create with agent" took a prompt, cut the first
+ * line down to a title and added three fixed subtasks to every task, whatever it
+ * was about; "Create manually" was the honest form behind a toggle. Now there is
+ * the honest form, subtasks suggested only from what the author wrote and shown
+ * as suggestions they keep or drop, and an explicit choice to plan a build.
+ */
 export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   isOpen,
   onClose,
@@ -41,26 +44,24 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   initialTitle,
   initialDescription
 }) => {
-  const { createIssue, projects } = useApp();
+  const { createIssue, projects, identity, can } = useApp();
+  const ids = useId();
+  const canRunBuilds = can('run_builds');
 
-  // Mode: 'agent' (Create with agent) vs 'manual' (Create manually)
-  const [mode, setMode] = useTabSessionState<'agent' | 'manual'>('issueModal.mode', 'agent');
-  const [createAnother, setCreateAnother] = useState(false);
-  const [isFullscreen, setIsFullscreen] = useState(false);
-
-  // Common fields
-  const [promptText, setPromptText] = useTabSessionState<string>('issueModal.prompt', initialPrompt ?? '');
   const [title, setTitle] = useTabSessionState<string>('issueModal.title', initialTitle ?? '');
   const [description, setDescription] = useTabSessionState<string>('issueModal.description', initialDescription ?? '');
-  const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string>('issueModal.project', initialProjectId || projects[0]?.id || 'proj-1');
+  const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string>('issueModal.project', initialProjectId || projects[0]?.id || '');
   const [status, setStatus] = useTabSessionState<IssueStatus>('issueModal.status', 'todo');
-  const [priority, setPriority] = useTabSessionState<IssuePriority>('issueModal.priority', 'none');
-  const [selectedLabels, setSelectedLabels] = useTabSessionState<string[]>('issueModal.labels', []);
+  const [priority, setPriority] = useTabSessionState<IssuePriority>('issueModal.priority', 'medium');
+  const [assignee, setAssignee] = useTabSessionState<string>('issueModal.assignee', '');
+  const [labels, setLabels] = useTabSessionState<string[]>('issueModal.labels', []);
+  const [subtasks, setSubtasks] = useTabSessionState<DraftSubtask[]>('issueModal.subtasks', []);
+  const [newSubtask, setNewSubtask] = useTabSessionState<string>('issueModal.newSubtask', '');
+  const [planBuild, setPlanBuild] = useTabSessionState<boolean>('issueModal.planBuild', false);
+  const [noSuggestions, setNoSuggestions] = useTabSessionState<boolean>('issueModal.noSuggestions', false);
 
-  // The modal is mounted before the daemon hydrates its collections. If the
-  // hydrated rows use different ids than the local fallback values, move the
-  // selection to a real row before submit so creation cannot hit a foreign-key
-  // error while still preserving an explicit user selection.
+  // The modal can mount before the daemon hydrates projects; move to a real
+  // project before submit so creation cannot hit a foreign-key error.
   useEffect(() => {
     if (projects.length > 0 && !projects.some(project => project.id === selectedProjectId)) {
       setSelectedProjectId(projects[0].id);
@@ -71,465 +72,257 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     if (!isOpen) return;
     if (initialProjectId) setSelectedProjectId(initialProjectId);
     if (initialPrompt !== undefined) {
-      setMode('agent');
-      setPromptText(initialPrompt);
+      const [firstLine = '', ...rest] = initialPrompt.trim().split('\n');
+      setTitle(firstLine.slice(0, 120));
+      setDescription(rest.join('\n').trim() || initialPrompt.trim());
     }
     if (initialTitle !== undefined) setTitle(initialTitle);
     if (initialDescription !== undefined) setDescription(initialDescription);
-  }, [
-    initialDescription,
-    initialProjectId,
-    initialPrompt,
-    initialTitle,
-    isOpen
-  ]);
-
-  // Popover menus
-  const [openMenu, setOpenMenu] = useState<'project' | 'status' | 'priority' | 'label' | 'more' | null>(null);
-
-  const availableLabels = ['UI/UX', 'core', 'backend', 'runtime', 'frontend', 'bug', 'feature', 'performance'];
-
-  /**
-   * May be undefined, and that is a normal state — not an edge case.
-   *
-   * This modal is mounted unconditionally by App.tsx, so its body renders on
-   * every app render including the first, before the daemon has hydrated
-   * `projects`. Reading `.name` off it directly threw and unmounted the entire
-   * app, which is what made "New Issue" show a blank screen.
-   */
-  const activeProject = projects.find(p => p.id === selectedProjectId) || projects[0];
-
-  // Keyboard shortcut for Cmd+Enter
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (!isOpen) return;
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault();
-        handleSubmit();
-      } else if (e.key === 'Escape' && openMenu === null) {
-        onClose();
-      } else if (e.key === 'Escape' && openMenu !== null) {
-        setOpenMenu(null);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  });
+  }, [initialDescription, initialProjectId, initialPrompt, initialTitle, isOpen]);
 
   if (!isOpen) return null;
 
-  const handleSubmit = async () => {
-    if (mode === 'agent') {
-      if (!promptText.trim()) return;
+  const activeProject = projects.find(p => p.id === selectedProjectId) || projects[0];
+  const kept = subtasks.filter(subtask => subtask.keep);
+  const hasSuggestions = subtasks.some(subtask => subtask.suggested);
+  const canSubmit = Boolean(title.trim() && activeProject);
 
-      let generatedTitle = promptText.trim().split('\n')[0];
-      if (generatedTitle.length > 60) {
-        generatedTitle = generatedTitle.substring(0, 57) + '...';
-      }
-      generatedTitle = generatedTitle.charAt(0).toUpperCase() + generatedTitle.slice(1);
+  const reset = () => {
+    setTitle('');
+    setDescription('');
+    setSubtasks([]);
+    setNewSubtask('');
+    setLabels([]);
+    setAssignee('');
+    setPlanBuild(false);
+    setNoSuggestions(false);
+  };
 
-      createIssue({
-        title: generatedTitle,
-        description: promptText.trim(),
-        projectId: selectedProjectId,
-        priority: priority === 'none' ? 'medium' : priority,
-        // New cards start unstarted so the author can finish planning before
-        // starting an Orchestrator build from the card. The Orchestrator picks
-        // the agents for each task when the build is planned.
-        status: 'todo',
-        labels: selectedLabels.length > 0 ? selectedLabels : ['agent-task'],
-        subtasks: [
-          'Deconstruct user prompt & analyze files',
-          'Execute code modifications & test suites',
-          'Submit patch & prepare PR diff'
-        ]
-      });
+  const suggest = () => {
+    const suggestions = suggestSubtasks(description);
+    setNoSuggestions(suggestions.length === 0);
+    setSubtasks(prev => [
+      ...prev.filter(subtask => !subtask.suggested),
+      ...suggestions.map((text, index) => ({ key: `s-${Date.now()}-${index}`, title: text, keep: true, suggested: true }))
+    ]);
+  };
 
-      if (createAnother) {
-        setPromptText('');
-      } else {
-        setPromptText('');
-        onClose();
-      }
-    } else {
-      if (!title.trim() && !promptText.trim()) return;
+  const addSubtask = () => {
+    const text = newSubtask.trim();
+    if (!text) return;
+    setSubtasks(prev => [...prev, { key: `m-${Date.now()}`, title: text, keep: true, suggested: false }]);
+    setNewSubtask('');
+  };
 
-      const issueTitle = title.trim() || promptText.trim().split('\n')[0];
-      const issueDesc = description.trim() || (title ? promptText.trim() : '');
+  const toggleLabel = (label: string) =>
+    setLabels(prev => (prev.includes(label) ? prev.filter(item => item !== label) : [...prev, label]));
 
-      createIssue({
-        title: issueTitle,
-        description: issueDesc,
-        projectId: selectedProjectId,
+  const handleSubmit = () => {
+    if (!canSubmit || !activeProject) return;
+    const created = createIssue(
+      {
+        title: title.trim(),
+        description: description.trim(),
+        projectId: activeProject.id,
         priority,
         status,
-        labels: selectedLabels,
-        subtasks: []
-      });
+        labels,
+        assignedHuman: assignee || undefined,
+        subtasks: kept.map(subtask => subtask.title)
+      },
+      { planBuild: planBuild && canRunBuilds && status !== 'done' }
+    );
+    if (!created) return;
+    reset();
+    onClose();
+  };
 
-      if (createAnother) {
-        setTitle('');
-        setDescription('');
-        setPromptText('');
-      } else {
-        setTitle('');
-        setDescription('');
-        setPromptText('');
-        onClose();
-      }
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      handleSubmit();
     }
   };
 
-  const toggleLabel = (label: string) => {
-    setSelectedLabels(prev =>
-      prev.includes(label) ? prev.filter(l => l !== label) : [...prev, label]
-    );
-  };
+  const footer = (
+    <div className="flex items-center justify-end gap-2">
+      <button type="button" onClick={onClose} className="h-8 rounded-md border border-divider px-3 text-[13px] font-medium text-content-secondary hover:bg-surface-high hover:text-content">
+        Cancel
+      </button>
+      <button
+        type="button"
+        onClick={handleSubmit}
+        disabled={!canSubmit}
+        title="Create task (Ctrl or Cmd + Enter)"
+        className="inline-flex h-8 items-center gap-2.5 rounded-md bg-action px-3 text-[13px] font-semibold text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Create task
+        <kbd className="font-mono text-[10.5px] font-medium opacity-70">Ctrl ↵</kbd>
+      </button>
+    </div>
+  );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-black/80 backdrop-blur-md transition-opacity animate-fade-in"
-        onClick={() => {
-          setOpenMenu(null);
-          onClose();
-        }}
-      />
-
-      {/* Card dialog */}
-      <div
-        className={`relative w-full ${isFullscreen ? 'max-w-5xl h-[88vh]' : 'max-w-3xl min-h-[440px]'} bg-surface border border-divider rounded-2xl shadow-2xl overflow-visible z-10 animate-slide-up flex flex-col justify-between text-[15px]`}
-        onClick={() => openMenu && setOpenMenu(null)}
-      >
-        {/* Top Header Bar */}
-        <div>
-          <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-divider">
-            <div className="flex items-center gap-2 text-sm text-content-secondary font-medium">
-              <span className="hover:text-content-secondary">Alpha work</span>
-              <span className="text-content-muted">›</span>
-              <span className="text-content font-semibold">
-                {mode === 'agent' ? 'Create with agent' : 'Create manually'}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsFullscreen(!isFullscreen)}
-                className="text-content-secondary hover:text-content p-1.5 rounded-lg hover:bg-surface-high transition-colors"
-                title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
-              >
-                <Maximize2 className="w-4 h-4" />
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-content-secondary hover:text-content p-1.5 rounded-lg hover:bg-surface-high transition-colors"
-                title="Close (Esc)"
-              >
-                <X className="w-4.5 h-4.5" />
-              </button>
-            </div>
-          </div>
-
-          {/* Main Input Area */}
-          <div className="p-6 space-y-3">
-            {mode === 'agent' ? (
-              /* Agent Prompt Textarea */
-              <textarea
-                autoFocus
-                rows={isFullscreen ? 14 : 6}
-                value={promptText}
-                onChange={(e) => setPromptText(e.target.value)}
-                placeholder="report to me how can we improve the layout of the home page more,"
-                className="w-full bg-transparent border-none text-base sm:text-lg text-content placeholder-content-muted focus:outline-none resize-none leading-relaxed font-sans"
-              />
-            ) : (
-              /* Manual Mode: Title + Description */
-              <div className="space-y-4">
-                <input
-                  autoFocus
-                  type="text"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Task title"
-                  className="w-full bg-transparent text-lg sm:text-xl font-bold text-content placeholder-content-muted focus:outline-none border-none"
-                />
-
-                <textarea
-                  rows={isFullscreen ? 12 : 5}
-                  value={description || promptText}
-                  onChange={(e) => {
-                    setDescription(e.target.value);
-                    setPromptText(e.target.value);
-                  }}
-                  placeholder="Add description..."
-                  className="w-full bg-transparent border-none text-sm sm:text-base text-content-secondary placeholder-content-muted focus:outline-none resize-none leading-relaxed font-sans"
-                />
-              </div>
-            )}
-          </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      title="New task"
+      subtitle={activeProject ? `In ${activeProject.name}` : 'Create a project first'}
+      maxWidth="max-w-2xl"
+      footer={footer}
+    >
+      <div className="space-y-5" onKeyDown={onKeyDown}>
+        <div className="space-y-2">
+          <label htmlFor={`${ids}-title`} className="sr-only">Title</label>
+          <input
+            id={`${ids}-title`}
+            autoFocus
+            value={title}
+            onChange={event => setTitle(event.target.value)}
+            placeholder="What needs to happen?"
+            className="w-full bg-transparent py-1 text-xl font-semibold tracking-tight text-content placeholder-content-muted focus:outline-none"
+          />
+          <label htmlFor={`${ids}-description`} className="sr-only">Description</label>
+          <textarea
+            id={`${ids}-description`}
+            rows={4}
+            value={description}
+            onChange={event => setDescription(event.target.value)}
+            placeholder="Describe the outcome. Add links, error messages or what done looks like."
+            className="w-full resize-y rounded-md border border-control bg-well px-3 py-2.5 text-sm leading-relaxed text-content placeholder-content-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          />
         </div>
 
-        {/* Bottom Section */}
-        <div className="px-6 pb-5 space-y-4">
-          {/* Helper note in manual mode */}
-          {mode === 'manual' && (
-            <div className="flex items-center gap-2 text-xs text-content-secondary font-medium">
-              <Users className="w-4 h-4 text-content-secondary" />
-              <span>Assigned — won't start working in Backlog.</span>
-            </div>
-          )}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <label className="space-y-1">
+            <span className="block text-[11.25px] text-content-muted">Project</span>
+            <select value={activeProject?.id ?? ''} onChange={event => setSelectedProjectId(event.target.value)} className={fieldClass}>
+              {projects.map(project => <option key={project.id} value={project.id}>{project.name}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[11.25px] text-content-muted">Status</span>
+            <select value={status} onChange={event => setStatus(event.target.value as IssueStatus)} className={fieldClass}>
+              {/* Building is a real Orchestrator build, chosen below, not a status to type in. */}
+              {TASK_STATUSES.filter(item => item.id !== 'agent_running').map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[11.25px] text-content-muted">Priority</span>
+            <select value={priority} onChange={event => setPriority(event.target.value as IssuePriority)} className={fieldClass}>
+              {TASK_PRIORITIES.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="block text-[11.25px] text-content-muted">Assignee</span>
+            <select value={assignee} onChange={event => setAssignee(event.target.value)} className={fieldClass}>
+              <option value="">Unassigned</option>
+              {identity && <option value={identity.login}>Me ({identity.login})</option>}
+            </select>
+          </label>
+        </div>
 
-          {/* Interactive Toolbar Pills Row */}
-          <div className="flex flex-wrap items-center gap-2.5 relative text-sm">
-            {/* Status Pill (in manual mode) */}
-            {mode === 'manual' && (
-              <div className="relative">
+        <fieldset>
+          <legend className="mb-1.5 text-[11.25px] text-content-muted">Labels</legend>
+          <div className="flex flex-wrap gap-1.5">
+            {AVAILABLE_LABELS.map(label => {
+              const on = labels.includes(label);
+              return (
                 <button
+                  key={label}
                   type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenu(openMenu === 'status' ? null : 'status');
-                  }}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-surface hover:bg-surface-high border border-divider text-content-secondary transition-colors"
+                  aria-pressed={on}
+                  onClick={() => toggleLabel(label)}
+                  className={`h-7 rounded-md border px-2.5 text-xs font-medium transition-colors ${on ? 'border-divider bg-selected text-selected-content' : 'border-divider text-content-secondary hover:bg-surface-high hover:text-content'}`}
                 >
-                  <Circle className="w-3.5 h-3.5 text-content-secondary" />
-                  <span className="capitalize">{status.replace('_', ' ')}</span>
+                  {label}
                 </button>
+              );
+            })}
+          </div>
+        </fieldset>
 
-                {openMenu === 'status' && (
-                  <div className="absolute bottom-full mb-1.5 left-0 z-40 w-48 bg-surface-raised border border-divider rounded-xl shadow-2xl p-2 space-y-0.5 animate-slide-up text-xs">
-                    {[
-                      { id: 'backlog', label: 'Backlog', icon: <Circle className="w-4 h-4 text-content-secondary" /> },
-                      { id: 'todo', label: 'Todo', icon: <Clock className="w-4 h-4 text-content-secondary" /> },
-                      { id: 'in_progress', label: 'In Progress', icon: <PlayCircle className="w-4 h-4 text-status-warning" /> },
-                      { id: 'agent_running', label: 'Building', icon: <Bot className="w-4 h-4 text-status-info" /> },
-                      { id: 'review', label: 'In Review', icon: <CheckCircle2 className="w-4 h-4 text-link" /> },
-                      { id: 'done', label: 'Done', icon: <CheckCircle2 className="w-4 h-4 text-status-success" /> },
-                    ].map((st) => (
-                      <button
-                        key={st.id}
-                        onClick={() => {
-                          setStatus(st.id as IssueStatus);
-                          setOpenMenu(null);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
-                          status === st.id ? 'bg-selected text-selected-content font-semibold' : 'text-content-secondary hover:bg-surface-high'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2.5">
-                          {st.icon}
-                          <span>{st.label}</span>
-                        </span>
-                        {status === st.id && <Check className="w-4 h-4 text-link" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Priority Pill (in manual mode) */}
-            {mode === 'manual' && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenu(openMenu === 'priority' ? null : 'priority');
-                  }}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-surface hover:bg-surface-high border border-divider text-content-secondary transition-colors"
-                >
-                  <Minus className="w-3.5 h-3.5 text-content-secondary" />
-                  <span className="capitalize">{priority === 'none' ? 'No priority' : priority}</span>
-                </button>
-
-                {openMenu === 'priority' && (
-                  <div className="absolute bottom-full mb-1.5 left-0 z-40 w-44 bg-surface-raised border border-divider rounded-xl shadow-2xl p-2 space-y-0.5 animate-slide-up text-xs">
-                    {[
-                      { id: 'urgent', label: 'Urgent', icon: <Flame className="w-4 h-4 text-status-danger" /> },
-                      { id: 'high', label: 'High', icon: <ArrowUp className="w-4 h-4 text-status-warning" /> },
-                      { id: 'medium', label: 'Medium', icon: <ArrowRight className="w-4 h-4 text-status-warning" /> },
-                      { id: 'low', label: 'Low', icon: <ArrowDown className="w-4 h-4 text-status-info" /> },
-                      { id: 'none', label: 'No priority', icon: <Minus className="w-4 h-4 text-content-muted" /> },
-                    ].map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => {
-                          setPriority(p.id as IssuePriority);
-                          setOpenMenu(null);
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs transition-colors ${
-                          priority === p.id ? 'bg-selected text-selected-content font-semibold' : 'text-content-secondary hover:bg-surface-high'
-                        }`}
-                      >
-                        <span className="flex items-center gap-2.5">
-                          {p.icon}
-                          <span>{p.label}</span>
-                        </span>
-                        {priority === p.id && <Check className="w-4 h-4 text-link" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Label Pill (manual mode) */}
-            {mode === 'manual' && (
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setOpenMenu(openMenu === 'label' ? null : 'label');
-                  }}
-                  className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-surface hover:bg-surface-high border border-divider text-content-secondary transition-colors"
-                >
-                  <Tag className="w-3.5 h-3.5 text-content-secondary" />
-                  <span>{selectedLabels.length > 0 ? `${selectedLabels.length} labels` : 'Add label'}</span>
-                </button>
-
-                {openMenu === 'label' && (
-                  <div className="absolute bottom-full mb-1.5 left-0 z-40 w-52 bg-surface-raised border border-divider rounded-xl shadow-2xl p-2 space-y-1 animate-slide-up text-xs">
-                    <div className="text-[11px] font-mono uppercase text-content-muted px-2 font-semibold">Select Labels</div>
-                    {availableLabels.map(l => (
-                      <button
-                        key={l}
-                        onClick={() => toggleLabel(l)}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs ${
-                          selectedLabels.includes(l) ? 'bg-selected text-selected-content font-semibold' : 'text-content-secondary hover:bg-surface-high'
-                        }`}
-                      >
-                        <span>{l}</span>
-                        {selectedLabels.includes(l) && <Check className="w-4 h-4 text-link" />}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Project Pill (📁 Project ✕) */}
-            <div className="relative">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setOpenMenu(openMenu === 'project' ? null : 'project');
-                }}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-surface hover:bg-surface-high border border-divider text-content transition-colors"
-              >
-                <Folder className="w-3.5 h-3.5 text-status-info" />
-                <span>{activeProject?.name ?? 'No project'}</span>
-                <X className="w-3.5 h-3.5 text-content-secondary hover:text-content ml-0.5" />
-              </button>
-
-              {openMenu === 'project' && (
-                <div className="absolute bottom-full mb-1.5 left-0 z-40 w-64 bg-surface-raised border border-divider rounded-xl shadow-2xl p-2 space-y-1 animate-slide-up text-xs">
-                  <div className="text-[11px] font-mono uppercase text-content-muted px-2 py-0.5 font-semibold">Projects</div>
-                  {projects.map(p => (
-                    <button
-                      key={p.id}
-                      onClick={() => {
-                        setSelectedProjectId(p.id);
-                        setOpenMenu(null);
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs text-left ${
-                        selectedProjectId === p.id ? 'bg-selected text-selected-content font-semibold' : 'text-content-secondary hover:bg-surface-high'
-                      }`}
-                    >
-                      <span className="truncate">{p.name} ({p.key})</span>
-                      {selectedProjectId === p.id && <Check className="w-4 h-4 text-link" />}
+        <section aria-labelledby={`${ids}-subtasks`} className="space-y-2">
+          <div className="flex items-center gap-2">
+            <h4 id={`${ids}-subtasks`} className="text-[13px] font-semibold text-content-secondary">Subtasks</h4>
+            {subtasks.length > 0 && <span className="text-xs tabular-nums text-content-muted">{kept.length} of {subtasks.length} kept</span>}
+            <button
+              type="button"
+              onClick={suggest}
+              disabled={!description.trim()}
+              title={description.trim() ? 'Suggest subtasks from the description' : 'Write a description first'}
+              className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-md border border-divider px-2.5 text-xs font-medium text-content-secondary hover:bg-surface-high hover:text-content disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <Sparkles className="h-3.5 w-3.5 text-link" />
+              {hasSuggestions ? 'Suggest again' : 'Suggest from description'}
+            </button>
+          </div>
+          {hasSuggestions && <p className="text-xs text-content-muted">Suggested from your description. Untick any you don’t want.</p>}
+          {noSuggestions && <p className="text-xs text-content-muted">Nothing to suggest yet. Describe the work in a few sentences or as a list.</p>}
+          {subtasks.length > 0 && (
+            <ul className="space-y-0.5">
+              {subtasks.map(subtask => (
+                <li key={subtask.key} className="flex min-h-8 items-center gap-2.5 rounded-md px-2 hover:bg-surface-high">
+                  <input
+                    id={`${ids}-${subtask.key}`}
+                    type="checkbox"
+                    checked={subtask.keep}
+                    onChange={() => setSubtasks(prev => prev.map(item => (item.key === subtask.key ? { ...item, keep: !item.keep } : item)))}
+                    className="h-3.5 w-3.5 accent-brand-500"
+                  />
+                  <label htmlFor={`${ids}-${subtask.key}`} className={`flex-1 cursor-pointer text-[13px] ${subtask.keep ? 'text-content' : 'text-content-muted line-through'}`}>
+                    {subtask.title}
+                  </label>
+                  {subtask.suggested && <span className="font-mono text-[10px] uppercase tracking-wider text-link">Suggested</span>}
+                  {!subtask.suggested && (
+                    <button type="button" aria-label={`Remove ${subtask.title}`} onClick={() => setSubtasks(prev => prev.filter(item => item.key !== subtask.key))} className="rounded p-1 text-content-muted hover:text-content">
+                      <X className="h-3.5 w-3.5" />
                     </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* More actions pill (•••) */}
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                setOpenMenu(openMenu === 'more' ? null : 'more');
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="flex h-8 items-center gap-2 rounded-md border border-dashed border-divider px-2.5">
+            <Plus className="h-3.5 w-3.5 text-content-muted" />
+            <label htmlFor={`${ids}-new-subtask`} className="sr-only">New subtask</label>
+            <input
+              id={`${ids}-new-subtask`}
+              value={newSubtask}
+              onChange={event => setNewSubtask(event.target.value)}
+              onKeyDown={event => {
+                if (event.key === 'Enter' && !event.ctrlKey && !event.metaKey) {
+                  event.preventDefault();
+                  addSubtask();
+                }
               }}
-              className="p-2 rounded-full bg-surface hover:bg-surface-high border border-divider text-content-secondary hover:text-content transition-colors"
-              title="More options"
-            >
-              <MoreHorizontal className="w-4 h-4" />
+              placeholder="Add a subtask"
+              className="min-w-0 flex-1 bg-transparent text-[13px] text-content placeholder-content-muted focus:outline-none"
+            />
+            <button type="button" onClick={addSubtask} disabled={!newSubtask.trim()} className="text-xs font-semibold text-link disabled:opacity-40">
+              Add
             </button>
           </div>
+        </section>
 
-          {/* Bottom Footer Action Bar */}
-          <div className="flex flex-col gap-3 border-t border-divider pt-4 text-sm sm:flex-row sm:items-center sm:justify-between">
-            {/* Left: Attachment */}
-            <button
-              type="button"
-              className="text-content-secondary hover:text-content p-2 rounded-lg hover:bg-surface-high transition-colors"
-              title="Attach screenshot or file"
-            >
-              <Paperclip className="h-5 w-5" />
-            </button>
-
-            {/* Right: Switch Mode + Create Another Toggle + Submit Button */}
-            <div className="flex flex-wrap items-center justify-end gap-3">
-              {/* Switch to Agent / Switch to Manual */}
-              <button
-                type="button"
-                onClick={() => {
-                  setMode(mode === 'agent' ? 'manual' : 'agent');
-                  if (mode === 'agent' && promptText && !title) {
-                    setTitle(promptText.split('\n')[0]);
-                  }
-                }}
-                className={`flex items-center gap-2 rounded-md px-3 py-2 text-xs font-semibold transition-colors ${
-                  mode === 'manual'
-                    ? 'bg-gradient-to-r from-cyan-500/20 via-brand-500/20 to-purple-500/20 border border-divider text-link shadow-glow-brand'
-                    : 'text-content-secondary hover:text-content border border-divider hover:border-divider bg-surface'
-                }`}
-              >
-                <ArrowLeftRight className="w-4 h-4" />
-                <span>{mode === 'agent' ? 'Switch to Manual' : 'Switch to Agent'}</span>
-              </button>
-
-              {/* Create Another Toggle */}
-              <div className="flex min-h-9 select-none items-center gap-2 text-content-secondary">
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={createAnother}
-                  aria-label="Create another task after this one"
-                  onClick={() => setCreateAnother(!createAnother)}
-                  className={`flex h-5 w-9 items-center rounded-full border p-0.5 transition-colors ${
-                    createAnother
-                      ? 'border-divider bg-action'
-                      : 'border-divider bg-surface-raised hover:border-divider'
-                  }`}
-                >
-                  <span className={`h-4 w-4 rounded-full bg-on-accent shadow-sm transition-transform ${
-                    createAnother ? 'translate-x-4' : 'translate-x-0'
-                  }`} />
-                </button>
-                <span className="text-xs font-medium">Create another</span>
-              </div>
-
-              {/* Submit Button */}
-              <button
-                type="button"
-                onClick={handleSubmit}
-                disabled={mode === 'agent' ? !promptText.trim() : (!title.trim() && !promptText.trim())}
-                className="inline-flex min-w-[112px] items-center justify-center whitespace-nowrap rounded-md bg-action px-4 py-2.5 text-xs font-semibold text-on-action shadow-sm transition-colors hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-action"
-                title="Create task (Ctrl/Cmd + Enter)"
-              >
-                <span>Create task</span>
-              </button>
-            </div>
-          </div>
-        </div>
+        {canRunBuilds && (
+          <label className="flex cursor-pointer items-start gap-3 rounded-md border border-divider p-3">
+            <input
+              type="checkbox"
+              checked={planBuild}
+              onChange={event => setPlanBuild(event.target.checked)}
+              disabled={status === 'done'}
+              className="mt-0.5 h-3.5 w-3.5 accent-brand-500"
+            />
+            <span>
+              <span className="block text-[13px] font-medium text-content">Plan a build when it’s created</span>
+              <span className="mt-0.5 block text-xs text-content-muted">
+                The Orchestrator drafts a plan in the project chat for you to approve. Nothing in the code changes until you approve it.
+              </span>
+            </span>
+          </label>
+        )}
       </div>
-    </div>
+    </Modal>
   );
 };
