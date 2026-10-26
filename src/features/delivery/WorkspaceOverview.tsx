@@ -3,11 +3,11 @@ import {
   Activity,
   AlertCircle,
   ArrowRight,
+  Bell,
   Bot,
   CheckCircle2,
   FolderKanban,
   GitBranch,
-  Inbox,
   ListChecks,
   MessageSquare,
   Plus,
@@ -202,6 +202,7 @@ export const WorkspaceOverview: React.FC = () => {
     role,
     serverStatus,
     setActiveTab,
+    setNotificationPanelOpen,
     syncBoard,
     syncing,
     settings,
@@ -222,7 +223,7 @@ export const WorkspaceOverview: React.FC = () => {
     () => requirementDocs.filter(doc => doc.status === 'in_review' || doc.status === 'draft'),
     [requirementDocs],
   );
-  const unreadInbox = useMemo(() => inbox.filter(item => !item.read && !item.archived), [inbox]);
+  const unreadNotifications = useMemo(() => inbox.filter(item => !item.read && !item.archived), [inbox]);
   const failedDeployments = useMemo(() => deployments.filter(item => item.status === 'failed'), [deployments]);
   const completedIssues = issues.filter(issue => issue.status === 'done').length;
   const deliveryProgress = issues.length > 0 ? Math.round((completedIssues / issues.length) * 100) : 0;
@@ -232,7 +233,7 @@ export const WorkspaceOverview: React.FC = () => {
     ...pendingDocs.map(doc => `doc:${doc.id}`),
     ...reviewIssues.map(issue => `issue:${issue.id}`),
     ...failedDeployments.map(deployment => `deployment:${deployment.id}`),
-    ...unreadInbox.map(notification => `notification:${notification.id}`),
+    ...unreadNotifications.map(notification => `notification:${notification.id}`),
   ]).size;
 
   const syncLabel = syncing
@@ -243,10 +244,10 @@ export const WorkspaceOverview: React.FC = () => {
   const syncTone = serverStatus === 'offline' ? 'bg-amber-400' : serverStatus === 'connecting' ? 'bg-amber-400 animate-pulse' : 'bg-emerald-400';
 
   const quickActions = [
-    ...(can('create_project') ? [{ label: 'Create a project', detail: 'Set a delivery goal and invite the right people.', icon: Plus, tab: 'projects' as const }] : []),
-    { label: 'Review the inbox', detail: unreadInbox.length > 0 ? `${unreadInbox.length} unread item${unreadInbox.length === 1 ? '' : 's'}` : 'Nothing waiting right now.', icon: Inbox, tab: 'inbox' as const },
-    { label: role === 'dev' ? 'Open assigned work' : 'Review tasks', detail: openIssues.length > 0 ? `${openIssues.length} open task${openIssues.length === 1 ? '' : 's'}` : 'No open tasks yet.', icon: ListChecks, tab: 'issues' as const },
-    { label: 'Message the team', detail: 'Keep a decision or handoff in one shared thread.', icon: MessageSquare, tab: 'chat' as const },
+    ...(can('create_project') ? [{ label: 'Create a project', detail: 'Set a delivery goal and invite the right people.', icon: Plus, onClick: () => setActiveTab('projects') }] : []),
+    { label: 'Review notifications', detail: unreadNotifications.length > 0 ? `${unreadNotifications.length} unread notification${unreadNotifications.length === 1 ? '' : 's'}` : 'Nothing waiting right now.', icon: Bell, onClick: () => setNotificationPanelOpen(true) },
+    { label: role === 'dev' ? 'Open assigned work' : 'Review tasks', detail: openIssues.length > 0 ? `${openIssues.length} open task${openIssues.length === 1 ? '' : 's'}` : 'No open tasks yet.', icon: ListChecks, onClick: () => setActiveTab('issues') },
+    { label: 'Message the team', detail: 'Keep a decision or handoff in one shared thread.', icon: MessageSquare, onClick: () => setActiveTab('chat') },
   ];
 
   return (
@@ -281,7 +282,20 @@ export const WorkspaceOverview: React.FC = () => {
         <section aria-label="Workspace summary" className="grid grid-cols-2 divide-y divide-divider border-y border-divider py-2 sm:grid-cols-4 sm:divide-x sm:divide-y-0">
           <MetricCard label="Active projects" value={allActiveProjects.length} detail={projects.length === allActiveProjects.length ? 'Across the workspace' : `${projects.length} total visible`} icon={FolderKanban} onClick={() => setActiveTab('projects')} />
           <MetricCard label={role === 'dev' ? 'Assigned tasks' : 'Open tasks'} value={openIssues.length} detail={reviewIssues.length > 0 ? `${reviewIssues.length} ready for review` : 'Nothing waiting for review'} icon={ListChecks} tone={reviewIssues.length > 0 ? 'amber' : 'brand'} onClick={() => setActiveTab('issues')} />
-          <MetricCard label="Needs attention" value={attentionCount} detail={attentionCount === 0 ? 'You are all caught up' : 'Unread items and delivery decisions'} icon={attentionCount > 0 ? AlertCircle : CheckCircle2} tone={attentionCount > 0 ? 'amber' : 'emerald'} onClick={() => setActiveTab(attentionCount > 0 ? 'inbox' : 'projects')} />
+          <MetricCard label="Needs attention" value={attentionCount} detail={attentionCount === 0 ? 'You are all caught up' : 'Unread notifications and delivery decisions'} icon={attentionCount > 0 ? AlertCircle : CheckCircle2} tone={attentionCount > 0 ? 'amber' : 'emerald'} onClick={() => {
+            if (unreadNotifications.length > 0) {
+              setNotificationPanelOpen(true);
+              return;
+            }
+            const nextView = pendingDocs.length > 0 && visibleTabs.includes('documents')
+              ? 'documents'
+              : reviewIssues.length > 0
+                ? 'issues'
+                : failedDeployments.length > 0
+                  ? 'deployments'
+                  : 'projects';
+            setActiveTab(nextView);
+          }} />
           <MetricCard label="Delivery progress" value={`${deliveryProgress}%`} detail={issues.length > 0 ? `${completedIssues} of ${issues.length} tasks complete` : 'Progress appears as work is added'} icon={Activity} tone={deliveryProgress === 100 && issues.length > 0 ? 'emerald' : 'brand'} onClick={role === 'pm' || role === 'admin' ? () => setActiveTab('analytics') : undefined} />
         </section>
 
@@ -333,7 +347,7 @@ export const WorkspaceOverview: React.FC = () => {
               {visibleTabs.includes('documents') && pendingDocs.length > 0 && <AttentionRow icon={GitBranch} tone="amber" title={`${pendingDocs.length} specification${pendingDocs.length === 1 ? '' : 's'} need review`} detail="Refine scope before work starts." onClick={() => setActiveTab('documents')} />}
               {reviewIssues.length > 0 && <AttentionRow icon={ListChecks} tone="amber" title={`${reviewIssues.length} task${reviewIssues.length === 1 ? '' : 's'} ready for review`} detail="Check the latest work before it moves on." onClick={() => setActiveTab('issues')} />}
               {failedDeployments.length > 0 && <AttentionRow icon={Rocket} tone="rose" title={`${failedDeployments.length} deployment${failedDeployments.length === 1 ? '' : 's'} failed`} detail="Open delivery history to inspect the failure." onClick={() => setActiveTab('deployments')} />}
-              {unreadInbox.length > 0 && <AttentionRow icon={Inbox} tone="brand" title={`${unreadInbox.length} unread inbox item${unreadInbox.length === 1 ? '' : 's'}`} detail="Approvals and updates are waiting for you." onClick={() => setActiveTab('inbox')} />}
+              {unreadNotifications.length > 0 && <AttentionRow icon={Bell} tone="brand" title={`${unreadNotifications.length} unread notification${unreadNotifications.length === 1 ? '' : 's'}`} detail="Approvals and updates are waiting for you." onClick={() => setNotificationPanelOpen(true)} />}
               {attentionCount === 0 && <div className="flex items-start gap-3 py-4"><CheckCircle2 className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-success" /><div><p className="text-sm font-medium text-status-success">You are all caught up</p><p className="mt-1 text-xs leading-5 text-content-muted">New decisions and delivery updates will appear here.</p></div></div>}
             </div>
           </section>
@@ -367,7 +381,7 @@ export const WorkspaceOverview: React.FC = () => {
             <div className="mt-3 grid gap-x-4 gap-y-1 sm:grid-cols-2">
               {quickActions.map(action => {
                 const Icon = action.icon;
-                return <button key={action.label} type="button" onClick={() => setActiveTab(action.tab)} className="group flex min-h-[40px] items-start gap-2.5 py-2 text-left transition-colors hover:text-content focus:outline-none focus:ring-2 focus:ring-focus"><span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center text-content-muted transition-colors group-hover:text-link-hover"><Icon className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-xs font-medium text-content">{action.label}</span><span className="mt-1 hidden text-[11px] leading-4 text-content-muted xl:block">{action.detail}</span></span></button>;
+                return <button key={action.label} type="button" onClick={action.onClick} className="group flex min-h-[40px] items-start gap-2.5 py-2 text-left transition-colors hover:text-content focus:outline-none focus:ring-2 focus:ring-focus"><span className="mt-0.5 flex h-6 w-6 flex-shrink-0 items-center justify-center text-content-muted transition-colors group-hover:text-link-hover"><Icon className="h-4 w-4" /></span><span className="min-w-0"><span className="block text-xs font-medium text-content">{action.label}</span><span className="mt-1 hidden text-[11px] leading-4 text-content-muted xl:block">{action.detail}</span></span></button>;
               })}
             </div>
           </section>

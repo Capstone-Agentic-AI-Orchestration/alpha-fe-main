@@ -1,7 +1,7 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, PenLine, FileText, Inbox, MessageSquare,
+  LayoutDashboard, PenLine, FileText, MessageSquare,
   CheckSquare, FolderKanban, Rocket, Bot, BarChart3, Monitor, BookOpen, Settings,
   RadioTower, Ticket
 } from 'lucide-react';
@@ -128,7 +128,6 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
-  { id: 'inbox', label: 'Inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: Inbox },
   // Chat is where work is planned and built with the Orchestrator, so internal roles find it
   // first, under Build. A client's chat is still a conversation with their project manager.
   { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Plan and build with Alpha and your agents', group: 'primary', section: 'build', sectionByRole: { client: 'communication' }, icon: MessageSquare },
@@ -196,14 +195,14 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  * necessarily one that can change workspace settings.
  */
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
-  client: ['portal', 'intake', 'inbox', 'chat', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'inbox', 'chat', 'settings'],
+  client: ['portal', 'intake', 'chat', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'chat', 'settings'],
   pm: [
-    'issues', 'projects', 'tickets', 'inbox', 'chat',
+    'issues', 'projects', 'tickets', 'chat',
     'agents', 'runtimes', 'skills', 'analytics', 'settings'
   ],
   admin: [
-    'issues', 'projects', 'inbox', 'chat',
+    'issues', 'projects', 'chat',
     'agents', 'runtimes', 'skills', 'analytics', 'settings'
   ]
 };

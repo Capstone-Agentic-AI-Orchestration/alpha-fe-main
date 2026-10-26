@@ -2,7 +2,6 @@ export type NavigationTab =
   | 'portal'
   | 'intake'
   | 'documents'
-  | 'inbox'
   | 'chat'
   | 'tickets'
   | 'issues'
@@ -1531,6 +1530,7 @@ export interface InboxNotification {
     agentRole?: string;
     issueIdentifier?: string;
     proposedChanges?: string;
+    prUrl?: string;
   };
 }
 
