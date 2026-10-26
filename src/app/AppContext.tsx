@@ -130,7 +130,7 @@ interface AppContextType {
   
   // Issues
   issues: Issue[];
-  createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }) => Issue | null;
+  createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }, options?: CreateIssueOptions) => Issue | null;
   updateIssueStatus: (id: string, status: IssueStatus) => void;
   updateIssue: (id: string, updates: Partial<Issue>) => void;
   addIssueComment: (issueId: string, comment: IssueComment) => void;
@@ -444,6 +444,16 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
 const ROLE_TABS = ROLE_NAV;
 
 /** Extra fields for a chat message that starts a build. */
+export interface CreateIssueOptions {
+  /**
+   * Start an Orchestrator build once the daemon has saved the task.
+   *
+   * The task only has its real id and identifier after the save, and a build
+   * needs both, so this waits for the save rather than building the placeholder.
+   */
+  planBuild?: boolean;
+}
+
 export interface ChatSendOptions {
   /** Board issue the build is for; the Orchestrator builds it instead of filing a new one. */
   issueId?: string;
@@ -834,6 +844,8 @@ ${e.detail}`;
   // derivations further down are what the provider exposes, so a view cannot
   // accidentally render another persona's data.
   const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(loadFromStorage<Issue[]>('issues', [])));
+  /** Saved tasks whose author asked for a build when creating them; see `CreateIssueOptions.planBuild`. */
+  const [issuesAwaitingBuild, setIssuesAwaitingBuild] = useState<string[]>([]);
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage<Project[]>('projects', []));
   const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(loadFromStorage<Agent[]>('agents', [])));
   const [runtimes, setRuntimes] = useState<RuntimeEngine[]>(() => loadFromStorage<RuntimeEngine[]>('runtimes', []));
@@ -1559,7 +1571,7 @@ ${e.detail}`;
   // raw list — a client must not be given a badge for internal traffic.
 
   // Issue CRUD
-  const createIssue = (input: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }): Issue | null => {
+  const createIssue = (input: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }, options: CreateIssueOptions = {}): Issue | null => {
     if (!requireCapability('manage_issues')) return null;
     const project = projects.find(p => p.id === input.projectId) || projects[0];
 
@@ -1614,7 +1626,10 @@ ${e.detail}`;
 
     persist(
       () => apiService.createIssue(newIssue),
-      saved => setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i))),
+      saved => {
+        setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i)));
+        if (options.planBuild) setIssuesAwaitingBuild(prev => [...prev, saved.id]);
+      },
       msg => showToast('Task not saved', msg, 'error')
     );
 
@@ -2531,6 +2546,24 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
     });
     return threadId;
   };
+
+  /**
+   * Plan the builds asked for at creation, once each saved task is on the board.
+   *
+   * Runs here rather than in the dialog: the dialog has closed by the time the
+   * save returns, and only this render's `startIssueBuild` can see the saved task.
+   */
+  useEffect(() => {
+    if (!issuesAwaitingBuild.length) return;
+    const ready = issuesAwaitingBuild.filter(id => issues.some(issue => issue.id === id));
+    if (!ready.length) return;
+    setIssuesAwaitingBuild(prev => prev.filter(id => !ready.includes(id)));
+    for (const id of ready) {
+      void startIssueBuild(id).then(threadId => {
+        if (threadId) showToast('Planning a build', 'The plan will appear in the project chat for you to approve. Nothing in the code changes before that.', 'info');
+      });
+    }
+  }, [issuesAwaitingBuild, issues]);
 
   // Runtimes
   const scanLocalRuntimes = async () => {

@@ -39,10 +39,12 @@ import {
   Square,
   Trash2,
   Users,
-  X
+  X,
+  Kanban
 } from 'lucide-react';
 
 import { useApp, useTabSessionState } from '@/app/AppContext';
+import { statusLabel as taskStatusLabel, taskHandoffContext } from '@/features/issues';
 import { isDesktop } from '@/shared/desktop';
 import { Modal } from '@/shared/components/Modal';
 import { apiService } from '@/shared/services/apiService';
@@ -475,12 +477,16 @@ export const ChatView: React.FC = () => {
     agents: workspaceAgents,
     runtimes,
     updateAgent,
-    currentUser
+    currentUser,
+    issues
   } = useApp();
 
   const sessionStateKey = (key: string, threadId = activeThreadId) => `chat.session.${threadId ?? 'draft'}.${key}`;
   const [input, setInput] = useTabSessionState<string>(sessionStateKey('draft'), '');
   const [approvalMode, setApprovalMode] = useTabSessionState<'ask' | 'approve' | 'full'>(sessionStateKey('approvalMode'), 'ask');
+  /** A board task handed to this conversation from its details; sent with the next message. */
+  const [taskRefId, setTaskRefId] = useTabSessionState<string | null>(sessionStateKey('taskRef'), null);
+  const taskRef = taskRefId ? issues.find(issue => issue.id === taskRefId) : undefined;
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingFileViews, setPendingFileViews] = useState<Array<{ file: File; previewUrl?: string }>>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
@@ -1203,7 +1209,18 @@ export const ChatView: React.FC = () => {
       return;
     }
     setPendingFiles([]);
-    await sendChatMessage(message, activeThread?.id, buildRepositories, 'auto', uploadedAttachments, { approvalMode });
+    // A handed-off task travels with the message: the agent gets its details, and the
+    // issue id links any build back to this task instead of filing a new one.
+    const handedOff = taskRef;
+    if (handedOff) setTaskRefId(null);
+    await sendChatMessage(
+      handedOff ? `${message}\n\n${taskHandoffContext(handedOff)}` : message,
+      activeThread?.id,
+      buildRepositories,
+      'auto',
+      uploadedAttachments,
+      handedOff ? { approvalMode, issueId: handedOff.id, projectId: handedOff.projectId } : { approvalMode }
+    );
     if (activeThread?.id) {
       void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
     }
@@ -1789,6 +1806,16 @@ export const ChatView: React.FC = () => {
                 <span className="max-w-48 truncate">{file.name}</span><span className="shrink-0 text-content-muted">{formatFileSize(file.size)}</span>
                 <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removePendingFile(index)} className="rounded-md p-1 text-content-muted hover:bg-surface-high hover:text-content"><X className="h-3.5 w-3.5" /></button>
               </div>)}</div>}
+              {taskRef && <div className="px-2">
+                <div className="flex max-w-full items-center gap-2.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1.5 text-xs">
+                  <span aria-hidden="true" className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-selected text-link"><Kanban className="h-3.5 w-3.5" /></span>
+                  <span className="shrink-0 font-mono text-[11px] text-content-muted">{taskRef.identifier}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-content">{taskRef.title}</span>
+                  <span className="shrink-0 text-[11px] text-content-muted">{taskStatusLabel(taskRef.status)}</span>
+                  <button type="button" aria-label={`Remove attached task ${taskRef.identifier}`} onClick={() => setTaskRefId(null)} className="rounded-md p-1 text-content-muted hover:bg-surface-high hover:text-content"><X className="h-3.5 w-3.5" /></button>
+                </div>
+                <p className="mt-1.5 px-1 text-[11px] text-content-muted">Task attached. Its description and open subtasks are sent with your message.</p>
+              </div>}
               <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-1.5 rounded-[1.75rem] border border-divider bg-surface-raised/95 p-1.5 shadow-2xl shadow-black/50 transition-colors focus-within:border-control ${isDraggingFiles ? 'ring-2 ring-selected-content/70' : ''}`}>
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
                 <div ref={repositoryMenuRef} className="relative shrink-0">
