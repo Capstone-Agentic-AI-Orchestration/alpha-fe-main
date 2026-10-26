@@ -2,6 +2,14 @@ import { useState } from 'react';
 import { ArrowUpRight, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { ClientAuthShell } from './ClientAuthShell';
 import { clientAccountApi } from './clientAccountApi';
+import { COSMO_IGNITE_EVENT } from './publicClient/cosmoBackdropScene';
+
+/** Let the backdrop's spiral flash once before the portal replaces the page. */
+function igniteThen(next: () => void) {
+  globalThis.dispatchEvent(new Event(COSMO_IGNITE_EVENT));
+  const reduced = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  globalThis.setTimeout(next, reduced ? 0 : 380);
+}
 
 export function ClientPasswordSignIn({ unavailable, error, onRetry, onSignedIn }: {
   unavailable: boolean; error: string; onRetry: () => void; onSignedIn: () => void;
@@ -15,7 +23,7 @@ export function ClientPasswordSignIn({ unavailable, error, onRetry, onSignedIn }
     <form onSubmit={event => {
       event.preventDefault(); if (busy || unavailable) return;
       setBusy(true); setFailure('');
-      void clientAccountApi.signIn(email.trim(), password).then(onSignedIn).catch(err => setFailure(err instanceof TypeError
+      void clientAccountApi.signIn(email.trim(), password).then(() => igniteThen(onSignedIn)).catch(err => setFailure(err instanceof TypeError
         ? 'We could not connect to sign-in. Check your internet connection and try again.'
         : err instanceof Error ? err.message : 'Could not sign in. Try again.'))
         .finally(() => { setBusy(false); setPassword(''); });

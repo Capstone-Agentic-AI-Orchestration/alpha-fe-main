@@ -1,3 +1,5 @@
+import { buildSpiral, seeded, spiralAngle, TWIST } from './cosmoSpiral';
+
 /**
  * Canvas "camera" for the client landing zoom journey. Five nested worlds
  * (cosmos → thread → nebula → planets → galaxy); each world sits 40× inside
@@ -49,14 +51,6 @@ const clamp = (v: number) => Math.max(0, Math.min(1, v));
 const smooth = (x: number) => { x = clamp(x); return x * x * (3 - 2 * x); };
 const lerp = (a: Vec, b: Vec, t: number): Vec => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
-function seeded(seed: number) {
-  let state = seed;
-  return () => {
-    state = (state * 16_807) % 2_147_483_647;
-    return state / 2_147_483_647;
-  };
-}
-
 function buildWorld(): World {
   const rnd = seeded(5);
   const stars: World['stars'] = [];
@@ -73,8 +67,7 @@ function buildWorld(): World {
   for (let i = 0; i < n; i++) { const y = 1 - (i / (n - 1)) * 2, rr = Math.sqrt(1 - y * y), th = i * 2.39996; sphere.push([Math.cos(th) * rr, y, Math.sin(th) * rr]); }
   const dust2: World['dust2'] = [];
   for (let i = 0; i < 260; i++) dust2.push([(rnd() - 0.5) * 4, (rnd() - 0.5) * 2.6, rnd()]);
-  const spiral: World['spiral'] = [];
-  for (let i = 0; i < 1700; i++) { const r = Math.pow(rnd(), 0.7) * 1.15; spiral.push([i % 2, r, (rnd() - 0.5) * (0.35 + rnd() * 0.5), rnd(), (rnd() - 0.5) * 0.12 * (1.2 - r)]); }
+  const spiral = buildSpiral(rnd);
   // Separate stream so the finale's start positions don't reshuffle the other worlds.
   const gatherRnd = seeded(77);
   const gather: World['gather'] = spiral.map(() => [0.9 + gatherRnd() * 0.9, gatherRnd() * 0.55, (gatherRnd() - 0.5) * 0.8]);
@@ -210,9 +203,8 @@ const WORKS: { name: string; kind: Kind; arm: number; r: number }[] = [
 ];
 const KIND_RGB: Record<Kind, string> = { done: '52,211,153', waiting: '251,191,36', progress: '167,139,250' };
 const KIND_LABEL: Record<Kind, string> = { done: 'Done', waiting: 'Awaiting you', progress: 'In progress' };
-/** Galaxy disk radius in world units, and how many radians an arm winds per unit of radius. */
+/** Galaxy disk radius in world units. */
 const DISK = 0.82;
-const TWIST = 5.2;
 
 function nebulaColor(r: number, hot: number): string {
   if (r < 0.35) return INK;
@@ -359,7 +351,7 @@ export class ZoomScene {
       const [dist, delay, swirl] = gather[i];
       const local = clamp((F.gather - delay) / 0.45);
       const e = 1 - Math.pow(1 - local, 3);
-      const target = spin + arm * Math.PI + r * TWIST + jitter * (0.25 + r * 0.6);
+      const target = spiralAngle(spin, arm, r, jitter);
       const angle = target + (1 - e) * (2.4 + swirl);
       const radius = (r / 1.15) * R + (dist * reach - (r / 1.15) * R) * (1 - e);
       const fade = 1 - r / 1.3;
