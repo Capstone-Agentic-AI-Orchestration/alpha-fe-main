@@ -3,8 +3,7 @@ import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
 import cosmoLogoUrl from '@/assets/cosmo-logo.png';
 import { clientLandingHref, clientPortalHref, publicInquiryHref, publicInquirySlug } from '@/features/ticketing/publicIntakeApi';
 import '@/features/ticketing/publicClient/clientPublic.css';
-import { ProjectWindow } from './ProjectWindow';
-import { journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
+import { GALAXY_BEATS, journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
 import './clientLanding.css';
 
 function readSlug(): string {
@@ -59,14 +58,18 @@ const captions = [
   { title: 'All in one place.', description: 'From the first message to the finished work.' },
 ];
 
-/** Closing line shown over the canvas once the project window has faded, with the project-progress window it owns. */
+/** Zoom-out lines shown over the canvas, each with the project-progress window it owns. */
 const recap = [
-  { text: <>It all starts with <b>one message.</b></>, range: [0.77, 0.96] },
+  { text: <>Every detail you see,</>, range: [0.48, 0.6] },
+  { text: <>every step you take,</>, range: [0.6, 0.71] },
+  { text: <>every idea you bring,</>, range: [0.71, 0.82] },
+  { text: <>starts with <b>one message.</b></>, range: [0.82, 0.95] },
 ];
 
+/** Caption in focus, matching the galaxy's beats: lighting up, the message, then the face-on reveal. */
 function captionIndex(pp: number): number {
-  if (pp < 0.24) return 0;
-  return pp < 0.46 ? 1 : 2;
+  if (pp < GALAXY_BEATS.ask) return 0;
+  return pp < GALAXY_BEATS.reveal ? 1 : 2;
 }
 
 function recapClass(pp: number, [from, to]: number[]): string {
@@ -254,7 +257,7 @@ export default function ClientLandingPage() {
         </section>
 
         <section id="client-project" className={sectionClass('cl-project', 'client-project')} data-track="project" aria-labelledby="client-project-heading">
-          <div className="cl-stick" style={fadeOut(0.72, 0.06, pp)}>
+          <div className="cl-stick" style={fadeOut(GALAXY_BEATS.pull + 0.02, 0.04, pp)}>
             <div className="cl-shade" aria-hidden="true" />
             <div className="cl-project-in public-container">
               <h2 id="client-project-heading" className="sr-only">Then see your project come together</h2>
@@ -266,9 +269,6 @@ export default function ClientLandingPage() {
                 <div className="cl-rail cl-mono" aria-hidden="true">
                   {captions.map(({ title }, index) => <span key={title} className={railClass(index, caption)}><span>0{index + 1}</span><i /></span>)}
                 </div>
-              </div>
-              <div className="cl-project-stage cl-fade">
-                <ProjectWindow beat={caption} fill={clamp(pp / 0.2)} />
               </div>
             </div>
           </div>

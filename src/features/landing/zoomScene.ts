@@ -1,9 +1,11 @@
 /**
  * Canvas "camera" for the client landing zoom journey. Five nested worlds
- * (cosmos → thread → nebula → planets → spiral); each world sits 40× inside
+ * (cosmos → thread → nebula → planets → galaxy); each world sits 40× inside
  * the previous one, and scroll progress drives a single camera through them.
- * The last world is a quiet Cosmo spiral behind the project window, which
- * crossfades back to the cosmos instead of zooming out through every world.
+ * The last world is the client's project as a 3D Cosmo galaxy: light runs out
+ * along its arms, work items ignite, a message comets out to the item waiting
+ * on the client, the disk turns face-on into the Cosmo mark, and the camera
+ * pulls all the way back out through every world.
  * Decorative only: every word the canvas shows is also in the DOM.
  */
 
@@ -16,11 +18,14 @@ type World = {
   core: [number, number, number][];
   sphere: [number, number, number][];
   dust2: [number, number, number][];
-  /** Spiral particles: [arm, radius, angular jitter, brightness]. */
-  spiral: [number, number, number, number][];
+  /** Galaxy particles: [arm, radius, angular jitter, brightness, disk thickness]. */
+  spiral: [number, number, number, number, number][];
 };
-type Frame = { U: number; time: number; still: boolean; mx: number; my: number; wp: number };
+type Frame = { U: number; time: number; still: boolean; mx: number; my: number; wp: number; pu: number };
 type WorldPainter = (ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) => void;
+type WarpStreak = { a: number; r0: number; sp: number; len: number; hot: number };
+type Kind = 'done' | 'waiting' | 'progress';
+type Label = { x: number; y: number; text: string; col: string; a: number; r: number; up?: boolean };
 
 /** Scroll progress per sticky section, each 0–1. */
 export type JourneyProgress = { hp: number; ip: number; wp: number; pp: number; flat: boolean };
@@ -63,7 +68,7 @@ function buildWorld(): World {
   const dust2: World['dust2'] = [];
   for (let i = 0; i < 260; i++) dust2.push([(rnd() - 0.5) * 4, (rnd() - 0.5) * 2.6, rnd()]);
   const spiral: World['spiral'] = [];
-  for (let i = 0; i < 1500; i++) spiral.push([i % 2, Math.pow(rnd(), 0.7) * 1.15, (rnd() - 0.5) * (0.35 + rnd() * 0.5), rnd()]);
+  for (let i = 0; i < 1700; i++) { const r = Math.pow(rnd(), 0.7) * 1.15; spiral.push([i % 2, r, (rnd() - 0.5) * (0.35 + rnd() * 0.5), rnd(), (rnd() - 0.5) * 0.12 * (1.2 - r)]); }
   return { stars, neb, core, sphere, dust2, spiral };
 }
 
@@ -107,12 +112,17 @@ function planetsCamera(u: number): Camera {
 
 /** Where the closing section rests: the opening starfield. */
 const REST_LEVEL = -0.75;
-/** Project progress at which the spiral starts handing over to the starfield. */
-const HANDOFF = 0.66;
+/**
+ * Project-world beats in project progress (0–1): the light reaches the rim by
+ * `lit`, the message beat runs `ask`–`reveal`, the disk turns face-on by
+ * `revealEnd`, and the camera pulls back out from `pull`.
+ */
+export const GALAXY_BEATS = { lit: 0.13, ask: 0.15, reveal: 0.3, revealEnd: 0.41, pull: 0.45 } as const;
 
-/** Project: a slow, barely-there push into the spiral while the project window tells its story. */
+/** Project: a slow push into the galaxy while the captions play, then pull all the way back out. */
 function projectCamera(u: number): Camera {
-  return pureCamera(3 + 0.08 * smooth(u / HANDOFF));
+  const { pull } = GALAXY_BEATS;
+  return pureCamera(u < pull ? 3 + 0.06 * smooth(u / pull) : 3.06 - (3.06 - REST_LEVEL) * smooth((u - pull) / (1 - pull)));
 }
 
 /** Maps global progress g (0 hero … 4 end) to a camera. */
@@ -130,6 +140,36 @@ function stepsProgress(g: number): number {
   return g >= 2 ? g - 2 : 0;
 }
 
+/** Progress through the project world, held at 1 once the camera has moved past it. */
+function projectProgress(g: number): number {
+  if (g >= 4) return 1;
+  return g >= 3 ? g - 3 : 0;
+}
+
+/** 0–1 share of the side shift that keeps the galaxy clear of the captions on the left. */
+function galaxyShift(g: number): number {
+  if (g < 3) return 0;
+  return smooth((g - 3) / 0.05) * (1 - smooth((g - 3 - GALAXY_BEATS.pull) / 0.1));
+}
+
+function buildWarp(): WarpStreak[] {
+  const rnd = seeded(41);
+  return Array.from({ length: 180 }, () => ({ a: rnd() * 6.2832, r0: rnd(), sp: 0.5 + rnd() * 0.9, len: 0.04 + rnd() * 0.1, hot: rnd() }));
+}
+
+/** Work items on the galaxy arms: arm index and radius along the spiral. */
+const WORKS: { name: string; kind: Kind; arm: number; r: number }[] = [
+  { name: 'Brand assets', kind: 'done', arm: 1, r: 0.26 },
+  { name: 'Homepage', kind: 'done', arm: 0, r: 0.42 },
+  { name: 'Contact page', kind: 'waiting', arm: 1, r: 0.62 },
+  { name: 'Booking flow', kind: 'progress', arm: 0, r: 0.84 },
+];
+const KIND_RGB: Record<Kind, string> = { done: '52,211,153', waiting: '251,191,36', progress: '167,139,250' };
+const KIND_LABEL: Record<Kind, string> = { done: 'Done', waiting: 'Awaiting you', progress: 'In progress' };
+/** Galaxy disk radius in world units, and how many radians an arm winds per unit of radius. */
+const DISK = 0.82;
+const TWIST = 5.2;
+
 function nebulaColor(r: number, hot: number): string {
   if (r < 0.35) return INK;
   if (hot > 0.8) return CYAN;
@@ -139,6 +179,7 @@ function nebulaColor(r: number, hot: number): string {
 
 export class ZoomScene {
   private readonly world = buildWorld();
+  private readonly warpStreaks = buildWarp();
   private eased: number | null = null;
   private lastTime: number | null = null;
 
@@ -184,7 +225,7 @@ export class ZoomScene {
 
   private drawWorld(ctx: CanvasRenderingContext2D, i: number, T: Transform, k: number, alpha: number, frame: Frame, w: number, h: number) {
     if (alpha <= 0.01) return;
-    const worlds: Record<number, WorldPainter> = { [-1]: this.cosmos, 0: this.thread, 1: this.nebula, 2: this.planets, 3: this.spiral };
+    const worlds: Record<number, WorldPainter> = { [-1]: this.cosmos, 0: this.thread, 1: this.nebula, 2: this.planets, 3: this.galaxy };
     ctx.save();
     ctx.globalAlpha = alpha;
     worlds[i]?.call(this, ctx, T, k, frame, w, h);
@@ -209,15 +250,28 @@ export class ZoomScene {
     const { ctx, w, h } = surface;
     const g = this.ease(this.globalProgress(progress, time, still), time, still);
     const [mx, my] = pointer;
-    const frame: Frame = { U: Math.min(w, h) * 0.42, time, still, mx, my, wp: stepsProgress(g) };
-    const centre: Vec = [w / 2 + mx * 18, h / 2 + my * 12];
-    const handoff = g >= 3 + HANDOFF && g < 4 ? smooth((g - 3 - HANDOFF) / (1 - HANDOFF)) : 0;
-    if (handoff > 0) {
-      this.drawCamera(ctx, camera(g), centre, frame, w, h, 1 - handoff);
-      this.drawCamera(ctx, pureCamera(REST_LEVEL), centre, frame, w, h, handoff);
-      return;
-    }
+    const frame: Frame = { U: Math.min(w, h) * 0.42, time, still, mx, my, wp: stepsProgress(g), pu: projectProgress(g) };
+    const side = w >= 900 ? Math.min(w * 0.18, 260) : 0;
+    const centre: Vec = [w / 2 + mx * 18 + side * galaxyShift(g), h / 2 + my * 12];
     this.drawCamera(ctx, camera(g), centre, frame, w, h);
+    const warpFrom = 3 + GALAXY_BEATS.pull + 0.05;
+    if (!still && g > warpFrom && g < 4) this.warp(ctx, w, h, Math.sin(Math.PI * clamp((g - warpFrom) / (4 - warpFrom))), time);
+  }
+
+  private warp(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number, time: number) {
+    if (intensity <= 0.01) return;
+    const cx = w / 2, cy = h / 2, R = Math.hypot(w, h) / 2;
+    ctx.lineWidth = 1.2;
+    this.warpStreaks.forEach(s => {
+      let r = (s.r0 - time * s.sp) % 1;
+      if (r < 0) r += 1;
+      const r1 = (0.06 + r * 0.98) * R, r2 = r1 + s.len * (0.3 + r * 1.4) * R;
+      const a = intensity * Math.min(1, r * 1.6) * (s.hot > 0.85 ? 0.9 : 0.45);
+      const ca = Math.cos(s.a), sa = Math.sin(s.a);
+      ctx.strokeStyle = rgba(s.hot > 0.85 ? INK : VIOLET, a.toFixed(3));
+      ctx.beginPath(); ctx.moveTo(cx + ca * r1, cy + sa * r1); ctx.lineTo(cx + ca * r2, cy + sa * r2); ctx.stroke();
+    });
+    ctx.lineWidth = 1;
   }
 
   private dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, col: string, a: number, w: number, h: number) {
@@ -388,21 +442,115 @@ export class ZoomScene {
     ctx.textAlign = 'left';
   }
 
-  /** The Cosmo mark: two dotted arms winding into a bright core, turning slowly behind the project window. */
-  private spiral(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
-    const turn = C.still ? 0 : -C.time * 0.05;
-    const tilt = 0.82 + C.my * 0.04;
-    this.world.spiral.forEach(([arm, r, jitter, glow]) => {
-      const a = turn + arm * Math.PI + r * 5.2 + jitter * (0.25 + r * 0.6);
-      const q = T(Math.cos(a) * r, Math.sin(a) * r * tilt);
-      const fade = 1 - r / 1.25;
-      const tw = C.still ? 1 : 0.75 + 0.25 * Math.sin(C.time * 1.1 + glow * 9);
-      this.dot(ctx, q[0], q[1], r < 0.2 ? 1.2 : 0.9, glow > 0.9 ? LILAC : INK, (0.12 + 0.5 * fade * fade) * tw, w, h);
+  /**
+   * The project as a 3D Cosmo galaxy. A tilted two-arm disk turns in depth;
+   * light runs from the core out along the arms and each work item ignites as
+   * it passes; a message comets out to the item waiting on the client; then
+   * the disk swings face-on into the Cosmo mark before the camera pulls away.
+   */
+  private galaxy(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
+    const t = C.time, u = C.pu, B = GALAXY_BEATS;
+    const spin = C.still ? 0.4 : -t * 0.07;
+    const pitch = 0.55 + 0.97 * smooth((u - B.reveal) / (B.revealEnd - B.reveal)) + C.my * 0.12;
+    const roll = -0.18 + C.mx * 0.25;
+    const cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
+    /** Disk point (angle, radius, height) → screen [x, y, depth]; depth > 0 is toward the viewer. */
+    const place = (a: number, r: number, y = 0): [number, number, number] => {
+      const x = Math.cos(a) * r * DISK, z = Math.sin(a) * r * DISK;
+      const y1 = y * cp - z * sp, z1 = y * sp + z * cp;
+      const f = 3 / (3 - z1 * 0.9);
+      const sx = x * f, sy = y1 * f;
+      const q = T(sx * cr - sy * sr, sx * sr + sy * cr);
+      return [q[0], q[1], z1];
+    };
+    const armAngle = (arm: number, r: number) => spin + arm * Math.PI + r * TWIST;
+    const reach = clamp(u / B.lit) * 1.2;
+
+    ctx.strokeStyle = rgba(MIST, 0.07);
+    [0.36, 0.72, 1.08].forEach(r => {
+      ctx.beginPath();
+      for (let j = 0; j <= 72; j++) { const p = place(j / 72 * 6.2832, r); if (j) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
+      ctx.stroke();
     });
-    const c = T(0, 0);
-    ctx.strokeStyle = rgba(MIST, 0.06);
-    [0.35, 0.7, 1.05].forEach(r => { ctx.beginPath(); ctx.ellipse(c[0], c[1], r * k, r * k * tilt, 0, 0, 6.2832); ctx.stroke(); });
-    this.dot(ctx, c[0], c[1], Math.max(2, k * 0.012), '255,255,255', 0.85, w, h);
+
+    this.world.spiral.forEach(([arm, r, jitter, glow, height]) => {
+      const p = place(armAngle(arm, r) + jitter * (0.25 + r * 0.6), r, height);
+      const lit = r < reach;
+      const near = 0.7 + 0.3 * clamp((p[2] + 0.8) / 1.6);
+      const tw = C.still ? 1 : 0.75 + 0.25 * Math.sin(t * 1.1 + glow * 9);
+      const alpha = lit ? 0.22 + 0.62 * (1 - r / 1.3) : 0.1;
+      const col = lit ? (glow > 0.88 ? LILAC : INK) : VIOLET;
+      this.dot(ctx, p[0], p[1], r < 0.2 ? 1.3 : 0.95, col, alpha * tw * near, w, h);
+    });
+
+    const core = place(0, 0);
+    this.dot(ctx, core[0], core[1], Math.max(3, k * 0.016), '255,255,255', 0.95, w, h);
+    for (let j = 0; j < 3; j++) {
+      const ph = C.still ? 0.3 : ((t * 0.35 + j / 3) % 1);
+      ctx.strokeStyle = rgba(MIST, (0.35 * (1 - ph)).toFixed(3));
+      ctx.beginPath(); ctx.arc(core[0], core[1], Math.max(3, k * 0.016) * (1.5 + ph * 5), 0, 6.2832); ctx.stroke();
+    }
+
+    const asking = u >= B.ask && u < B.reveal;
+    const labelFade = 1 - clamp((u - (B.pull - 0.05)) / 0.04);
+    const labels: Label[] = [];
+    WORKS.forEach(work => {
+      const p = place(armAngle(work.arm, work.r), work.r);
+      const on = clamp((reach - work.r) / 0.15);
+      const col = KIND_RGB[work.kind];
+      const focus = asking && work.kind === 'waiting';
+      const dim = asking && !focus ? 0.45 : 1;
+      const size = Math.max(3.5, k * 0.02) * (0.8 + 0.2 * (p[2] + 1)) * (focus ? 1.35 : 1);
+      const pulse = focus && !C.still ? 0.6 + 0.4 * Math.sin(t * 3) : 1;
+      for (let j = 0; j < 2; j++) {
+        ctx.strokeStyle = rgba(col, (0.4 * on * pulse * dim / (j + 1)).toFixed(3));
+        ctx.beginPath(); ctx.arc(p[0], p[1], size * (2 + j * 1.3), 0, 6.2832); ctx.stroke();
+      }
+      this.dot(ctx, p[0], p[1], size, on > 0 ? col : VIOLET, (0.3 + 0.7 * on) * dim, w, h);
+      const shown = !asking || focus;
+      if (on > 0.5 && shown) labels.push({ x: p[0], y: p[1], text: work.name + '  ·  ' + KIND_LABEL[work.kind], col, a: (on - 0.5) * 2 * labelFade, r: size });
+      if (focus) labels.push({ x: p[0], y: p[1], text: 'New message from your project manager', col: VIOLET, a: clamp((u - B.ask) / 0.03) * labelFade, r: size, up: true });
+    });
+
+    if (asking) {
+      // The message: a comet that leaves the core and runs out along the arm to the waiting item.
+      const target = WORKS.find(work => work.kind === 'waiting') ?? WORKS[0];
+      const env = clamp((u - B.ask) / 0.02) * (1 - clamp((u - (B.reveal - 0.02)) / 0.02));
+      const head = C.still ? 0.8 : (t * 0.4) % 1;
+      for (let j = 0; j < 10; j++) {
+        const along = head - j * 0.022;
+        if (along < 0) break;
+        const p = place(armAngle(target.arm, along * target.r), along * target.r);
+        this.dot(ctx, p[0], p[1], 2.6 - j * 0.2, j ? LILAC : '255,255,255', env * (1 - j / 10), w, h);
+      }
+    }
+    if (k >= 120) this.labels(ctx, labels, w);
+  }
+
+  /** Status pills beside the galaxy's work items; flipped to the left when they would leave the screen. */
+  private labels(ctx: CanvasRenderingContext2D, labels: Label[], w: number) {
+    ctx.font = '500 12px "DM Sans", sans-serif';
+    ctx.textBaseline = 'middle';
+    const baseA = ctx.globalAlpha;
+    labels.forEach(l => {
+      if (l.a <= 0.01) return;
+      const width = ctx.measureText(l.text).width + 24;
+      let bx = l.x + l.r + 12;
+      if (bx + width > w - 16) bx = l.x - l.r - 12 - width;
+      const by = l.up ? l.y - l.r - 40 : l.y - 13;
+      ctx.globalAlpha = clamp(l.a) * baseA;
+      ctx.fillStyle = rgba('20,18,32', 0.92);
+      ctx.strokeStyle = rgba(l.col, 0.6);
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(bx, by, width, 26, 6); else ctx.rect(bx, by, width, 26);
+      ctx.fill(); ctx.stroke();
+      ctx.fillStyle = 'rgb(' + l.col + ')';
+      ctx.fillRect(bx + 9, by + 10, 6, 6);
+      ctx.fillStyle = '#f5f3fc';
+      ctx.fillText(l.text, bx + 20, by + 13.5);
+    });
+    ctx.globalAlpha = baseA;
+    ctx.textBaseline = 'alphabetic';
   }
 }
 
