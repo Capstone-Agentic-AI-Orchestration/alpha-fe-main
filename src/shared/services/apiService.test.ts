@@ -33,6 +33,46 @@ describe('project Actions transport', () => {
   });
 });
 
+describe('workspace board cursor transport', () => {
+  it('loads a bootstrap through the selected workspace session', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ workspaceId: 'ws-board', cursor: { workspaceId: 'ws-board', value: '4' }, projects: [], agents: [], issues: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    setActiveWorkspaceId('ws-board');
+
+    await apiService.getBoardBootstrap();
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/board/bootstrap');
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.method).toBeUndefined();
+    expect(options.credentials).toBe('include');
+    expect(new Headers(options.headers).get('X-Workspace-Id')).toBe('ws-board');
+    expect(new Headers(options.headers).get('X-Alpha-Client-Version')).toBe('0.1.0');
+  });
+
+  it('sends a workspace cursor and caps change pages at 100 rows', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(json({ workspaceId: 'ws-board', nextCursor: { workspaceId: 'ws-board', value: '5' }, hasMore: false, resetRequired: false, changes: [] }));
+    vi.stubGlobal('fetch', fetchMock);
+    setActiveWorkspaceId('ws-board');
+    const cursor = { workspaceId: 'ws-board', value: '4' };
+
+    await apiService.getBoardChanges(cursor, 500);
+
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/board/changes');
+    const options = fetchMock.mock.calls[0][1] as RequestInit;
+    expect(options.method).toBe('POST');
+    expect(JSON.parse(options.body as string)).toEqual({ cursor, limit: 100 });
+    expect(new Headers(options.headers).get('X-Workspace-Id')).toBe('ws-board');
+  });
+
+  it('rejects a cursor for another workspace before sending it', async () => {
+    const fetchMock = vi.fn(); vi.stubGlobal('fetch', fetchMock);
+    setActiveWorkspaceId('ws-board');
+
+    await expect(apiService.getBoardChanges({ workspaceId: 'other-workspace', value: '4' })).rejects.toThrow(/active workspace/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
 describe('existing API transport compatibility', () => {
   it('preserves existing project request cookies, selected workspace and error message format', async () => {
     setActiveWorkspaceId('workspace-existing');

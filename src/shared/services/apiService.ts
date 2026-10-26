@@ -67,8 +67,10 @@ import {
 
 import { API_BASE } from '@/shared/config';
 import type { ActionsFilters, ActionsRun, ActionsRunsPage, ActionsWorkflowsPage, ActionsJobsPage, ActionsLog, ActionsArtifactsPage } from '@/shared/types/actions';
+import type { BoardBootstrap, BoardChangePage, BoardCursor } from '@/shared/types/boardSync';
 
 const API_TOKEN = import.meta.env.VITE_ALPHA_LOCAL_TOKEN;
+const CLIENT_VERSION = import.meta.env.VITE_ALPHA_CLIENT_VERSION || 'unknown';
 let activeWorkspaceId: string | null = null;
 
 /** Bind subsequent daemon calls to the selected product workspace. */
@@ -238,6 +240,7 @@ export class ApiRequestError extends Error {
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const headers = new Headers({
     'Content-Type': 'application/json',
+    'X-Alpha-Client-Version': CLIENT_VERSION,
     ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
     ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {}),
   });
@@ -658,6 +661,25 @@ export const apiService = {
   // Issues
   getIssues: async (): Promise<Issue[]> => {
     return fetchJson<Issue[]>('/issues');
+  },
+
+  /** One initial shared-board snapshot, anchored before the rows are read. */
+  getBoardBootstrap: (): Promise<BoardBootstrap> => fetchJson<BoardBootstrap>('/board/bootstrap'),
+
+  /** A bounded page of workspace changes after this device's last saved cursor. */
+  getBoardChanges: async (cursor: BoardCursor, limit = 100): Promise<BoardChangePage> => {
+    if (!cursor || typeof cursor.workspaceId !== 'string' || !cursor.workspaceId.trim()
+      || typeof cursor.value !== 'string' || !/^(0|[1-9]\d*)$/.test(cursor.value)) {
+      throw new Error('A valid workspace board cursor is required.');
+    }
+    if (!activeWorkspaceId || cursor.workspaceId !== activeWorkspaceId) {
+      throw new Error('The board cursor does not match the active workspace.');
+    }
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 100;
+    return fetchJson<BoardChangePage>('/board/changes', {
+      method: 'POST',
+      body: JSON.stringify({ cursor, limit: safeLimit })
+    });
   },
 
   createIssue: async (issue: Partial<Issue>): Promise<Issue> => {

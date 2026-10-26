@@ -48,8 +48,13 @@ export function loadFromStorage<T>(key: string, fallback: T): T {
 
 export function saveToStorage<T>(key: string, value: T): void {
   try {
-    localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
+    saveToStorageStrict(key, value);
   } catch (e) {
     console.error('Failed to save to localStorage', e);
   }
+}
+
+/** Save synchronously and let the caller handle quota or serialization errors. */
+export function saveToStorageStrict<T>(key: string, value: T): void {
+  localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
 }

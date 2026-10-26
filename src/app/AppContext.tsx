@@ -46,9 +46,12 @@ import {
 } from '@/data/defaults';
 import { apiService, normalizeGitHubRepo, normalizeSkill, onWorkspaceRefused, setActiveWorkspaceId } from '@/shared/services/apiService';
 import { mergeThreadsWithCachedMessages } from './chatThreadHydration';
+import { createBoardSyncCoordinator } from './boardSyncCoordinator';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
+import { catchUpBoard } from '@/shared/services/boardSync';
+import type { BoardCursor } from '@/shared/types/boardSync';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { isDesktop } from '@/shared/desktop';
 
@@ -576,6 +579,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /** Sync warnings already shown this session. */
   const reportedSyncErrorsRef = useRef(new Set<string>());
   const syncBoardRef = useRef<() => Promise<void>>(async () => {});
+  const catchUpWorkspaceBoard = useCallback((workspaceId: string) => {
+    const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${workspaceId}`, null);
+    return catchUpBoard(workspaceId, cachedCursor);
+  }, []);
 
   /**
    * Pull the board from GitHub.
@@ -597,23 +604,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     syncingRef.current = true;
     setSyncing(true);
     try {
+      const workspaceId = activeWorkspaceId;
       const report = await apiService.syncBoard();
-      // Re-read rather than patching from the report: the daemon already
-      // assembled the board consistently, and rebuilding it from a summary is
-      // how the two versions drift apart.
-      // Keep the catalogue in sync if an explicitly authorized importer ever
-      // adds a PM-owned project; the normal board sync only updates projects
-      // that already exist in Alpha.
       const imported = report.projectsImported ?? 0;
-      // Any project change, not only imports: a project a manager created or
-      // renamed on the team's board reaches a desktop through this pull.
-      const projectsMoved = imported > 0 || (report.projects ?? 0) > 0;
-      const [fresh, freshProjects] = await Promise.all([
-        apiService.getIssues(),
-        projectsMoved ? apiService.getProjects() : Promise.resolve(null)
-      ]);
-      if (freshProjects?.length) setProjects(freshProjects);
-      if (fresh?.length) setIssues(fresh as any);
+      if (workspaceId) {
+        const board = await catchUpWorkspaceBoard(workspaceId);
+        if (workspaceId === activeWorkspaceId) {
+          setProjects(board.state.projects);
+          setAgents(board.state.agents);
+          setIssues(board.state.issues);
+        }
+      }
       setLastSyncedAt(new Date().toISOString());
 
       if (imported > 0) {
@@ -629,8 +630,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // A workspace where one repository is unreachable still synced the
       // others, so failures are named rather than failing the whole run.
       for (const e of report.errors ?? []) {
-        // Once per session: the board syncs every minute, and a warning that
-        // needs someone to act on it does not get more useful by repeating.
+        // Once per session: a warning that needs someone to act on it does not
+        // get more useful by repeating.
         const seen = `${e.project}
 ${e.detail}`;
         if (reportedSyncErrorsRef.current.has(seen)) continue;
@@ -647,7 +648,7 @@ ${e.detail}`;
         void syncBoardRef.current();
       }
     }
-  }, [localMode, role]);
+  }, [activeWorkspaceId, catchUpWorkspaceBoard, localMode, role]);
   syncBoardRef.current = syncBoard;
 
   /**
@@ -659,11 +660,9 @@ ${e.detail}`;
    * two people editing the same board spent that interval looking at different
    * truths.
    *
-   * The database announces each write on the workspace's own channel (`0012`),
-   * and this re-reads what changed. The message is a nudge, not the board: it
-   * says a write happened and which table, and the answer comes from the API,
-   * which applies the same permissions as everywhere else. Acting on the
-   * payload would be trusting a row this person may not be allowed to see.
+   * The database sends a cursor-only nudge on the workspace's own channel.
+   * The actual rows still come from the API, which applies the same permissions
+   * as everywhere else. The marker contains no board data to trust or display.
    *
    * Private, like every channel here: Realtime admits only a token whose
    * workspace matches the channel's.
@@ -672,58 +671,30 @@ ${e.detail}`;
     if (localMode || !activeWorkspaceId || !isSupabaseConfigured() || !supabase) return;
 
     let cancelled = false;
-    let pending: ReturnType<typeof setTimeout> | null = null;
-    const changed = new Set<string>();
-
-    const reread = () => {
-      pending = null;
-      const tables = new Set(changed);
-      changed.clear();
-      /*
-       * On a desktop the API answers from this machine's copy of the board,
-       * which the write has not reached yet -- re-reading it showed the
-       * project or card that was just created as missing. Pull it from the
-       * team's board first; the sync re-reads issues and projects after.
-       */
-      if (isDesktop) {
-        void syncBoardRef.current();
-        return;
-      }
-      if (tables.has('issues')) {
-        void apiService.getIssues().then(rows => {
-          if (!cancelled && rows) setIssues(rows as any);
-        }).catch(() => {
-          // A failed re-read leaves what is on screen; the next message or the
-          // next focus will try again.
-        });
-      }
-      if (tables.has('projects')) {
-        void apiService.getProjects().then(rows => {
-          if (!cancelled && rows) setProjects(rows);
-        }).catch(() => {});
-      }
-    };
-
-    /** A burst of writes -- a sync, a run finishing -- is one re-read. */
-    const onBoardWrite = ({ payload }: { payload: any }) => {
-      changed.add(String(payload?.table ?? 'issues'));
-      if (pending) clearTimeout(pending);
-      pending = setTimeout(reread, 400);
-    };
-
+    const coordinator = createBoardSyncCoordinator(async () => {
+      const result = await catchUpWorkspaceBoard(activeWorkspaceId);
+      if (cancelled) return;
+      setProjects(result.state.projects);
+      setAgents(result.state.agents);
+      setIssues(result.state.issues);
+      setServerStatus('online');
+    });
+    const onVisibilityChange = () => coordinator.onVisible();
+    document.addEventListener('visibilitychange', onVisibilityChange);
     const channel = supabase
       .channel(`workspace:${activeWorkspaceId}:board`, { config: { private: true } })
-      .on('broadcast', { event: 'INSERT' }, onBoardWrite)
-      .on('broadcast', { event: 'UPDATE' }, onBoardWrite)
-      .on('broadcast', { event: 'DELETE' }, onBoardWrite)
-      .subscribe();
+      .on('broadcast', { event: 'board_changed' }, () => coordinator.notify())
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') coordinator.onSubscribed();
+      });
 
     return () => {
       cancelled = true;
-      if (pending) clearTimeout(pending);
+      coordinator.dispose();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       void supabase?.removeChannel(channel);
     };
-  }, [activeWorkspaceId, localMode]);
+  }, [activeWorkspaceId, catchUpWorkspaceBoard, localMode]);
 
   /**
     * The role you chose, which is an override rather than the answer.
@@ -988,21 +959,36 @@ ${e.detail}`;
         // older build that does not expose workspaces yet.
       }
 
-      const snapshot = await fetchServerSnapshot();
-      if (cancelled) return;
-
-      // Empty object = nothing succeeded, i.e. the daemon is not answering.
-      if (Object.keys(snapshot).length === 0) {
-        setServerStatus('offline');
-        setWorkspaceLoading(false);
+      setActiveWorkspaceId(selectedWorkspaceId);
+      if (!selectedWorkspaceId) {
+        if (!cancelled) {
+          setServerStatus('offline');
+          setWorkspaceLoading(false);
+        }
         return;
       }
 
+      let result;
+      try {
+        const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${selectedWorkspaceId}`, null);
+        result = await fetchServerSnapshot(selectedWorkspaceId, cachedCursor);
+      } catch (error) {
+        console.warn('[sync] workspace hydration failed:', error instanceof Error ? error.message : error);
+        if (!cancelled) {
+          setServerStatus('offline');
+          setWorkspaceLoading(false);
+        }
+        return;
+      }
+      if (cancelled) return;
+
+      const snapshot = result.snapshot;
+
       // Only overwrite what actually came back; a partially-implemented backend
       // must not blank the entities it does not serve yet.
-      if (snapshot.projects) setProjects(snapshot.projects as Project[]);
-      if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
-      if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
+      setProjects(result.board.state.projects);
+      setAgents(result.board.state.agents);
+      setIssues(result.board.state.issues);
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       /**
@@ -1215,29 +1201,10 @@ ${e.detail}`;
     if (!isDesktop) saveToStorage('local_mode', localMode);
   }, [localMode]);
 
-  /**
-   * Pull the board every minute, and once on load.
-   *
-   * A webhook would be push-based and instant, and it needs a public URL a
-   * laptop does not have — which would mean hosting something, the thing this
-   * architecture exists to avoid. A minute is well inside what anyone notices
-   * on a six-person board, and it costs four API calls against a limit of five
-   * thousand an hour.
-   *
-   * Paused while the tab is hidden: a laptop with Alpha open in a background
-   * tab for a week should not spend the rate limit on a board nobody is
-   * looking at.
-   */
+  /** Keep workspace membership fresh; board rows arrive through cursor catch-up. */
   useEffect(() => {
-    const tick = () => {
+    const refresh = () => {
       if (document.visibilityState !== 'visible') return;
-      void syncBoard();
-      /*
-       * And which workspaces this person is in. A project manager can put a
-       * developer in a workspace at any time, and the developer does nothing
-       * to accept it -- so the app has to notice, not wait for a restart.
-       * Quiet on failure: the board sync already reports an offline daemon.
-       */
       void apiService.getWorkspaces()
         .then(available => {
           if (!Array.isArray(available)) return;
@@ -1250,16 +1217,13 @@ ${e.detail}`;
         })
         .catch(() => {});
     };
-    tick();
-    const id = window.setInterval(tick, 60_000);
-    // Catch up immediately when someone comes back to the tab, rather than
-    // showing a stale board until the next interval.
-    document.addEventListener('visibilitychange', tick);
+    const id = window.setInterval(refresh, 60_000);
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       window.clearInterval(id);
-      document.removeEventListener('visibilitychange', tick);
+      document.removeEventListener('visibilitychange', refresh);
     };
-  }, [syncBoard]);
+  }, []);
   useEffect(() => { saveToStorage(workspaceStorageKey('requirement_docs'), requirementDocs); }, [requirementDocs, activeWorkspaceId]);
 
   const dismissToast = (id: string) => {
@@ -1310,6 +1274,7 @@ ${e.detail}`;
     setActiveWorkspaceIdState(workspaceId);
     setActiveWorkspaceId(workspaceId);
     setLiveBuildRoomProjectIds([]);
+    const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${workspaceId}`, null);
     setActiveThreadId(null);
     // The next workspace may have thread IDs loaded earlier in this session.
     // Clear this cache so opening one always rehydrates its transcript from
@@ -1329,16 +1294,17 @@ ${e.detail}`;
     setAnalytics(normalizeAnalytics(loadFromStorage<AnalyticsData>(`analytics_v2:${workspaceId}`, emptyAnalytics)));
 
     try {
-      const snapshot = await fetchServerSnapshot();
+      const result = await fetchServerSnapshot(workspaceId, cachedCursor);
       try {
         const roomProjects = await apiService.getLiveBuildRoomProjects();
         setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
       } catch {
         setLiveBuildRoomProjectIds([]);
       }
-      if (snapshot.projects) setProjects(snapshot.projects as Project[]);
-      if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
-      if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
+      setProjects(result.board.state.projects);
+      setAgents(result.board.state.agents);
+      setIssues(result.board.state.issues);
+      const snapshot = result.snapshot;
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       if (snapshot.chatThreads) {
