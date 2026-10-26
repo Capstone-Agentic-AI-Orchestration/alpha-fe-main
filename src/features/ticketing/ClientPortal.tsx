@@ -479,24 +479,28 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         </button>
       </nav>
       <div className="client-sidebar-footer">
+        <div className="client-sidebar-account" role="group" aria-label="Client account controls">
+          <span className="client-sidebar-avatar" aria-hidden="true">C</span>
+          <span className="client-sidebar-account-copy"><strong>Client account</strong><small>Client</small></span>
+          <div className="client-sidebar-account-actions">
+            <button type="button" className="client-sidebar-action" aria-label="Refresh portal data"
+              title="Refresh portal data" onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
+              disabled={queueLoading || projectsLoading || Boolean(pending)}>
+              <RefreshCw size={16} className={queueLoading || projectsLoading ? 'animate-spin' : ''} />
+            </button>
+            <button type="button" className="client-sidebar-action" aria-label={signingOut ? 'Signing out' : 'Sign out'}
+              title={signingOut ? 'Signing out…' : 'Sign out'} onClick={() => void signOut()}
+              disabled={inspectionOnly || signingOut || Boolean(pending)} aria-busy={signingOut}>
+              <LogOut size={16} />
+            </button>
+          </div>
+        </div>
         <button type="button" className="client-sidebar-pin" aria-pressed={sidebarPinned} aria-label={sidebarPinned ? 'Collapse sidebar' : 'Keep sidebar expanded'}
           onClick={() => setSidebarPinned(value => !value)}><Pin size={16} /><span>{sidebarPinned ? 'Collapse sidebar' : 'Keep open'}</span></button>
       </div>
     </aside>
 
     <div className="client-portal-mainview">
-      <header className="client-portal-header client-portal-header--workspace">
-        <div className="client-portal-brand"><img src={alphaMarkUrl} alt="" /><div><p>Alphaexplora</p><span>Client portal</span></div></div>
-        <div className="client-portal-header-actions">
-          <button aria-label="Refresh portal data" onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }} disabled={queueLoading || projectsLoading || Boolean(pending)} className="client-control-button">
-            <RefreshCw size={16} className={queueLoading || projectsLoading ? 'animate-spin' : ''} /><span>Refresh</span>
-          </button>
-          <button aria-label={signingOut ? 'Signing out' : 'Sign out'} onClick={() => void signOut()} disabled={inspectionOnly || signingOut || Boolean(pending)} className="client-control-button">
-            <LogOut size={16} /><span>{signingOut ? 'Signing out…' : 'Sign out'}</span>
-          </button>
-        </div>
-      </header>
-
       <div className="client-portal-main client-portal-main--workspace">
         {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
         {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
