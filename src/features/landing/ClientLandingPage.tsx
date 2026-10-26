@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
 import cosmoLogoUrl from '@/assets/cosmo-logo.png';
+import cosmoWordmarkUrl from '@/assets/cosmo-wordmark.png';
 import { clientLandingHref, clientPortalHref, publicInquiryHref, publicInquirySlug } from '@/features/ticketing/publicIntakeApi';
 import '@/features/ticketing/publicClient/clientPublic.css';
 import { GALAXY_BEATS, journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
@@ -33,7 +34,7 @@ function scrollToSection(id: string) {
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 
 type Journey = JourneyProgress & { page: number; active: string };
-const INITIAL: Journey = { hp: 0, ip: 0, wp: 0, pp: 0, flat: false, page: 0, active: 'client-intro' };
+const INITIAL: Journey = { hp: 0, ip: 0, wp: 0, pp: 0, cp: 0, flat: false, page: 0, active: 'client-intro' };
 
 const sections = [
   { id: 'client-intro', label: 'Intro' },
@@ -60,10 +61,10 @@ const captions = [
 
 /** Zoom-out lines shown over the canvas, each with the project-progress window it owns. */
 const recap = [
-  { text: <>Every detail you see,</>, range: [0.48, 0.6] },
-  { text: <>every step you take,</>, range: [0.6, 0.71] },
-  { text: <>every idea you bring,</>, range: [0.71, 0.82] },
-  { text: <>starts with <b>one message.</b></>, range: [0.82, 0.95] },
+  { text: <>Every detail you see,</>, range: [0.48, 0.58] },
+  { text: <>every step you take,</>, range: [0.58, 0.67] },
+  { text: <>every idea you bring,</>, range: [0.67, 0.76] },
+  { text: <>starts with <b>one message.</b></>, range: [0.76, 0.86] },
 ];
 
 /** Caption in focus, matching the galaxy's beats: lighting up, the message, then the face-on reveal. */
@@ -118,6 +119,8 @@ export default function ClientLandingPage() {
     const page = document.scrollingElement ?? document.documentElement;
     const next: Journey = {
       hp: track('hero'), ip: track('idea'), wp: track('how'), pp: track('project'),
+      // How far the closing section has risen into view; the Cosmo lockup recedes behind it.
+      cp: clamp((vh - (sectionElement('client-start')?.getBoundingClientRect().top ?? vh)) / vh),
       flat: isFlat(), page: clamp(page.scrollTop / Math.max(1, page.scrollHeight - vh)), active,
     };
     const previous = journeyRef.current;
@@ -131,7 +134,7 @@ export default function ClientLandingPage() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const scene = new ZoomScene(canvas);
+    const scene = new ZoomScene(canvas, cosmoWordmarkUrl);
     const start = performance.now();
     let frame = 0, pending = 0;
     const drawStill = () => scene.draw(0, true, journeyRef.current, pointerRef.current);

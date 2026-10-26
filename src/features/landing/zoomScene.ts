@@ -20,15 +20,21 @@ type World = {
   dust2: [number, number, number][];
   /** Galaxy particles: [arm, radius, angular jitter, brightness, disk thickness]. */
   spiral: [number, number, number, number, number][];
+  /** Finale start for each galaxy particle: [distance from the lockup, as a share of the half‑diagonal; delay 0–0.55; extra swirl]. */
+  gather: [number, number, number][];
 };
-type Frame = { U: number; time: number; still: boolean; mx: number; my: number; wp: number; pu: number };
+type Frame = { U: number; time: number; still: boolean; mx: number; my: number; wp: number; pu: number; finale: number };
 type WorldPainter = (ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) => void;
 type WarpStreak = { a: number; r0: number; sp: number; len: number; hot: number };
 type Kind = 'done' | 'waiting' | 'progress';
 type Label = { x: number; y: number; text: string; col: string; a: number; r: number; up?: boolean };
+/** Finale amounts, each 0–1: particles gathered, wordmark written, core flash, warp curl, recede behind the close, wordmark left. */
+type Finale = { gather: number; word: number; flash: number; curl: number; recede: number; wordLeft: number };
+/** Where the Cosmo lockup sits at rest: spiral centre and radius, and the wordmark box. */
+type Lockup = { R: number; x: number; y: number; wordX: number; wordY: number; wordW: number; wordH: number; stacked: boolean };
 
-/** Scroll progress per sticky section, each 0–1. */
-export type JourneyProgress = { hp: number; ip: number; wp: number; pp: number; flat: boolean };
+/** Scroll progress per sticky section, each 0–1, plus `cp`: how far the closing section has risen into view. */
+export type JourneyProgress = { hp: number; ip: number; wp: number; pp: number; cp: number; flat: boolean };
 
 const ZOOM = 40;
 const BACKGROUND = '#07070c';
@@ -69,7 +75,10 @@ function buildWorld(): World {
   for (let i = 0; i < 260; i++) dust2.push([(rnd() - 0.5) * 4, (rnd() - 0.5) * 2.6, rnd()]);
   const spiral: World['spiral'] = [];
   for (let i = 0; i < 1700; i++) { const r = Math.pow(rnd(), 0.7) * 1.15; spiral.push([i % 2, r, (rnd() - 0.5) * (0.35 + rnd() * 0.5), rnd(), (rnd() - 0.5) * 0.12 * (1.2 - r)]); }
-  return { stars, neb, core, sphere, dust2, spiral };
+  // Separate stream so the finale's start positions don't reshuffle the other worlds.
+  const gatherRnd = seeded(77);
+  const gather: World['gather'] = spiral.map(() => [0.9 + gatherRnd() * 0.9, gatherRnd() * 0.55, (gatherRnd() - 0.5) * 0.8]);
+  return { stars, neb, core, sphere, dust2, spiral, gather };
 }
 
 /** Where each world's child portal sits, in that world's own units. */
@@ -118,11 +127,17 @@ const REST_LEVEL = -0.75;
  * `revealEnd`, and the camera pulls back out from `pull`.
  */
 export const GALAXY_BEATS = { lit: 0.13, ask: 0.15, reveal: 0.3, revealEnd: 0.41, pull: 0.45 } as const;
+/**
+ * Finale beats in project progress: the warp curls from `curl`, the camera
+ * rests at `rest`, particles gather `gather`–`gatherEnd`, the core flashes at
+ * `ignite`, and the wordmark writes in from `word` to the end of the section.
+ */
+export const FINALE_BEATS = { curl: 0.8, rest: 0.88, gather: 0.86, gatherEnd: 0.95, ignite: 0.935, word: 0.95 } as const;
 
 /** Project: a slow push into the galaxy while the captions play, then pull all the way back out. */
 function projectCamera(u: number): Camera {
   const { pull } = GALAXY_BEATS;
-  return pureCamera(u < pull ? 3 + 0.06 * smooth(u / pull) : 3.06 - (3.06 - REST_LEVEL) * smooth((u - pull) / (1 - pull)));
+  return pureCamera(u < pull ? 3 + 0.06 * smooth(u / pull) : 3.06 - (3.06 - REST_LEVEL) * smooth((u - pull) / (FINALE_BEATS.rest - pull)));
 }
 
 /** Maps global progress g (0 hero … 4 end) to a camera. */
@@ -150,6 +165,35 @@ function projectProgress(g: number): number {
 function galaxyShift(g: number): number {
   if (g < 3) return 0;
   return smooth((g - 3) / 0.05) * (1 - smooth((g - 3 - GALAXY_BEATS.pull) / 0.1));
+}
+
+/** Finale amounts for global progress g. Reduced motion shows the finished lockup once the close is in view. */
+function finaleState(g: number, cp: number, still: boolean): Finale {
+  const F = FINALE_BEATS;
+  const u = g >= 4 ? 1 : g - 3;
+  const recede = smooth(cp / 0.5), wordLeft = 1 - smooth(cp / 0.3);
+  if (still) { const on = cp > 0 ? 1 : 0; return { gather: on, word: on, flash: 0, curl: 0, recede, wordLeft }; }
+  if (g < 3) return { gather: 0, word: 0, flash: 0, curl: 0, recede, wordLeft };
+  return {
+    gather: smooth((u - F.gather) / (F.gatherEnd - F.gather)),
+    word: clamp((u - F.word) / (1 - F.word)),
+    flash: u >= F.ignite ? clamp((u - F.ignite) / 0.04) : 0,
+    curl: smooth((u - F.curl) / (F.rest - F.curl)),
+    recede,
+    wordLeft,
+  };
+}
+
+/** The lockup as in the logo: spiral, gap 0.3R, wordmark 3.07R × 0.52R set 0.1R low; stacked when it can't fit across. */
+function lockupLayout(w: number, h: number): Lockup {
+  const R = Math.min(Math.min(w, h) * 0.23, 210);
+  const wordW = R * 3.07, wordH = R * 0.52, gap = R * 0.3;
+  if (2 * R + gap + wordW > w * 0.9) {
+    const y = h / 2 - (wordH + gap) / 2;
+    return { R, x: w / 2, y, wordX: w / 2 - wordW / 2, wordY: y + R + gap, wordW, wordH, stacked: true };
+  }
+  const x = w / 2 - (2 * R + gap + wordW) / 2 + R;
+  return { R, x, y: h / 2, wordX: x + R + gap, wordY: h / 2 + 0.1 * R - wordH / 2, wordW, wordH, stacked: false };
 }
 
 function buildWarp(): WarpStreak[] {
@@ -183,7 +227,14 @@ export class ZoomScene {
   private eased: number | null = null;
   private lastTime: number | null = null;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {}
+  private readonly wordmark: HTMLImageElement | null = null;
+
+  constructor(private readonly canvas: HTMLCanvasElement, wordmarkUrl?: string) {
+    if (wordmarkUrl && typeof Image !== 'undefined') {
+      this.wordmark = new Image();
+      this.wordmark.src = wordmarkUrl;
+    }
+  }
 
   /** Global progress: 0–4 across the four sticky sections; flat pages loop slowly instead. */
   private globalProgress(progress: JourneyProgress, time: number, still: boolean): number {
@@ -250,28 +301,94 @@ export class ZoomScene {
     const { ctx, w, h } = surface;
     const g = this.ease(this.globalProgress(progress, time, still), time, still);
     const [mx, my] = pointer;
-    const frame: Frame = { U: Math.min(w, h) * 0.42, time, still, mx, my, wp: stepsProgress(g), pu: projectProgress(g) };
+    const finale = finaleState(g, progress.cp, still);
+    const frame: Frame = { U: Math.min(w, h) * 0.42, time, still, mx, my, wp: stepsProgress(g), pu: projectProgress(g), finale: finale.gather };
     const side = w >= 900 ? Math.min(w * 0.18, 260) : 0;
     const centre: Vec = [w / 2 + mx * 18 + side * galaxyShift(g), h / 2 + my * 12];
     this.drawCamera(ctx, camera(g), centre, frame, w, h);
-    const warpFrom = 3 + GALAXY_BEATS.pull + 0.05;
-    if (!still && g > warpFrom && g < 4) this.warp(ctx, w, h, Math.sin(Math.PI * clamp((g - warpFrom) / (4 - warpFrom))), time);
+    const lockup = lockupLayout(w, h);
+    const warpFrom = 3 + GALAXY_BEATS.pull + 0.05, warpTo = 3 + FINALE_BEATS.gatherEnd - 0.03;
+    if (!still && g > warpFrom && g < warpTo) {
+      // As the streaks curl, their vanishing point slides over to the forming spiral.
+      const at: Vec = [w / 2 + (lockup.x - w / 2) * finale.curl, h / 2 + (lockup.y - h / 2) * finale.curl];
+      this.warp(ctx, w, h, Math.sin(Math.PI * clamp((g - warpFrom) / (warpTo - warpFrom))), time, finale.curl, at);
+    }
+    if (finale.gather > 0) this.lockup(ctx, lockup, finale, w, h, time, still);
   }
 
-  private warp(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number, time: number) {
+  /** Speed lines rushing to the centre; `curl` (0–1) bends them into the spiral's arms. */
+  private warp(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number, time: number, curl: number, [cx, cy]: Vec) {
     if (intensity <= 0.01) return;
-    const cx = w / 2, cy = h / 2, R = Math.hypot(w, h) / 2;
+    const R = Math.hypot(w, h) / 2;
+    const bend = curl * 1.6;
     ctx.lineWidth = 1.2;
     this.warpStreaks.forEach(s => {
       let r = (s.r0 - time * s.sp) % 1;
       if (r < 0) r += 1;
       const r1 = (0.06 + r * 0.98) * R, r2 = r1 + s.len * (0.3 + r * 1.4) * R;
       const a = intensity * Math.min(1, r * 1.6) * (s.hot > 0.85 ? 0.9 : 0.45);
-      const ca = Math.cos(s.a), sa = Math.sin(s.a);
+      const a1 = s.a + bend * (1 - r1 / R), a2 = s.a + bend * (1 - r2 / R), am = (a1 + a2) / 2, rm = (r1 + r2) / 2;
       ctx.strokeStyle = rgba(s.hot > 0.85 ? INK : VIOLET, a.toFixed(3));
-      ctx.beginPath(); ctx.moveTo(cx + ca * r1, cy + sa * r1); ctx.lineTo(cx + ca * r2, cy + sa * r2); ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + Math.cos(a1) * r1, cy + Math.sin(a1) * r1);
+      ctx.quadraticCurveTo(cx + Math.cos(am) * rm, cy + Math.sin(am) * rm, cx + Math.cos(a2) * r2, cy + Math.sin(a2) * r2);
+      ctx.stroke();
     });
     ctx.lineWidth = 1;
+  }
+
+  /**
+   * The finale: galaxy particles spiral in from across the screen to form the
+   * Cosmo mark, the core flashes, and the wordmark writes in beside it. As the
+   * closing section rises, the wordmark leaves and the mark recedes behind it.
+   */
+  private lockup(ctx: CanvasRenderingContext2D, L: Lockup, F: Finale, w: number, h: number, time: number, still: boolean) {
+    const x = L.x + (w / 2 - L.x) * F.recede, y = L.y + (h * 0.4 - L.y) * F.recede;
+    const R = L.R * (1 - 0.3 * F.recede);
+    const reach = Math.hypot(w, h) / 2;
+    const spin = still ? 0 : -time * 0.03;
+    const appear = clamp(F.gather * 4);
+    ctx.save();
+    ctx.globalAlpha = 1 - 0.86 * F.recede;
+
+    ctx.strokeStyle = rgba(MIST, (0.08 * F.gather).toFixed(3));
+    [0.36, 0.72, 1.08].forEach(f => { ctx.beginPath(); ctx.arc(x, y, f * R, 0, 6.2832); ctx.stroke(); });
+
+    const { spiral, gather } = this.world;
+    spiral.forEach(([arm, r, jitter, glow], i) => {
+      const [dist, delay, swirl] = gather[i];
+      const local = clamp((F.gather - delay) / 0.45);
+      const e = 1 - Math.pow(1 - local, 3);
+      const target = spin + arm * Math.PI + r * TWIST + jitter * (0.25 + r * 0.6);
+      const angle = target + (1 - e) * (2.4 + swirl);
+      const radius = (r / 1.15) * R + (dist * reach - (r / 1.15) * R) * (1 - e);
+      const fade = 1 - r / 1.3;
+      this.dot(ctx, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius, r < 0.2 ? 1.25 : 0.95, glow > 0.88 ? LILAC : INK, (0.14 + 0.66 * fade) * (0.3 + 0.7 * e) * appear, w, h);
+    });
+
+    const coreR = Math.max(2.5, R * 0.025);
+    this.dot(ctx, x, y, coreR, '255,255,255', F.gather, w, h);
+    if (F.flash > 0 && F.flash < 1) {
+      this.dot(ctx, x, y, coreR * (1 + 3 * (1 - F.flash)), '255,255,255', 0.35 * (1 - F.flash), w, h);
+      ctx.lineWidth = 1.5;
+      ctx.strokeStyle = rgba(MIST, (0.6 * (1 - F.flash)).toFixed(3));
+      ctx.beginPath(); ctx.arc(x, y, R * (0.08 + 1.1 * F.flash), 0, 6.2832); ctx.stroke();
+      ctx.lineWidth = 1;
+    }
+    ctx.restore();
+
+    const img = this.wordmark;
+    const show = F.word * F.wordLeft;
+    if (!img?.complete || !img.naturalWidth || show <= 0.01) return;
+    // The letters arrive a little wide and soft, then tighten to the logo's spacing.
+    const width = L.wordW * (1 + 0.22 * (1 - F.word));
+    const left = L.stacked ? w / 2 - width / 2 : L.wordX;
+    ctx.save();
+    ctx.globalAlpha = clamp(show * 1.5);
+    ctx.beginPath(); ctx.rect(left - 6, L.wordY - 10, (width + 12) * clamp(F.word * 1.3), L.wordH + 20); ctx.clip();
+    if ('filter' in ctx) ctx.filter = `blur(${((1 - F.word) * 5).toFixed(1)}px)`;
+    ctx.drawImage(img, left, L.wordY, width, L.wordH);
+    ctx.restore();
   }
 
   private dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, col: string, a: number, w: number, h: number) {
@@ -289,7 +406,7 @@ export class ZoomScene {
     });
     const c = T(0, 0);
     [1.6, 2.6].forEach((r, j) => {
-      ctx.strokeStyle = rgba(VIOLET, 0.12 - j * 0.04);
+      ctx.strokeStyle = rgba(VIOLET, ((0.12 - j * 0.04) * (1 - C.finale)).toFixed(3));
       ctx.beginPath(); ctx.arc(c[0], c[1], r * k * 0.05, 0, 6.2832); ctx.stroke();
     });
   }

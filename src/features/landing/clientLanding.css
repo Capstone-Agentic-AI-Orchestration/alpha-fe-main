@@ -31,7 +31,7 @@
 .client-landing.is-flat .cl-hero { height: 920px; }
 .client-landing.is-immersive .cl-idea { height: 290vh; }
 .client-landing.is-immersive .cl-how { height: 430vh; }
-.client-landing.is-immersive .cl-project { height: 600vh; }
+.client-landing.is-immersive .cl-project { height: 660vh; }
 .client-landing .cl-stick { position: relative; }
 .client-landing.is-immersive .cl-stick { position: sticky; top: 0; height: 100vh; height: 100svh; }
 .client-landing.is-flat .cl-stick { padding-block: 120px; }
