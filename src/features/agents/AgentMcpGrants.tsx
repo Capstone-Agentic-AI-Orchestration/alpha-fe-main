@@ -14,9 +14,8 @@ import { FileManagedBadge, isManagedByFile } from './FileManagedBadge';
  * three, which is the opposite of the truth and the only thing the panel said
  * about MCP at all.
  *
- * The options come from the daemon rather than a constant, because the catalog
- * is a file the user owns (`~/.alpha/mcp.json`) plus whatever Alpha ships. A
- * hardcoded list would go stale the first time either changed.
+ * The options come from the active workspace catalog rather than a constant,
+ * so a tool configured by an admin can be granted to this developer persona.
  */
 
 interface Props {
@@ -89,8 +88,7 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }
           {granted.length ? granted.join(', ') : 'None granted'}
         </div>
         <div className="text-[10px] text-status-warning">
-          Could not reach the daemon, so the catalog is not shown. This is what the
-          agent has stored.
+          Could not load the workspace catalog. This is what the agent currently has stored.
         </div>
       </div>
     );
@@ -99,9 +97,9 @@ export function AgentMcpGrants({ agent, onChange, onOpenFile, readOnly = false }
   if (!servers.length) {
     return (
       <div className="p-3 rounded-xl bg-well border border-divider space-y-1">
-        <div className="text-xs text-content-secondary">No MCP servers in the catalog.</div>
+        <div className="text-xs text-content-secondary">No MCP servers in this workspace catalog.</div>
         <div className="text-[10px] text-content-muted leading-snug">
-          Add one under Settings &rarr; Connected Accounts to make it grantable here.
+          Ask a workspace admin to add one under Settings &rarr; Connected Accounts.
         </div>
       </div>
     );

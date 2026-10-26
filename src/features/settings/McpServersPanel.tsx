@@ -16,8 +16,8 @@ import { useApp } from '@/app/AppContext';
  * unreachable from an Alpha agent. Anything an agent should be able to use has
  * to be here.
  *
- * Backed by `~/.alpha/mcp.json`, which stays hand-editable: this panel reads and
- * writes the same file, keeping the comment the seed puts in it.
+ * Team catalogs are shared through the active workspace. Solo desktop setups
+ * keep their existing hand-editable `~/.alpha/mcp.json` fallback.
  */
 
 /**
@@ -146,6 +146,22 @@ export function McpServersPanel() {
     }
   };
 
+  const addPlaywrightPreset = async () => {
+    if (!canManageMcp || busy || servers.some(server => server.name === 'playwright')) return;
+    setBusy(true);
+    try {
+      setServers(await apiService.saveMcpServer('playwright', {
+        command: 'npx',
+        args: ['-y', '@playwright/mcp@latest']
+      }));
+      showToast('Playwright MCP added', 'It is now available to grant in a persona’s MCP & CLI settings.', 'success');
+    } catch (err: any) {
+      showToast('Playwright MCP not added', err?.message ?? String(err), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const remove = async (server: McpServer) => {
     if (!canManageMcp) return;
     setBusy(true);
@@ -169,20 +185,30 @@ export function McpServersPanel() {
             MCP Servers
           </h3>
           <p className="text-[11px] text-content-muted leading-snug max-w-xl">
-            Tools your agents can be granted. Agents can only use servers listed here —
-            nothing configured for your personal CLI is reachable from a run. Stored in{' '}
-            <span className="font-mono text-content-secondary">~/.alpha/mcp.json</span>.
+            Workspace-shared tools your agents can be granted. Add a server here, then enable it
+            in the persona&apos;s MCP &amp; CLI settings. Credential values stay hidden in this list.
           </p>
         </div>
 
-        <button
-          onClick={() => setDraft(EMPTY_DRAFT)}
-          disabled={!canManageMcp || busy || !!draft}
-          className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high disabled:opacity-40 border border-divider text-xs font-medium text-content transition-colors"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          Add server
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          {!servers.some(server => server.name === 'playwright') && (
+            <button
+              onClick={() => void addPlaywrightPreset()}
+              disabled={!canManageMcp || busy}
+              className="px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high disabled:opacity-40 border border-divider text-xs font-medium text-content transition-colors"
+            >
+              Add Playwright
+            </button>
+          )}
+          <button
+            onClick={() => setDraft(EMPTY_DRAFT)}
+            disabled={!canManageMcp || busy || !!draft}
+            className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high disabled:opacity-40 border border-divider text-xs font-medium text-content transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add server
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -257,14 +283,14 @@ export function McpServersPanel() {
                           secretsText: ''
                         })
                       }
-                      disabled={busy || !!draft}
+                      disabled={!canManageMcp || busy || !!draft}
                       className="px-2 py-1 rounded-lg text-[10px] text-content-secondary hover:text-content hover:bg-surface-high disabled:opacity-40 transition-colors"
                     >
                       {protectedBuiltin ? 'Override' : 'Edit'}
                     </button>
                     <button
                       onClick={() => setConfirmDelete(server)}
-                      disabled={busy || !!draft || protectedBuiltin}
+                      disabled={!canManageMcp || busy || !!draft || protectedBuiltin}
                       title={
                         protectedBuiltin
                           ? 'Ships with Alpha — cannot be removed'
