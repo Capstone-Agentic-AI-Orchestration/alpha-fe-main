@@ -56,4 +56,3 @@ export interface BoardBootstrap extends BoardState {
   workspaceId: string;
   cursor: BoardCursor;
 }
-
