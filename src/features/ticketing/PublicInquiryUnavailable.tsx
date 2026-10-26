@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ShieldCheck } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { PublicInquiryForm, type InquiryNavigationState } from './PublicInquiryForm';
 import { clientLandingHref, clientPortalHref, publicInquiryContext, publicTicketIntakeApi } from './publicIntakeApi';
 import { ClientPublicShell } from './publicClient/ClientPublicShell';
+import './clientAuth.css';
 
 function readPublicInquiryContext() {
   if (typeof window === 'undefined') return { kind: 'central' } as const;
@@ -65,56 +66,39 @@ export default function PublicInquiryUnavailable() {
         ? 'This inquiry link is incomplete or invalid. Nothing has been sent. Ask your project manager for a new link.'
         : 'This inquiry link is unavailable or could not be checked. Nothing has been submitted. Try again or contact your project manager.';
 
+  const unavailable = configuration === 'unavailable';
   return <ClientPublicShell page="inquiry" slug={slug} navigationLocked={navigation.locked} hasDraft={navigation.dirty}>
-    <div className="public-container public-inquiry-layout">
-      <section className="public-inquiry-body" aria-label="Project inquiry">
-        <p role="status" aria-live="polite" className={configuration === 'unavailable' ? 'public-notice public-notice-warning' : 'public-notice'}>
-          <ShieldCheck size={17} aria-hidden="true" />
-          <span>{message}</span>
-        </p>
-        {context.kind === 'central' && <p className="public-notice mt-3">
-          <ShieldCheck size={17} aria-hidden="true" />
-          <span>No account or team selection is needed to send this inquiry. A project manager will review it and let you know what happens next.</span>
-        </p>}
-        {configuration === 'unavailable' && <button type="button" className="public-button public-button-secondary public-recheck mt-3" onClick={() => setRetryVersion(value => value + 1)}>
-          Check inquiry availability again
-        </button>}
-        <PublicInquiryForm
-          key={configurationKey}
-          submissionEnabled={configuration === 'enabled'}
-          unavailableMessage={configuration === 'checking'
-            ? 'Checking inquiry availability. Nothing has been submitted.'
-            : 'Inquiry submission is currently unavailable for this link. Nothing has been submitted.'}
-          onNavigationStateChange={setNavigation}
-          onSubmit={async inquiry => {
-            const request = { inquiry };
-            if (context.kind === 'invalid') throw new Error('This inquiry link has conflicting or invalid workspace details.');
-            if (context.kind === 'workspace') await publicTicketIntakeApi.submit(context.slug, request);
-            else return publicTicketIntakeApi.submitCentral(request);
-          }}
-          onCancel={() => { window.location.href = clientLandingHref(slug); }}
-        />
-      </section>
-      <aside className="public-inquiry-guide" aria-label="What happens next">
-        <div className="public-guide-sticky">
-          <div className="public-guide-heading">
-            <ShieldCheck size={22} aria-hidden="true" />
-            <h2>{context.kind === 'workspace' ? 'Your request reaches the right team.' : 'A real person reviews your request.'}</h2>
-          </div>
-          <p>{context.kind === 'workspace'
-            ? 'This link was shared by a specific team. That team’s project manager will review your inquiry.'
-            : 'Send your inquiry once. You do not need to choose a workspace or create an account first.'}</p>
-          <ul className="public-guide-prompts">
-            <li><span>01</span><span>You send your inquiry using this form.</span></li>
-            <li><span>02</span><span>A project manager reviews your request.</span></li>
-            <li><span>03</span><span>If they accept it and invite you, follow the email to access your account and updates.</span></li>
-          </ul>
-          <div className="public-guide-next">
-            <h3>Already have client access?</h3>
-            <p><a href={clientHref}>Sign in to your client portal</a>. This inquiry will be reviewed separately from requests already shared with you.</p>
-          </div>
-        </div>
-      </aside>
-    </div>
+    <section className="public-container iq-section" aria-label="Project inquiry">
+      <PublicInquiryForm
+        key={configurationKey}
+        submissionEnabled={configuration === 'enabled'}
+        unavailableMessage={configuration === 'checking'
+          ? 'Checking inquiry availability. Nothing has been submitted.'
+          : 'Inquiry submission is currently unavailable for this link. Nothing has been submitted.'}
+        onNavigationStateChange={setNavigation}
+        onSubmit={async inquiry => {
+          const request = { inquiry };
+          if (context.kind === 'invalid') throw new Error('This inquiry link has conflicting or invalid workspace details.');
+          if (context.kind === 'workspace') await publicTicketIntakeApi.submit(context.slug, request);
+          else return publicTicketIntakeApi.submitCentral(request);
+        }}
+        onCancel={() => { window.location.href = clientLandingHref(slug); }}
+        status={<div className="iq-status">
+          <p role="status" aria-live="polite" className={unavailable ? 'iq-status-line is-warning' : 'iq-status-line'}>{message}</p>
+          {context.kind === 'central' && <p className="iq-status-line">No account or team selection is needed to send this inquiry. A project manager will review it and let you know what happens next.</p>}
+          {unavailable && <button type="button" className="ca-link" onClick={() => setRetryVersion(value => value + 1)}><RefreshCw size={13} aria-hidden="true" />Check inquiry availability again</button>}
+        </div>}
+        guide={<aside className="iq-guide" aria-label="What happens next">
+          <h2>{context.kind === 'workspace' ? 'Your request reaches the right team.' : 'A real person reviews your request.'}</h2>
+          <ol>
+            <li><span>01</span>You send your inquiry using this form.</li>
+            <li><span>02</span>A project manager reviews your request.</li>
+            <li><span>03</span>If they accept it and invite you, follow the email to access your account and updates.</li>
+          </ol>
+          <p>Already have client access? <a href={clientHref}>Sign in to your client portal</a>. This inquiry will be reviewed separately from requests already shared with you.</p>
+        </aside>}
+      />
+    </section>
   </ClientPublicShell>;
 }
+
