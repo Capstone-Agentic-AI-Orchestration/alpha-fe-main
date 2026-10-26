@@ -20,6 +20,10 @@ describe('client landing and password entry', () => {
     expect(html).toContain('A clear start for');
     expect(html).toContain('Three steps.');
     expect(html).toContain('Alphaexplora');
+    expect(html).toContain('alt="Cosmo home"');
+    expect(html).not.toContain('Client home');
+    expect(html).not.toContain('Invite only');
+    expect(html).toContain('Then see it come together.');
     expect(html).toContain('If your project manager invites you');
     expect(html).toContain('Sign in to your requests');
     expect(html).toContain('aria-current="page">Home</a>');

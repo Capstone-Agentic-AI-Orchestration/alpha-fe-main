@@ -3,18 +3,8 @@ import ReactDOM from 'react-dom/client';
 import AppEntry from '@/app/AppEntry';
 import { selectAppEntry } from '@/features/ticketing/entry';
 import { ErrorBoundary } from '@/app/ErrorBoundary';
-import alphaMarkUrl from '@/assets/alpha-mark.png';
 import './index.css';
 import { ThemeProvider } from '@/shared/theme';
-
-// Keep the browser tab and the sidebar on the same source of truth for the
-// brand mark. The imported asset is transformed correctly for both Vite's web
-// build and the packaged desktop renderer.
-const favicon = document.querySelector<HTMLLinkElement>('#alpha-favicon');
-if (favicon) {
-  favicon.href = alphaMarkUrl;
-  favicon.type = 'image/png';
-}
 
 function ApplicationRoot() {
   const [entry, setEntry] = React.useState(() => selectAppEntry(window.location, import.meta.env.DEV));

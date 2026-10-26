@@ -1,27 +1,26 @@
 /**
  * Canvas "camera" for the client landing zoom journey. Five nested worlds
- * (cosmos → thread → nebula → planets → project); each world sits 40× inside
+ * (cosmos → thread → nebula → planets → spiral); each world sits 40× inside
  * the previous one, and scroll progress drives a single camera through them.
+ * The last world is a quiet Cosmo spiral behind the project window, which
+ * crossfades back to the cosmos instead of zooming out through every world.
  * Decorative only: every word the canvas shows is also in the DOM.
  */
 
 type Vec = [number, number];
 type Transform = (x: number, y: number) => Vec;
 type Camera = { i: number; s: number; q: Vec; P: Record<string, Vec> };
-type Work = { name: string; pos: [number, number, number]; kind: Kind; tasks: [number, number, number, number][] };
-type Kind = 'em' | 'am' | 'vi';
 type World = {
   stars: [number, number, number, number][];
   neb: { arm: number; r: number; off: number; ph: number; hot: number }[];
   core: [number, number, number][];
   sphere: [number, number, number][];
   dust2: [number, number, number][];
-  works: Work[];
-  dust3: [number, number, number][];
+  /** Spiral particles: [arm, radius, angular jitter, brightness]. */
+  spiral: [number, number, number, number][];
 };
-type Frame = { U: number; time: number; still: boolean; mx: number; my: number; projP: number; wp: number };
+type Frame = { U: number; time: number; still: boolean; mx: number; my: number; wp: number };
 type WorldPainter = (ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) => void;
-type WarpStreak = { a: number; r0: number; sp: number; len: number; hot: number };
 
 /** Scroll progress per sticky section, each 0–1. */
 export type JourneyProgress = { hp: number; ip: number; wp: number; pp: number; flat: boolean };
@@ -63,21 +62,9 @@ function buildWorld(): World {
   for (let i = 0; i < n; i++) { const y = 1 - (i / (n - 1)) * 2, rr = Math.sqrt(1 - y * y), th = i * 2.39996; sphere.push([Math.cos(th) * rr, y, Math.sin(th) * rr]); }
   const dust2: World['dust2'] = [];
   for (let i = 0; i < 260; i++) dust2.push([(rnd() - 0.5) * 4, (rnd() - 0.5) * 2.6, rnd()]);
-  const works: Work[] = [
-    { name: 'Homepage', pos: [-0.75, -0.35, 0.3], kind: 'vi', tasks: [] },
-    { name: 'Contact page', pos: [0.8, -0.25, -0.2], kind: 'am', tasks: [] },
-    { name: 'Brand assets', pos: [-0.35, 0.6, -0.5], kind: 'em', tasks: [] },
-    { name: 'Booking flow', pos: [0.45, 0.55, 0.55], kind: 'vi', tasks: [] },
-  ];
-  works.forEach(w => {
-    for (let k = 0; k < 14; k++) {
-      const a = rnd() * 6.28, b = (rnd() - 0.5) * 3, r = 0.12 + rnd() * 0.16;
-      w.tasks.push([w.pos[0] + Math.cos(a) * Math.cos(b) * r, w.pos[1] + Math.sin(b) * r, w.pos[2] + Math.sin(a) * Math.cos(b) * r, rnd()]);
-    }
-  });
-  const dust3: World['dust3'] = [];
-  for (let i = 0; i < 320; i++) { const a = rnd() * 6.28, b = (rnd() - 0.5) * 3.1, r = 0.4 + rnd() * 1.5; dust3.push([Math.cos(a) * Math.cos(b) * r, Math.sin(b) * r * 0.7, Math.sin(a) * Math.cos(b) * r]); }
-  return { stars, neb, core, sphere, dust2, works, dust3 };
+  const spiral: World['spiral'] = [];
+  for (let i = 0; i < 1500; i++) spiral.push([i % 2, Math.pow(rnd(), 0.7) * 1.15, (rnd() - 0.5) * (0.35 + rnd() * 0.5), rnd()]);
+  return { stars, neb, core, sphere, dust2, spiral };
 }
 
 /** Where each world's child portal sits, in that world's own units. */
@@ -118,19 +105,14 @@ function planetsCamera(u: number): Camera {
   return { i: 2, s: Z, q, P: PORTALS };
 }
 
-/** Keyframes [progress, x offset, y offset] that drift the project camera between the three captions. */
-const CAPTION_DRIFT = [[0, 0, 0], [0.05, 0.24, -0.06], [0.11, 0.24, -0.06], [0.15, -0.24, 0.1], [0.24, -0.24, 0.1], [0.28, -0.24, -0.08], [0.36, -0.24, -0.08], [0.4, 0, 0]];
+/** Where the closing section rests: the opening starfield. */
+const REST_LEVEL = -0.75;
+/** Project progress at which the spiral starts handing over to the starfield. */
+const HANDOFF = 0.66;
 
-/** Project: drift between the captions, then pull all the way back out. */
+/** Project: a slow, barely-there push into the spiral while the project window tells its story. */
 function projectCamera(u: number): Camera {
-  const c = pureCamera(u < 0.4 ? 3 + 0.08 * (u / 0.4) : 3.08 - 3.83 * smooth((u - 0.4) / 0.6));
-  if (c.i !== 3 || u >= 0.4) return c;
-  let j = 0;
-  while (j < CAPTION_DRIFT.length - 2 && u > CAPTION_DRIFT[j + 1][0]) j++;
-  const a = CAPTION_DRIFT[j], b = CAPTION_DRIFT[j + 1], t = smooth((u - a[0]) / (b[0] - a[0]));
-  const ox = a[1] + (b[1] - a[1]) * t, oy = a[2] + (b[2] - a[2]) * t;
-  c.q = [c.q[0] - ox / c.s, c.q[1] - oy / c.s];
-  return c;
+  return pureCamera(3 + 0.08 * smooth(u / HANDOFF));
 }
 
 /** Maps global progress g (0 hero … 4 end) to a camera. */
@@ -139,14 +121,7 @@ function camera(g: number): Camera {
   if (g < 2) return nebulaCamera(g - 1);
   if (g < 3) return planetsCamera(g - 2);
   if (g < 4) return projectCamera(g - 3);
-  return pureCamera(-0.75);
-}
-
-/** How far the project world has lit up (0–1). */
-function projectProgress(progress: JourneyProgress, g: number): number {
-  if (g >= 4) return 1;
-  if (g < 3) return 0;
-  return clamp(progress.flat ? (g - 3) / 0.32 : progress.pp / 0.32);
+  return pureCamera(REST_LEVEL);
 }
 
 /** Progress through the planets scene, held at 1 once the camera has moved past it. */
@@ -162,16 +137,8 @@ function nebulaColor(r: number, hot: number): string {
   return VIOLET;
 }
 
-const STATUS_LABEL: Record<Kind, string> = { em: 'Done', am: 'Awaiting you', vi: 'In progress' };
-
-function buildWarp(): WarpStreak[] {
-  const rnd = seeded(41);
-  return Array.from({ length: 180 }, () => ({ a: rnd() * 6.2832, r0: rnd(), sp: 0.5 + rnd() * 0.9, len: 0.04 + rnd() * 0.1, hot: rnd() }));
-}
-
 export class ZoomScene {
   private readonly world = buildWorld();
-  private readonly warpStreaks = buildWarp();
   private eased: number | null = null;
   private lastTime: number | null = null;
 
@@ -217,11 +184,23 @@ export class ZoomScene {
 
   private drawWorld(ctx: CanvasRenderingContext2D, i: number, T: Transform, k: number, alpha: number, frame: Frame, w: number, h: number) {
     if (alpha <= 0.01) return;
-    const worlds: Record<number, WorldPainter> = { [-1]: this.cosmos, 0: this.thread, 1: this.nebula, 2: this.planets, 3: this.project };
+    const worlds: Record<number, WorldPainter> = { [-1]: this.cosmos, 0: this.thread, 1: this.nebula, 2: this.planets, 3: this.spiral };
     ctx.save();
     ctx.globalAlpha = alpha;
     worlds[i]?.call(this, ctx, T, k, frame, w, h);
     ctx.restore();
+  }
+
+  /** Draws one camera's world (and the next world in, seen through its portal) at the given opacity. */
+  private drawCamera(ctx: CanvasRenderingContext2D, { s, q, i, P }: Camera, centre: Vec, frame: Frame, w: number, h: number, alpha = 1) {
+    const k = s * frame.U;
+    const T: Transform = (x, y) => [centre[0] + (x - q[0]) * k, centre[1] + (y - q[1]) * k];
+    this.drawWorld(ctx, i, T, k, alpha * (1 - clamp((s - 8) / 24)), frame, w, h);
+    if (i < 3) {
+      const p = P[String(i)] ?? [0, 0];
+      const Tc: Transform = (x, y) => T(p[0] + x / ZOOM, p[1] + y / ZOOM);
+      this.drawWorld(ctx, i + 1, Tc, k / ZOOM, alpha * clamp((s - 2.5) / 7), frame, w, h);
+    }
   }
 
   draw(time: number, still: boolean, progress: JourneyProgress, pointer: Vec) {
@@ -230,36 +209,15 @@ export class ZoomScene {
     const { ctx, w, h } = surface;
     const g = this.ease(this.globalProgress(progress, time, still), time, still);
     const [mx, my] = pointer;
-    const U = Math.min(w, h) * 0.42;
-    const cx = w / 2 + mx * 18, cy = h / 2 + my * 12;
-    const frame: Frame = { U, time, still, mx, my, projP: projectProgress(progress, g), wp: stepsProgress(g) };
-    const { s, q, i, P } = camera(g);
-    const k = s * U;
-    const T: Transform = (x, y) => [cx + (x - q[0]) * k, cy + (y - q[1]) * k];
-    this.drawWorld(ctx, i, T, k, 1 - clamp((s - 8) / 24), frame, w, h);
-    if (i < 3) {
-      // The next world in, seen through this world's portal.
-      const p = P[String(i)] ?? [0, 0];
-      const Tc: Transform = (x, y) => T(p[0] + x / ZOOM, p[1] + y / ZOOM);
-      this.drawWorld(ctx, i + 1, Tc, k / ZOOM, clamp((s - 2.5) / 7), frame, w, h);
+    const frame: Frame = { U: Math.min(w, h) * 0.42, time, still, mx, my, wp: stepsProgress(g) };
+    const centre: Vec = [w / 2 + mx * 18, h / 2 + my * 12];
+    const handoff = g >= 3 + HANDOFF && g < 4 ? smooth((g - 3 - HANDOFF) / (1 - HANDOFF)) : 0;
+    if (handoff > 0) {
+      this.drawCamera(ctx, camera(g), centre, frame, w, h, 1 - handoff);
+      this.drawCamera(ctx, pureCamera(REST_LEVEL), centre, frame, w, h, handoff);
+      return;
     }
-    if (!still && g > 3.4 && g < 4) this.warp(ctx, w, h, Math.sin(Math.PI * clamp((g - 3.4) / 0.6)), time);
-  }
-
-  private warp(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number, time: number) {
-    if (intensity <= 0.01) return;
-    const cx = w / 2, cy = h / 2, R = Math.hypot(w, h) / 2;
-    ctx.lineWidth = 1.2;
-    this.warpStreaks.forEach(s => {
-      let r = (s.r0 - time * s.sp) % 1;
-      if (r < 0) r += 1;
-      const r1 = (0.06 + r * 0.98) * R, r2 = r1 + s.len * (0.3 + r * 1.4) * R;
-      const a = intensity * Math.min(1, r * 1.6) * (s.hot > 0.85 ? 0.9 : 0.45);
-      const ca = Math.cos(s.a), sa = Math.sin(s.a);
-      ctx.strokeStyle = rgba(s.hot > 0.85 ? INK : VIOLET, a.toFixed(3));
-      ctx.beginPath(); ctx.moveTo(cx + ca * r1, cy + sa * r1); ctx.lineTo(cx + ca * r2, cy + sa * r2); ctx.stroke();
-    });
-    ctx.lineWidth = 1;
+    this.drawCamera(ctx, camera(g), centre, frame, w, h);
   }
 
   private dot(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, col: string, a: number, w: number, h: number) {
@@ -430,72 +388,21 @@ export class ZoomScene {
     ctx.textAlign = 'left';
   }
 
-  private project(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
-    const t = C.time;
-    const W = this.world;
-    const yaw = (C.still ? 0.3 : t * 0.12) + C.mx * 0.6, pitch = 0.2 + C.my * 0.3;
-    const cy1 = Math.cos(yaw), sy1 = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
-    const project = (p: readonly number[]): [number, number, number] => {
-      const x = p[0] * cy1 + p[2] * sy1, z = -p[0] * sy1 + p[2] * cy1;
-      const y = p[1] * cp - z * sp, z2 = p[1] * sp + z * cp;
-      const f = 3 / (3 - z2);
-      const q = T(x * f, y * f);
-      return [q[0], q[1], z2];
-    };
-    W.dust3.forEach(d => { const q = project(d); this.dot(ctx, q[0], q[1], 0.8, VIOLET, 0.12 + 0.25 * ((q[2] + 1.5) / 3), w, h); });
-    const P = C.projP;
-    const hub = project([0, 0, 0]);
-    const COL: Record<Kind, string> = { em: '52,211,153', am: '251,191,36', vi: '167,139,250' };
-    const labels: { x: number; y: number; text: string; col: string; a: number; r: number; up?: boolean }[] = [];
-    W.works.forEach((wk, wi) => {
-      const kind: Kind = wk.name === 'Homepage' && P >= 0.9 ? 'em' : wk.kind;
-      const lit = clamp((P - wi * 0.12) / 0.5);
-      const c = project(wk.pos);
-      ctx.strokeStyle = rgba(VIOLET, (0.15 + 0.35 * lit).toFixed(3));
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(hub[0], hub[1]); ctx.lineTo(c[0], c[1]); ctx.stroke();
-      wk.tasks.forEach((tk, ti) => {
-        const q = project(tk);
-        const on = ti / wk.tasks.length < lit;
-        ctx.strokeStyle = rgba(COL[kind], on ? 0.28 : 0.06);
-        ctx.beginPath(); ctx.moveTo(c[0], c[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
-        const tw = C.still ? 1 : 0.7 + 0.3 * Math.sin(t * 2 + tk[3] * 6);
-        this.dot(ctx, q[0], q[1], on ? 1.6 : 1, on ? COL[kind] : VIOLET, (on ? 0.9 : 0.25) * tw, w, h);
-      });
-      const pulse = kind === 'am' && !C.still ? 0.6 + 0.4 * Math.sin(t * 3) : 1;
-      for (let j = 0; j < 2; j++) {
-        ctx.strokeStyle = rgba(COL[kind], (0.35 * lit * pulse / (j + 1)).toFixed(3));
-        ctx.beginPath(); ctx.arc(c[0], c[1], Math.max(6, k * 0.035) * (1.6 + j * 0.9), 0, 6.2832); ctx.stroke();
-      }
-      this.dot(ctx, c[0], c[1], Math.max(4, k * 0.03), COL[kind], 0.4 + 0.6 * lit, w, h);
-      if (lit > 0.6) labels.push({ x: c[0], y: c[1], text: wk.name + '  ·  ' + STATUS_LABEL[kind], col: COL[kind], a: (lit - 0.6) / 0.4, r: Math.max(4, k * 0.03) });
+  /** The Cosmo mark: two dotted arms winding into a bright core, turning slowly behind the project window. */
+  private spiral(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
+    const turn = C.still ? 0 : -C.time * 0.05;
+    const tilt = 0.82 + C.my * 0.04;
+    this.world.spiral.forEach(([arm, r, jitter, glow]) => {
+      const a = turn + arm * Math.PI + r * 5.2 + jitter * (0.25 + r * 0.6);
+      const q = T(Math.cos(a) * r, Math.sin(a) * r * tilt);
+      const fade = 1 - r / 1.25;
+      const tw = C.still ? 1 : 0.75 + 0.25 * Math.sin(C.time * 1.1 + glow * 9);
+      this.dot(ctx, q[0], q[1], r < 0.2 ? 1.2 : 0.9, glow > 0.9 ? LILAC : INK, (0.12 + 0.5 * fade * fade) * tw, w, h);
     });
-    this.dot(ctx, hub[0], hub[1], Math.max(5, k * 0.04), INK, 1, w, h);
-    for (let j = 0; j < 3; j++) {
-      const ph = C.still ? 0.3 : ((t * 0.35 + j / 3) % 1);
-      ctx.strokeStyle = rgba(MIST, (0.4 * (1 - ph)).toFixed(3));
-      ctx.beginPath(); ctx.arc(hub[0], hub[1], Math.max(5, k * 0.04) * (1 + ph * 4), 0, 6.2832); ctx.stroke();
-    }
-    if (k < 120) return;
-    if (P > 0.95) labels.push({ x: hub[0], y: hub[1], text: 'New message from your project manager', col: VIOLET, a: Math.min(1, (P - 0.95) / 0.05), r: Math.max(5, k * 0.04), up: true });
-    ctx.font = '500 12px "DM Sans", sans-serif';
-    ctx.textBaseline = 'middle';
-    const baseA = ctx.globalAlpha;
-    labels.forEach(l => {
-      const width = ctx.measureText(l.text).width + 24;
-      const bx = l.x + l.r + 10, by = l.up ? l.y - l.r - 34 : l.y - 13;
-      ctx.globalAlpha = clamp(l.a) * baseA;
-      ctx.fillStyle = rgba('20,18,32', 0.92);
-      ctx.strokeStyle = rgba(l.col, 0.6);
-      ctx.beginPath();
-      if (ctx.roundRect) ctx.roundRect(bx, by, width, 26, 6); else ctx.rect(bx, by, width, 26);
-      ctx.fill(); ctx.stroke();
-      ctx.fillStyle = 'rgb(' + l.col + ')';
-      ctx.fillRect(bx + 9, by + 10, 6, 6);
-      ctx.fillStyle = '#f5f3fc';
-      ctx.fillText(l.text, bx + 20, by + 13.5);
-      ctx.globalAlpha = baseA;
-    });
+    const c = T(0, 0);
+    ctx.strokeStyle = rgba(MIST, 0.06);
+    [0.35, 0.7, 1.05].forEach(r => { ctx.beginPath(); ctx.ellipse(c[0], c[1], r * k, r * k * tilt, 0, 0, 6.2832); ctx.stroke(); });
+    this.dot(ctx, c[0], c[1], Math.max(2, k * 0.012), '255,255,255', 0.85, w, h);
   }
 }
 

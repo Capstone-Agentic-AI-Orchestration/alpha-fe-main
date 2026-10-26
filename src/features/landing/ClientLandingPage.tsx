@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
-import alphaMarkUrl from '@/assets/alpha-mark.png';
+import cosmoLogoUrl from '@/assets/cosmo-logo.png';
 import { clientLandingHref, clientPortalHref, publicInquiryHref, publicInquirySlug } from '@/features/ticketing/publicIntakeApi';
 import '@/features/ticketing/publicClient/clientPublic.css';
+import { ProjectWindow } from './ProjectWindow';
 import { journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
 import './clientLanding.css';
 
@@ -58,17 +59,14 @@ const captions = [
   { title: 'All in one place.', description: 'From the first message to the finished work.' },
 ];
 
-/** Zoom-out lines shown over the canvas, each with the project-progress window it owns. */
+/** Closing line shown over the canvas once the project window has faded, with the project-progress window it owns. */
 const recap = [
-  { text: <>Every detail you see,</>, range: [0.43, 0.55] },
-  { text: <>every step you take,</>, range: [0.55, 0.665] },
-  { text: <>every idea you bring,</>, range: [0.665, 0.775] },
-  { text: <>starts with <b>one message.</b></>, range: [0.775, 0.93] },
+  { text: <>It all starts with <b>one message.</b></>, range: [0.77, 0.96] },
 ];
 
 function captionIndex(pp: number): number {
-  if (pp < 0.13) return 0;
-  return pp < 0.26 ? 1 : 2;
+  if (pp < 0.24) return 0;
+  return pp < 0.46 ? 1 : 2;
 }
 
 function recapClass(pp: number, [from, to]: number[]): string {
@@ -198,9 +196,8 @@ export default function ClientLandingPage() {
         <section id="client-intro" className="cl-hero" data-track="hero" aria-labelledby="client-hero-heading">
           <div className="cl-stick cl-hero-stick" style={heroStyle}>
             <header className="cl-header public-container">
-              <a className="public-brand" href={home}>
-                <img src={alphaMarkUrl} alt="" width="36" height="36" />
-                <span>Alphaexplora<span className="public-brand-label">Client home</span></span>
+              <a className="public-brand cl-brand" href={home}>
+                <img src={cosmoLogoUrl} alt="Cosmo home" width="124" height="48" />
               </a>
               <nav className="cl-nav" aria-label="Client navigation">
                 <a className="public-current-page" href={home} aria-current="page">Home</a>
@@ -212,7 +209,6 @@ export default function ClientLandingPage() {
             <div className="cl-shade" aria-hidden="true" />
             <div className="cl-hero-in public-container">
               <p className="cl-hero-aside">One place for the request. <span>One place to stay in the loop.</span></p>
-              <p className="cl-kicker cl-mono"><span className="cl-dot" />Client portal · Invite only</p>
               <h1 id="client-hero-heading"><span className="cl-line"><span>A clear start for</span></span><span className="cl-line"><span>your next project<span className="cl-accent">.</span></span></span></h1>
               <div className="cl-hero-row">
                 <div className="cl-buttons">
@@ -258,13 +254,22 @@ export default function ClientLandingPage() {
         </section>
 
         <section id="client-project" className={sectionClass('cl-project', 'client-project')} data-track="project" aria-labelledby="client-project-heading">
-          <div className="cl-stick" style={fadeOut(0.42, 0.04, pp)}>
+          <div className="cl-stick" style={fadeOut(0.72, 0.06, pp)}>
             <div className="cl-shade" aria-hidden="true" />
             <div className="cl-project-in public-container">
               <h2 id="client-project-heading" className="sr-only">Then see your project come together</h2>
-              <ol className="cl-captions cl-fade">
-                {captions.map(({ title, description }, index) => <li key={title} className={`cl-caption cl-pos-${index + 1}${shown(caption === index)}`}><strong>{title}</strong><span>{description}</span></li>)}
-              </ol>
+              <div className="cl-project-copy cl-fade">
+                <span className="cl-eyebrow cl-mono">Your project</span>
+                <ol className="cl-captions">
+                  {captions.map(({ title, description }, index) => <li key={title} className={`cl-caption${shown(caption === index)}`}><strong>{title}</strong><span>{description}</span></li>)}
+                </ol>
+                <div className="cl-rail cl-mono" aria-hidden="true">
+                  {captions.map(({ title }, index) => <span key={title} className={railClass(index, caption)}><span>0{index + 1}</span><i /></span>)}
+                </div>
+              </div>
+              <div className="cl-project-stage cl-fade">
+                <ProjectWindow beat={caption} fill={clamp(pp / 0.2)} />
+              </div>
             </div>
           </div>
         </section>
