@@ -270,3 +270,15 @@
 @media (max-width: 640px) {
   .public-brand-cosmo img { width: auto; height: 38px; }
 }
+
+/* One screen, no page scroll: on desktop and laptop windows the header, the
+   page and the footer share exactly the viewport. Spacing inside scales with
+   the window height. The main area keeps an overflow fallback so nothing is
+   ever clipped (browser zoom, very short windows); phones scroll normally. */
+@media (min-width: 901px) and (min-height: 600px) {
+  .alpha-public.public-fit { display: flex; flex-direction: column; height: 100dvh; min-height: 0; }
+  .public-fit .public-header { flex: none; min-height: clamp(68px, 10vh, 96px); }
+  .public-fit .public-main { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow-y: auto; }
+  .public-fit .public-main > * { margin-block: auto; }
+  .public-fit .public-footer { flex: none; padding-block: clamp(12px, 2.2vh, 24px); }
+}

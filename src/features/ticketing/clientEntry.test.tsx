@@ -34,7 +34,7 @@ describe('client landing and password entry', () => {
   });
   it('shows password sign-in and existing-account migration without open signup or client GitHub login', () => {
     browser(); const html = renderToStaticMarkup(<ClientPasswordSignIn unavailable={false} error="" onRetry={() => {}} onSignedIn={() => {}} />);
-    expect(html).toContain('class="alpha-public public-cosmo"');
+    expect(html).toContain('class="alpha-public public-cosmo public-fit"');
     expect(html).toContain('alt="Cosmo home"');
     expect(html).toContain('aria-current="step"');
     expect(html).toContain('Alphaexplora');

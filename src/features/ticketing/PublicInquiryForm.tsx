@@ -1,15 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, Send, ShieldCheck } from 'lucide-react';
 import { PUBLIC_TICKET_INQUIRY_SCHEMA_VERSION } from './publicIntakeContract';
 import type { PublicTicketInquiryPayload, PublicTicketInquiryResponse } from './publicIntakeContract';
 import { PublicTicketIntakeApiError } from './publicIntakeApi';
 import { composeInquiryDescription, INQUIRY_DETAILS_MAX_LENGTH, INQUIRY_LINKS_MAX_LENGTH, INQUIRY_PROMPTS } from './inquiryDetails';
 import { useClientPageMotion } from './publicClient/useClientPageMotion';
-import { input, primary, secondary } from './ticketUi';
 
 export type InquiryNavigationState = { dirty: boolean; locked: boolean };
 
-export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = false, unavailableMessage = 'Inquiry submission is unavailable. Nothing is sent or saved.', onNavigationStateChange }: {
+export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = false, unavailableMessage = 'Inquiry submission is unavailable. Nothing is sent or saved.', onNavigationStateChange, status, guide }: {
+  /** Availability lines shown under the intro, beside the form. */
+  status?: ReactNode;
+  /** What happens next, shown under the status. */
+  guide?: ReactNode;
   /** Resolve only after the configured intake transport returns its generic receipt. */
   onSubmit: (value: PublicTicketInquiryPayload) => void | PublicTicketInquiryResponse | Promise<void | PublicTicketInquiryResponse>;
   onCancel: () => void;
@@ -58,10 +61,14 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
     }
   };
 
-  return <div ref={motionRef} className="public-inquiry-body">
-    <button type="button" onClick={cancel} disabled={locked} className="public-text-link public-back-link"><ArrowLeft size={15} />Back to Alphaexplora entry</button>
-    <div className="public-inquiry-intro" data-public-arrival><h1>Tell us what you need<span>.</span></h1><p>A good project starts with a conversation. Share your idea, the outcome you’re after, and what matters most. Your project manager will take it from here.</p></div>
-    <form aria-label="Project inquiry" aria-busy={isSubmitting} className="public-inquiry-form" onInvalidCapture={() => setValidationError('Please complete the required fields and use a valid email address.')} onInput={() => { setValidationError(''); setError(''); }} onSubmit={event => {
+  return <div ref={motionRef} className="iq-layout">
+    <div className="iq-copy">
+      <button type="button" onClick={cancel} disabled={locked} className="ca-link iq-back"><ArrowLeft size={15} />Back to Alphaexplora entry</button>
+      <div className="public-inquiry-intro" data-public-arrival><p className="ca-eyebrow">Project inquiry</p><h1>Tell us what you need<span>.</span></h1><p>A good project starts with a conversation. Share your idea, the outcome you’re after, and what matters most. Your project manager will take it from here.</p></div>
+      {status}
+      {guide}
+    </div>
+    <form aria-label="Project inquiry" aria-busy={isSubmitting} className="ca-form iq-form" onInvalidCapture={() => setValidationError('Please complete the required fields and use a valid email address.')} onInput={() => { setValidationError(''); setError(''); }} onSubmit={event => {
       event.preventDefault();
       if (!submissionEnabled || submissionInFlight.current || submitted) return;
       submissionInFlight.current = true;
@@ -94,38 +101,32 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
           setIsSubmitting(false);
         });
     }}>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Your name <span className="text-gray-500">(required)</span></span>
-          <input className={input} required maxLength={160} autoComplete="name" disabled={fieldsDisabled} value={fullName} onChange={event => { setFullName(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
-        <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Email <span className="text-gray-500">(required)</span></span>
-          <input className={input} type="email" required maxLength={254} autoComplete="email" disabled={fieldsDisabled} value={email} onChange={event => { setEmail(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
-      </div>
-      <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Company <span className="text-gray-500">(optional)</span></span>
-        <input className={input} maxLength={160} autoComplete="organization" disabled={fieldsDisabled} value={company} onChange={event => { setCompany(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
-      <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">What do you need? <span className="text-gray-500">(required)</span></span>
-        <input className={input} required maxLength={160} disabled={fieldsDisabled} value={title} onChange={event => { setTitle(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="A short summary" /></label>
-      <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Details <span className="text-gray-500">(required)</span></span>
-        <textarea className={`${input} min-h-36 resize-y`} required maxLength={INQUIRY_DETAILS_MAX_LENGTH} aria-describedby="inquiry-prompts" disabled={fieldsDisabled} value={description} onChange={event => { setDescription(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="Describe the outcome you’re looking for and any useful context." /></label>
-      <div id="inquiry-prompts" className="rounded-lg bg-white/[0.03] p-3 text-xs leading-relaxed text-gray-400">
-        <p className="font-medium text-gray-300">Not sure what to write? These help your project manager the most:</p>
-        <ul className="mt-1.5 list-disc space-y-0.5 pl-4">{INQUIRY_PROMPTS.map(prompt => <li key={prompt}>{prompt}</li>)}</ul>
-      </div>
-      <label className="block space-y-2"><span className="text-xs font-medium text-gray-300">Links to reference material <span className="text-gray-500">(optional)</span></span>
-        <textarea className={`${input} min-h-20 resize-y`} maxLength={INQUIRY_LINKS_MAX_LENGTH} disabled={fieldsDisabled} value={links} onChange={event => { setLinks(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="One per line: your current website, a shared folder, a design or example you like." />
-        <span className="block text-xs leading-relaxed text-gray-400">Files can be added to your request after your project manager invites you and you sign in.</span></label>
-      <label className="block max-w-xs space-y-2"><span className="text-xs font-medium text-gray-300">Requested target date <span className="text-gray-500">(optional, not guaranteed)</span></span>
-        <input className={input} type="date" disabled={fieldsDisabled} value={requestedDeadline} onChange={event => { setRequestedDeadline(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
-      <div className="flex items-start gap-2 rounded-lg bg-white/[0.03] p-3 text-xs leading-relaxed text-gray-400"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-gray-500" />
-        <p>This sends your request for review. It does not start work or create an account. You can sign in after your project manager invites you and you verify this email. Do not include passwords or sensitive files.</p></div>
-      {error && <p role="alert" className="text-sm leading-relaxed text-rose-200">{error}</p>}
-      {validationError && <p role="alert" className="text-sm leading-relaxed text-amber-100">{validationError}</p>}
-      {outcomeUnknown && <p role="status" className="rounded-lg border border-amber-400/20 bg-amber-500/[0.05] p-3 text-sm leading-relaxed text-amber-100">We could not confirm whether your inquiry was received. Choose “Check inquiry status” below before trying again; this avoids sending a duplicate.</p>}
-      {submitted && <p role="status" className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3 text-sm text-emerald-200">Inquiry received{publicReference ? <> · reference <span className="font-mono">{publicReference}</span></> : ''}. Your project manager will review it. This does not create an account or give you portal access yet.</p>}
-      {submitted && <p className="text-xs leading-relaxed text-gray-400">If your project manager invites you, follow the email to verify your access. If this is your first time, you can choose a password; otherwise, keep using your current one.</p>}
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-white/[0.06] pt-5">
-        <p className="max-w-xs text-xs leading-relaxed text-gray-400">{submitted ? 'You must verify your email from your project manager’s invitation before you can sign in.' : !submissionEnabled ? unavailableMessage : 'Your project manager will review this request. An email address alone does not create portal access.'}</p>
-        <div className="flex flex-wrap gap-2"><button type="button" onClick={cancel} className={`${secondary} min-h-[44px] min-w-24`} disabled={locked}>Cancel</button><button className={`${primary} min-h-[44px]`} type="submit" disabled={!submissionEnabled || isSubmitting || submitted}><Send size={14} />{isSubmitting ? 'Submitting…' : submitted ? 'Inquiry received' : outcomeUnknown ? 'Check inquiry status' : 'Submit inquiry'}</button></div>
+      <label className="ca-field"><span>Your name <span>(required)</span></span>
+        <input required maxLength={160} autoComplete="name" disabled={fieldsDisabled} value={fullName} onChange={event => { setFullName(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+      <label className="ca-field"><span>Email <span>(required)</span></span>
+        <input type="email" required maxLength={254} autoComplete="email" disabled={fieldsDisabled} value={email} onChange={event => { setEmail(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+      <label className="ca-field"><span>Company <span>(optional)</span></span>
+        <input maxLength={160} autoComplete="organization" disabled={fieldsDisabled} value={company} onChange={event => { setCompany(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+      <label className="ca-field"><span>Target date <span>(optional, not guaranteed)</span></span>
+        <input type="date" disabled={fieldsDisabled} value={requestedDeadline} onChange={event => { setRequestedDeadline(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+      <label className="ca-field iq-wide"><span>What do you need? <span>(required)</span></span>
+        <input required maxLength={160} disabled={fieldsDisabled} value={title} onChange={event => { setTitle(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="A short summary" /></label>
+      <label className="ca-field iq-wide iq-details"><span>Details <span>(required)</span></span>
+        <textarea required maxLength={INQUIRY_DETAILS_MAX_LENGTH} aria-describedby="inquiry-prompts" disabled={fieldsDisabled} value={description} onChange={event => { setDescription(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="Describe the outcome you’re looking for and any useful context." /></label>
+      <p id="inquiry-prompts" className="iq-hint iq-wide iq-prompts">Not sure what to write? These help your project manager the most:{INQUIRY_PROMPTS.map(prompt => <span key={prompt}>{prompt}</span>)}</p>
+      <label className="ca-field iq-wide"><span>Links to reference material <span>(optional)</span></span>
+        <textarea rows={2} className="iq-links" maxLength={INQUIRY_LINKS_MAX_LENGTH} disabled={fieldsDisabled} value={links} onChange={event => { setLinks(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="One per line: your website, a shared folder, an example you like" /></label>
+      <p className="iq-hint iq-wide iq-notice"><ShieldCheck size={14} aria-hidden="true" />This sends your request for review. It does not start work or create an account. You can sign in after your project manager invites you and you verify this email. Do not include passwords or sensitive files. Files can be added to your request after your project manager invites you and you sign in.</p>
+      {error && <p role="alert" className="ca-error iq-wide">{error}</p>}
+      {validationError && <p role="alert" className="ca-error is-warning iq-wide">{validationError}</p>}
+      {outcomeUnknown && <p role="status" className="ca-error is-warning iq-wide">We could not confirm whether your inquiry was received. Choose “Check inquiry status” below before trying again; this avoids sending a duplicate.</p>}
+      {submitted && <p role="status" className="ca-error is-success iq-wide">Inquiry received{publicReference ? <> · reference <span className="font-mono">{publicReference}</span></> : ''}. Your project manager will review it. This does not create an account or give you portal access yet.</p>}
+      {submitted && <p className="iq-hint iq-wide">If your project manager invites you, follow the email to verify your access. If this is your first time, you can choose a password; otherwise, keep using your current one.</p>}
+      <div className="iq-actions iq-wide">
+        <p>{submitted ? 'You must verify your email from your project manager’s invitation before you can sign in.' : !submissionEnabled ? unavailableMessage : 'Your project manager will review this request. An email address alone does not create portal access.'}</p>
+        <div><button type="button" onClick={cancel} className="ca-link iq-cancel min-h-[44px]" disabled={locked}>Cancel</button><button className="ca-submit min-h-[44px]" type="submit" disabled={!submissionEnabled || isSubmitting || submitted}><span className="ca-submit-text">{isSubmitting ? 'Submitting…' : submitted ? 'Inquiry received' : outcomeUnknown ? 'Check inquiry status' : 'Submit inquiry'}</span><span className="ca-submit-icon"><Send size={15} /></span></button></div>
       </div>
     </form>
   </div>;
 }
+

@@ -16,9 +16,10 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
   const mainRef = useRef<HTMLElement>(null);
   const homeHref = clientLandingHref(slug);
   const clientHref = clientPortalHref(slug);
-  // Access pages (sign in, recovery, invitation setup) share the landing's Cosmo space.
-  const cosmo = page === 'access';
-  return <div className={`alpha-public${cosmo ? ' public-cosmo' : ''}`} onClickCapture={event => {
+  // Access pages (sign in, recovery, invitation setup) and the inquiry share the landing's
+  // Cosmo space and fit one screen on desktop.
+  const cosmo = page !== 'landing';
+  return <div className={`alpha-public${cosmo ? ' public-cosmo public-fit' : ''}`} onClickCapture={event => {
     if (!(event.target instanceof Element)) return;
     const anchor = event.target.closest<HTMLAnchorElement>('a[href]');
     if (!anchor) return;
