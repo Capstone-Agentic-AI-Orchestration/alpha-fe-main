@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowRight, Check, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
-  ListChecks, LogOut, Pin, RefreshCw, Search, Ticket,
+  ListChecks, LogOut, RefreshCw, Search, Ticket,
 } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
@@ -82,7 +82,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [projectsError, setProjectsError] = useState('');
   const [page, setPage] = useState<Page>('overview');
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
-  const [sidebarPinned, setSidebarPinned] = useState(false);
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [filter, setFilter] = useState<NonNullable<Filter>>(() => (typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash)));
   const [searchInput, setSearchInput] = useState('');
@@ -465,7 +464,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const currentNav = page;
 
   return <main className="client-portal-shell client-portal-shell--workspace">
-    <aside className={`client-sidebar ${sidebarPinned ? 'is-pinned' : ''}`} aria-label="Client portal navigation">
+    <aside className="client-sidebar" aria-label="Client portal navigation">
       <div className="client-sidebar-brand"><img src={alphaMarkUrl} alt="" /><div><strong>Alphaexplora</strong><small>Client portal</small></div></div>
       <nav className="client-sidebar-nav">
         <button type="button" aria-current={currentNav === 'overview' ? 'page' : undefined} onClick={() => navigate('overview')}>
@@ -483,11 +482,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           <span className="client-sidebar-avatar" aria-hidden="true">C</span>
           <span className="client-sidebar-account-copy"><strong>Client account</strong><small>Client</small></span>
           <div className="client-sidebar-account-actions">
-            <button type="button" className="client-sidebar-action" aria-label="Refresh portal data"
-              title="Refresh portal data" onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
-              disabled={queueLoading || projectsLoading || Boolean(pending)}>
-              <RefreshCw size={16} className={queueLoading || projectsLoading ? 'animate-spin' : ''} />
-            </button>
             <button type="button" className="client-sidebar-action" aria-label={signingOut ? 'Signing out' : 'Sign out'}
               title={signingOut ? 'Signing out…' : 'Sign out'} onClick={() => void signOut()}
               disabled={inspectionOnly || signingOut || Boolean(pending)} aria-busy={signingOut}>
@@ -495,12 +489,17 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             </button>
           </div>
         </div>
-        <button type="button" className="client-sidebar-pin" aria-pressed={sidebarPinned} aria-label={sidebarPinned ? 'Collapse sidebar' : 'Keep sidebar expanded'}
-          onClick={() => setSidebarPinned(value => !value)}><Pin size={16} /><span>{sidebarPinned ? 'Collapse sidebar' : 'Keep open'}</span></button>
       </div>
     </aside>
 
     <div className="client-portal-mainview">
+      <header className="client-portal-toolbar">
+        <button aria-label="Refresh portal data" title="Refresh portal data"
+          onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
+          disabled={queueLoading || projectsLoading || Boolean(pending)} className="client-control-button">
+          <RefreshCw size={16} className={queueLoading || projectsLoading ? 'animate-spin' : ''} /><span>Refresh</span>
+        </button>
+      </header>
       <div className="client-portal-main client-portal-main--workspace">
         {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
         {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
