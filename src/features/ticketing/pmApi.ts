@@ -49,6 +49,12 @@ export interface PmTicketReceipt {
   ticketId: string; operationId: string; version: number; status: TicketStatus;
   messageId?: string; reference?: string;
 }
+export interface PmProjectClientPreview { repository: string; branch: 'main' | 'uat'; url: string }
+export interface PmProjectClientPreviewState { preview: PmProjectClientPreview | null }
+export interface PmProjectPreviewClient { clientId: string; displayName: string }
+export interface PmProjectFeedbackMessage { id: string; clientId: string; author: 'pm' | 'client'; body: string; createdAt: string }
+export interface PmProjectFeedbackInput { schemaVersion: 1; operationId: string; body: string }
+export interface PmProjectFeedbackReceipt { messageId: string; operationId: string }
 
 export interface PmTicketDetail {
   id: string;
@@ -192,9 +198,9 @@ function query(values: Record<string, string | null | undefined>): string {
   return encoded ? `?${encoded}` : '';
 }
 
-async function withOperationRecovery(
-  submit: () => Promise<PmTicketReceipt>, lookup: () => Promise<PmTicketReceipt>,
-): Promise<PmTicketReceipt> {
+async function withOperationRecovery<T>(
+  submit: () => Promise<T>, lookup: () => Promise<T>,
+): Promise<T> {
   try { return await submit(); }
   catch (error) {
     if (!(error instanceof ApiRequestError) || !error.reconciliationRequired) throw error;
@@ -387,6 +393,43 @@ export const pmTicketApi = {
       `/tickets/${encodeId(ticketId)}/client-requests`, {
         method: 'PUT', body: JSON.stringify({ acceptsNewRequests }),
       },
+    );
+  },
+  getProjectClientPreview(projectId: string) {
+    return apiService.ticketRequest<PmProjectClientPreviewState>(
+      `/tickets/projects/${encodeId(projectId)}/client-preview`,
+    );
+  },
+  setProjectClientPreview(projectId: string, preview: PmProjectClientPreview | null) {
+    return apiService.ticketRequest<PmProjectClientPreviewState>(
+      `/tickets/projects/${encodeId(projectId)}/client-preview`,
+      { method: 'PUT', body: JSON.stringify({ preview }) },
+    );
+  },
+  listProjectPreviewClients(projectId: string) {
+    return apiService.ticketRequest<{ items: PmProjectPreviewClient[] }>(
+      `/tickets/projects/${encodeId(projectId)}/client-preview/clients`,
+    );
+  },
+  getProjectFeedbackMessages(projectId: string, clientId: string, options: { limit?: number; before?: string | null } = {}) {
+    return apiService.ticketRequest<PmTicketPage<PmProjectFeedbackMessage>>(
+      `/tickets/projects/${encodeId(projectId)}/client-preview/messages${query({
+        clientId, limit: options.limit === undefined ? undefined : String(options.limit), before: options.before,
+      })}`,
+    );
+  },
+  sendProjectFeedbackMessage(projectId: string, clientId: string, input: PmProjectFeedbackInput) {
+    return withOperationRecovery(
+      () => apiService.ticketRequest<PmProjectFeedbackReceipt>(
+        `/tickets/projects/${encodeId(projectId)}/client-preview/messages${query({ clientId })}`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ),
+      () => pmTicketApi.getProjectFeedbackOperation(projectId, clientId, input.operationId),
+    );
+  },
+  getProjectFeedbackOperation(projectId: string, clientId: string, operationId: string) {
+    return apiService.ticketRequest<PmProjectFeedbackReceipt>(
+      `/tickets/projects/${encodeId(projectId)}/client-preview/messages/operations/${encodeId(operationId)}${query({ clientId })}`,
     );
   },
 };
