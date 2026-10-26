@@ -26,7 +26,8 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
     prototypeRuns,
     cancelPrototypeRun,
     retryPrototypeRun,
-    setActiveTab
+    setActiveTab,
+    setNotificationPanelOpen
   } = useApp();
   const [logsOpen, setLogsOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -172,10 +173,10 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
       {run.status === 'awaiting_approval' && (
         <button
           type="button"
-          onClick={() => setActiveTab('inbox')}
+          onClick={() => setNotificationPanelOpen(true)}
           className="text-[11px] font-medium text-link transition-colors hover:text-link-hover"
         >
-          Review output in Inbox →
+          Review output in Notifications →
         </button>
       )}
 

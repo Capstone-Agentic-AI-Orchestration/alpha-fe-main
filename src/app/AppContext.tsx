@@ -127,6 +127,8 @@ interface AppContextType {
   ) => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
+  notificationPanelOpen: boolean;
+  setNotificationPanelOpen: React.Dispatch<React.SetStateAction<boolean>>;
   
   // Issues
   issues: Issue[];
@@ -208,7 +210,7 @@ interface AppContextType {
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   archiveNotification: (id: string) => void;
-  handleApproval: (notificationId: string, action: 'approved' | 'rejected') => void;
+  handleApproval: (notificationId: string, action: 'approved' | 'rejected') => Promise<void>;
   
   // Analytics
   analytics: AnalyticsData;
@@ -467,7 +469,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
-  'portal', 'intake', 'documents', 'inbox', 'chat', 'issues', 'projects', 'tickets', 'agents',
+  'portal', 'intake', 'documents', 'chat', 'issues', 'projects', 'tickets', 'agents',
   'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments',
   'build_room', 'settings'
 ];
@@ -839,6 +841,7 @@ ${e.detail}`;
   };
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
 
   // Raw collections. These are never handed to a view directly — the scoped
   // derivations further down are what the provider exposes, so a view cannot
@@ -2192,10 +2195,11 @@ ${e.detail}`;
           issueIdentifier: targetIssue.identifier,
           proposedChanges: run.changedFiles
             ? `${run.insertions ?? 0} insertions, ${run.deletions ?? 0} deletions in ${run.changedFiles} files.`
-            : 'No files were changed.'
+            : 'No files were changed.',
+          prUrl: run.prUrl
         }
       }, ...prev]);
-      showToast('Review ready', `${targetIssue.identifier} is waiting in Inbox.`, 'success');
+      showToast('Review ready', `${targetIssue.identifier} is waiting in Notifications.`, 'success');
     });
   }, [prototypeRuns, issues, agents]);
 
@@ -2712,14 +2716,15 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
     setInbox(prev => prev.map(n => n.id === id ? { ...n, archived: true } : n));
   };
 
-  const handleApproval = (notificationId: string, action: 'approved' | 'rejected') => {
+  const handleApproval = async (notificationId: string, action: 'approved' | 'rejected'): Promise<void> => {
     if (!requireCapability('approve_runs')) return;
     const notif = inbox.find(n => n.id === notificationId);
     if (!notif) return;
 
-    setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
-
-    if (notif.entityType !== 'issue') return;
+    if (notif.entityType !== 'issue') {
+      setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
+      return;
+    }
 
     const run = prototypeRuns.find(item =>
       item.issueId === notif.entityId && item.status === 'awaiting_approval'
@@ -2727,79 +2732,53 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
 
     // Preserve approval behavior for older seeded notifications that are not tied to a run.
     if (!run) {
+      setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
       if (action === 'approved') updateIssueStatus(notif.entityId, 'done');
       showToast(action === 'approved' ? 'Work approved' : 'Changes requested', undefined, action === 'approved' ? 'success' : 'info');
       return;
     }
 
     const now = new Date().toISOString();
+    try {
+      // The same persisted endpoint records approvals and request-changes
+      // decisions. Keep the notification pending if the daemon rejects either.
+      const updatedRun = await apiService.approveRun(run.id, action === 'approved');
+      setPrototypeRuns(prev => prev.map(item => item.id === run.id ? updatedRun : item));
+      setInbox(prev => prev.map(n => n.id === notificationId
+        ? { ...n, approvalStatus: action, read: true }
+        : n));
 
-    /**
-     * Tell the daemon, so the decision outlives this tab.
-     *
-     * The state changes below are optimistic; without this the run stayed
-     * `awaiting_approval` in SQLite and the same notification returned on the
-     * next reload.
-     */
-    if (action === 'approved') {
-      /**
-       * The daemon merges; this waits to hear whether it did.
-       *
-       * Two things used to happen here at once: `approveRun` recorded the
-       * decision and a separate `mergeGitHubPR` call did the merging, with its
-       * failure going to `console.warn`. So a merge blocked by a required check
-       * or a conflict still produced "Review approved", the card moved to Done,
-       * and the pull request stayed open with nobody told.
-       *
-       * The merge now belongs to the approve endpoint, which reports what
-       * actually happened. Nothing here moves until it answers.
-       */
-      apiService
-        .approveRun(run.id, true)
-        .then(() => {
-          setPrototypeRuns(prev => prev.map(item =>
-            item.id === run.id ? { ...item, status: 'completed', updatedAt: new Date().toISOString() } : item
-          ));
-          setIssues(prev => prev.map(issue =>
-            issue.id === run.issueId ? { ...issue, status: 'done', updatedAt: new Date().toISOString() } : issue
-          ));
-          showToast(
-            'Review approved',
-            run.prUrl ? `Merged ${run.prUrl}.` : 'No pull request to merge.',
-            'success'
-          );
-        })
-        .catch((err: unknown) => {
-          // Put the decision back: the run is still at the gate, and the
-          // notification must return rather than read as handled.
-          setInbox(prev => prev.map(n =>
-            n.id === notificationId ? { ...n, approvalStatus: undefined, read: true } : n
-          ));
-          const detail = err instanceof Error ? err.message : String(err);
-          showToast('Not merged', detail, 'error');
-        });
+      if (action === 'approved') {
+        setIssues(prev => prev.map(issue => issue.id === run.issueId
+          ? { ...issue, status: 'done', updatedAt: updatedRun.updatedAt || now }
+          : issue));
+        showToast(
+          'Review approved',
+          run.prUrl ? `Merged ${run.prUrl}.` : 'No pull request to merge.',
+          'success'
+        );
+        return;
+      }
 
-      return;
+      setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
+        ...issue,
+        status: 'todo',
+        comments: issue.comments.some(comment => comment.id === `comm-${run.id}-rejected`)
+          ? issue.comments
+          : [...issue.comments, {
+              id: `comm-${run.id}-rejected`,
+              authorType: 'system' as const,
+              authorName: 'Alpha Execution Engine',
+              content: 'Changes requested. The run stopped at the review gate.',
+              createdAt: now
+            }],
+        updatedAt: updatedRun.updatedAt || now
+      } : issue));
+      showToast('Changes requested', 'The review decision was saved.', 'info');
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      showToast(action === 'approved' ? 'Not merged' : 'Changes not saved', detail, 'error');
     }
-
-    setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
-      ...item,
-      status: 'changes_requested',
-      updatedAt: now
-    } : item));
-    setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
-      ...issue,
-      status: 'in_progress',
-      comments: [...issue.comments, {
-        id: `comm-${run.id}-rejected`,
-        authorType: 'system' as const,
-        authorName: 'Prototype runner',
-        content: 'Changes requested during review. The run can be retried from the task.',
-        createdAt: now
-      }],
-      updatedAt: now
-    } : issue));
-    showToast('Changes requested', 'Return to the task when you are ready to retry.', 'info');
   };
 
   // Chat & Threads
@@ -3665,6 +3644,8 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       setTabSessionState,
       commandPaletteOpen,
       setCommandPaletteOpen,
+      notificationPanelOpen,
+      setNotificationPanelOpen,
       issues: scopedIssues,
       createIssue,
       updateIssueStatus,

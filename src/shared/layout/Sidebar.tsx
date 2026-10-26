@@ -43,7 +43,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const {
     activeTab,
     setActiveTab,
-    unreadInboxCount,
     settings,
     setCommandPaletteOpen,
     role,
@@ -180,18 +179,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
             {label}
           </span>
         </span>
-        {tab === 'inbox' && unreadInboxCount > 0 && (
-          compact ? (
-            <span
-              className="absolute ml-6 mt-[-18px] h-1.5 w-1.5 rounded-full bg-amber-300"
-              title={`${unreadInboxCount} unread`}
-            />
-          ) : (
-            <span className="text-xs font-medium tabular-nums text-status-warning">
-              {unreadInboxCount}
-            </span>
-          )
-        )}
       </button>
     );
   };

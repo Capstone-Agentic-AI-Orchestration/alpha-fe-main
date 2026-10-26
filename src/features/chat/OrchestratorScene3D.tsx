@@ -4,8 +4,10 @@ import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber'
 import { Html, Line, OrbitControls, QuadraticBezierLine, Sparkles } from '@react-three/drei';
 
 import { useTheme, rgbChannels, type ScenePalette } from '@/shared/theme';
+import type { LiveBuildOrchestrationStatus } from '@/shared/types';
 
 import { AgentSceneOrb, AgentSceneWave, SceneThemeFrame, useAgentGlowTexture } from './AgentScenePrimitives';
+import { OrchestratorParticleSphere } from './OrchestratorParticleSphere';
 
 import { atomPositions, CAMERA_FOV, CAMERA_START, orbitPath, ORBIT_COUNT, type Vec3 } from './orchestratorSceneLayout';
 
@@ -39,6 +41,8 @@ export interface OrchestratorSceneProps {
   hubDetail: string;
   hubClickable: boolean;
   working: boolean;
+  /** Used only to color and pace the central sphere. */
+  buildStatus?: LiveBuildOrchestrationStatus | null;
   selectedId: string | null;
   onSelect: (id: string) => void;
   reduceMotion: boolean;
@@ -53,13 +57,12 @@ function Orbits({ working, palette }: { working: boolean; palette: ScenePalette 
   return <>{paths.map((points, orbit) => <Line key={orbit} points={points} color={palette.orbit} lineWidth={1.1} transparent opacity={working ? 0.42 : 0.3} depthWrite={false} />)}</>;
 }
 
-function Hub({ palette, reduceMotion, glow, working, selected, clickable, onOver, onOut, onClick }: {
-  palette: ScenePalette; reduceMotion: boolean; glow: THREE.Texture; working: boolean; selected: boolean; clickable: boolean;
+function Hub({ palette, glow, status, reduceMotion, working, selected, clickable, onOver, onOut, onClick }: {
+  palette: ScenePalette; glow: THREE.Texture; status: LiveBuildOrchestrationStatus | null; reduceMotion: boolean; working: boolean; selected: boolean; clickable: boolean;
   onOver: () => void; onOut: () => void; onClick: () => void;
 }) {
-  return <AgentSceneOrb palette={palette} reduceMotion={reduceMotion} glow={glow} color={palette.hub} hub active={working} selected={selected}
-    onPointerOver={event => { event.stopPropagation(); onOver(); }} onPointerOut={onOut}
-    onClick={event => { event.stopPropagation(); if (clickable) onClick(); }} />;
+  return <OrchestratorParticleSphere palette={palette} glow={glow} status={status} reduceMotion={reduceMotion} working={working} selected={selected} clickable={clickable}
+    onOver={onOver} onOut={onOut} onClick={onClick} />;
 }
 
 /** A link from the Orchestrator, drawn only while the agent takes part in the work. */
@@ -131,7 +134,7 @@ function AgentOrb({ palette, reduceMotion, agent, position, glow, selected, hove
   </group>;
 }
 
-function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, working, selectedId, onSelect, reduceMotion, resetToken, palette }: OrchestratorSceneProps & { palette: ScenePalette }) {
+function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, working, buildStatus, selectedId, onSelect, reduceMotion, resetToken, palette }: OrchestratorSceneProps & { palette: ScenePalette }) {
   const glow = useAgentGlowTexture();
   const { gl } = useThree();
   const controls = useThree(state => state.controls) as unknown as { reset?: () => void } | null;
@@ -164,10 +167,10 @@ function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, w
       return from === undefined || to === undefined ? null
         : <HandoffLink palette={palette} key={'handoff-' + link.from + '-' + link.to} start={positions[from]} end={positions[to]} state={link.state} reduceMotion={reduceMotion} />;
     })}
-    <Hub palette={palette} reduceMotion={reduceMotion} glow={glow} working={working} selected={selectedId === hubId} clickable={hubClickable}
+    <Hub palette={palette} reduceMotion={reduceMotion} glow={glow} status={buildStatus ?? null} working={working} selected={selectedId === hubId} clickable={hubClickable}
       onOver={() => setHoveredId(hubId)} onOut={() => setHoveredId(previous => (previous === hubId ? null : previous))}
       onClick={() => onSelect(hubId)} />
-    {hoveredId === hubId && <Html center position={[0, 1.15, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
+    {hoveredId === hubId && <Html center position={[0, 1.6, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
       <div style={{ backgroundColor: `rgba(${rgbChannels(palette.labelBackground)}, 0.95)`, borderColor: `rgba(${rgbChannels(palette.ring)}, 0.2)`, color: palette.labelForeground }} className="w-max min-w-44 max-w-80 rounded-xl border px-3 py-2 shadow-xl">
         <div className="whitespace-nowrap text-xs font-semibold">{hubLabel}</div>
         {hubDetail.split(' · ').map(line => <div key={line} className="whitespace-nowrap text-[10px] leading-4 opacity-70">{line}</div>)}

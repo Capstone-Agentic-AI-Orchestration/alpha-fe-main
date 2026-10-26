@@ -5,6 +5,7 @@ import { ChevronDown, Maximize2, Minimize2, RotateCcw } from 'lucide-react';
 import { useTheme, rgbChannels, type ScenePalette } from '@/shared/theme';
 
 import { Agent, AgentCall, ProjectChatAgent, RuntimeEngine } from '@/shared/types';
+import type { LiveBuildOrchestrationStatus } from '@/shared/types';
 import { AgentModelPanel } from './AgentModelPanel';
 import type { BuildAgentNode, BuildAgentState, BuildHandoff } from './useProjectLiveBuild';
 import type { SceneAgent, SceneLink } from './OrchestratorScene3D';
@@ -27,6 +28,7 @@ export interface FlowBuild {
   runId: string;
   label: string;
   running: boolean;
+  status?: LiveBuildOrchestrationStatus;
   agents: BuildAgentNode[];
   /** Work passed between agents, drawn as links from one agent to the next. */
   handoffs?: BuildHandoff[];
@@ -148,7 +150,15 @@ function mix(base: string, target: string | null, amount: number): string {
 const AGENT_OFFSETS = [0.18, -0.18, 0.3, -0.3, 0.4, -0.4, 0.24, -0.24];
 
 function toneFor(status: AgentCall['status'], palette: ScenePalette): string {
-  return rgbChannels(status === 'failed' ? palette.danger : status === 'completed' ? palette.success : status === 'awaiting_confirmation' ? palette.warning : palette.hub);
+  switch (status) {
+    case 'failed': return rgbChannels(palette.danger);
+    case 'completed': return rgbChannels(palette.success);
+    case 'awaiting_confirmation': return rgbChannels(palette.warning);
+    case 'queued': return rgbChannels(palette.info);
+    case 'draft':
+    case 'cancelled': return rgbChannels(palette.idle);
+    case 'running': return rgbChannels(palette.hub);
+  }
 }
 
 function buildTone(state: BuildAgentState, palette: ScenePalette): string {
@@ -370,13 +380,13 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     ...buildAgents.map(agent => ({
       id: BUILD_PREFIX + agent.agentId,
       initial: agent.name.slice(0, 1).toUpperCase(),
-      tone: build?.running && agent.state === 'running' ? buildTone(agent.state, palette) : idleRgb,
+      tone: buildTone(agent.state, palette),
       active: Boolean(build?.running && agent.state === 'running')
     })),
     ...agentCalls.map(call => ({
       id: call.id,
       initial: (agentById.get(call.agentId)?.name ?? call.agentId).slice(0, 1).toUpperCase(),
-      tone: call.status === 'running' ? toneFor(call.status, palette) : idleRgb,
+      tone: toneFor(call.status, palette),
       active: call.status === 'running'
     }))
   ].slice(0, AGENT_OFFSETS.length), [agentById, agentCalls, buildAgents, build?.running, palette, idleRgb]);
@@ -406,7 +416,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         ...buildAgents.map(agent => ({
           id: BUILD_PREFIX + agent.agentId,
           name: agent.name,
-          tone: build?.running && agent.state === 'running' ? buildTone(agent.state, palette) : idleRgb,
+          tone: buildTone(agent.state, palette),
           active: Boolean(build?.running && agent.state === 'running'),
           engaged: false,
           detail: [BUILD_STATE_LABEL[agent.state], agent.currentTaskTitle].filter(Boolean).join(' · ')
@@ -414,7 +424,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         ...agentCalls.map(call => ({
           id: call.id,
           name: agentById.get(call.agentId)?.name ?? call.agentId,
-          tone: call.status === 'running' ? toneFor(call.status, palette) : idleRgb,
+          tone: toneFor(call.status, palette),
           active: call.status === 'running',
           engaged: false,
           detail: [agentById.get(call.agentId)?.role, callStatus(call.status)].filter(Boolean).join(' · ')
@@ -429,7 +439,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       return {
         id: ROSTER_PREFIX + agent.id,
         name: agent.name,
-        tone: build?.running && inBuild?.state === 'running' ? buildTone(inBuild.state, palette) : call?.status === 'running' ? toneFor(call.status, palette) : idleRgb,
+        tone: inBuild ? buildTone(inBuild.state, palette) : call ? toneFor(call.status, palette) : idleRgb,
         active: Boolean(build?.running && inBuild?.state === 'running') || call?.status === 'running',
         engaged: false,
         detail: [agent.role, state, inBuild?.changedFiles.length ? inBuild.changedFiles.length + (inBuild.changedFiles.length === 1 ? ' file changed' : ' files changed') : null, agent.modelName].filter(Boolean).join(' · ')
@@ -590,6 +600,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
           hubDetail={[title, statusText, orchestratorAgent ? orchestratorAgent.modelName : null, orchestratorAgent ? 'Click to see and change its model' : hubClickable ? 'Click to see activity' : null].filter(Boolean).join(' · ')}
           hubClickable={hubClickable}
           working={working}
+          buildStatus={build?.status ?? null}
           selectedId={sceneSelectedId}
           onSelect={select}
           reduceMotion={reduceMotion}
