@@ -45,6 +45,7 @@ function notificationLabel(type: InboxNotification['type']): string {
     case 'issue_assigned': return 'Task update';
     case 'mention': return 'Mention';
     case 'deployment_status': return 'Deployment update';
+    case 'ops_incident': return 'Operations alert';
     default: return 'Notification';
   }
 }
@@ -58,6 +59,7 @@ function NotificationTypeIcon({ type }: { type: InboxNotification['type'] }) {
     case 'issue_assigned': return <CheckSquare className={`${className} text-link`} />;
     case 'mention': return <MessageCircle className={`${className} text-status-info`} />;
     case 'deployment_status': return <Rocket className={`${className} text-content-muted`} />;
+    case 'ops_incident': return <AlertTriangle className={`${className} text-status-danger`} />;
     default: return <Bell className={`${className} text-content-muted`} />;
   }
 }
@@ -487,6 +489,19 @@ export const NotificationPopover: React.FC = () => {
                         className="mt-4 inline-flex w-fit items-center gap-2 text-xs font-semibold text-link transition hover:text-link-hover focus:outline-none focus:ring-2 focus:ring-focus"
                       >
                         Open related task <ExternalLink className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+
+                    {selectedNotification.entityType === 'ops_incident' && can('view_operations') && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setNotificationPanelOpen(false);
+                          setActiveTab('operations');
+                        }}
+                        className="mt-4 inline-flex w-fit items-center gap-2 text-xs font-semibold text-link transition hover:text-link-hover focus:outline-none focus:ring-2 focus:ring-focus"
+                      >
+                        Open Operations Center <ExternalLink className="h-3.5 w-3.5" />
                       </button>
                     )}
 

@@ -334,7 +334,9 @@ export type Capability =
   | 'submit_intake'
   | 'bind_workspace'
   | 'view_members'
-  | 'manage_members';
+  | 'manage_members'
+  | 'view_operations'
+  | 'manage_operations';
 
 const KNOWN_ROLES: UserRole[] = ['client', 'dev', 'pm', 'admin'];
 
@@ -432,7 +434,9 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'run_agents',
     'contact_client',
     'view_members',
-    'manage_members'
+    'manage_members',
+    'view_operations',
+    'manage_operations'
   ]
 };
 
@@ -470,7 +474,7 @@ export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
   'portal', 'intake', 'documents', 'chat', 'issues', 'projects', 'tickets', 'agents',
-  'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments',
+  'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments', 'operations',
   'build_room', 'settings'
 ];
 
@@ -867,6 +871,43 @@ ${e.detail}`;
    * ones that matter.
    */
   const [inbox, setInbox] = useState<InboxNotification[]>(() => normalizeInboxNotifications(loadFromStorage<InboxNotification[]>('inbox', [])));
+  useEffect(() => {
+    if (role !== 'admin' || !activeWorkspaceId) {
+      setInbox(current => current.filter(notification => !notification.id.startsWith('ops-notice-')));
+      return;
+    }
+
+    let cancelled = false;
+    const refreshOperationsNotifications = async () => {
+      try {
+        const notifications = await apiService.getOperationsNotifications();
+        if (cancelled) return;
+        const mapped: InboxNotification[] = notifications.map(notification => ({
+          ...notification,
+          audience: 'internal'
+        }));
+        setInbox(current => [
+          ...mapped,
+          ...current.filter(notification => !notification.id.startsWith('ops-notice-'))
+        ]);
+      } catch {
+        // Monitoring alerts are additive: a temporary cloud outage must not
+        // blank the rest of the existing workspace notification list.
+      }
+    };
+
+    const tick = () => {
+      if (document.visibilityState === 'visible') void refreshOperationsNotifications();
+    };
+    void refreshOperationsNotifications();
+    const timer = window.setInterval(tick, 60_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [activeWorkspaceId, role]);
   const [analytics, setAnalytics] = useState<AnalyticsData>(() => normalizeAnalytics(loadFromStorage('analytics_v2', emptyAnalytics)));
   const [settings, setSettings] = useState<WorkspaceSettings>(() =>
     normalizeSettings(loadFromStorage('settings', defaultSettings))
@@ -2706,14 +2747,17 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
   // Inbox
   const markNotificationRead = (id: string) => {
     setInbox(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    if (id.startsWith('ops-notice-')) void apiService.markOperationsNotificationRead(id).catch(() => undefined);
   };
 
   const markAllNotificationsRead = () => {
     setInbox(prev => prev.map(n => ({ ...n, read: true })));
+    if (role === 'admin') void apiService.markAllOperationsNotificationsRead().catch(() => undefined);
   };
 
   const archiveNotification = (id: string) => {
     setInbox(prev => prev.map(n => n.id === id ? { ...n, archived: true } : n));
+    if (id.startsWith('ops-notice-')) void apiService.archiveOperationsNotification(id).catch(() => undefined);
   };
 
   const handleApproval = async (notificationId: string, action: 'approved' | 'rejected'): Promise<void> => {

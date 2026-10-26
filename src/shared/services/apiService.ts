@@ -1,5 +1,6 @@
 import type { ChatUsageSnapshot } from '@/features/chat/ChatUsage';
 import type { LocalPreview } from '@/shared/types/localPreview';
+import type { OperationsNotification, OperationsSnapshot, OperationsExpense, TicketPriority } from '@/shared/types/operations';
 
 export const getLocalPreviews = (threadId: string) => fetchJson<LocalPreview[]>(`/chat/threads/${encodeURIComponent(threadId)}/previews`);
 export const startLocalPreview = (threadId: string, repository?: string) => fetchJson<LocalPreview>(`/chat/threads/${encodeURIComponent(threadId)}/previews`, { method: 'POST', body: JSON.stringify({ repository }) });
@@ -806,6 +807,17 @@ export const apiService = {
   // Runs
   getRuns: () => fetchJson<PrototypeRun[]>('/runs'),
   getAnalytics: () => fetchJson<AnalyticsData>('/analytics'),
+  getOperationsSnapshot: () => fetchJson<OperationsSnapshot>('/operations', { cache: 'no-store' }),
+  getOperationsNotifications: () => fetchJson<OperationsNotification[]>('/operations/notifications', { cache: 'no-store' }),
+  markOperationsNotificationRead: (id: string) => fetchJson<{ success: boolean }>(`/operations/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
+  archiveOperationsNotification: (id: string) => fetchJson<{ success: boolean }>(`/operations/notifications/${encodeURIComponent(id)}/archive`, { method: 'PATCH' }),
+  markAllOperationsNotificationsRead: () => fetchJson<{ success: boolean }>('/operations/notifications/read-all', { method: 'PATCH' }),
+  setOperationsUptimeTarget: (targetPercent: number) => fetchJson<{ targetPercent: number }>('/operations/uptime-target', { method: 'PATCH', body: JSON.stringify({ targetPercent }) }),
+  setOperationsTicketPolicies: (policies: Array<{ priority: TicketPriority; responseMinutes: number; resolutionMinutes: number }>, removePriorities: TicketPriority[] = []) => fetchJson<{ success: boolean }>('/operations/ticket-policies', { method: 'PUT', body: JSON.stringify({ policies, removePriorities }) }),
+  setProjectBudget: (projectId: string, amountUsd: number | null) => fetchJson<{ budgetUsd: number | null }>(`/operations/projects/${encodeURIComponent(projectId)}/budget`, { method: 'PUT', body: JSON.stringify({ amountUsd }) }),
+  createProjectExpense: (projectId: string, expense: Omit<OperationsExpense, 'id' | 'projectId' | 'projectName' | 'createdBy' | 'createdAt'>) => fetchJson<OperationsExpense>(`/operations/projects/${encodeURIComponent(projectId)}/expenses`, { method: 'POST', body: JSON.stringify(expense) }),
+  deleteProjectExpense: (projectId: string, expenseId: string) => fetchJson<{ success: boolean }>(`/operations/projects/${encodeURIComponent(projectId)}/expenses/${encodeURIComponent(expenseId)}`, { method: 'DELETE' }),
+  setOperationsTicketPriority: (ticketId: string, priority: TicketPriority) => fetchJson<{ success: boolean }>(`/operations/tickets/${encodeURIComponent(ticketId)}/priority`, { method: 'PATCH', body: JSON.stringify({ priority }) }),
   startRun: (payload: { issueId: string; agentId: string; plan?: string[]; scenario?: string }) =>
     fetchJson<PrototypeRun>('/runs/start', { method: 'POST', body: JSON.stringify(payload) }),
   /** Settle a run waiting at the review gate. */

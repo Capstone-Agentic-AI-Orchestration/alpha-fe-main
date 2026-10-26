@@ -11,7 +11,7 @@ const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'chat', 'settings'],
   dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'chat', 'settings'],
   pm: ['issues', 'projects', 'analytics', 'settings'],
-  admin: ['issues', 'projects', 'chat', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
+  admin: ['issues', 'projects', 'chat', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
  * Existing sidebar ordering differs from ROLE_NAV; preserve it independently.
@@ -21,13 +21,20 @@ const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'chat', 'settings'],
   dev: ['chat', 'issues', 'projects', 'agents', 'runtimes', 'skills', 'settings'],
   pm: ['projects', 'issues', 'analytics', 'settings'],
-  admin: ['chat', 'projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
+  admin: ['chat', 'projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
 };
 describe('existing navigation compatibility', () => {
   it('shows Tasks while preserving the existing issues route identifier', () => {
     const tasks = NAV_ITEMS.find(item => item.id === 'issues');
     expect(tasks).toMatchObject({ id: 'issues', label: 'Tasks', title: 'Tasks' });
     expect(tasks?.labels).toMatchObject({ pm: 'All Tasks', admin: 'All Tasks' });
+  });
+  it('places the Operations Center in Administration for admins only', () => {
+    const operations = NAV_ITEMS.find(item => item.id === 'operations');
+    expect(operations).toMatchObject({ id: 'operations', title: 'Operations Center', section: 'administration' });
+    expect(ROLE_NAV.admin).toContain('operations');
+    expect(sectionsFor('admin').find(group => group.section.id === 'administration')?.items.map(item => item.id)).toContain('operations');
+    for (const role of ['client', 'dev', 'pm'] as const) expect(ROLE_NAV[role]).not.toContain('operations');
   });
   it.each(Object.keys(existing) as UserRole[])('preserves every existing %s destination and landing page', role => {
     expect(ROLE_NAV[role].filter(tab => tab !== 'tickets')).toEqual(existing[role]);

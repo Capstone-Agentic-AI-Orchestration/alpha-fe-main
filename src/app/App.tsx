@@ -22,6 +22,7 @@ import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectsView } from '@/features/projects/ProjectsView';
 import { AgentsView } from '@/features/agents/AgentsView';
 import { AnalyticsView } from '@/features/analytics/AnalyticsView';
+import { OperationsCenterView } from '@/features/operations/OperationsCenterView';
 import { RuntimesView } from '@/features/runtimes/RuntimesView';
 import { SkillsView } from '@/features/skills/SkillsView';
 import { DeploymentsView } from '@/features/deployments/DeploymentsView';
@@ -62,6 +63,7 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
     case 'agents': content = <AgentsView />; break;
     case 'live_build_room': content = <LiveBuildRoomView />; break;
     case 'analytics': content = <AnalyticsView />; break;
+    case 'operations': content = <OperationsCenterView />; break;
     case 'runtimes': content = <RuntimesView />; break;
     case 'skills': content = <SkillsView />; break;
     case 'deployments': content = <DeploymentsView />; break;

@@ -12,6 +12,7 @@ export type NavigationTab =
   | 'runtimes'
   | 'skills'
   | 'deployments'
+  | 'operations'
   | 'build_room'
   | 'settings';
 
@@ -568,6 +569,7 @@ export interface Milestone {
   title: string;
   targetDate: string;
   completed: boolean;
+  completedAt?: string;
 }
 
 /** Where a project's code is on this machine, and what state it is in. */
@@ -643,6 +645,7 @@ export interface Project {
   totalIssues?: number;
   completedIssues?: number;
   milestones?: Milestone[];
+  completedAt?: string;
   createdAt?: string;
 }
 
@@ -1503,7 +1506,8 @@ export type NotificationType =
   | 'agent_completed' 
   | 'agent_failed' 
   | 'mention' 
-  | 'deployment_status';
+  | 'deployment_status'
+  | 'ops_incident';
 
 /** Who a notification is written for. Internal items never reach a client. */
 export type Audience = 'client' | 'internal';
@@ -1522,7 +1526,7 @@ export interface InboxNotification {
   forUserId?: string;
   /** Scopes a client item to the client who owns it. */
   clientId?: string;
-  entityType: 'issue' | 'agent' | 'squad' | 'deployment';
+  entityType: 'issue' | 'agent' | 'squad' | 'deployment' | 'ops_incident';
   entityId: string;
   approvalStatus?: 'pending' | 'approved' | 'rejected';
   meta?: {

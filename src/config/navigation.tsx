@@ -1,7 +1,7 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, PenLine, FileText, MessageSquare,
+  LayoutDashboard, PenLine, FileText, MessageSquare, Activity,
   CheckSquare, FolderKanban, Rocket, Bot, BarChart3, Monitor, BookOpen, Settings,
   RadioTower, Ticket
 } from 'lucide-react';
@@ -144,6 +144,8 @@ export const NAV_ITEMS: NavItem[] = [
 
   { id: 'analytics', label: 'Analytics', labels: { pm: 'Delivery Health', admin: 'Delivery Health' }, title: 'Operational Analytics', subtitle: 'Run health, delivery activity, and performance', group: 'workspace', section: 'insights', icon: BarChart3 },
 
+  { id: 'operations', label: 'Operations', title: 'Operations Center', subtitle: 'Deployments, uptime, SLAs, and project costs', group: 'workspace', section: 'administration', icon: Activity },
+
   { id: 'settings', label: 'Settings', labels: { admin: 'Workspace Settings' }, title: 'Workspace Settings', subtitle: 'Preferences, keys, and autonomy governance', group: 'configure', section: 'settings', sectionByRole: { pm: 'workspace', admin: 'administration' }, icon: Settings }
 ];
 
@@ -203,7 +205,7 @@ const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   ],
   admin: [
     'issues', 'projects', 'chat',
-    'agents', 'runtimes', 'skills', 'analytics', 'settings'
+    'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'
   ]
 };
 
