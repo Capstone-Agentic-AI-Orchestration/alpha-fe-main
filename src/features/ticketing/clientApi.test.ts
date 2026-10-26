@@ -175,6 +175,59 @@ describe('client browser transport', () => {
     expect(headers.get('X-Alpha-Local-Token')).toBeNull();
   });
 
+  it('loads project eligibility from the authenticated project endpoint without resolving projects by display name', async () => {
+    browser();
+    const project = { workspaceId: 'workspace/one', projectId: 'project/one', name: 'Same display name',
+      updatedAt: '2026-10-26T08:00:00Z', intakeOptionId: 'opaque-option-1', preview: null };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { items: [project] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(clientTicketApi.listProjects()).resolves.toEqual({ items: [project] });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/client/projects');
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'same-origin', cache: 'no-store', mode: 'same-origin' });
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { items: [{ ...project, intakeOptionId: undefined }] }));
+    await expect(clientTicketApi.listProjects()).rejects.toThrow('shared projects could not be read');
+  });
+
+  it('uses global and exact workspace/project request endpoints for the client project portal', async () => {
+    browser();
+    const item = { id: 'ticket-1', reference: 'REQ-1', title: 'A request', status: 'received',
+      createdAt: '2026-10-25T00:00:00Z', updatedAt: '2026-10-26T00:00:00Z', closedAt: null,
+      readOnly: false, writesAvailable: true, requestedAction: null, workspaceId: 'workspace/one',
+      projectId: null, projectName: null, projectLinkStatus: 'pending_review', requestedProjectName: 'Portal', };
+    const fetchMock = vi.fn().mockImplementation(() => jsonResponse(200, { items: [item], nextCursor: null,
+      counters: { kind: 'client', open: 1, needsClient: 0 } }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await clientTicketApi.listRequests({ limit: 25, after: 'cursor/one', search: 'new request', filter: 'open' });
+    await clientTicketApi.listProjectRequests('workspace/one', 'project/one', { limit: 20, search: 'update' });
+    await clientTicketApi.getProjectFeedbackMessages('workspace/one', 'project/one', { limit: 20, before: 'message/one' });
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/client/requests?limit=25&after=cursor%2Fone&search=new+request&filter=open',
+      '/api/client/projects/workspace%2Fone/project%2Fone/requests?limit=20&search=update',
+      '/api/client/projects/workspace%2Fone/project%2Fone/preview/messages?limit=20&before=message%2Fone',
+    ]);
+  });
+
+  it('recovers an uncertain project feedback send using the same operation ID and body', async () => {
+    browser();
+    const receipt = { messageId: 'feedback-1', operationId: 'feedback-operation-1' };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse(503, { code: 'project_message_outcome_unknown', reconciliationRequired: true }))
+      .mockResolvedValueOnce(jsonResponse(200, receipt));
+    vi.stubGlobal('fetch', fetchMock);
+    const input = { schemaVersion: 1 as const, operationId: 'feedback-operation-1', body: 'The preview looks good.' };
+
+    await expect(clientTicketApi.sendProjectFeedbackMessage('workspace/one', 'project/one', input)).resolves.toEqual(receipt);
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/client/projects/workspace%2Fone/project%2Fone/preview/messages',
+      '/api/client/projects/workspace%2Fone/project%2Fone/preview/messages/operations/feedback-operation-1',
+    ]);
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: 'POST', body: JSON.stringify(input) });
+  });
+
   it('recovers an uncertain ticket creation with its original intake context and operation ID', async () => {
     browser();
     const receipt = {

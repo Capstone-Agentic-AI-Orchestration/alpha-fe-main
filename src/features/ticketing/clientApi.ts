@@ -19,6 +19,19 @@ export type ClientTicketStatus =
   | 'on_hold' | 'closed' | 'declined' | 'cancelled';
 
 export interface ClientWorkspaceOption { workspaceId: string; displayName: string }
+export interface ClientProjectPreview {
+  repository: string;
+  branch: 'main' | 'uat';
+  url: string;
+}
+export interface ClientProject {
+  workspaceId: string;
+  projectId: string;
+  name: string;
+  updatedAt: string;
+  intakeOptionId: string;
+  preview: ClientProjectPreview | null;
+}
 export interface ClientTicketIntakeContext {
   intakeContextId: string;
   canCreate: boolean;
@@ -29,6 +42,16 @@ export interface ClientTicketQueueItem {
   createdAt: string; updatedAt: string; closedAt: string | null;
   readOnly: boolean; writesAvailable: boolean;
   requestedAction: 'reply' | 'agree_scope' | 'review_result' | null;
+}
+/** Server-authorized client request row; projectId describes an actual PM link only. */
+export interface ClientProjectRequestItem extends ClientTicketQueueItem {
+  workspaceId: string;
+  projectId: string | null;
+  projectName: string | null;
+  /** Set only while an inquiry's project preference awaits PM review. */
+  projectLinkStatus: 'linked' | 'pending_review' | null;
+  /** Client-safe label for the requested project; never used for access or matching. */
+  requestedProjectName: string | null;
 }
 export interface ClientTicketDetail extends ClientTicketQueueItem {
   description: string;
@@ -50,6 +73,12 @@ export interface ClientTicketPage<T> { items: T[]; nextCursor: string | null }
 export interface ClientTicketQueue extends ClientTicketPage<ClientTicketQueueItem> {
   counters: { kind: 'client'; open: number; needsClient: number };
 }
+export interface ClientProjectRequestQueue extends ClientTicketPage<ClientProjectRequestItem> {
+  counters: { kind: 'client'; open: number; needsClient: number };
+}
+export interface ClientProjectFeedbackMessage { id: string; author: 'pm' | 'client'; body: string; createdAt: string }
+export interface ClientProjectFeedbackInput { schemaVersion: 1; operationId: string; body: string }
+export interface ClientProjectFeedbackReceipt { messageId: string; operationId: string }
 export interface ClientTicketReceipt {
   ticketId: string; operationId: string; version: number; status: ClientTicketStatus;
   reference?: string; messageId?: string;
@@ -140,10 +169,10 @@ async function apiError(response: Response): Promise<ClientTicketApiError> {
   );
 }
 
-async function withOperationRecovery(
-  submit: () => Promise<ClientTicketReceipt>,
-  lookup: () => Promise<ClientTicketReceipt>,
-): Promise<ClientTicketReceipt> {
+async function withOperationRecovery<T>(
+  submit: () => Promise<T>,
+  lookup: () => Promise<T>,
+): Promise<T> {
   try { return await submit(); }
   catch (error) {
     if (!(error instanceof ClientTicketApiError) || !error.reconciliationRequired) throw error;
@@ -208,10 +237,13 @@ export async function requestJson<T>(path: string, options: RequestOptions = {})
 }
 
 function pathId(value: string): string { return encodeURIComponent(value); }
-function pageQuery(options: { limit?: number; after?: string | null }): string {
+function pageQuery(options: { limit?: number; after?: string | null; before?: string | null; search?: string; filter?: string }): string {
   const query = new URLSearchParams();
   if (options.limit !== undefined) query.set('limit', String(options.limit));
   if (options.after) query.set('after', options.after);
+  if (options.before) query.set('before', options.before);
+  if (options.search) query.set('search', options.search);
+  if (options.filter) query.set('filter', options.filter);
   const value = query.toString();
   return value ? `?${value}` : '';
 }
@@ -231,6 +263,59 @@ export const clientTicketApi = {
   signOut() { return requestJson<void>('/session/logout', { method: 'POST', body: '{}' }); },
   listWorkspaces() {
     return requestJson<{ items: ClientWorkspaceOption[] }>('/workspaces');
+  },
+  async listProjects(): Promise<{ items: ClientProject[] }> {
+    const value = await requestJson<unknown>('/projects');
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray((value as Record<string, unknown>).items)) {
+      throw new ClientTicketApiError(null, 'Your shared projects could not be read. Reload the portal and try again.');
+    }
+    const items = ((value as { items: unknown[] }).items).map((raw): ClientProject => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new ClientTicketApiError(null, 'Your shared projects could not be read. Reload the portal and try again.');
+      const row = raw as Record<string, unknown>;
+      const preview = row.preview;
+      const previewIsValid = preview === null || (typeof preview === 'object' && !Array.isArray(preview)
+        && typeof (preview as Record<string, unknown>).repository === 'string'
+        && ((preview as Record<string, unknown>).branch === 'main' || (preview as Record<string, unknown>).branch === 'uat')
+        && typeof (preview as Record<string, unknown>).url === 'string');
+      if (typeof row.workspaceId !== 'string' || !row.workspaceId.trim()
+        || typeof row.projectId !== 'string' || !row.projectId.trim()
+        || typeof row.name !== 'string' || !row.name.trim()
+        || typeof row.updatedAt !== 'string' || !Number.isFinite(Date.parse(row.updatedAt))
+        || typeof row.intakeOptionId !== 'string' || !row.intakeOptionId.trim()
+        || !previewIsValid) {
+        throw new ClientTicketApiError(null, 'Your shared projects could not be read. Reload the portal and try again.');
+      }
+      return { workspaceId: row.workspaceId, projectId: row.projectId, name: row.name, updatedAt: row.updatedAt,
+        intakeOptionId: row.intakeOptionId, preview: preview as ClientProjectPreview | null };
+    });
+    return { items };
+  },
+  listRequests(options: ClientTicketQueueOptions = {}) {
+    return requestJson<ClientProjectRequestQueue>(`/requests${pageQuery(options)}`);
+  },
+  listProjectRequests(workspaceId: string, projectId: string, options: ClientTicketQueueOptions = {}) {
+    return requestJson<ClientProjectRequestQueue>(
+      `/projects/${pathId(workspaceId)}/${pathId(projectId)}/requests${pageQuery(options)}`,
+    );
+  },
+  getProjectFeedbackMessages(workspaceId: string, projectId: string, options: { limit?: number; before?: string | null } = {}) {
+    return requestJson<ClientTicketPage<ClientProjectFeedbackMessage>>(
+      `/projects/${pathId(workspaceId)}/${pathId(projectId)}/preview/messages${pageQuery(options)}`,
+    );
+  },
+  sendProjectFeedbackMessage(workspaceId: string, projectId: string, input: ClientProjectFeedbackInput) {
+    return withOperationRecovery(
+      () => requestJson<ClientProjectFeedbackReceipt>(
+        `/projects/${pathId(workspaceId)}/${pathId(projectId)}/preview/messages`,
+        { method: 'POST', body: JSON.stringify(input) },
+      ),
+      () => clientTicketApi.getProjectFeedbackOperation(workspaceId, projectId, input.operationId),
+    );
+  },
+  getProjectFeedbackOperation(workspaceId: string, projectId: string, operationId: string) {
+    return requestJson<ClientProjectFeedbackReceipt>(
+      `/projects/${pathId(workspaceId)}/${pathId(projectId)}/preview/messages/operations/${pathId(operationId)}`,
+    );
   },
   getIntakeContext(workspaceId: string) {
     return requestJson<ClientTicketIntakeContext>(`/workspaces/${pathId(workspaceId)}/intake-context`);
