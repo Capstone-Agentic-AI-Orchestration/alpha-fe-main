@@ -70,6 +70,7 @@ import type { ActionsFilters, ActionsRun, ActionsRunsPage, ActionsWorkflowsPage,
 import type { BoardBootstrap, BoardChangePage, BoardCursor } from '@/shared/types/boardSync';
 
 const API_TOKEN = import.meta.env.VITE_ALPHA_LOCAL_TOKEN;
+const CLIENT_VERSION = import.meta.env.VITE_ALPHA_CLIENT_VERSION || 'unknown';
 let activeWorkspaceId: string | null = null;
 
 /** Bind subsequent daemon calls to the selected product workspace. */
@@ -239,6 +240,7 @@ export class ApiRequestError extends Error {
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const headers = new Headers({
     'Content-Type': 'application/json',
+    'X-Alpha-Client-Version': CLIENT_VERSION,
     ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
     ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {}),
   });

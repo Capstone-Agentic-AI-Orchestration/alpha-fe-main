@@ -46,6 +46,7 @@ describe('workspace board cursor transport', () => {
     expect(options.method).toBeUndefined();
     expect(options.credentials).toBe('include');
     expect(new Headers(options.headers).get('X-Workspace-Id')).toBe('ws-board');
+    expect(new Headers(options.headers).get('X-Alpha-Client-Version')).toBe('0.1.0');
   });
 
   it('sends a workspace cursor and caps change pages at 100 rows', async () => {
