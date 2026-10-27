@@ -36,7 +36,11 @@ export default defineConfig(({ mode }) => {
         name: 'alpha-theme-first-paint',
         transformIndexHtml(html: string) {
           const startup = fs.readFileSync(path.resolve(__dirname, 'public/theme-startup.js'), 'utf8');
-          return html.replace('<!-- alpha:theme-startup -->', `<script>${startup}</script>`);
+          // The Cosmo loading screen must run before the bundle, so it is inlined too.
+          const loader = fs.readFileSync(path.resolve(__dirname, 'public/cosmo-loader.js'), 'utf8');
+          return html
+            .replace('<!-- alpha:theme-startup -->', `<script>${startup}</script>`)
+            .replace('<!-- alpha:cosmo-loader -->', `<script>${loader}</script>`);
         },
       },
       react(),
