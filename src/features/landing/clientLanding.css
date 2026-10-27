@@ -62,6 +62,10 @@
 /* fixed header: logo at the left edge, inquiry pill + menu at the right edge */
 .client-landing .cl-header { position: fixed; inset: 0 0 auto; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: clamp(14px, 2.6vh, 28px) var(--cl-edge); background: linear-gradient(color-mix(in srgb, var(--public-bg) 80%, transparent), transparent); pointer-events: none; }
 .client-landing .cl-header > * { pointer-events: auto; }
+/* Hidden after scrolling down; kept visible while the menu is open or focus is inside. */
+.client-landing .cl-header { transition: transform 450ms var(--cl-ease), opacity 300ms ease; }
+.client-landing .cl-header.is-hidden:not(:focus-within):not(:has(.cl-menu.is-open)) { opacity: 0; transform: translateY(-110%); }
+.client-landing .cl-header.is-hidden:not(:focus-within):not(:has(.cl-menu.is-open)) > * { pointer-events: none; }
 .client-landing .cl-brand img { width: auto; height: clamp(56px, 8vh, 72px); }
 .client-landing .cl-menu { position: relative; }
 .client-landing .cl-menu-bar { display: flex; align-items: center; gap: 10px; }
@@ -210,5 +214,5 @@
 /* While the loading screen is up, hold the hero's entrance animations so they play on reveal. */
 html.cosmo-loading .client-landing * { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) {
-  .client-landing :is(.cl-menu-panels, .cl-pill-dots, .cl-menu-card-arrow, .cl-index, .cl-index button::after) { transition: none; }
+  .client-landing :is(.cl-header, .cl-menu-panels, .cl-pill-dots, .cl-menu-card-arrow, .cl-index, .cl-index button::after) { transition: none; }
 }

@@ -10,24 +10,19 @@
     <title>Alphaexplora — AI work, orchestrated</title>
     <style>
       /* Cosmo loading screen (public pages only; see public/cosmo-loader.js). */
-      #cosmo-loader { position: fixed; inset: 0; z-index: 2147483000; overflow: hidden; background: #07070c; color: #f5f3fc; font-family: 'DM Sans', system-ui, sans-serif; transition: opacity .7s ease .25s; }
+      #cosmo-loader { position: fixed; inset: 0; z-index: 2147483000; overflow: hidden; background: #07070c; transition: opacity .6s ease .3s; }
       #cosmo-loader.is-leaving { opacity: 0; }
       #cosmo-loader canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
-      .cosmo-loader-count { position: absolute; left: clamp(20px, 3.6vw, 64px); bottom: clamp(10px, 2.4vh, 36px); display: flex; height: 1.1em; overflow: hidden; font-size: clamp(64px, 13vw, 190px); font-weight: 400; letter-spacing: -.05em; line-height: 1.1; font-variant-numeric: tabular-nums; }
-      .cosmo-loader-count > span { display: block; height: 1.1em; overflow: hidden; }
-      #cosmo-loader.is-leaving :is(.cosmo-loader-count, .cosmo-loader-caption, .cosmo-loader-line) { opacity: 0; transition: opacity .25s ease; }
-      .cosmo-loader-strip { display: flex; flex-direction: column; transition: transform .5s cubic-bezier(.2, .7, .2, 1); }
-      .cosmo-loader-strip > span { display: block; height: 1.1em; }
-      .cosmo-loader-caption { position: absolute; right: clamp(20px, 3.6vw, 64px); bottom: clamp(22px, 4vh, 52px); margin: 0; color: #89869e; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: .16em; text-transform: uppercase; }
-      .cosmo-loader-line { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: #b29af5; transform: scaleX(0); transform-origin: left; }
+      .cosmo-loader-caption { position: absolute; left: 50%; bottom: clamp(22px, 4vh, 48px); margin: 0; color: #89869e; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: .24em; text-transform: uppercase; transform: translateX(-50%); transition: opacity .3s ease; }
+      .cosmo-loader-line { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: #b29af5; transform: scaleX(0); transform-origin: left; transition: opacity .3s ease; }
+      #cosmo-loader.is-leaving :is(.cosmo-loader-caption, .cosmo-loader-line) { opacity: 0; }
       .cosmo-loader-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-      @media (prefers-reduced-motion: reduce) { .cosmo-loader-strip { transition: none; } #cosmo-loader { transition-duration: .2s; transition-delay: 0s; } }
+      @media (prefers-reduced-motion: reduce) { #cosmo-loader { transition-duration: .2s; transition-delay: 0s; } }
     </style>
   </head>
   <body class="bg-background text-gray-100 antialiased selection:bg-brand-500/30 selection:text-brand-100 font-sans">
     <div id="cosmo-loader" role="status">
       <canvas aria-hidden="true"></canvas>
-      <div class="cosmo-loader-count" aria-hidden="true"><span data-digit></span><span data-digit></span><span data-digit></span></div>
       <p class="cosmo-loader-caption" aria-hidden="true">Entering Cosmo</p>
       <span class="cosmo-loader-line" aria-hidden="true"></span>
       <span class="cosmo-loader-sr">Loading</span>

@@ -92,6 +92,7 @@ export default function ClientLandingPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLElement>(null);
   const indexRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const journeyRef = useRef(journey);
   const pointerRef = useRef<[number, number]>([0, 0]);
   const home = clientLandingHref(slug);
@@ -121,6 +122,24 @@ export default function ClientLandingPage() {
       document.removeEventListener('scroll', wake, { capture: true });
       window.clearTimeout(timer);
     };
+  }, []);
+
+  // The header leaves with the hero when scrolling down and slides back on any scroll up,
+  // so the menu stays one flick away. Small trackpad jitters (under 12px) are ignored.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    let anchor = 0;
+    const update = () => {
+      const y = (document.scrollingElement ?? document.documentElement).scrollTop;
+      const nearTop = y < globalThis.innerHeight * 0.4;
+      const delta = y - anchor;
+      if (nearTop || delta < -12) header.classList.remove('is-hidden');
+      else if (delta > 12) header.classList.add('is-hidden');
+      if (nearTop || Math.abs(delta) > 12) anchor = y;
+    };
+    document.addEventListener('scroll', update, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', update, { capture: true });
   }, []);
 
   const measure = useCallback(() => {
@@ -204,7 +223,7 @@ export default function ClientLandingPage() {
     onPointerLeave={() => { pointerRef.current = [0, 0]; }}
   >
     <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
-    <header className="cl-header">
+    <header ref={headerRef} className="cl-header">
       <a className="public-brand cl-brand" href={home}>
         <img src={cosmoLogoUrl} alt="Cosmo home" width="155" height="60" />
       </a>
