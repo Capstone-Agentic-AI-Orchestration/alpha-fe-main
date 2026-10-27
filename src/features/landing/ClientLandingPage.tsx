@@ -5,6 +5,7 @@ import cosmoWordmarkUrl from '@/assets/cosmo-wordmark.png';
 import { clientLandingHref, clientPortalHref, publicInquiryHref, publicInquirySlug } from '@/features/ticketing/publicIntakeApi';
 import '@/features/ticketing/publicClient/clientPublic.css';
 import { GALAXY_BEATS, journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
+import { LandingMenu } from './LandingMenu';
 import './clientLanding.css';
 
 function readSlug(): string {
@@ -90,6 +91,8 @@ export default function ClientLandingPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const indexRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const journeyRef = useRef(journey);
   const pointerRef = useRef<[number, number]>([0, 0]);
   const home = clientLandingHref(slug);
@@ -104,6 +107,39 @@ export default function ClientLandingPage() {
       window.removeEventListener('hashchange', updateSlug);
       window.removeEventListener('popstate', updateSlug);
     };
+  }, []);
+
+  // The section rail brightens while the page is scrolling, then settles back.
+  useEffect(() => {
+    let timer = 0;
+    const wake = () => {
+      indexRef.current?.classList.add('is-awake');
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => indexRef.current?.classList.remove('is-awake'), 1400);
+    };
+    document.addEventListener('scroll', wake, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('scroll', wake, { capture: true });
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  // The header leaves with the hero when scrolling down and slides back on any scroll up,
+  // so the menu stays one flick away. Small trackpad jitters (under 12px) are ignored.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    let anchor = 0;
+    const update = () => {
+      const y = (document.scrollingElement ?? document.documentElement).scrollTop;
+      const nearTop = y < globalThis.innerHeight * 0.4;
+      const delta = y - anchor;
+      if (nearTop || delta < -12) header.classList.remove('is-hidden');
+      else if (delta > 12) header.classList.add('is-hidden');
+      if (nearTop || Math.abs(delta) > 12) anchor = y;
+    };
+    document.addEventListener('scroll', update, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', update, { capture: true });
   }, []);
 
   const measure = useCallback(() => {
@@ -168,6 +204,7 @@ export default function ClientLandingPage() {
   }, [measure]);
 
   const { flat, hp, ip, wp, pp, active } = journey;
+  const activeIndex = sections.findIndex(({ id }) => id === active);
   const litWords = flat ? ideaWords.length : Math.floor(clamp(ip * 1.9) * ideaWords.length);
   const step = flat ? -1 : journeyStep(wp);
   const caption = flat ? -1 : captionIndex(pp);
@@ -186,12 +223,19 @@ export default function ClientLandingPage() {
     onPointerLeave={() => { pointerRef.current = [0, 0]; }}
   >
     <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
+    <header ref={headerRef} className="cl-header">
+      <a className="public-brand cl-brand" href={home}>
+        <img src={cosmoLogoUrl} alt="Cosmo home" width="155" height="60" />
+      </a>
+      <LandingMenu home={home} inquiry={inquiry} clientSignIn={clientSignIn} onHowItWorks={() => scrollToSection(HOW_IT_WORKS)} />
+    </header>
     <canvas ref={canvasRef} className="cl-canvas" aria-hidden="true" />
     <div className="cl-progress" style={{ transform: `scaleX(${journey.page})` }} aria-hidden="true" />
-    <nav aria-label="Sections">
-      <ul className="cl-index cl-mono">
-        {sections.map(({ id, label }) => <li key={id}><button type="button" className={active === id ? 'is-on' : ''} aria-current={active === id ? 'location' : undefined} onClick={() => scrollToSection(id)}>{label}</button></li>)}
+    <nav ref={indexRef} className="cl-index" aria-label="Sections">
+      <ul className="cl-mono">
+        {sections.map(({ id, label }, index) => <li key={id}><button type="button" className={railClass(index, activeIndex)} aria-current={active === id ? 'location' : undefined} onClick={() => scrollToSection(id)}>{label}</button></li>)}
       </ul>
+      <span className="cl-index-track" aria-hidden="true"><i style={{ transform: `scaleY(${journey.page})` }} /></span>
     </nav>
     <div className="cl-recap" aria-hidden="true">
       {recap.map(({ text, range }) => <span key={range[0]} className={flat ? '' : recapClass(pp, range)}>{text}</span>)}
@@ -201,17 +245,6 @@ export default function ClientLandingPage() {
       <main ref={mainRef} tabIndex={-1} className="public-main">
         <section id="client-intro" className="cl-hero" data-track="hero" aria-labelledby="client-hero-heading">
           <div className="cl-stick cl-hero-stick" style={heroStyle}>
-            <header className="cl-header public-container">
-              <a className="public-brand cl-brand" href={home}>
-                <img src={cosmoLogoUrl} alt="Cosmo home" width="124" height="48" />
-              </a>
-              <nav className="cl-nav" aria-label="Client navigation">
-                <a className="public-current-page" href={home} aria-current="page">Home</a>
-                <a className="public-text-link cl-nav-link" href={clientSignIn}>Client sign in</a>
-                <button type="button" className="public-text-link cl-nav-link" onClick={() => scrollToSection(HOW_IT_WORKS)}>How it works</button>
-                <a className="public-nav-action" href={inquiry}>Start an inquiry <ArrowUpRight size={15} /></a>
-              </nav>
-            </header>
             <div className="cl-shade" aria-hidden="true" />
             <div className="cl-hero-in public-container">
               <p className="cl-hero-aside">One place for the request. <span>One place to stay in the loop.</span></p>
