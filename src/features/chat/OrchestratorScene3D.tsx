@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { Billboard, Html, Line, OrbitControls, QuadraticBezierLine, Sparkles } from '@react-three/drei';
+import { Billboard, Html, Line, OrbitControls, Sparkles } from '@react-three/drei';
 
 import { useTheme, rgbChannels, type ScenePalette } from '@/shared/theme';
 import type { LiveBuildOrchestrationStatus } from '@/shared/types';
@@ -57,102 +57,128 @@ function Orbits({ working, palette }: { working: boolean; palette: ScenePalette 
   return <>{paths.map((points, orbit) => <Line key={orbit} points={points} color={palette.orbit} lineWidth={1} transparent opacity={working ? 0.32 : 0.2} depthWrite={false} />)}</>;
 }
 
-function Hub({ palette, glow, status, reduceMotion, working, selected, clickable, onOver, onOut, onClick }: {
-  palette: ScenePalette; glow: THREE.Texture; status: LiveBuildOrchestrationStatus | null; reduceMotion: boolean; working: boolean; selected: boolean; clickable: boolean;
+function Hub({ palette, glow, status, reduceMotion, working, cosmo, selected, clickable, onOver, onOut, onClick }: {
+  palette: ScenePalette; glow: THREE.Texture; status: LiveBuildOrchestrationStatus | null; reduceMotion: boolean; working: boolean; cosmo: boolean; selected: boolean; clickable: boolean;
   onOver: () => void; onOut: () => void; onClick: () => void;
 }) {
-  return <OrchestratorParticleSphere palette={palette} glow={glow} status={status} reduceMotion={reduceMotion} working={working} selected={selected} clickable={clickable}
+  return <OrchestratorParticleSphere palette={palette} glow={glow} status={status} reduceMotion={reduceMotion} working={working} cosmo={cosmo} selected={selected} clickable={clickable}
     onOver={onOver} onOut={onOut} onClick={onClick} />;
 }
 
-const COMET_SEGMENTS = [0, 0.022, 0.046, 0.072, 0.1, 0.13];
+const COMET_SEGMENTS = [0, 0.03, 0.062, 0.096, 0.132, 0.17];
 
-/** Place a tapered comet along a curve; tail grains behind the start stay hidden instead of wrapping to the far end. */
-function placeComet(group: THREE.Group, curve: THREE.Curve<THREE.Vector3>, head: number) {
+/** Where an Orchestrator link leaves the Orchestrator, so its core stays clear. */
+const LINK_START_RADIUS = 0.72;
+/** Links stop at an agent's surface, just outside its ring, instead of running into it. */
+const NODE_CLEARANCE = 0.44;
+
+interface TrimmedCurve {
+  curve: THREE.QuadraticBezierCurve3;
+  /** Curve parameters where the visible line starts and ends. */
+  t0: number;
+  t1: number;
+  points: THREE.Vector3[];
+}
+
+/** The parameter at which the curve is `clearance` away from one of its ends. */
+function clearAt(curve: THREE.QuadraticBezierCurve3, fromEnd: boolean, clearance: number): number {
+  const anchor = curve.getPoint(fromEnd ? 1 : 0);
+  let low = 0, high = 1;
+  for (let i = 0; i < 24; i++) {
+    const mid = (low + high) / 2;
+    const t = fromEnd ? 1 - mid : mid;
+    if (curve.getPoint(t).distanceTo(anchor) < clearance) low = mid; else high = mid;
+  }
+  return fromEnd ? 1 - high : high;
+}
+
+function trimmedCurve(start: Vec3, mid: Vec3, end: Vec3, startClearance: number, endClearance: number): TrimmedCurve {
+  const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(...start), new THREE.Vector3(...mid), new THREE.Vector3(...end));
+  const t0 = startClearance > 0 ? clearAt(curve, false, startClearance) : 0;
+  const t1 = Math.max(t0 + 0.05, clearAt(curve, true, endClearance));
+  const points = Array.from({ length: 49 }, (_, i) => curve.getPoint(t0 + (t1 - t0) * (i / 48)));
+  return { curve, t0, t1, points };
+}
+
+/**
+ * Place a tapered comet along the visible part of a link. `u` runs 0–1 from the
+ * start to the agent's surface; grains that have not set off, or that reach the
+ * surface, are hidden, so the comet is absorbed by the node rather than passing through it.
+ */
+function placeComet(group: THREE.Group, path: TrimmedCurve, u: number) {
   group.children.forEach((child, idx) => {
-    const t = head - COMET_SEGMENTS[idx];
-    child.visible = t >= 0;
-    if (t >= 0) child.position.copy(curve.getPoint(t));
+    const along = u - COMET_SEGMENTS[idx];
+    child.visible = along >= 0 && along <= 1;
+    if (child.visible) child.position.copy(path.curve.getPoint(path.t0 + (path.t1 - path.t0) * along));
   });
 }
 
-/** Where an Orchestrator link leaves the Cosmo mark: its outer edge, so the core stays clear. */
-const LINK_START_RADIUS = 0.8;
+function Comet({ path, head, tail, cometRef }: { path: TrimmedCurve; head: string; tail: string; cometRef: RefObject<THREE.Group> }) {
+  return <group ref={cometRef}>
+    {COMET_SEGMENTS.map((seg, idx) => (
+      <mesh key={seg} visible={false} position={path.points[0]}>
+        <sphereGeometry args={[Math.max(0.02, 0.066 - idx * 0.009), 12, 12]} />
+        <meshBasicMaterial color={idx === 0 ? head : tail} transparent opacity={Math.max(0.18, 0.98 - idx * 0.15)} depthWrite={false} />
+      </mesh>
+    ))}
+  </group>;
+}
 
 /** A link from the Orchestrator, drawn only while the agent takes part in the work. */
 function Link({ palette, end, tone, active, highlighted = false, reduceMotion }: { palette: ScenePalette; end: Vec3; tone: string; active: boolean; highlighted?: boolean; reduceMotion: boolean }) {
-  const line = useRef<any>(null);
   const cometGroup = useRef<THREE.Group>(null);
-  const start = useMemo<Vec3>(() => {
+  const path = useMemo(() => {
     const length = Math.hypot(end[0], end[1], end[2]) || 1;
-    return [end[0] / length * LINK_START_RADIUS, end[1] / length * LINK_START_RADIUS, end[2] / length * LINK_START_RADIUS];
+    const start: Vec3 = [end[0] / length * LINK_START_RADIUS, end[1] / length * LINK_START_RADIUS, end[2] / length * LINK_START_RADIUS];
+    const mid: Vec3 = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.5, (start[2] + end[2]) / 2];
+    return trimmedCurve(start, mid, end, 0, NODE_CLEARANCE);
   }, [end]);
-  const mid = useMemo<Vec3>(() => [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.5, (start[2] + end[2]) / 2], [start, end]);
-  const curve = useMemo(() => new THREE.QuadraticBezierCurve3(new THREE.Vector3(...start), new THREE.Vector3(...mid), new THREE.Vector3(...end)), [start, end, mid]);
-  useFrame(({ clock }, delta) => {
-    if (!active || reduceMotion) return;
-    if (line.current?.material) line.current.material.dashOffset -= delta * 0.9;
-    if (cometGroup.current) placeComet(cometGroup.current, curve, (clock.getElapsedTime() * 0.32) % 1.15);
+  useFrame(({ clock }) => {
+    if (!active || reduceMotion || !cometGroup.current) return;
+    placeComet(cometGroup.current, path, (clock.getElapsedTime() * 0.3) % 1.35);
   });
   return <>
-    <QuadraticBezierLine ref={line} start={start} end={end} mid={mid} color={'rgb(' + tone + ')'} lineWidth={active ? 1.8 : highlighted ? 1.4 : 1} transparent opacity={active ? 0.85 : highlighted ? 0.65 : 0.32} dashed={active} dashSize={0.28} gapSize={0.16} depthWrite={false} />
-    {active && <group ref={cometGroup}>
-      {COMET_SEGMENTS.map((seg, idx) => (
-        <mesh key={seg} position={curve.getPoint(Math.max(0, 0.5 - seg))}>
-          <sphereGeometry args={[Math.max(0.02, 0.068 - idx * 0.009), 12, 12]} />
-          <meshBasicMaterial color={idx === 0 ? palette.highlight : 'rgb(' + tone + ')'} transparent opacity={Math.max(0.18, 0.98 - idx * 0.15)} />
-        </mesh>
-      ))}
-    </group>}
+    <Line points={path.points} color={'rgb(' + tone + ')'} lineWidth={active ? 1.6 : highlighted ? 1.3 : 1} transparent opacity={active ? 0.8 : highlighted ? 0.6 : 0.3} depthWrite={false} />
+    {active && <Comet path={path} head={palette.highlight} tail={'rgb(' + tone + ')'} cometRef={cometGroup} />}
   </>;
 }
 
 /**
  * One agent handing work to another: an arc lifted above the orbits so it reads
  * apart from the Orchestrator's links. While the receiver works on what it was
- * given, a spark runs from the sender to the receiver.
+ * given, a comet runs from the sender to the receiver and the receiver ripples
+ * as it arrives.
  */
 function HandoffLink({ palette, start, end, state, highlighted = false, reduceMotion }: { palette: ScenePalette; start: Vec3; end: Vec3; state: SceneLink['state']; highlighted?: boolean; reduceMotion: boolean }) {
-  const line = useRef<any>(null);
   const cometGroup = useRef<THREE.Group>(null);
   const arrivalRing = useRef<THREE.Mesh>(null);
-  const mid = useMemo<Vec3>(() => {
+  const path = useMemo(() => {
     const span = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2]);
-    return [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.55 + span * 0.18, (start[2] + end[2]) / 2];
+    const mid: Vec3 = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.55 + span * 0.18, (start[2] + end[2]) / 2];
+    return trimmedCurve(start, mid, end, NODE_CLEARANCE, NODE_CLEARANCE);
   }, [start, end]);
-  const curve = useMemo(() => new THREE.QuadraticBezierCurve3(new THREE.Vector3(...start), new THREE.Vector3(...mid), new THREE.Vector3(...end)), [start, mid, end]);
   const active = state === 'active';
   const color = active ? palette.ring : state === 'done' ? palette.success : palette.idle;
-  useFrame(({ clock }, delta) => {
+  useFrame(({ clock }) => {
     if (!active || reduceMotion) return;
-    if (line.current?.material) line.current.material.dashOffset -= delta * 0.8;
-    // One cycle: the comet travels sender to receiver, then the receiver ripples as the work lands.
-    const cycle = (clock.getElapsedTime() * 0.3) % 1.2;
-    if (cometGroup.current) placeComet(cometGroup.current, curve, cycle);
+    // One cycle: the comet travels to the receiver's surface, then the receiver ripples as the work lands.
+    const cycle = (clock.getElapsedTime() * 0.28) % 1.45;
+    if (cometGroup.current) placeComet(cometGroup.current, path, cycle);
     if (arrivalRing.current) {
-      const landed = THREE.MathUtils.clamp((cycle - 0.98) / 0.22, 0, 1);
+      const landed = THREE.MathUtils.clamp((cycle - 1) / 0.3, 0, 1);
       const eased = 1 - Math.pow(1 - landed, 3);
       arrivalRing.current.scale.setScalar(0.85 + eased * 1.1);
       (arrivalRing.current.material as THREE.MeshBasicMaterial).opacity = landed > 0 ? (1 - eased) * 0.5 : 0;
     }
   });
   return <>
-    {(active || highlighted) && <QuadraticBezierLine start={start} end={end} mid={mid} color={color}
-      lineWidth={active ? 4.2 : 2.8} transparent opacity={active ? 0.22 : 0.14} depthWrite={false} />}
-    <QuadraticBezierLine ref={line} start={start} end={end} mid={mid} color={color}
-      lineWidth={active ? 2.2 : highlighted ? 1.8 : 1.3} transparent opacity={active ? 0.96 : highlighted ? 0.82 : state === 'done' ? 0.62 : 0.34}
-      dashed={state !== 'done'} dashSize={active ? 0.26 : 0.14} gapSize={active ? 0.14 : 0.14} depthWrite={false} />
-    {active && <group ref={cometGroup}>
-      {COMET_SEGMENTS.map((seg, idx) => (
-        <mesh key={seg} position={curve.getPoint(Math.max(0, 0.5 - seg))}>
-          <sphereGeometry args={[Math.max(0.022, 0.075 - idx * 0.01), 12, 12]} />
-          <meshBasicMaterial color={idx === 0 ? palette.highlight : color} transparent opacity={Math.max(0.18, 1 - idx * 0.15)} />
-        </mesh>
-      ))}
-    </group>}
-    {/* A small head at the receiving end shows which way the work went. */}
-    <mesh position={curve.getPoint(0.92)}><sphereGeometry args={[active ? 0.055 : 0.045, 12, 12]} /><meshBasicMaterial color={active ? palette.highlight : color} transparent opacity={state === 'pending' ? 0.55 : 0.92} /></mesh>
-    {active && <Billboard position={end}><mesh ref={arrivalRing}><ringGeometry args={[0.38, 0.405, 48]} /><meshBasicMaterial color={color} transparent opacity={0.45} depthWrite={false} side={THREE.DoubleSide} /></mesh></Billboard>}
+    {(active || highlighted) && <Line points={path.points} color={color} lineWidth={active ? 4 : 2.8} transparent opacity={active ? 0.18 : 0.12} depthWrite={false} />}
+    <Line points={path.points} color={color} lineWidth={active ? 1.9 : highlighted ? 1.6 : 1.2}
+      transparent opacity={active ? 0.92 : highlighted ? 0.8 : state === 'done' ? 0.6 : 0.32} depthWrite={false} />
+    {active && <Comet path={path} head={palette.highlight} tail={color} cometRef={cometGroup} />}
+    {/* A small head where the line meets the receiver shows which way the work went. */}
+    <mesh position={path.points[path.points.length - 1]}><sphereGeometry args={[active ? 0.05 : 0.04, 12, 12]} /><meshBasicMaterial color={active ? palette.highlight : color} transparent opacity={state === 'pending' ? 0.55 : 0.92} /></mesh>
+    {active && <Billboard position={end}><mesh ref={arrivalRing}><ringGeometry args={[0.38, 0.405, 48]} /><meshBasicMaterial color={color} transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} /></mesh></Billboard>}
   </>;
 }
 
@@ -221,7 +247,8 @@ function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, w
       return from === undefined || to === undefined ? null
         : <HandoffLink palette={palette} key={'handoff-' + link.from + '-' + link.to} start={positions[from]} end={positions[to]} state={link.state} highlighted={hoveredId === link.from || hoveredId === link.to} reduceMotion={reduceMotion} />;
     })}
-    <Hub palette={palette} reduceMotion={reduceMotion} glow={glow} status={buildStatus ?? null} working={working} selected={selectedId === hubId} clickable={hubClickable}
+    {/* At rest the Orchestrator is a sphere; it becomes the Cosmo galaxy while agents work on what it handed them. */}
+    <Hub palette={palette} reduceMotion={reduceMotion} glow={glow} status={buildStatus ?? null} working={working} cosmo={agents.some(agent => agent.active)} selected={selectedId === hubId} clickable={hubClickable}
       onOver={() => setHoveredId(hubId)} onOut={() => setHoveredId(previous => (previous === hubId ? null : previous))}
       onClick={() => onSelect(hubId)} />
     {hoveredId === hubId && <Html center position={[0, 1.45, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
@@ -260,4 +287,5 @@ export default function OrchestratorScene3D(props: OrchestratorSceneProps) {
     <Scene {...props} palette={palette} />
   </Canvas>;
 }
+
 

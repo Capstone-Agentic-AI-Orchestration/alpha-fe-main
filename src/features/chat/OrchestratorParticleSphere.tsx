@@ -7,29 +7,34 @@ import type { ScenePalette } from '@/shared/theme';
 import type { LiveBuildOrchestrationStatus } from '@/shared/types';
 
 /**
- * The Orchestrator as the Cosmo mark, built as a small 3D galaxy.
+ * The Orchestrator: a quiet sphere of light at rest, the Cosmo galaxy while it
+ * hands work to agents.
  *
- * Two stippled arms wind out of a tight, bright hook at the core, with faint
- * hairlines running along them like the logo's brushed strokes. The disc has
- * real thickness and sits tilted in the scene, so orbiting the camera shows it
- * from every side. Hovering lifts and brightens the grains under the pointer;
- * a click sends one ripple out through the disc. It turns as one piece, slowly,
- * easing between speeds so it never jerks.
+ * Every grain has two homes, one on the sphere and one in the galaxy. When
+ * agents start working the sphere unfurls from the core outwards, swirling as
+ * it flattens into two stippled arms; when the work ends it folds back. The
+ * galaxy has real thickness and sits tilted in the scene, so orbiting the
+ * camera shows its depth. Hovering lifts the grains under the pointer and a
+ * click sends one ripple through it. It turns slowly and eases between speeds.
  */
 
 const RADIUS = 1.15;
+/** Resting sphere radius: the size of the old Orchestrator orb, without its large glow. */
+const SPHERE_RADIUS = 0.62;
 const ARM_GRAINS = 8200;
 const DUST_GRAINS = 1500;
 const CORE_GRAINS = 480;
 const HAIRLINES = 18;
 const RINGS = 8;
+/** Seconds to unfurl into the galaxy, or fold back into the sphere. */
+const MORPH_SECONDS = 2.2;
 
 /** Radians an arm winds from the core to the rim: about one and a quarter turns. */
 const WIND = 7.6;
 const armAngle = (arm: number, r: number) => arm * Math.PI + WIND * Math.pow(r, 0.9);
 const armWidth = (r: number) => 0.026 + 0.125 * r;
 
-/** The disc's resting tilt: leaned back and turned a little, like a galaxy seen at an angle. */
+/** The galaxy's resting tilt: leaned back and turned a little. */
 const TILT_X = -0.62;
 const TILT_Z = 0.28;
 
@@ -53,6 +58,8 @@ const STATUS_MOTION: Record<LiveBuildOrchestrationStatus, { color: keyof ScenePa
 };
 
 const VERTEX = `
+attribute vec3 aSphere;
+attribute float aDelay;
 attribute float aSize;
 attribute float aBright;
 attribute float aHue;
@@ -61,6 +68,7 @@ uniform float uTime;
 uniform float uPixel;
 uniform float uScale;
 uniform float uOpacity;
+uniform float uMorph;
 uniform vec3 uPointer;
 uniform float uPointerAmt;
 uniform float uPulse;
@@ -71,20 +79,31 @@ uniform vec3 uTint;
 varying vec3 vColor;
 varying float vAlpha;
 void main() {
-  vec3 p = position;
+  // The core unfurls first and the rim follows, so the galaxy grows out of the sphere.
+  float local = clamp(uMorph * 1.45 - aDelay * 0.45, 0.0, 1.0);
+  float e = local * local * (3.0 - 2.0 * local);
+  vec3 p = mix(aSphere, position, e);
+  // A swirl that is strongest halfway through the change and gone at either end.
+  float twist = sin(e * 3.14159) * (1.7 - aDelay * 0.6);
+  float c = cos(twist), s = sin(twist);
+  p.xy = mat2(c, s, -s, c) * p.xy;
+
   float r = length(p.xy);
   vec2 away = p.xy - uPointer.xy;
   float near = uPointerAmt * exp(-dot(away, away) / 0.07);
-  p.xy += normalize(away + vec2(0.00001)) * near * 0.05;
-  p.z += near * 0.17;
+  p += normalize(p + vec3(0.00001)) * near * 0.09 * (1.0 - e);
+  p.xy += normalize(away + vec2(0.00001)) * near * 0.05 * e;
+  p.z += near * 0.17 * e;
   float wave = uPulseAmt * exp(-pow((r - uPulse) * 7.0, 2.0));
   p.z += wave * 0.09;
+
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   float twinkle = 0.82 + 0.18 * sin(uTime * 1.1 + aPhase);
-  vAlpha = aBright * twinkle * uOpacity * (1.0 + near * 1.3 + wave * 1.5);
-  vColor = mix(uWhite, mix(uLilac, uTint, 0.45), aHue);
-  gl_PointSize = aSize * uPixel * uScale / -mv.z * (1.0 + near * 0.6);
+  float sphereBright = 0.42 + 0.2 * sin(aPhase * 3.0);
+  vAlpha = mix(sphereBright, aBright, e) * twinkle * uOpacity * (1.0 + near * 1.3 + wave * 1.5);
+  vColor = mix(mix(uWhite, uLilac, 0.35), mix(uWhite, mix(uLilac, uTint, 0.45), aHue), e);
+  gl_PointSize = mix(0.026, aSize, e) * uPixel * uScale / -mv.z * (1.0 + near * 0.6);
 }
 `;
 
@@ -110,9 +129,17 @@ function soft(rnd: () => number): number {
 
 function buildGalaxy() {
   const rnd = seeded(23);
-  const position: number[] = [], size: number[] = [], bright: number[] = [], hue: number[] = [], phase: number[] = [];
+  const position: number[] = [], sphere: number[] = [], delay: number[] = [];
+  const size: number[] = [], bright: number[] = [], hue: number[] = [], phase: number[] = [];
   const add = (x: number, y: number, z: number, s: number, b: number, h: number) => {
     position.push(x * RADIUS, y * RADIUS, z * RADIUS);
+    // Its place on the sphere keeps the same heading, so grains travel outwards
+    // rather than across the shape while it changes.
+    const heading = Math.atan2(y, x) + (rnd() - 0.5) * 0.3;
+    const polar = Math.acos(1 - 2 * rnd());
+    const shell = SPHERE_RADIUS * (0.97 + rnd() * 0.06);
+    sphere.push(Math.cos(heading) * Math.sin(polar) * shell, Math.sin(heading) * Math.sin(polar) * shell, Math.cos(polar) * shell);
+    delay.push(Math.min(1, Math.hypot(x, y)));
     size.push(s); bright.push(b); hue.push(h); phase.push(rnd() * 6.2832);
   };
 
@@ -147,10 +174,14 @@ function buildGalaxy() {
 
   const grains = new THREE.BufferGeometry();
   grains.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
+  grains.setAttribute('aSphere', new THREE.Float32BufferAttribute(sphere, 3));
+  grains.setAttribute('aDelay', new THREE.Float32BufferAttribute(delay, 1));
   grains.setAttribute('aSize', new THREE.Float32BufferAttribute(size, 1));
   grains.setAttribute('aBright', new THREE.Float32BufferAttribute(bright, 1));
   grains.setAttribute('aHue', new THREE.Float32BufferAttribute(hue, 1));
   grains.setAttribute('aPhase', new THREE.Float32BufferAttribute(phase, 1));
+  // The grains move in the shader, beyond the bounds three.js would compute from `position`.
+  grains.boundingSphere = new THREE.Sphere(new THREE.Vector3(), RADIUS * 1.6);
 
   // Fine hairlines wound along the arms, the logo's brushed strokes.
   const lines: number[] = [];
@@ -180,11 +211,15 @@ function buildGalaxy() {
   return { grains, hairlines };
 }
 
-export function OrchestratorParticleSphere({ palette, glow, status, working, selected, clickable, reduceMotion, onOver, onOut, onClick }: {
+const smooth = (v: number) => v * v * (3 - 2 * v);
+
+export function OrchestratorParticleSphere({ palette, glow, status, working, cosmo, selected, clickable, reduceMotion, onOver, onOut, onClick }: {
   palette: ScenePalette;
   glow: THREE.Texture;
   status: LiveBuildOrchestrationStatus | null;
   working: boolean;
+  /** Agents are working on handed-off tasks: unfurl into the galaxy. */
+  cosmo: boolean;
   selected: boolean;
   clickable: boolean;
   reduceMotion: boolean;
@@ -194,8 +229,9 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, sel
 }) {
   const disc = useRef<THREE.Group>(null);
   const core = useRef<THREE.SpriteMaterial>(null);
+  const halo = useRef<THREE.SpriteMaterial>(null);
   const hairlineMaterial = useRef<THREE.LineBasicMaterial>(null);
-  const motion = useRef({ spin: 0, angle: 0, hover: 0, hovering: false, pulse: -1 });
+  const motion = useRef({ spin: 0, angle: 0, hover: 0, hovering: false, pulse: -1, morph: cosmo ? 1 : 0 });
   const { gl, size, camera, invalidate } = useThree();
   const visual = status ? STATUS_MOTION[status] : null;
   const tint = visual ? palette[visual.color] : palette.hub;
@@ -209,7 +245,7 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, sel
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     uniforms: {
-      uTime: { value: 0 }, uPixel: { value: 1 }, uScale: { value: 500 }, uOpacity: { value: 0.8 },
+      uTime: { value: 0 }, uPixel: { value: 1 }, uScale: { value: 500 }, uOpacity: { value: 0.8 }, uMorph: { value: 0 },
       uPointer: { value: new THREE.Vector3(9, 9, 0) }, uPointerAmt: { value: 0 },
       uPulse: { value: 0 }, uPulseAmt: { value: 0 },
       uWhite: { value: new THREE.Color() }, uLilac: { value: new THREE.Color() }, uTint: { value: new THREE.Color() }
@@ -223,6 +259,7 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, sel
     invalidate();
   }, [material, palette.highlight, palette.ring, tint, invalidate]);
 
+  useEffect(() => { invalidate(); }, [cosmo, invalidate]);
   useEffect(() => () => { grains.dispose(); hairlines.dispose(); material.dispose(); }, [grains, hairlines, material]);
 
   useFrame(({ clock }, delta) => {
@@ -231,6 +268,13 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, sel
     const fov = (camera as THREE.PerspectiveCamera).fov ?? 34;
     material.uniforms.uScale.value = size.height / (2 * Math.tan((fov * Math.PI) / 360));
     material.uniforms.uPixel.value = gl.getPixelRatio();
+
+    const morphTarget = cosmo ? 1 : 0;
+    if (reduceMotion) m.morph = morphTarget;
+    else m.morph += Math.sign(morphTarget - m.morph) * Math.min(Math.abs(morphTarget - m.morph), dt / MORPH_SECONDS);
+    const shape = smooth(m.morph);
+    material.uniforms.uMorph.value = m.morph;
+
     if (!reduceMotion) {
       material.uniforms.uTime.value = clock.getElapsedTime();
       // Ease towards the target speed; hovering adds a gentle push.
@@ -244,14 +288,15 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, sel
     let animating = Math.abs((m.hovering ? 1 : 0) - m.hover) > 0.01;
     if (m.pulse >= 0) {
       m.pulse += dt / 1.4;
-      material.uniforms.uPulse.value = m.pulse * 1.3;
+      material.uniforms.uPulse.value = m.pulse * (SPHERE_RADIUS + (RADIUS * 1.3 - SPHERE_RADIUS) * shape);
       material.uniforms.uPulseAmt.value = Math.max(0, 1 - m.pulse);
       if (m.pulse >= 1) { m.pulse = -1; material.uniforms.uPulseAmt.value = 0; }
       animating = true;
     }
     material.uniforms.uOpacity.value = 0.8 + (selected ? 0.15 : 0) + (working ? 0.05 : 0);
-    if (core.current) core.current.opacity = (working ? 0.7 : 0.52) + (selected ? 0.2 : 0) + m.hover * 0.12 + material.uniforms.uPulseAmt.value * 0.3;
-    if (hairlineMaterial.current) hairlineMaterial.current.opacity = 0.055 + m.hover * 0.05 + (selected ? 0.04 : 0);
+    if (core.current) core.current.opacity = (working ? 0.7 : 0.5) * (0.55 + 0.45 * shape) + (selected ? 0.2 : 0) + m.hover * 0.12 + material.uniforms.uPulseAmt.value * 0.3;
+    if (halo.current) halo.current.opacity = 0.16 * (1 - shape) + (working ? 0.12 : 0.07) * shape + (selected ? 0.06 : 0);
+    if (hairlineMaterial.current) hairlineMaterial.current.opacity = (0.055 + m.hover * 0.05 + (selected ? 0.04 : 0)) * Math.max(0, shape * 1.4 - 0.4);
     if (reduceMotion && animating) invalidate();
   });
 
@@ -261,34 +306,34 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, sel
     material.uniforms.uPointer.value.set(local.x, local.y, 0);
     if (reduceMotion) invalidate();
   };
+  const pointerHandlers = {
+    onPointerOver: (event: ThreeEvent<PointerEvent>) => { event.stopPropagation(); motion.current.hovering = true; trackPointer(event); onOver(); },
+    onPointerMove: trackPointer,
+    onPointerOut: () => { motion.current.hovering = false; onOut(); },
+    onClick: (event: ThreeEvent<MouseEvent>) => {
+      event.stopPropagation();
+      motion.current.pulse = 0;
+      if (reduceMotion) invalidate();
+      if (clickable) onClick();
+    }
+  };
 
   return <group rotation={[TILT_X, 0, TILT_Z]}>
     <group ref={disc}>
       <lineSegments geometry={hairlines}>
-        <lineBasicMaterial ref={hairlineMaterial} color={palette.highlight} transparent opacity={0.06} depthWrite={false} blending={THREE.AdditiveBlending} />
+        <lineBasicMaterial ref={hairlineMaterial} color={palette.highlight} transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} />
       </lineSegments>
       <points geometry={grains} material={material} />
-      <mesh
-        onPointerOver={event => { event.stopPropagation(); motion.current.hovering = true; trackPointer(event); onOver(); }}
-        onPointerMove={trackPointer}
-        onPointerOut={() => { motion.current.hovering = false; onOut(); }}
-        onClick={event => {
-          event.stopPropagation();
-          motion.current.pulse = 0;
-          if (reduceMotion) invalidate();
-          if (clickable) onClick();
-        }}
-      >
-        <circleGeometry args={[RADIUS * 0.95, 48]} />
-        <meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} />
-      </mesh>
+      {/* Pointer targets: the sphere at rest, the disc as the galaxy. */}
+      {cosmo
+        ? <mesh {...pointerHandlers}><circleGeometry args={[RADIUS * 0.95, 48]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} /></mesh>
+        : <mesh {...pointerHandlers}><sphereGeometry args={[SPHERE_RADIUS * 1.1, 24, 24]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} /></mesh>}
     </group>
-    {/* The brightest, tightest part of the arms: a soft point of light, no disc. */}
     <sprite scale={[0.5, 0.5, 1]}>
-      <spriteMaterial ref={core} map={glow} color={palette.highlight} transparent opacity={0.52} depthWrite={false} blending={THREE.AdditiveBlending} />
+      <spriteMaterial ref={core} map={glow} color={palette.highlight} transparent opacity={0.4} depthWrite={false} blending={THREE.AdditiveBlending} />
     </sprite>
-    <sprite scale={[RADIUS * 2.2, RADIUS * 2.2, 1]}>
-      <spriteMaterial map={glow} color={tint} transparent opacity={working ? 0.12 : 0.07} depthWrite={false} blending={THREE.AdditiveBlending} />
+    <sprite scale={[RADIUS * 2.1, RADIUS * 2.1, 1]}>
+      <spriteMaterial ref={halo} map={glow} color={tint} transparent opacity={0.16} depthWrite={false} blending={THREE.AdditiveBlending} />
     </sprite>
   </group>;
 }
