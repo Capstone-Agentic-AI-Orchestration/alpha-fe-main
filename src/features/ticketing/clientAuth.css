@@ -132,6 +132,12 @@
 .iq-actions .ca-submit { margin-top: 0; }
 .iq-cancel { color: var(--public-muted); }
 
+/* Match the landing's slide when arriving at sign-in or the inquiry form. */
+.ca-auth-layout, .iq-section { animation: public-page-arrive 420ms cubic-bezier(.2, .7, .2, 1) both; }
+@keyframes public-page-arrive {
+  from { opacity: 0; transform: translate3d(28px, 0, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
 
 @media (max-width: 900px) {
   .ca-auth-layout { grid-template-columns: minmax(0, 1fr); grid-template-areas: "copy" "form" "path"; row-gap: 44px; padding-block: 40px 64px; }
