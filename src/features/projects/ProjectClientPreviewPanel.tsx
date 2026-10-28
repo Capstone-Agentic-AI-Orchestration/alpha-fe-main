@@ -7,14 +7,16 @@ import {
 } from '@/features/ticketing/pmApi';
 import { input, primary, secondary } from '@/features/ticketing/ticketUi';
 
-export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicketApi }: {
+export function ProjectClientPreviewPanel({ projectId, canManage, conversationOnly=false, requestedClientId, api = pmTicketApi }: {
   projectId: string;
   canManage: boolean;
+  conversationOnly?: boolean;
+  requestedClientId?: string;
   api?: typeof pmTicketApi;
 }) {
   const [preview, setPreview] = useState<PmProjectClientPreview | null>(null);
   const [repository, setRepository] = useState('');
-  const [branch, setBranch] = useState<'main' | 'uat'>('main');
+  const [branch, setBranch] = useState<'main' | 'uat'>('uat');
   const [url, setUrl] = useState('');
   const [settingsLoading, setSettingsLoading] = useState(true);
   const [settingsSaving, setSettingsSaving] = useState(false);
@@ -33,10 +35,12 @@ export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicket
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
+  useEffect(()=>{setDraft('');setSendError('');},[selectedClientId]);
 
   const selectedClient = useMemo(() => clients.find(client => client.clientId === selectedClientId) ?? null,
     [clients, selectedClientId]);
   const previewFormValid = useMemo(() => {
+    if(branch!=='uat')return false;
     if (!repository.trim()) return false;
     if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repository.trim())) return false;
     try {
@@ -44,20 +48,21 @@ export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicket
       return parsed.protocol === 'https:' && !parsed.username && !parsed.password && !parsed.port
         && parsed.hostname !== 'vercel.app' && parsed.hostname.endsWith('.vercel.app');
     } catch { return false; }
-  }, [repository, url]);
+  }, [repository, url,branch]);
 
   useEffect(() => {
     let active = true;
+    if(conversationOnly){setSettingsLoading(false);return;}
     setSettingsLoading(true); setSettingsError(''); setSettingsSaved(false);
     void api.getProjectClientPreview(projectId).then(result => {
       if (!active) return;
       setPreview(result.preview);
-      setRepository(result.preview?.repository ?? ''); setBranch(result.preview?.branch ?? 'main'); setUrl(result.preview?.url ?? '');
+      setRepository(result.preview?.repository ?? ''); setBranch(result.preview?.branch ?? 'uat'); setUrl(result.preview?.url ?? '');
     }).catch(error => {
       if (active) setSettingsError(errorText(error, 'settings'));
     }).finally(() => { if (active) setSettingsLoading(false); });
     return () => { active = false; };
-  }, [api, projectId]);
+  }, [api, projectId,conversationOnly]);
 
   useEffect(() => {
     let active = true;
@@ -66,12 +71,13 @@ export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicket
       if (!active) return;
       const unique = result.items.filter((client, index, items) => items.findIndex(item => item.clientId === client.clientId) === index);
       setClients(unique);
-      if (unique.length === 1) setSelectedClientId(unique[0].clientId);
+      if (requestedClientId!==undefined) setSelectedClientId(unique.some(client=>client.clientId===requestedClientId)?requestedClientId:'');
+      else if (unique.length === 1) setSelectedClientId(unique[0].clientId);
     }).catch(error => {
       if (active) setClientError(errorText(error, 'clients'));
     }).finally(() => { if (active) setClientLoading(false); });
     return () => { active = false; };
-  }, [api, projectId]);
+  }, [api, projectId,requestedClientId]);
 
   useEffect(() => {
     if (!selectedClientId) { setMessages([]); setCursor(null); setMessagesLoading(false); return; }
@@ -94,7 +100,7 @@ export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicket
     setSettingsSaving(true); setSettingsError(''); setSettingsSaved(false);
     try {
       const result = await api.setProjectClientPreview(projectId, next);
-      setPreview(result.preview); setRepository(result.preview?.repository ?? ''); setBranch(result.preview?.branch ?? 'main');
+      setPreview(result.preview); setRepository(result.preview?.repository ?? ''); setBranch(result.preview?.branch ?? 'uat');
       setUrl(result.preview?.url ?? ''); setSettingsSaved(true);
     } catch (error) { setSettingsError(errorText(error, 'save')); }
     finally { setSettingsSaving(false); }
@@ -105,7 +111,7 @@ export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicket
     setSettingsSaving(true); setSettingsError(''); setSettingsSaved(false);
     try {
       const result = await api.setProjectClientPreview(projectId, null);
-      setPreview(result.preview); setRepository(''); setUrl(''); setBranch('main'); setSettingsSaved(true);
+      setPreview(result.preview); setRepository(''); setUrl(''); setBranch('uat'); setSettingsSaved(true);
     } catch (error) { setSettingsError(errorText(error, 'save')); }
     finally { setSettingsSaving(false); }
   }
@@ -134,13 +140,13 @@ export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicket
   }
 
   return <section className="project-client-preview-panel" aria-labelledby={`client-preview-heading-${projectId}`}>
-    <header className="project-client-preview-header">
+    {!conversationOnly&&<header className="project-client-preview-header">
       <div><h2 id={`client-preview-heading-${projectId}`}>Client preview &amp; feedback</h2>
         <p>Share a hosted preview and keep project feedback in a separate thread for each client with active project access.</p></div>
-    </header>
+    </header>}
 
     <div className="project-client-preview-grid">
-      <form className="project-client-preview-settings" onSubmit={event => void savePreview(event)}>
+      {!conversationOnly&&<form className="project-client-preview-settings" onSubmit={event => void savePreview(event)}>
         <h3>Hosted preview</h3>
         {settingsLoading ? <p role="status">Loading the saved preview…</p> : <>
           {preview && <p className="project-client-current-preview">Currently shared: <a href={preview.url} target="_blank" rel="noreferrer">{preview.repository} · {preview.branch} <ExternalLink size={13} /></a></p>}
@@ -150,7 +156,8 @@ export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicket
           </label>
           <div className="project-client-preview-fields">
             <label>Branch<select className={input} value={branch} onChange={event => { setBranch(event.target.value as 'main' | 'uat'); setSettingsSaved(false); }} disabled={!canManage || settingsSaving}>
-              <option value="main">main</option><option value="uat">uat</option>
+              <option value="uat">uat</option>
+              {branch==='main'&&<option value="main" disabled>main (historical configuration)</option>}
             </select></label>
             <label>Preview URL<input className={input} type="url" value={url} onChange={event => { setUrl(event.target.value); setSettingsSaved(false); }}
               placeholder="https://…" disabled={!canManage || settingsSaving} required /></label>
@@ -163,7 +170,7 @@ export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicket
           {preview && <button type="button" className={secondary} disabled={settingsSaving} onClick={() => void clearPreview()}>Remove preview</button>}
           <button type="submit" className={primary} disabled={settingsLoading || settingsSaving || !previewFormValid}>{settingsSaving ? 'Saving…' : 'Save preview'}</button>
         </div>}
-      </form>
+      </form>}
 
       <div className="project-client-feedback-panel">
         <div className="project-client-feedback-heading"><div><h3>Project conversation</h3>
@@ -174,6 +181,7 @@ export function ProjectClientPreviewPanel({ projectId, canManage, api = pmTicket
         {clientLoading ? <p role="status" className="project-client-thread-state">Loading clients with project access…</p>
           : clientError ? <p role="alert" className="project-client-preview-error">{clientError}</p>
             : !clients.length ? <p className="project-client-thread-state">No clients with active access to this project yet.</p>
+              : requestedClientId!==undefined ? <p className="project-client-selected-name">{selectedClient?.displayName??'Choose a client above to open their feedback.'}</p>
               : clients.length === 1 ? <p className="project-client-selected-name"><span>Client</span><strong>{clients[0].displayName}</strong></p>
                 : <label className="project-client-selector">Client
                   <select className={input} value={selectedClientId} onChange={event => setSelectedClientId(event.target.value)}>

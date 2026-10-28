@@ -21,7 +21,7 @@ const build = (status: ProjectLiveBuild['status'], stoppedReason?: string): Proj
 const noop = () => undefined;
 const render = (overrides: Partial<ChatBuildWizardProps>) => renderToStaticMarkup(<ChatBuildWizard
   projectId="p1" build={null} failure={null} canStart canApprove canStop busy={null} error={null}
-  onStart={noop} onApprove={noop} onStop={noop} onContinue={noop} onReply={noop} onRetry={noop} onDismiss={noop} onOpenReview={noop}
+  onStop={noop} onContinue={noop} onReply={noop} onRetry={noop} onDismiss={noop} onOpenReview={noop}
   {...overrides} />);
 
 describe('the build panel above the message box', () => {
@@ -54,7 +54,7 @@ describe('the build panel above the message box', () => {
   it('directs plan approval to its tab without numbered approval questions', () => {
     const html = render({ build: build('awaiting_plan_approval') });
     expect(html).toContain('Plan ready for your approval');
-    expect(html).toContain('type start in the Build review tab');
+    expect(html).toContain('reply start in the main chat');
     expect(html).not.toContain('Start planned work');
     expect(html).not.toContain('Open the full plan');
     expect(html).toMatch(/aria-current="step"[^>]*>.*Approve/);

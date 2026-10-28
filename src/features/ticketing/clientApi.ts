@@ -20,8 +20,7 @@ export type ClientTicketStatus =
 
 export interface ClientWorkspaceOption { workspaceId: string; displayName: string }
 export interface ClientProjectPreview {
-  repository: string;
-  branch: 'main' | 'uat';
+  branch: 'uat';
   url: string;
 }
 export interface ClientProject {
@@ -189,7 +188,7 @@ async function withOperationRecovery<T>(
 
 interface RequestOptions extends RequestInit { csrf?: boolean; accept?: string }
 
-async function requestResponse(path: string, options: RequestOptions = {}): Promise<Response> {
+export async function requestResponse(path: string, options: RequestOptions = {}): Promise<Response> {
   if (!browserOriginAllowed()) {
     throw new ClientTicketApiError(null, 'For your safety, open Alphaexplora in its secure website to access your requests.');
   }
@@ -274,8 +273,7 @@ export const clientTicketApi = {
       const row = raw as Record<string, unknown>;
       const preview = row.preview;
       const previewIsValid = preview === null || (typeof preview === 'object' && !Array.isArray(preview)
-        && typeof (preview as Record<string, unknown>).repository === 'string'
-        && ((preview as Record<string, unknown>).branch === 'main' || (preview as Record<string, unknown>).branch === 'uat')
+        && (preview as Record<string, unknown>).branch === 'uat'
         && typeof (preview as Record<string, unknown>).url === 'string');
       if (typeof row.workspaceId !== 'string' || !row.workspaceId.trim()
         || typeof row.projectId !== 'string' || !row.projectId.trim()

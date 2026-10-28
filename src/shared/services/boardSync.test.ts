@@ -4,7 +4,7 @@ import type { Agent, Issue, Project } from '@/shared/types';
 import { loadFromStorage } from '@/shared/lib/storage';
 import type { BoardBootstrap, BoardChangePage, BoardCursor, BoardState } from '@/shared/types/boardSync';
 import { apiService } from './apiService';
-import { applyBoardChangePage, catchUpBoard } from './boardSync';
+import { applyBoardChangePage, catchUpBoard, cursorStorageKey } from './boardSync';
 
 const workspaceId = 'workspace-board-sync';
 const cursor = (value: string): BoardCursor => ({ workspaceId, value });
@@ -53,7 +53,22 @@ describe('browser board cursor sync', () => {
     expect(changesSpy).not.toHaveBeenCalled();
     expect(result).toEqual({ state: { projects: bootstrap.projects, agents: bootstrap.agents, issues: bootstrap.issues }, cursor: cursor('5') });
     expect(loadFromStorage(`projects:${workspaceId}`, [])).toEqual(bootstrap.projects);
-    expect(loadFromStorage(`board_cursor:${workspaceId}`, null)).toEqual(cursor('5'));
+    expect(loadFromStorage(cursorStorageKey(workspaceId), null)).toEqual(cursor('5'));
+  });
+
+  it('replaces a legacy persona cache even when its previous cursor was current', async () => {
+    localStorage.setItem(`alpha_multica_board_cursor_v2:${workspaceId}`, JSON.stringify(cursor('5')));
+    localStorage.setItem(`alpha_multica_agents:${workspaceId}`, JSON.stringify([
+      { ...agent('agent-orion'), name: 'Orion Cross' }
+    ]));
+    vi.spyOn(apiService, 'getBoardBootstrap').mockResolvedValue(bootstrap);
+    const changesSpy = vi.spyOn(apiService, 'getBoardChanges');
+
+    const result = await catchUpBoard(workspaceId, loadFromStorage(cursorStorageKey(workspaceId), null));
+
+    expect(changesSpy).not.toHaveBeenCalled();
+    expect(result.state.agents).toEqual(bootstrap.agents);
+    expect(loadFromStorage(`agents:${workspaceId}`, [])).toEqual(bootstrap.agents);
   });
 
   it('uses only delta pages when a valid cursor exists', async () => {
@@ -129,7 +144,7 @@ describe('browser board cursor sync', () => {
 
   it('does not save the next cursor when a board-array storage write fails', () => {
     const previous = cursor('5');
-    localStorage.setItem(`alpha_multica_board_cursor:${workspaceId}`, JSON.stringify(previous));
+    localStorage.setItem(`alpha_multica_${cursorStorageKey(workspaceId)}`, JSON.stringify(previous));
     const originalSetItem = storage.setItem.bind(storage);
     const setItem = vi.spyOn(storage, 'setItem').mockImplementation((key, value) => {
       if (key === `alpha_multica_projects:${workspaceId}`) throw new DOMException('quota exceeded', 'QuotaExceededError');
@@ -140,7 +155,7 @@ describe('browser board cursor sync', () => {
       workspaceId, nextCursor: cursor('6'), hasMore: false, resetRequired: false,
       changes: [{ cursor: '6', table: 'projects', rowKey: { id: 'project-2' }, operation: 'insert', row: project('project-2') as unknown as Record<string, unknown> }]
     })).toThrow(/quota exceeded/i);
-    expect(loadFromStorage(`board_cursor:${workspaceId}`, null)).toEqual(previous);
+    expect(loadFromStorage(cursorStorageKey(workspaceId), null)).toEqual(previous);
     expect(setItem).toHaveBeenCalled();
   });
 });

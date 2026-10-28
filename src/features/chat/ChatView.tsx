@@ -1,3 +1,4 @@
+import { buildDecisionAction, type ChatBuildDecision } from './chatBuildDecision';
 import { ChatPanelHandle } from './ChatPanelHandle';
 import { LocalPreviewTab, WebPreviewCard, useLocalPreviews } from './LocalPreview';
 import { reconcileCallSnapshot } from './chatCallSnapshot';
@@ -651,20 +652,6 @@ export const ChatView: React.FC = () => {
     openBuildReview();
   }, [activeThreadId, isClient, latestBuild?.runId, latestBuild?.status, latestBuild?.orchestration.run.planVersion, openedReviewDecisions]);
   useEffect(() => { setBuildDecisionError(null); }, [buildDecisionKey]);
-  const startPlannedBuild = async () => {
-    if (!liveBuild || !project?.id || buildDecisionBusy) return;
-    setBuildDecisionBusy('start');
-    setBuildDecisionError(null);
-    try {
-      await apiService.startPlannedOrchestration(project.id, liveBuild.runId, liveBuild.revision);
-      showToast('Build started', 'The first agent is starting. Follow each agent in the bar above.', 'success');
-    } catch (error: any) {
-      setBuildDecisionError(error?.message ?? 'The plan could not be started. It may have changed; check it and try again.');
-    } finally {
-      setBuildDecisionBusy(null);
-      void refreshLiveBuild();
-    }
-  };
   const resumePausedBuild = async () => {
     if (!liveBuild || !project?.id) return;
     try {
@@ -673,24 +660,6 @@ export const ChatView: React.FC = () => {
     } catch (error: any) {
       showToast('Build not resumed', error?.message ?? 'Open the build to see what it is waiting for.', 'error');
     } finally {
-      void refreshLiveBuild();
-    }
-  };
-  const approveBuild = async () => {
-    if (!liveBuild || !project?.id || buildDecisionBusy || !can('approve_runs')) return;
-    setBuildDecisionBusy('approve');
-    setBuildDecisionError(null);
-    try {
-      const result = await apiService.approveOrchestration(project.id, liveBuild.runId, liveBuild.revision);
-      const publication = result.publication;
-      if (publication?.pullRequestUrl) {
-        setPublishedBuild({ projectId: project.id, links: [{ repository: publication.repository ?? liveBuild.repository, url: publication.pullRequestUrl }] });
-      }
-      showToast('Pull request ready', 'The checked branch was pushed and its pull request is open for review.', 'success');
-    } catch (error: any) {
-      setBuildDecisionError(error?.message ?? 'The pull request could not be opened. Check the build and try again.');
-    } finally {
-      setBuildDecisionBusy(null);
       void refreshLiveBuild();
     }
   };
@@ -1150,15 +1119,14 @@ export const ChatView: React.FC = () => {
     if (!message) return;
     // "Continue", "go ahead", "keep going": carry the open build to its next step.
     const continueRequest = !sendsBuild && Boolean(liveBuild) && isContinueRequest(message);
-    if (continueRequest && liveBuild?.status === 'awaiting_plan_approval') {
-      if (!liveBuild.canControl || !can('run_builds')) {
-        showToast('Build access needed', 'Your workspace role cannot start builds.', 'info');
-        return;
-      }
-      setInput('');
-      await startPlannedBuild();
-      return;
-    }
+    const decisionAction = buildDecisionAction(message);
+    const pendingDecision = liveBuild && ['awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(liveBuild.status);
+    const readingAnotherBuild = liveBuild && (activeSideTab?.kind === 'review' || activeSideTab?.kind === 'plan' || activeSideTab?.kind === 'changes') && activeSideTab.runId !== liveBuild.runId;
+    const buildDecision: ChatBuildDecision | undefined = !sendsBuild && pendingDecision && decisionAction && !pendingFiles.length
+      ? { action: decisionAction, runId: liveBuild.runId, expectedRevision: liveBuild.revision,
+          planVersion: liveBuild.orchestration.run.planVersion,
+          evidenceReady: !readingAnotherBuild }
+      : undefined;
     if (continueRequest && liveBuild?.status === 'paused') {
       setInput('');
       await resumePausedBuild();
@@ -1166,9 +1134,9 @@ export const ChatView: React.FC = () => {
     }
     const requestedRecoveryAction = inferRecoveryAction(message)
       ?? ((continueRequest || isRetryRequest(message)) && !sendsBuild && liveBuild && ['blocked', 'recovery_required'].includes(liveBuild.status) ? 'repair_and_continue' : undefined);
-    if (requestedRecoveryAction && await dispatchRecoveryFollowUp(message, requestedRecoveryAction)) return;
+    if (!buildDecision && requestedRecoveryAction && await dispatchRecoveryFollowUp(message, requestedRecoveryAction)) return;
     // A build waiting for direction takes an instruction typed here as its answer.
-    if (!requestedRecoveryAction && !sendsBuild && liveBuild && ['blocked', 'recovery_required'].includes(liveBuild.status) &&
+    if (!buildDecision && !requestedRecoveryAction && !sendsBuild && liveBuild && ['blocked', 'recovery_required'].includes(liveBuild.status) &&
         isBuildDirection(message) && await dispatchRecoveryFollowUp(message, 'repair_and_continue', true)) return;
     if (sendsBuild && !can('run_agents')) {
       showToast('Build access needed', 'Your workspace role cannot start Orchestrator builds.', 'info');
@@ -1213,13 +1181,24 @@ export const ChatView: React.FC = () => {
     // issue id links any build back to this task instead of filing a new one.
     const handedOff = taskRef;
     if (handedOff) setTaskRefId(null);
+    // Load evidence for this exact decision even when its review tab is hidden or a Markdown tab survived reload.
+    if (buildDecision?.evidenceReady && project) {
+      try {
+        const plans = await apiService.getOrchestrationPlans(project.id, buildDecision.runId);
+        buildDecision.evidenceReady = plans.documents.some(document => document.version === buildDecision.planVersion);
+        if (buildDecision.evidenceReady && buildDecision.action !== 'start') {
+          const diff = await apiService.getOrchestrationDiffPreview(project.id, buildDecision.runId);
+          buildDecision.evidenceReady = diff.reviewType === 'validated';
+        }
+      } catch { buildDecision.evidenceReady = false; }
+    }
     await sendChatMessage(
       handedOff ? `${message}\n\n${taskHandoffContext(handedOff)}` : message,
       activeThread?.id,
       buildRepositories,
       'auto',
       uploadedAttachments,
-      handedOff ? { approvalMode, issueId: handedOff.id, projectId: handedOff.projectId } : { approvalMode }
+      handedOff ? { approvalMode, issueId: handedOff.id, projectId: handedOff.projectId } : { approvalMode, buildDecision }
     );
     if (activeThread?.id) {
       void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
@@ -1665,10 +1644,10 @@ export const ChatView: React.FC = () => {
   };
   const renderSideTab = (tab: SideTab): React.ReactNode => {
     switch (tab.kind) {
-      case 'preview': return <LocalPreviewTab record={previews.record} repositories={projectRepositories.map(item => item.repo)} busy={previews.busy} error={previews.error} onStart={repo => void previews.start(repo)} onStop={() => void previews.stop()} blocked={Boolean(!isActiveTab || memoryThreadId || threadPendingDelete || showCreateProject || repositoryMenuOpen)} />;
+      case 'preview': return <LocalPreviewTab record={previews.record} error={previews.error} onStop={() => void previews.stop()} blocked={Boolean(!isActiveTab || memoryThreadId || threadPendingDelete || showCreateProject || repositoryMenuOpen)} />;
       case 'plan': return <PlanDocumentTab key={tab.id + ':' + tab.planVersion} projectId={tab.projectId} runId={tab.runId} planVersion={tab.planVersion} />;
       case 'review': return latestBuild?.runId === tab.runId
-        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('approve_runs')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} onStart={() => void startPlannedBuild()} onApprove={() => void approveBuild()} />
+        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('approve_runs')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} />
         : activeThreadId ? <SavedBuildReviewTab key={tab.id} projectId={tab.projectId} runId={tab.runId} threadId={activeThreadId} /> : null;
       case 'changes': return <div key={tab.id} className="min-h-0 flex-1 overflow-y-auto p-4"><LiveChangesView projectId={tab.projectId} runId={tab.runId} live={Boolean(liveBuild?.running && liveBuild.runId === tab.runId)} /></div>;
       case 'agent': {
@@ -1790,8 +1769,6 @@ export const ChatView: React.FC = () => {
                 canStop={canStopBuild}
                 busy={stoppingProjectRunId ? 'stop' : buildDecisionBusy}
                 error={buildDecisionError}
-                onStart={() => void startPlannedBuild()}
-                onApprove={() => void approveBuild()}
                 onStop={() => void stopProjectBuild()}
                 onContinue={action => void continueBuild(action)}
                 onAuditPlan={() => void proposeSecurityAuditPlan()}
@@ -1901,7 +1878,7 @@ export const ChatView: React.FC = () => {
       </main>
       {!isClient && <ChatPanelHandle open={Boolean(panelVisible)} onToggle={() => setPanelVisible(value => !value)} />}
       {!isClient && panelVisible && <ChatSidePanel tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setPanelVisible(false); document.getElementById('chat-panel-toggle')?.focus(); }}>
-        {activeSideTab ? renderSideTab(activeSideTab) : <section className="space-y-4 p-5"><h2 className="text-sm font-semibold">Side panel</h2><p className="text-xs text-content-secondary">Keep previews, plans, agents and changes beside your conversation.</p><button type="button" onClick={openPreview} className="flex w-full items-center gap-2 rounded-lg border border-divider p-3 text-xs hover:bg-surface-high"><Globe className="h-4 w-4" />Web preview</button>{latestBuild && project && <><button type="button" onClick={() => openPlanTab({ projectId: project.id, runId: latestBuild.runId, planVersion: latestBuild.orchestration.run.planVersion, auto: false })} className="block text-xs text-link">Open saved plan</button><button type="button" onClick={() => openSavedBuildReview(latestBuild.runId)} className="block text-xs text-link">Build review</button><button type="button" onClick={openBuildChanges} className="block text-xs text-link">Code changes</button></>}</section>}
+        {activeSideTab ? renderSideTab(activeSideTab) : <section className="space-y-4 p-5"><h2 className="text-sm font-semibold">Side panel</h2><p className="text-xs text-content-secondary">Keep previews, plans, agents and changes beside your conversation.</p>{latestBuild && project && <><button type="button" onClick={() => openPlanTab({ projectId: project.id, runId: latestBuild.runId, planVersion: latestBuild.orchestration.run.planVersion, auto: false })} className="block text-xs text-link">Open saved plan</button><button type="button" onClick={() => openSavedBuildReview(latestBuild.runId)} className="block text-xs text-link">Build review</button><button type="button" onClick={openBuildChanges} className="block text-xs text-link">Code changes</button></>}</section>}
       </ChatSidePanel>}
     </div>
     </PlanPanelContext.Provider>

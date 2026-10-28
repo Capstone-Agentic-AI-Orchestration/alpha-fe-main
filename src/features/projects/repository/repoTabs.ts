@@ -5,6 +5,7 @@ export const REPO_TABS = [
   { id: 'pulls', label: 'Pull requests' },
   { id: 'runs', label: 'Pipeline runs' },
   { id: 'previews', label: 'Previews' },
+  { id: 'qa', label: 'QA Studio' },
   { id: 'logs', label: 'Logs' },
   { id: 'environment', label: 'Environment' }
 ] as const;
@@ -22,17 +23,17 @@ export function isRepoTab(value: unknown): value is RepoTab {
  * and wrap around, Home and End jump to the ends. Null for any other key,
  * which is then left to the browser.
  */
-export function tabForKey(current: RepoTab, key: string): RepoTab | null {
-  const index = IDS.indexOf(current);
+export function tabForKey(current: RepoTab, key: string, ids:readonly RepoTab[]=IDS): RepoTab | null {
+  const index = ids.indexOf(current);
   switch (key) {
     case 'ArrowRight':
-      return IDS[(index + 1) % IDS.length];
+      return ids[(index + 1) % ids.length];
     case 'ArrowLeft':
-      return IDS[(index - 1 + IDS.length) % IDS.length];
+      return ids[(index - 1 + ids.length) % ids.length];
     case 'Home':
-      return IDS[0];
+      return ids[0];
     case 'End':
-      return IDS[IDS.length - 1];
+      return ids[ids.length - 1];
     default:
       return null;
   }

@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Download, ExternalLink, FileCode2, GitBranch, GitPullRequest, KeyRound,
-  LayoutDashboard, MonitorPlay, PlayCircle, ScrollText, type LucideIcon
+  LayoutDashboard, MonitorPlay, PlayCircle, ScrollText, ShieldCheck, type LucideIcon
 } from 'lucide-react';
 
 import { useApp, useTabSessionState } from '@/app/AppContext';
@@ -27,23 +27,27 @@ interface ProjectRepositoryViewProps {
   onInitialRepositoryApplied?: () => void;
   repositoriesLoading?: boolean;
   overview: React.ReactNode;
+  qaStudio?: React.ReactNode;
   onManageRepositories?: () => void;
 }
 
-type RepositoryTab = Exclude<RepoTab, 'overview'>;
+type RepositoryTab = Exclude<RepoTab, 'overview'|'qa'>;
 const shortName = (repo: string) => repo.split('/').pop() ?? repo;
 const TAB_ICONS: Record<RepoTab, LucideIcon> = {
   overview: LayoutDashboard, code: FileCode2, pulls: GitPullRequest,
-  runs: PlayCircle, previews: MonitorPlay, logs: ScrollText, environment: KeyRound
+  runs: PlayCircle, previews: MonitorPlay, qa:ShieldCheck, logs: ScrollText, environment: KeyRound
 };
 
 /** Project tasks and repository tools share one navigation row and the full page width. */
 export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
-  projectId, repositories, repositoriesLoading = false, overview, onManageRepositories, initialRepository, onInitialRepositoryApplied
+  projectId, repositories, repositoriesLoading = false, overview, qaStudio, onManageRepositories, initialRepository, onInitialRepositoryApplied
 }) => {
   const { role, can, isActiveTab, activeWorkspaceId, identity } = useApp();
   const [storedTab, setStoredTab] = useTabSessionState<RepoTab>(`projects.workspaceTab:${projectId}`, 'overview');
-  const tab = isRepoTab(storedTab) ? storedTab : 'overview';
+  const tab = isRepoTab(storedTab) && (storedTab!=='qa'||qaStudio) ? storedTab : 'overview';
+  const visibleTabs=REPO_TABS.filter(item=>item.id!=='qa'||qaStudio);
+  const [qaOpened,setQaOpened]=useState(tab==='qa');
+  useEffect(()=>{if(tab==='qa')setQaOpened(true);},[tab]);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(repositories[0] ?? null);
   const [actionsRepo, setActionsRepo] = useState<string | null>(null);
   const [actionsOpened, setActionsOpened] = useState(tab === 'runs');
@@ -74,7 +78,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
   const tabId = (id: RepoTab) => `${idBase}-tab-${id}`;
   const panelId = (id: RepoTab) => `${idBase}-panel-${id}`;
   const onTabKeyDown = (event: React.KeyboardEvent) => {
-    const next = tabForKey(tab, event.key);
+    const next = tabForKey(tab, event.key,visibleTabs.map(item=>item.id));
     if (!next) return;
     event.preventDefault();
     setStoredTab(next);
@@ -85,7 +89,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-x-4 border-b border-divider px-4 sm:px-5">
         <div role="tablist" aria-label="Project sections" className="-mb-px flex min-w-0 max-w-full overflow-x-auto" onKeyDown={onTabKeyDown}>
-          {REPO_TABS.map(({ id, label }) => {
+          {visibleTabs.map(({ id, label }) => {
             const Icon = TAB_ICONS[id];
             const selected = id === tab;
             return (
@@ -108,7 +112,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
             );
           })}
         </div>
-        {tab !== 'overview' && repo && !repositoryPending && (
+        {tab !== 'overview' && tab!=='qa' && repo && !repositoryPending && (
           <div className="my-2 flex max-w-full items-center gap-2">
           <div role="group" aria-label="Repository" className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-divider bg-surface-raised p-0.5">
             {tab === 'runs' && <button type="button" aria-pressed={!actionsRepo} onClick={() => setActionsRepo(null)}
@@ -136,6 +140,10 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
         hidden={tab !== 'overview'} className={tab === 'overview' ? 'min-h-0 flex-1' : 'hidden'}>
         {overview}
       </div>
+      {qaStudio&&<div id={panelId('qa')} role="tabpanel" aria-labelledby={tabId('qa')}
+        hidden={tab!=='qa'} className={tab==='qa'?'min-h-0 flex-1 overflow-auto p-4 sm:p-5':'hidden'}>
+        {qaOpened||tab==='qa'?qaStudio:null}
+      </div>}
 
       {actionsOpened && repo && !repositoryPending && <div id={panelId('runs')} role="tabpanel" aria-labelledby={tabId('runs')}
         hidden={tab !== 'runs'} className={tab === 'runs' ? 'min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 select-text' : 'hidden'}>
@@ -144,7 +152,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
           canPromote={role === 'pm' || role === 'admin'} />
       </div>}
 
-      {tab !== 'overview' && (!repo || repositoryPending) && (
+      {tab !== 'overview' && tab!=='qa' && (!repo || repositoryPending) && (
         <div id={panelId(tab)} role="tabpanel" aria-labelledby={tabId(tab)} className="min-h-0 flex-1 overflow-y-auto p-5" tabIndex={0}>
           {repositoriesLoading || repositoryPending ? <SectionLoading label={repositoryPending ? "Connecting the new repository and opening its preview…" : "Loading repositories…"} /> : (
             <div className="rounded-xl border border-divider p-8 text-center">
@@ -162,7 +170,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
       )}
 
       {repo && !repositoryPending && (repositoryOpened || tab !== 'overview') && (
-        <div hidden={tab === 'overview' || tab === 'runs'} className={tab === 'overview' || tab === 'runs' ? 'hidden' : 'min-h-0 flex-1 overflow-y-auto p-4 select-text sm:p-5'}>
+        <div hidden={tab === 'overview' || tab === 'runs'||tab==='qa'} className={tab === 'overview' || tab === 'runs'||tab==='qa' ? 'hidden' : 'min-h-0 flex-1 overflow-y-auto p-4 select-text sm:p-5'}>
           <a href={`https://github.com/${repo}`} target="_blank" rel="noreferrer"
             className="mb-4 inline-flex max-w-full items-center gap-1.5 text-xs text-content-secondary hover:text-content">
             <GitBranch className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -172,7 +180,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
           </a>
           <RepoPanel
             key={`${projectId}|${repo}`} projectId={projectId} repo={repo}
-            tab={tab === 'overview' || tab === 'runs' ? null : tab} idBase={idBase}
+            tab={tab === 'overview' || tab === 'runs'||tab==='qa' ? null : tab} idBase={idBase}
             canSetUpHosting={can('manage_deployments')}
             canManagePreviewEnv={can('manage_preview_env')}
           />
@@ -234,7 +242,7 @@ const RepoPanel: React.FC<{
   };
   return (
     <>
-      {REPO_TABS.map(({ id }) => id !== 'overview' && (visited.has(id) || tab === id) ? (
+      {REPO_TABS.map(({ id }) => id !== 'overview' && id!=='qa' && (visited.has(id) || tab === id) ? (
         <div key={id} id={`${idBase}-panel-${id}`} role="tabpanel" aria-labelledby={`${idBase}-tab-${id}`}
           hidden={id !== tab} tabIndex={0} className={id === tab ? 'space-y-4 focus:outline-none' : 'hidden'}>
           {content[id]()}

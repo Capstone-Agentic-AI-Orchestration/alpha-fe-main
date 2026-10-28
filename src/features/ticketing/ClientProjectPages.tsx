@@ -1,10 +1,11 @@
-import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, ExternalLink, FolderKanban, RefreshCw, Send } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ArrowLeft, ArrowRight, FolderKanban, RefreshCw, Send } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi, ClientTicketApiError } from './clientApi';
 import { clientTicketProgress } from './clientTicketProgress';
 import { time } from './ticketUi';
+import { ClientProjectQaStudio } from './ClientProjectQaStudio';
 
 export function clientProjectKey(project: Pick<ClientProject, 'workspaceId' | 'projectId'>): string {
   return JSON.stringify([project.workspaceId, project.projectId]);
@@ -91,7 +92,11 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   const [feedbackError, setFeedbackError] = useState('');
   const [feedbackMoreLoading, setFeedbackMoreLoading] = useState(false);
   const [feedbackRefresh, setFeedbackRefresh] = useState(0);
-  const [draft, setDraft] = useState('');
+  const [projectDrafts, setProjectDrafts] = useState<Record<string,string>>({});
+  const projectKey=selectedProject?clientProjectKey(selectedProject):'';
+  const activeProject=useRef(projectKey);activeProject.current=projectKey;
+  const draft=projectDrafts[projectKey]??'';
+  const setDraft=(value:string)=>{if(projectKey)setProjectDrafts(current=>({...current,[projectKey]:value}));};
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
 
@@ -131,6 +136,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     try {
       const page = await api.listProjectRequests(selectedProject.workspaceId, selectedProject.projectId,
         { limit: 50, after: requestPage.nextCursor, search: requestSearch, filter: 'all' });
+      if(activeProject.current!==projectKey)return;
       const seen = new Set(requestPage.items.map(requestKey));
       setRequestPage({ ...page, items: [...requestPage.items, ...page.items.filter(item => !seen.has(requestKey(item)))] });
     } catch (error) { setRequestError(projectLoadError(error, 'requests')); }
@@ -143,6 +149,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     try {
       const page = await api.getProjectFeedbackMessages(selectedProject.workspaceId, selectedProject.projectId,
         { limit: 50, before: feedbackCursor });
+      if(activeProject.current!==projectKey)return;
       setFeedback(current => [...page.items, ...current]); setFeedbackCursor(page.nextCursor);
     } catch (error) { setFeedbackError(projectLoadError(error, 'feedback')); }
     finally { setFeedbackMoreLoading(false); }
@@ -175,7 +182,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     </header>
     <div className="client-project-tabs" role="tablist" aria-label="Project sections">
       {(['overview', 'preview', 'requests'] as const).map(value => <button key={value} type="button" role="tab"
-        aria-selected={tab === value} onClick={() => setTab(value)}>{value === 'preview' ? 'Preview & feedback' : value[0].toUpperCase() + value.slice(1)}</button>)}
+        aria-selected={tab === value} onClick={() => setTab(value)}>{value === 'preview' ? 'QA Studio' : value[0].toUpperCase() + value.slice(1)}</button>)}
     </div>
     {tab === 'overview' && <div className="client-project-overview">
       <div><p className="client-eyebrow">SHARED WITH YOU</p><h2>{selectedProject.name}</h2>
@@ -183,18 +190,12 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
       </div>
       <div className="client-project-overview-meta">
         <span>Last updated <strong>{time(selectedProject.updatedAt)}</strong></span>
-        <span>Preview <strong>{selectedProject.preview ? `${selectedProject.preview.repository} · ${selectedProject.preview.branch}` : 'Not shared yet'}</strong></span>
+        <span>Preview <strong>{selectedProject.preview ? 'UAT · reviewed by your project manager' : 'Not shared yet'}</strong></span>
       </div>
       <button type="button" className="client-text-action" onClick={() => setTab('requests')}>View project requests <ArrowRight size={15} /></button>
     </div>}
-    {tab === 'preview' && <div className="client-project-preview-page">
-      <section className="client-preview-destination" aria-labelledby="client-preview-title">
-        <div><p className="client-eyebrow">PROJECT PREVIEW</p><h2 id="client-preview-title">Review the shared work</h2>
-          <p>{selectedProject.preview ? `Preview from ${selectedProject.preview.repository} · ${selectedProject.preview.branch}` : 'Your project manager has not shared a hosted preview yet.'}</p></div>
-        {selectedProject.preview && <a className="client-text-action" href={selectedProject.preview.url} target="_blank" rel="noreferrer">
-          Open preview <ExternalLink size={15} />
-        </a>}
-      </section>
+    {tab === 'preview' && <ClientProjectQaStudio key={clientProjectKey(selectedProject)} workspaceId={selectedProject.workspaceId}
+      projectId={selectedProject.projectId} projectName={selectedProject.name} inspectionOnly={inspectionOnly} feedback={
       <section className="client-feedback" aria-labelledby="client-feedback-title">
         <div className="client-section-heading"><div><h2 id="client-feedback-title">Project conversation</h2>
           <p>Feedback about this project preview, shared with your project manager.</p></div>
@@ -221,7 +222,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
             </button></div>
         </form>
       </section>
-    </div>}
+    }/>}
     {tab === 'requests' && <section className="client-project-requests" aria-labelledby="client-project-requests-title">
       <div className="client-section-heading"><div><h2 id="client-project-requests-title">Requests in this project</h2>
         <p>Only requests returned for this shared project are shown here.</p></div>
