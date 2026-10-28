@@ -100,10 +100,10 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   float twinkle = 0.82 + 0.18 * sin(uTime * 1.1 + aPhase);
-  float sphereBright = 0.42 + 0.2 * sin(aPhase * 3.0);
+  float sphereBright = 0.2 + 0.12 * sin(aPhase * 3.0);
   vAlpha = mix(sphereBright, aBright, e) * twinkle * uOpacity * (1.0 + near * 1.3 + wave * 1.5);
-  vColor = mix(mix(uWhite, uLilac, 0.35), mix(uWhite, mix(uLilac, uTint, 0.45), aHue), e);
-  gl_PointSize = mix(0.026, aSize, e) * uPixel * uScale / -mv.z * (1.0 + near * 0.6);
+  vColor = mix(mix(uWhite, mix(uLilac, uTint, 0.3), 0.55), mix(uWhite, mix(uLilac, uTint, 0.45), aHue), e);
+  gl_PointSize = mix(0.022, aSize, e) * uPixel * uScale / -mv.z * (1.0 + near * 0.6);
 }
 `;
 
