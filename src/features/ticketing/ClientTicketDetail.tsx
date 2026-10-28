@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, CheckCircle2, Clock3, Copy, ExternalLink, FileText, FolderKanban, LockKeyhole, MessageSquare, Paperclip, Send, ShieldCheck, User } from 'lucide-react';
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Clock3, Copy, ExternalLink, FileText, FolderKanban, LockKeyhole, MessageSquare, Paperclip, Send, ShieldCheck, User } from 'lucide-react';
 
 import type {
   ClientTicketCommandInput, ClientTicketDetail as ClientTicketRecord,
@@ -64,6 +64,7 @@ export function ClientTicketDetail({
   const [previewOpenedKey, setPreviewOpenedKey] = useState('');
   const [scopeChangeOpen, setScopeChangeOpen] = useState(false);
   const [scopeChangeBody, setScopeChangeBody] = useState('');
+  const [progressOpen, setProgressOpen] = useState(true);
   const scroller = useRef<HTMLDivElement>(null);
   const deliveryKey = clientDeliveryReviewKey(ticket);
   const inspected = useCallback((verified: boolean) => {
@@ -73,6 +74,7 @@ export function ClientTicketDetail({
   const terminal = ticket.status === 'closed' || ticket.status === 'declined' || ticket.status === 'cancelled';
   const canReply = communicationEnabled ? !terminal : ticket.writesAvailable && !ticket.readOnly;
   const progress = clientTicketProgress(ticket.status, workflowActionsDisabled ? null : ticket.requestedAction);
+  const progressSteps = clientProgressSteps(workflowActionsDisabled ? { ...ticket, requestedAction: null } : ticket);
   const scopeDecision = ticket.requestedAction === 'agree_scope' && ticket.scope && !ticket.scope.agreed
     ? { type: 'agree_scope' as const, scopeVersionId: ticket.scope.id } : null;
   const awaitingResultReview = ticket.requestedAction === 'review_result' && Boolean(ticket.delivery) && !ticket.delivery?.accepted;
@@ -148,13 +150,20 @@ export function ClientTicketDetail({
       </div>
     </header>
 
-    <section aria-live="polite" className={`client-detail-status ${needsAction ? 'needs-action' : ''}`}>
-      <div className="client-detail-status-copy">
+    <section aria-live="polite" className={`client-detail-status ${needsAction ? 'needs-action' : ''} ${progressOpen ? 'is-open' : 'is-collapsed'}`}>
+      <div className="client-detail-status-head">
+        <div className="client-detail-status-copy">
         <span className="client-detail-status-icon"><Clock3 size={16} /></span>
-        <div><h2>{needsAction ? `Action needed: ${progress.label}` : progress.label}</h2><p>{progress.description}</p></div>
+          <div><span className="client-detail-status-eyebrow">Current request status</span><h2>{needsAction ? `Action needed: ${progress.label}` : progress.label}</h2><p>{progress.description}</p></div>
+        </div>
+        <div className="client-detail-status-actions">
+          {needsAction && canReply && tab !== 'details' && <button type="button" onClick={() => setTab('details')} className={`${primary} min-h-[44px] client-review-action`}>{scopeDecision ? 'Review proposed work' : 'Review result'}</button>}
+          {progressSteps.length > 0 && <button type="button" className="client-detail-status-toggle" aria-expanded={progressOpen} aria-controls="client-request-progress" onClick={() => setProgressOpen(value => !value)}>
+            <span>{progressOpen ? 'Hide progress' : 'Show progress'}</span>{progressOpen ? <ChevronUp size={15} aria-hidden="true" /> : <ChevronDown size={15} aria-hidden="true" />}
+          </button>}
+        </div>
       </div>
-      {needsAction && canReply && tab !== 'details' && <button onClick={() => setTab('details')} className={`${primary} min-h-[44px] client-review-action`}>{scopeDecision ? 'Review proposed work' : 'Review result'}</button>}
-      <div className="client-detail-progress"><ClientProgressStrip steps={clientProgressSteps(workflowActionsDisabled ? { ...ticket, requestedAction: null } : ticket)} /></div>
+      {progressSteps.length > 0 && <div id="client-request-progress" hidden={!progressOpen} className="client-detail-progress"><ClientProgressStrip steps={progressSteps} /></div>}
     </section>
 
     {error && <p role="alert" className="client-detail-error">{error}</p>}

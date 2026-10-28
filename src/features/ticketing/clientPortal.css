@@ -37,8 +37,9 @@
   border-bottom: 1px solid var(--cp-line);
   background: rgb(var(--ui-shell));
 }
-:where(.client-portal-shell) .client-portal-brand { display: flex; min-width: 0; align-items: center; gap: 11px; }
-:where(.client-portal-shell) .client-portal-brand img { width: 35px; height: 35px; padding: 5px; border-radius: 10px; background: #20182d; object-fit: contain; }
+:where(.client-portal-shell) .client-portal-brand { display: flex; min-width: 0; flex: 0 1 auto; align-items: center; gap: 11px; }
+:where(.client-portal-shell) .client-portal-brand > div { min-width: 0; }
+:where(.client-portal-shell) .client-portal-brand img { display: block; width: 35px; height: 35px; flex: 0 0 35px; padding: 5px; border-radius: 10px; background: #20182d; object-fit: contain; }
 :where(.client-portal-shell) .client-portal-brand p { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 15px; font-weight: 700; letter-spacing: -.025em; }
 :where(.client-portal-shell) .client-portal-brand span { display: block; overflow: hidden; max-width: 50vw; margin-top: 2px; color: var(--cp-muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
 :where(.client-portal-shell) .client-portal-header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; }
@@ -76,7 +77,7 @@
 :where(.client-portal-shell) .client-attention-dot { width: 9px; height: 9px; flex: 0 0 auto; border-radius: 50%; background: rgb(var(--ui-warning)); box-shadow: 0 0 0 4px rgb(var(--ui-warning) / .15); }
 :where(.client-portal-shell) .client-all-caught-up { display: inline-flex; align-items: center; gap: 8px; margin: 0; color: rgb(var(--ui-success)); font-size: 12px; }
 
-:where(.client-portal-shell) .client-portal-workspace { display: grid; width: 100%; min-width: 0; min-height: 0; flex: 1; grid-template-columns: minmax(280px, 340px) minmax(0, 1fr); gap: 16px; }
+:where(.client-portal-shell) .client-portal-workspace { display: grid; width: 100%; min-width: 0; min-height: 0; flex: 1; grid-template-columns: minmax(260px, 300px) minmax(0, 1fr); gap: 20px; }
 :where(.client-portal-shell) .client-request-list, :where(.client-portal-shell) .client-request-detail-pane { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; border: 1px solid rgb(var(--ui-divider)); border-radius: 14px; background: rgb(var(--ui-surface)); box-shadow: 0 3px 12px rgb(var(--ui-overlay) / .12); }
 :where(.client-portal-shell) .client-list-header { display: flex; min-height: 58px; align-items: center; justify-content: space-between; gap: 8px; padding: 12px 15px 7px; }
 :where(.client-portal-shell) .client-list-title { display: flex; align-items: center; gap: 8px; }
@@ -144,62 +145,79 @@
 :where(.client-portal-shell) .client-detail-date { margin: 0; color: rgb(var(--ui-text-muted)); font-size: 10px; }
 :where(.client-portal-shell) .client-detail-heading-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 :where(.client-portal-shell) .client-ticket-detail .client-status { min-height: 28px; padding-inline: 10px; font-size: 11px; }
-:where(.client-portal-shell) .client-detail-status { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 16px; margin: 0 22px 0; padding: 13px 15px 10px; border: 1px solid rgb(var(--ui-divider)); border-radius: 11px; background: rgb(var(--ui-surface)); }
-:where(.client-portal-shell) .client-detail-status.needs-action { border-color: rgb(var(--ui-warning) / .30); background: rgb(var(--ui-warning) / .10); }
-:where(.client-portal-shell) .client-detail-status-copy { display: flex; min-width: 0; align-items: flex-start; gap: 10px; }
-:where(.client-portal-shell) .client-detail-status-icon { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border-radius: 8px; background: rgb(var(--ui-selected)); color: rgb(var(--ui-text-secondary)); }
-:where(.client-portal-shell) .client-detail-status.needs-action .client-detail-status-icon { background: rgb(var(--ui-warning) / .10); color: rgb(var(--ui-warning)); }
-:where(.client-portal-shell) .client-detail-status-copy h2 { margin: 1px 0 3px; color: rgb(var(--ui-text-primary)); font-size: 12px; font-weight: 700; }
+:where(.client-portal-shell) .client-detail-status { margin: 0 20px; padding: 16px 18px 15px; border: 1px solid rgb(var(--ui-divider)); border-radius: 14px; background: rgb(var(--ui-surface)); box-shadow: 0 8px 24px rgb(var(--ui-overlay) / .10); }
+:where(.client-portal-shell) .client-detail-status.needs-action { border-color: rgb(var(--ui-warning) / .34); background: rgb(var(--ui-surface)); }
+:where(.client-portal-shell) .client-detail-status-head { display: flex; min-width: 0; align-items: flex-start; justify-content: space-between; gap: 18px; }
+:where(.client-portal-shell) .client-detail-status-copy { display: flex; min-width: 0; align-items: flex-start; gap: 12px; }
+:where(.client-portal-shell) .client-detail-status-icon { display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border-radius: 10px; background: rgb(var(--ui-selected)); color: rgb(var(--ui-link)); }
+:where(.client-portal-shell) .client-detail-status.needs-action .client-detail-status-icon { background: rgb(var(--ui-warning) / .14); color: rgb(var(--ui-warning)); }
+:where(.client-portal-shell) .client-detail-status-eyebrow { display: block; margin: 0 0 3px; color: rgb(var(--ui-text-muted)); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+:where(.client-portal-shell) .client-detail-status-copy h2 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 14px; font-weight: 700; letter-spacing: -.02em; line-height: 1.3; }
 :where(.client-portal-shell) .client-detail-status.needs-action .client-detail-status-copy h2 { color: rgb(var(--ui-warning)); }
-:where(.client-portal-shell) .client-detail-status-copy p { margin: 0; color: rgb(var(--ui-text-secondary)); font-size: 11px; line-height: 1.5; }
+:where(.client-portal-shell) .client-detail-status-copy p { max-width: 68ch; margin: 5px 0 0; color: rgb(var(--ui-text-secondary)); font-size: 12px; line-height: 1.55; }
+:where(.client-portal-shell) .client-detail-status-actions { display: flex; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; }
 :where(.client-portal-shell) .client-review-action { align-self: center; }
-:where(.client-portal-shell) .client-detail-progress { grid-column: 1 / -1; margin-top: 8px; }
+:where(.client-portal-shell) .client-detail-status-toggle { display: inline-flex; min-height: 40px; align-items: center; gap: 7px; padding: 0 10px; border: 1px solid rgb(var(--ui-divider)); border-radius: 8px; background: transparent; color: rgb(var(--ui-text-secondary)); font-size: 11px; font-weight: 650; cursor: pointer; }
+:where(.client-portal-shell) .client-detail-status-toggle:hover { border-color: rgb(var(--ui-control)); background: rgb(var(--ui-raised)); color: rgb(var(--ui-text-primary)); }
+:where(.client-portal-shell) .client-detail-progress { margin-top: 15px; padding-top: 14px; border-top: 1px solid rgb(var(--ui-divider)); }
 :where(.client-portal-shell) .client-progress-strip { width: 100%; }
-:where(.client-portal-shell) .client-progress-strip ol { display: flex; width: 100%; align-items: flex-start; gap: 7px; margin: 0; padding: 0; list-style: none; }
-:where(.client-portal-shell) .client-progress-strip ol > li { min-width: 0; flex: 1; }
-:where(.client-portal-shell) .client-progress-strip ol > li > span:first-child { display: block; height: 4px; border-radius: 999px; }
-:where(.client-portal-shell) .client-progress-strip ol > li[aria-current="step"] > span:first-child { }
-:where(.client-portal-shell) .client-progress-strip ol > li > span.mt-1\.5 { display: block; overflow: hidden; margin-top: 5px; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-:where(.client-portal-shell) .client-progress-strip ol > li[aria-current="step"] > span.mt-1\.5 { font-weight: 650; }
-:where(.client-portal-shell) .client-progress-strip p { margin: 5px 0 0; font-size: 10px; }
+:where(.client-portal-shell) .client-progress-overview { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+:where(.client-portal-shell) .client-progress-caption { color: rgb(var(--ui-text-secondary)); font-size: 11px; font-weight: 650; }
+:where(.client-portal-shell) .client-progress-count { color: rgb(var(--ui-text-muted)); font-size: 10px; font-variant-numeric: tabular-nums; }
+:where(.client-portal-shell) .client-progress-steps { display: flex; width: 100%; align-items: flex-start; margin: 0; padding: 0; list-style: none; }
+:where(.client-portal-shell) .client-progress-step { min-width: 0; flex: 1; }
+:where(.client-portal-shell) .client-progress-node-row { display: flex; align-items: center; }
+:where(.client-portal-shell) .client-progress-node { display: grid; width: 25px; height: 25px; flex: 0 0 auto; place-items: center; border: 1px solid rgb(var(--ui-divider)); border-radius: 50%; background: rgb(var(--ui-well)); color: rgb(var(--ui-text-muted)); font-size: 10px; font-weight: 700; }
+:where(.client-portal-shell) .client-progress-step.is-done .client-progress-node { border-color: rgb(var(--ui-action)); background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); }
+:where(.client-portal-shell) .client-progress-step.is-current .client-progress-node { border-color: rgb(var(--ui-link)); background: rgb(var(--ui-selected)); color: rgb(var(--ui-selected-content)); box-shadow: 0 0 0 4px rgb(var(--ui-link) / .13); }
+:where(.client-portal-shell) .client-progress-step.is-action .client-progress-node { border-color: rgb(var(--ui-warning)); background: rgb(var(--ui-warning) / .14); color: rgb(var(--ui-warning)); box-shadow: 0 0 0 4px rgb(var(--ui-warning) / .11); }
+:where(.client-portal-shell) .client-progress-connector { display: block; height: 2px; flex: 1; margin-inline: 8px; background: rgb(var(--ui-raised)); }
+:where(.client-portal-shell) .client-progress-connector.is-complete { background: rgb(var(--ui-action)); }
+:where(.client-portal-shell) .client-progress-label { display: block; overflow: hidden; margin-top: 8px; padding-right: 8px; color: rgb(var(--ui-text-secondary)); font-size: 11px; font-weight: 550; line-height: 1.25; text-overflow: ellipsis; white-space: nowrap; }
+:where(.client-portal-shell) .client-progress-step.is-current .client-progress-label { color: rgb(var(--ui-text-primary)); font-weight: 700; }
+:where(.client-portal-shell) .client-progress-step.is-action .client-progress-label { color: rgb(var(--ui-warning)); }
+:where(.client-portal-shell) .client-progress-state { display: block; margin-top: 3px; color: rgb(var(--ui-text-muted)); font-size: 10px; line-height: 1.25; }
+:where(.client-portal-shell) .client-progress-step.is-current .client-progress-state { color: rgb(var(--ui-link)); font-weight: 650; }
+:where(.client-portal-shell) .client-progress-step.is-action .client-progress-state { color: rgb(var(--ui-warning)); }
+:where(.client-portal-shell) .client-progress-mobile-summary { display: none; }
 :where(.client-portal-shell) .client-detail-error { flex: 0 0 auto; margin: 10px 22px 0; padding: 10px 12px; border: 1px solid rgb(var(--ui-danger) / .30); border-radius: 8px; background: rgb(var(--ui-danger) / .10); color: rgb(var(--ui-danger)); font-size: 11px; line-height: 1.5; }
 :where(.client-portal-shell) .client-detail-tabs { display: flex; min-height: 49px; flex: 0 0 auto; gap: 6px; overflow-x: auto; margin-top: 12px; padding: 0 22px; border-bottom: 1px solid rgb(var(--ui-divider)); }
 :where(.client-portal-shell) .client-detail-tab { position: relative; display: inline-flex; min-height: 46px; flex: 0 0 auto; align-items: center; gap: 8px; padding: 0 12px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: rgb(var(--ui-text-secondary)); font-size: 11px; font-weight: 600; cursor: pointer; }
 :where(.client-portal-shell) .client-detail-tab:hover { color: rgb(var(--ui-text-primary)); }
 :where(.client-portal-shell) .client-detail-tab.is-active { border-bottom-color: rgb(var(--ui-accent)); color: rgb(var(--ui-selected-content)); }
-:where(.client-portal-shell) .client-detail-content { display: flex; min-height: 0; flex: 1; flex-direction: column; padding: 13px 16px 16px; }
-:where(.client-portal-shell) .client-conversation { min-width: 0; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; border: 1px solid rgb(var(--ui-divider)); border-radius: 12px; background: rgb(var(--ui-surface)); }
-:where(.client-portal-shell) .client-conversation-heading { display: flex; min-height: 54px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 15px; border-bottom: 1px solid rgb(var(--ui-divider)); }
-:where(.client-portal-shell) .client-conversation-heading h2 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 12px; font-weight: 700; }
-:where(.client-portal-shell) .client-conversation-heading p { margin: 3px 0 0; color: rgb(var(--ui-text-secondary)); font-size: 10px; }
+:where(.client-portal-shell) .client-detail-content { display: flex; min-height: 0; flex: 1; flex-direction: column; padding: 16px 20px 20px; }
+:where(.client-portal-shell) .client-conversation { min-width: 0; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; border: 1px solid rgb(var(--ui-divider)); border-radius: 14px; background: rgb(var(--ui-surface)); }
+:where(.client-portal-shell) .client-conversation-heading { display: flex; min-height: 62px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid rgb(var(--ui-divider)); }
+:where(.client-portal-shell) .client-conversation-heading h2 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 13px; font-weight: 700; }
+:where(.client-portal-shell) .client-conversation-heading p { margin: 4px 0 0; color: rgb(var(--ui-text-secondary)); font-size: 11px; }
 :where(.client-portal-shell) .client-conversation-heading > span { color: rgb(var(--ui-text-secondary)); font-size: 9px; white-space: nowrap; }
-:where(.client-portal-shell) .client-conversation-feed { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 13px; overflow-y: auto; overscroll-behavior: contain; padding: 15px clamp(14px, 2.1vw, 28px); background: rgb(var(--ui-well)); }
+:where(.client-portal-shell) .client-conversation-feed { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 20px; overflow-y: auto; overscroll-behavior: contain; padding: 22px clamp(18px, 3.2vw, 42px); background: rgb(var(--ui-well)); }
 :where(.client-portal-shell) .client-message-day { display: flex; justify-content: center; padding: 2px 0; }
 :where(.client-portal-shell) .client-message-day span { padding: 4px 9px; border: 1px solid rgb(var(--ui-divider)); border-radius: 999px; background: rgb(var(--ui-surface)); color: rgb(var(--ui-text-secondary)); font-size: 9px; }
-:where(.client-portal-shell) .client-message { display: flex; max-width: min(760px, 88%); align-items: flex-end; gap: 8px; }
+:where(.client-portal-shell) .client-message { display: flex; max-width: min(800px, 84%); align-items: flex-end; gap: 10px; }
 :where(.client-portal-shell) .client-message.is-mine { align-self: flex-end; flex-direction: row-reverse; }
-:where(.client-portal-shell) .client-message-avatar { display: grid; width: 29px; height: 29px; flex: 0 0 auto; place-items: center; border: 1px solid rgb(var(--ui-divider)); border-radius: 50%; background: rgb(var(--ui-selected)); color: rgb(var(--ui-text-secondary)); font-size: 10px; font-weight: 700; }
+:where(.client-portal-shell) .client-message-avatar { display: grid; width: 32px; height: 32px; flex: 0 0 auto; place-items: center; border: 1px solid rgb(var(--ui-divider)); border-radius: 10px; background: rgb(var(--ui-selected)); color: rgb(var(--ui-text-secondary)); font-size: 10px; font-weight: 700; }
 :where(.client-portal-shell) .client-message.is-mine .client-message-avatar { border-color: rgb(var(--ui-divider)); background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); }
-:where(.client-portal-shell) .client-message-bubble { min-width: 120px; padding: 9px 12px 7px; border: 1px solid rgb(var(--ui-divider)); border-radius: 12px 12px 12px 4px; background: rgb(var(--ui-surface)); box-shadow: 0 2px 6px rgb(var(--ui-overlay) / .12); }
-:where(.client-portal-shell) .client-message.is-mine .client-message-bubble { border-color: rgb(var(--ui-divider)); border-radius: 12px 12px 4px 12px; background: rgb(var(--ui-selected)); }
-:where(.client-portal-shell) .client-message-author { color: rgb(var(--ui-text-secondary)); font-size: 9px; font-weight: 600; }
-:where(.client-portal-shell) .client-message-bubble p { margin: 4px 0 5px; color: rgb(var(--ui-text-primary)); font-size: 12px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
-:where(.client-portal-shell) .client-message-bubble time { display: block; color: rgb(var(--ui-text-muted)); font-size: 9px; text-align: right; }
+:where(.client-portal-shell) .client-message-bubble { min-width: 120px; padding: 11px 15px 9px; border: 1px solid rgb(var(--ui-divider)); border-radius: 14px 14px 14px 5px; background: rgb(var(--ui-surface)); box-shadow: 0 3px 10px rgb(var(--ui-overlay) / .12); }
+:where(.client-portal-shell) .client-message.is-mine .client-message-bubble { border-color: rgb(var(--ui-divider)); border-radius: 14px 14px 5px 14px; background: rgb(var(--ui-selected)); }
+:where(.client-portal-shell) .client-message-author { color: rgb(var(--ui-text-secondary)); font-size: 10px; font-weight: 650; }
+:where(.client-portal-shell) .client-message-bubble p { margin: 5px 0 6px; color: rgb(var(--ui-text-primary)); font-size: 13px; line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+:where(.client-portal-shell) .client-message-bubble time { display: block; color: rgb(var(--ui-text-muted)); font-size: 10px; text-align: right; }
 :where(.client-portal-shell) .client-no-messages { margin: auto; color: rgb(var(--ui-text-secondary)); font-size: 12px; text-align: center; }
 :where(.client-portal-shell) .client-load-messages { align-self: center; }
-:where(.client-portal-shell) .client-reply-form { flex: 0 0 auto; padding: 11px 13px 9px; border-top: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-surface)); }
+:where(.client-portal-shell) .client-reply-form { flex: 0 0 auto; padding: 14px 18px 12px; border-top: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-surface)); }
 :where(.client-portal-shell) .client-reply-controls { display: flex; align-items: flex-end; gap: 8px; }
-:where(.client-portal-shell) .client-reply-controls textarea { display: block; min-height: 43px; max-height: 112px; flex: 1; resize: vertical; padding: 11px 12px; border: 1px solid rgb(var(--ui-control)); border-radius: 9px; background: rgb(var(--ui-well)); color: rgb(var(--ui-text-primary)); font: inherit; font-size: 12px; line-height: 1.5; }
+:where(.client-portal-shell) .client-reply-controls textarea { display: block; min-height: 48px; max-height: 132px; flex: 1; resize: vertical; padding: 12px 14px; border: 1px solid rgb(var(--ui-control)); border-radius: 10px; background: rgb(var(--ui-well)); color: rgb(var(--ui-text-primary)); font: inherit; font-size: 13px; line-height: 1.55; }
 :where(.client-portal-shell) .client-reply-controls textarea::placeholder { color: rgb(var(--ui-text-muted)); opacity: 1; }
 :where(.client-portal-shell) .client-reply-controls textarea:focus { border-color: rgb(var(--ui-focus)); outline: 0; box-shadow: 0 0 0 3px rgb(var(--ui-focus) / .18); }
 :where(.client-portal-shell) .client-reply-controls textarea:disabled { opacity: .65; }
-:where(.client-portal-shell) .client-send-reply, :where(.client-portal-shell) .client-attach-button { display: inline-flex; min-width: 42px; min-height: 42px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 9px; background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); font-size: 11px; font-weight: 650; cursor: pointer; }
+:where(.client-portal-shell) .client-send-reply, :where(.client-portal-shell) .client-attach-button { display: inline-flex; min-width: 48px; min-height: 48px; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; border: 0; border-radius: 10px; background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); font-size: 11px; font-weight: 650; cursor: pointer; }
 :where(.client-portal-shell) .client-send-reply { padding: 0 14px; }
 :where(.client-portal-shell) .client-send-reply:hover:not(:disabled) { background: rgb(var(--ui-action-hover)); }
 :where(.client-portal-shell) .client-send-reply:disabled { opacity: .45; cursor: not-allowed; }
 :where(.client-portal-shell) .client-attach-button { border: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-surface)); color: rgb(var(--ui-text-secondary)); }
 :where(.client-portal-shell) .client-attach-button:hover { background: rgb(var(--ui-raised)); }
-:where(.client-portal-shell) .client-reply-note { margin: 6px 0 0 2px; color: rgb(var(--ui-text-muted)); font-size: 9px; }
+:where(.client-portal-shell) .client-reply-note { margin: 7px 0 0 2px; color: rgb(var(--ui-text-muted)); font-size: 10px; }
 :where(.client-portal-shell) .client-detail-panel { min-height: 0; flex: 1; overflow-y: auto; }
 :where(.client-portal-shell) .client-other-panels { display: flex; min-height: 0; flex: 1; flex-direction: column; overflow-y: auto; }
 :where(.client-portal-shell) .client-other-panels.hidden { display: none; }
@@ -232,14 +250,14 @@
   :where(.client-portal-shell) .client-detail-back { display: inline-flex; }
   :where(.client-portal-shell) .client-detail-content { padding: 10px 12px 12px; }
   :where(.client-portal-shell) .client-detail-header { padding: 12px 15px 10px; }
-  :where(.client-portal-shell) .client-detail-status { margin-inline: 14px; }
+  :where(.client-portal-shell) .client-detail-status { margin-inline: 16px; }
   :where(.client-portal-shell) .client-detail-tabs { padding-inline: 14px; }
   :where(.client-portal-shell) .client-detail-error { margin-inline: 14px; }
 }
 @media (max-width: 640px) {
   .client-portal-shell { min-height: 520px; }
   :where(.client-portal-shell) .client-portal-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 62px; padding: 8px 12px; }
-  :where(.client-portal-shell) .client-portal-brand img { width: 32px; height: 32px; }
+  :where(.client-portal-shell) .client-portal-brand img { display: block; width: 34px; height: 34px; flex-basis: 34px; }
   :where(.client-portal-shell) .client-portal-brand p { font-size: 13px; }
   :where(.client-portal-shell) .client-portal-brand span { max-width: 38vw; font-size: 10px; }
   :where(.client-portal-shell) .client-portal-header-actions { gap: 5px; }
@@ -275,29 +293,43 @@
   :where(.client-portal-shell) .client-detail-date { font-size: 9px; }
   :where(.client-portal-shell) .client-detail-heading-actions { gap: 4px; }
   :where(.client-portal-shell) .client-ticket-detail .client-status { min-height: 25px; padding-inline: 8px; font-size: 9px; }
-  :where(.client-portal-shell) .client-detail-status { grid-template-columns: minmax(0,1fr); gap: 8px; margin-inline: 10px; padding: 10px; }
-  :where(.client-portal-shell) .client-detail-status-copy p { font-size: 10px; }
-  :where(.client-portal-shell) .client-review-action { min-height: 38px !important; justify-self: start; }
-  :where(.client-portal-shell) .client-detail-progress { margin-top: 4px; }
-  :where(.client-portal-shell) .client-progress-strip ol { gap: 4px; }
-  :where(.client-portal-shell) .client-progress-strip ol > li > span.mt-1\.5 { font-size: 8px; }
+  :where(.client-portal-shell) .client-detail-status { margin-inline: 10px; padding: 12px; }
+  :where(.client-portal-shell) .client-detail-status-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; }
+  :where(.client-portal-shell) .client-detail-status-copy { gap: 9px; }
+  :where(.client-portal-shell) .client-detail-status-icon { width: 32px; height: 32px; }
+  :where(.client-portal-shell) .client-detail-status-eyebrow { font-size: 9px; }
+  :where(.client-portal-shell) .client-detail-status-copy h2 { font-size: 13px; }
+  :where(.client-portal-shell) .client-detail-status-copy p { font-size: 11px; }
+  :where(.client-portal-shell) .client-detail-status-actions { display: contents; }
+  :where(.client-portal-shell) .client-detail-status-toggle { min-height: 36px; padding-inline: 8px; font-size: 10px; }
+  :where(.client-portal-shell) .client-detail-status-toggle span { display: none; }
+  :where(.client-portal-shell) .client-review-action { min-height: 40px !important; grid-column: 1 / -1; justify-self: start; }
+  :where(.client-portal-shell) .client-detail-progress { margin-top: 12px; padding-top: 12px; }
+  :where(.client-portal-shell) .client-progress-overview { margin-bottom: 10px; }
+  :where(.client-portal-shell) .client-progress-caption { font-size: 10px; }
+  :where(.client-portal-shell) .client-progress-count { font-size: 9px; }
+  :where(.client-portal-shell) .client-progress-node { width: 22px; height: 22px; font-size: 9px; }
+  :where(.client-portal-shell) .client-progress-connector { margin-inline: 4px; }
+  :where(.client-portal-shell) .client-progress-label, :where(.client-portal-shell) .client-progress-state { display: none; }
+  :where(.client-portal-shell) .client-progress-mobile-summary { display: block; margin: 9px 0 0; color: rgb(var(--ui-text-secondary)); font-size: 10px; line-height: 1.4; }
+  :where(.client-portal-shell) .client-progress-mobile-summary.is-action { color: rgb(var(--ui-warning)); font-weight: 650; }
   :where(.client-portal-shell) .client-detail-tabs { min-height: 44px; margin-top: 7px; padding-inline: 10px; }
   :where(.client-portal-shell) .client-detail-tab { min-height: 42px; padding-inline: 9px; font-size: 10px; }
   :where(.client-portal-shell) .client-detail-content { padding: 8px; }
-  :where(.client-portal-shell) .client-conversation-heading { min-height: 50px; padding: 8px 10px; }
+  :where(.client-portal-shell) .client-conversation-heading { min-height: 54px; padding: 9px 11px; }
   :where(.client-portal-shell) .client-conversation-heading > span { display: none; }
-  :where(.client-portal-shell) .client-conversation-feed { gap: 10px; padding: 12px 10px; }
+  :where(.client-portal-shell) .client-conversation-feed { gap: 14px; padding: 16px 12px; }
   :where(.client-portal-shell) .client-message { max-width: 94%; gap: 6px; }
   :where(.client-portal-shell) .client-message-avatar { width: 25px; height: 25px; }
-  :where(.client-portal-shell) .client-message-bubble { min-width: 100px; padding: 8px 10px 6px; }
-  :where(.client-portal-shell) .client-message-bubble p { font-size: 11px; }
-  :where(.client-portal-shell) .client-reply-form { padding: 9px; }
+  :where(.client-portal-shell) .client-message-bubble { min-width: 100px; padding: 9px 11px 7px; }
+  :where(.client-portal-shell) .client-message-bubble p { font-size: 12px; line-height: 1.6; }
+  :where(.client-portal-shell) .client-reply-form { padding: 10px; }
   :where(.client-portal-shell) .client-reply-controls { gap: 6px; }
-  :where(.client-portal-shell) .client-reply-controls textarea { min-height: 42px; padding: 9px; font-size: 11px; }
+  :where(.client-portal-shell) .client-reply-controls textarea { min-height: 44px; padding: 10px; font-size: 12px; }
   :where(.client-portal-shell) .client-send-reply { width: 42px; padding: 0; }
   :where(.client-portal-shell) .client-send-reply span { display: none; }
   :where(.client-portal-shell) .client-attach-button { width: 38px; min-width: 38px; min-height: 42px; }
-  :where(.client-portal-shell) .client-reply-note { font-size: 8px; }
+  :where(.client-portal-shell) .client-reply-note { font-size: 9px; }
   :where(.client-portal-shell) .client-portal-notice, :where(.client-portal-shell) .client-portal-error { font-size: 10px; }
 }
 @media (max-height: 640px) and (min-width: 641px) {

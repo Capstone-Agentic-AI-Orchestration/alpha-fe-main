@@ -162,9 +162,9 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     }
   };
 
-  return <section className="flex h-full min-h-0 flex-col px-4 pb-4 pt-5 md:px-6" aria-label="Shared PM inquiry inbox">
-    <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
-      <div>
+  return <section className="pm-inquiries flex h-full min-h-0 flex-col px-4 pb-4 pt-5 md:px-6" aria-label="Shared PM inquiry inbox">
+    <header className="pm-inquiries__header mb-4 flex flex-wrap items-start justify-between gap-3">
+      <div className="pm-inquiries__heading">
         <div className="flex items-center gap-2"><Inbox size={18} className="text-link" /><h1 className="text-lg font-semibold text-content">Shared inquiries</h1></div>
         <p className="mt-1 max-w-2xl text-xs leading-relaxed text-content-secondary">One shared intake queue for Alpha. Review an inquiry, then accept it into your current workspace before it becomes a regular ticket.</p>
         {workspaceName && <p className="mt-2 text-[11px] text-content-muted">Accept destination: <span className="font-medium text-content-secondary">{workspaceName}</span></p>}
@@ -173,25 +173,25 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
         <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
       </button>
     </header>
-    <nav aria-label="Inquiry status" className="mb-4 flex gap-2">
+    <nav aria-label="Inquiry status" className="pm-inquiries__filters mb-4 flex gap-2">
       {(['pending', 'handled'] as const).map(value => <button key={value} type="button" aria-pressed={filter === value}
         disabled={accepting || declining} onClick={() => setFilter(value)} className={filter === value ? primary : secondary}>
         {value === 'pending' ? 'Pending review' : 'Handled inquiries'}
       </button>)}
     </nav>
 
-    {!workspaceId ? <div className="rounded-xl border border-status-warning-border bg-status-warning-subtle p-4 text-sm text-status-warning">
+    {!workspaceId ? <div className="pm-inquiries__notice rounded-xl border border-status-warning-border bg-status-warning-subtle p-4 text-sm text-status-warning">
       Select a workspace where you have PM access to review and accept shared inquiries.
-    </div> : !workspaceCanReview ? <div className="rounded-xl border border-status-warning-border bg-status-warning-subtle p-4 text-sm text-status-warning">
+    </div> : !workspaceCanReview ? <div className="pm-inquiries__notice rounded-xl border border-status-warning-border bg-status-warning-subtle p-4 text-sm text-status-warning">
       The shared inquiry inbox is available only to PMs in the selected workspace.
-    </div> : <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.5fr)]">
-      <div className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-divider bg-surface">
-        <div className="border-b border-divider px-4 py-3 text-xs text-content-secondary">{items.length} loaded {items.length === 1 ? 'inquiry' : 'inquiries'} · {filter === 'pending' ? 'Pending PM review' : 'Handled inquiries'}{newIds.size > 0 ? ` · ${newIds.size} new` : ''}</div>
-        <div className="min-h-0 flex-1 overflow-y-auto">
+    </div> : <div className="pm-inquiries__workspace grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.5fr)]">
+      <div className="pm-inquiries__list-panel flex min-h-0 flex-col overflow-hidden rounded-xl border border-divider bg-surface">
+        <div className="pm-inquiries__list-summary border-b border-divider px-4 py-3 text-xs text-content-secondary">{items.length} loaded {items.length === 1 ? 'inquiry' : 'inquiries'} · {filter === 'pending' ? 'Pending PM review' : 'Handled inquiries'}{newIds.size > 0 ? ` · ${newIds.size} new` : ''}</div>
+        <div className="pm-inquiries__list-scroll min-h-0 flex-1 overflow-y-auto">
           {loading && items.length === 0 ? <p role="status" className="p-5 text-xs text-content-secondary">Loading shared inquiries…</p>
             : items.length === 0 ? <div className="p-5 text-center"><Inbox size={22} className="mx-auto text-content-muted" /><p className="mt-3 text-sm text-content-secondary">{filter === 'pending' ? 'No inquiries waiting' : 'No handled inquiries yet'}</p><p className="mt-1 text-xs text-content-muted">{filter === 'pending' ? 'New client inquiries will appear here for PM review.' : 'Accepted and declined inquiries remain here for reference.'}</p></div>
               : items.map(item => <button key={item.id} type="button" onClick={() => { setSelectedId(item.id); setNewIds(current => { const next = new Set(current); next.delete(item.id); return next; }); setDeclineReason(''); }} aria-pressed={selected?.id === item.id}
-                className={`block w-full border-b border-divider border-l-2 p-4 text-left transition-colors ${selected?.id === item.id ? 'border-l-control bg-selected' : 'border-l-transparent hover:bg-surface-high'}`}>
+                className={`pm-inquiries__list-item block w-full border-b border-divider border-l-2 p-4 text-left transition-colors ${selected?.id === item.id ? 'border-l-control bg-selected' : 'border-l-transparent hover:bg-surface-high'}`}>
                 <span className="flex items-center justify-between gap-2"><span className="block truncate text-sm font-medium text-content">{item.title}</span>{newIds.has(item.id) && <span className="shrink-0 rounded bg-selected px-1.5 py-0.5 text-[9px] text-selected-content">New</span>}</span>
                 <span className="mt-1 block truncate text-xs text-content-secondary">{item.fullName} · {item.email}</span>
                 <span className="mt-2 flex items-center gap-1 text-[11px] text-status-warning"><Clock3 size={12} />{filter === 'pending' ? 'Email not verified' : item.status === 'accepted' ? 'Accepted' : 'Declined'}</span>
@@ -202,33 +202,33 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
         </button>}
       </div>
 
-      <div className="flex min-h-0 flex-col overflow-y-auto rounded-xl border border-divider bg-surface">
+      <div className="pm-inquiries__detail-panel flex min-h-0 flex-col overflow-y-auto rounded-xl border border-divider bg-surface">
         {error && <p role="alert" className="m-4 flex items-start gap-2 rounded-lg border border-status-danger-border bg-status-danger-subtle p-3 text-xs text-status-danger"><AlertCircle size={15} className="mt-0.5 shrink-0" />{error}</p>}
         {selected ? <>
-          <div className="border-b border-divider p-5">
+          <div className="pm-inquiries__detail-header border-b border-divider p-5">
             <p className="text-[11px] uppercase tracking-wide text-content-muted">{filter === 'pending' ? 'Inquiry · Not yet a ticket' : selected.status === 'accepted' ? 'Accepted inquiry' : 'Declined inquiry'}</p>
             <h2 className="mt-2 text-lg font-semibold text-content">{selected.title}</h2>
             {selected.publicReference && <p className="mt-1 font-mono text-[10px] text-content-muted">{selected.publicReference}</p>}
             <p className="mt-2 text-xs text-content-muted">Received {formatDate(selected.submittedAt)}</p>
           </div>
-          <div className="grid gap-3 p-5 md:grid-cols-2">
-            <div className="rounded-lg border border-divider p-4">
+          <div className="pm-inquiries__meta-grid grid gap-3 p-5 md:grid-cols-2">
+            <div className="pm-inquiries__info-card rounded-lg border border-divider p-4">
               <p className="text-[10px] uppercase tracking-wide text-content-muted">{filter === 'pending' ? 'Client contact · Unverified' : 'Original inquiry contact'}</p>
               <p className="mt-3 flex items-center gap-2 text-sm text-content"><UserRound size={14} />{selected.fullName}</p>
               <p className="mt-2 flex items-center gap-2 break-all text-xs text-content-secondary"><Mail size={14} className="shrink-0" />{selected.email}</p>
               {selected.company && <p className="mt-2 text-xs text-content-secondary">{selected.company}</p>}
             </div>
-            <div className="rounded-lg border border-divider p-4">
+            <div className="pm-inquiries__info-card rounded-lg border border-divider p-4">
               <p className="text-[10px] uppercase tracking-wide text-content-muted">Requested date</p>
               <p className="mt-3 text-sm text-content">{selected.requestedDeadline ?? 'Not specified'}</p>
               <p className="mt-2 text-xs text-content-muted">The date is a client preference, not a commitment.</p>
             </div>
           </div>
-          <div className="mx-5 rounded-lg border border-divider p-4">
+          <div className="pm-inquiries__request mx-5 rounded-lg border border-divider p-4">
             <p className="text-[10px] uppercase tracking-wide text-content-muted">What they need</p>
             <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-content-secondary">{selected.description}</p>
           </div>
-          {filter === 'pending' ? <div className="mt-auto border-t border-divider p-5">
+          {filter === 'pending' ? <div className="pm-inquiries__decision mt-auto border-t border-divider p-5">
             <p className="mb-3 text-xs leading-relaxed text-content-secondary">Accepting creates a normal ticket in <span className="font-medium text-content">{workspaceName ?? 'the selected workspace'}</span>. It does not verify the email, create a project, invite the client, or grant portal access.</p>
             <label className="mb-3 block space-y-1.5"><span className="text-[11px] font-medium text-content-secondary">Optional internal decline note</span><textarea maxLength={1000} rows={2} value={declineReason} disabled={declining || accepting} onChange={event => setDeclineReason(event.target.value)} className="w-full rounded-lg border border-divider bg-well p-2.5 text-xs text-content outline-none focus:border-control" placeholder="For your team's records only" /></label>
             <p className="mb-3 text-[10px] text-content-muted">Declining queues a general outcome email to the inquiry contact. The internal note is not emailed; no ticket or account is created.</p>
@@ -241,7 +241,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
               {accepting ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
               {accepting ? 'Accepting…' : `Accept into ${workspaceName ?? 'workspace'}`}
             </button></div>
-          </div> : <div className="mt-auto border-t border-divider p-5 text-xs leading-relaxed text-content-secondary">
+          </div> : <div className="pm-inquiries__decision mt-auto border-t border-divider p-5 text-xs leading-relaxed text-content-secondary">
             {selected.handledAt && <p>Handled {formatDate(selected.handledAt)}</p>}
             <p className="mt-2">{selected.status === 'accepted' ? 'Accepted into a workspace. The regular ticket is managed in that workspace’s Tickets page.' : 'Declined. This record creates no ticket or client access.'}</p>
             {selected.status === 'declined' && <p className="mt-2">{selected.outcomeEmailStatus === 'delivered'

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, Edit3, FlaskConical, HelpCircle, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react';
+import { ChevronDown, Edit3, FlaskConical, HelpCircle, Inbox, Pin, PinOff, Plus, Search, Trash2 } from 'lucide-react';
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import type { PreviewRole } from './previewModel';
-import { pmPreviewApi, pmPreviewDocumentsApi } from './ticketingPreviewFixtures';
+import { pmPreviewApi, pmPreviewDocumentsApi, pmPreviewIntakeApi } from './ticketingPreviewFixtures';
 import { clientPreviewApi } from './clientPreviewApi';
 import ClientPortal from './ClientPortal';
 import { PmTicketsView } from './PmTicketsView';
+import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
 
 function isPmPreviewRole(value: PreviewRole): boolean {
   return value === 'pm';
@@ -21,6 +22,7 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
+  const [previewSection, setPreviewSection] = useState<'tickets' | 'inquiries'>('tickets');
   const expanded = pinnedOpen || hovered || focused;
   const sections = useMemo(() => sectionsFor('pm'), []);
 
@@ -87,9 +89,11 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
       <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4">
         <div className="pointer-events-auto mx-auto flex w-full max-w-[1800px] flex-wrap items-center gap-1.5 rounded-2xl border border-divider bg-surface/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
           <div role="tablist" aria-label="Open workspace tabs" className="workspace-tab-strip flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar">
-            <div role="tab" aria-selected="true" className="flex h-9 min-w-[112px] max-w-[220px] items-center gap-2 rounded-xl border border-divider bg-selected px-3 text-xs font-medium text-selected-content shadow-sm">
-              <span className="text-link">{navIcon('tickets', 'h-3.5 w-3.5')}</span><span className="truncate">Tickets</span>
-            </div>
+            {(['tickets', 'inquiries'] as const).map(section => <button key={section} type="button" role="tab" aria-selected={previewSection === section}
+              onClick={() => setPreviewSection(section)}
+              className={`flex h-9 min-w-[112px] max-w-[220px] items-center gap-2 rounded-xl border px-3 text-xs font-medium shadow-sm ${previewSection === section ? 'border-divider bg-selected text-selected-content' : 'border-transparent text-content-muted hover:bg-surface-high hover:text-content'}`}>
+              <span className={previewSection === section ? 'text-link' : 'text-content-muted'}>{section === 'tickets' ? navIcon('tickets', 'h-3.5 w-3.5') : <Inbox className="h-3.5 w-3.5" />}</span><span className="truncate">{section === 'tickets' ? 'Tickets' : 'Inquiries'}</span>
+            </button>)}
           </div>
           <button type="button" disabled title="Opening other Alpha pages is outside this preview" aria-label="Open new tab" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-content-muted"><Plus className="h-4 w-4" /></button>
           <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
@@ -104,7 +108,8 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
           {/* Kept visible so sample content cannot be mistaken for live records. */}
           <div className="flex h-full min-h-0 flex-col">
             <div className="pm-ticket-preview__notice"><FlaskConical size={12} />Design preview · fictional tickets · changes are disabled</div>
-            <div className="min-h-0 flex-1"><PmTicketsView api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} communicationEnabled /></div>
+            <div className="min-h-0 flex-1">{previewSection === 'tickets' ? <PmTicketsView api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} communicationEnabled />
+              : <PmCentralIntakeInbox workspaceId="preview-workspace" workspaceName="Northstar Demo" workspaceCanReview onAccepted={() => setPreviewSection('tickets')} api={pmPreviewIntakeApi} />}</div>
           </div>
         </div>
       </main>

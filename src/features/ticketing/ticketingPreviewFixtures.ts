@@ -8,6 +8,8 @@ import {
   type PmTicketQueueItem,
   type PmTicketQueueOptions,
   type PmTicketQueuePage,
+  type PmCentralIntakeItem,
+  type PmCentralIntakePage,
   type TicketActionOwner,
   type TicketNextAction,
   type TicketStatus,
@@ -239,6 +241,36 @@ export const pmPreviewDocumentsApi: TicketDocumentsApi = {
   list: async () => [],
   upload: async () => { throw new Error('Uploads are disabled in the local UI preview.'); },
   download: async () => { throw new Error('Downloads are disabled in the local UI preview.'); },
+};
+
+const DEMO_INQUIRIES: PmCentralIntakeItem[] = [
+  {
+    id: 'preview-inquiry-2041', publicReference: 'INQ-DEMO-2041',
+    fullName: 'Jordan Reyes', email: 'jordan.reyes@example.test', company: 'Northstar Demo Co.',
+    title: 'Request an inventory overview',
+    description: 'We would like an overview of stock levels and recent inventory changes, with a clear way to compare the current month with the previous one.',
+    requestedDeadline: '2026-11-15', submittedAt: '2026-10-08T09:10:00+08:00', status: 'pending',
+  },
+  {
+    id: 'preview-inquiry-2038', publicReference: 'INQ-DEMO-2038',
+    fullName: 'Maya Chen', email: 'maya.chen@example.test', company: 'Northstar Demo Co.',
+    title: 'Add a weekly operations summary',
+    description: 'Please add a weekly summary of the operations dashboard to the workspace overview.',
+    requestedDeadline: null, submittedAt: '2026-10-06T15:40:00+08:00', status: 'pending',
+  },
+];
+
+/** Read-only shared inquiry transport used by the development PM preview. */
+export const pmPreviewIntakeApi = {
+  async listCentralIntakes(_after: string | null = null, filter: 'pending' | 'handled' = 'pending'): Promise<PmCentralIntakePage> {
+    return { items: DEMO_INQUIRIES.filter(item => filter === 'pending' ? item.status === 'pending' : item.status !== 'pending'), nextCursor: null };
+  },
+  async acceptCentralIntake(): Promise<never> {
+    throw new Error('Inquiry changes are disabled in the local UI preview.');
+  },
+  async declineCentralIntake(): Promise<never> {
+    throw new Error('Inquiry changes are disabled in the local UI preview.');
+  },
 };
 
 export function createClientPreviewModel() {

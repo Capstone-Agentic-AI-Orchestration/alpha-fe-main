@@ -236,3 +236,146 @@
 /* Keep the development-only preview label readable. */
 .pm-ticket-preview [class*="text-[10px]"] { font-size: 11px; }
 .pm-ticket-preview__notice { display: flex; min-height: 30px; flex: none; align-items: center; gap: 7px; padding: 6px 24px; background: rgb(var(--ui-canvas)); color: rgb(var(--ui-text-secondary)); font-size: 11px; }
+
+/* Shared page rhythm: keep the PM work surfaces readable without changing the
+   queue, ticket, or inquiry state model. */
+.pm-ticket-page__tabs { min-height: 52px; gap: 28px; padding-inline: clamp(16px, 3vw, 40px); }
+.pm-ticket-page__tabs button { min-height: 52px; font-weight: 500; }
+.pm-ticket-page__content { overflow: hidden; }
+.pm-tickets__header { min-height: 88px; padding-inline: clamp(24px, 3vw, 40px); }
+.pm-tickets__queue { padding-inline: clamp(24px, 3vw, 40px); }
+.pm-tickets__queue-toolbar { min-height: 54px; padding-bottom: 18px; font-size: 13px; }
+.pm-ticket-queue__columns, .pm-ticket-queue__item { gap: 28px; padding-right: 48px; padding-left: 18px; }
+.pm-ticket-queue__item { min-height: 104px; padding-top: 22px; padding-bottom: 22px; }
+.pm-ticket-queue__title { font-size: 15px; line-height: 1.55; }
+.pm-tickets__detail-shell { padding-right: clamp(28px, 4vw, 56px); padding-left: clamp(28px, 4vw, 56px); }
+.pm-tickets__conversation-area--chat { height: clamp(320px, calc(100dvh - 460px), 640px); min-height: 320px; }
+.pm-tickets__conversation-area--chat .pm-tickets__conversation-history { padding: 26px clamp(18px, 3vw, 34px); }
+.pm-tickets__conversation-area--chat .pm-tickets__message-content { max-width: min(82%, 720px); padding: 14px 18px; }
+
+/* The shared inquiry inbox uses the same spacious two-pane reading model as a
+   selected ticket. The custom hooks sit alongside the existing utility classes
+   so loading, acceptance, and error behaviour remain untouched. */
+.pm-inquiries { --pm-inquiry-line: rgb(var(--ui-divider)); --pm-inquiry-muted: rgb(var(--ui-text-secondary)); --pm-inquiry-faint: rgb(var(--ui-text-muted)); overflow-y: auto; padding: 26px clamp(16px, 3vw, 40px) 28px !important; }
+.pm-inquiries__header { margin-bottom: 20px !important; }
+.pm-inquiries__heading { min-width: 0; }
+.pm-inquiries__header, .pm-inquiries__filters { flex-shrink: 0; }
+.pm-inquiries__workspace { grid-template-columns: minmax(300px, .9fr) minmax(0, 1.7fr); gap: 20px !important; }
+.pm-inquiries__list-panel, .pm-inquiries__detail-panel { border-radius: 14px !important; }
+.pm-inquiries__list-summary { padding: 15px 18px !important; }
+.pm-inquiries__list-item { min-height: 112px; padding: 18px 20px !important; }
+.pm-inquiries__detail-header { padding: 26px 30px !important; }
+.pm-inquiries__meta-grid { gap: 16px !important; padding: 20px 30px !important; }
+.pm-inquiries__info-card, .pm-inquiries__request { border-radius: 12px !important; padding: 20px !important; }
+.pm-inquiries__request { margin-inline: 30px !important; }
+.pm-inquiries__decision { padding: 24px 30px !important; }
+
+@media (max-width: 767px) {
+  /* On phones the PM navigation becomes a scrollable filter row. Keeping it
+     in flow preserves access to every queue without stealing detail width. */
+  .pm-tickets { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .pm-tickets__navigation { min-height: 0; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--pm-line); }
+  .pm-tickets__navigation-heading { display: none; }
+  .pm-tickets__filters { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .pm-tickets__filters::-webkit-scrollbar { display: none; }
+  .pm-tickets__filter { flex: 0 0 auto; min-height: 35px; width: auto; gap: 7px; padding: 7px 10px; border-radius: 8px; font-size: 12px !important; white-space: nowrap; }
+  .pm-tickets__filter-count { margin-left: 1px; }
+  .pm-tickets__header { min-height: 66px; align-items: center; gap: 10px; padding: 14px 16px; }
+  .pm-tickets__view-heading h2 { font-size: 17px; }
+  .pm-tickets__header-actions { margin-left: auto; gap: 7px; }
+  .pm-tickets__search-input { width: min(168px, 45vw); height: 35px; }
+  .pm-tickets__refresh { width: 35px; padding: 7px; }
+  .pm-tickets__refresh > span { display: none; }
+  .pm-tickets__queue { padding-inline: 16px; }
+  .pm-tickets__queue-toolbar { min-height: 42px; padding-bottom: 10px; font-size: 12px; }
+  .pm-ticket-queue__columns { display: none; }
+  .pm-ticket-queue__item { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; min-height: 0; padding: 17px 0; }
+  .pm-ticket-queue__request { grid-column: 1; grid-row: 1; }
+  .pm-ticket-queue__client { display: flex; grid-column: 1; grid-row: 2; flex-wrap: wrap; gap: 4px 8px; }
+  .pm-ticket-queue__client-name { font-size: 12px; }
+  .pm-ticket-queue__project { font-size: 11px; }
+  .pm-ticket-queue__state { grid-column: 1; grid-row: 3; gap: 5px; }
+  .pm-ticket-queue__next-action { font-size: 11px; }
+  .pm-ticket-queue__item > time { grid-column: 2; grid-row: 1; align-self: start; font-size: 11px; }
+  .pm-ticket-queue__open { display: none; }
+  .pm-ticket-queue__client-options { top: 14px; right: -4px; }
+  .pm-tickets__detail-shell { max-width: none; padding: 0 16px 22px; }
+  .pm-tickets__detail-header { padding: 12px 0 8px; }
+  .pm-tickets__detail-meta { gap: 8px 14px; }
+  .pm-tickets__detail-title { margin: 15px 0 8px; font-size: 24px; letter-spacing: -.45px; line-height: 1.22; }
+  .pm-tickets__ticket-context { gap: 6px 8px; font-size: 12px; }
+  .pm-tickets__ticket-toolbar { align-items: stretch; flex-direction: column; gap: 13px; min-height: 0; margin-top: 16px; }
+  .pm-tickets__detail-actions { width: 100%; flex-wrap: wrap; }
+  .pm-tickets__detail-actions > button { flex: 1 1 auto; min-height: 38px; }
+  .pm-tickets__more-actions { flex: 1 1 auto; }
+  .pm-tickets__more-actions > summary { justify-content: center; min-height: 38px; }
+  .pm-tickets__section-tabs { gap: 22px; margin-top: 10px; }
+  .pm-tickets__section-tabs > button { font-size: 12px; }
+  .pm-tickets__conversation-area--chat { height: clamp(340px, calc(100dvh - 390px), 560px); min-height: 320px; margin-top: 16px; }
+  .pm-tickets__conversation-area--chat .pm-tickets__conversation-history { gap: 14px; padding: 18px 14px; }
+  .pm-tickets__conversation-area--chat .pm-tickets__message-content { max-width: 88%; padding: 12px 14px; }
+  .pm-tickets__conversation-area--chat .pm-tickets__reply-prompt { padding: 14px; }
+  .pm-tickets__conversation-area--chat .pm-tickets__composer { padding: 12px 14px; }
+  .pm-tickets__overview { gap: 28px; }
+  .pm-tickets__details-view, .pm-tickets__documents-view { padding: 20px 0; }
+  .pm-ticket-page__tabs { gap: 22px; padding-inline: 16px; }
+  .pm-ticket-page__tabs button { min-height: 48px; }
+
+  .pm-inquiries { height: 100%; padding: 16px 14px 22px !important; }
+  .pm-inquiries__header { gap: 12px !important; margin-bottom: 14px !important; }
+  .pm-inquiries__header > button { flex: 0 0 auto; }
+  .pm-inquiries__filters { max-width: 100%; min-height: 38px; margin-bottom: 14px !important; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .pm-inquiries__filters::-webkit-scrollbar { display: none; }
+  .pm-inquiries__workspace { display: flex !important; flex: none !important; flex-direction: column; gap: 14px !important; min-height: auto; overflow: visible; }
+  .pm-inquiries__list-panel { min-height: 0; max-height: 270px; flex: none; }
+  .pm-inquiries__list-scroll { max-height: 205px; flex: none; }
+  .pm-inquiries__list-item { min-height: 100px; padding: 16px !important; }
+  .pm-inquiries__detail-panel { min-height: 560px; flex: none; overflow: visible !important; }
+  .pm-inquiries__detail-header { padding: 22px 18px !important; }
+  .pm-inquiries__meta-grid { grid-template-columns: minmax(0, 1fr); padding: 16px 18px !important; }
+  .pm-inquiries__info-card, .pm-inquiries__request { padding: 17px !important; }
+  .pm-inquiries__request { margin-inline: 18px !important; }
+  .pm-inquiries__decision { padding: 20px 18px !important; }
+  .pm-inquiries__decision > div { flex-direction: column; }
+  .pm-inquiries__decision > div > button { width: 100%; justify-content: center; }
+}
+
+@media (min-width: 768px) and (max-width: 899px) {
+  .pm-inquiries { padding-inline: 20px !important; }
+  .pm-inquiries__workspace { display: flex !important; flex-direction: column; overflow: visible; }
+  .pm-inquiries__list-panel { max-height: 290px; flex: none; }
+  .pm-inquiries__list-scroll { max-height: 220px; flex: none; }
+  .pm-inquiries__detail-panel { min-height: 560px; flex: none; overflow: visible !important; }
+}
+
+/* PM ticket conversations get the same focused reading hierarchy as the
+   client portal: chat is primary, supporting context stays visible beside it. */
+.pm-tickets__chat-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(230px, 278px); gap: 20px; width: 100%; min-height: 380px; height: clamp(420px, calc(100dvh - 330px), 660px); margin-top: 20px; }
+.pm-tickets__chat-layout .pm-tickets__conversation-area { min-width: 0; min-height: 0; margin-top: 0; }
+.pm-tickets__chat-layout .pm-tickets__conversation-area--chat { height: 100%; min-height: 0; margin-top: 0; }
+.pm-tickets__chat-layout .pm-tickets__conversation-history { min-width: 0; }
+.pm-tickets__context-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: 0; overflow-y: auto; border: 1px solid rgb(var(--ui-divider)); border-radius: 14px; background: rgb(var(--ui-well)); padding: 20px; }
+.pm-tickets__context-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 17px; border-bottom: 1px solid rgb(var(--ui-divider)); }
+.pm-tickets__context-heading .pm-tickets__eyebrow { margin-bottom: 4px; font-size: 12px; }
+.pm-tickets__context-heading .pm-tickets__status { font-size: 11px; }
+.pm-tickets__context-section { display: grid; gap: 7px; padding: 17px 0; border-bottom: 1px solid rgb(var(--ui-divider)); }
+.pm-tickets__context-section:last-child { border-bottom: 0; padding-bottom: 0; }
+.pm-tickets__context-label { margin: 0; color: var(--pm-faint); font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.pm-tickets__context-value { display: flex; align-items: flex-start; gap: 7px; margin: 0; color: var(--pm-text); font-size: 13px; font-weight: 500; line-height: 1.45; overflow-wrap: anywhere; }
+.pm-tickets__context-value--accent { color: var(--pm-muted); }
+.pm-tickets__context-value--accent svg { flex: none; color: var(--pm-accent); margin-top: 2px; }
+.pm-tickets__context-detail { margin: 0; color: var(--pm-muted); font-size: 11px; line-height: 1.65; overflow-wrap: anywhere; }
+.pm-tickets__context-description { color: var(--pm-text); font-size: 12px; line-height: 1.7; }
+
+@media (max-width: 1199px) and (min-width: 768px) {
+  .pm-tickets__chat-layout { grid-template-columns: minmax(0, 1fr) minmax(210px, 240px); gap: 16px; }
+  .pm-tickets__detail-shell { padding-inline: 28px; }
+  .pm-tickets__context-panel { padding: 17px; }
+}
+
+@media (max-width: 767px) {
+  .pm-tickets__chat-layout { display: flex; height: auto; min-height: 0; flex-direction: column; gap: 14px; margin-top: 16px; }
+  .pm-tickets__chat-layout .pm-tickets__conversation-area--chat { height: clamp(420px, calc(100dvh - 360px), 600px); min-height: 380px; flex: none; }
+  .pm-tickets__chat-layout .pm-tickets__conversation-area:not(.pm-tickets__conversation-area--chat) { min-height: 360px; flex: none; }
+  .pm-tickets__context-panel { flex: none; max-height: none; overflow: visible; padding: 18px; border-radius: 14px; }
+}

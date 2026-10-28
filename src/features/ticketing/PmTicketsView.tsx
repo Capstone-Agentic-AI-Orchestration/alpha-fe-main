@@ -891,7 +891,8 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
               </section>}
               </section>}
               {writeError && <div role="alert" className="pm-tickets__error">{writeError}</div>}
-              {(ticketSection === 'conversation' || ticketSection === 'notes') && <div className={`pm-tickets__conversation-area${panel === 'conversation' ? ' pm-tickets__conversation-area--chat' : ''}`}>
+              {(ticketSection === 'conversation' || ticketSection === 'notes') && <div className="pm-tickets__chat-layout">
+                <div className={`pm-tickets__conversation-area${panel === 'conversation' ? ' pm-tickets__conversation-area--chat' : ''}`}>
                   {panel === 'notes' && <p className="pm-tickets__privacy-notice"><LockKeyhole size={13} />Only authorized project managers can see these notes.</p>}
                   <div className="pm-tickets__conversation-history">
                     {(panel === 'conversation' ? messageCursor : noteCursor) && <button type="button" onClick={() => void loadMoreHistory()} disabled={historyLoading} className="pm-tickets__load-more">{historyLoading ? 'Loading…' : 'Load more'}</button>}
@@ -940,7 +941,38 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                     </form>}
                   </>}
                   {!detail.writesAvailable && <div className="pm-tickets__readonly">This ticket is read-only or ticket changes are disabled.</div>}
-                </div>}
+                </div>
+                <aside className="pm-tickets__context-panel" aria-label="Ticket context">
+                  <div className="pm-tickets__context-heading">
+                    <div>
+                      <p className="pm-tickets__eyebrow">Request context</p>
+                      <span className="pm-tickets__reference">{detail.reference}</span>
+                    </div>
+                    <span className={`pm-tickets__status ${statusStyle(detail.status)}`}>{statusLabel(detail.status)}</span>
+                  </div>
+                  <section className="pm-tickets__context-section">
+                    <p className="pm-tickets__context-label">Client</p>
+                    <p className="pm-tickets__context-value">{detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? detail.companyLabel}</p>
+                    {detail.internal.request?.contact && <p className="pm-tickets__context-detail">{detail.internal.request.contact.email}</p>}
+                    <p className="pm-tickets__context-detail">{detail.companyLabel}</p>
+                    {detail.internal.request?.contact && <p className="pm-tickets__context-detail"><PmContactVerification verification={detail.internal.request.contact.verification} /></p>}
+                  </section>
+                  <section className="pm-tickets__context-section">
+                    <p className="pm-tickets__context-label">Project</p>
+                    <p className="pm-tickets__context-value">{detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? detail.request?.projectLabel ?? 'No project linked'}</p>
+                    <p className="pm-tickets__context-detail">{detail.internal.projectId ? (detail.internal.projectClientVisible ? 'Client-visible project name' : 'PM-only project link') : 'Link a project after scope is agreed.'}</p>
+                  </section>
+                  <section className="pm-tickets__context-section">
+                    <p className="pm-tickets__context-label">Next step</p>
+                    <p className="pm-tickets__context-value pm-tickets__context-value--accent"><CircleDot size={14} aria-hidden="true" />{selectedNextStep}</p>
+                  </section>
+                  <section className="pm-tickets__context-section pm-tickets__context-section--request">
+                    <p className="pm-tickets__context-label">Request summary</p>
+                    <p className="pm-tickets__context-detail pm-tickets__context-description">{detail.description}</p>
+                    {detail.request?.requestedDeadline && <p className="pm-tickets__context-detail">Requested by {detail.request.requestedDeadline}</p>}
+                  </section>
+                </aside>
+              </div>}
                 {ticketSection === 'documents' && communicationEnabled && <section aria-label="Ticket documents" className="pm-tickets__documents-view">
                   <TicketDocumentsPanel api={documentsApi} ticketId={detail.id} heading="Shared files"
                     canUpload={detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status)} />

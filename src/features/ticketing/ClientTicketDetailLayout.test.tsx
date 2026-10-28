@@ -32,6 +32,8 @@ describe('client ticket detail layout', () => {
     expect(html).toContain('aria-label="Send reply"');
     expect(html).toContain('Hello there');
     expect(html).toContain('Copy request reference');
+    expect(html).toContain('Hide progress');
+    expect(html).toContain('aria-controls="client-request-progress"');
     expect(html).toContain('min-h-[44px]');
     // The progress path names the proposed work as the current step and makes the client's turn explicit.
     expect(html).toContain('aria-label="Request progress"');
