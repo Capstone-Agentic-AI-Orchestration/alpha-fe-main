@@ -53,7 +53,7 @@ describe('browser board cursor sync', () => {
     expect(changesSpy).not.toHaveBeenCalled();
     expect(result).toEqual({ state: { projects: bootstrap.projects, agents: bootstrap.agents, issues: bootstrap.issues }, cursor: cursor('5') });
     expect(loadFromStorage(`projects:${workspaceId}`, [])).toEqual(bootstrap.projects);
-    expect(loadFromStorage(`board_cursor:${workspaceId}`, null)).toEqual(cursor('5'));
+    expect(loadFromStorage(`board_cursor_v2:${workspaceId}`, null)).toEqual(cursor('5'));
   });
 
   it('uses only delta pages when a valid cursor exists', async () => {
@@ -129,7 +129,7 @@ describe('browser board cursor sync', () => {
 
   it('does not save the next cursor when a board-array storage write fails', () => {
     const previous = cursor('5');
-    localStorage.setItem(`alpha_multica_board_cursor:${workspaceId}`, JSON.stringify(previous));
+    localStorage.setItem(`alpha_multica_board_cursor_v2:${workspaceId}`, JSON.stringify(previous));
     const originalSetItem = storage.setItem.bind(storage);
     const setItem = vi.spyOn(storage, 'setItem').mockImplementation((key, value) => {
       if (key === `alpha_multica_projects:${workspaceId}`) throw new DOMException('quota exceeded', 'QuotaExceededError');
@@ -140,7 +140,7 @@ describe('browser board cursor sync', () => {
       workspaceId, nextCursor: cursor('6'), hasMore: false, resetRequired: false,
       changes: [{ cursor: '6', table: 'projects', rowKey: { id: 'project-2' }, operation: 'insert', row: project('project-2') as unknown as Record<string, unknown> }]
     })).toThrow(/quota exceeded/i);
-    expect(loadFromStorage(`board_cursor:${workspaceId}`, null)).toEqual(previous);
+    expect(loadFromStorage(`board_cursor_v2:${workspaceId}`, null)).toEqual(previous);
     expect(setItem).toHaveBeenCalled();
   });
 });

@@ -50,7 +50,7 @@ import { createBoardSyncCoordinator } from './boardSyncCoordinator';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
-import { catchUpBoard } from '@/shared/services/boardSync';
+import { catchUpBoard, cursorStorageKey } from '@/shared/services/boardSync';
 import type { BoardCursor } from '@/shared/types/boardSync';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { isDesktop } from '@/shared/desktop';
@@ -549,6 +549,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(() =>
     loadFromStorage<string | null>('active_workspace_id', null)
   );
+  /**
+   * Board caches are per workspace. Seeding state from the unscoped keys let an
+   * old roster from a retired build be written straight into the active
+   * workspace's cache by the save effects below, before the board had loaded.
+   */
+  const initialWorkspaceCacheKey = (key: string) => {
+    const workspaceId = loadFromStorage<string | null>('active_workspace_id', null);
+    return workspaceId ? `${key}:${workspaceId}` : key;
+  };
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberRecord[]>([]);
@@ -580,7 +589,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const reportedSyncErrorsRef = useRef(new Set<string>());
   const syncBoardRef = useRef<() => Promise<void>>(async () => {});
   const catchUpWorkspaceBoard = useCallback((workspaceId: string) => {
-    const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${workspaceId}`, null);
+    const cachedCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(workspaceId), null);
     return catchUpBoard(workspaceId, cachedCursor);
   }, []);
 
@@ -821,11 +830,11 @@ ${e.detail}`;
   // Raw collections. These are never handed to a view directly — the scoped
   // derivations further down are what the provider exposes, so a view cannot
   // accidentally render another persona's data.
-  const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(loadFromStorage<Issue[]>('issues', [])));
+  const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(loadFromStorage<Issue[]>(initialWorkspaceCacheKey('issues'), [])));
   /** Saved tasks whose author asked for a build when creating them; see `CreateIssueOptions.planBuild`. */
   const [issuesAwaitingBuild, setIssuesAwaitingBuild] = useState<string[]>([]);
-  const [projects, setProjects] = useState<Project[]>(() => loadFromStorage<Project[]>('projects', []));
-  const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(loadFromStorage<Agent[]>('agents', [])));
+  const [projects, setProjects] = useState<Project[]>(() => loadFromStorage<Project[]>(initialWorkspaceCacheKey('projects'), []));
+  const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(loadFromStorage<Agent[]>(initialWorkspaceCacheKey('agents'), [])));
   const [runtimes, setRuntimes] = useState<RuntimeEngine[]>(() => loadFromStorage<RuntimeEngine[]>('runtimes', []));
   const [skills, setSkills] = useState<Skill[]>(() => {
     const saved = loadFromStorage<unknown[]>('skills', []);
@@ -970,7 +979,7 @@ ${e.detail}`;
 
       let result;
       try {
-        const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${selectedWorkspaceId}`, null);
+        const cachedCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(selectedWorkspaceId), null);
         result = await fetchServerSnapshot(selectedWorkspaceId, cachedCursor);
       } catch (error) {
         console.warn('[sync] workspace hydration failed:', error instanceof Error ? error.message : error);
@@ -1274,7 +1283,7 @@ ${e.detail}`;
     setActiveWorkspaceIdState(workspaceId);
     setActiveWorkspaceId(workspaceId);
     setLiveBuildRoomProjectIds([]);
-    const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${workspaceId}`, null);
+    const cachedCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(workspaceId), null);
     setActiveThreadId(null);
     // The next workspace may have thread IDs loaded earlier in this session.
     // Clear this cache so opening one always rehydrates its transcript from

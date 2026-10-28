@@ -165,6 +165,21 @@ function buildTone(state: BuildAgentState, palette: ScenePalette): string {
   return rgbChannels(state === 'failed' ? palette.danger : state === 'completed' ? palette.success : state === 'review' ? palette.warning : state === 'waiting' ? palette.info : palette.hub);
 }
 
+/** Subtle spatial harmonic tint per specialist role so idle nodes are visually distinct while matching the Cosmo palette. */
+function roleIdleTone(roleOrName: string, palette: ScenePalette): string {
+  const base = rgbChannels(palette.idle);
+  const text = roleOrName.toLowerCase();
+  if (/architect/.test(text)) return mix(base, rgbChannels(palette.hub), 0.38);
+  if (/front|ui|design/.test(text)) return mix(base, rgbChannels(palette.info), 0.42);
+  if (/back|api|server/.test(text)) return mix(base, rgbChannels(palette.ring), 0.36);
+  if (/valid|check|qa|test/.test(text)) return mix(base, rgbChannels(palette.success), 0.32);
+  if (/secur|audit/.test(text)) return mix(base, rgbChannels(palette.warning), 0.34);
+  if (/data|sql|schema/.test(text)) return mix(base, rgbChannels(palette.info), 0.28);
+  if (/mobile|ios|android/.test(text)) return mix(base, rgbChannels(palette.glow), 0.36);
+  if (/git|final|release|deploy/.test(text)) return mix(base, rgbChannels(palette.highlight), 0.28);
+  return base;
+}
+
 const BUILD_STATE_LABEL: Record<BuildAgentState, string> = {
   running: 'Working',
   waiting: 'Waiting',
@@ -314,37 +329,26 @@ export function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: n
     ctx.fillText(agent.initial, node.x, node.y + 0.5);
   });
 
-  // The Orchestrator: a breathing glass orb with soft ripples and two satellites.
+  // The Orchestrator: the Cosmo mark, two dotted arms winding out of a soft core.
   const hubGlow = mix(rgbChannels(palette.glow), flashRgb, flashAmount);
-  const hubTone = mix(rgbChannels(palette.hub), flashRgb, flashAmount);
-  const ringTone = mix(rgbChannels(palette.ring), flashRgb, flashAmount);
-  drawGlow(ctx, hub.x, hub.y, core * 4.4, hubGlow, (working ? 0.34 : 0.24) + flashAmount * 0.2);
-  const ripples = working ? 3 : 2;
-  for (let k = 0; k < ripples; k++) {
-    const phase = (seconds * (working ? 0.55 : 0.3) + k / ripples) % 1;
-    ctx.strokeStyle = 'rgba(' + ringTone + ', ' + (1 - phase) * 0.28 + ')';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.arc(hub.x, hub.y, core + phase * core * 2.4, 0, Math.PI * 2);
-    ctx.stroke();
+  const markRadius = core * 1.7;
+  drawGlow(ctx, hub.x, hub.y, markRadius * 1.3, hubGlow, (working ? 0.16 : 0.1) + flashAmount * 0.15 + (selectedId === hubId ? 0.08 : 0));
+  // The same slow, steady turn as the 3D mark.
+  const turn = -seconds * (working ? 0.13 : 0.05);
+  const grain = rgbChannels(palette.highlight);
+  for (let arm = 0; arm < 2; arm++) {
+    for (let step = 0; step < 70; step++) {
+      const r = (step + 1) / 70;
+      // A fixed scatter per grain, so the arm keeps its texture from frame to frame.
+      const across = Math.sin(step * 12.9898 + arm * 78.233) * (0.022 + 0.12 * r);
+      const angle = turn + arm * Math.PI + 3.4 * Math.log(1 + r * 20);
+      const rad = (r + across) * markRadius;
+      const size = 0.5 + (1 - r) * 0.7;
+      ctx.fillStyle = 'rgba(' + grain + ', ' + (0.2 + (1 - r) * 0.7).toFixed(2) + ')';
+      ctx.fillRect(hub.x + Math.cos(angle) * rad - size, hub.y + Math.sin(angle) * rad - size, size * 2, size * 2);
+    }
   }
-  ctx.strokeStyle = 'rgba(' + ringTone + ', 0.12)';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.arc(hub.x, hub.y, core * 1.9, 0, Math.PI * 2);
-  ctx.stroke();
-  drawOrb(ctx, hub.x, hub.y, core, hubTone, palette);
-  if (selectedId === hubId) drawRing(ctx, hub.x, hub.y, core + 6, palette);
-  for (let k = 0; k < 2; k++) {
-    const angle = seconds * (working ? 1.6 : 0.7) + k * Math.PI;
-    const sx = hub.x + Math.cos(angle) * core * 1.9;
-    const sy = hub.y + Math.sin(angle) * core * 1.9;
-    drawGlow(ctx, sx, sy, 7, ringTone, 0.5);
-    ctx.fillStyle = `rgba(${rgbChannels(palette.highlight)}, 0.95)`;
-    ctx.beginPath();
-    ctx.arc(sx, sy, 1.8, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  drawGlow(ctx, hub.x, hub.y, core * 0.6, grain, working ? 0.85 : 0.65);
   positions.push({ id: hubId, x: hub.x, y: hub.y, r: core });
   return positions;
 }
@@ -418,7 +422,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
           name: agent.name,
           tone: buildTone(agent.state, palette),
           active: Boolean(build?.running && agent.state === 'running'),
-          engaged: false,
+          engaged: Boolean(build),
           detail: [BUILD_STATE_LABEL[agent.state], agent.currentTaskTitle].filter(Boolean).join(' · ')
         })),
         ...agentCalls.map(call => ({
@@ -426,7 +430,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
           name: agentById.get(call.agentId)?.name ?? call.agentId,
           tone: toneFor(call.status, palette),
           active: call.status === 'running',
-          engaged: false,
+          engaged: LIVE_STATUSES.includes(call.status) || call.status === 'completed',
           detail: [agentById.get(call.agentId)?.role, callStatus(call.status)].filter(Boolean).join(' · ')
         }))
       ];
@@ -439,9 +443,9 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       return {
         id: ROSTER_PREFIX + agent.id,
         name: agent.name,
-        tone: inBuild ? buildTone(inBuild.state, palette) : call ? toneFor(call.status, palette) : idleRgb,
+        tone: inBuild ? buildTone(inBuild.state, palette) : call ? toneFor(call.status, palette) : roleIdleTone(agent.role || agent.name, palette),
         active: Boolean(build?.running && inBuild?.state === 'running') || call?.status === 'running',
-        engaged: false,
+        engaged: Boolean(inBuild) || Boolean(call && (LIVE_STATUSES.includes(call.status) || call.status === 'completed')),
         detail: [agent.role, state, inBuild?.changedFiles.length ? inBuild.changedFiles.length + (inBuild.changedFiles.length === 1 ? ' file changed' : ' files changed') : null, agent.modelName].filter(Boolean).join(' · ')
       };
     });
@@ -450,10 +454,25 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   const sceneLinks = useMemo<SceneLink[]>(() => {
     const sceneId = (agentId: string) => (rosterAgents.length ? ROSTER_PREFIX : BUILD_PREFIX) + agentId;
     const present = new Set(sceneAgents.map(agent => agent.id));
-    return (build?.running ? build.handoffs ?? [] : []).filter(handoff => handoff.state === 'active')
+    const buildLinks = (build?.handoffs ?? [])
       .map(handoff => ({ from: sceneId(handoff.fromAgentId), to: sceneId(handoff.toAgentId), state: handoff.state }))
       .filter(link => present.has(link.from) && present.has(link.to));
-  }, [build?.handoffs, build?.running, rosterAgents.length, sceneAgents]);
+    if (buildLinks.length) return buildLinks;
+    // When a chat turn dispatches multiple specialists, connect them in execution order so handoffs remain visible.
+    const orderedCalls = [...agentCalls].reverse();
+    const chatLinks: SceneLink[] = [];
+    for (let i = 0; i < orderedCalls.length - 1; i++) {
+      const fromCall = orderedCalls[i];
+      const toCall = orderedCalls[i + 1];
+      const from = rosterAgents.length ? ROSTER_PREFIX + fromCall.agentId : fromCall.id;
+      const to = rosterAgents.length ? ROSTER_PREFIX + toCall.agentId : toCall.id;
+      if (from !== to && present.has(from) && present.has(to)) {
+        const state: SceneLink['state'] = toCall.status === 'running' ? 'active' : toCall.status === 'completed' ? 'done' : 'pending';
+        chatLinks.push({ from, to, state });
+      }
+    }
+    return chatLinks;
+  }, [agentCalls, build?.handoffs, rosterAgents.length, sceneAgents]);
   const agentStatus = (agentId: string): string => {
     if (agentId === orchestratorAgent?.id) return 'Orchestrator · ' + statusText;
     const inBuild = buildAgents.find(node => node.agentId === agentId);

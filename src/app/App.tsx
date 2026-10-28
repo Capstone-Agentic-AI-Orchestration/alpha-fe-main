@@ -496,7 +496,7 @@ export const App: React.FC = () => {
 
             </div>
 
-            <div className="app-no-drag flex-shrink-0">
+            <div className="app-no-drag ml-auto flex-shrink-0">
               <NotificationPopover />
             </div>
 

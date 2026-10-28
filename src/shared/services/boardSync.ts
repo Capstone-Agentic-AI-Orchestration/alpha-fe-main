@@ -21,8 +21,14 @@ function compareCursor(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function cursorStorageKey(workspaceId: string): string {
-  return `board_cursor:${workspaceId}`;
+/**
+ * Where a workspace's board cursor is kept. Versioned: a cursor only means
+ * "the cache holds everything before this point", and caches written before
+ * the workspace-scoped startup fix may hold another roster. Changing the key
+ * makes every device take one full snapshot instead of trusting them.
+ */
+export function cursorStorageKey(workspaceId: string): string {
+  return `board_cursor_v2:${workspaceId}`;
 }
 
 function readBoardState(workspaceId: string): BoardState {

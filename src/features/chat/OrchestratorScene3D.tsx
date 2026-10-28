@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
-import { Html, Line, OrbitControls, QuadraticBezierLine, Sparkles } from '@react-three/drei';
+import { Billboard, Html, Line, OrbitControls, QuadraticBezierLine, Sparkles } from '@react-three/drei';
 
 import { useTheme, rgbChannels, type ScenePalette } from '@/shared/theme';
 import type { LiveBuildOrchestrationStatus } from '@/shared/types';
@@ -54,7 +54,7 @@ export interface OrchestratorSceneProps {
 /** The three orbit lines of the atom. */
 function Orbits({ working, palette }: { working: boolean; palette: ScenePalette }) {
   const paths = useMemo(() => Array.from({ length: ORBIT_COUNT }, (_, orbit) => orbitPath(orbit)), []);
-  return <>{paths.map((points, orbit) => <Line key={orbit} points={points} color={palette.orbit} lineWidth={1.1} transparent opacity={working ? 0.42 : 0.3} depthWrite={false} />)}</>;
+  return <>{paths.map((points, orbit) => <Line key={orbit} points={points} color={palette.orbit} lineWidth={1} transparent opacity={working ? 0.32 : 0.2} depthWrite={false} />)}</>;
 }
 
 function Hub({ palette, glow, status, reduceMotion, working, selected, clickable, onOver, onOut, onClick }: {
@@ -65,20 +65,45 @@ function Hub({ palette, glow, status, reduceMotion, working, selected, clickable
     onOver={onOver} onOut={onOut} onClick={onClick} />;
 }
 
+const COMET_SEGMENTS = [0, 0.022, 0.046, 0.072, 0.1, 0.13];
+
+/** Place a tapered comet along a curve; tail grains behind the start stay hidden instead of wrapping to the far end. */
+function placeComet(group: THREE.Group, curve: THREE.Curve<THREE.Vector3>, head: number) {
+  group.children.forEach((child, idx) => {
+    const t = head - COMET_SEGMENTS[idx];
+    child.visible = t >= 0;
+    if (t >= 0) child.position.copy(curve.getPoint(t));
+  });
+}
+
+/** Where an Orchestrator link leaves the Cosmo mark: its outer edge, so the core stays clear. */
+const LINK_START_RADIUS = 0.8;
+
 /** A link from the Orchestrator, drawn only while the agent takes part in the work. */
-function Link({ palette, end, tone, active, reduceMotion }: { palette: ScenePalette; end: Vec3; tone: string; active: boolean; reduceMotion: boolean }) {
+function Link({ palette, end, tone, active, highlighted = false, reduceMotion }: { palette: ScenePalette; end: Vec3; tone: string; active: boolean; highlighted?: boolean; reduceMotion: boolean }) {
   const line = useRef<any>(null);
-  const spark = useRef<THREE.Mesh>(null);
-  const mid = useMemo<Vec3>(() => [end[0] / 2, end[1] / 2 + 0.6, end[2] / 2], [end]);
-  const curve = useMemo(() => new THREE.QuadraticBezierCurve3(new THREE.Vector3(0, 0, 0), new THREE.Vector3(...mid), new THREE.Vector3(...end)), [end, mid]);
+  const cometGroup = useRef<THREE.Group>(null);
+  const start = useMemo<Vec3>(() => {
+    const length = Math.hypot(end[0], end[1], end[2]) || 1;
+    return [end[0] / length * LINK_START_RADIUS, end[1] / length * LINK_START_RADIUS, end[2] / length * LINK_START_RADIUS];
+  }, [end]);
+  const mid = useMemo<Vec3>(() => [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.5, (start[2] + end[2]) / 2], [start, end]);
+  const curve = useMemo(() => new THREE.QuadraticBezierCurve3(new THREE.Vector3(...start), new THREE.Vector3(...mid), new THREE.Vector3(...end)), [start, end, mid]);
   useFrame(({ clock }, delta) => {
     if (!active || reduceMotion) return;
-    if (line.current?.material) line.current.material.dashOffset -= delta * 1.4;
-    if (spark.current) spark.current.position.copy(curve.getPoint((clock.getElapsedTime() * 0.45) % 1));
+    if (line.current?.material) line.current.material.dashOffset -= delta * 0.9;
+    if (cometGroup.current) placeComet(cometGroup.current, curve, (clock.getElapsedTime() * 0.32) % 1.15);
   });
   return <>
-    <QuadraticBezierLine ref={line} start={[0, 0, 0]} end={end} mid={mid} color={'rgb(' + tone + ')'} lineWidth={active ? 1.8 : 1} transparent opacity={active ? 0.9 : 0.45} dashed={active} dashSize={0.3} gapSize={0.18} />
-    {active && <mesh ref={spark}><sphereGeometry args={[0.06, 12, 12]} /><meshBasicMaterial color={palette.highlight} /></mesh>}
+    <QuadraticBezierLine ref={line} start={start} end={end} mid={mid} color={'rgb(' + tone + ')'} lineWidth={active ? 1.8 : highlighted ? 1.4 : 1} transparent opacity={active ? 0.85 : highlighted ? 0.65 : 0.32} dashed={active} dashSize={0.28} gapSize={0.16} depthWrite={false} />
+    {active && <group ref={cometGroup}>
+      {COMET_SEGMENTS.map((seg, idx) => (
+        <mesh key={seg} position={curve.getPoint(Math.max(0, 0.5 - seg))}>
+          <sphereGeometry args={[Math.max(0.02, 0.068 - idx * 0.009), 12, 12]} />
+          <meshBasicMaterial color={idx === 0 ? palette.highlight : 'rgb(' + tone + ')'} transparent opacity={Math.max(0.18, 0.98 - idx * 0.15)} />
+        </mesh>
+      ))}
+    </group>}
   </>;
 }
 
@@ -87,28 +112,47 @@ function Link({ palette, end, tone, active, reduceMotion }: { palette: ScenePale
  * apart from the Orchestrator's links. While the receiver works on what it was
  * given, a spark runs from the sender to the receiver.
  */
-function HandoffLink({ palette, start, end, state, reduceMotion }: { palette: ScenePalette; start: Vec3; end: Vec3; state: SceneLink['state']; reduceMotion: boolean }) {
+function HandoffLink({ palette, start, end, state, highlighted = false, reduceMotion }: { palette: ScenePalette; start: Vec3; end: Vec3; state: SceneLink['state']; highlighted?: boolean; reduceMotion: boolean }) {
   const line = useRef<any>(null);
-  const spark = useRef<THREE.Mesh>(null);
+  const cometGroup = useRef<THREE.Group>(null);
+  const arrivalRing = useRef<THREE.Mesh>(null);
   const mid = useMemo<Vec3>(() => {
     const span = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2]);
-    return [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.5 + span * 0.18, (start[2] + end[2]) / 2];
+    return [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2 + 0.55 + span * 0.18, (start[2] + end[2]) / 2];
   }, [start, end]);
   const curve = useMemo(() => new THREE.QuadraticBezierCurve3(new THREE.Vector3(...start), new THREE.Vector3(...mid), new THREE.Vector3(...end)), [start, mid, end]);
   const active = state === 'active';
   const color = active ? palette.ring : state === 'done' ? palette.success : palette.idle;
   useFrame(({ clock }, delta) => {
     if (!active || reduceMotion) return;
-    if (line.current?.material) line.current.material.dashOffset -= delta * 1.2;
-    if (spark.current) spark.current.position.copy(curve.getPoint((clock.getElapsedTime() * 0.35) % 1));
+    if (line.current?.material) line.current.material.dashOffset -= delta * 0.8;
+    // One cycle: the comet travels sender to receiver, then the receiver ripples as the work lands.
+    const cycle = (clock.getElapsedTime() * 0.3) % 1.2;
+    if (cometGroup.current) placeComet(cometGroup.current, curve, cycle);
+    if (arrivalRing.current) {
+      const landed = THREE.MathUtils.clamp((cycle - 0.98) / 0.22, 0, 1);
+      const eased = 1 - Math.pow(1 - landed, 3);
+      arrivalRing.current.scale.setScalar(0.85 + eased * 1.1);
+      (arrivalRing.current.material as THREE.MeshBasicMaterial).opacity = landed > 0 ? (1 - eased) * 0.5 : 0;
+    }
   });
   return <>
+    {(active || highlighted) && <QuadraticBezierLine start={start} end={end} mid={mid} color={color}
+      lineWidth={active ? 4.2 : 2.8} transparent opacity={active ? 0.22 : 0.14} depthWrite={false} />}
     <QuadraticBezierLine ref={line} start={start} end={end} mid={mid} color={color}
-      lineWidth={active ? 2 : 1.2} transparent opacity={active ? 0.95 : state === 'done' ? 0.55 : 0.3}
-      dashed={state !== 'done'} dashSize={active ? 0.28 : 0.12} gapSize={active ? 0.16 : 0.14} depthWrite={false} />
-    {active && <mesh ref={spark} position={start}><sphereGeometry args={[0.07, 12, 12]} /><meshBasicMaterial color={palette.highlight} /></mesh>}
+      lineWidth={active ? 2.2 : highlighted ? 1.8 : 1.3} transparent opacity={active ? 0.96 : highlighted ? 0.82 : state === 'done' ? 0.62 : 0.34}
+      dashed={state !== 'done'} dashSize={active ? 0.26 : 0.14} gapSize={active ? 0.14 : 0.14} depthWrite={false} />
+    {active && <group ref={cometGroup}>
+      {COMET_SEGMENTS.map((seg, idx) => (
+        <mesh key={seg} position={curve.getPoint(Math.max(0, 0.5 - seg))}>
+          <sphereGeometry args={[Math.max(0.022, 0.075 - idx * 0.01), 12, 12]} />
+          <meshBasicMaterial color={idx === 0 ? palette.highlight : color} transparent opacity={Math.max(0.18, 1 - idx * 0.15)} />
+        </mesh>
+      ))}
+    </group>}
     {/* A small head at the receiving end shows which way the work went. */}
-    <mesh position={curve.getPoint(0.92)}><sphereGeometry args={[0.045, 10, 10]} /><meshBasicMaterial color={color} transparent opacity={state === 'pending' ? 0.5 : 0.9} /></mesh>
+    <mesh position={curve.getPoint(0.92)}><sphereGeometry args={[active ? 0.055 : 0.045, 12, 12]} /><meshBasicMaterial color={active ? palette.highlight : color} transparent opacity={state === 'pending' ? 0.55 : 0.92} /></mesh>
+    {active && <Billboard position={end}><mesh ref={arrivalRing}><ringGeometry args={[0.38, 0.405, 48]} /><meshBasicMaterial color={color} transparent opacity={0.45} depthWrite={false} side={THREE.DoubleSide} /></mesh></Billboard>}
   </>;
 }
 
@@ -122,7 +166,17 @@ function AgentOrb({ palette, reduceMotion, agent, position, glow, selected, hove
     <AgentSceneOrb palette={palette} reduceMotion={reduceMotion} glow={glow} color={color} active={agent.active} engaged={agent.engaged} selected={selected} hovered={hovered}
       onPointerOver={onOver} onPointerOut={onOut} onClick={onClick} />
     <Html center position={[0, -0.46, 0]} zIndexRange={[5, 0]} style={{ pointerEvents: 'none' }}>
-      <div style={{ backgroundColor: `rgba(${rgbChannels(selected ? palette.orbit : palette.labelBackground)}, ${selected ? 0.3 : lit ? 0.6 : 0.4})`, color: palette.labelForeground }} className="whitespace-nowrap rounded-full px-1.5 py-px text-[8.5px] font-medium leading-3">{agent.name}</div>
+      <div
+        style={{
+          backgroundColor: `rgba(${rgbChannels(selected ? palette.orbit : palette.labelBackground)}, ${selected ? 0.48 : lit || hovered ? 0.78 : 0.56})`,
+          borderColor: `rgba(${agent.active ? agent.tone : rgbChannels(palette.ring)}, ${agent.active || selected || hovered ? 0.45 : 0.16})`,
+          color: palette.labelForeground
+        }}
+        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[8.5px] font-medium leading-3 shadow-sm"
+      >
+        <span style={{ backgroundColor: 'rgb(' + agent.tone + ')' }} className={'h-1.5 w-1.5 rounded-full ' + (agent.active ? 'animate-pulse' : 'opacity-85')} />
+        <span>{agent.name}</span>
+      </div>
     </Html>
     {hovered && agent.detail && <Html center position={[0, 0.72, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
       <div style={{ backgroundColor: `rgba(${rgbChannels(palette.labelBackground)}, 0.95)`, borderColor: `rgba(${rgbChannels(palette.ring)}, 0.2)`, color: palette.labelForeground }} className="w-max min-w-44 max-w-80 rounded-xl border px-3 py-2 text-left shadow-xl">
@@ -160,17 +214,17 @@ function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, w
     {!reduceMotion && <Sparkles count={60} scale={[16, 8, 9]} size={1.4} speed={0.2} opacity={0.4} color={palette.ring} />}
     <Orbits palette={palette} working={working} />
     {agents.map((agent, index) => (agent.active || agent.engaged) &&
-      <Link palette={palette} reduceMotion={reduceMotion} key={'link-' + agent.id} end={positions[index]} tone={agent.tone} active={agent.active} />)}
+      <Link palette={palette} reduceMotion={reduceMotion} key={'link-' + agent.id} end={positions[index]} tone={agent.tone} active={agent.active} highlighted={hoveredId === agent.id || hoveredId === hubId} />)}
     {links.map(link => {
       const from = indexById.get(link.from);
       const to = indexById.get(link.to);
       return from === undefined || to === undefined ? null
-        : <HandoffLink palette={palette} key={'handoff-' + link.from + '-' + link.to} start={positions[from]} end={positions[to]} state={link.state} reduceMotion={reduceMotion} />;
+        : <HandoffLink palette={palette} key={'handoff-' + link.from + '-' + link.to} start={positions[from]} end={positions[to]} state={link.state} highlighted={hoveredId === link.from || hoveredId === link.to} reduceMotion={reduceMotion} />;
     })}
     <Hub palette={palette} reduceMotion={reduceMotion} glow={glow} status={buildStatus ?? null} working={working} selected={selectedId === hubId} clickable={hubClickable}
       onOver={() => setHoveredId(hubId)} onOut={() => setHoveredId(previous => (previous === hubId ? null : previous))}
       onClick={() => onSelect(hubId)} />
-    {hoveredId === hubId && <Html center position={[0, 1.6, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
+    {hoveredId === hubId && <Html center position={[0, 1.45, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
       <div style={{ backgroundColor: `rgba(${rgbChannels(palette.labelBackground)}, 0.95)`, borderColor: `rgba(${rgbChannels(palette.ring)}, 0.2)`, color: palette.labelForeground }} className="w-max min-w-44 max-w-80 rounded-xl border px-3 py-2 shadow-xl">
         <div className="whitespace-nowrap text-xs font-semibold">{hubLabel}</div>
         {hubDetail.split(' · ').map(line => <div key={line} className="whitespace-nowrap text-[10px] leading-4 opacity-70">{line}</div>)}
