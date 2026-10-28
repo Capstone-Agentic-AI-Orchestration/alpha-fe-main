@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
 import cosmoLogoUrl from '@/assets/cosmo-logo.png';
 import cosmoWordmarkUrl from '@/assets/cosmo-wordmark.png';
@@ -14,6 +14,7 @@ function readSlug(): string {
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 const HOW_IT_WORKS = 'client-how';
+const PUBLIC_PAGE_EXIT_DURATION_MS = 380;
 
 function prefersReducedMotion(): boolean {
   return globalThis.matchMedia(REDUCED_MOTION).matches;
@@ -88,6 +89,7 @@ function railClass(index: number, step: number): string {
 export default function ClientLandingPage() {
   const [slug, setSlug] = useState(readSlug);
   const [journey, setJourney] = useState<Journey>(INITIAL);
+  const [leavingForPublicPage, setLeavingForPublicPage] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLElement>(null);
@@ -95,9 +97,40 @@ export default function ClientLandingPage() {
   const headerRef = useRef<HTMLElement>(null);
   const journeyRef = useRef(journey);
   const pointerRef = useRef<[number, number]>([0, 0]);
+  const leavingForPublicPageRef = useRef(false);
+  const publicPageNavigationTimerRef = useRef<number | null>(null);
   const home = clientLandingHref(slug);
   const inquiry = publicInquiryHref(slug);
   const clientSignIn = clientPortalHref(slug);
+
+  const beginPublicPageTransition = (event: MouseEvent<HTMLDivElement>) => {
+    if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    if (!(event.target instanceof Element)) return;
+    const anchor = event.target.closest<HTMLAnchorElement>('a[href]');
+    if (!anchor || anchor.target === '_blank' || anchor.hasAttribute('download')) return;
+
+    const destination = new URL(anchor.href, window.location.href);
+    const inquiryDestination = new URL(inquiry, window.location.href);
+    const signInDestination = new URL(clientSignIn, window.location.href);
+    if (destination.href !== inquiryDestination.href && destination.href !== signInDestination.href) return;
+    if (leavingForPublicPageRef.current) {
+      event.preventDefault();
+      return;
+    }
+    if (prefersReducedMotion()) return;
+
+    event.preventDefault();
+    leavingForPublicPageRef.current = true;
+    setLeavingForPublicPage(true);
+    publicPageNavigationTimerRef.current = window.setTimeout(() => {
+      publicPageNavigationTimerRef.current = null;
+      window.location.assign(destination.href);
+    }, PUBLIC_PAGE_EXIT_DURATION_MS);
+  };
+
+  useEffect(() => () => {
+    if (publicPageNavigationTimerRef.current !== null) window.clearTimeout(publicPageNavigationTimerRef.current);
+  }, []);
 
   useEffect(() => {
     const updateSlug = () => setSlug(readSlug());
@@ -215,7 +248,8 @@ export default function ClientLandingPage() {
 
   return <div
     ref={rootRef}
-    className={`alpha-public client-landing ${flat ? 'is-flat' : 'is-immersive'}`}
+    className={`alpha-public client-landing ${flat ? 'is-flat' : 'is-immersive'}${leavingForPublicPage ? ' is-leaving-public-page' : ''}`}
+    onClickCapture={beginPublicPageTransition}
     onPointerMove={event => {
       if (event.pointerType !== 'mouse') return;
       pointerRef.current = [clamp(event.clientX / globalThis.innerWidth) - 0.5, clamp(event.clientY / globalThis.innerHeight) - 0.5];

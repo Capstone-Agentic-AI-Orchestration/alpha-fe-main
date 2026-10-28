@@ -177,6 +177,23 @@
 .client-landing .cl-door-new .cl-door-arrow { border-color: #b498f1; background: #aa8bee; color: #1b102e; }
 .client-landing .cl-footer-end { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
 
+/* Carry public-page links through as a short slide to their destination. */
+.client-landing.is-leaving-public-page .cl-layer {
+  opacity: 0;
+  transform: translate3d(-28px, 0, 0);
+  pointer-events: none;
+  transition: opacity 320ms ease, transform 380ms var(--cl-ease);
+}
+.client-landing.is-leaving-public-page .cl-header {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 220ms ease, transform 380ms var(--cl-ease);
+}
+.client-landing.is-leaving-public-page :is(.cl-canvas, .cl-index, .cl-progress, .cl-recap) {
+  opacity: 0;
+  transition: opacity 320ms ease;
+}
+
 @keyframes cl-fade-up { from { opacity: 0; transform: translateY(16px); } }
 @keyframes cl-line-up { from { opacity: 0; transform: translateY(100%); } }
 @keyframes cl-nudge { 50% { transform: translateY(4px); } }
@@ -215,4 +232,5 @@
 html.cosmo-loading .client-landing * { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) {
   .client-landing :is(.cl-header, .cl-menu-panels, .cl-pill-dots, .cl-menu-card-arrow, .cl-index, .cl-index button::after) { transition: none; }
+  .client-landing.is-leaving-public-page :is(.cl-layer, .cl-header, .cl-canvas, .cl-index, .cl-progress, .cl-recap) { transition: none; }
 }
