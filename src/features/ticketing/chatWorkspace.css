@@ -111,17 +111,20 @@
 .client-portal-shell .client-sidebar-progress .client-progress-label { display: block; margin: 0; font-size: 12px; line-height: 1.6; }
 .client-portal-shell .client-sidebar-progress .client-progress-state { display: block; margin-top: 2px; font-size: 10px; }
 .client-portal-shell .client-sidebar-progress .client-progress-mobile-summary { display: none; }
-.client-portal-shell .client-detail-content.role-chat-layout { flex-direction: row; padding: 0; }
-.client-portal-shell .client-chat-main { display: flex; flex-direction: column; overflow: hidden; }
-.client-portal-shell .client-conversation { border: 0; border-radius: 0; background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-detail-content.role-chat-layout { width: 100%; min-width: 0; align-self: stretch; flex-direction: row; padding: 0; }
+.client-portal-shell .client-chat-main { display: flex; min-width: 0; min-height: 0; flex: 1 1 0%; flex-direction: column; overflow: hidden; }
+.client-portal-shell .client-conversation { width: 100%; min-width: 0; border: 0; border-radius: 0; background: rgb(var(--ui-shell)); }
 .client-portal-shell .client-conversation.hidden { display: none; }
 .client-portal-shell .client-conversation-heading { min-height: 52px; border: 0; padding: 12px 28px; }
-.client-portal-shell .client-conversation-feed { gap: 24px; padding: 24px clamp(20px, 3vw, 48px); background: rgb(var(--ui-shell)); }
-.client-portal-shell .client-message { width: 100%; max-width: 800px; margin-inline: auto; }
-.client-portal-shell .client-message-bubble { max-width: 85%; font-size: 14px; line-height: 1.7; }
-.client-portal-shell .client-reply-form { flex: none; padding: 14px 24px 18px; border: 0; }
-.client-portal-shell .client-reply-controls { max-width: 800px; margin-inline: auto; border-radius: 20px; padding: 8px; }
-.client-portal-shell .client-reply-controls textarea { min-height: 44px; max-height: 140px; }
+.client-portal-shell .client-conversation-feed { min-width: 0; gap: 16px; padding: 20px clamp(16px, 2vw, 32px); background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-message { width: 100%; max-width: none; min-width: 0; align-self: stretch; margin: 0; }
+.client-portal-shell .client-message.is-theirs, .client-portal-shell .client-message.is-mine { justify-content: flex-start; }
+.client-portal-shell .client-message-bubble { width: fit-content; min-width: min(144px, calc(100% - 42px)); max-width: min(560px, calc(100% - 42px)); box-sizing: border-box; padding: 8px 13px 6px; font-size: 13px; line-height: 1.55; }
+.client-portal-shell .client-message-bubble p { margin: 3px 0 4px; font-size: 12px; line-height: 1.5; }
+.client-portal-shell .client-message-author, .client-portal-shell .client-message-bubble time { font-size: 9px; }
+.client-portal-shell .client-reply-form { min-width: 0; flex: none; padding: 14px 24px 18px; border: 0; }
+.client-portal-shell .client-reply-controls { width: 100%; min-width: 0; max-width: 800px; box-sizing: border-box; margin-inline: auto; border-radius: 20px; padding: 8px; }
+.client-portal-shell .client-reply-controls textarea { width: 0; min-width: 0; max-width: 100%; flex: 1 1 0%; box-sizing: border-box; min-height: 44px; max-height: 140px; }
 .client-portal-shell .client-portal-brand img { display: block !important; visibility: visible; flex-shrink: 0; }
 
 .pm-tickets.pm-tickets--ticket-open { grid-template-columns: 250px minmax(0, 1fr); }
