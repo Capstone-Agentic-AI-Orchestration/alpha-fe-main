@@ -464,7 +464,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review' || Boolean(currentPendingProject);
   const currentNav = page;
 
-  return <main className="client-portal-shell client-portal-shell--workspace">
+  return <main className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}`}>
     <aside className="client-sidebar" aria-label="Client portal navigation">
       <div className="client-sidebar-brand"><img src={alphaMarkUrl} alt="" /><div><strong>Alphaexplora</strong><small>Client portal</small></div></div>
       <nav className="client-sidebar-nav">
@@ -494,13 +494,13 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     </aside>
 
     <div className="client-portal-mainview">
-      <header className="client-portal-toolbar">
+      {page !== 'requests' && <header className="client-portal-toolbar">
         <button aria-label="Refresh portal data" title="Refresh portal data"
           onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
           disabled={queueLoading || projectsLoading || Boolean(pending)} className="client-control-button">
           <RefreshCw size={16} className={queueLoading || projectsLoading ? 'animate-spin' : ''} /><span>Refresh</span>
         </button>
-      </header>
+      </header>}
       <div className="client-portal-main client-portal-main--workspace">
         {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
         {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
@@ -526,7 +526,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading} />
         </>)}
 
-        {page === 'requests' && <div className="client-requests-page">
+        {page === 'requests' && <div className={`client-requests-page ${selectedId ? 'has-selected-request' : ''}`}>
           <section className={`client-portal-page-heading ${selectedId && !requestListShown ? 'client-mobile-heading-hidden' : ''}`} aria-label="Request overview">
             <div><p className="client-eyebrow">CLIENT PORTAL</p><h1>Requests</h1><p className="client-page-description">Follow the status of each request and message your project manager.</p></div>
             {queue && queue.counters.needsClient > 0 && !workflowActionsDisabled && <button type="button" className="client-attention-link" onClick={() => { setFilter('needs_client'); setSearchInput(''); setSearch(''); }}>
@@ -540,6 +540,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             <aside className={`client-request-list ${navigationCollapsed ? 'is-collapsed' : ''} ${selectedId && !requestListShown ? 'client-mobile-hidden' : ''}`} aria-label="Request list">
               <div className="client-list-header">
                 <div className="client-list-title"><h2>All requests</h2></div>
+                <button type="button" className="client-list-refresh" aria-label="Refresh portal data" title="Refresh portal data"
+                  onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
+                  disabled={queueLoading || projectsLoading || Boolean(pending)}>
+                  <RefreshCw size={16} className={queueLoading || projectsLoading ? 'animate-spin' : ''} />
+                </button>
                 <button type="button" className="role-chat-navigation-toggle" aria-label={navigationCollapsed ? 'Show requests' : 'Collapse requests'} aria-expanded={!navigationCollapsed} onClick={() => setNavigationCollapsed(value => !value)}>{navigationCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
               </div>
               <label className="client-search"><Search size={16} /><span className="sr-only">Search requests</span>
@@ -587,7 +592,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                           {showPendingLinkNotice && <div role="status" className="client-project-pending-notice">
                             <strong>PM review pending</strong><span>This request is not linked to a project yet. Your project manager must review and confirm the project link before it appears in that project.</span>
                           </div>}
-                          {activeRequest.projectLinkStatus === 'linked' && activeRequest.projectId && <p className="client-request-project-link">Linked to {activeRequest.projectName || 'a shared project'}</p>}
                           <ClientTicketDetail workspaceId={activeRequest.workspaceId} api={api} key={`${activeRequest.workspaceId}:${detail.id}`}
                             ticket={detail} messages={messages} messageCursor={messageCursor} historyLoading={historyLoading} historyError={historyError}
                             busy={writing || Boolean(pending)} error={writeError} replyResetVersion={replyResetVersion}

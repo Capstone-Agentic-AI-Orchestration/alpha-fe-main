@@ -109,7 +109,7 @@ export function TicketDocumentsPanel({
     fileInput.current?.click();
   }
 
-  return <section className="mt-4 rounded-xl border border-divider bg-surface" aria-label={heading}>
+  return <section className="ticket-documents-panel mt-4 min-w-0 max-w-full rounded-xl border border-divider bg-surface" aria-label={heading}>
     <header className="flex items-center justify-between gap-3 border-b border-divider px-4 py-3">
       <div className="flex items-center gap-2"><FileText size={15} className="text-link" /><h3 className="text-sm font-medium text-content">{heading}</h3></div>
       <button type="button" onClick={() => void refresh()} disabled={loading || busy} className={secondary} aria-label="Refresh ticket documents"><RefreshCw size={12} />Refresh</button>
@@ -120,15 +120,15 @@ export function TicketDocumentsPanel({
       : groups.length === 0 ? <p className="p-5 text-center text-[11px] text-content-muted">No documents have been added to this ticket.</p>
         : <div className="divide-y divide-divider">
           {groups.map(group => <div key={group.groupId} className="space-y-2 p-3">
-            {group.versions.map((document, index) => <article key={document.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-divider bg-surface-raised p-3">
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium text-content">{document.filename}<span className="ml-2 text-[10px] font-normal text-content-muted">v{document.version}</span></p>
-                <p className="mt-1 text-[10px] text-content-muted">{document.author === 'pm' ? 'Project Manager' : 'Client'} · {new Date(document.createdAt).toLocaleString()}</p>
+            {group.versions.map((document, index) => <article key={document.id} className="ticket-document-item flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-divider bg-surface-raised p-3">
+              <div className="ticket-document-copy min-w-0 max-w-full flex-1">
+                <p title={document.filename} className="ticket-document-name truncate text-xs font-medium text-content">{document.filename}<span className="ml-2 text-[10px] font-normal text-content-muted">v{document.version}</span></p>
+                <p className="ticket-document-meta mt-1 text-[10px] text-content-muted">{document.author === 'pm' ? 'Project Manager' : 'Client'} · {new Date(document.createdAt).toLocaleString()}</p>
                 {document.changeProposed && <p className="mt-1 text-[10px] text-status-warning">Proposed change · prior version is preserved; this does not change agreed work.</p>}
                 {document.status === 'pending' && <p className="mt-1 text-[10px] text-status-warning">Upload not confirmed. Reselect the same file to safely retry.</p>}
                 {index < group.versions.length - 1 && <p className="mt-1 text-[10px] text-content-muted">Earlier version retained in this ticket’s history.</p>}
               </div>
-              <div className="flex shrink-0 flex-wrap gap-1.5">
+              <div className="ticket-document-actions flex min-w-0 max-w-full shrink-0 flex-wrap gap-1.5">
                 {document.status === 'available' && <button type="button" onClick={() => void download(document)} disabled={busy} className={secondary}><Download size={12} />Download</button>}
                 {canUpload && index === group.versions.length - 1 && document.status === 'available' && <button type="button" onClick={() => proposeReplacement(document)} disabled={busy} className={secondary}><Upload size={12} />Propose replacement</button>}
               </div>
@@ -139,9 +139,9 @@ export function TicketDocumentsPanel({
     {canUpload && <form onSubmit={upload} className="space-y-2 border-t border-divider p-3">
       <div className="flex items-center justify-between gap-2"><label htmlFor={`ticket-document-${ticketId}`} className="text-[11px] text-content-secondary">{replacementId ? 'Choose the proposed replacement' : 'Add a document'}</label>
         {replacementId && <button type="button" onClick={() => { setReplacementId(null); setFile(null); setPending(null); if (fileInput.current) fileInput.current.value = ''; }} className="inline-flex items-center gap-1 text-[10px] text-content-muted hover:text-content-secondary"><X size={11} />Cancel replacement</button>}</div>
-      <input ref={fileInput} id={`ticket-document-${ticketId}`} type="file" accept={ACCEPT} disabled={busy} onChange={event => selectFile(event.currentTarget.files?.[0] ?? null)} className={input} />
+      <input ref={fileInput} id={`ticket-document-${ticketId}`} type="file" accept={ACCEPT} disabled={busy} onChange={event => selectFile(event.currentTarget.files?.[0] ?? null)} className={`${input} ticket-document-input`} />
       <p className="text-[10px] leading-relaxed text-content-muted">PDF, PNG, JPEG, plain text or CSV · up to 10 MB. Documents remain private to this ticket. A replacement is a proposal, not an automatic change to agreed work.</p>
-      {file && <p className="text-[10px] text-content-secondary">Selected: {file.name} · {(file.size / 1024).toFixed(1)} KB</p>}
+      {file && <p className="ticket-document-selected-file break-all text-[10px] text-content-secondary">Selected: {file.name} · {(file.size / 1024).toFixed(1)} KB</p>}
       <div className="flex justify-end"><button type="submit" disabled={!file || busy || file.size < 1 || file.size > MAX_BYTES} className={primary}><Upload size={12} />{busy ? 'Working…' : pending ? 'Retry same upload' : replacementId ? 'Propose replacement' : 'Upload document'}</button></div>
     </form>}
     {!canUpload && <p className="border-t border-divider px-4 py-3 text-center text-[10px] text-content-muted">This ticket is closed or document changes are unavailable.</p>}
