@@ -255,10 +255,10 @@ export function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: n
   const { palette, expanded, working, agents, hoveredId, selectedId, hubId, flashRgb, flashAmount } = state;
   const morph = state.morph ?? 0;
   if (!expanded && COLLAPSED_SHOWS_ORCHESTRATOR) {
-    // Resting bar: just the Orchestrator, centred, with a faint glow behind it.
-    const radius = height * 0.42;
-    drawGlow(ctx, width / 2, height / 2, radius * 1.6, mix(rgbChannels(palette.glow), flashRgb, flashAmount), (working ? 0.14 : 0.08) + flashAmount * 0.12);
-    drawCosmoMark(ctx, width / 2, height / 2, radius, morph, seconds, rgbChannels(palette.highlight));
+    // Collapsed: only the Orchestrator, centred. Fewer, distinct dots snapped to
+    // device pixels keep a mark this small sharp.
+    const radius = height * 0.46;
+    drawCosmoMark(ctx, width / 2, height / 2, radius, morph, seconds, rgbChannels(palette.highlight), { pixelRatio: dpr, dot: 0.5, sphereScale: 0.72, intensity: 1.2 });
     return [];
   }
   const t = seconds * (working ? 1.5 : 0.65);
@@ -677,7 +677,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         </div>
       </div>
     </div>, document.body)}
-    <section id={panelId} data-execution-state={working ? 'running' : 'idle'} className={'absolute inset-x-0 top-0 z-30 overflow-hidden rounded-2xl border border-[rgba(var(--scene-labelForeground),0.08)] bg-[rgba(var(--scene-background),1)] transition-[height,box-shadow] duration-500 ease-out motion-reduce:transition-none ' + (show3D ? 'h-[560px] shadow-2xl shadow-[rgba(var(--scene-background),0.6)]' : expanded ? 'h-[184px] shadow-2xl shadow-[rgba(var(--scene-background),0.6)]' : 'h-14')}>
+    <section id={panelId} data-execution-state={working ? 'running' : 'idle'} className={'absolute inset-x-0 top-0 z-30 rounded-2xl border transition-[height,box-shadow,background-color,border-color] duration-500 ease-out motion-reduce:transition-none ' + (expanded ? 'overflow-hidden border-[rgba(var(--scene-labelForeground),0.08)] bg-[rgba(var(--scene-background),1)] ' : 'overflow-visible border-transparent bg-transparent ') + (show3D ? 'h-[560px] shadow-2xl shadow-[rgba(var(--scene-background),0.6)]' : expanded ? 'h-[184px] shadow-2xl shadow-[rgba(var(--scene-background),0.6)]' : 'h-14')}>
       {show3D && !maximized && <div className="absolute inset-0 select-none">{sceneView}</div>}
       {show3D && maximized && <div role="status" className="absolute inset-0 grid place-items-center text-[11px] text-[rgba(var(--scene-labelForeground),0.65)]">Showing in the enlarged view</div>}
       <canvas
@@ -686,9 +686,9 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         onMouseMove={event => { const id = nodeAt(event); if (id !== hoveredId) setHoveredId(id); }}
         onMouseLeave={() => setHoveredId(null)}
         onClick={event => { const id = nodeAt(event); if (id) select(id); }}
-        className={(show3D ? 'hidden ' : '') + 'absolute inset-0 h-full w-full ' + (hoveredCall || hoveredBuildAgent || (hubHovered && hubClickable) ? 'cursor-pointer' : '')}
+        className={(show3D ? 'hidden ' : '') + (expanded ? '' : 'pointer-events-none ') + 'absolute inset-0 h-full w-full ' + (hoveredCall || hoveredBuildAgent || (hubHovered && hubClickable) ? 'cursor-pointer' : '')}
       />
-      <div aria-hidden="true" className={'pointer-events-none absolute left-0 top-0 w-72 bg-gradient-to-r from-[rgba(var(--scene-background),1)] via-[rgba(var(--scene-background),0.7)] to-transparent ' + (show3D ? 'h-14' : 'bottom-0')} />
+      {expanded && <div aria-hidden="true" className={'pointer-events-none absolute left-0 top-0 w-72 bg-gradient-to-r from-[rgba(var(--scene-background),1)] via-[rgba(var(--scene-background),0.7)] to-transparent ' + (show3D ? 'h-14' : 'bottom-0')} />}
       {expanded && !show3D && (hoveredCall || hoveredBuildAgent || hubHovered) && <div ref={tooltipRef} role="tooltip" style={{ visibility: 'hidden' }} className="pointer-events-none absolute left-0 top-0 z-20 whitespace-nowrap rounded-xl border border-[rgba(var(--scene-hub),0.2)] bg-[rgba(var(--scene-labelBackground),0.95)] px-3 py-2 shadow-xl shadow-[rgba(var(--scene-background),0.4)] backdrop-blur">
         {hoveredBuildAgent ? <>
           <span className="block text-xs font-semibold text-[rgba(var(--scene-labelForeground),1)]">{hoveredBuildAgent.name}</span>
@@ -702,7 +702,26 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         </>}
       </div>}
 
-      <div className="relative flex h-14 items-center gap-3 px-4">
+      {!expanded && <div className="relative flex h-14 items-center justify-center">
+        {/* Collapsed: just the Orchestrator. Its project, status and running agents are in the tooltip. */}
+        <button
+          type="button"
+          aria-expanded={false}
+          aria-controls={panelId}
+          aria-label="Expand orchestrator"
+          aria-describedby={panelId + '-summary'}
+          onClick={() => setExpanded(true)}
+          className="group relative h-14 w-14 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]"
+        >
+          {runningCount > 0 && <span aria-hidden="true" className="absolute right-0 top-1 min-w-4 rounded-full bg-[rgba(var(--scene-hub),1)] px-1 text-center text-[9px] font-semibold leading-4 text-[rgba(var(--scene-background),1)] shadow-[0_0_8px_rgba(var(--scene-glow),0.7)]">{runningCount}</span>}
+          <span id={panelId + '-summary'} role="tooltip" className="pointer-events-none absolute left-1/2 top-full z-40 mt-1 -translate-x-1/2 whitespace-nowrap rounded-xl border border-[rgba(var(--scene-hub),0.2)] bg-[rgba(var(--scene-labelBackground),0.95)] px-3 py-2 text-left opacity-0 shadow-xl shadow-[rgba(var(--scene-background),0.4)] backdrop-blur transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+            <span className="block text-xs font-semibold text-[rgba(var(--scene-labelForeground),1)]">{title}</span>
+            <span className={'block text-[11px] ' + (working ? 'text-[rgba(var(--scene-hub),1)]' : 'text-[rgba(var(--scene-labelForeground),0.65)]')}>Orchestrator · {statusText}</span>
+            <span data-agent-execution-count={runningCount} className={'block text-[11px] ' + (runningCount ? 'text-[rgba(var(--scene-hub),1)]' : 'text-[rgba(var(--scene-labelForeground),0.65)]')}>{runningCount ? runningCount + (runningCount === 1 ? ' agent running' : ' agents running') : 'No agents running'}</span>
+          </span>
+        </button>
+      </div>}
+      {expanded && <div className="relative flex h-14 items-center gap-3 px-4">
         <button
           type="button"
           aria-expanded={expanded}
@@ -719,7 +738,6 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
             <span className={'block truncate text-[11px] ' + (working ? 'text-[rgba(var(--scene-hub),1)]' : 'text-[rgba(var(--scene-labelForeground),0.65)]')}>Orchestrator · {statusText}</span>
           </span>
         </button>
-        {!expanded && <span data-agent-execution-count={runningCount} className={'shrink-0 rounded-full border bg-[rgba(var(--scene-background),0.4)] px-2.5 py-1 text-[10px] ' + (runningCount ? 'border-[rgba(var(--scene-hub),0.2)] text-[rgba(var(--scene-hub),1)]' : 'border-[rgba(var(--scene-labelForeground),0.1)] text-[rgba(var(--scene-labelForeground),0.65)]')}>{runningCount ? runningCount + (runningCount === 1 ? ' agent running' : ' agents running') : 'No agents running'}</span>}
         {show3D && <>
           <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="shrink-0 rounded-lg p-1 text-[rgba(var(--scene-labelForeground),0.65)] hover:bg-[rgba(var(--scene-labelForeground),0.06)] hover:text-[rgba(var(--scene-labelForeground),1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
           <button type="button" onClick={() => setMaximized(value => !value)} aria-label={maximized ? 'Restore the 3D view' : 'Enlarge the 3D view'} title={maximized ? 'Restore' : 'Enlarge'} className="shrink-0 rounded-lg p-1 text-[rgba(var(--scene-labelForeground),0.65)] hover:bg-[rgba(var(--scene-labelForeground),0.06)] hover:text-[rgba(var(--scene-labelForeground),1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]">{maximized ? <Minimize2 className="h-4 w-4" aria-hidden="true" /> : <Maximize2 className="h-4 w-4" aria-hidden="true" />}</button>
@@ -727,8 +745,9 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         <button type="button" onClick={() => setExpanded(value => !value)} aria-label={expanded ? 'Collapse orchestrator' : 'Expand orchestrator'} className="shrink-0 rounded-lg p-1 text-[rgba(var(--scene-labelForeground),0.65)] hover:bg-[rgba(var(--scene-labelForeground),0.06)] hover:text-[rgba(var(--scene-labelForeground),1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]">
           <ChevronDown className={'h-4 w-4 transition-transform ' + (expanded ? 'rotate-180' : '')} aria-hidden="true" />
         </button>
-      </div>
+      </div>}
     </section>
     </div>
   );
 };
+
