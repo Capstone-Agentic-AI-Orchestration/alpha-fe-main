@@ -1,19 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { OrchestrationPlanPreview } from '../live-build-room/OrchestrationPlanPreview';
-import { AlertTriangle, Check, ChevronDown, CircleDot, ExternalLink, LoaderCircle } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ExternalLink, LoaderCircle } from 'lucide-react';
 
+import { buildStepFor, type WizardStep } from './buildSteps';
 import { needsSecurityAuditPlan, type ProjectLiveBuild } from './useProjectLiveBuild';
 import type { LiveBuildRecoveryAction } from '@/shared/types';
 
-export type WizardStep = 'plan' | 'approve' | 'build' | 'review' | 'publish';
-
-const STEPS: Array<{ id: WizardStep; label: string }> = [
-  { id: 'plan', label: 'Plan' },
-  { id: 'approve', label: 'Approve' },
-  { id: 'build', label: 'Build' },
-  { id: 'review', label: 'Review' },
-  { id: 'publish', label: 'Pull request' }
-];
+export type { WizardStep };
 
 /** A planning attempt that ended before any build existed, read from the chat. */
 export interface BuildPlanningFailure {
@@ -27,17 +20,7 @@ export interface BuildPlanningFailure {
 
 /** Which step a build is on, and whether that step needs the person. */
 export function wizardStepFor(build: ProjectLiveBuild | null): { step: WizardStep; attention: boolean } {
-  if (!build) return { step: 'plan', attention: true };
-  switch (build.status) {
-    case 'planning': return { step: 'plan', attention: false };
-    case 'awaiting_plan_approval': return { step: 'approve', attention: true };
-    case 'paused':
-    case 'blocked':
-    case 'recovery_required': return { step: 'build', attention: true };
-    case 'awaiting_approval': return { step: 'review', attention: true };
-    case 'publishing': return { step: 'publish', attention: false };
-    default: return { step: 'build', attention: false };
-  }
+  return buildStepFor(build?.status ?? null);
 }
 
 /** Strip the chat formatting from the Orchestrator's "Build not started." message. */
@@ -75,26 +58,6 @@ const Options: React.FC<{ options: Option[] }> = ({ options }) => (
     </div>)}
   </div>
 );
-
-const Stepper: React.FC<{ step: WizardStep; attention: boolean; failed: boolean }> = ({ step, attention, failed }) => {
-  const current = STEPS.findIndex(item => item.id === step);
-  // Stretched across the composer's width: the connectors grow, the labels keep their size.
-  return <ol aria-label="Build steps" className="flex min-w-0 flex-1 items-center">
-    {STEPS.map((item, index) => {
-      const done = index < current;
-      const active = index === current;
-      return <li key={item.id} aria-current={active ? 'step' : undefined} className={'flex min-w-0 items-center ' + (index > 0 ? 'flex-1' : '')}>
-        {index > 0 && <span aria-hidden="true" className={'mx-2 h-px min-w-3 flex-1 ' + (done || active ? 'bg-selected' : 'bg-surface-raised')} />}
-        <span className={'inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-medium ' +
-          (active ? (failed ? 'bg-status-danger-subtle text-status-danger' : attention ? 'bg-status-warning-subtle text-status-warning' : 'bg-selected text-selected-content')
-            : done ? 'text-link' : 'text-content-muted')}>
-          {done ? <Check className="h-3 w-3" /> : active ? (failed ? <AlertTriangle className="h-3 w-3" /> : attention ? <CircleDot className="h-3 w-3" /> : <LoaderCircle className="h-3 w-3 animate-spin" />) : null}
-          {item.label}
-        </span>
-      </li>;
-    })}
-  </ol>;
-};
 
 const TASK_TONE: Record<string, string> = {
   accepted: 'text-status-success',
@@ -240,13 +203,14 @@ export interface ChatBuildWizardProps {
 /**
  * The build, step by step, docked above the message box: what the
  * Orchestrator is doing now, and the choices it is waiting on, answered here
- * without leaving the chat.
+ * without leaving the chat. The step track lives in the Orchestrator bar at
+ * the top of the chat, so this card does not repeat it.
  */
 export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   const { build, failure, busy } = props;
   const failed = !build && Boolean(failure);
-  const { step, attention } = wizardStepFor(build);
-  // Only a step that needs the person opens by itself; a working build is just the step bar.
+  const { attention } = wizardStepFor(build);
+  // Only a step that needs the person opens by itself; a working build is just its one-line header.
   const needsYou = failed || attention;
   const [collapsed, setCollapsed] = useState(!needsYou);
   useEffect(() => { if (needsYou) setCollapsed(false); }, [needsYou, build?.status]);
@@ -314,7 +278,8 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
         break;
       default: {
         const working = build.agents.find(agent => agent.state === 'running');
-        title = build.status === 'cancelling' ? 'Stopping the build' : working ? working.name + ' is working' : build.status === 'validating' ? 'Checking the build' : 'Building';
+        // Who is working is on the Orchestrator bar; this header only names the phase.
+        title = build.status === 'cancelling' ? 'Stopping the build' : build.status === 'validating' ? 'Checking the build' : 'Build in progress';
         subtitle = (working?.currentTaskTitle ?? build.goal) + ' · ' + currentRepositoryLabel(build, working?.currentTaskTitle);
         body = <Progress build={build} />;
         options = [
@@ -327,24 +292,25 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   }
 
   const border = failed ? 'border-status-danger-border' : attention ? 'border-status-warning-border' : 'border-divider';
-  const details = !collapsed && Boolean((build && build.status !== 'planning') || body || options.length || props.error);
-  return <section aria-label={title} className="space-y-2">
-    <div className="flex items-center gap-3 px-3">
-      <Stepper step={step} attention={attention} failed={failed} />
+  const showsPlan = Boolean(build && !['planning', 'awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(build.status));
+  const hasDetails = showsPlan || Boolean(body || options.length || props.error);
+  const details = !collapsed && hasDetails;
+  return <section aria-label={title} className={'overflow-hidden rounded-2xl border bg-surface-raised/95 shadow-xl shadow-black/50 backdrop-blur ' + border}>
+    <div className="flex items-center gap-3 px-4 py-2.5">
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-xs font-semibold text-content">{title}</div>
+        {needsYou && <div className="truncate text-[11px] text-content-secondary">{subtitle}</div>}
+      </div>
       <span className="flex shrink-0 items-center gap-1">
         {build && <button type="button" onClick={props.onOpenReview} aria-label="Show Build review tab" title="Show Build review tab" className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ExternalLink className="h-3.5 w-3.5" /></button>}
-        <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? 'Show build details' : 'Hide build details'} className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ChevronDown className={'h-4 w-4 transition-transform ' + (collapsed ? '' : 'rotate-180')} /></button>
+        {hasDetails && <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? 'Show build details' : 'Hide build details'} className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ChevronDown className={'h-4 w-4 transition-transform ' + (collapsed ? '' : 'rotate-180')} /></button>}
       </span>
     </div>
-    {details && <div className={'overflow-hidden rounded-2xl border bg-surface-raised/95 shadow-xl shadow-black/50 backdrop-blur ' + border}>
-      {needsYou && <div className="px-4 pb-2 pt-3">
-        <div className="text-xs font-semibold text-content">{title}</div>
-        <div className="truncate text-[11px] text-content-secondary">{subtitle}</div>
-      </div>}
-      {build && !['planning', 'awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(build.status) && <div className={'px-4 pb-3 ' + (needsYou ? '' : 'pt-3')}><OrchestrationPlanPreview key={build.runId} projectId={props.projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={build.status === 'executing'} /></div>}
+    {details && <>
+      {showsPlan && build && <div className="border-t border-divider px-4 py-3"><OrchestrationPlanPreview key={build.runId} projectId={props.projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={build.status === 'executing'} /></div>}
       {body && <div className="max-h-[22vh] space-y-3 overflow-y-auto border-t border-divider px-4 py-3">{body}</div>}
       {options.length > 0 && <div className="border-t border-divider px-3 py-2.5"><Options options={options} /></div>}
       {props.error && <p role="alert" className="border-t border-status-danger-border bg-status-danger-subtle px-4 py-2 text-[11px] text-status-danger">{props.error}</p>}
-    </div>}
+    </>}
   </section>;
 };

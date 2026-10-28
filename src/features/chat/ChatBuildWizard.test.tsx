@@ -57,7 +57,8 @@ describe('the build panel above the message box', () => {
     expect(html).toContain('reply start in the main chat');
     expect(html).not.toContain('Start planned work');
     expect(html).not.toContain('Open the full plan');
-    expect(html).toMatch(/aria-current="step"[^>]*>.*Approve/);
+    // The step track is on the Orchestrator bar now, not above the message box.
+    expect(html).not.toContain('aria-label="Build steps"');
   });
 
   it('shows review status without combined approval or navigation choices', () => {
@@ -88,15 +89,15 @@ describe('the build panel above the message box', () => {
     expect(html).toContain('Your workspace role cannot start builds.');
   });
 
-  it('shows a working build as the step bar alone, and labels every repository it touches', () => {
+  it('shows a working build as a one-line header, and labels every repository it touches', () => {
     const running = build('executing');
     running.orchestration.run.currentTaskId = 't2';
     running.orchestration.tasks.push({ ...running.orchestration.tasks[0], id: 't2', title: 'Add the login API', repository: 'acme/shop-be', ownerName: 'Backend Agent', status: 'running' });
     running.agents = [{ name: 'Backend Agent', state: 'running', currentTaskTitle: 'Add the login API' }] as unknown as ProjectLiveBuild['agents'];
     expect(buildRepositoriesLabel(running)).toBe('shop-fe, shop-be');
     const html = render({ build: running });
-    expect(html).toContain('aria-label="Build steps"');
-    expect(html).toContain('Pull request');
+    expect(html).toContain('Build in progress');
+    expect(html).not.toContain('aria-label="Build steps"');
     // The "who is working on what" line lives in the side panel now, not above the message box.
     expect(html).not.toContain('Add the login API · shop-be');
     expect(html).not.toMatch(/>Backend Agent is working</);
