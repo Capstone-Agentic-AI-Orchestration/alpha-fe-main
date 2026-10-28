@@ -57,11 +57,11 @@ function Orbits({ working, palette }: { working: boolean; palette: ScenePalette 
   return <>{paths.map((points, orbit) => <Line key={orbit} points={points} color={palette.orbit} lineWidth={1} transparent opacity={working ? 0.32 : 0.2} depthWrite={false} />)}</>;
 }
 
-function Hub({ palette, glow, status, reduceMotion, working, cosmo, selected, clickable, onOver, onOut, onClick }: {
-  palette: ScenePalette; glow: THREE.Texture; status: LiveBuildOrchestrationStatus | null; reduceMotion: boolean; working: boolean; cosmo: boolean; selected: boolean; clickable: boolean;
+function Hub({ palette, status, reduceMotion, working, selected, clickable, onOver, onOut, onClick }: {
+  palette: ScenePalette; status: LiveBuildOrchestrationStatus | null; reduceMotion: boolean; working: boolean; selected: boolean; clickable: boolean;
   onOver: () => void; onOut: () => void; onClick: () => void;
 }) {
-  return <OrchestratorParticleSphere palette={palette} glow={glow} status={status} reduceMotion={reduceMotion} working={working} cosmo={cosmo} selected={selected} clickable={clickable}
+  return <OrchestratorParticleSphere palette={palette} status={status} reduceMotion={reduceMotion} working={working} selected={selected} clickable={clickable}
     onOver={onOver} onOut={onOut} onClick={onClick} />;
 }
 
@@ -247,8 +247,8 @@ function Scene({ agents, links = [], hubId, hubLabel, hubDetail, hubClickable, w
       return from === undefined || to === undefined ? null
         : <HandoffLink palette={palette} key={'handoff-' + link.from + '-' + link.to} start={positions[from]} end={positions[to]} state={link.state} highlighted={hoveredId === link.from || hoveredId === link.to} reduceMotion={reduceMotion} />;
     })}
-    {/* At rest the Orchestrator is a sphere; it becomes the Cosmo galaxy while agents work on what it handed them. */}
-    <Hub palette={palette} reduceMotion={reduceMotion} glow={glow} status={buildStatus ?? null} working={working} cosmo={agents.some(agent => agent.active)} selected={selectedId === hubId} clickable={hubClickable}
+    {/* The Orchestrator stays a sphere; its spin and brightness show when agents are working. */}
+    <Hub palette={palette} reduceMotion={reduceMotion} status={buildStatus ?? null} working={working} selected={selectedId === hubId} clickable={hubClickable}
       onOver={() => setHoveredId(hubId)} onOut={() => setHoveredId(previous => (previous === hubId ? null : previous))}
       onClick={() => onSelect(hubId)} />
     {hoveredId === hubId && <Html center position={[0, 1.45, 0]} zIndexRange={[6, 0]} style={{ pointerEvents: 'none' }}>
