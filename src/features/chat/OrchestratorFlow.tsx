@@ -11,6 +11,7 @@ import type { BuildAgentNode, BuildAgentState, BuildHandoff } from './useProject
 import type { SceneAgent, SceneLink } from './OrchestratorScene3D';
 import { supportsWebGL } from './orchestratorSceneLayout';
 import { runningFlowAgentCount } from './flowExecution';
+import { drawCosmoMark } from './cosmoMark2d';
 
 // three.js loads only when someone opens the flow, never with the chat itself.
 const OrchestratorScene3D = lazy(() => import('./OrchestratorScene3D'));
@@ -72,7 +73,17 @@ interface WaveState {
   hubId: string;
   flashRgb: string | null;
   flashAmount: number;
+  /** 0 shows the Orchestrator as a sphere, 1 as the Cosmo galaxy (while agents work). */
+  morph?: number;
 }
+
+/**
+ * The collapsed bar shows the Orchestrator itself (a sphere at rest, the galaxy
+ * during handoffs) in place of the dot wave. Set to false to bring the wave back.
+ */
+const COLLAPSED_SHOWS_ORCHESTRATOR = true;
+/** Seconds for the 2D mark to change between sphere and galaxy, matching the 3D view. */
+const MORPH_SECONDS = 2.2;
 
 interface NodePosition {
   id: string;
@@ -242,6 +253,14 @@ export function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: n
   ctx.clearRect(0, 0, width, height);
 
   const { palette, expanded, working, agents, hoveredId, selectedId, hubId, flashRgb, flashAmount } = state;
+  const morph = state.morph ?? 0;
+  if (!expanded && COLLAPSED_SHOWS_ORCHESTRATOR) {
+    // Resting bar: just the Orchestrator, centred, with a faint glow behind it.
+    const radius = height * 0.42;
+    drawGlow(ctx, width / 2, height / 2, radius * 1.6, mix(rgbChannels(palette.glow), flashRgb, flashAmount), (working ? 0.14 : 0.08) + flashAmount * 0.12);
+    drawCosmoMark(ctx, width / 2, height / 2, radius, morph, seconds, rgbChannels(palette.highlight));
+    return [];
+  }
   const t = seconds * (working ? 1.5 : 0.65);
   const cols = Math.max(24, Math.min(170, Math.floor(width / 8)));
   const rows = expanded ? 24 : 7;
@@ -329,25 +348,12 @@ export function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: n
     ctx.fillText(agent.initial, node.x, node.y + 0.5);
   });
 
-  // The Orchestrator: the Cosmo mark, two dotted arms winding out of a soft core.
+  // The Orchestrator: a dotted sphere at rest, the Cosmo galaxy while agents work.
   const hubGlow = mix(rgbChannels(palette.glow), flashRgb, flashAmount);
   const markRadius = core * 1.7;
   drawGlow(ctx, hub.x, hub.y, markRadius * 1.3, hubGlow, (working ? 0.16 : 0.1) + flashAmount * 0.15 + (selectedId === hubId ? 0.08 : 0));
-  // The same slow, steady turn as the 3D mark.
-  const turn = -seconds * (working ? 0.13 : 0.05);
   const grain = rgbChannels(palette.highlight);
-  for (let arm = 0; arm < 2; arm++) {
-    for (let step = 0; step < 70; step++) {
-      const r = (step + 1) / 70;
-      // A fixed scatter per grain, so the arm keeps its texture from frame to frame.
-      const across = Math.sin(step * 12.9898 + arm * 78.233) * (0.022 + 0.12 * r);
-      const angle = turn + arm * Math.PI + 3.4 * Math.log(1 + r * 20);
-      const rad = (r + across) * markRadius;
-      const size = 0.5 + (1 - r) * 0.7;
-      ctx.fillStyle = 'rgba(' + grain + ', ' + (0.2 + (1 - r) * 0.7).toFixed(2) + ')';
-      ctx.fillRect(hub.x + Math.cos(angle) * rad - size, hub.y + Math.sin(angle) * rad - size, size * 2, size * 2);
-    }
-  }
+  drawCosmoMark(ctx, hub.x, hub.y, markRadius, morph, seconds, grain);
   drawGlow(ctx, hub.x, hub.y, core * 0.6, grain, working ? 0.85 : 0.65);
   positions.push({ id: hubId, x: hub.x, y: hub.y, r: core });
   return positions;
@@ -539,8 +545,10 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   }, [build?.runId, build?.running]);
 
   // The animation loop reads the latest state from a ref so it never restarts.
-  const stateRef = useRef({ palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: false });
-  stateRef.current = { palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: show3D };
+  const stateRef = useRef({ palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: false, dispatching: false });
+  stateRef.current = { palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: show3D, dispatching: runningCount > 0 };
+  /** Sphere (0) to galaxy (1), eased over time in the paint loop. */
+  const morphRef = useRef({ value: runningCount > 0 ? 1 : 0, last: 0 });
 
   // Historical outcomes remain in review/activity. The live scene returns directly to neutral.
   useEffect(() => { if (!working) flashRef.current = null; }, [working]);
@@ -552,6 +560,11 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     let frame = 0;
     const paint = (seconds: number, now: number) => {
       paintSecondsRef.current = seconds;
+      const morph = morphRef.current;
+      const target = stateRef.current.dispatching ? 1 : 0;
+      const dt = morph.last ? Math.min(0.1, (now - morph.last) / 1000) : 0;
+      morph.last = now;
+      morph.value = reduceMotion ? target : morph.value + Math.sign(target - morph.value) * Math.min(Math.abs(target - morph.value), dt / MORPH_SECONDS);
       const flash = flashRef.current;
       let flashAmount = 0;
       if (flash && !reduceMotion) {
@@ -559,7 +572,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         flashAmount = elapsed < FLASH_HOLD_MS ? 1 : Math.max(0, 1 - (elapsed - FLASH_HOLD_MS) / FLASH_FADE_MS);
         if (flashAmount === 0) flashRef.current = null;
       }
-      positionsRef.current = drawWave(canvas, { ...stateRef.current, flashRgb: flash?.rgb ?? null, flashAmount }, seconds);
+      positionsRef.current = drawWave(canvas, { ...stateRef.current, flashRgb: flash?.rgb ?? null, flashAmount, morph: morph.value }, seconds);
       // The label follows its node as the wave carries it.
       const hovered = positionsRef.current.find(node => node.id === stateRef.current.hoveredId);
       if (hovered && tooltipRef.current) {
@@ -586,9 +599,10 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     // Refresh appearance without restarting the loop or advancing a still frame.
     const canvas = canvasRef.current;
     if (canvas) {
-      positionsRef.current = drawWave(canvas, { ...stateRef.current, flashRgb: null, flashAmount: 0 }, reduceMotion ? 0 : paintSecondsRef.current);
+      if (reduceMotion) morphRef.current.value = runningCount > 0 ? 1 : 0;
+      positionsRef.current = drawWave(canvas, { ...stateRef.current, flashRgb: null, flashAmount: 0, morph: morphRef.current.value }, reduceMotion ? 0 : paintSecondsRef.current);
     }
-  }, [expanded, working, waveAgents, hoveredId, selectedId, hubId, palette, reduceMotion]);
+  }, [expanded, working, waveAgents, hoveredId, selectedId, hubId, palette, reduceMotion, runningCount]);
 
   useEffect(() => {
     if (!expanded) setHoveredId(null);
