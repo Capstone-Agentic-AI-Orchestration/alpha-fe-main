@@ -3,12 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <!-- alpha:theme-startup -->
-    <link id="alpha-favicon" rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%238b5cf6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polygon points='12 2 2 7 12 12 22 7 12 2'/><polyline points='2 17 12 22 22 17'/><polyline points='2 12 12 17 22 12'/></svg>" />
+    <link rel="icon" type="image/png" sizes="32x32" href="./favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="./favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Alphaexplora — AI work, orchestrated</title>
+    <style>
+      /* Cosmo loading screen (public pages only; see public/cosmo-loader.js). */
+      #cosmo-loader { position: fixed; inset: 0; z-index: 2147483000; overflow: hidden; background: #07070c; transition: opacity .6s ease .3s; }
+      #cosmo-loader.is-leaving { opacity: 0; }
+      #cosmo-loader canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; }
+      .cosmo-loader-caption { position: absolute; left: 50%; bottom: clamp(22px, 4vh, 48px); margin: 0; color: #89869e; font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; letter-spacing: .24em; text-transform: uppercase; transform: translateX(-50%); transition: opacity .3s ease; }
+      .cosmo-loader-line { position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: #b29af5; transform: scaleX(0); transform-origin: left; transition: opacity .3s ease; }
+      #cosmo-loader.is-leaving :is(.cosmo-loader-caption, .cosmo-loader-line) { opacity: 0; }
+      .cosmo-loader-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+      @media (prefers-reduced-motion: reduce) { #cosmo-loader { transition-duration: .2s; transition-delay: 0s; } }
+    </style>
   </head>
   <body class="bg-background text-gray-100 antialiased selection:bg-brand-500/30 selection:text-brand-100 font-sans">
+    <div id="cosmo-loader" role="status">
+      <canvas aria-hidden="true"></canvas>
+      <p class="cosmo-loader-caption" aria-hidden="true">Entering Cosmo</p>
+      <span class="cosmo-loader-line" aria-hidden="true"></span>
+      <span class="cosmo-loader-sr">Loading</span>
+    </div>
+    <!-- alpha:cosmo-loader -->
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
+

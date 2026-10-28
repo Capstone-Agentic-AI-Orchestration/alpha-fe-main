@@ -20,6 +20,10 @@ describe('client landing and password entry', () => {
     expect(html).toContain('A clear start for');
     expect(html).toContain('Three steps.');
     expect(html).toContain('Alphaexplora');
+    expect(html).toContain('alt="Cosmo home"');
+    expect(html).not.toContain('Client home');
+    expect(html).not.toContain('Invite only');
+    expect(html).toContain('Then see it come together.');
     expect(html).toContain('If your project manager invites you');
     expect(html).toContain('Sign in to your requests');
     expect(html).toContain('aria-current="page">Home</a>');
@@ -30,7 +34,9 @@ describe('client landing and password entry', () => {
   });
   it('shows password sign-in and existing-account migration without open signup or client GitHub login', () => {
     browser(); const html = renderToStaticMarkup(<ClientPasswordSignIn unavailable={false} error="" onRetry={() => {}} onSignedIn={() => {}} />);
-    expect(html).toContain('class="alpha-public"');
+    expect(html).toContain('class="alpha-public public-cosmo public-fit"');
+    expect(html).toContain('alt="Cosmo home"');
+    expect(html).toContain('aria-current="step"');
     expect(html).toContain('Alphaexplora');
     expect(html).toContain('aria-current="page">Client sign in</span>');
     expect(html).toContain('type="password"');

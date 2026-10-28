@@ -39,10 +39,12 @@ import {
   Square,
   Trash2,
   Users,
-  X
+  X,
+  Kanban
 } from 'lucide-react';
 
 import { useApp, useTabSessionState } from '@/app/AppContext';
+import { statusLabel as taskStatusLabel, taskHandoffContext } from '@/features/issues';
 import { isDesktop } from '@/shared/desktop';
 import { Modal } from '@/shared/components/Modal';
 import { apiService } from '@/shared/services/apiService';
@@ -475,12 +477,16 @@ export const ChatView: React.FC = () => {
     agents: workspaceAgents,
     runtimes,
     updateAgent,
-    currentUser
+    currentUser,
+    issues
   } = useApp();
 
   const sessionStateKey = (key: string, threadId = activeThreadId) => `chat.session.${threadId ?? 'draft'}.${key}`;
   const [input, setInput] = useTabSessionState<string>(sessionStateKey('draft'), '');
   const [approvalMode, setApprovalMode] = useTabSessionState<'ask' | 'approve' | 'full'>(sessionStateKey('approvalMode'), 'ask');
+  /** A board task handed to this conversation from its details; sent with the next message. */
+  const [taskRefId, setTaskRefId] = useTabSessionState<string | null>(sessionStateKey('taskRef'), null);
+  const taskRef = taskRefId ? issues.find(issue => issue.id === taskRefId) : undefined;
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
   const [pendingFileViews, setPendingFileViews] = useState<Array<{ file: File; previewUrl?: string }>>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
@@ -1203,7 +1209,18 @@ export const ChatView: React.FC = () => {
       return;
     }
     setPendingFiles([]);
-    await sendChatMessage(message, activeThread?.id, buildRepositories, 'auto', uploadedAttachments, { approvalMode });
+    // A handed-off task travels with the message: the agent gets its details, and the
+    // issue id links any build back to this task instead of filing a new one.
+    const handedOff = taskRef;
+    if (handedOff) setTaskRefId(null);
+    await sendChatMessage(
+      handedOff ? `${message}\n\n${taskHandoffContext(handedOff)}` : message,
+      activeThread?.id,
+      buildRepositories,
+      'auto',
+      uploadedAttachments,
+      handedOff ? { approvalMode, issueId: handedOff.id, projectId: handedOff.projectId } : { approvalMode }
+    );
     if (activeThread?.id) {
       void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
     }
@@ -1737,7 +1754,7 @@ export const ChatView: React.FC = () => {
           {!isClient && chatSyncStatus?.state === 'failed' && <div className="shrink-0 px-5 pt-3 lg:px-7"><div className="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-full border border-status-warning-border bg-status-warning-subtle px-4 py-2 text-[11px] text-status-warning"><span>Chat sync paused</span><button type="button" onClick={() => void handleRetryChatSync()} disabled={syncRetrying} className="font-medium hover:text-content disabled:opacity-50">{syncRetrying ? 'Retrying…' : 'Retry'}</button></div></div>}
 
 
-          {!isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={latestBuild ? { runId: latestBuild.runId, label: buildStatusLabel(latestBuild), running: latestBuild.running, agents: latestBuild.agents, handoffs: buildHandoffs(latestBuild.orchestration) } : null} sidePanelOpen={Boolean(panelVisible)} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} roster={workspaceAgents} runtimes={runtimes} canEditAgents={can('manage_agents')} onUpdateAgent={updateAgent} /></div>}
+          {!isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={latestBuild ? { runId: latestBuild.runId, label: buildStatusLabel(latestBuild), running: latestBuild.running, status: latestBuild.status, agents: latestBuild.agents, handoffs: buildHandoffs(latestBuild.orchestration) } : null} sidePanelOpen={Boolean(panelVisible)} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} roster={workspaceAgents} runtimes={runtimes} canEditAgents={can('manage_agents')} onUpdateAgent={updateAgent} /></div>}
           <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 [overflow-anchor:none]"><div className={'mx-auto w-full max-w-3xl space-y-5 ' + (currentMessages.length === 0 ? 'h-full' : '')}>{currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-divider bg-selected flex items-center justify-center"><Sparkles className="h-6 w-6 text-link" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-content">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-content-muted max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div></div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-divider bg-surface-raised p-4 text-xs text-content-secondary">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-divider bg-surface-raised px-4 py-2 text-xs text-content-secondary flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-link" />{message.content}</div></div>; return <div key={message.id} className="w-full"><div className={`min-w-0 space-y-2 ${isUser ? 'flex flex-col items-end' : ''}`}><div className={`text-sm leading-relaxed ${isUser ? 'max-w-[80%] rounded-2xl bg-surface-raised px-4 py-2.5 text-content' : 'text-content'}`}>{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-link"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 py-2 text-xs text-content"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-link" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-link">Build update</div><MessageMarkdown content={message.content} /></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-link"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
   const setupRequired = /review the project setup|project needs setup|configured model|available model|workspace identity|reconnect (?:this )?repository/i.test(message.content);
   if (message.content.includes('Choose a codebase') || message.content.includes('Choose one repository')) {
@@ -1789,6 +1806,16 @@ export const ChatView: React.FC = () => {
                 <span className="max-w-48 truncate">{file.name}</span><span className="shrink-0 text-content-muted">{formatFileSize(file.size)}</span>
                 <button type="button" aria-label={`Remove ${file.name}`} onClick={() => removePendingFile(index)} className="rounded-md p-1 text-content-muted hover:bg-surface-high hover:text-content"><X className="h-3.5 w-3.5" /></button>
               </div>)}</div>}
+              {taskRef && <div className="px-2">
+                <div className="flex max-w-full items-center gap-2.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1.5 text-xs">
+                  <span aria-hidden="true" className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-selected text-link"><Kanban className="h-3.5 w-3.5" /></span>
+                  <span className="shrink-0 font-mono text-[11px] text-content-muted">{taskRef.identifier}</span>
+                  <span className="min-w-0 flex-1 truncate font-medium text-content">{taskRef.title}</span>
+                  <span className="shrink-0 text-[11px] text-content-muted">{taskStatusLabel(taskRef.status)}</span>
+                  <button type="button" aria-label={`Remove attached task ${taskRef.identifier}`} onClick={() => setTaskRefId(null)} className="rounded-md p-1 text-content-muted hover:bg-surface-high hover:text-content"><X className="h-3.5 w-3.5" /></button>
+                </div>
+                <p className="mt-1.5 px-1 text-[11px] text-content-muted">Task attached. Its description and open subtasks are sent with your message.</p>
+              </div>}
               <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-1.5 rounded-[1.75rem] border border-divider bg-surface-raised/95 p-1.5 shadow-2xl shadow-black/50 transition-colors focus-within:border-control ${isDraggingFiles ? 'ring-2 ring-selected-content/70' : ''}`}>
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
                 <div ref={repositoryMenuRef} className="relative shrink-0">

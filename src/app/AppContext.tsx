@@ -46,9 +46,12 @@ import {
 } from '@/data/defaults';
 import { apiService, normalizeGitHubRepo, normalizeSkill, onWorkspaceRefused, setActiveWorkspaceId } from '@/shared/services/apiService';
 import { mergeThreadsWithCachedMessages } from './chatThreadHydration';
+import { createBoardSyncCoordinator } from './boardSyncCoordinator';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
+import { catchUpBoard } from '@/shared/services/boardSync';
+import type { BoardCursor } from '@/shared/types/boardSync';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { isDesktop } from '@/shared/desktop';
 
@@ -127,10 +130,12 @@ interface AppContextType {
   ) => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
+  notificationPanelOpen: boolean;
+  setNotificationPanelOpen: React.Dispatch<React.SetStateAction<boolean>>;
   
   // Issues
   issues: Issue[];
-  createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }) => Issue | null;
+  createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }, options?: CreateIssueOptions) => Issue | null;
   updateIssueStatus: (id: string, status: IssueStatus) => void;
   updateIssue: (id: string, updates: Partial<Issue>) => void;
   addIssueComment: (issueId: string, comment: IssueComment) => void;
@@ -208,7 +213,7 @@ interface AppContextType {
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   archiveNotification: (id: string) => void;
-  handleApproval: (notificationId: string, action: 'approved' | 'rejected') => void;
+  handleApproval: (notificationId: string, action: 'approved' | 'rejected') => Promise<void>;
   
   // Analytics
   analytics: AnalyticsData;
@@ -332,7 +337,9 @@ export type Capability =
   | 'submit_intake'
   | 'bind_workspace'
   | 'view_members'
-  | 'manage_members';
+  | 'manage_members'
+  | 'view_operations'
+  | 'manage_operations';
 
 const KNOWN_ROLES: UserRole[] = ['client', 'dev', 'pm', 'admin'];
 
@@ -430,7 +437,9 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'run_agents',
     'contact_client',
     'view_members',
-    'manage_members'
+    'manage_members',
+    'view_operations',
+    'manage_operations'
   ]
 };
 
@@ -444,6 +453,16 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
 const ROLE_TABS = ROLE_NAV;
 
 /** Extra fields for a chat message that starts a build. */
+export interface CreateIssueOptions {
+  /**
+   * Start an Orchestrator build once the daemon has saved the task.
+   *
+   * The task only has its real id and identifier after the save, and a build
+   * needs both, so this waits for the save rather than building the placeholder.
+   */
+  planBuild?: boolean;
+}
+
 export interface ChatSendOptions {
   /** Board issue the build is for; the Orchestrator builds it instead of filing a new one. */
   issueId?: string;
@@ -457,8 +476,8 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
-  'portal', 'intake', 'documents', 'inbox', 'chat', 'issues', 'projects', 'tickets', 'agents',
-  'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments',
+  'portal', 'intake', 'documents', 'chat', 'issues', 'projects', 'tickets', 'agents',
+  'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments', 'operations',
   'build_room', 'settings'
 ];
 
@@ -560,6 +579,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /** Sync warnings already shown this session. */
   const reportedSyncErrorsRef = useRef(new Set<string>());
   const syncBoardRef = useRef<() => Promise<void>>(async () => {});
+  const catchUpWorkspaceBoard = useCallback((workspaceId: string) => {
+    const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${workspaceId}`, null);
+    return catchUpBoard(workspaceId, cachedCursor);
+  }, []);
 
   /**
    * Pull the board from GitHub.
@@ -581,23 +604,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     syncingRef.current = true;
     setSyncing(true);
     try {
+      const workspaceId = activeWorkspaceId;
       const report = await apiService.syncBoard();
-      // Re-read rather than patching from the report: the daemon already
-      // assembled the board consistently, and rebuilding it from a summary is
-      // how the two versions drift apart.
-      // Keep the catalogue in sync if an explicitly authorized importer ever
-      // adds a PM-owned project; the normal board sync only updates projects
-      // that already exist in Alpha.
       const imported = report.projectsImported ?? 0;
-      // Any project change, not only imports: a project a manager created or
-      // renamed on the team's board reaches a desktop through this pull.
-      const projectsMoved = imported > 0 || (report.projects ?? 0) > 0;
-      const [fresh, freshProjects] = await Promise.all([
-        apiService.getIssues(),
-        projectsMoved ? apiService.getProjects() : Promise.resolve(null)
-      ]);
-      if (freshProjects?.length) setProjects(freshProjects);
-      if (fresh?.length) setIssues(fresh as any);
+      if (workspaceId) {
+        const board = await catchUpWorkspaceBoard(workspaceId);
+        if (workspaceId === activeWorkspaceId) {
+          setProjects(board.state.projects);
+          setAgents(board.state.agents);
+          setIssues(board.state.issues);
+        }
+      }
       setLastSyncedAt(new Date().toISOString());
 
       if (imported > 0) {
@@ -613,8 +630,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // A workspace where one repository is unreachable still synced the
       // others, so failures are named rather than failing the whole run.
       for (const e of report.errors ?? []) {
-        // Once per session: the board syncs every minute, and a warning that
-        // needs someone to act on it does not get more useful by repeating.
+        // Once per session: a warning that needs someone to act on it does not
+        // get more useful by repeating.
         const seen = `${e.project}
 ${e.detail}`;
         if (reportedSyncErrorsRef.current.has(seen)) continue;
@@ -631,7 +648,7 @@ ${e.detail}`;
         void syncBoardRef.current();
       }
     }
-  }, [localMode, role]);
+  }, [activeWorkspaceId, catchUpWorkspaceBoard, localMode, role]);
   syncBoardRef.current = syncBoard;
 
   /**
@@ -643,11 +660,9 @@ ${e.detail}`;
    * two people editing the same board spent that interval looking at different
    * truths.
    *
-   * The database announces each write on the workspace's own channel (`0012`),
-   * and this re-reads what changed. The message is a nudge, not the board: it
-   * says a write happened and which table, and the answer comes from the API,
-   * which applies the same permissions as everywhere else. Acting on the
-   * payload would be trusting a row this person may not be allowed to see.
+   * The database sends a cursor-only nudge on the workspace's own channel.
+   * The actual rows still come from the API, which applies the same permissions
+   * as everywhere else. The marker contains no board data to trust or display.
    *
    * Private, like every channel here: Realtime admits only a token whose
    * workspace matches the channel's.
@@ -656,58 +671,30 @@ ${e.detail}`;
     if (localMode || !activeWorkspaceId || !isSupabaseConfigured() || !supabase) return;
 
     let cancelled = false;
-    let pending: ReturnType<typeof setTimeout> | null = null;
-    const changed = new Set<string>();
-
-    const reread = () => {
-      pending = null;
-      const tables = new Set(changed);
-      changed.clear();
-      /*
-       * On a desktop the API answers from this machine's copy of the board,
-       * which the write has not reached yet -- re-reading it showed the
-       * project or card that was just created as missing. Pull it from the
-       * team's board first; the sync re-reads issues and projects after.
-       */
-      if (isDesktop) {
-        void syncBoardRef.current();
-        return;
-      }
-      if (tables.has('issues')) {
-        void apiService.getIssues().then(rows => {
-          if (!cancelled && rows) setIssues(rows as any);
-        }).catch(() => {
-          // A failed re-read leaves what is on screen; the next message or the
-          // next focus will try again.
-        });
-      }
-      if (tables.has('projects')) {
-        void apiService.getProjects().then(rows => {
-          if (!cancelled && rows) setProjects(rows);
-        }).catch(() => {});
-      }
-    };
-
-    /** A burst of writes -- a sync, a run finishing -- is one re-read. */
-    const onBoardWrite = ({ payload }: { payload: any }) => {
-      changed.add(String(payload?.table ?? 'issues'));
-      if (pending) clearTimeout(pending);
-      pending = setTimeout(reread, 400);
-    };
-
+    const coordinator = createBoardSyncCoordinator(async () => {
+      const result = await catchUpWorkspaceBoard(activeWorkspaceId);
+      if (cancelled) return;
+      setProjects(result.state.projects);
+      setAgents(result.state.agents);
+      setIssues(result.state.issues);
+      setServerStatus('online');
+    });
+    const onVisibilityChange = () => coordinator.onVisible();
+    document.addEventListener('visibilitychange', onVisibilityChange);
     const channel = supabase
       .channel(`workspace:${activeWorkspaceId}:board`, { config: { private: true } })
-      .on('broadcast', { event: 'INSERT' }, onBoardWrite)
-      .on('broadcast', { event: 'UPDATE' }, onBoardWrite)
-      .on('broadcast', { event: 'DELETE' }, onBoardWrite)
-      .subscribe();
+      .on('broadcast', { event: 'board_changed' }, () => coordinator.notify())
+      .subscribe(status => {
+        if (status === 'SUBSCRIBED') coordinator.onSubscribed();
+      });
 
     return () => {
       cancelled = true;
-      if (pending) clearTimeout(pending);
+      coordinator.dispose();
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       void supabase?.removeChannel(channel);
     };
-  }, [activeWorkspaceId, localMode]);
+  }, [activeWorkspaceId, catchUpWorkspaceBoard, localMode]);
 
   /**
     * The role you chose, which is an override rather than the answer.
@@ -829,11 +816,14 @@ ${e.detail}`;
   };
 
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
 
   // Raw collections. These are never handed to a view directly — the scoped
   // derivations further down are what the provider exposes, so a view cannot
   // accidentally render another persona's data.
   const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(loadFromStorage<Issue[]>('issues', [])));
+  /** Saved tasks whose author asked for a build when creating them; see `CreateIssueOptions.planBuild`. */
+  const [issuesAwaitingBuild, setIssuesAwaitingBuild] = useState<string[]>([]);
   const [projects, setProjects] = useState<Project[]>(() => loadFromStorage<Project[]>('projects', []));
   const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(loadFromStorage<Agent[]>('agents', [])));
   const [runtimes, setRuntimes] = useState<RuntimeEngine[]>(() => loadFromStorage<RuntimeEngine[]>('runtimes', []));
@@ -852,6 +842,43 @@ ${e.detail}`;
    * ones that matter.
    */
   const [inbox, setInbox] = useState<InboxNotification[]>(() => normalizeInboxNotifications(loadFromStorage<InboxNotification[]>('inbox', [])));
+  useEffect(() => {
+    if (role !== 'admin' || !activeWorkspaceId) {
+      setInbox(current => current.filter(notification => !notification.id.startsWith('ops-notice-')));
+      return;
+    }
+
+    let cancelled = false;
+    const refreshOperationsNotifications = async () => {
+      try {
+        const notifications = await apiService.getOperationsNotifications();
+        if (cancelled) return;
+        const mapped: InboxNotification[] = notifications.map(notification => ({
+          ...notification,
+          audience: 'internal'
+        }));
+        setInbox(current => [
+          ...mapped,
+          ...current.filter(notification => !notification.id.startsWith('ops-notice-'))
+        ]);
+      } catch {
+        // Monitoring alerts are additive: a temporary cloud outage must not
+        // blank the rest of the existing workspace notification list.
+      }
+    };
+
+    const tick = () => {
+      if (document.visibilityState === 'visible') void refreshOperationsNotifications();
+    };
+    void refreshOperationsNotifications();
+    const timer = window.setInterval(tick, 60_000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [activeWorkspaceId, role]);
   const [analytics, setAnalytics] = useState<AnalyticsData>(() => normalizeAnalytics(loadFromStorage('analytics_v2', emptyAnalytics)));
   const [settings, setSettings] = useState<WorkspaceSettings>(() =>
     normalizeSettings(loadFromStorage('settings', defaultSettings))
@@ -932,21 +959,36 @@ ${e.detail}`;
         // older build that does not expose workspaces yet.
       }
 
-      const snapshot = await fetchServerSnapshot();
-      if (cancelled) return;
-
-      // Empty object = nothing succeeded, i.e. the daemon is not answering.
-      if (Object.keys(snapshot).length === 0) {
-        setServerStatus('offline');
-        setWorkspaceLoading(false);
+      setActiveWorkspaceId(selectedWorkspaceId);
+      if (!selectedWorkspaceId) {
+        if (!cancelled) {
+          setServerStatus('offline');
+          setWorkspaceLoading(false);
+        }
         return;
       }
 
+      let result;
+      try {
+        const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${selectedWorkspaceId}`, null);
+        result = await fetchServerSnapshot(selectedWorkspaceId, cachedCursor);
+      } catch (error) {
+        console.warn('[sync] workspace hydration failed:', error instanceof Error ? error.message : error);
+        if (!cancelled) {
+          setServerStatus('offline');
+          setWorkspaceLoading(false);
+        }
+        return;
+      }
+      if (cancelled) return;
+
+      const snapshot = result.snapshot;
+
       // Only overwrite what actually came back; a partially-implemented backend
       // must not blank the entities it does not serve yet.
-      if (snapshot.projects) setProjects(snapshot.projects as Project[]);
-      if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
-      if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
+      setProjects(result.board.state.projects);
+      setAgents(result.board.state.agents);
+      setIssues(result.board.state.issues);
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       /**
@@ -1159,29 +1201,10 @@ ${e.detail}`;
     if (!isDesktop) saveToStorage('local_mode', localMode);
   }, [localMode]);
 
-  /**
-   * Pull the board every minute, and once on load.
-   *
-   * A webhook would be push-based and instant, and it needs a public URL a
-   * laptop does not have — which would mean hosting something, the thing this
-   * architecture exists to avoid. A minute is well inside what anyone notices
-   * on a six-person board, and it costs four API calls against a limit of five
-   * thousand an hour.
-   *
-   * Paused while the tab is hidden: a laptop with Alpha open in a background
-   * tab for a week should not spend the rate limit on a board nobody is
-   * looking at.
-   */
+  /** Keep workspace membership fresh; board rows arrive through cursor catch-up. */
   useEffect(() => {
-    const tick = () => {
+    const refresh = () => {
       if (document.visibilityState !== 'visible') return;
-      void syncBoard();
-      /*
-       * And which workspaces this person is in. A project manager can put a
-       * developer in a workspace at any time, and the developer does nothing
-       * to accept it -- so the app has to notice, not wait for a restart.
-       * Quiet on failure: the board sync already reports an offline daemon.
-       */
       void apiService.getWorkspaces()
         .then(available => {
           if (!Array.isArray(available)) return;
@@ -1194,16 +1217,13 @@ ${e.detail}`;
         })
         .catch(() => {});
     };
-    tick();
-    const id = window.setInterval(tick, 60_000);
-    // Catch up immediately when someone comes back to the tab, rather than
-    // showing a stale board until the next interval.
-    document.addEventListener('visibilitychange', tick);
+    const id = window.setInterval(refresh, 60_000);
+    document.addEventListener('visibilitychange', refresh);
     return () => {
       window.clearInterval(id);
-      document.removeEventListener('visibilitychange', tick);
+      document.removeEventListener('visibilitychange', refresh);
     };
-  }, [syncBoard]);
+  }, []);
   useEffect(() => { saveToStorage(workspaceStorageKey('requirement_docs'), requirementDocs); }, [requirementDocs, activeWorkspaceId]);
 
   const dismissToast = (id: string) => {
@@ -1254,6 +1274,7 @@ ${e.detail}`;
     setActiveWorkspaceIdState(workspaceId);
     setActiveWorkspaceId(workspaceId);
     setLiveBuildRoomProjectIds([]);
+    const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${workspaceId}`, null);
     setActiveThreadId(null);
     // The next workspace may have thread IDs loaded earlier in this session.
     // Clear this cache so opening one always rehydrates its transcript from
@@ -1273,16 +1294,17 @@ ${e.detail}`;
     setAnalytics(normalizeAnalytics(loadFromStorage<AnalyticsData>(`analytics_v2:${workspaceId}`, emptyAnalytics)));
 
     try {
-      const snapshot = await fetchServerSnapshot();
+      const result = await fetchServerSnapshot(workspaceId, cachedCursor);
       try {
         const roomProjects = await apiService.getLiveBuildRoomProjects();
         setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
       } catch {
         setLiveBuildRoomProjectIds([]);
       }
-      if (snapshot.projects) setProjects(snapshot.projects as Project[]);
-      if (snapshot.agents) setAgents(snapshot.agents as Agent[]);
-      if (snapshot.issues) setIssues(snapshot.issues as Issue[]);
+      setProjects(result.board.state.projects);
+      setAgents(result.board.state.agents);
+      setIssues(result.board.state.issues);
+      const snapshot = result.snapshot;
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
       if (snapshot.chatThreads) {
@@ -1559,7 +1581,7 @@ ${e.detail}`;
   // raw list — a client must not be given a badge for internal traffic.
 
   // Issue CRUD
-  const createIssue = (input: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }): Issue | null => {
+  const createIssue = (input: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }, options: CreateIssueOptions = {}): Issue | null => {
     if (!requireCapability('manage_issues')) return null;
     const project = projects.find(p => p.id === input.projectId) || projects[0];
 
@@ -1614,7 +1636,10 @@ ${e.detail}`;
 
     persist(
       () => apiService.createIssue(newIssue),
-      saved => setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i))),
+      saved => {
+        setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i)));
+        if (options.planBuild) setIssuesAwaitingBuild(prev => [...prev, saved.id]);
+      },
       msg => showToast('Task not saved', msg, 'error')
     );
 
@@ -2177,10 +2202,11 @@ ${e.detail}`;
           issueIdentifier: targetIssue.identifier,
           proposedChanges: run.changedFiles
             ? `${run.insertions ?? 0} insertions, ${run.deletions ?? 0} deletions in ${run.changedFiles} files.`
-            : 'No files were changed.'
+            : 'No files were changed.',
+          prUrl: run.prUrl
         }
       }, ...prev]);
-      showToast('Review ready', `${targetIssue.identifier} is waiting in Inbox.`, 'success');
+      showToast('Review ready', `${targetIssue.identifier} is waiting in Notifications.`, 'success');
     });
   }, [prototypeRuns, issues, agents]);
 
@@ -2532,6 +2558,24 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
     return threadId;
   };
 
+  /**
+   * Plan the builds asked for at creation, once each saved task is on the board.
+   *
+   * Runs here rather than in the dialog: the dialog has closed by the time the
+   * save returns, and only this render's `startIssueBuild` can see the saved task.
+   */
+  useEffect(() => {
+    if (!issuesAwaitingBuild.length) return;
+    const ready = issuesAwaitingBuild.filter(id => issues.some(issue => issue.id === id));
+    if (!ready.length) return;
+    setIssuesAwaitingBuild(prev => prev.filter(id => !ready.includes(id)));
+    for (const id of ready) {
+      void startIssueBuild(id).then(threadId => {
+        if (threadId) showToast('Planning a build', 'The plan will appear in the project chat for you to approve. Nothing in the code changes before that.', 'info');
+      });
+    }
+  }, [issuesAwaitingBuild, issues]);
+
   // Runtimes
   const scanLocalRuntimes = async () => {
     if (!requireCapability('manage_runtimes')) return;
@@ -2669,24 +2713,28 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
   // Inbox
   const markNotificationRead = (id: string) => {
     setInbox(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
+    if (id.startsWith('ops-notice-')) void apiService.markOperationsNotificationRead(id).catch(() => undefined);
   };
 
   const markAllNotificationsRead = () => {
     setInbox(prev => prev.map(n => ({ ...n, read: true })));
+    if (role === 'admin') void apiService.markAllOperationsNotificationsRead().catch(() => undefined);
   };
 
   const archiveNotification = (id: string) => {
     setInbox(prev => prev.map(n => n.id === id ? { ...n, archived: true } : n));
+    if (id.startsWith('ops-notice-')) void apiService.archiveOperationsNotification(id).catch(() => undefined);
   };
 
-  const handleApproval = (notificationId: string, action: 'approved' | 'rejected') => {
+  const handleApproval = async (notificationId: string, action: 'approved' | 'rejected'): Promise<void> => {
     if (!requireCapability('approve_runs')) return;
     const notif = inbox.find(n => n.id === notificationId);
     if (!notif) return;
 
-    setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
-
-    if (notif.entityType !== 'issue') return;
+    if (notif.entityType !== 'issue') {
+      setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
+      return;
+    }
 
     const run = prototypeRuns.find(item =>
       item.issueId === notif.entityId && item.status === 'awaiting_approval'
@@ -2694,79 +2742,53 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
 
     // Preserve approval behavior for older seeded notifications that are not tied to a run.
     if (!run) {
+      setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
       if (action === 'approved') updateIssueStatus(notif.entityId, 'done');
       showToast(action === 'approved' ? 'Work approved' : 'Changes requested', undefined, action === 'approved' ? 'success' : 'info');
       return;
     }
 
     const now = new Date().toISOString();
+    try {
+      // The same persisted endpoint records approvals and request-changes
+      // decisions. Keep the notification pending if the daemon rejects either.
+      const updatedRun = await apiService.approveRun(run.id, action === 'approved');
+      setPrototypeRuns(prev => prev.map(item => item.id === run.id ? updatedRun : item));
+      setInbox(prev => prev.map(n => n.id === notificationId
+        ? { ...n, approvalStatus: action, read: true }
+        : n));
 
-    /**
-     * Tell the daemon, so the decision outlives this tab.
-     *
-     * The state changes below are optimistic; without this the run stayed
-     * `awaiting_approval` in SQLite and the same notification returned on the
-     * next reload.
-     */
-    if (action === 'approved') {
-      /**
-       * The daemon merges; this waits to hear whether it did.
-       *
-       * Two things used to happen here at once: `approveRun` recorded the
-       * decision and a separate `mergeGitHubPR` call did the merging, with its
-       * failure going to `console.warn`. So a merge blocked by a required check
-       * or a conflict still produced "Review approved", the card moved to Done,
-       * and the pull request stayed open with nobody told.
-       *
-       * The merge now belongs to the approve endpoint, which reports what
-       * actually happened. Nothing here moves until it answers.
-       */
-      apiService
-        .approveRun(run.id, true)
-        .then(() => {
-          setPrototypeRuns(prev => prev.map(item =>
-            item.id === run.id ? { ...item, status: 'completed', updatedAt: new Date().toISOString() } : item
-          ));
-          setIssues(prev => prev.map(issue =>
-            issue.id === run.issueId ? { ...issue, status: 'done', updatedAt: new Date().toISOString() } : issue
-          ));
-          showToast(
-            'Review approved',
-            run.prUrl ? `Merged ${run.prUrl}.` : 'No pull request to merge.',
-            'success'
-          );
-        })
-        .catch((err: unknown) => {
-          // Put the decision back: the run is still at the gate, and the
-          // notification must return rather than read as handled.
-          setInbox(prev => prev.map(n =>
-            n.id === notificationId ? { ...n, approvalStatus: undefined, read: true } : n
-          ));
-          const detail = err instanceof Error ? err.message : String(err);
-          showToast('Not merged', detail, 'error');
-        });
+      if (action === 'approved') {
+        setIssues(prev => prev.map(issue => issue.id === run.issueId
+          ? { ...issue, status: 'done', updatedAt: updatedRun.updatedAt || now }
+          : issue));
+        showToast(
+          'Review approved',
+          run.prUrl ? `Merged ${run.prUrl}.` : 'No pull request to merge.',
+          'success'
+        );
+        return;
+      }
 
-      return;
+      setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
+        ...issue,
+        status: 'todo',
+        comments: issue.comments.some(comment => comment.id === `comm-${run.id}-rejected`)
+          ? issue.comments
+          : [...issue.comments, {
+              id: `comm-${run.id}-rejected`,
+              authorType: 'system' as const,
+              authorName: 'Alpha Execution Engine',
+              content: 'Changes requested. The run stopped at the review gate.',
+              createdAt: now
+            }],
+        updatedAt: updatedRun.updatedAt || now
+      } : issue));
+      showToast('Changes requested', 'The review decision was saved.', 'info');
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : String(err);
+      showToast(action === 'approved' ? 'Not merged' : 'Changes not saved', detail, 'error');
     }
-
-    setPrototypeRuns(prev => prev.map(item => item.id === run.id ? {
-      ...item,
-      status: 'changes_requested',
-      updatedAt: now
-    } : item));
-    setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
-      ...issue,
-      status: 'in_progress',
-      comments: [...issue.comments, {
-        id: `comm-${run.id}-rejected`,
-        authorType: 'system' as const,
-        authorName: 'Prototype runner',
-        content: 'Changes requested during review. The run can be retried from the task.',
-        createdAt: now
-      }],
-      updatedAt: now
-    } : issue));
-    showToast('Changes requested', 'Return to the task when you are ready to retry.', 'info');
   };
 
   // Chat & Threads
@@ -3632,6 +3654,8 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       setTabSessionState,
       commandPaletteOpen,
       setCommandPaletteOpen,
+      notificationPanelOpen,
+      setNotificationPanelOpen,
       issues: scopedIssues,
       createIssue,
       updateIssueStatus,

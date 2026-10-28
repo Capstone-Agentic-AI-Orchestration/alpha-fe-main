@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
-import alphaMarkUrl from '@/assets/alpha-mark.png';
+import cosmoLogoUrl from '@/assets/cosmo-logo.png';
+import cosmoWordmarkUrl from '@/assets/cosmo-wordmark.png';
 import { clientLandingHref, clientPortalHref, publicInquiryHref, publicInquirySlug } from '@/features/ticketing/publicIntakeApi';
 import '@/features/ticketing/publicClient/clientPublic.css';
-import { journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
+import { GALAXY_BEATS, journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
+import { LandingMenu } from './LandingMenu';
 import './clientLanding.css';
 
 function readSlug(): string {
@@ -33,7 +35,7 @@ function scrollToSection(id: string) {
 const clamp = (v: number) => Math.max(0, Math.min(1, v));
 
 type Journey = JourneyProgress & { page: number; active: string };
-const INITIAL: Journey = { hp: 0, ip: 0, wp: 0, pp: 0, flat: false, page: 0, active: 'client-intro' };
+const INITIAL: Journey = { hp: 0, ip: 0, wp: 0, pp: 0, cp: 0, flat: false, page: 0, active: 'client-intro' };
 
 const sections = [
   { id: 'client-intro', label: 'Intro' },
@@ -60,15 +62,16 @@ const captions = [
 
 /** Zoom-out lines shown over the canvas, each with the project-progress window it owns. */
 const recap = [
-  { text: <>Every detail you see,</>, range: [0.43, 0.55] },
-  { text: <>every step you take,</>, range: [0.55, 0.665] },
-  { text: <>every idea you bring,</>, range: [0.665, 0.775] },
-  { text: <>starts with <b>one message.</b></>, range: [0.775, 0.93] },
+  { text: <>Every detail you see,</>, range: [0.48, 0.58] },
+  { text: <>every step you take,</>, range: [0.58, 0.67] },
+  { text: <>every idea you bring,</>, range: [0.67, 0.76] },
+  { text: <>starts with <b>one message.</b></>, range: [0.76, 0.86] },
 ];
 
+/** Caption in focus, matching the galaxy's beats: lighting up, the message, then the face-on reveal. */
 function captionIndex(pp: number): number {
-  if (pp < 0.13) return 0;
-  return pp < 0.26 ? 1 : 2;
+  if (pp < GALAXY_BEATS.ask) return 0;
+  return pp < GALAXY_BEATS.reveal ? 1 : 2;
 }
 
 function recapClass(pp: number, [from, to]: number[]): string {
@@ -88,6 +91,8 @@ export default function ClientLandingPage() {
   const rootRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const mainRef = useRef<HTMLElement>(null);
+  const indexRef = useRef<HTMLElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const journeyRef = useRef(journey);
   const pointerRef = useRef<[number, number]>([0, 0]);
   const home = clientLandingHref(slug);
@@ -104,6 +109,39 @@ export default function ClientLandingPage() {
     };
   }, []);
 
+  // The section rail brightens while the page is scrolling, then settles back.
+  useEffect(() => {
+    let timer = 0;
+    const wake = () => {
+      indexRef.current?.classList.add('is-awake');
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => indexRef.current?.classList.remove('is-awake'), 1400);
+    };
+    document.addEventListener('scroll', wake, { capture: true, passive: true });
+    return () => {
+      document.removeEventListener('scroll', wake, { capture: true });
+      window.clearTimeout(timer);
+    };
+  }, []);
+
+  // The header leaves with the hero when scrolling down and slides back on any scroll up,
+  // so the menu stays one flick away. Small trackpad jitters (under 12px) are ignored.
+  useEffect(() => {
+    const header = headerRef.current;
+    if (!header) return;
+    let anchor = 0;
+    const update = () => {
+      const y = (document.scrollingElement ?? document.documentElement).scrollTop;
+      const nearTop = y < globalThis.innerHeight * 0.4;
+      const delta = y - anchor;
+      if (nearTop || delta < -12) header.classList.remove('is-hidden');
+      else if (delta > 12) header.classList.add('is-hidden');
+      if (nearTop || Math.abs(delta) > 12) anchor = y;
+    };
+    document.addEventListener('scroll', update, { capture: true, passive: true });
+    return () => document.removeEventListener('scroll', update, { capture: true });
+  }, []);
+
   const measure = useCallback(() => {
     const root = rootRef.current;
     if (!root) return;
@@ -117,6 +155,8 @@ export default function ClientLandingPage() {
     const page = document.scrollingElement ?? document.documentElement;
     const next: Journey = {
       hp: track('hero'), ip: track('idea'), wp: track('how'), pp: track('project'),
+      // How far the closing section has risen into view; the Cosmo lockup recedes behind it.
+      cp: clamp((vh - (sectionElement('client-start')?.getBoundingClientRect().top ?? vh)) / vh),
       flat: isFlat(), page: clamp(page.scrollTop / Math.max(1, page.scrollHeight - vh)), active,
     };
     const previous = journeyRef.current;
@@ -130,7 +170,7 @@ export default function ClientLandingPage() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const scene = new ZoomScene(canvas);
+    const scene = new ZoomScene(canvas, cosmoWordmarkUrl);
     const start = performance.now();
     let frame = 0, pending = 0;
     const drawStill = () => scene.draw(0, true, journeyRef.current, pointerRef.current);
@@ -164,6 +204,7 @@ export default function ClientLandingPage() {
   }, [measure]);
 
   const { flat, hp, ip, wp, pp, active } = journey;
+  const activeIndex = sections.findIndex(({ id }) => id === active);
   const litWords = flat ? ideaWords.length : Math.floor(clamp(ip * 1.9) * ideaWords.length);
   const step = flat ? -1 : journeyStep(wp);
   const caption = flat ? -1 : captionIndex(pp);
@@ -182,12 +223,19 @@ export default function ClientLandingPage() {
     onPointerLeave={() => { pointerRef.current = [0, 0]; }}
   >
     <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
+    <header ref={headerRef} className="cl-header">
+      <a className="public-brand cl-brand" href={home}>
+        <img src={cosmoLogoUrl} alt="Cosmo home" width="155" height="60" />
+      </a>
+      <LandingMenu home={home} inquiry={inquiry} clientSignIn={clientSignIn} onHowItWorks={() => scrollToSection(HOW_IT_WORKS)} />
+    </header>
     <canvas ref={canvasRef} className="cl-canvas" aria-hidden="true" />
     <div className="cl-progress" style={{ transform: `scaleX(${journey.page})` }} aria-hidden="true" />
-    <nav aria-label="Sections">
-      <ul className="cl-index cl-mono">
-        {sections.map(({ id, label }) => <li key={id}><button type="button" className={active === id ? 'is-on' : ''} aria-current={active === id ? 'location' : undefined} onClick={() => scrollToSection(id)}>{label}</button></li>)}
+    <nav ref={indexRef} className="cl-index" aria-label="Sections">
+      <ul className="cl-mono">
+        {sections.map(({ id, label }, index) => <li key={id}><button type="button" className={railClass(index, activeIndex)} aria-current={active === id ? 'location' : undefined} onClick={() => scrollToSection(id)}>{label}</button></li>)}
       </ul>
+      <span className="cl-index-track" aria-hidden="true"><i style={{ transform: `scaleY(${journey.page})` }} /></span>
     </nav>
     <div className="cl-recap" aria-hidden="true">
       {recap.map(({ text, range }) => <span key={range[0]} className={flat ? '' : recapClass(pp, range)}>{text}</span>)}
@@ -197,22 +245,9 @@ export default function ClientLandingPage() {
       <main ref={mainRef} tabIndex={-1} className="public-main">
         <section id="client-intro" className="cl-hero" data-track="hero" aria-labelledby="client-hero-heading">
           <div className="cl-stick cl-hero-stick" style={heroStyle}>
-            <header className="cl-header public-container">
-              <a className="public-brand" href={home}>
-                <img src={alphaMarkUrl} alt="" width="36" height="36" />
-                <span>Alphaexplora<span className="public-brand-label">Client home</span></span>
-              </a>
-              <nav className="cl-nav" aria-label="Client navigation">
-                <a className="public-current-page" href={home} aria-current="page">Home</a>
-                <a className="public-text-link cl-nav-link" href={clientSignIn}>Client sign in</a>
-                <button type="button" className="public-text-link cl-nav-link" onClick={() => scrollToSection(HOW_IT_WORKS)}>How it works</button>
-                <a className="public-nav-action" href={inquiry}>Start an inquiry <ArrowUpRight size={15} /></a>
-              </nav>
-            </header>
             <div className="cl-shade" aria-hidden="true" />
             <div className="cl-hero-in public-container">
               <p className="cl-hero-aside">One place for the request. <span>One place to stay in the loop.</span></p>
-              <p className="cl-kicker cl-mono"><span className="cl-dot" />Client portal · Invite only</p>
               <h1 id="client-hero-heading"><span className="cl-line"><span>A clear start for</span></span><span className="cl-line"><span>your next project<span className="cl-accent">.</span></span></span></h1>
               <div className="cl-hero-row">
                 <div className="cl-buttons">
@@ -258,13 +293,19 @@ export default function ClientLandingPage() {
         </section>
 
         <section id="client-project" className={sectionClass('cl-project', 'client-project')} data-track="project" aria-labelledby="client-project-heading">
-          <div className="cl-stick" style={fadeOut(0.42, 0.04, pp)}>
+          <div className="cl-stick" style={fadeOut(GALAXY_BEATS.pull + 0.02, 0.04, pp)}>
             <div className="cl-shade" aria-hidden="true" />
             <div className="cl-project-in public-container">
               <h2 id="client-project-heading" className="sr-only">Then see your project come together</h2>
-              <ol className="cl-captions cl-fade">
-                {captions.map(({ title, description }, index) => <li key={title} className={`cl-caption cl-pos-${index + 1}${shown(caption === index)}`}><strong>{title}</strong><span>{description}</span></li>)}
-              </ol>
+              <div className="cl-project-copy cl-fade">
+                <span className="cl-eyebrow cl-mono">Your project</span>
+                <ol className="cl-captions">
+                  {captions.map(({ title, description }, index) => <li key={title} className={`cl-caption${shown(caption === index)}`}><strong>{title}</strong><span>{description}</span></li>)}
+                </ol>
+                <div className="cl-rail cl-mono" aria-hidden="true">
+                  {captions.map(({ title }, index) => <span key={title} className={railClass(index, caption)}><span>0{index + 1}</span><i /></span>)}
+                </div>
+              </div>
             </div>
           </div>
         </section>

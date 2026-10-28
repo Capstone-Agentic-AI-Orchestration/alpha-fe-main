@@ -3,13 +3,15 @@
   --cl-ink2: #c2bed1;
   --cl-line-strong: #777083;
   --cl-ease: cubic-bezier(.2, .7, .2, 1);
+  /* Content runs to the screen edges; the right side keeps room for the section rail. */
+  --cl-edge: clamp(20px, 3.6vw, 64px);
+  --cl-rail-space: 0px;
 }
 .client-landing h1, .client-landing h2, .client-landing h3, .client-landing p, .client-landing ol, .client-landing ul { margin: 0; }
 .client-landing ol, .client-landing ul { padding: 0; list-style: none; }
 .client-landing ::selection { background: rgba(139, 92, 246, .3); color: #f3e8ff; }
 .client-landing .cl-mono { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 11px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; }
 .client-landing .cl-accent { color: var(--public-accent); }
-.client-landing .cl-dot { display: inline-block; width: 7px; height: 7px; border-radius: 9999px; background: #34d399; animation: cl-pulse 2s infinite; }
 .client-landing .cl-arrow-button svg { transition: transform 160ms; }
 .client-landing .cl-arrow-button:hover svg { transform: translateX(3px); }
 
@@ -18,10 +20,22 @@
 .client-landing.is-flat .cl-canvas { position: absolute; width: 100%; height: 920px; }
 .client-landing .cl-layer { position: relative; z-index: 1; }
 .client-landing .cl-progress { position: fixed; inset: 0 0 auto; z-index: 30; height: 2px; background: var(--public-accent); transform-origin: left; pointer-events: none; }
-.client-landing .cl-index { position: fixed; left: 32px; bottom: 28px; z-index: 30; display: flex; flex-direction: column; gap: 4px; }
-.client-landing .cl-index button { display: inline-flex; align-items: center; min-height: 24px; padding: 0 6px; color: var(--public-faint); font: inherit; letter-spacing: inherit; text-transform: inherit; transition: color 200ms, background-color 200ms; }
+/* section rail: labels beside a track that fills as the page scrolls; quiet until scrolling, hover or focus */
+.client-landing .cl-index { position: fixed; top: 50%; right: var(--cl-edge); z-index: 30; display: flex; align-items: stretch; gap: 14px; font-size: 13px; opacity: .5; transform: translateY(-50%); transition: opacity 500ms ease; }
+.client-landing .cl-index:is(.is-awake, :hover, :focus-within) { opacity: 1; }
+.client-landing .cl-index ul { display: flex; flex-direction: column; gap: 6px; }
+.client-landing .cl-index li { position: relative; }
+.client-landing .cl-index button { display: flex; align-items: center; justify-content: flex-end; width: 100%; min-height: 32px; padding: 0 2px; color: var(--public-faint); font: inherit; letter-spacing: inherit; text-align: right; text-transform: inherit; transition: color 250ms; }
+.client-landing .cl-index button::after { content: ''; position: absolute; top: 50%; right: -22px; width: 7px; height: 7px; margin-top: -3.5px; border: 1px solid var(--public-faint); border-radius: 9999px; background: var(--public-bg); transition: background-color 250ms, border-color 250ms, box-shadow 250ms, transform 250ms; }
 .client-landing .cl-index button:hover { color: var(--public-ink); }
-.client-landing .cl-index button.is-on { background: #aa8bee; color: #1b102e; }
+.client-landing .cl-index button:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 2px; color: var(--public-ink); }
+.client-landing .cl-index button.is-done { color: var(--public-muted); }
+.client-landing .cl-index button.is-done::after { border-color: var(--public-accent); background: var(--public-accent); }
+.client-landing .cl-index button.is-on { color: var(--public-ink); }
+.client-landing .cl-index button.is-on::after { border-color: var(--public-accent); background: var(--public-accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--public-accent) 22%, transparent); transform: scale(1.3); }
+.client-landing .cl-index-track { position: relative; width: 9px; }
+.client-landing .cl-index-track::before, .client-landing .cl-index-track i { content: ''; position: absolute; top: 16px; bottom: 16px; left: 4px; width: 1px; background: var(--public-line); }
+.client-landing .cl-index-track i { background: var(--public-accent); transform-origin: top; transition: transform 120ms linear; }
 .client-landing.is-flat .cl-progress, .client-landing.is-flat .cl-index { display: none; }
 
 /* sticky scenes */
@@ -29,7 +43,7 @@
 .client-landing.is-flat .cl-hero { height: 920px; }
 .client-landing.is-immersive .cl-idea { height: 290vh; }
 .client-landing.is-immersive .cl-how { height: 430vh; }
-.client-landing.is-immersive .cl-project { height: 650vh; }
+.client-landing.is-immersive .cl-project { height: 660vh; }
 .client-landing .cl-stick { position: relative; }
 .client-landing.is-immersive .cl-stick { position: sticky; top: 0; height: 100vh; height: 100svh; }
 .client-landing.is-flat .cl-stick { padding-block: 120px; }
@@ -45,13 +59,41 @@
 .client-landing.is-flat .cl-shade { display: none; }
 
 /* hero */
-.client-landing .cl-header { position: absolute; inset: 0 0 auto; z-index: 5; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px; min-height: 96px; }
-.client-landing .cl-nav { display: flex; flex-wrap: wrap; align-items: center; gap: 28px; }
-.client-landing .cl-header .public-nav-action { background: rgba(7, 7, 12, .6); }
+/* fixed header: logo at the left edge, inquiry pill + menu at the right edge */
+.client-landing .cl-header { position: fixed; inset: 0 0 auto; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: clamp(14px, 2.6vh, 28px) var(--cl-edge); background: linear-gradient(color-mix(in srgb, var(--public-bg) 80%, transparent), transparent); pointer-events: none; }
+.client-landing .cl-header > * { pointer-events: auto; }
+/* Hidden after scrolling down; kept visible while the menu is open or focus is inside. */
+.client-landing .cl-header { transition: transform 450ms var(--cl-ease), opacity 300ms ease; }
+.client-landing .cl-header.is-hidden:not(:focus-within):not(:has(.cl-menu.is-open)) { opacity: 0; transform: translateY(-110%); }
+.client-landing .cl-header.is-hidden:not(:focus-within):not(:has(.cl-menu.is-open)) > * { pointer-events: none; }
+.client-landing .cl-brand img { width: auto; height: clamp(56px, 8vh, 72px); }
+.client-landing .cl-menu { position: relative; }
+.client-landing .cl-menu-bar { display: flex; align-items: center; gap: 10px; }
+.client-landing .cl-pill { display: inline-flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 20px; border: 1px solid var(--public-line); border-radius: 9999px; background: color-mix(in srgb, var(--public-panel) 82%, transparent); color: var(--public-ink); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: 12px; font-weight: 500; letter-spacing: .08em; text-decoration: none; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(10px); transition: border-color 200ms, background-color 200ms; }
+.client-landing .cl-pill:hover { border-color: color-mix(in srgb, var(--public-accent) 50%, transparent); }
+.client-landing .cl-pill:focus-visible { outline: 2px solid var(--public-accent); outline-offset: 3px; }
+.client-landing .cl-pill-cta { border-color: transparent; background: var(--public-accent); color: var(--public-bg); }
+.client-landing .cl-pill-cta:hover { border-color: transparent; background: color-mix(in srgb, var(--public-accent) 85%, white); }
+.client-landing .cl-pill-cta i, .client-landing .cl-pill-dots i { display: block; width: 5px; height: 5px; border-radius: 9999px; background: currentColor; }
+.client-landing .cl-pill-dots { display: inline-flex; gap: 3px; transition: transform 300ms var(--cl-ease); }
+.client-landing .cl-menu.is-open .cl-pill-dots { transform: rotate(90deg); }
+.client-landing .cl-menu-panels { position: absolute; top: calc(100% + 10px); right: 0; display: grid; gap: 8px; width: min(380px, calc(100vw - 2 * var(--cl-edge))); visibility: hidden; opacity: 0; transform: translateY(-8px) scale(.98); transform-origin: top right; transition: opacity 220ms ease, transform 360ms var(--cl-ease), visibility 0s 360ms; }
+.client-landing .cl-menu.is-open .cl-menu-panels { visibility: visible; opacity: 1; transform: none; transition: opacity 220ms ease, transform 360ms var(--cl-ease), visibility 0s; }
+.client-landing :is(.cl-menu-links, .cl-menu-card) { border: 1px solid var(--public-line); border-radius: 14px; background: color-mix(in srgb, var(--public-panel) 94%, transparent); backdrop-filter: blur(14px); }
+.client-landing .cl-menu-links { display: grid; padding: 14px 26px; }
+.client-landing .cl-menu-links :is(a, button) { display: flex; align-items: center; justify-content: space-between; min-height: 54px; padding: 0; border: 0; background: none; color: var(--public-ink); font: inherit; font-size: 24px; font-weight: 500; letter-spacing: -.02em; text-align: left; text-decoration: none; cursor: pointer; transition: color 200ms; }
+.client-landing .cl-menu-links :is(a, button):hover { color: var(--public-accent); }
+.client-landing .cl-menu-links [aria-current='page']::after { content: ''; width: 7px; height: 7px; border-radius: 9999px; background: var(--public-accent); }
+.client-landing .cl-menu-card { position: relative; display: grid; gap: 10px; padding: 22px 26px 26px; color: var(--public-ink); text-decoration: none; }
+.client-landing .cl-menu-card > .cl-mono { color: var(--public-faint); }
+.client-landing .cl-menu-card-title { font-size: 30px; font-weight: 500; letter-spacing: -.03em; line-height: 1.08; }
+.client-landing .cl-menu-card-arrow { position: absolute; right: 22px; bottom: 22px; display: grid; width: 44px; height: 44px; place-items: center; border-radius: 9999px; background: var(--public-accent); color: var(--public-bg); transition: transform 260ms var(--cl-ease); }
+.client-landing .cl-menu-card:hover .cl-menu-card-arrow { transform: translateX(4px); }
+.client-landing .cl-menu-team { display: flex; align-items: center; justify-content: space-between; min-height: 64px; padding: 0 26px; border-radius: 14px; background: var(--public-accent); color: var(--public-bg); font-size: 22px; font-weight: 500; letter-spacing: -.02em; text-decoration: none; }
+.client-landing :is(.cl-menu-links, .cl-menu-card, .cl-menu-team) :focus-visible, .client-landing :is(.cl-menu-card, .cl-menu-team):focus-visible { outline: 2px solid var(--public-accent); outline-offset: 3px; }
 .client-landing .cl-hero-in { position: relative; display: flex; flex-direction: column; justify-content: flex-end; height: 100%; padding-bottom: 56px; }
 .client-landing .cl-hero-aside { position: absolute; top: 150px; right: 0; max-width: 360px; color: var(--cl-ink2); font-size: 20px; font-weight: 500; line-height: 1.45; letter-spacing: -.4px; text-align: right; animation: cl-fade-up 1s .6s both; }
 .client-landing .cl-hero-aside span { color: var(--public-faint); }
-.client-landing .cl-kicker { display: inline-flex; align-items: center; gap: 10px; margin-bottom: 22px; color: var(--cl-ink2); animation: cl-fade-up .8s .2s both; }
 .client-landing h1 { max-width: 980px; font-size: clamp(52px, 8.2vw, 124px); line-height: .98; font-weight: 500; letter-spacing: -5px; }
 .client-landing .cl-line { display: block; overflow: hidden; padding-bottom: .06em; }
 .client-landing .cl-line > span { display: inline-block; animation: cl-line-up 1.1s var(--cl-ease) both; }
@@ -88,19 +130,26 @@
 .client-landing .cl-step h3 { margin: 12px 0 6px; font-size: clamp(34px, 3.6vw, 52px); font-weight: 500; line-height: 1.05; letter-spacing: -1.8px; }
 .client-landing .cl-step p { color: var(--public-muted); font-size: 15px; line-height: 1.7; }
 .client-landing .cl-step .cl-step-short { margin-bottom: 12px; color: var(--public-accent); font-size: 16px; line-height: 1.6; }
-.client-landing .cl-captions { position: relative; max-width: 520px; min-height: 130px; }
-.client-landing .cl-caption strong { display: block; font-size: clamp(30px, 3.2vw, 46px); font-weight: 500; line-height: 1.08; letter-spacing: -1.6px; }
-.client-landing .cl-caption span { display: block; margin-top: 10px; color: var(--public-muted); font-size: 16px; }
-.client-landing.is-immersive .cl-steps, .client-landing.is-immersive .cl-captions { position: absolute; inset: 104px 0 64px; max-width: none; min-height: 0; pointer-events: none; }
-.client-landing.is-immersive .cl-step, .client-landing.is-immersive .cl-caption { position: absolute; width: min(440px, 92%); opacity: 0; transition: opacity .6s ease, transform .9s var(--cl-ease); }
-.client-landing.is-immersive .cl-caption { width: min(480px, 92%); }
+.client-landing.is-immersive .cl-steps { position: absolute; inset: 104px 0 64px; max-width: none; min-height: 0; pointer-events: none; }
+.client-landing.is-immersive .cl-step { position: absolute; width: min(440px, 92%); opacity: 0; transition: opacity .6s ease, transform .9s var(--cl-ease); }
 .client-landing.is-immersive .cl-pos-1 { left: 0; bottom: 0; transform: translateX(-60px); }
 .client-landing.is-immersive .cl-pos-2 { right: 0; top: 0; text-align: right; transform: translateY(-50px); }
 .client-landing.is-immersive .cl-pos-3 { right: 0; bottom: 0; text-align: right; transform: translateX(60px); }
-.client-landing.is-immersive .cl-step.is-on, .client-landing.is-immersive .cl-caption.is-on { opacity: 1; transform: none; }
+.client-landing.is-immersive .cl-step.is-on { opacity: 1; transform: none; }
 .client-landing.is-flat .cl-steps { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 40px; max-width: none; min-height: 0; }
 .client-landing.is-flat .cl-step h3 { font-size: 30px; }
-.client-landing.is-flat .cl-captions { display: grid; gap: 28px; min-height: 0; }
+
+/* your project: captions on the left, the 3D project galaxy on the canvas to their right */
+.client-landing .cl-project-in { display: grid; grid-template-columns: minmax(0, 440px); align-content: center; }
+.client-landing .cl-captions { display: grid; }
+.client-landing .cl-caption { text-shadow: 0 2px 30px color-mix(in srgb, var(--public-bg) 90%, transparent); }
+.client-landing .cl-caption strong { display: block; font-size: clamp(30px, 3.2vw, 46px); font-weight: 500; line-height: 1.08; letter-spacing: -1.6px; }
+.client-landing .cl-caption span { display: block; max-width: 420px; margin-top: 12px; color: var(--public-muted); font-size: 16px; line-height: 1.6; }
+.client-landing.is-immersive .cl-caption { grid-area: 1 / 1; opacity: 0; transform: translateY(14px); transition: opacity .5s ease, transform .7s var(--cl-ease); }
+.client-landing.is-immersive .cl-caption.is-on { opacity: 1; transform: none; }
+.client-landing.is-flat .cl-captions { gap: 28px; }
+.client-landing.is-flat .cl-project-copy .cl-rail { display: none; }
+
 
 /* zoom-out recap */
 .client-landing .cl-recap { position: fixed; inset: 0; z-index: 2; display: grid; place-items: center; padding: 0 24px; pointer-events: none; }
@@ -130,11 +179,24 @@
 
 @keyframes cl-fade-up { from { opacity: 0; transform: translateY(16px); } }
 @keyframes cl-line-up { from { opacity: 0; transform: translateY(100%); } }
-@keyframes cl-pulse { 50% { opacity: .35; } }
 @keyframes cl-nudge { 50% { transform: translateY(4px); } }
 
+/* Keep landing content clear of the fixed section index wherever the index shows. */
+/* Landing content runs to the screen edges, clear of the section rail; the closing doors stay centred. */
+.client-landing .public-container { width: auto; margin-inline: var(--cl-edge) calc(var(--cl-edge) + var(--cl-rail-space)); }
+.client-landing .cl-close.public-container { width: min(1160px, calc(100% - 2 * var(--cl-edge) - 2 * var(--cl-rail-space))); margin-inline: auto; }
+@media (min-width: 1100px) {
+  .client-landing.is-immersive { --cl-rail-space: 170px; }
+  .client-landing.is-immersive .cl-progress { display: none; }
+}
+@media (max-width: 1099px) {
+  .client-landing .cl-index { display: none; }
+}
 @media (max-width: 1000px) {
-  .client-landing .cl-index, .client-landing .cl-hero-aside { display: none; }
+  .client-landing .cl-hero-aside { display: none; }
+}
+@media (max-width: 900px) {
+  .client-landing .cl-project-in { grid-template-columns: minmax(0, 1fr); align-content: end; }
 }
 @media (max-width: 720px) {
   .client-landing .cl-doors, .client-landing.is-flat .cl-steps { grid-template-columns: minmax(0, 1fr); }
@@ -142,7 +204,15 @@
   .client-landing.is-immersive .cl-pos-3 { left: 0; right: auto; text-align: left; }
 }
 @media (max-width: 640px) {
-  .client-landing .cl-nav-link { display: none; }
+  .client-landing .cl-brand img { height: 42px; }
+  .client-landing .cl-pill-cta { display: none; }
+  .client-landing .cl-pill { min-height: 42px; padding-inline: 16px; }
   .client-landing h1 { letter-spacing: -2.4px; }
   .client-landing .cl-close h2 { letter-spacing: -3px; }
+}
+
+/* While the loading screen is up, hold the hero's entrance animations so they play on reveal. */
+html.cosmo-loading .client-landing * { animation-play-state: paused !important; }
+@media (prefers-reduced-motion: reduce) {
+  .client-landing :is(.cl-header, .cl-menu-panels, .cl-pill-dots, .cl-menu-card-arrow, .cl-index, .cl-index button::after) { transition: none; }
 }

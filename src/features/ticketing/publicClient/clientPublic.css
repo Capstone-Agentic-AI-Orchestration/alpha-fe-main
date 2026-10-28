@@ -31,7 +31,6 @@
 .public-brand { display: inline-flex; align-items: center; gap: 12px; text-decoration: none; }
 .public-brand img { width: 36px; height: 36px; object-fit: contain; }
 .public-brand > span { font-size: 23px; font-weight: 650; line-height: 1.2; letter-spacing: -.8px; }
-.public-brand-label { display: block; margin-top: 4px; font-size: 11px; font-weight: 400; letter-spacing: .3px; color: var(--public-muted); }
 .public-header nav { display: flex; align-items: center; gap: 32px; }
 .public-text-link, .public-nav-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; font-weight: 500; line-height: 1.5; text-decoration: none; transition: color 160ms, background-color 160ms, border-color 160ms; }
 .public-text-link { min-height: 44px; color: var(--public-muted); }
@@ -222,7 +221,6 @@
   .public-brand { gap: 9px; }
   .public-brand img { width: 30px; height: 30px; }
   .public-brand > span { font-size: 21px; }
-  .public-brand-label { font-size: 10px; }
   .public-nav-action { padding-inline: 11px; font-size: 11px; gap: 6px; }
   .public-hero { padding-top: 40px; }
   .public-hero h1 { font-size: clamp(34px, 9.5vw, 44px); letter-spacing: -1.65px; }
@@ -261,4 +259,26 @@
 }
 @media (prefers-reduced-motion: reduce) {
   .alpha-public *, .alpha-public *::before, .alpha-public *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation: none !important; }
+}
+
+/* Cosmo brand and space: the header logo on every public page, and the
+   landing's starfield + spiral backdrop on the client access pages. */
+.public-brand-cosmo img { width: auto; height: 44px; }
+.public-cosmo-canvas { position: fixed; inset: 0; z-index: 0; display: block; width: 100vw; height: 100vh; pointer-events: none; }
+.alpha-public.public-cosmo .public-header { border-bottom-color: transparent; }
+.alpha-public.public-cosmo :is(.public-header, .public-main, .public-footer) { position: relative; z-index: 1; }
+@media (max-width: 640px) {
+  .public-brand-cosmo img { width: auto; height: 38px; }
+}
+
+/* One screen, no page scroll: on desktop and laptop windows the header, the
+   page and the footer share exactly the viewport. Spacing inside scales with
+   the window height. The main area keeps an overflow fallback so nothing is
+   ever clipped (browser zoom, very short windows); phones scroll normally. */
+@media (min-width: 901px) and (min-height: 600px) {
+  .alpha-public.public-fit { display: flex; flex-direction: column; height: 100dvh; min-height: 0; }
+  .public-fit .public-header { flex: none; min-height: clamp(68px, 10vh, 96px); }
+  .public-fit .public-main { display: flex; flex: 1 1 auto; flex-direction: column; min-height: 0; overflow-y: auto; }
+  .public-fit .public-main > * { margin-block: auto; }
+  .public-fit .public-footer { flex: none; padding-block: clamp(12px, 2.2vh, 24px); }
 }

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
-  LayoutDashboard, PenLine, FileText, Inbox, MessageSquare,
+  LayoutDashboard, PenLine, FileText, MessageSquare, Activity,
   CheckSquare, FolderKanban, Rocket, Bot, BarChart3, Monitor, BookOpen, Settings,
   RadioTower, Ticket
 } from 'lucide-react';
@@ -128,7 +128,6 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
-  { id: 'inbox', label: 'Inbox', title: 'Inbox & Approvals', subtitle: 'View notifications & agent approvals', group: 'primary', section: 'communication', sectionByRole: { pm: 'collaboration', admin: 'collaboration' }, icon: Inbox },
   // Chat is where work is planned and built with the Orchestrator, so internal roles find it
   // first, under Build. A client's chat is still a conversation with their project manager.
   { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Plan and build with Alpha and your agents', group: 'primary', section: 'build', sectionByRole: { client: 'communication' }, icon: MessageSquare },
@@ -144,6 +143,8 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
 
   { id: 'analytics', label: 'Analytics', labels: { pm: 'Delivery Health', admin: 'Delivery Health' }, title: 'Operational Analytics', subtitle: 'Run health, delivery activity, and performance', group: 'workspace', section: 'insights', icon: BarChart3 },
+
+  { id: 'operations', label: 'Operations', title: 'Operations Center', subtitle: 'Deployments, uptime, SLAs, and project costs', group: 'workspace', section: 'administration', icon: Activity },
 
   { id: 'settings', label: 'Settings', labels: { admin: 'Workspace Settings' }, title: 'Workspace Settings', subtitle: 'Preferences, keys, and autonomy governance', group: 'configure', section: 'settings', sectionByRole: { pm: 'workspace', admin: 'administration' }, icon: Settings }
 ];
@@ -196,15 +197,15 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  * necessarily one that can change workspace settings.
  */
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
-  client: ['portal', 'intake', 'inbox', 'chat', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'inbox', 'chat', 'settings'],
+  client: ['portal', 'intake', 'chat', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'chat', 'settings'],
   pm: [
-    'issues', 'projects', 'tickets', 'inbox', 'chat',
+    'issues', 'projects', 'tickets', 'chat',
     'agents', 'runtimes', 'skills', 'analytics', 'settings'
   ],
   admin: [
-    'issues', 'projects', 'inbox', 'chat',
-    'agents', 'runtimes', 'skills', 'analytics', 'settings'
+    'issues', 'projects', 'chat',
+    'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'
   ]
 };
 

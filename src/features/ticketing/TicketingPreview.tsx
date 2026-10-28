@@ -121,8 +121,8 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
 export default function TicketingPreview({ initialRole }: { initialRole: PreviewRole }) {
   const [role, setRole] = useState(initialRole);
   if (isPmPreviewRole(role)) return <AlphaPmPreviewShell onViewAsClient={() => setRole('client')} onReset={() => window.location.reload()} />;
-  return <div className="min-h-dvh bg-canvas">
-    <div className="flex flex-wrap items-center justify-between gap-2 border-b border-status-warning-border bg-status-warning-subtle px-4 py-2 text-[11px] text-status-warning">
+  return <div className="ticketing-client-preview bg-canvas">
+    <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-status-warning-border bg-status-warning-subtle px-4 py-2 text-[11px] text-status-warning">
       <p className="flex items-center gap-2"><FlaskConical size={13} />Local UI inspection · fictional records, no real account or server writes</p>
       <div className="flex gap-3"><button type="button" onClick={() => setRole('pm')} className="text-link hover:text-content">Project Manager</button><a href="/#/request" className="text-content-secondary hover:text-content">Inquiry form</a><a href="/#/client" className="text-content-secondary hover:text-content">Client access</a></div>
     </div>

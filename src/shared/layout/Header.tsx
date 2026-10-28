@@ -18,7 +18,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
     activeTab,
     setCommandPaletteOpen,
     unreadInboxCount,
+    notificationPanelOpen,
     setActiveTab,
+    setNotificationPanelOpen,
     agents,
     runtimes,
     settings,
@@ -31,7 +33,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
 
   const getTabTitle = () => {
     switch (activeTab) {
-      case 'inbox': return 'Inbox & Triage';
       case 'chat': return 'Multi-Agent Chat Canvas';
       case 'issues': return 'Tasks & Workstreams';
       case 'projects': return 'Strategic Projects';
@@ -133,11 +134,14 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
           </div>
         )}
 
-        {/* Inbox Notifications Bell */}
+        {/* Notification Bell */}
         <button
-          onClick={() => setActiveTab('inbox')}
+          onClick={() => setNotificationPanelOpen(open => !open)}
           className="relative p-2 rounded-lg text-content-secondary hover:text-content hover:bg-surface-high transition-colors"
-          title="Inbox"
+          title="Notifications"
+          aria-label={unreadInboxCount > 0 ? `Notifications, ${unreadInboxCount} unread` : 'Notifications'}
+          aria-expanded={notificationPanelOpen}
+          aria-haspopup="dialog"
         >
           <Bell className="w-4 h-4" />
           {unreadInboxCount > 0 && (

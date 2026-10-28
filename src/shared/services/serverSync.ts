@@ -1,4 +1,6 @@
 import { apiService } from './apiService';
+import { catchUpBoard } from './boardSync';
+import type { BoardCursor, BoardSyncResult } from '@/shared/types/boardSync';
 
 /**
  * Hydration from the local Alpha daemon.
@@ -27,6 +29,11 @@ export interface ServerSnapshot {
   analytics: unknown;
 }
 
+export interface ServerSyncResult {
+  snapshot: Partial<ServerSnapshot>;
+  board: BoardSyncResult;
+}
+
 /**
  * Fetch everything the daemon owns.
  *
@@ -35,7 +42,61 @@ export interface ServerSnapshot {
  * 500 taking down the whole hydration would be indistinguishable from the daemon
  * being offline.
  */
-export async function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>> {
+async function settleSnapshot(
+  calls: Partial<Record<keyof ServerSnapshot, Promise<unknown>>>
+): Promise<Partial<ServerSnapshot>> {
+  const entries = Object.entries(calls) as [keyof ServerSnapshot, Promise<unknown>][];
+  const settled = await Promise.allSettled(entries.map(([, request]) => request));
+  const snapshot: Partial<ServerSnapshot> = {};
+
+  settled.forEach((result, i) => {
+    const key = entries[i][0];
+    if (
+      result.status === 'fulfilled' &&
+      (Array.isArray(result.value) || key === 'analytics')
+    ) {
+      snapshot[key] = result.value as never;
+    } else if (result.status === 'rejected') {
+      console.warn(`[sync] ${String(key)} failed to load:`, result.reason?.message ?? result.reason);
+    }
+  });
+
+  return snapshot;
+}
+
+/**
+ * Fetch non-board daemon data and update the board from one bootstrap or bounded
+ * cursor pages. The no-argument overload remains for the two hydration callers
+ * that are migrated in the next plan task.
+ */
+export function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>>;
+export function fetchServerSnapshot(workspaceId: string, cachedCursor: BoardCursor | null): Promise<ServerSyncResult>;
+export async function fetchServerSnapshot(
+  workspaceId?: string,
+  cachedCursor?: BoardCursor | null
+): Promise<Partial<ServerSnapshot> | ServerSyncResult> {
+  if (workspaceId !== undefined) {
+    const calls = {
+      skills: apiService.getSkills(),
+      runtimes: apiService.getRuntimes(),
+      chatThreads: apiService.getChatThreads(),
+      runs: apiService.getRuns(),
+      analytics: apiService.getAnalytics(),
+      // History for builds started before squads were removed.
+      squadRuns: apiService.getSquadRuns()
+    } as const;
+    const [snapshot, board] = await Promise.all([
+      settleSnapshot(calls),
+      catchUpBoard(workspaceId, cachedCursor ?? null)
+    ]);
+    return { snapshot, board };
+  }
+
+  return fetchLegacyServerSnapshot();
+}
+
+/** Transitional path used only until AppContext switches to workspace cursors. */
+async function fetchLegacyServerSnapshot(): Promise<Partial<ServerSnapshot>> {
   const calls = {
     projects: apiService.getProjects(),
     agents: apiService.getAgents(),
@@ -49,22 +110,7 @@ export async function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>> {
     squadRuns: apiService.getSquadRuns()
   } as const;
 
-  const keys = Object.keys(calls) as (keyof typeof calls)[];
-  const settled = await Promise.allSettled(Object.values(calls));
-
-  const snapshot: Partial<ServerSnapshot> = {};
-  settled.forEach((result, i) => {
-    if (
-      result.status === 'fulfilled' &&
-      (Array.isArray(result.value) || keys[i] === 'analytics')
-    ) {
-      snapshot[keys[i]] = result.value as never;
-    } else if (result.status === 'rejected') {
-      console.warn(`[sync] ${keys[i]} failed to load:`, result.reason?.message ?? result.reason);
-    }
-  });
-
-  return snapshot;
+  return settleSnapshot(calls);
 }
 
 /** Cheap liveness probe. Never throws. */

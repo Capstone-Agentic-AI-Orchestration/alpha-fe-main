@@ -1,5 +1,6 @@
 import type { ChatUsageSnapshot } from '@/features/chat/ChatUsage';
 import type { LocalPreview } from '@/shared/types/localPreview';
+import type { OperationsNotification, OperationsSnapshot, OperationsExpense, TicketPriority } from '@/shared/types/operations';
 
 export const getLocalPreviews = (threadId: string) => fetchJson<LocalPreview[]>(`/chat/threads/${encodeURIComponent(threadId)}/previews`);
 export const startLocalPreview = (threadId: string, repository?: string) => fetchJson<LocalPreview>(`/chat/threads/${encodeURIComponent(threadId)}/previews`, { method: 'POST', body: JSON.stringify({ repository }) });
@@ -66,8 +67,10 @@ import {
 
 import { API_BASE } from '@/shared/config';
 import type { ActionsFilters, ActionsRun, ActionsRunsPage, ActionsWorkflowsPage, ActionsJobsPage, ActionsLog, ActionsArtifactsPage } from '@/shared/types/actions';
+import type { BoardBootstrap, BoardChangePage, BoardCursor } from '@/shared/types/boardSync';
 
 const API_TOKEN = import.meta.env.VITE_ALPHA_LOCAL_TOKEN;
+const CLIENT_VERSION = import.meta.env.VITE_ALPHA_CLIENT_VERSION || 'unknown';
 let activeWorkspaceId: string | null = null;
 
 /** Bind subsequent daemon calls to the selected product workspace. */
@@ -237,6 +240,7 @@ export class ApiRequestError extends Error {
 async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
   const headers = new Headers({
     'Content-Type': 'application/json',
+    'X-Alpha-Client-Version': CLIENT_VERSION,
     ...(activeWorkspaceId ? { 'X-Workspace-Id': activeWorkspaceId } : {}),
     ...(API_TOKEN ? { 'X-Alpha-Token': API_TOKEN } : {}),
   });
@@ -659,6 +663,25 @@ export const apiService = {
     return fetchJson<Issue[]>('/issues');
   },
 
+  /** One initial shared-board snapshot, anchored before the rows are read. */
+  getBoardBootstrap: (): Promise<BoardBootstrap> => fetchJson<BoardBootstrap>('/board/bootstrap'),
+
+  /** A bounded page of workspace changes after this device's last saved cursor. */
+  getBoardChanges: async (cursor: BoardCursor, limit = 100): Promise<BoardChangePage> => {
+    if (!cursor || typeof cursor.workspaceId !== 'string' || !cursor.workspaceId.trim()
+      || typeof cursor.value !== 'string' || !/^(0|[1-9]\d*)$/.test(cursor.value)) {
+      throw new Error('A valid workspace board cursor is required.');
+    }
+    if (!activeWorkspaceId || cursor.workspaceId !== activeWorkspaceId) {
+      throw new Error('The board cursor does not match the active workspace.');
+    }
+    const safeLimit = Number.isFinite(limit) ? Math.max(1, Math.min(100, Math.floor(limit))) : 100;
+    return fetchJson<BoardChangePage>('/board/changes', {
+      method: 'POST',
+      body: JSON.stringify({ cursor, limit: safeLimit })
+    });
+  },
+
   createIssue: async (issue: Partial<Issue>): Promise<Issue> => {
     return fetchJson<Issue>('/issues', { method: 'POST', body: JSON.stringify(issue) });
   },
@@ -806,6 +829,17 @@ export const apiService = {
   // Runs
   getRuns: () => fetchJson<PrototypeRun[]>('/runs'),
   getAnalytics: () => fetchJson<AnalyticsData>('/analytics'),
+  getOperationsSnapshot: () => fetchJson<OperationsSnapshot>('/operations', { cache: 'no-store' }),
+  getOperationsNotifications: () => fetchJson<OperationsNotification[]>('/operations/notifications', { cache: 'no-store' }),
+  markOperationsNotificationRead: (id: string) => fetchJson<{ success: boolean }>(`/operations/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' }),
+  archiveOperationsNotification: (id: string) => fetchJson<{ success: boolean }>(`/operations/notifications/${encodeURIComponent(id)}/archive`, { method: 'PATCH' }),
+  markAllOperationsNotificationsRead: () => fetchJson<{ success: boolean }>('/operations/notifications/read-all', { method: 'PATCH' }),
+  setOperationsUptimeTarget: (targetPercent: number) => fetchJson<{ targetPercent: number }>('/operations/uptime-target', { method: 'PATCH', body: JSON.stringify({ targetPercent }) }),
+  setOperationsTicketPolicies: (policies: Array<{ priority: TicketPriority; responseMinutes: number; resolutionMinutes: number }>, removePriorities: TicketPriority[] = []) => fetchJson<{ success: boolean }>('/operations/ticket-policies', { method: 'PUT', body: JSON.stringify({ policies, removePriorities }) }),
+  setProjectBudget: (projectId: string, amountUsd: number | null) => fetchJson<{ budgetUsd: number | null }>(`/operations/projects/${encodeURIComponent(projectId)}/budget`, { method: 'PUT', body: JSON.stringify({ amountUsd }) }),
+  createProjectExpense: (projectId: string, expense: Omit<OperationsExpense, 'id' | 'projectId' | 'projectName' | 'createdBy' | 'createdAt'>) => fetchJson<OperationsExpense>(`/operations/projects/${encodeURIComponent(projectId)}/expenses`, { method: 'POST', body: JSON.stringify(expense) }),
+  deleteProjectExpense: (projectId: string, expenseId: string) => fetchJson<{ success: boolean }>(`/operations/projects/${encodeURIComponent(projectId)}/expenses/${encodeURIComponent(expenseId)}`, { method: 'DELETE' }),
+  setOperationsTicketPriority: (ticketId: string, priority: TicketPriority) => fetchJson<{ success: boolean }>(`/operations/tickets/${encodeURIComponent(ticketId)}/priority`, { method: 'PATCH', body: JSON.stringify({ priority }) }),
   startRun: (payload: { issueId: string; agentId: string; plan?: string[]; scenario?: string }) =>
     fetchJson<PrototypeRun>('/runs/start', { method: 'POST', body: JSON.stringify(payload) }),
   /** Settle a run waiting at the review gate. */

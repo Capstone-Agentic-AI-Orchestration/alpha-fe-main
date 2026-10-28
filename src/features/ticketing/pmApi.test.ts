@@ -120,4 +120,48 @@ describe('PM ticket transport', () => {
       method: 'PUT', body: JSON.stringify({ acceptsNewRequests: true }),
     });
   });
+
+  it('loads and updates the selected project client preview through the workspace-scoped PM API', async () => {
+    const preview = { repository: 'org/repo', branch: 'uat' as const, url: 'https://preview.example.test' };
+    const request = vi.spyOn(apiService, 'ticketRequest')
+      .mockResolvedValueOnce({ preview } as never)
+      .mockResolvedValueOnce({ preview: null } as never);
+
+    await expect(pmTicketApi.getProjectClientPreview('project/one')).resolves.toEqual({ preview });
+    await expect(pmTicketApi.setProjectClientPreview('project/one', null)).resolves.toEqual({ preview: null });
+    expect(request.mock.calls).toEqual([
+      ['/tickets/projects/project%2Fone/client-preview'],
+      ['/tickets/projects/project%2Fone/client-preview', { method: 'PUT', body: JSON.stringify({ preview: null }) }],
+    ]);
+  });
+
+  it('loads only clients with server-confirmed access to the selected project', async () => {
+    const items = [{ clientId: 'client-1', displayName: 'Client One' }, { clientId: 'client-2', displayName: 'Client Two' }];
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ items } as never);
+    await expect(pmTicketApi.listProjectPreviewClients('project/one')).resolves.toEqual({ items });
+    expect(request).toHaveBeenCalledWith('/tickets/projects/project%2Fone/client-preview/clients');
+  });
+
+  it('reconciles an uncertain PM project feedback send by its operation receipt', async () => {
+    const receipt = { messageId: 'feedback-1', operationId: 'feedback-operation-1' };
+    const request = vi.spyOn(apiService, 'ticketRequest')
+      .mockRejectedValueOnce(new ApiRequestError(null, 'unknown', 'project_message_outcome_unknown', true))
+      .mockResolvedValueOnce(receipt as never);
+    const input = { schemaVersion: 1 as const, operationId: 'feedback-operation-1', body: 'Please review the preview.' };
+
+    await expect(pmTicketApi.sendProjectFeedbackMessage('project/one', 'client/one', input)).resolves.toEqual(receipt);
+    expect(request.mock.calls).toEqual([
+      ['/tickets/projects/project%2Fone/client-preview/messages?clientId=client%2Fone', { method: 'POST', body: JSON.stringify(input) }],
+      ['/tickets/projects/project%2Fone/client-preview/messages/operations/feedback-operation-1?clientId=client%2Fone'],
+    ]);
+  });
+
+  it('scopes project feedback page reads to the selected client and requires the client ID in message rows', async () => {
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ items: [
+      { id: 'message-1', clientId: 'client-1', author: 'client', body: 'Looks good.', createdAt: '2026-10-26T00:00:00Z' },
+    ], nextCursor: null } as never);
+    await expect(pmTicketApi.getProjectFeedbackMessages('project-1', 'client-1', { limit: 20, before: 'message-0' }))
+      .resolves.toMatchObject({ items: [{ clientId: 'client-1' }] });
+    expect(request).toHaveBeenCalledWith('/tickets/projects/project-1/client-preview/messages?clientId=client-1&limit=20&before=message-0');
+  });
 });

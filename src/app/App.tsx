@@ -16,12 +16,13 @@ import { CreateIssueModal } from '@/features/issues/CreateIssueModal';
 import { AgentRunModal } from '@/features/runs/AgentRunModal';
 import { PrototypeGuide } from '@/features/onboarding/PrototypeGuide';
 import { ToastRegion } from '@/shared/components/ToastRegion';
-import { InboxView } from '@/features/inbox/InboxView';
+import { NotificationPopover } from '@/features/inbox/NotificationPopover';
 import { ChatView } from '@/features/chat/ChatView';
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectsView } from '@/features/projects/ProjectsView';
 import { AgentsView } from '@/features/agents/AgentsView';
 import { AnalyticsView } from '@/features/analytics/AnalyticsView';
+import { OperationsCenterView } from '@/features/operations/OperationsCenterView';
 import { RuntimesView } from '@/features/runtimes/RuntimesView';
 import { SkillsView } from '@/features/skills/SkillsView';
 import { DeploymentsView } from '@/features/deployments/DeploymentsView';
@@ -56,13 +57,13 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
     case 'intake': content = <IntakeWizardView />; break;
     case 'documents': content = <DocumentsView />; break;
     case 'tickets': content = <PmTicketsPage />; break;
-    case 'inbox': content = <InboxView />; break;
     case 'chat': content = <ChatView />; break;
     case 'issues': content = <IssuesView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'projects': content = <ProjectsView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'agents': content = <AgentsView />; break;
     case 'live_build_room': content = <LiveBuildRoomView />; break;
     case 'analytics': content = <AnalyticsView />; break;
+    case 'operations': content = <OperationsCenterView />; break;
     case 'runtimes': content = <RuntimesView />; break;
     case 'skills': content = <SkillsView />; break;
     case 'deployments': content = <DeploymentsView />; break;
@@ -422,7 +423,7 @@ export const App: React.FC = () => {
             <div
               role="tablist"
               aria-label="Open workspace tabs"
-              className="workspace-tab-strip app-no-drag flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar"
+              className="workspace-tab-strip app-no-drag flex min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar"
             >
             {tabs.map((tab) => {
               const isActive = activeTabId === tab.id;
@@ -493,6 +494,10 @@ export const App: React.FC = () => {
                 <Plus className="w-4 h-4" />
               </button>
 
+            </div>
+
+            <div className="app-no-drag flex-shrink-0">
+              <NotificationPopover />
             </div>
 
             {/* The picker is portaled to the document so the workspace frame

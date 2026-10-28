@@ -14,6 +14,7 @@ export default defineConfig(({ mode }) => {
    * inlines the value at build time, so the build is the place to stop it.
    */
   const env = loadEnv(mode, process.cwd());
+  const frontendVersion = JSON.parse(fs.readFileSync(path.resolve(__dirname, 'package.json'), 'utf8')).version;
   if (!env.VITE_API_URL) {
     throw new Error(
       'VITE_API_URL is not set. Web builds use "/api" (see DEPLOYMENT.md); the ' +
@@ -22,6 +23,9 @@ export default defineConfig(({ mode }) => {
   }
 
   return {
+    define: {
+      'import.meta.env.VITE_ALPHA_CLIENT_VERSION': JSON.stringify(env.VITE_ALPHA_CLIENT_VERSION || frontendVersion),
+    },
     // Relative asset URLs. The Electron renderer loads index.html over file://,
     // where the default absolute '/' base resolves to the filesystem root and
     // every script and stylesheet 404s — a blank window with no error.
@@ -32,7 +36,11 @@ export default defineConfig(({ mode }) => {
         name: 'alpha-theme-first-paint',
         transformIndexHtml(html: string) {
           const startup = fs.readFileSync(path.resolve(__dirname, 'public/theme-startup.js'), 'utf8');
-          return html.replace('<!-- alpha:theme-startup -->', `<script>${startup}</script>`);
+          // The Cosmo loading screen must run before the bundle, so it is inlined too.
+          const loader = fs.readFileSync(path.resolve(__dirname, 'public/cosmo-loader.js'), 'utf8');
+          return html
+            .replace('<!-- alpha:theme-startup -->', `<script>${startup}</script>`)
+            .replace('<!-- alpha:cosmo-loader -->', `<script>${loader}</script>`);
         },
       },
       react(),

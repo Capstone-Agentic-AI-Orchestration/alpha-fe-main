@@ -1,7 +1,8 @@
 import { useRef, type ReactNode } from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import alphaMarkUrl from '@/assets/alpha-mark.png';
+import cosmoLogoUrl from '@/assets/cosmo-logo.png';
 import { clientLandingHref, clientPortalHref, publicInquiryHref } from '../publicIntakeApi';
+import { CosmoBackdrop } from './CosmoBackdrop';
 import { InteractiveBackdrop } from './InteractiveBackdrop';
 import './clientPublic.css';
 
@@ -15,7 +16,10 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
   const mainRef = useRef<HTMLElement>(null);
   const homeHref = clientLandingHref(slug);
   const clientHref = clientPortalHref(slug);
-  return <div className="alpha-public" onClickCapture={event => {
+  // Access pages (sign in, recovery, invitation setup) and the inquiry share the landing's
+  // Cosmo space and fit one screen on desktop.
+  const cosmo = page !== 'landing';
+  return <div className={`alpha-public${cosmo ? ' public-cosmo public-fit' : ''}`} onClickCapture={event => {
     if (!(event.target instanceof Element)) return;
     const anchor = event.target.closest<HTMLAnchorElement>('a[href]');
     if (!anchor) return;
@@ -28,12 +32,11 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
       event.stopPropagation();
     }
   }}>
-    <InteractiveBackdrop />
+    {cosmo ? <CosmoBackdrop /> : <InteractiveBackdrop />}
     <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
     <header className="public-header public-container">
-      <a className="public-brand" href={homeHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>
-        <img src={alphaMarkUrl} alt="" width="36" height="36" />
-        <span>Alphaexplora<span className="public-brand-label">{page === 'inquiry' ? 'Project inquiry' : page === 'access' ? 'Client sign in' : 'Client home'}</span></span>
+      <a className="public-brand public-brand-cosmo" href={homeHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>
+        <img src={cosmoLogoUrl} alt="Cosmo home" width="114" height="44" />
       </a>
       <nav className={`public-header-nav public-header-nav-${page}`} aria-label="Client navigation">
         {page === 'landing' ? <>
