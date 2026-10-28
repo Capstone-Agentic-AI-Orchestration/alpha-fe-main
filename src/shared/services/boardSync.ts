@@ -21,8 +21,15 @@ function compareCursor(left: string, right: string): number {
   return left < right ? -1 : left > right ? 1 : 0;
 }
 
-function cursorStorageKey(workspaceId: string): string {
-  return `board_cursor:${workspaceId}`;
+/**
+ * Where a workspace's board cursor is kept. Versioned: a cursor only means
+ * "the cache holds everything before this point". Earlier caches can still
+ * contain retired local personas absent from the shared board: delta pages
+ * have no deletion to replay for records that never belonged to that board.
+ * Version 3 replaces those caches with one authoritative workspace snapshot.
+ */
+export function cursorStorageKey(workspaceId: string): string {
+  return `board_cursor_v3:${workspaceId}`;
 }
 
 function readBoardState(workspaceId: string): BoardState {

@@ -133,6 +133,9 @@ describe('PM ticket transport', () => {
       ['/tickets/projects/project%2Fone/client-preview'],
       ['/tickets/projects/project%2Fone/client-preview', { method: 'PUT', body: JSON.stringify({ preview: null }) }],
     ]);
+
+    request.mockRejectedValueOnce(new ApiRequestError(503, 'API Error [503]: Ticket changes are not enabled yet.'));
+    await expect(pmTicketApi.getProjectClientPreview('project/one')).resolves.toEqual({ preview: null });
   });
 
   it('loads only clients with server-confirmed access to the selected project', async () => {

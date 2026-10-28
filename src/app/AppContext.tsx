@@ -50,7 +50,7 @@ import { createBoardSyncCoordinator } from './boardSyncCoordinator';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
-import { catchUpBoard } from '@/shared/services/boardSync';
+import { catchUpBoard, cursorStorageKey } from '@/shared/services/boardSync';
 import type { BoardCursor } from '@/shared/types/boardSync';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { isDesktop } from '@/shared/desktop';
@@ -464,6 +464,7 @@ export interface CreateIssueOptions {
 }
 
 export interface ChatSendOptions {
+  buildDecision?: import('@/features/chat/chatBuildDecision').ChatBuildDecision;
   /** Board issue the build is for; the Orchestrator builds it instead of filing a new one. */
   issueId?: string;
   /** Project of a thread created in the same tick, before it reaches `chatThreads`. */
@@ -549,6 +550,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(() =>
     loadFromStorage<string | null>('active_workspace_id', null)
   );
+  /**
+   * Board caches are per workspace. Seeding state from the unscoped keys let an
+   * old roster from a retired build be written straight into the active
+   * workspace's cache by the save effects below, before the board had loaded.
+   */
+  const initialWorkspaceCacheKey = (key: string) => {
+    const workspaceId = loadFromStorage<string | null>('active_workspace_id', null);
+    return workspaceId ? `${key}:${workspaceId}` : key;
+  };
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberRecord[]>([]);
@@ -580,7 +590,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const reportedSyncErrorsRef = useRef(new Set<string>());
   const syncBoardRef = useRef<() => Promise<void>>(async () => {});
   const catchUpWorkspaceBoard = useCallback((workspaceId: string) => {
-    const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${workspaceId}`, null);
+    const cachedCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(workspaceId), null);
     return catchUpBoard(workspaceId, cachedCursor);
   }, []);
 
@@ -821,11 +831,11 @@ ${e.detail}`;
   // Raw collections. These are never handed to a view directly — the scoped
   // derivations further down are what the provider exposes, so a view cannot
   // accidentally render another persona's data.
-  const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(loadFromStorage<Issue[]>('issues', [])));
+  const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(loadFromStorage<Issue[]>(initialWorkspaceCacheKey('issues'), [])));
   /** Saved tasks whose author asked for a build when creating them; see `CreateIssueOptions.planBuild`. */
   const [issuesAwaitingBuild, setIssuesAwaitingBuild] = useState<string[]>([]);
-  const [projects, setProjects] = useState<Project[]>(() => loadFromStorage<Project[]>('projects', []));
-  const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(loadFromStorage<Agent[]>('agents', [])));
+  const [projects, setProjects] = useState<Project[]>(() => loadFromStorage<Project[]>(initialWorkspaceCacheKey('projects'), []));
+  const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(loadFromStorage<Agent[]>(initialWorkspaceCacheKey('agents'), [])));
   const [runtimes, setRuntimes] = useState<RuntimeEngine[]>(() => loadFromStorage<RuntimeEngine[]>('runtimes', []));
   const [skills, setSkills] = useState<Skill[]>(() => {
     const saved = loadFromStorage<unknown[]>('skills', []);
@@ -894,7 +904,9 @@ ${e.detail}`;
    */
   const loadedThreadsRef = useRef<Set<string>>(new Set());
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage<ChatMessage[]>('chat_messages', []));
-  const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() => loadFromStorage('prototype_runs', []));
+  const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() =>
+    normalizeLegacyPrototypeRuns(loadFromStorage<PrototypeRun[]>(initialWorkspaceCacheKey('prototype_runs'), []))
+  );
   const [squadRuns, setSquadRuns] = useState<SquadRun[]>(() => loadFromStorage('squad_runs', []));
 
   const [runSetupIssueId, setRunSetupIssueId] = useState<string | null>(null);
@@ -903,7 +915,20 @@ ${e.detail}`;
     loadFromStorage<Record<string, RunPlanDraft>>('run_plan_drafts_v1', {})
   );
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const handledRunEventsRef = useRef<Set<string>>(new Set());
+  const handledRunEventsRef = useRef<Set<string>>(new Set(
+    prototypeRuns
+      .filter(run => run.status === 'awaiting_approval' || run.status === 'failed')
+      .map(run => `${run.id}:${run.status}`)
+  ));
+  const hydratePrototypeRuns = (runs: unknown[]) => {
+    const normalized = normalizeLegacyPrototypeRuns(runs);
+    for (const run of normalized) {
+      if (run.status === 'awaiting_approval' || run.status === 'failed') {
+        handledRunEventsRef.current.add(`${run.id}:${run.status}`);
+      }
+    }
+    setPrototypeRuns(normalized);
+  };
   /**
    * Backend run IDs do not exist until POST /runs/start returns. Keeping this
    * small pending map lets a user cancel during that window without sending a
@@ -970,7 +995,7 @@ ${e.detail}`;
 
       let result;
       try {
-        const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${selectedWorkspaceId}`, null);
+        const cachedCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(selectedWorkspaceId), null);
         result = await fetchServerSnapshot(selectedWorkspaceId, cachedCursor);
       } catch (error) {
         console.warn('[sync] workspace hydration failed:', error instanceof Error ? error.message : error);
@@ -1010,7 +1035,7 @@ ${e.detail}`;
           return mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev);
         });
       }
-      if (snapshot.runs) setPrototypeRuns(normalizeLegacyPrototypeRuns(snapshot.runs));
+      if (snapshot.runs) hydratePrototypeRuns(snapshot.runs);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
       if (snapshot.analytics && typeof snapshot.analytics === 'object') {
         setAnalytics(normalizeAnalytics(snapshot.analytics));
@@ -1274,7 +1299,7 @@ ${e.detail}`;
     setActiveWorkspaceIdState(workspaceId);
     setActiveWorkspaceId(workspaceId);
     setLiveBuildRoomProjectIds([]);
-    const cachedCursor = loadFromStorage<BoardCursor | null>(`board_cursor:${workspaceId}`, null);
+    const cachedCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(workspaceId), null);
     setActiveThreadId(null);
     // The next workspace may have thread IDs loaded earlier in this session.
     // Clear this cache so opening one always rehydrates its transcript from
@@ -1287,7 +1312,7 @@ ${e.detail}`;
     setAgents(normalizeLegacyAgents(loadFromStorage<Agent[]>(`agents:${workspaceId}`, [])));
     setChatThreads(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
     setChatMessages(loadFromStorage<ChatMessage[]>(`chat_messages:${workspaceId}`, []));
-    setPrototypeRuns(normalizeLegacyPrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, [])));
+    hydratePrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, []));
     setSquadRuns(loadFromStorage<SquadRun[]>(`squad_runs:${workspaceId}`, []));
     setInbox(normalizeInboxNotifications(loadFromStorage<InboxNotification[]>(`inbox:${workspaceId}`, [])));
     setRequirementDocs(normalizeRequirementDocs(loadFromStorage<RequirementDoc[]>(`requirement_docs:${workspaceId}`, [])));
@@ -1310,7 +1335,7 @@ ${e.detail}`;
       if (snapshot.chatThreads) {
         setChatThreads(prev => mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev));
       }
-      if (snapshot.runs) setPrototypeRuns(normalizeLegacyPrototypeRuns(snapshot.runs));
+      if (snapshot.runs) hydratePrototypeRuns(snapshot.runs);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
       if (snapshot.analytics && typeof snapshot.analytics === 'object') {
         setAnalytics(normalizeAnalytics(snapshot.analytics));
@@ -3050,6 +3075,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
         intent,
         issueId: options.issueId,
         approvalMode: options.approvalMode,
+        buildDecision: options.buildDecision,
         clientMessageId: userMsg.id,
         attachmentIds: attachments.map(attachment => attachment.id)
       });

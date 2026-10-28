@@ -395,10 +395,18 @@ export const pmTicketApi = {
       },
     );
   },
-  getProjectClientPreview(projectId: string) {
-    return apiService.ticketRequest<PmProjectClientPreviewState>(
-      `/tickets/projects/${encodeId(projectId)}/client-preview`,
-    );
+  async getProjectClientPreview(projectId: string) {
+    try {
+      return await apiService.ticketRequest<PmProjectClientPreviewState>(
+        `/tickets/projects/${encodeId(projectId)}/client-preview`,
+      );
+    } catch (error) {
+      if (error instanceof ApiRequestError && error.status === 503
+        && error.message.includes('Ticket changes are not enabled yet.')) {
+        return { preview: null };
+      }
+      throw error;
+    }
   },
   setProjectClientPreview(projectId: string, preview: PmProjectClientPreview | null) {
     return apiService.ticketRequest<PmProjectClientPreviewState>(

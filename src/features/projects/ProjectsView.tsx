@@ -22,6 +22,7 @@ import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectRepositoryView } from '@/features/projects/repository/ProjectRepositoryView';
 import { ProjectClientPreviewPanel } from '@/features/projects/ProjectClientPreviewPanel';
+import { PmProjectQaStudio } from '@/features/ticketing/PmProjectQaStudio';
 import { useProjectRepos } from '@/features/projects/repository/useProjectRepos';
 import { deriveProjectKey } from '@/features/projects/useProjectsViewModel';
 import { Project, ProjectStatus, ProjectPriority } from '@/shared/types';
@@ -283,6 +284,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
         </div>
 
         <ProjectRepositoryView
+          qaStudio={role==='pm'?<PmProjectQaStudio key={`${activeWorkspaceId}:${selectedProject.id}`} projectId={selectedProject.id} projectName={selectedProject.name}
+            issues={projectIssues}
+            feedback={clientId=><ProjectClientPreviewPanel key={clientId} projectId={selectedProject.id} canManage={canEditProjects} conversationOnly requestedClientId={clientId}/>}/>:undefined}
           key={selectedProject.id}
           projectId={selectedProject.id}
           repositories={projectRepos}
@@ -374,11 +378,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                   </section>
                 </div>
               </details>
-              {canEditProjects && <ProjectClientPreviewPanel
-                key={`${activeWorkspaceId}:${selectedProject.id}`}
-                projectId={selectedProject.id}
-                canManage={canEditProjects}
-              />}
               <div className="min-h-0 flex-1">
                 <IssuesView
                   embedded

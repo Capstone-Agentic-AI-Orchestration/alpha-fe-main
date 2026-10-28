@@ -226,8 +226,6 @@ export interface ChatBuildWizardProps {
   canStop: boolean;
   busy: 'start' | 'approve' | 'stop' | 'continue' | 'retry' | null;
   error: string | null;
-  onStart: () => void;
-  onApprove: () => void;
   onStop: () => void;
   /** Resume a paused build, or take the recovery action the server offers for a stopped one. */
   onContinue: (action?: LiveBuildRecoveryAction) => void;
@@ -278,7 +276,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'awaiting_plan_approval':
         title = 'Plan ready for your approval';
         subtitle = build.orchestration.tasks.length + (build.orchestration.tasks.length === 1 ? ' task' : ' tasks') + ' · ' + buildRepositoriesLabel(build) + '. No code has changed yet.';
-        body = <p className="text-xs text-content-secondary">{props.canStart ? 'Review the saved plan and type start in the Build review tab.' : 'Your workspace role cannot start builds.'}</p>;
+        body = <p className="text-xs text-content-secondary">{props.canStart ? 'Read the saved plan on the right, then reply start in the main chat.' : 'Your workspace role cannot start builds.'}</p>;
         options = [];
         break;
       case 'paused':
@@ -311,7 +309,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'publishing':
         title = build.status === 'publishing' ? 'Opening the pull request' : 'Build ready for your review';
         subtitle = buildRepositoriesLabel(build);
-        body = <p className="text-xs text-content-secondary">{build.status === 'publishing' ? 'Publication progress is in the Build review tab.' : 'Checks, findings, code changes and approval are in the Build review tab.'}</p>;
+        body = <p className="text-xs text-content-secondary">{build.status === 'publishing' ? 'Publication progress is in the Build review tab.' : 'Read the checks, findings and code changes on the right, then reply approve in the main chat.'}</p>;
         options = [];
         break;
       default: {

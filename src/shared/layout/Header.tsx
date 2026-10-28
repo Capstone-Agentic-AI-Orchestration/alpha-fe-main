@@ -134,6 +134,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
           </div>
         )}
 
+        {/* New Issue Button */}
+        <button
+          onClick={onOpenNewIssue}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-action hover:bg-action-hover text-on-action font-medium text-xs shadow-glow-brand transition-all"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span className="hidden sm:inline">New Task</span>
+        </button>
+
         {/* Notification Bell */}
         <button
           onClick={() => setNotificationPanelOpen(open => !open)}
@@ -147,15 +156,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
           {unreadInboxCount > 0 && (
             <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-divider animate-pulse" />
           )}
-        </button>
-
-        {/* New Issue Button */}
-        <button
-          onClick={onOpenNewIssue}
-          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-action hover:bg-action-hover text-on-action font-medium text-xs shadow-glow-brand transition-all"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span className="hidden sm:inline">New Task</span>
         </button>
       </div>
 

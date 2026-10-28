@@ -9,7 +9,7 @@ export interface PmProjectPreview { repository: string; branch: 'main' | 'uat'; 
 export interface PmProjectLinkDraft { projectId: string | null; clientVisible: boolean; projectPreview: PmProjectPreview | null }
 
 function shareablePreview(repository: string, preview: BranchPreview): PmProjectPreview | null {
-  if ((preview.branch !== 'main' && preview.branch !== 'uat') || preview.surface !== 'page'
+  if (preview.branch !== 'uat' || preview.surface !== 'page'
     || !preview.ready || preview.embeddable !== true || !preview.url) return null;
   try {
     const url = new URL(preview.url);
@@ -52,7 +52,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
   useEffect(() => {
     setProjectId(initialProjectId ?? '');
     setClientVisible(initialClientVisible);
-    setPreviewKey(initialProjectPreview ? `${initialProjectPreview.repository}|${initialProjectPreview.branch}` : '');
+    setPreviewKey(initialProjectPreview?.branch==='uat' ? `${initialProjectPreview.repository}|uat` : '');
   }, [initialProjectId, initialClientVisible, initialProjectPreview]);
 
   useEffect(() => {
@@ -69,7 +69,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
       const choices = data.flatMap(item => item?.previews
         .map(preview => shareablePreview(item.repository, preview))
         .filter((preview): preview is PmProjectPreview => preview !== null) ?? []);
-      if (initialProjectId === projectId && initialProjectPreview
+      if (initialProjectId === projectId && initialProjectPreview?.branch==='uat'
         && !choices.some(preview => preview.url === initialProjectPreview.url)) choices.unshift(initialProjectPreview);
       setPreviews(choices);
     }).catch(() => { if (active) { setPreviews([]); setPreviewError(true); } })
@@ -118,8 +118,8 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
       </select>
       {previewLoading && <span role="status" className="block text-[10px] text-content-muted">Checking ready hosted frontend previews…</span>}
       {previewError && <span role="alert" className="block text-[10px] text-status-warning">Hosted previews could not be checked. You can still save the project link without sharing one.</span>}
-      {!previewLoading && !previewError && projectId && previews.length === 0 && <span className="block text-[10px] text-content-muted">No ready, embeddable main or uat frontend preview was found.</span>}
-      <span className="block text-[10px] text-content-muted">Only ready hosted frontend previews are offered. The link may be publicly accessible; the client gets no repository, task, or internal project access.</span>
+      {!previewLoading && !previewError && projectId && previews.length === 0 && <span className="block text-[10px] text-content-muted">No ready UAT frontend preview was found.</span>}
+      <span className="block text-[10px] text-content-muted">Preview configuration stays internal. Review the UAT build and hand it off through this project’s QA Studio before the client can see it.</span>
     </label>
     <div className="flex flex-wrap justify-end gap-2 border-t border-divider pt-3">
       <button type="button" disabled={disabled} onClick={onCancel} className={secondary}>Cancel</button>
