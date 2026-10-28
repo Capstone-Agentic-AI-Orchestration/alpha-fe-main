@@ -41,7 +41,8 @@ import {
   Trash2,
   Users,
   X,
-  Kanban
+  Kanban,
+  FileDiff
 } from 'lucide-react';
 
 import { useApp, useTabSessionState } from '@/app/AppContext';
@@ -178,9 +179,6 @@ function ChatTurnActivityRow({
   const current = ordered.find(call => call.status === 'running' || call.status === 'queued') ?? ordered.at(-1)!;
   const currentAgent = agents.find(agent => agent.id === current.agentId);
   const latestActivity = current.activities.at(-1);
-  const changedFiles = [...new Set(ordered.flatMap(call => call.activities
-    .filter(activity => activity.kind === 'file_change')
-    .flatMap(activity => activity.paths ?? [])))];
   const working = current.status === 'running' || current.status === 'queued';
   const summary = latestActivity?.message ?? (working ? 'Starting work' : statusLabel(current.status));
   return (
@@ -188,7 +186,6 @@ function ChatTurnActivityRow({
       <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-surface-high">
         {working ? <span className="h-2 w-2 shrink-0 rounded-full bg-violet-300 animate-pulse" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-status-success" />}
         <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-link">{currentAgent?.name ?? (current.squadId === 'alpha-chat' ? 'Alpha' : current.agentId)} · {summary}</span>
-        <span className="shrink-0 text-[10px] text-content-muted">{changedFiles.length} changed</span>
         <span className="shrink-0 text-[10px] text-link">{expanded ? 'Hide activity' : 'View activity'}</span>
         {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-content-muted" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-content-muted" />}
       </button>
@@ -221,6 +218,7 @@ function OrchestratorBuildActivityRow({
   runId,
   threadId,
   onOpenReview,
+  onViewChanges,
   onWithdraw,
   withdrawing = false
 }: {
@@ -228,6 +226,8 @@ function OrchestratorBuildActivityRow({
   runId: string;
   threadId: string;
   onOpenReview: () => void;
+  /** Open this build's code changes in the side panel. */
+  onViewChanges: () => void;
   /** Turn an unstarted plan back into a question for Alpha to answer. */
   onWithdraw?: () => void;
   withdrawing?: boolean;
@@ -299,6 +299,17 @@ function OrchestratorBuildActivityRow({
   ])].sort((a, b) => a.localeCompare(b));
   const status = orchestration?.run.status;
   const working = Boolean(status && ['planning', 'executing', 'validating', 'publishing', 'cancelling'].includes(status));
+  // Line counts come from the build's worktrees; without them the card still lists the paths.
+  const [countedFiles, setCountedFiles] = useState<ChangedFile[] | null>(null);
+  const changedKey = changedFiles.join('|');
+  useEffect(() => {
+    if (!changedKey) { setCountedFiles(null); return undefined; }
+    let cancelled = false;
+    apiService.getOrchestrationLiveChanges(projectId, runId)
+      .then(changes => { if (!cancelled) setCountedFiles(changes.repositories.flatMap(repository => repository.files)); })
+      .catch(() => { if (!cancelled) setCountedFiles(null); });
+    return () => { cancelled = true; };
+  }, [projectId, runId, changedKey, status]);
   const currentTask = tasks.find(task => task.id === orchestration?.run.currentTaskId)
     ?? tasks.find(task => ['running', 'submitted'].includes(task.status));
   const currentAttempt = currentTask
@@ -348,7 +359,7 @@ function OrchestratorBuildActivityRow({
     .slice(0, 8);
   const statusLabel = status?.replace(/_/g, ' ') ?? (loading ? 'connecting' : 'activity unavailable');
 
-  return <div className="mt-2 overflow-hidden rounded-xl border border-divider bg-surface-raised/75 text-left">
+  return <><div className="mt-2 overflow-hidden rounded-xl border border-divider bg-surface-raised/75 text-left">
     <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-surface-high">
       {working ? <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-violet-300" />
         : status === 'completed' ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-status-success" />
@@ -356,7 +367,6 @@ function OrchestratorBuildActivityRow({
             : status ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-warning" />
               : <Activity className="h-3.5 w-3.5 shrink-0 text-link" />}
       <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-link">{currentAgent?.agentName ?? currentTask?.ownerName ?? 'Orchestrator activity'}{currentTask ? ` · ${currentTask.title}` : ` · ${statusLabel}`}</span>
-      <span className="hidden shrink-0 text-[10px] text-content-muted sm:inline">{changedFiles.length} {changedFiles.length === 1 ? 'file changed' : 'files changed'}</span>
       <span className="shrink-0 text-[10px] text-link">{expanded ? 'Hide details' : 'View details'}</span>
       {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-content-muted" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-content-muted" />}
     </button>
@@ -429,6 +439,51 @@ function OrchestratorBuildActivityRow({
       </section>
 
     </div>}
+  </div>
+  <ChangedFilesCard files={countedFiles?.length ? countedFiles : changedFiles.map(path => ({ path }))} onView={onViewChanges} />
+  </>;
+}
+
+type ChangedFile = { path: string; additions?: number; deletions?: number };
+
+/** Files the agents in one chat turn reported editing. */
+function turnChangedFiles(calls: AgentCall[]): ChangedFile[] {
+  return [...new Set(calls.flatMap(call => call.activities
+    .filter(activity => activity.kind === 'file_change')
+    .flatMap(activity => activity.paths ?? [])))].map(path => ({ path }));
+}
+
+/**
+ * What an AI reply changed, shown in the conversation right under that reply:
+ * "Edited <file> +12 −3" with a way to open the diff. It replaces the bar that
+ * used to sit above the message box.
+ */
+function ChangedFilesCard({ files, onView }: { files: ChangedFile[]; onView?: () => void }) {
+  const [open, setOpen] = useState(false);
+  if (!files.length) return null;
+  const counted = files.every(file => typeof file.additions === 'number' && typeof file.deletions === 'number');
+  const added = files.reduce((sum, file) => sum + (file.additions ?? 0), 0);
+  const removed = files.reduce((sum, file) => sum + (file.deletions ?? 0), 0);
+  const name = (path: string) => path.split('/').pop() || path;
+  return <div className="mt-2 overflow-hidden rounded-xl border border-divider bg-surface-raised/75 text-left">
+    <div className="flex items-center gap-3 px-3 py-2.5">
+      <span aria-hidden="true" className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-well text-content-secondary"><FileDiff className="h-4 w-4" /></span>
+      <button type="button" aria-expanded={open} onClick={() => setOpen(value => !value)} className="min-w-0 flex-1 rounded-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">
+        <span className="block truncate text-xs font-semibold text-content">Edited {files.length === 1 ? name(files[0].path) : files.length + ' files'}</span>
+        <span className="flex items-center gap-1.5 text-[11px]">
+          {counted && <><span className="font-mono text-status-success">+{added}</span><span className="font-mono text-status-danger">−{removed}</span></>}
+          <span className="truncate text-content-muted">{files.length > 1 ? files.slice(0, 3).map(file => name(file.path)).join(', ') + (files.length > 3 ? ' …' : '') : files[0].path}</span>
+        </span>
+      </button>
+      {files.length > 1 && <button type="button" onClick={() => setOpen(value => !value)} aria-label={open ? 'Hide changed files' : 'Show changed files'} className="shrink-0 rounded-lg p-1 text-content-muted hover:bg-surface-high hover:text-content">{open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}</button>}
+      {onView && <button type="button" onClick={onView} className="shrink-0 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-content hover:bg-surface-high">View changes</button>}
+    </div>
+    {open && <ul className="space-y-1 border-t border-divider px-3 py-2">
+      {files.map(file => <li key={file.path} className="flex items-center justify-between gap-3 font-mono text-[10px]">
+        <span className="min-w-0 truncate text-content-secondary">{file.path}</span>
+        {counted && <span className="shrink-0"><span className="text-status-success">+{file.additions}</span> <span className="text-status-danger">−{file.deletions}</span></span>}
+      </li>)}
+    </ul>}
   </div>;
 }
 
@@ -1746,7 +1801,7 @@ export const ChatView: React.FC = () => {
     return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
   }
   return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} /> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div></div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}</div></div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div></div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-4 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-8 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-3xl space-y-2">
@@ -1756,13 +1811,6 @@ export const ChatView: React.FC = () => {
                 <span className="min-w-0 flex-1 font-semibold">Pull request opened</span>
                 {publishedBuild.links.map(link => <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-status-success-border px-3 py-1 font-medium text-status-success hover:bg-status-success-subtle">{publishedBuild.links.length > 1 ? link.repository : 'Open on GitHub'}</a>)}
                 <button type="button" onClick={() => setPublishedBuild(null)} aria-label="Dismiss" className="rounded-full p-1 text-status-success hover:bg-surface-high hover:text-content"><X className="h-3.5 w-3.5" /></button>
-              </div>}
-              {/* When the agents have finished their part, what they changed, one click from the diff. */}
-              {!isClient && project && liveBuild && !liveBuild.running && buildChangedFiles.length > 0 && <div className="flex items-center gap-3 rounded-xl border border-divider bg-surface-raised/95 px-3 py-2 text-[11px] shadow-lg shadow-black/40">
-                <FileCode2 className="h-3.5 w-3.5 shrink-0 text-link" aria-hidden="true" />
-                <span className="shrink-0 font-medium text-content">{buildChangedFiles.length} {buildChangedFiles.length === 1 ? 'file' : 'files'} changed</span>
-                <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-content-muted">{buildChangedFiles.slice(0, 4).map(file => file.split('/').pop()).join(', ')}{buildChangedFiles.length > 4 ? ' …' : ''}</span>
-                <button type="button" onClick={openBuildChanges} className="shrink-0 rounded-lg px-2 py-1 font-medium text-link hover:bg-surface-high hover:text-content">Review changes</button>
               </div>}
               {/* The build, step by step, with the choices it is waiting on. */}
               {!isClient && project && (liveBuild || buildFailure) && <ChatBuildWizard
