@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
+import { ApiRequestError } from '@/shared/services/apiService';
 
 import { pmTicketApi, type PmTicketDetail } from './pmApi';
 import type { ClientDeliveryFile, ClientDeliveryManifest } from './clientDelivery';
@@ -10,8 +11,9 @@ import { input, primary, secondary } from './ticketUi';
 /** Inline on the existing PM Tickets page; registration does not pre-approve
  * the result, and assessment never publishes it to the client automatically.
  */
-export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onAssess }: {
+export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onAssess, onPrepared }: {
   ticket: PmTicketDetail; clientAccessActive: boolean; disabled: boolean; onAssess: (deliveryId: string) => Promise<boolean>;
+  onPrepared?: () => void;
 }) {
   const [candidates, setCandidates] = useState<PmDeliveryCandidate[]>([]);
   const [selectedId, setSelectedId] = useState('');
@@ -25,6 +27,13 @@ export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onA
   const [acknowledged, setAcknowledged] = useState(false);
   const [downloading, setDownloading] = useState<string | null>(null);
   const [retry, setRetry] = useState(0);
+  const [summary, setSummary] = useState('');
+  const [preparing, setPreparing] = useState(false);
+  const [prepareError, setPrepareError] = useState('');
+  const [prepared, setPrepared] = useState(false);
+  const [needsRefresh, setNeedsRefresh] = useState(false);
+  const prepareRequest = useRef<AbortController | null>(null);
+  useEffect(() => () => prepareRequest.current?.abort(), []);
   const listRequest = useRef<AbortController | null>(null);
   const fileRequest = useRef<AbortController | null>(null);
   const downloadLock = useRef(false);
@@ -86,7 +95,42 @@ export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onA
   }
   const inspected = manifest !== null && manifest.files.every(file => read.includes(file.id));
   const available = canAssessTicketDelivery(ticket, clientAccessActive);
+  const canPrepare = available && ticket.internal.nextAction === 'assess_result';
+  async function prepare() {
+    if (!canPrepare || disabled || prepareRequest.current || needsRefresh || !summary.trim() || summary.trim().length > 4000) return;
+    const controller = new AbortController(); prepareRequest.current = controller;
+    setPreparing(true); setPrepareError(''); setPrepared(false);
+    try {
+      await pmTicketApi.prepareResult(ticket.id, { schemaVersion: 1, operationId: crypto.randomUUID(),
+        expectedVersion: ticket.version, publicSummary: summary.trim() }, controller.signal);
+      if (controller.signal.aborted) return;
+      setSummary(''); setPrepared(true); setRetry(value => value + 1);
+      onPrepared?.();
+    } catch (error) {
+      if (controller.signal.aborted) return;
+      const uncertain = !(error instanceof ApiRequestError) || error.reconciliationRequired || error.status === null;
+      setNeedsRefresh(uncertain || (error instanceof ApiRequestError && error.status === 409));
+      setPrepareError(uncertain ? 'We could not confirm whether the result was prepared. Refresh this ticket and check prepared results before trying again.'
+        : error instanceof ApiRequestError && error.status === 409
+          ? 'The ticket or completed work has changed. Refresh the ticket and check that all authorized tasks are reviewed before preparing a result.'
+          : 'The result could not be prepared. Check your access and that all authorized tasks are completed and reviewed, then try again.');
+    } finally {
+      if (!controller.signal.aborted) setPreparing(false);
+      if (prepareRequest.current === controller) prepareRequest.current = null;
+    }
+  }
   return <section aria-label="PM result assessment" className="border-b border-divider p-4 md:p-5">
+    {canPrepare && <form aria-label="Prepare client result" className="mb-5 space-y-3" onSubmit={event => { event.preventDefault(); void prepare(); }}>
+      <h3 className="text-sm font-medium text-content">Prepare a result for review</h3>
+      <p className="text-xs leading-relaxed text-content-muted">Describe the completed work in language the client can understand. This prepares a summary file; it does not automatically include developer files or publish anything to the client. All authorized tasks must be completed and reviewed.</p>
+      <label className="block text-xs text-content-secondary">Client-facing result summary
+        <textarea className={`${input} mt-2`} rows={3} required maxLength={4000} value={summary}
+          disabled={disabled || preparing || needsRefresh} onChange={event => setSummary(event.target.value)} />
+      </label>
+      <button type="submit" className={secondary} disabled={disabled || preparing || needsRefresh || !summary.trim()}>{preparing ? 'Preparing…' : 'Prepare result'}</button>
+      {prepareError && <p role="alert" className="text-xs text-status-warning">{prepareError}</p>}
+      {prepared && <p role="status" className="text-xs text-content-secondary">Result prepared. Inspect the files below before approving it for sharing.</p>}
+    </form>}
     <h3 className="text-sm font-medium text-content">Review a prepared result</h3>
     <p className="mt-2 text-[11px] leading-relaxed text-content-muted">These protected candidates are not approved or visible to the client. Inspect the files and client-facing summary against the agreed work.</p>
     {loading && <p role="status" className="mt-3 text-xs text-content-muted">Checking prepared results…</p>}
