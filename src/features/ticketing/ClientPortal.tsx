@@ -463,6 +463,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     && activeRequest.status !== 'declined' && activeRequest.status !== 'cancelled' ? pendingProjectReview : null;
   const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review' || Boolean(currentPendingProject);
   const currentNav = page;
+  const clientEmail = session?.email?.trim() ?? '';
 
   return <main className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}`}>
     <aside className="client-sidebar" aria-label="Client portal navigation">
@@ -479,9 +480,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         </button>
       </nav>
       <div className="client-sidebar-footer">
-        <div className="client-sidebar-account" role="group" aria-label="Client account controls">
-          <span className="client-sidebar-avatar" aria-hidden="true">C</span>
-          <span className="client-sidebar-account-copy"><strong>Client account</strong><small>Client</small></span>
+        <div className="client-sidebar-account" role="group"
+          aria-label={clientEmail ? `Client account for ${clientEmail}` : 'Client account controls'}>
+          <span className="client-sidebar-avatar" aria-hidden="true">{clientEmail ? clientEmail[0].toUpperCase() : 'C'}</span>
+          <span className="client-sidebar-account-copy">
+            <strong title={clientEmail || 'Signed in'}>{clientEmail || 'Signed in'}</strong><small>Client</small>
+          </span>
           <div className="client-sidebar-account-actions">
             <button type="button" className="client-sidebar-action" aria-label={signingOut ? 'Signing out' : 'Sign out'}
               title={signingOut ? 'Signing out…' : 'Sign out'} onClick={() => void signOut()}

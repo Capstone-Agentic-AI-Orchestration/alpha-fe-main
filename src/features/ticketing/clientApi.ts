@@ -83,7 +83,7 @@ export interface ClientTicketReceipt {
   ticketId: string; operationId: string; version: number; status: ClientTicketStatus;
   reference?: string; messageId?: string;
 }
-export interface ClientSession { authenticated: boolean; expiresAt?: string }
+export interface ClientSession { authenticated: boolean; email?: string; expiresAt?: string }
 export type ClientEmailLinkType = 'invite' | 'magiclink';
 export interface ClientTicketCreateInput {
   intakeContextId: string;
