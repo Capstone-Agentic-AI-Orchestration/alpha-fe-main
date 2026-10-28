@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowRight, Check, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
-  ListChecks, LogOut, RefreshCw, Search, Ticket,
+  ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket,
 } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
@@ -91,6 +91,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [selectedItemFallback, setSelectedItemFallback] = useState<ClientProjectRequestItem | null>(null);
   const [returnToProjects, setReturnToProjects] = useState(false);
   const [pendingProjectReview, setPendingProjectReview] = useState<PendingProjectReview | null>(null);
+  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [detail, setDetail] = useState<TicketDetail | null>(null);
   const [messages, setMessages] = useState<ClientTicketMessage[]>([]);
   const [messageCursor, setMessageCursor] = useState<string | null>(null);
@@ -535,9 +536,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </section>
           {queueNotice && <p role="status" className="client-project-pending-notice">{queueNotice}</p>}
           {queueError && <p role="alert" className="client-project-error">{queueError}</p>}
-          <section className="client-portal-workspace client-portal-workspace--requests" aria-label="Your requests and updates">
-            <aside className={`client-request-list ${selectedId && !requestListShown ? 'client-mobile-hidden' : ''}`} aria-label="Request list">
-              <div className="client-list-header"><div className="client-list-title"><h2>All requests</h2></div></div>
+          <section className={`client-portal-workspace client-portal-workspace--requests ${navigationCollapsed ? 'is-navigation-collapsed' : ''}`} aria-label="Your requests and updates">
+            <aside className={`client-request-list ${navigationCollapsed ? 'is-collapsed' : ''} ${selectedId && !requestListShown ? 'client-mobile-hidden' : ''}`} aria-label="Request list">
+              <div className="client-list-header">
+                <div className="client-list-title"><h2>All requests</h2></div>
+                <button type="button" className="role-chat-navigation-toggle" aria-label={navigationCollapsed ? 'Show requests' : 'Collapse requests'} aria-expanded={!navigationCollapsed} onClick={() => setNavigationCollapsed(value => !value)}>{navigationCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
+              </div>
               <label className="client-search"><Search size={16} /><span className="sr-only">Search requests</span>
                 <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search requests" /></label>
               <div className="client-request-filters" aria-label="Filter requests">{filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => {
@@ -588,6 +592,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                             ticket={detail} messages={messages} messageCursor={messageCursor} historyLoading={historyLoading} historyError={historyError}
                             busy={writing || Boolean(pending)} error={writeError} replyResetVersion={replyResetVersion}
                             workflowActionsDisabled={workflowActionsDisabled} newRequestsDisabled communicationEnabled={communicationEnabled && !inspectionOnly}
+                            readOnlyPreview={inspectionOnly}
                             onBack={() => { historyGeneration.current += 1; setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null);
                               setRequestListShown(true); if (returnToProjects) { setPage('projects'); setReturnToProjects(false); } }}
                             onLoadMore={() => void loadMoreMessages()} onReply={sendReply} onCorrection={sendCorrection} onDecision={makeDecision}

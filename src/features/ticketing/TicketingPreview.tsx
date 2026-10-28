@@ -126,6 +126,6 @@ export default function TicketingPreview({ initialRole }: { initialRole: Preview
       <p className="flex items-center gap-2"><FlaskConical size={13} />Local UI inspection · fictional records, no real account or server writes</p>
       <div className="flex gap-3"><button type="button" onClick={() => setRole('pm')} className="text-link hover:text-content">Project Manager</button><a href="/#/request" className="text-content-secondary hover:text-content">Inquiry form</a><a href="/#/client" className="text-content-secondary hover:text-content">Client access</a></div>
     </div>
-    <ClientPortal api={clientPreviewApi} inspectionOnly />
+    <ClientPortal api={clientPreviewApi} inspectionOnly communicationEnabled />
   </div>;
 }

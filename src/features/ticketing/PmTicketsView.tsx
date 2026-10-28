@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, Archive, ArrowLeft, ArrowUpRight, Check, ChevronDown, CircleDot, Clock3, FileText, Inbox, Info,
-  LockKeyhole, MessageSquare, Paperclip, RefreshCw, Search, Send, StickyNote,
+  AlertCircle, ArrowLeft, ArrowUpRight, Check, ChevronDown, CircleDot, FileText, Info,
+  LockKeyhole, MessageSquare, PanelLeftClose, PanelLeftOpen, Paperclip, RefreshCw, Search, Send, StickyNote,
   Ticket as TicketIcon, UserRound,
 } from 'lucide-react';
 
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, pmTicketDocumentsApi } from './pmApi';
+import { ChatContextPanel } from './ChatContextPanel';
 import type {
   PmTicketCommandInput, PmTicketDetail, PmTicketMessage, PmTicketMessageInput,
   PmTicketNote, PmTicketNoteInput, PmTicketQueueItem, PmTicketQueueOptions,
@@ -150,6 +151,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [detail, setDetail] = useState<PmTicketDetail | null>(null);
   const [messages, setMessages] = useState<PmTicketMessage[]>([]);
   const [notes, setNotes] = useState<PmTicketNote[]>([]);
@@ -580,12 +582,12 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     }
   }
 
-  async function loadMoreHistory() {
+  async function loadMoreHistory(mode: Panel = panel) {
     if (!selectedId || historyLoading) return;
     const generation = historyGeneration.current;
     const ticketId = selectedId;
-    const activePanel = panel;
-    const cursor = panel === 'conversation' ? messageCursor : noteCursor;
+    const activePanel = mode;
+    const cursor = mode === 'conversation' ? messageCursor : noteCursor;
     if (!cursor) return;
     setHistoryLoading(true); setHistoryError('');
     try {
@@ -670,25 +672,125 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     if (action === 'delivery-review') setDeliveryReviewOpen(true);
   }
 
-  return <div className={`pm-tickets${selectedId ? ' pm-tickets--ticket-open' : ''}`}>
+  function renderConversation(mode: Panel) {
+    if (!detail || !selectedQueueItem) return null;
+    return (
+                <div className={`pm-tickets__conversation-area${mode === 'conversation' ? ' pm-tickets__conversation-area--chat' : ''}`}>
+                  {mode === 'notes' && <p className="pm-tickets__privacy-notice"><LockKeyhole size={13} />Only authorized project managers can see these notes.</p>}
+                  <div className="pm-tickets__conversation-history">
+                    {(mode === 'conversation' ? messageCursor : noteCursor) && <button type="button" onClick={() => void loadMoreHistory(mode)} disabled={historyLoading} className="pm-tickets__load-more">{historyLoading ? 'Loading…' : 'Load more'}</button>}
+                    {mode === panel && historyError && <div role="alert" className="pm-tickets__error">{historyError}</div>}
+                    {mode === 'conversation' && !selectedQueueItem.internal.clientAccessActive
+                      ? <div className="pm-tickets__locked"><LockKeyhole size={18} aria-hidden="true" /><p>Client conversation is available after the invited client activates access.</p><p>The invitation email contains a one-time activation link. Use private notes for internal triage until then.</p></div>
+                      : mode === 'conversation' && messages.length === 0
+                        ? <p className="pm-tickets__conversation-empty">No messages yet.</p>
+                        : mode === 'notes' && notes.length === 0
+                          ? <p className="pm-tickets__conversation-empty">No private notes yet. These notes are visible only to authorized PMs.</p>
+                          : mode === 'conversation' ? messages.map(message => <article key={message.id} className={`pm-tickets__message${message.author === 'pm' ? ' pm-tickets__message--pm' : ''}`}>
+                            <span className="pm-tickets__message-avatar" aria-hidden="true">{message.author === 'pm' ? 'PM' : (detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? 'Client').slice(0, 1)}</span>
+                            <div className="pm-tickets__message-content"><div className="pm-tickets__message-meta"><span>{message.author === 'pm' ? 'Project Manager' : detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? 'Client'}</span><time dateTime={message.createdAt}>{time(message.createdAt)}</time></div>
+                            <p className="pm-tickets__message-body">{message.body}</p>
+                            </div>
+                          </article>) : notes.map(note => <article key={note.id} className="pm-tickets__message pm-tickets__message--note">
+                            <span className="pm-tickets__message-avatar" aria-hidden="true"><LockKeyhole size={14} /></span>
+                            <div className="pm-tickets__message-content"><div className="pm-tickets__message-meta"><span>PM-only note</span><time dateTime={note.createdAt}>{time(note.createdAt)}</time></div>
+                            <p className="pm-tickets__message-body">{note.body}</p>
+                            </div>
+                          </article>)}
+                  </div>
+
+                  {(mode === 'notes' || ((communicationEnabled || workflowActions !== 'triage') && selectedQueueItem.internal.clientAccessActive)) && <>
+                    {(!composerOpen || mode !== panel) && <button type="button" className="pm-tickets__reply-prompt" onClick={() => { setPanel(mode); setTicketSection(mode === 'notes' ? 'notes' : 'conversation'); setComposerOpen(true); }}>
+                      <span>{mode === 'notes' ? 'Write a private note…' : 'Write a message to the client…'}</span>
+                      <span>{mode === 'notes' ? 'Add note' : 'Reply'}<ArrowUpRight size={15} /></span>
+                    </button>}
+                    {composerOpen && mode === panel && <form className="pm-tickets__composer" onSubmit={event => { event.preventDefault(); mode === 'notes' ? submitNote() : submitReply(); }}>
+                      <label className="sr-only" htmlFor={`ticket-${mode}-draft`}>{mode === 'notes' ? 'Private note' : 'Message to client'}</label>
+                      {mode === 'conversation' && !communicationEnabled && <div className="pm-tickets__message-actions">
+                        <button type="button" aria-pressed={messageAction === 'reply'} onClick={() => setMessageAction('reply')} className={messageAction === 'reply' ? 'is-active' : ''}>Send update</button>
+                        <button type="button" aria-pressed={messageAction === 'request_details'} onClick={() => setMessageAction('request_details')} disabled={!['under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)} className={messageAction === 'request_details' ? 'is-active' : ''}>Request details</button>
+                        {messageAction === 'request_details' && <span>Sets the next action to the client.</span>}
+                      </div>}
+                      <textarea autoFocus id={`ticket-${mode}-draft`} value={drafts[mode]} onChange={event => setDrafts(current => ({ ...current, [mode]: event.target.value }))} disabled={!detail.writesAvailable || writing || Boolean(pending)} maxLength={4000} rows={3} placeholder={mode === 'notes' ? 'Write a private PM note…' : 'Write a message to the client…'} className="pm-tickets__composer-input" />
+                      <div className="pm-tickets__composer-footer">
+                        <span className="pm-tickets__composer-visibility">{mode === 'notes' ? <><LockKeyhole size={12} />Only PMs can see this note</> : <><MessageSquare size={12} />Visible to the client</>}</span>
+                        <div className="pm-tickets__composer-buttons">
+                          <button type="button" onClick={() => setComposerOpen(false)} disabled={writing} className={secondary}>Close</button>
+                          <button type="submit" disabled={!detail.writesAvailable || !drafts[mode].trim() || writing || Boolean(pending)} className={mode === 'notes' ? secondary : primary}>
+                            {mode === 'notes' ? <StickyNote size={13} /> : <Send size={13} />}{mode === 'notes' ? 'Save note' : messageAction === 'request_details' ? 'Ask for details' : 'Send update'}
+                          </button>
+                        </div>
+                      </div>
+                    </form>}
+                  </>}
+                  {!detail.writesAvailable && <div className="pm-tickets__readonly">This ticket is read-only or ticket changes are disabled.</div>}
+                </div>
+    );
+  }
+
+  const workflowToolbar = detail && selectedQueueItem && (primaryAction || hasMoreActions) ? (
+                  <div className="pm-tickets__ticket-toolbar">
+                  <div className="pm-tickets__next-step"><CircleDot size={14} aria-hidden="true" /><p>{selectedNextStep}</p></div>
+                  <div className="pm-tickets__detail-actions">
+                    {primaryAction === 'review' && <button onClick={markUnderReview} disabled={writing || Boolean(pending)} className={primary}><Check size={14} />Mark under review</button>}
+                    {primaryAction === 'invite' && <button onClick={() => void sendClientInvitationEmail()}
+                      disabled={invitationEmailSending || writing || Boolean(pending)
+                        || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')} className={primary}>
+                      <Send size={14} />{invitationEmailSending ? 'Sending invitation…' : invitationButtonLabel(selectedInvitation)}
+                    </button>}
+                    {primaryAction === 'authorize' && <button onClick={() => openWorkflowAction('handoff')}
+                      disabled={writing || Boolean(pending)} className={primary}><Check size={14} />Link agreed work</button>}
+                    {primaryAction === 'close' && <button onClick={() => openWorkflowAction('close')}
+                      disabled={writing || Boolean(pending)} className={primary}>Close accepted ticket</button>}
+                    {hasMoreActions && <details key={detail.id} open={actionMenuOpen}
+                      onToggle={event => setActionMenuOpen(event.currentTarget.open)} className="pm-tickets__more-actions">
+                      <summary>More actions<ChevronDown size={14} aria-hidden="true" /></summary>
+                      <div className="pm-tickets__action-menu">
+                        {canInviteClient && primaryAction !== 'invite' && <button type="button" onClick={() => { setActionMenuOpen(false); void sendClientInvitationEmail(); }}
+                          disabled={invitationEmailSending || writing || Boolean(pending)
+                            || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')}>
+                          <Send size={14} />{invitationEmailSending ? 'Sending invitation…' : invitationButtonLabel(selectedInvitation)}
+                        </button>}
+                        {canDeclineInquiry && <button type="button" onClick={() => openWorkflowAction('decline')}>Decline inquiry</button>}
+                        {canProposeScope && <button type="button" onClick={() => openWorkflowAction('scope')}>
+                          {detail.scope?.agreed ? 'Replace agreed scope' : detail.scope ? 'Revise proposed scope' : 'Propose scope'}
+                        </button>}
+                        {canLinkAgreedWork && primaryAction !== 'authorize' && <button type="button" onClick={() => openWorkflowAction('handoff')}>Link agreed work</button>}
+                        {canManageProjectLink && <button type="button" onClick={() => openWorkflowAction('project')}>
+                          {detail.internal.projectId ? 'Manage project link' : 'Link to project'}
+                        </button>}
+                        {canReviewCorrection && <button type="button" onClick={() => openWorkflowAction('correction')}>
+                          {detail.internal.correctionRequestedFor ? 'Review client correction' : 'Return affected tasks'}
+                        </button>}
+                        {canAssessDelivery && <button type="button" onClick={() => openWorkflowAction('delivery-assess')}>Assess prepared work</button>}
+                        {canReviewDelivery && <button type="button" onClick={() => openWorkflowAction('delivery-review')}>Review client response</button>}
+                        {canCloseTicket && primaryAction !== 'close' && <button type="button" onClick={() => openWorkflowAction('close')}>Close accepted ticket</button>}
+                      </div>
+                    </details>}
+                  </div>
+                  </div>
+  ) : null;
+
+  return <div className={`pm-tickets${selectedId ? ' pm-tickets--ticket-open' : ''}${navigationCollapsed ? ' is-navigation-collapsed' : ''}`}>
     <aside className="pm-tickets__navigation" aria-label="Ticket views">
+      <button type="button" className="role-chat-navigation-toggle" aria-label={navigationCollapsed ? 'Show ticket navigation' : 'Collapse ticket navigation'} aria-expanded={!navigationCollapsed} onClick={() => setNavigationCollapsed(value => !value)}>{navigationCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
       <header className="pm-tickets__navigation-heading">
         <h1 className="pm-tickets__title"><TicketIcon size={19} aria-hidden="true" />Tickets</h1>
         <p>Client requests</p>
       </header>
-      <nav aria-label="Filter requests" className="pm-tickets__filters">
-        {filters.map(option => {
-          const Icon = option.id === 'all' ? Inbox : option.id === 'needs_pm' ? CircleDot
-            : option.id === 'in_progress' ? ArrowUpRight : option.id === 'waiting_client' ? Clock3
-              : option.id === 'closed_month' ? Check : Archive;
-          return <button key={option.id} type="button" aria-pressed={filter === option.id}
-            disabled={!intakeEnabled || writing || Boolean(pending)} onClick={() => activeFilter(option.id)}
-            className={`pm-tickets__filter${filter === option.id ? ' is-active' : ''}`}>
-            <Icon size={15} aria-hidden="true" /><span>{option.label}</span>
-            {option.counter && queue?.counters.kind === 'pm' && <span className="pm-tickets__filter-count">{queue.counters[option.counter]}</span>}
-          </button>;
-        })}
-      </nav>
+      <label className="pm-tickets__compact-filter"><span className="sr-only">Filter requests</span>
+        <select aria-label="Filter requests" value={filter} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => activeFilter(event.target.value as Filter)}>
+          {filters.map(option => <option key={option.id} value={option.id}>{option.label}{option.counter && queue?.counters.kind === 'pm' ? ` · ${queue.counters[option.counter]}` : ''}</option>)}
+        </select>
+      </label>
+      {selectedId && <nav className="pm-tickets__chat-list" aria-label="Ticket conversations">
+        <p>Conversations</p>
+        {queue?.items.map(item => <button key={item.id} type="button" aria-current={selectedId === item.id ? 'page' : undefined}
+          disabled={writing || Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setPanel('conversation'); setTicketSection('conversation'); setMessageAction('reply'); setDraft(''); setWriteError(''); }}>
+          <MessageSquare size={15} aria-hidden="true" /><span><strong>{item.title}</strong><small>{statusLabel(item.status)}</small></span>
+        </button>)}
+        {queue?.nextCursor && <button type="button" disabled={queueMoreLoading || queueLoading} onClick={() => void loadMoreQueue()}>{queueMoreLoading ? 'Loading…' : 'Load more tickets'}</button>}
+      </nav>}
     </aside>
     <div className="pm-tickets__main">
     <header className="pm-tickets__header">
@@ -755,46 +857,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   <h2 ref={detailHeading} tabIndex={-1} className="pm-tickets__detail-title">{detail.title}</h2>
                   <p className="pm-tickets__ticket-context">{detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? detail.companyLabel}
                     <span>·</span>{detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? detail.request?.projectLabel ?? 'No project linked'}</p>
-                  <div className="pm-tickets__ticket-toolbar">
-                  <div className="pm-tickets__next-step"><CircleDot size={14} aria-hidden="true" /><p>{selectedNextStep}</p></div>
-                  <div className="pm-tickets__detail-actions">
-                    {primaryAction === 'review' && <button onClick={markUnderReview} disabled={writing || Boolean(pending)} className={primary}><Check size={14} />Mark under review</button>}
-                    {primaryAction === 'invite' && <button onClick={() => void sendClientInvitationEmail()}
-                      disabled={invitationEmailSending || writing || Boolean(pending)
-                        || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')} className={primary}>
-                      <Send size={14} />{invitationEmailSending ? 'Sending invitation…' : invitationButtonLabel(selectedInvitation)}
-                    </button>}
-                    {primaryAction === 'authorize' && <button onClick={() => openWorkflowAction('handoff')}
-                      disabled={writing || Boolean(pending)} className={primary}><Check size={14} />Link agreed work</button>}
-                    {primaryAction === 'close' && <button onClick={() => openWorkflowAction('close')}
-                      disabled={writing || Boolean(pending)} className={primary}>Close accepted ticket</button>}
-                    {hasMoreActions && <details key={detail.id} open={actionMenuOpen}
-                      onToggle={event => setActionMenuOpen(event.currentTarget.open)} className="pm-tickets__more-actions">
-                      <summary>More actions<ChevronDown size={14} aria-hidden="true" /></summary>
-                      <div className="pm-tickets__action-menu">
-                        {canInviteClient && primaryAction !== 'invite' && <button type="button" onClick={() => { setActionMenuOpen(false); void sendClientInvitationEmail(); }}
-                          disabled={invitationEmailSending || writing || Boolean(pending)
-                            || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')}>
-                          <Send size={14} />{invitationEmailSending ? 'Sending invitation…' : invitationButtonLabel(selectedInvitation)}
-                        </button>}
-                        {canDeclineInquiry && <button type="button" onClick={() => openWorkflowAction('decline')}>Decline inquiry</button>}
-                        {canProposeScope && <button type="button" onClick={() => openWorkflowAction('scope')}>
-                          {detail.scope?.agreed ? 'Replace agreed scope' : detail.scope ? 'Revise proposed scope' : 'Propose scope'}
-                        </button>}
-                        {canLinkAgreedWork && primaryAction !== 'authorize' && <button type="button" onClick={() => openWorkflowAction('handoff')}>Link agreed work</button>}
-                        {canManageProjectLink && <button type="button" onClick={() => openWorkflowAction('project')}>
-                          {detail.internal.projectId ? 'Manage project link' : 'Link to project'}
-                        </button>}
-                        {canReviewCorrection && <button type="button" onClick={() => openWorkflowAction('correction')}>
-                          {detail.internal.correctionRequestedFor ? 'Review client correction' : 'Return affected tasks'}
-                        </button>}
-                        {canAssessDelivery && <button type="button" onClick={() => openWorkflowAction('delivery-assess')}>Assess prepared work</button>}
-                        {canReviewDelivery && <button type="button" onClick={() => openWorkflowAction('delivery-review')}>Review client response</button>}
-                        {canCloseTicket && primaryAction !== 'close' && <button type="button" onClick={() => openWorkflowAction('close')}>Close accepted ticket</button>}
-                      </div>
-                    </details>}
-                  </div>
-                  </div>
                   {invitationEmailError && <p role="alert" className="pm-tickets__detail-notice pm-tickets__detail-notice--error">{invitationEmailError}</p>}
                 </header>
 
@@ -809,9 +871,15 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   }} disabled={writing} className={secondary}>{writing ? 'Checking…' : 'Check and retry'}</button>
                 </div>}
 
-                <nav aria-label="Ticket sections" className="pm-tickets__section-tabs">
+
+
+              {writeError && <div role="alert" className="pm-tickets__error">{writeError}</div>}
+              <div className="pm-tickets__chat-layout role-chat-layout">
+                {renderConversation('conversation')}
+                <ChatContextPanel label="Ticket context" className="pm-tickets__context-panel" activeSection={ticketSection} onClose={() => { setTicketSection('conversation'); setPanel('conversation'); setComposerOpen(false); }}>
+                <nav aria-label="Ticket sections" className="pm-tickets__section-tabs role-chat-tools">
                   <button type="button" aria-pressed={ticketSection === 'conversation'} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setPanel('conversation'); setComposerOpen(false); setTicketSection('conversation'); }}
-                    className={ticketSection === 'conversation' ? 'is-active' : ''}><MessageSquare size={15} />Conversation</button>
+                    className={ticketSection === 'conversation' ? 'is-active' : ''}><MessageSquare size={15} />Overview</button>
                   <button type="button" aria-pressed={ticketSection === 'notes'} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setPanel('notes'); setComposerOpen(false); setTicketSection('notes'); }}
                     className={ticketSection === 'notes' ? 'is-active' : ''}><LockKeyhole size={14} />Private notes</button>
                   <button type="button" aria-pressed={ticketSection === 'details'} onClick={() => setTicketSection('details')}
@@ -819,8 +887,8 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   {communicationEnabled && <button type="button" aria-pressed={ticketSection === 'documents'} onClick={() => setTicketSection('documents')}
                     className={ticketSection === 'documents' ? 'is-active' : ''}><Paperclip size={15} />Documents</button>}
                 </nav>
-
                 {ticketSection === 'details' && <section ref={detailsElement} aria-label="Request details and workflow" className="pm-tickets__details-view">
+                  {workflowToolbar}
                 <div className="pm-tickets__overview">
                   <div className="pm-tickets__overview-section">
                     <p className="pm-tickets__eyebrow">Request</p>
@@ -890,59 +958,13 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   <button className={primary} disabled={writing || Boolean(pending)} onClick={() => void closeAcceptedTicket()}>Confirm ticket closure</button></div>
               </section>}
               </section>}
-              {writeError && <div role="alert" className="pm-tickets__error">{writeError}</div>}
-              {(ticketSection === 'conversation' || ticketSection === 'notes') && <div className="pm-tickets__chat-layout">
-                <div className={`pm-tickets__conversation-area${panel === 'conversation' ? ' pm-tickets__conversation-area--chat' : ''}`}>
-                  {panel === 'notes' && <p className="pm-tickets__privacy-notice"><LockKeyhole size={13} />Only authorized project managers can see these notes.</p>}
-                  <div className="pm-tickets__conversation-history">
-                    {(panel === 'conversation' ? messageCursor : noteCursor) && <button type="button" onClick={() => void loadMoreHistory()} disabled={historyLoading} className="pm-tickets__load-more">{historyLoading ? 'Loading…' : 'Load more'}</button>}
-                    {historyError && <div role="alert" className="pm-tickets__error">{historyError}</div>}
-                    {panel === 'conversation' && !selectedQueueItem.internal.clientAccessActive
-                      ? <div className="pm-tickets__locked"><LockKeyhole size={18} aria-hidden="true" /><p>Client conversation is available after the invited client activates access.</p><p>The invitation email contains a one-time activation link. Use private notes for internal triage until then.</p></div>
-                      : panel === 'conversation' && messages.length === 0
-                        ? <p className="pm-tickets__conversation-empty">No messages yet.</p>
-                        : panel === 'notes' && notes.length === 0
-                          ? <p className="pm-tickets__conversation-empty">No private notes yet. These notes are visible only to authorized PMs.</p>
-                          : panel === 'conversation' ? messages.map(message => <article key={message.id} className={`pm-tickets__message${message.author === 'pm' ? ' pm-tickets__message--pm' : ''}`}>
-                            <span className="pm-tickets__message-avatar" aria-hidden="true">{message.author === 'pm' ? 'PM' : (detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? 'Client').slice(0, 1)}</span>
-                            <div className="pm-tickets__message-content"><div className="pm-tickets__message-meta"><span>{message.author === 'pm' ? 'Project Manager' : detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? 'Client'}</span><time dateTime={message.createdAt}>{time(message.createdAt)}</time></div>
-                            <p className="pm-tickets__message-body">{message.body}</p>
-                            </div>
-                          </article>) : notes.map(note => <article key={note.id} className="pm-tickets__message pm-tickets__message--note">
-                            <span className="pm-tickets__message-avatar" aria-hidden="true"><LockKeyhole size={14} /></span>
-                            <div className="pm-tickets__message-content"><div className="pm-tickets__message-meta"><span>PM-only note</span><time dateTime={note.createdAt}>{time(note.createdAt)}</time></div>
-                            <p className="pm-tickets__message-body">{note.body}</p>
-                            </div>
-                          </article>)}
-                  </div>
 
-                  {(panel === 'notes' || ((communicationEnabled || workflowActions !== 'triage') && selectedQueueItem.internal.clientAccessActive)) && <>
-                    {!composerOpen && <button type="button" className="pm-tickets__reply-prompt" onClick={() => setComposerOpen(true)}>
-                      <span>{panel === 'notes' ? 'Write a private note…' : 'Write a message to the client…'}</span>
-                      <span>{panel === 'notes' ? 'Add note' : 'Reply'}<ArrowUpRight size={15} /></span>
-                    </button>}
-                    {composerOpen && <form className="pm-tickets__composer" onSubmit={event => { event.preventDefault(); panel === 'notes' ? submitNote() : submitReply(); }}>
-                      <label className="sr-only" htmlFor="ticket-message-draft">{panel === 'notes' ? 'Private note' : 'Message to client'}</label>
-                      {panel === 'conversation' && !communicationEnabled && <div className="pm-tickets__message-actions">
-                        <button type="button" aria-pressed={messageAction === 'reply'} onClick={() => setMessageAction('reply')} className={messageAction === 'reply' ? 'is-active' : ''}>Send update</button>
-                        <button type="button" aria-pressed={messageAction === 'request_details'} onClick={() => setMessageAction('request_details')} disabled={!['under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)} className={messageAction === 'request_details' ? 'is-active' : ''}>Request details</button>
-                        {messageAction === 'request_details' && <span>Sets the next action to the client.</span>}
-                      </div>}
-                      <textarea autoFocus id="ticket-message-draft" value={draft} onChange={event => setDraft(event.target.value)} disabled={!detail.writesAvailable || writing || Boolean(pending)} maxLength={4000} rows={3} placeholder={panel === 'notes' ? 'Write a private PM note…' : 'Write a message to the client…'} className="pm-tickets__composer-input" />
-                      <div className="pm-tickets__composer-footer">
-                        <span className="pm-tickets__composer-visibility">{panel === 'notes' ? <><LockKeyhole size={12} />Only PMs can see this note</> : <><MessageSquare size={12} />Visible to the client</>}</span>
-                        <div className="pm-tickets__composer-buttons">
-                          <button type="button" onClick={() => setComposerOpen(false)} disabled={writing} className={secondary}>Close</button>
-                          <button type="submit" disabled={!detail.writesAvailable || !draft.trim() || writing || Boolean(pending)} className={panel === 'notes' ? secondary : primary}>
-                            {panel === 'notes' ? <StickyNote size={13} /> : <Send size={13} />}{panel === 'notes' ? 'Save note' : messageAction === 'request_details' ? 'Ask for details' : 'Send update'}
-                          </button>
-                        </div>
-                      </div>
-                    </form>}
-                  </>}
-                  {!detail.writesAvailable && <div className="pm-tickets__readonly">This ticket is read-only or ticket changes are disabled.</div>}
-                </div>
-                <aside className="pm-tickets__context-panel" aria-label="Ticket context">
+                {ticketSection === 'documents' && communicationEnabled && <section aria-label="Ticket documents" className="pm-tickets__documents-view">
+                  <TicketDocumentsPanel api={documentsApi} ticketId={detail.id} heading="Shared files"
+                    canUpload={detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status)} />
+                </section>}
+                  {ticketSection === 'notes' && renderConversation('notes')}
+                  <div hidden={ticketSection !== 'conversation'}>
                   <div className="pm-tickets__context-heading">
                     <div>
                       <p className="pm-tickets__eyebrow">Request context</p>
@@ -954,7 +976,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                     <p className="pm-tickets__context-label">Client</p>
                     <p className="pm-tickets__context-value">{detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? detail.companyLabel}</p>
                     {detail.internal.request?.contact && <p className="pm-tickets__context-detail">{detail.internal.request.contact.email}</p>}
-                    <p className="pm-tickets__context-detail">{detail.companyLabel}</p>
+                    {detail.companyLabel !== (detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? detail.companyLabel) && <p className="pm-tickets__context-detail">{detail.companyLabel}</p>}
                     {detail.internal.request?.contact && <p className="pm-tickets__context-detail"><PmContactVerification verification={detail.internal.request.contact.verification} /></p>}
                   </section>
                   <section className="pm-tickets__context-section">
@@ -965,18 +987,18 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   <section className="pm-tickets__context-section">
                     <p className="pm-tickets__context-label">Next step</p>
                     <p className="pm-tickets__context-value pm-tickets__context-value--accent"><CircleDot size={14} aria-hidden="true" />{selectedNextStep}</p>
+                    {workflowToolbar}
                   </section>
                   <section className="pm-tickets__context-section pm-tickets__context-section--request">
                     <p className="pm-tickets__context-label">Request summary</p>
                     <p className="pm-tickets__context-detail pm-tickets__context-description">{detail.description}</p>
                     {detail.request?.requestedDeadline && <p className="pm-tickets__context-detail">Requested by {detail.request.requestedDeadline}</p>}
                   </section>
-                </aside>
-              </div>}
-                {ticketSection === 'documents' && communicationEnabled && <section aria-label="Ticket documents" className="pm-tickets__documents-view">
-                  <TicketDocumentsPanel api={documentsApi} ticketId={detail.id} heading="Shared files"
-                    canUpload={detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status)} />
-                </section>}
+
+                  </div>
+                </ChatContextPanel>
+              </div>
+
               </div>}
       </div>
     </section>

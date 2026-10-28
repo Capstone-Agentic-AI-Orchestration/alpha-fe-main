@@ -1,0 +1,193 @@
+/* Shared reading layout, independent of ticket state and role permissions. */
+.role-chat-layout { position: relative; display: flex; flex: 1; min-width: 0; min-height: 0; gap: 0; overflow: hidden; }
+.role-chat-layout > :first-child { flex: 1; min-width: 0; min-height: 0; }
+.role-chat-context { position: relative; flex: 0 0 44px; min-width: 0; min-height: 0; border-left: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-shell)); }
+.role-chat-context.is-open { flex-basis: var(--role-chat-context-width, 320px); }
+.role-chat-context__resize { position: absolute; z-index: 2; top: 0; bottom: 0; left: -4px; width: 8px; cursor: col-resize; touch-action: none; }
+.role-chat-context__resize:hover, .role-chat-context__resize:focus-visible { background: rgb(var(--ui-accent) / .25); outline: none; }
+.role-chat-context__toggle { display: flex; width: 44px; min-height: 44px; align-items: center; justify-content: center; color: rgb(var(--ui-text-secondary)); }
+.role-chat-context__toggle span { display: none; }
+.role-chat-context.is-open > .role-chat-context__toggle { display: none; }
+.role-chat-context__panel { display: flex; height: 100%; min-height: 0; flex-direction: column; gap: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 22px 24px; color: rgb(var(--ui-text-primary)); }
+.role-chat-context__panel[hidden] { display: none; }
+.role-chat-context__header { display: flex; flex: none; min-height: 62px; align-items: center; justify-content: space-between; gap: 12px; border-bottom: 1px solid rgb(var(--ui-divider)); margin-bottom: 6px; }
+.role-chat-context__header h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.role-chat-context__header button { display: grid; width: 36px; height: 36px; place-items: center; border-radius: 8px; color: rgb(var(--ui-text-secondary)); }
+.role-chat-context button:hover { background: rgb(var(--ui-raised)); }
+.role-chat-context button:focus-visible { outline: 2px solid rgb(var(--ui-focus)); outline-offset: -3px; }
+.role-chat-context__scrim { display: none; }
+.role-chat-context__section { padding: 20px 0; border-bottom: 1px solid rgb(var(--ui-divider)); }
+.role-chat-context__section h3 { margin: 0 0 10px; color: rgb(var(--ui-text-secondary)); font-size: 12px; font-weight: 500; }
+.role-chat-context__section p { margin: 6px 0 0; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; white-space: pre-wrap; }
+.role-chat-context__section small { display: block; margin-top: 8px; color: rgb(var(--ui-text-muted)); font-size: 11px; line-height: 1.6; }
+.role-chat-context__link { display: flex; min-height: 40px; align-items: center; gap: 8px; margin-top: 8px; color: rgb(var(--ui-link)); font-size: 12px; text-align: left; }
+.role-chat-context .role-chat-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); flex: none; gap: 4px; min-height: 0; margin: 0; padding: 12px 0; border-bottom: 1px solid rgb(var(--ui-divider)); overflow: visible; }
+.role-chat-context .role-chat-tools > button { display: flex; min-width: 0; min-height: 36px; align-items: center; justify-content: flex-start; gap: 7px; margin: 0; padding: 7px 9px; border: 0; border-radius: 7px; background: none; color: rgb(var(--ui-text-secondary)); font-size: 12px; white-space: normal; text-align: left; }
+.role-chat-context .role-chat-tools > button.is-active { background: rgb(var(--ui-selected)); color: rgb(var(--ui-selected-content)); }
+.role-chat-context .role-chat-tools > button::after { display: none; }
+.role-chat-context .role-chat-tools > button svg { flex: none; }
+.pm-tickets.pm-tickets--ticket-open .role-chat-context .role-chat-tools { padding-inline: 0; gap: 4px; }
+.pm-tickets__compact-filter { display: block; margin: 0 4px 16px; }
+.pm-tickets__compact-filter select { width: 100%; min-height: 40px; padding: 8px 10px; border: 1px solid rgb(var(--ui-control)); border-radius: 8px; background: rgb(var(--ui-shell)); color: rgb(var(--ui-text-secondary)); font: inherit; font-size: 12px; }
+.pm-tickets__compact-filter option { background: rgb(var(--ui-shell)); color: rgb(var(--ui-text-primary)); }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__navigation-heading { padding-bottom: 18px; }
+.pm-tickets__context-panel .pm-tickets__context-label { font-size: 12px; letter-spacing: 0; text-transform: none; }
+.pm-tickets__context-panel .pm-tickets__context-section { padding-block: 18px; }
+.pm-tickets__navigation-heading p { display: none; }
+.role-chat-context [hidden] { display: none !important; }
+.client-portal-shell .role-chat-context .client-other-panels { flex: none; min-height: 0; overflow: visible; }
+.client-portal-shell .role-chat-context .client-detail-panel { padding: 20px 0; overflow: visible; }
+.client-portal-shell .role-chat-context .client-detail-card { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
+.client-portal-shell .role-chat-context .client-detail-card + .client-detail-card { padding-top: 20px; border-top: 1px solid rgb(var(--ui-divider)); }
+.client-portal-shell .role-chat-context .client-detail-card h2 { font-size: 13px; }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__context-panel .pm-tickets__details-view,
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__context-panel .pm-tickets__documents-view { flex: none; padding: 20px 0; overflow: visible; }
+.pm-tickets__context-panel .pm-tickets__overview { grid-template-columns: minmax(0, 1fr); gap: 24px; }
+.pm-tickets__context-panel .pm-tickets__description { font-size: 13px; line-height: 1.75; }
+.pm-tickets__context-panel .pm-tickets__action-form { margin-top: 24px; padding-top: 20px; }
+.pm-tickets__context-panel .pm-tickets__conversation-area { flex: none !important; min-height: 300px !important; height: auto !important; }
+.pm-tickets__context-panel .pm-tickets__conversation-history { flex: none !important; overflow: visible !important; padding: 16px 0 !important; }
+.pm-tickets__context-panel .pm-tickets__message-content { max-width: 100%; }
+.pm-tickets__context-panel .pm-tickets__message-avatar { display: none; }
+.pm-tickets__context-panel .pm-tickets__message { margin-bottom: 14px; }
+.pm-tickets__context-panel .pm-tickets__composer,
+.pm-tickets__context-panel .pm-tickets__reply-prompt { max-height: none; margin: 12px 0; padding: 12px; border-radius: 12px; }
+.pm-tickets__context-panel .pm-tickets__composer-footer { flex-wrap: wrap; }
+.pm-tickets__context-panel .pm-tickets__context-heading { display: none; }
+.role-chat-navigation-toggle { display: grid; flex: none; width: 36px; height: 36px; place-items: center; border-radius: 8px; color: rgb(var(--ui-text-secondary)); }
+.role-chat-navigation-toggle:hover { background: rgb(var(--ui-raised)); }
+.pm-tickets__navigation > .role-chat-navigation-toggle { align-self: flex-end; margin-bottom: 10px; }
+@media (max-width: 1279px) {
+  .role-chat-context__resize { display: none; }
+  .role-chat-context.is-open { flex-basis: 44px; }
+  .role-chat-context.is-open > .role-chat-context__toggle { display: flex; }
+  .role-chat-context.is-open .role-chat-context__panel { position: fixed; z-index: 60; inset: 12px 12px 12px auto; width: min(360px, calc(100vw - 24px)); height: auto; background: rgb(var(--ui-shell)); border: 1px solid rgb(var(--ui-divider)); border-radius: 14px; box-shadow: -16px 0 48px rgb(var(--ui-overlay) / .24); }
+  .role-chat-context__scrim { display: block; position: fixed; z-index: 59; inset: 0; background: rgb(var(--ui-overlay) / .35); }
+}
+
+/* Fill the host workspace instead of allocating chat a fixed viewport fraction. */
+.client-portal-shell .client-portal-main { width: 100%; max-width: none; padding: 16px 20px 20px; }
+.client-portal-shell .client-portal-body:has(.client-ticket-detail) > .client-portal-page-heading { display: none; }
+.client-portal-shell .client-portal-workspace { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 0; }
+.client-portal-shell .client-request-list { border-radius: 0; border-right: 0; box-shadow: none; background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-request-detail-pane { border-radius: 0; box-shadow: none; }
+.client-portal-shell .client-detail-header { padding: 14px 24px 10px; }
+.client-portal-shell .client-detail-title { font-size: 23px; line-height: 1.3; }
+.client-portal-shell .client-detail-date { display: none; }
+.client-portal-shell .client-detail-status { margin: 0 24px 8px; padding: 12px 16px; }
+.client-portal-shell .client-detail-status.is-collapsed .client-detail-status-copy p,
+.client-portal-shell .client-detail-status.is-collapsed .client-detail-status-eyebrow { display: none; }
+.client-portal-shell .client-detail-tabs { flex: none; }
+.client-portal-shell .client-header-review { min-height: 36px; padding: 6px 10px; border-radius: 8px; color: rgb(var(--ui-link)); font-size: 12px; }
+.client-portal-shell .client-header-review:hover { background: rgb(var(--ui-selected)); }
+.client-portal-shell .client-sidebar-progress { margin: 0; padding: 18px 0; border: 0; border-bottom: 1px solid rgb(var(--ui-divider)); border-radius: 0; background: none; box-shadow: none; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-head { display: flex; align-items: stretch; flex-direction: column; gap: 12px; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-copy { align-items: flex-start; gap: 0; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-icon { display: none; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-copy h2 { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.55; }
+.client-portal-shell .client-sidebar-progress.is-collapsed .client-detail-status-copy p,
+.client-portal-shell .client-sidebar-progress .client-detail-status-copy p { display: block; margin: 8px 0 0; font-size: 12px; line-height: 1.7; color: rgb(var(--ui-text-secondary)); }
+.client-portal-shell .client-sidebar-progress .client-detail-status-eyebrow { display: none; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-toggle { min-height: 36px; padding: 0; border: 0; background: none; font-size: 12px; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-toggle span { display: inline; }
+.client-portal-shell .client-sidebar-progress .client-detail-progress { margin-top: 12px; padding-top: 14px; }
+.client-portal-shell .client-sidebar-progress .client-progress-steps { display: flex; flex-direction: column; gap: 0; }
+.client-portal-shell .client-sidebar-progress .client-progress-step { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 10px; padding-bottom: 18px; flex: none; }
+.client-portal-shell .client-sidebar-progress .client-progress-step:last-child { padding-bottom: 0; }
+.client-portal-shell .client-sidebar-progress .client-progress-node-row { grid-column: 1; grid-row: 1 / span 2; }
+.client-portal-shell .client-sidebar-progress .client-progress-node { width: 22px; height: 22px; font-size: 10px; }
+.client-portal-shell .client-sidebar-progress .client-progress-connector { position: absolute; top: 26px; bottom: 4px; left: 10px; width: 1px; height: auto; margin: 0; }
+.client-portal-shell .client-sidebar-progress .client-progress-label { display: block; margin: 0; font-size: 12px; line-height: 1.6; }
+.client-portal-shell .client-sidebar-progress .client-progress-state { display: block; margin-top: 2px; font-size: 10px; }
+.client-portal-shell .client-sidebar-progress .client-progress-mobile-summary { display: none; }
+.client-portal-shell .client-detail-content.role-chat-layout { flex-direction: row; padding: 0; }
+.client-portal-shell .client-chat-main { display: flex; flex-direction: column; overflow: hidden; }
+.client-portal-shell .client-conversation { border: 0; border-radius: 0; background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-conversation.hidden { display: none; }
+.client-portal-shell .client-conversation-heading { min-height: 52px; border: 0; padding: 12px 28px; }
+.client-portal-shell .client-conversation-feed { gap: 24px; padding: 24px clamp(20px, 3vw, 48px); background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-message { width: 100%; max-width: 800px; margin-inline: auto; }
+.client-portal-shell .client-message-bubble { max-width: 85%; font-size: 14px; line-height: 1.7; }
+.client-portal-shell .client-reply-form { flex: none; padding: 14px 24px 18px; border: 0; }
+.client-portal-shell .client-reply-controls { max-width: 800px; margin-inline: auto; border-radius: 20px; padding: 8px; }
+.client-portal-shell .client-reply-controls textarea { min-height: 44px; max-height: 140px; }
+.client-portal-shell .client-portal-brand img { display: block !important; visibility: visible; flex-shrink: 0; }
+
+.pm-tickets.pm-tickets--ticket-open { grid-template-columns: 250px minmax(0, 1fr); }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__navigation { min-height: 0; overflow: hidden; padding: 22px 12px 0; }
+.pm-tickets__chat-list { min-height: 0; flex: 1; overflow-y: auto; border-top: 1px solid rgb(var(--ui-divider)); margin-top: 24px; padding-top: 16px; }
+.pm-tickets__chat-list > p { margin: 0 12px 12px; font-size: 12px; color: rgb(var(--ui-text-muted)); }
+.pm-tickets__chat-list > button { display: flex; width: 100%; align-items: flex-start; gap: 10px; border-radius: 9px; padding: 14px 12px; margin-bottom: 4px; color: rgb(var(--ui-text-secondary)); text-align: left; }
+.pm-tickets__chat-list > button[aria-current] { background: rgb(var(--ui-selected)); color: rgb(var(--ui-selected-content)); }
+.pm-tickets__chat-list > button:hover { background: rgb(var(--ui-raised)); }
+.pm-tickets__chat-list svg { flex: none; margin-top: 3px; }
+.pm-tickets__chat-list span { min-width: 0; }
+.pm-tickets__chat-list strong { display: block; font-size: 13px; font-weight: 500; overflow-wrap: anywhere; }
+.pm-tickets__chat-list small { display: block; margin-top: 5px; font-size: 11px; color: rgb(var(--ui-text-muted)); }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__header { min-height: 52px; padding: 8px 24px; border-bottom: 1px solid rgb(var(--ui-divider)); }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__detail { overflow: hidden; }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-shell { height: 100%; min-height: 0; max-width: none; padding: 0; overflow: hidden; }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-header { padding: 16px 24px 8px; }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-title { margin: 8px 0; font-size: 24px; }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__ticket-toolbar { min-height: 40px; margin-top: 8px; }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__section-tabs { flex: none; margin: 0; padding-inline: 24px; }
+.pm-tickets__chat-layout.role-chat-layout { display: flex; flex: 1; height: auto; min-height: 0; margin: 0; gap: 0; }
+.pm-tickets__chat-layout.role-chat-layout .pm-tickets__conversation-area { display: flex; height: auto; min-height: 0; flex-direction: column; border: 0; border-radius: 0; background: rgb(var(--ui-shell)); overflow: hidden; }
+.pm-tickets__chat-layout.role-chat-layout .pm-tickets__conversation-history { flex: 1; min-height: 0; padding: 28px clamp(20px, 3vw, 48px); overflow-y: auto; }
+.pm-tickets__chat-layout.role-chat-layout .pm-tickets__context-panel { border: 0; border-radius: 0; padding: 0 22px 24px; background: rgb(var(--ui-shell)); }
+.pm-tickets__chat-layout .pm-tickets__message { width: 100%; max-width: 800px; margin-inline: auto; }
+.pm-tickets__chat-layout .pm-tickets__message-content { max-width: 85%; font-size: 14px; line-height: 1.7; }
+.pm-tickets__context-panel .pm-tickets__ticket-toolbar { min-height: 0; margin: 8px 0 0; }
+.pm-tickets__context-panel .pm-tickets__next-step { display: none; }
+.pm-tickets__context-panel .pm-tickets__detail-actions { width: 100%; align-items: stretch; flex-direction: column; }
+.pm-tickets__context-panel .pm-tickets__detail-actions > button { justify-content: center; min-height: 40px; }
+.pm-tickets__context-panel .pm-tickets__more-actions > summary { justify-content: center; }
+.pm-tickets__context-panel .pm-tickets__action-menu { position: static; width: 100%; margin-top: 8px; box-shadow: none; }
+.pm-tickets__chat-layout .pm-tickets__composer { flex: none; max-height: 45%; overflow-y: auto; margin: 0 24px 18px; border: 1px solid rgb(var(--ui-control)); border-radius: 20px; padding: 14px 18px; background: rgb(var(--ui-raised)); }
+.pm-tickets__chat-layout .pm-tickets__reply-prompt { flex: none; margin: 12px 24px 22px; border: 1px solid rgb(var(--ui-control)); border-radius: 20px; min-height: 60px; padding: 16px 20px; background: rgb(var(--ui-raised)); }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__details-view, .pm-tickets.pm-tickets--ticket-open .pm-tickets__documents-view { min-height: 0; overflow-y: auto; padding: 24px; }
+
+@media (max-width: 767px) {
+  .pm-tickets__compact-filter { margin: 0; }
+  .role-chat-context, .role-chat-context.is-open { flex-basis: 0; width: 0; border: 0; }
+  .role-chat-context__toggle { position: absolute; z-index: 3; top: 4px; right: 4px; width: 36px; min-height: 36px; border: 1px solid rgb(var(--ui-divider)); border-radius: 8px; background: rgb(var(--ui-shell)); }
+  .client-portal-shell .client-portal-workspace { display: flex; }
+  .client-portal-shell .client-portal-main { padding: 10px; }
+  .client-portal-shell .client-detail-header { padding: 12px; }
+  .client-portal-shell .client-detail-status { margin-inline: 12px; padding: 10px; }
+  .client-portal-shell .client-detail-title { font-size: 20px; }
+  .client-portal-shell .client-conversation-heading { padding-inline: 14px; }
+  .client-portal-shell .client-conversation-feed { padding: 18px 12px; gap: 18px; }
+  .client-portal-shell .client-reply-form { padding: 10px; }
+  .client-portal-shell .client-message-bubble { max-width: 90%; }
+  .pm-tickets.pm-tickets--ticket-open { grid-template-columns: minmax(0, 1fr); }
+  .pm-tickets.pm-tickets--ticket-open .pm-tickets__navigation { padding: 8px 12px; }
+  .pm-tickets__chat-list { display: none; }
+  .pm-tickets.pm-tickets--ticket-open .pm-tickets__header { min-height: 44px; padding: 4px 16px; }
+  .pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-header { padding: 12px 16px 4px; }
+  .pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-title { font-size: 20px; }
+  .pm-tickets.pm-tickets--ticket-open .pm-tickets__ticket-toolbar { flex-direction: row; align-items: center; gap: 8px; }
+  .pm-tickets.pm-tickets--ticket-open .pm-tickets__next-step { display: none; }
+  .pm-tickets.pm-tickets--ticket-open .pm-tickets__section-tabs { padding-inline: 16px; gap: 18px; }
+  .pm-tickets__chat-layout.role-chat-layout { flex-direction: row; }
+  .pm-tickets__chat-layout.role-chat-layout .pm-tickets__conversation-area { flex: 1; }
+  .pm-tickets__chat-layout.role-chat-layout .pm-tickets__conversation-history { padding: 18px 12px; }
+  .pm-tickets__chat-layout .pm-tickets__reply-prompt, .pm-tickets__chat-layout .pm-tickets__composer { margin: 10px 12px 14px; }
+}
+@media (min-width: 768px) and (max-width: 1279px) {
+  .client-portal-shell .client-portal-workspace > .client-mobile-hidden { display: flex !important; }
+  .client-portal-shell .client-detail-back { display: none; }
+}
+@media (min-width: 768px) {
+  .client-portal-shell .client-portal-workspace.is-navigation-collapsed { grid-template-columns: 48px minmax(0, 1fr); }
+  .client-portal-shell .client-request-list.is-collapsed > :not(.client-list-header),
+  .client-portal-shell .client-request-list.is-collapsed .client-list-header > :not(.role-chat-navigation-toggle) { display: none; }
+  .client-portal-shell .client-request-list.is-collapsed .client-list-header { justify-content: center; padding-inline: 0; }
+  .pm-tickets.is-navigation-collapsed { grid-template-columns: 48px minmax(0, 1fr); }
+  .pm-tickets.is-navigation-collapsed .pm-tickets__navigation { padding-inline: 6px; }
+  .pm-tickets.is-navigation-collapsed .pm-tickets__navigation > :not(.role-chat-navigation-toggle) { display: none; }
+}
+@media (max-width: 767px) {
+  .role-chat-navigation-toggle { display: none; }
+}

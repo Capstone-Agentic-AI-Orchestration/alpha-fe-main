@@ -23,16 +23,17 @@ describe('client ticket detail', () => {
     expect(html).toContain('Request changes');
   });
 
-  it('still explains the current stage when optional workflow actions are disabled', () => {
+  it.each([false, true])('explains the current stage with disabled workflow actions (read-only preview: %s)', readOnlyPreview => {
     const html = renderToStaticMarkup(<ClientTicketDetail
       workspaceId="workspace-a"
       workflowActionsDisabled
+      readOnlyPreview={readOnlyPreview}
       ticket={{ id: 'ticket-a', reference: 'TKT-1', title: 'Example request', status: 'in_progress',
         createdAt: '2026-10-17T00:00:00Z', updatedAt: '2026-10-17T00:00:00Z', closedAt: null,
         readOnly: false, writesAvailable: true, requestedAction: null, description: 'Request details',
         companyLabel: 'Example Co.', version: 2, sharedProjectName: null, relatedTicket: null,
         scope: null, delivery: null, request: null }}
-      messages={[]} messageCursor={null} historyLoading={false} historyError="" busy={false} error=""
+      messages={[{ id: 'sample-message', author: 'pm', body: 'Fictional project update', createdAt: '2026-10-17T01:00:00Z' }]} messageCursor={null} historyLoading={false} historyError="" busy={false} error=""
       replyResetVersion={0} onBack={() => undefined} onLoadMore={() => undefined}
       onReply={async () => undefined} onDecision={() => undefined} onAdditionalWork={() => undefined}
       onCorrection={async () => undefined}
@@ -42,5 +43,10 @@ describe('client ticket detail', () => {
     expect(html).toContain('Work underway (current step)');
     expect(html).not.toContain('Action needed:');
     expect(html).not.toContain('Agree to proposed work');
+    if (readOnlyPreview) {
+      expect(html).toContain('Fictional project update');
+      expect(html).not.toContain('aria-label="Send reply"');
+      expect(html).not.toContain('id="client-ticket-reply"');
+    }
   });
 });
