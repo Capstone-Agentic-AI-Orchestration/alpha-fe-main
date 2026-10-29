@@ -67,7 +67,11 @@ class RunnerSocketClient {
   }
 
   /**
-   * Subscribe to a specific run stream (via both local WebSocket and Supabase Realtime)
+   * Subscribe to a specific run stream (via both local WebSocket and Supabase Realtime).
+   *
+   * Raw log lines arrive only over the local socket. The cloud channel carries
+   * stage changes, the activity feed and the outcome; the finished run row
+   * brings the full log with it.
    */
   subscribeToRunStream(runId: string) {
     if (!runId || this.activeSupabaseChannels.has(runId)) return;
@@ -78,9 +82,6 @@ class RunnerSocketClient {
       const channel = supabase.channel(`run:${runId}`, { config: { private: true } })
         .on('broadcast', { event: 'stage_update' }, ({ payload }) => {
           this.emit('stage_update', payload);
-        })
-        .on('broadcast', { event: 'log_chunk' }, ({ payload }) => {
-          this.emit('log_chunk', payload);
         })
         .on('broadcast', { event: 'run_activity' }, ({ payload }) => {
           this.emit('run_activity', payload);
