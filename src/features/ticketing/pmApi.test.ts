@@ -6,6 +6,21 @@ import { pmTicketApi } from './pmApi';
 afterEach(() => vi.restoreAllMocks());
 
 describe('PM ticket transport', () => {
+  it('prepares only a client-safe summary through the existing result endpoint', async () => {
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ deliveryId: 'candidate' } as never);
+    const input = { schemaVersion: 1 as const, operationId: 'result-operation', expectedVersion: 5, publicSummary: 'Completed agreed work.' };
+    const controller = new AbortController();
+    await pmTicketApi.prepareResult('ticket/one', input, controller.signal);
+    expect(request).toHaveBeenCalledWith('/tickets/ticket%2Fone/results', {
+      method: 'POST', body: JSON.stringify(input), signal: controller.signal,
+    });
+  });
+  it('propagates result readiness failures without automatically repeating preparation', async () => {
+    const failure = new ApiRequestError(409, 'Work is not ready', 'ticket_conflict');
+    const request = vi.spyOn(apiService, 'ticketRequest').mockRejectedValue(failure);
+    await expect(pmTicketApi.prepareResult('ticket', { schemaVersion: 1, operationId: 'op', expectedVersion: 5, publicSummary: 'Summary' })).rejects.toBe(failure);
+    expect(request).toHaveBeenCalledTimes(1);
+  });
   it('loads handled inquiries and allowlists outcome status without exposing internal notes', async () => {
     const row = { id: 'inquiry-1', publicReference: `INQ-${'A'.repeat(32)}`, fullName: 'Test client', email: 'client@example.test',
       company: null, title: 'Test inquiry', description: 'A request', requestedDeadline: null, submittedAt: '2026-10-24T01:00:00Z',

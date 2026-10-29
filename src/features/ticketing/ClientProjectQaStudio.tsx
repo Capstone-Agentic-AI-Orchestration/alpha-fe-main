@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { RefreshCw } from 'lucide-react';
 import { clientProjectQaApi } from './clientProjectQaApi';
 import { qaError, uncertainQaOperation, type QaResult, type QaRound, type QaRoundPage } from './projectQaApi';
 import { History, Notice, QaPreview, QaEvidence, RoundPicker, StudioPanels, label } from './ProjectQaStudio';
 
-export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspectionOnly,feedback}:{workspaceId:string;projectId:string;projectName:string;inspectionOnly:boolean;feedback:ReactNode}) {
+export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspectionOnly,feedback,refreshToken}:{workspaceId:string;projectId:string;projectName:string;inspectionOnly:boolean;feedback:ReactNode;refreshToken:number}) {
   const [page,setPage]=useState<QaRoundPage|null>(null);const [round,setRound]=useState<QaRound|null>(null);
   const [selected,setSelected]=useState('');const [error,setError]=useState('');const [loading,setLoading]=useState(true);const [busy,setBusy]=useState(false);
   const [refresh,setRefresh]=useState(0);const [confirm,setConfirm]=useState(false);
@@ -15,12 +14,12 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
   const [mobile,setMobile]=useState<'preview'|'review'>('review');
   useEffect(()=>{let active=true;setLoading(true);setError('');setRound(null);
     if(inspectionOnly){setPage({items:[],nextBefore:null});setLoading(false);return;}
-    void clientProjectQaApi.list(workspaceId,projectId).then(value=>{if(active){setPage(value);setSelected(value.items.find(item=>item.status==='published')?.id??value.items[0]?.id??'');}})
+    void clientProjectQaApi.list(workspaceId,projectId).then(value=>{if(active){setPage(value);setSelected(current=>value.items.some(item=>item.id===current)?current:value.items.find(item=>item.status==='published')?.id??value.items[0]?.id??'');}})
       .catch(cause=>{if(active)setError(qaError(cause));}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};
-  },[workspaceId,projectId,refresh,inspectionOnly]);
+  },[workspaceId,projectId,refresh,refreshToken,inspectionOnly]);
   useEffect(()=>{let active=true;setRound(null);setConfirm(false);setDirtyItems({});if(!selected||inspectionOnly)return;
     void clientProjectQaApi.get(workspaceId,projectId,selected).then(value=>{if(active)setRound(value);}).catch(cause=>{if(active)setError(qaError(cause));});return()=>{active=false;};
-  },[workspaceId,projectId,selected,refresh,inspectionOnly]);
+  },[workspaceId,projectId,selected,refresh,refreshToken,inspectionOnly]);
   async function reload(){if(selected)setRound(await clientProjectQaApi.get(workspaceId,projectId,selected));}
   async function older(){if(!page?.nextBefore)return;try{const next=await clientProjectQaApi.list(workspaceId,projectId,page.nextBefore);setPage({items:[...page.items,...next.items],nextBefore:next.nextBefore});}catch(cause){setError(qaError(cause));}}
   const submission=useRef<{roundId:string;input:{operationId:string;expectedVersion:number}}|null>(null);
@@ -32,8 +31,7 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
   const completed=round?.items.filter(item=>item.result.status!=='not_tested').length??0;
   const incomplete=round?.items.some(item=>item.required&&item.result.status==='not_tested');
   return <section className="project-qa-studio pqa-client" aria-label={`${projectName} QA Studio`}>
-    <header className="pqa-heading"><div><h2>QA Studio</h2><span>Test the UAT build reviewed and shared by your project manager.</span></div>
-      <button type="button" disabled={busy||hasUnsaved} onClick={()=>setRefresh(value=>value+1)}><RefreshCw size={14}/> Refresh</button></header>
+    <header className="pqa-heading"><div><h2>QA Studio</h2><span>Test the UAT build reviewed and shared by your project manager.</span></div></header>
     <Notice error={error} onRetry={()=>setRefresh(value=>value+1)}/>
     <RoundPicker disabled={busy||hasUnsaved} page={page} selected={selected} onChange={value=>{setSelected(value);submission.current=null;}} onOlder={()=>void older()}/>
     {loading?<p role="status">Loading your project review…</p>:<>

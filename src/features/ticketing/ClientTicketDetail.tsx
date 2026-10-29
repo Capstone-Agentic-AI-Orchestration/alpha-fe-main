@@ -164,24 +164,39 @@ export function ClientTicketDetail({
       <section role="region" aria-label="Conversation"
         className="flex client-conversation">
         <p className="sr-only">Private messages between you and your project manager</p>
+        <header className="client-conversation-heading">
+          <div className="client-conversation-heading-copy">
+            <span className="client-conversation-heading-icon" aria-hidden="true"><MessageSquare size={15} /></span>
+            <div>
+              <h2>Conversation</h2>
+              <p>Private messages between you and your project manager</p>
+            </div>
+          </div>
+          <span className="client-conversation-signal"><span className="client-conversation-signal-dot" aria-hidden="true" />Private conversation</span>
+        </header>
         {showConversationFeed ? <div ref={scroller} className="client-conversation-feed" aria-label="Messages, oldest first" aria-live="polite">
           {historyError && <p role="alert" className="client-detail-error">{historyError}</p>}
-          {messages.length === 0 ? <p className="client-no-messages">No messages yet. Send a message below if you have a question.</p> : messages.map((message, index) => {
+          {messageCursor && <button onClick={onLoadMore} disabled={historyLoading} className="client-load-messages">{historyLoading ? 'Loading…' : 'Load earlier messages'}</button>}
+          {messages.length === 0 ? <div className="client-no-messages">
+            <span className="client-no-messages-icon" aria-hidden="true"><MessageSquare size={17} /></span>
+            <strong>No messages yet</strong>
+            <p>Send a note below if you have a question or an update.</p>
+          </div> : messages.map((message, index) => {
             const mine = message.author === 'client';
             const newDay = index === 0 || dayKey(message.createdAt) !== dayKey(messages[index - 1].createdAt);
+            const grouped = !newDay && messages[index - 1]?.author === message.author;
             return <Fragment key={message.id}>
               {newDay && <div className="client-message-day"><span>{dayLabel(message.createdAt)}</span></div>}
-              <article className={`client-message ${mine ? 'is-mine' : 'is-theirs'}`}>
+              <article aria-label={`${mine ? 'You' : 'Project Manager'} message at ${clockTime(message.createdAt)}`} className={`client-message ${mine ? 'is-mine' : 'is-theirs'}${grouped ? ' is-grouped' : ''}`}>
                 <span aria-hidden="true" className="client-message-avatar">{mine ? clientInitial : <User size={16} />}</span>
                 <div className="client-message-bubble">
-                  <span className="client-message-author">{mine ? 'You' : 'Project Manager'}</span>
+                  <span className="client-message-author">{grouped ? <span className="sr-only">{mine ? 'You' : 'Project Manager'}</span> : (mine ? 'You' : 'Project Manager')}</span>
                   <p>{message.body}</p>
                   <time dateTime={message.createdAt}>{clockTime(message.createdAt)}</time>
                 </div>
               </article>
             </Fragment>;
           })}
-          {messageCursor && <button onClick={onLoadMore} disabled={historyLoading} className="client-load-messages">{historyLoading ? 'Loading…' : 'Load earlier messages'}</button>}
         </div> : <div className="min-h-0 flex-1 overflow-y-auto p-5">
           <h3 className="text-sm font-medium text-content">About this conversation</h3>
           <p className="mt-2 text-xs leading-relaxed text-content-secondary">The conversation and result review are not available for this request yet. Try again later or contact your project manager.</p>

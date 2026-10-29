@@ -49,6 +49,11 @@ describe('existing navigation compatibility', () => {
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('tickets');
     for (const role of ['client', 'dev', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('tickets');
   });
+  it('places the Operations Center in Administration for workspace admins only', () => {
+    expect(NAV_ITEMS.find(item => item.id === 'operations')).toMatchObject({ title: 'Operations Center', section: 'administration' });
+    expect(sectionsFor('admin').find(group => group.section.id === 'administration')?.items.map(item => item.id)).toContain('operations');
+    for (const role of ['client', 'dev', 'pm'] as const) expect(ROLE_NAV[role]).not.toContain('operations');
+  });
   it('has no squads page; the Orchestrator assigns agents per task', () => {
     expect(NAV_ITEMS.some(item => (item.id as string) === 'squads')).toBe(false);
   });

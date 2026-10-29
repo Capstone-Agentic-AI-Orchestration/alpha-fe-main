@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowRight, Check, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
-  ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket,
+  CircleHelp, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket,
 } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
@@ -13,6 +13,8 @@ import type {
 import { ClientTicketApiError, clientTicketApi } from './clientApi';
 import { ClientCreateTicketForm } from './ClientCreateTicketForm';
 import { ClientTicketDetail } from './ClientTicketDetail';
+import { ClientQuickGuide } from './ClientQuickGuide';
+import { ClientNotificationBell, type ClientPortalUpdate } from './ClientNotificationBell';
 import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientPasswordSignIn } from './ClientPasswordSignIn';
 import { clientTicketProgress } from './clientTicketProgress';
@@ -83,6 +85,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [page, setPage] = useState<Page>('overview');
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
+  const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
+  const [notificationsLoading, setNotificationsLoading] = useState(true);
+  const [notificationsLoaded, setNotificationsLoaded] = useState(false);
+  const [notificationsError, setNotificationsError] = useState('');
   const [filter, setFilter] = useState<NonNullable<Filter>>(() => (typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash)));
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -92,6 +98,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [returnToProjects, setReturnToProjects] = useState(false);
   const [pendingProjectReview, setPendingProjectReview] = useState<PendingProjectReview | null>(null);
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const [quickGuideOpen, setQuickGuideOpen] = useState(false);
+  const [notificationProjectFocus, setNotificationProjectFocus] = useState(0);
   const [detail, setDetail] = useState<TicketDetail | null>(null);
   const [messages, setMessages] = useState<ClientTicketMessage[]>([]);
   const [messageCursor, setMessageCursor] = useState<string | null>(null);
@@ -131,6 +139,25 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     return queue?.items.find(item => item.id === selectedId && item.workspaceId === selectedWorkspaceId)
       ?? (selectedItemFallback?.id === selectedId && selectedItemFallback.workspaceId === selectedWorkspaceId ? selectedItemFallback : null);
   }, [queue, selectedId, selectedWorkspaceId, selectedItemFallback]);
+  const portalUpdates = useMemo<ClientPortalUpdate[]>(() => {
+    const requests: ClientPortalUpdate[] = (notificationRequests ?? []).map(item => ({
+      id: `request:${item.workspaceId}:${item.id}:${item.updatedAt}`,
+      title: item.requestedAction ? 'Action needed' : item.status === 'closed' ? 'Request completed' : 'Request updated',
+      message: `${item.reference} · ${clientTicketProgress(item.status, item.requestedAction).label}`,
+      timestamp: item.updatedAt,
+      target: { kind: 'request', item },
+    }));
+    const projectUpdates: ClientPortalUpdate[] = (projects ?? []).map(item => ({
+      id: `project:${item.workspaceId}:${item.projectId}:${item.updatedAt}`,
+      title: 'Project updated',
+      message: item.name,
+      timestamp: item.updatedAt,
+      target: { kind: 'project', item },
+    }));
+    return [...requests, ...projectUpdates]
+      .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
+      .slice(0, 30);
+  }, [notificationRequests, projects]);
 
   useEffect(() => {
     let current = true;
@@ -151,7 +178,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   function clearExpiredClientSession(): void {
     setSession({ authenticated: false }); setPortalState('signed_out');
-    setProjects(null); setQueue(null); setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null);
+    setProjects(null); setQueue(null); setNotificationRequests(null); setNotificationsLoaded(false); setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null);
     setDetail(null); setMessages([]); setMessageCursor(null); setPending(null);
     setCreateContext(null); setCreateProject(null); setView('portal'); setPage('overview');
     setQueueError(''); setDetailError(''); setHistoryError(''); setWriteError('');
@@ -196,6 +223,29 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       }).finally(() => { if (current) setProjectsLoading(false); });
     return () => { current = false; };
   }, [api, portalState, refreshVersion]);
+
+  useEffect(() => {
+    if (portalState !== 'ready') return;
+    let current = true;
+    let busy = false;
+    const refreshNotifications = async () => {
+      if (!current || busy) return;
+      busy = true;
+      setNotificationsLoading(true);
+      try {
+        const result = await api.listRequests({ limit: 50, filter: 'all' });
+        if (current) { setNotificationRequests(result.items); setNotificationsError(''); }
+      } catch (error) {
+        if (current) setNotificationsError(friendlyError(error, 'queue'));
+      } finally {
+        busy = false;
+        if (current) { setNotificationsLoaded(true); setNotificationsLoading(false); }
+      }
+    };
+    void refreshNotifications();
+    const stop = inspectionOnly ? () => undefined : startClientAutoRefresh(refreshNotifications);
+    return () => { current = false; stop(); };
+  }, [api, portalState, refreshVersion, inspectionOnly]);
 
   useEffect(() => {
     if (portalState !== 'ready') return;
@@ -447,7 +497,19 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   function navigate(nextPage: Page) {
     setPage(nextPage); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
     if (nextPage !== 'requests') { setReturnToProjects(false); setQueueNotice(''); }
+    if (nextPage === 'projects') setSelectedProjectKey(null);
     if (nextPage === 'requests') setRequestListShown(true);
+  }
+
+  function openPortalUpdate(update: ClientPortalUpdate) {
+    if (update.target.kind === 'request') {
+      setFilter('all'); setSearchInput(''); setSearch('');
+      openRequest(update.target.item);
+      return;
+    }
+    setPage('projects'); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
+    setSelectedProjectKey(clientProjectKey(update.target.item));
+    setNotificationProjectFocus(value => value + 1);
   }
 
   if (portalState === 'checking') return <FullPageState title="Checking your sign-in…" />;
@@ -494,17 +556,31 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             </button>
           </div>
         </div>
+        <div className="client-sidebar-help">
+          <button type="button" className="client-sidebar-guide" aria-label="Open client quick guide"
+            title="Client quick guide" onClick={() => setQuickGuideOpen(true)}>
+            <CircleHelp size={17} /><span>Quick guide</span>
+          </button>
+          <span className="client-sidebar-version" aria-label="Client portal version 2.0">2.0<span>v2.0.0</span></span>
+        </div>
       </div>
     </aside>
+    <ClientQuickGuide isOpen={quickGuideOpen} onClose={() => setQuickGuideOpen(false)} onNavigate={page => {
+      setQuickGuideOpen(false);
+      navigate(page);
+    }} />
 
     <div className="client-portal-mainview">
-      {page !== 'requests' && <header className="client-portal-toolbar">
-        <button aria-label="Refresh portal data" title="Refresh portal data"
+      <header className="client-portal-toolbar" aria-label="Client portal actions">
+        <button type="button" aria-label="Refresh portal" title="Refresh portal"
           onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
-          disabled={queueLoading || projectsLoading || Boolean(pending)} className="client-control-button">
-          <RefreshCw size={16} className={queueLoading || projectsLoading ? 'animate-spin' : ''} /><span>Refresh</span>
+          disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
+          <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
         </button>
-      </header>}
+        <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
+          loading={notificationsLoading} error={notificationsError}
+          onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
+      </header>
       <div className="client-portal-main client-portal-main--workspace">
         {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
         {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
@@ -527,7 +603,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           <ClientProjectsPage api={api} projects={projects ?? []} loading={projectsLoading} error={projectsError}
             selectedProjectKey={selectedProjectKey} onSelectedProjectKeyChange={setSelectedProjectKey}
             onOpenRequest={item => openRequest(item, true)} onNewRequest={project => void openCreateForm(project)}
-            inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading} />
+            inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading}
+            projectFocusVersion={notificationProjectFocus} refreshToken={refreshVersion} />
         </>)}
 
         {page === 'requests' && <div className={`client-requests-page ${selectedId ? 'has-selected-request' : ''}`}>
@@ -544,11 +621,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             <aside className={`client-request-list ${navigationCollapsed ? 'is-collapsed' : ''} ${selectedId && !requestListShown ? 'client-mobile-hidden' : ''}`} aria-label="Request list">
               <div className="client-list-header">
                 <div className="client-list-title"><h2>All requests</h2></div>
-                <button type="button" className="client-list-refresh" aria-label="Refresh portal data" title="Refresh portal data"
-                  onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
-                  disabled={queueLoading || projectsLoading || Boolean(pending)}>
-                  <RefreshCw size={16} className={queueLoading || projectsLoading ? 'animate-spin' : ''} />
-                </button>
                 <button type="button" className="role-chat-navigation-toggle" aria-label={navigationCollapsed ? 'Show requests' : 'Collapse requests'} aria-expanded={!navigationCollapsed} onClick={() => setNavigationCollapsed(value => !value)}>{navigationCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
               </div>
               <label className="client-search"><Search size={16} /><span className="sr-only">Search requests</span>

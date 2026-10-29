@@ -54,6 +54,7 @@ import { catchUpBoard, cursorStorageKey } from '@/shared/services/boardSync';
 import type { BoardCursor } from '@/shared/types/boardSync';
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
 import { isDesktop } from '@/shared/desktop';
+import type { OperationsNotification } from '@/shared/types/operations';
 
 function normalizeAnalytics(value: unknown, fallback: AnalyticsData = emptyAnalytics): AnalyticsData {
   if (isLegacyDemoAnalytics(value)) return fallback;
@@ -1215,6 +1216,28 @@ ${e.detail}`;
   useEffect(() => { saveToStorage('skills', skills); }, [skills]);
   useEffect(() => { saveToStorage(workspaceStorageKey('deployments_v2'), deployments); }, [deployments, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('inbox'), inbox); }, [inbox, activeWorkspaceId]);
+  useEffect(() => {
+    if (role !== 'admin' || !activeWorkspaceId || localMode) return;
+    let cancelled = false;
+    const refresh = () => {
+      void apiService.getOperationsNotifications().then((alerts: OperationsNotification[]) => {
+        if (cancelled || !Array.isArray(alerts)) return;
+        setInbox(previous => {
+          const oldById = new Map(previous.map(item => [item.id, item]));
+          const receivedIds = new Set(alerts.map(item => item.id));
+          const mapped: InboxNotification[] = alerts.map(item => ({
+            ...item,
+            audience: 'internal',
+            archived: item.archived ?? oldById.get(item.id)?.archived
+          }));
+          return [...mapped, ...previous.filter(item => item.type !== 'ops_incident' || !receivedIds.has(item.id))];
+        });
+      }).catch(() => undefined);
+    };
+    refresh();
+    const timer = window.setInterval(refresh, 60_000);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [role, activeWorkspaceId, localMode]);
   useEffect(() => { saveToStorage(workspaceStorageKey('analytics_v2'), analytics); }, [analytics, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('settings'), settings); }, [settings, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('chat_threads'), chatThreads); }, [chatThreads, activeWorkspaceId]);
