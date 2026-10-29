@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { FlaskConical } from 'lucide-react';
+import { FlaskConical, Inbox, Ticket as TicketIcon } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
 import { PmTicketsView } from './PmTicketsView';
 import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
@@ -42,13 +42,18 @@ export function PmTicketsPage() {
         {samples ? 'Hide sample data' : 'Show sample data'}
       </button>
     </div>}
-    {!samples && <nav aria-label="Ticket work queues" className="pm-ticket-page__tabs">
-      <button type="button" aria-pressed={section === 'tickets'} onClick={() => setSection('tickets')}
-        className={section === 'tickets' ? 'is-active' : ''}>Tickets</button>
-      <button type="button" aria-pressed={section === 'inquiries'} onClick={() => setSection('inquiries')}
-        className={section === 'inquiries' ? 'is-active' : ''}>Inquiries</button>
+    {!samples && <nav role="tablist" aria-label="Ticket work queues" className="pm-ticket-page__tabs">
+      <button id="pm-ticket-tab" type="button" role="tab" aria-selected={section === 'tickets'} aria-pressed={section === 'tickets'} aria-controls="pm-ticket-panel"
+        onClick={() => setSection('tickets')} className={`pm-ticket-page__tab${section === 'tickets' ? ' is-active' : ''}`}>
+        <TicketIcon size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Tickets</span>
+      </button>
+      <button id="pm-inquiry-tab" type="button" role="tab" aria-selected={section === 'inquiries'} aria-pressed={section === 'inquiries'} aria-controls="pm-inquiry-panel"
+        onClick={() => setSection('inquiries')} className={`pm-ticket-page__tab${section === 'inquiries' ? ' is-active' : ''}`}>
+        <Inbox size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Inquiries</span>
+      </button>
     </nav>}
-    <div className="pm-ticket-page__content">
+    <div id={section === 'inquiries' ? 'pm-inquiry-panel' : 'pm-ticket-panel'} role={samples ? undefined : 'tabpanel'}
+      aria-labelledby={samples ? undefined : section === 'inquiries' ? 'pm-inquiry-tab' : 'pm-ticket-tab'} className="pm-ticket-page__content">
       {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-content-secondary">Loading sample tickets…</p>}><SampleTickets /></Suspense>
         : section === 'inquiries' ? <PmCentralIntakeInbox workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? null}
           workspaceCanReview={activeWorkspace?.role === 'pm'}
