@@ -29,6 +29,7 @@ interface PipelineStripProps {
   onSelectBranch: (branch: string) => void;
   /** Project managers and admins may open promotion pull requests. */
   canPromote: boolean;
+  canPromoteUat?: boolean;
   /** A promotion opened a pull request; the pull request list should reload. */
   onPromoted: () => void;
 }
@@ -46,6 +47,7 @@ export const PipelineStrip: React.FC<PipelineStripProps> = ({
   selectedBranch,
   onSelectBranch,
   canPromote,
+  canPromoteUat = canPromote,
   onPromoted
 }) => {
   const has = (name: string) => branchNames.includes(name);
@@ -77,7 +79,7 @@ export const PipelineStrip: React.FC<PipelineStripProps> = ({
     } catch (err) {
       const { status } = parseApiError(err);
       const message = status === 403
-        ? 'Only a project manager or an admin can promote.'
+        ? step.to === 'main' ? 'Only a project manager or an admin can promote to production.' : 'Your workspace role cannot deliver this project to UAT.'
         : describeRepoError(err);
       setOutcomes(prev => ({ ...prev, [step.from]: { kind: 'error', message } }));
     } finally {
@@ -108,7 +110,7 @@ export const PipelineStrip: React.FC<PipelineStripProps> = ({
                   step={step}
                   compare={compares[step.from]}
                   missing={!has(step.from) ? step.from : !has(step.to) ? step.to : null}
-                  canPromote={canPromote}
+                  canPromote={step.to === 'uat' ? canPromoteUat : canPromote}
                   running={running === step.from}
                   busy={running !== null}
                   outcome={outcomes[step.from]}

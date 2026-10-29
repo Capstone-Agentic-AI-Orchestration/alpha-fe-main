@@ -149,7 +149,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
         hidden={tab !== 'runs'} className={tab === 'runs' ? 'min-h-0 flex-1 overflow-y-auto p-4 sm:p-5 select-text' : 'hidden'}>
         <ProjectActionsView key={`${activeWorkspaceId}|${identity?.login}|${projectId}`} projectId={projectId} repositories={repositories}
           repository={actionsRepo && repositories.includes(actionsRepo) ? actionsRepo : null} active={tab === 'runs' && isActiveTab}
-          canPromote={role === 'pm' || role === 'admin'} />
+          canPromote={role === 'pm' || role === 'admin'} canPromoteUat={role === 'dev' || role === 'pm' || role === 'admin'} />
       </div>}
 
       {tab !== 'overview' && tab!=='qa' && (!repo || repositoryPending) && (

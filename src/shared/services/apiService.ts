@@ -811,6 +811,14 @@ export const apiService = {
     ),
 
   // Skills
+  getOrchestrationDelivery: (projectId: string, runId: string) =>
+    fetchJson<import('../types/delivery').DeliveryResponse>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/delivery`),
+  orchestrationDeliveryAction: (projectId: string, runId: string, action: import('../types/delivery').DeliveryAction, expectedRevision: number, key: string) =>
+    fetchJson<import('../types/delivery').OrchestrationDelivery>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/delivery/actions`,
+      { method: 'POST', body: JSON.stringify({ action, expectedRevision, key }) }),
+
   getSkills: async (): Promise<Skill[]> => {
     const skills = await fetchJson<unknown[]>('/skills');
     return Array.isArray(skills) ? skills.map(normalizeSkill) : [];

@@ -9,11 +9,11 @@ import { ActionsRunDetail, ActionsStatus, PageControls, actionsButton, actionsIn
 import { relativeTime } from './repoFormat';
 import { PipelineStrip } from './PipelineStrip';
 
-interface Props { projectId: string; repositories: string[]; repository: string | null; active: boolean; canPromote: boolean }
+interface Props { projectId: string; repositories: string[]; repository: string | null; active: boolean; canPromote: boolean; canPromoteUat?: boolean }
 const initialFilters: ActionsFilters = {};
 
 /** GitHub executes the workflow; all inspection stays in this project page. */
-export function ProjectActionsView({ projectId, repositories, repository, active, canPromote }: Props) {
+export function ProjectActionsView({ projectId, repositories, repository, active, canPromote, canPromoteUat = canPromote }: Props) {
   const [filters, setFilters] = useState<ActionsFilters>(initialFilters);
   const [draft, setDraft] = useState<ActionsFilters>(initialFilters);
   const [selected, selectRun] = useState<ActionsRun | null>(null);
@@ -28,7 +28,7 @@ export function ProjectActionsView({ projectId, repositories, repository, active
         <p className="mt-1 text-xs text-content-secondary">Inspect workflow runs, jobs, logs, and artifacts here in the project.</p></div>
       <button type="button" className={actionsButton} onClick={() => setRefresh(n => n + 1)}><RefreshCw className="mr-1 inline h-3 w-3" />Refresh history</button>
     </div>
-    {repository && <Promotion projectId={projectId} repo={repository} active={active} canPromote={canPromote} />}
+    {repository && <Promotion projectId={projectId} repo={repository} active={active} canPromote={canPromote} canPromoteUat={canPromoteUat} />}
     <form aria-label="Actions run filters" className="flex flex-wrap items-end gap-3 rounded-xl border border-divider bg-surface/50 p-3" onSubmit={e => { e.preventDefault(); setFilters(draft); }}>
       <label className="min-w-0 flex-1 text-[11px] text-content-secondary">Branch<input className={`${actionsInput} mt-1 block w-full`} placeholder="All branches" value={draft.branch || ''} onChange={e => setDraft(f => ({ ...f, branch: e.target.value.trim() || undefined }))} /></label>
       <label className="text-[11px] text-content-secondary">Status<select aria-label="Run status" className={`${actionsInput} mt-1 block`} value={draft.status || ''} onChange={e => setDraft(f => ({ ...f, status: e.target.value || undefined }))}>
@@ -105,11 +105,11 @@ function RunsPage({ projectId, repo, filters, active, refresh, selected, onSelec
   </div>;
 }
 
-function Promotion({ projectId, repo, active, canPromote }: { projectId: string; repo: string; active: boolean; canPromote: boolean }) {
+function Promotion({ projectId, repo, active, canPromote, canPromoteUat }: { projectId: string; repo: string; active: boolean; canPromote: boolean; canPromoteUat: boolean }) {
   const [branch, setBranch] = useState('dev');
   const branches = useActionsResource<{ branches: RepoBranch[] }>(() => apiService.getRepoBranches(projectId, repo), `${repo}|promotion-branches`, active);
   if (!branches.data) return null;
   return <details className="rounded-lg border border-divider p-3"><summary className="cursor-pointer text-xs text-content-secondary">Branch promotion: dev → uat → main</summary>
-    <div className="mt-3"><PipelineStrip projectId={projectId} repo={repo} branchNames={branches.data.branches.map(b => b.name)} selectedBranch={branch} onSelectBranch={setBranch} canPromote={canPromote} onPromoted={branches.reload} /></div>
+    <div className="mt-3"><PipelineStrip projectId={projectId} repo={repo} branchNames={branches.data.branches.map(b => b.name)} selectedBranch={branch} onSelectBranch={setBranch} canPromote={canPromote} canPromoteUat={canPromoteUat} onPromoted={branches.reload} /></div>
   </details>;
 }
