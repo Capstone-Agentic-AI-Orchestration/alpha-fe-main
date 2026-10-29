@@ -34,7 +34,7 @@ export function PmTicketsPage() {
     });
     return () => { current = false; };
   }, [activeWorkspace?.id]);
-  return <div className="pm-ticket-page">
+  return <div className="pm-ticket-page pm-ticket-page--nested">
     {SampleTickets && <div className="pm-ticket-page__sample">
       <p><FlaskConical size={15} aria-hidden="true" />
         {samples ? 'Sample data — not real tickets. Read-only; no messages, uploads, assignments or agent execution.' : 'Local development · inspect the interface with optional fictional tickets.'}</p>
