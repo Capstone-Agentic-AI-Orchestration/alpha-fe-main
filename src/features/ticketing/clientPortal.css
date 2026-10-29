@@ -347,7 +347,7 @@
 .ticketing-client-preview { display: flex; height: 100dvh; min-height: 0; flex-direction: column; overflow: hidden; }
 .ticketing-client-preview > .client-portal-shell--workspace { height: auto; min-height: 0; flex: 1 1 0%; }
 .client-sidebar { position: relative; z-index: 4; display: flex; width: 80px; min-height: 0; flex-direction: column; overflow: hidden; border-right: 1px solid var(--cp-line); background: rgb(var(--ui-shell)); transition: width .16s ease; }
-.client-sidebar:hover, .client-sidebar:focus-within { width: 272px; box-shadow: 12px 0 32px rgb(var(--ui-overlay) / .24); }
+.client-sidebar:hover, .client-sidebar:focus-within { z-index: 20; width: 272px; box-shadow: 12px 0 32px rgb(var(--ui-overlay) / .24); }
 .client-sidebar-brand { display: flex; min-height: 72px; align-items: center; gap: 11px; padding: 15px 21px; border-bottom: 1px solid var(--cp-line); white-space: nowrap; }
 .client-sidebar-brand img { width: 35px; height: 35px; flex: 0 0 auto; padding: 5px; border-radius: 10px; background: rgb(var(--ui-selected)); object-fit: contain; }
 .client-sidebar-brand div { display: grid; gap: 3px; opacity: 0; transition: opacity .12s ease; }
