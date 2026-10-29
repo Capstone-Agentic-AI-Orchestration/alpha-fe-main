@@ -81,6 +81,15 @@ describe('Canvas palette updates', () => {
     expect(html).toMatch(/aria-current="step"[^>]*>(?:(?!<\/li>).)*Review</);
     expect(html).toContain('Review · waiting for you');
     expect(html).toContain('>Review changes</button>');
+    expect(html).not.toContain('data-resting-wave');
+    expect(html).not.toContain('max-w-3xl');
+  });
+
+  it('rests a wave across the full-width bar only while no build steps are shown', () => {
+    vi.mocked(useTheme).mockReturnValue({ theme: { scene: fixture } } as ReturnType<typeof useTheme>);
+    const html = renderToStaticMarkup(<OrchestratorFlow calls={[]} agents={[]} title="E-Commerce" isWorking={false} />);
+    expect(html).toContain('data-resting-wave');
+    expect(html).not.toContain('aria-label="Build steps"');
   });
 
   it('uses the same status palette in workflow labels and SVG fallback without changing layout', () => {

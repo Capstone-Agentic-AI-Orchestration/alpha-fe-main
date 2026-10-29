@@ -13,6 +13,7 @@ import { supportsWebGL } from './orchestratorSceneLayout';
 import { runningFlowAgentCount } from './flowExecution';
 import { drawCosmoMark } from './cosmoMark2d';
 import { BUILD_STEPS, buildStepFor } from './buildSteps';
+import { RestingWave } from './RestingWave';
 
 // three.js loads only when someone opens the flow, never with the chat itself.
 const OrchestratorScene3D = lazy(() => import('./OrchestratorScene3D'));
@@ -707,8 +708,10 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       </div>}
 
       {!expanded && <div className="relative flex h-14 items-center justify-center">
-        {/* Collapsed: the Orbit pill. Agents at work circle the Orchestrator; the build's steps are stars on its orbit. */}
-        <div className="flex h-12 w-full max-w-3xl items-center gap-3 rounded-full border border-[rgba(var(--scene-ring),0.16)] bg-[rgba(var(--scene-background),0.94)] pl-1.5 pr-2 shadow-[0_10px_32px_rgba(0,0,0,0.45)] backdrop-blur-md">
+        {/* Collapsed: the Orbit pill, as wide as the open panel. Agents at work circle the Orchestrator;
+            the build's steps are stars on its orbit, and with no build a slow wave rests in the middle. */}
+        <div className="relative isolate flex h-12 w-full items-center gap-3 rounded-full border border-[rgba(var(--scene-ring),0.16)] bg-[rgba(var(--scene-background),0.94)] pl-1.5 pr-2 shadow-[0_10px_32px_rgba(0,0,0,0.45)] backdrop-blur-md">
+          {!step && <RestingWave lively={working} colors={{ dot: rgbChannels(palette.wave), crest: rgbChannels(palette.waveActive), star: rgbChannels(palette.labelForeground) }} />}
           <button
             type="button"
             aria-expanded={false}
@@ -731,7 +734,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
             </span>
           </button>
           <span data-agent-execution-count={runningCount} className="sr-only">{runningCount ? runningCount + (runningCount === 1 ? ' agent running' : ' agents running') : 'No agents running'}</span>
-          {step ? <ol aria-label="Build steps" className="hidden min-w-0 flex-1 items-start md:flex">
+          {step ? <ol aria-label="Build steps" className="hidden min-w-0 flex-1 items-start px-4 md:flex lg:px-8">
             {BUILD_STEPS.map((item, index) => {
               const done = index < stepIndex;
               const now = index === stepIndex;
