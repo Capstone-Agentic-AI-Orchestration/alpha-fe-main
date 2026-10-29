@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, FolderKanban, RefreshCw, Send } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FolderKanban, RefreshCw, Send, Plus, X } from 'lucide-react';
 
-import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
+import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectProposal, ClientProjectProposalInput,
+  ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi, ClientTicketApiError } from './clientApi';
 import { clientTicketProgress } from './clientTicketProgress';
 import { time } from './ticketUi';
@@ -64,7 +65,8 @@ export function ClientOverviewPage({ requests, projects, requestsLoading, reques
 }
 
 export function ClientProjectsPage({ api = clientTicketApi, projects, loading, error, selectedProjectKey,
-  onSelectedProjectKeyChange, onOpenRequest, onNewRequest, inspectionOnly, newRequestEnabled, newRequestLoading, projectFocusVersion, refreshToken }: {
+  onSelectedProjectKeyChange, onOpenRequest, onNewRequest, inspectionOnly, newRequestEnabled, newRequestLoading, projectFocusVersion, refreshToken,
+  proposals, proposalsLoading, proposalsError, onRefreshProposals, onProposalSubmitted }: {
   api?: typeof clientTicketApi;
   projects: ClientProject[];
   loading: boolean;
@@ -78,8 +80,22 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   newRequestLoading: boolean;
   projectFocusVersion: number;
   refreshToken: number;
+  proposals: ClientProjectProposal[];
+  proposalsLoading: boolean;
+  proposalsError: string;
+  onRefreshProposals: () => void;
+  onProposalSubmitted: () => void;
 }) {
   const selectedProject = projects.find(project => clientProjectKey(project) === selectedProjectKey) ?? null;
+  const [proposalFormOpen, setProposalFormOpen] = useState(false);
+  const [proposalTitle, setProposalTitle] = useState('');
+  const [proposalDescription, setProposalDescription] = useState('');
+  const [proposalDeadline, setProposalDeadline] = useState('');
+  const [proposalSubmitting, setProposalSubmitting] = useState(false);
+  const [proposalNeedsRetry, setProposalNeedsRetry] = useState(false);
+  const [proposalError, setProposalError] = useState('');
+  const [proposalSuccess, setProposalSuccess] = useState('');
+  const pendingProposal = useRef<ClientProjectProposalInput | null>(null);
   const [tab, setTab] = useState<'overview' | 'preview' | 'requests'>('overview');
   useEffect(() => { setTab('overview'); }, [selectedProjectKey, projectFocusVersion]);
   const [requestPage, setRequestPage] = useState<ClientProjectRequestQueue | null>(null);
@@ -102,6 +118,41 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   const setDraft=(value:string)=>{if(projectKey)setProjectDrafts(current=>({...current,[projectKey]:value}));};
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
+
+  async function submitProposal(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (inspectionOnly || proposalSubmitting) return;
+    const input = pendingProposal.current ?? {
+      schemaVersion: 1 as const,
+      operationId: crypto.randomUUID(),
+      title: proposalTitle.trim(),
+      description: proposalDescription.trim(),
+      requestedDeadline: proposalDeadline || null,
+    };
+    pendingProposal.current = input;
+    setProposalSubmitting(true); setProposalError(''); setProposalSuccess('');
+    try {
+      await api.submitProjectProposal(input);
+      pendingProposal.current = null;
+      setProposalNeedsRetry(false); setProposalFormOpen(false);
+      setProposalTitle(''); setProposalDescription(''); setProposalDeadline('');
+      setProposalSuccess('Proposal sent. Your project manager will review it; it does not create a project automatically.');
+      onProposalSubmitted();
+    } catch (submitError) {
+      if (submitError instanceof ClientTicketApiError && submitError.reconciliationRequired) {
+        setProposalNeedsRetry(true);
+        setProposalError('We could not confirm the result. Retry to safely check this same proposal; do not start another one yet.');
+      } else {
+        pendingProposal.current = null;
+        setProposalNeedsRetry(false);
+        setProposalError(submitError instanceof ClientTicketApiError && submitError.status === 401
+          ? 'Your sign-in expired. Sign in again before sending a proposal.'
+          : submitError instanceof ClientTicketApiError && submitError.status === 503
+            ? 'Project proposals are temporarily unavailable. Try again later.'
+            : 'We could not send the proposal. Check the details and try again.');
+      }
+    } finally { setProposalSubmitting(false); }
+  }
 
   useEffect(() => {
     const timer = window.setTimeout(() => setRequestSearch(requestSearchInput.trim()), 250);
@@ -246,9 +297,46 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   </section>;
 
   return <section className="client-page client-projects-page" aria-labelledby="client-projects-page-title">
-    <header className="client-page-heading"><div><p className="client-eyebrow">CLIENT PORTAL</p><h1 id="client-projects-page-title">Projects</h1>
-      <p className="client-page-description">Projects your project manager has shared with you.</p></div></header>
+    <header className="client-projects-heading"><div><p className="client-eyebrow">CLIENT PORTAL</p><h1 id="client-projects-page-title">Projects</h1>
+      <p className="client-page-description">Projects your project manager has shared with you.</p></div>
+      {!inspectionOnly && <button type="button" className="client-primary-action" aria-expanded={proposalFormOpen} aria-controls={proposalFormOpen ? 'client-proposal-form' : undefined} onClick={() => { setProposalFormOpen(value => !value); setProposalError(''); setProposalSuccess(''); }}>
+        {proposalFormOpen ? <X size={15} /> : <Plus size={15} />}{proposalFormOpen ? 'Close' : 'Propose a project'}
+      </button>}
+    </header>
     {error && <p role="alert" className="client-project-error">{error}</p>}
+    {proposalFormOpen && <form id="client-proposal-form" className="client-proposal-form" onSubmit={submitProposal}>
+      <div><h2>Propose a new project</h2><p>Describe the outcome you want. Your project manager will review it and choose the right workspace.</p></div>
+      <label htmlFor="client-proposal-title">Project title<input id="client-proposal-title" value={proposalTitle} onChange={event => setProposalTitle(event.target.value)} maxLength={160} required disabled={proposalSubmitting || proposalNeedsRetry} /></label>
+      <label htmlFor="client-proposal-description">What would you like to accomplish?<textarea id="client-proposal-description" value={proposalDescription} onChange={event => setProposalDescription(event.target.value)} maxLength={6000} rows={4} required disabled={proposalSubmitting || proposalNeedsRetry} /></label>
+      <label htmlFor="client-proposal-deadline">Target date <span>(optional)</span><input id="client-proposal-deadline" type="date" value={proposalDeadline} onChange={event => setProposalDeadline(event.target.value)} disabled={proposalSubmitting || proposalNeedsRetry} /></label>
+      <p id="client-proposal-note" className="client-proposal-note">Sending this proposal does not create a project or promise a start date. If your PM accepts it, a request will appear here so you can discuss the scope together.</p>
+      {proposalError && <p role="alert" className="client-project-error">{proposalError}</p>}
+      <div className="client-proposal-actions">
+        {!proposalNeedsRetry && <button type="button" className="client-proposal-cancel" disabled={proposalSubmitting} onClick={() => { setProposalFormOpen(false); setProposalError(''); }}>Cancel</button>}
+        <button type="submit" className="client-primary-action" aria-describedby="client-proposal-note" disabled={proposalSubmitting || (!proposalNeedsRetry && (!proposalTitle.trim() || !proposalDescription.trim()))}>
+          <Send size={14} />{proposalSubmitting ? 'Sending…' : proposalNeedsRetry ? 'Retry same proposal' : 'Send proposal'}
+        </button>
+      </div>
+    </form>}
+    {proposalSuccess && <p role="status" className="client-proposal-success">{proposalSuccess}</p>}
+    <section className="client-proposals" aria-labelledby="client-proposals-title">
+      <div className="client-section-heading"><div><h2 id="client-proposals-title">Project proposals</h2>
+        <p>These are proposals for your PM to review, not active projects.</p></div>
+        <button type="button" className="client-icon-action" aria-label="Refresh project proposals" disabled={proposalsLoading} onClick={onRefreshProposals}><RefreshCw size={15} /></button>
+      </div>
+      {proposalsError && <p role="alert" className="client-project-error">{proposalsError} <button type="button" onClick={onRefreshProposals}>Try again</button></p>}
+      {proposalsLoading ? <p role="status" className="client-section-state">Loading project proposals…</p>
+        : proposals.length ? <div className="client-proposal-list">{proposals.map(proposal => <article key={proposal.id} className="client-proposal-row">
+          <div><strong>{proposal.title}</strong><p>{proposal.description}</p><small>Sent {time(proposal.submittedAt)}{proposal.requestedDeadline ? ` · Target ${proposal.requestedDeadline}` : ''}</small>
+            <small className="client-proposal-next">{proposal.status === 'pending'
+              ? 'Your project manager will review this proposal and update you here.'
+              : 'Your project manager decided not to move forward. No project was created.'}</small></div>
+          <span className={`client-proposal-status ${proposal.status === 'pending' ? 'is-pending' : 'is-declined'}`}>
+            {proposal.status === 'pending' ? 'Waiting for PM review' : 'Not moving forward'}
+          </span>
+        </article>)}</div>
+          : !proposalsError && <p className="client-section-state">No project proposals yet.</p>}
+    </section>
     {loading ? <p role="status" className="client-section-state">Loading your projects…</p>
       : projects.length ? <div className="client-project-list">{[...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(project => <button
         key={clientProjectKey(project)} type="button" onClick={() => { onSelectedProjectKeyChange(clientProjectKey(project)); setTab('overview'); }}>

@@ -245,6 +245,7 @@ export const pmPreviewDocumentsApi: TicketDocumentsApi = {
 
 const DEMO_INQUIRIES: PmCentralIntakeItem[] = [
   {
+    kind: 'public_inquiry',
     id: 'preview-inquiry-2041', publicReference: 'INQ-DEMO-2041',
     fullName: 'Jordan Reyes', email: 'jordan.reyes@example.test', company: 'Northstar Demo Co.',
     title: 'Request an inventory overview',
@@ -252,6 +253,7 @@ const DEMO_INQUIRIES: PmCentralIntakeItem[] = [
     requestedDeadline: '2026-11-15', submittedAt: '2026-10-08T09:10:00+08:00', status: 'pending',
   },
   {
+    kind: 'public_inquiry',
     id: 'preview-inquiry-2038', publicReference: 'INQ-DEMO-2038',
     fullName: 'Maya Chen', email: 'maya.chen@example.test', company: 'Northstar Demo Co.',
     title: 'Add a weekly operations summary',

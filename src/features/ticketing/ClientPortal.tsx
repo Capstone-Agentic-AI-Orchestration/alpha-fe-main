@@ -6,7 +6,7 @@ import {
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import type {
-  ClientProject, ClientProjectRequestItem, ClientProjectRequestQueue, ClientSession,
+  ClientProject, ClientProjectProposal, ClientProjectRequestItem, ClientProjectRequestQueue, ClientSession,
   ClientTicketCommandInput, ClientTicketCreateInput, ClientTicketDetail as TicketDetail,
   ClientTicketMessage, ClientTicketReceipt, ClientTicketReplyInput,
 } from './clientApi';
@@ -82,6 +82,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [projects, setProjects] = useState<ClientProject[] | null>(null);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [projectsError, setProjectsError] = useState('');
+  const [projectProposals, setProjectProposals] = useState<ClientProjectProposal[] | null>(null);
+  const [projectProposalsLoading, setProjectProposalsLoading] = useState(false);
+  const [projectProposalsError, setProjectProposalsError] = useState('');
   const [page, setPage] = useState<Page>('overview');
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
@@ -221,6 +224,21 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         if (!current || isExpiredClientSession(error)) return;
         setProjects(null); setProjectsError(friendlyError(error, 'projects'));
       }).finally(() => { if (current) setProjectsLoading(false); });
+    return () => { current = false; };
+  }, [api, portalState, refreshVersion]);
+
+  useEffect(() => {
+    if (portalState !== 'ready') return;
+    let current = true;
+    setProjectProposalsLoading(true); setProjectProposalsError('');
+    void api.listProjectProposals().then(result => { if (current) setProjectProposals(result.items); })
+      .catch(error => {
+        if (!current || isExpiredClientSession(error)) return;
+        setProjectProposals(null);
+        setProjectProposalsError(error instanceof ClientTicketApiError && (error.status === 404 || error.status === 503)
+          ? 'Project proposals are temporarily unavailable. Please try again later.'
+          : 'We could not load your project proposals. Refresh and try again.');
+      }).finally(() => { if (current) setProjectProposalsLoading(false); });
     return () => { current = false; };
   }, [api, portalState, refreshVersion]);
 
@@ -604,7 +622,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             selectedProjectKey={selectedProjectKey} onSelectedProjectKeyChange={setSelectedProjectKey}
             onOpenRequest={item => openRequest(item, true)} onNewRequest={project => void openCreateForm(project)}
             inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading}
-            projectFocusVersion={notificationProjectFocus} refreshToken={refreshVersion} />
+            projectFocusVersion={notificationProjectFocus} refreshToken={refreshVersion}
+            proposals={projectProposals ?? []} proposalsLoading={projectProposalsLoading} proposalsError={projectProposalsError}
+            onRefreshProposals={() => setRefreshVersion(value => value + 1)}
+            onProposalSubmitted={() => setRefreshVersion(value => value + 1)} />
         </>)}
 
         {page === 'requests' && <div className={`client-requests-page ${selectedId ? 'has-selected-request' : ''}`}>

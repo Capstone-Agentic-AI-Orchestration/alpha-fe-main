@@ -24,4 +24,9 @@ describe('fictional client portal preview transport', () => {
       { schemaVersion: 1, operationId: 'preview-only', body: 'This must stay disabled.' }))
       .rejects.toMatchObject({ status: 503 });
   });
+  it('keeps proposals empty in the read-only client preview', async () => {
+    await expect(clientPreviewApi.listProjectProposals()).resolves.toEqual({ items: [] });
+    await expect(clientPreviewApi.submitProjectProposal({ schemaVersion: 1, operationId: '10000000-0000-4000-8000-000000000001',
+      title: 'Disabled', description: 'Preview only', requestedDeadline: null })).rejects.toMatchObject({ status: 503 });
+  });
 });

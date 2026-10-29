@@ -185,6 +185,7 @@ export interface PmTicketProjectLinkReceipt extends PmTicketReceipt {
 export interface PmClientRequestAccessReceipt { ticketId: string; acceptsNewRequests: boolean }
 export interface PmPublicInquiryCode { code: string; submissionEnabled: boolean }
 export interface PmCentralIntakeItem {
+  kind: 'public_inquiry' | 'project_proposal';
   status?: 'pending' | 'accepted' | 'declined';
   handledAt?: string | null;
   outcomeEmailStatus?: 'pending' | 'retry' | 'leased' | 'delivered' | 'dead' | null;
@@ -240,6 +241,9 @@ export const pmTicketApi = {
     const items = page.items.map((value): PmCentralIntakeItem => {
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Shared inquiry response is invalid.');
       const row = value as Record<string, unknown>;
+      if (row.kind !== undefined && row.kind !== 'public_inquiry' && row.kind !== 'project_proposal') {
+        throw new Error('Shared intake item kind is invalid.');
+      }
       if ((row.status !== undefined && !['pending', 'accepted', 'declined'].includes(String(row.status)))
         || (row.handledAt != null && (typeof row.handledAt !== 'string' || !Number.isFinite(Date.parse(row.handledAt))))
         || (row.outcomeEmailStatus != null && !['pending', 'retry', 'leased', 'delivered', 'dead'].includes(String(row.outcomeEmailStatus)))) {
@@ -254,7 +258,8 @@ export const pmTicketApi = {
         || typeof row.submittedAt !== 'string' || !Number.isFinite(Date.parse(row.submittedAt))) {
         throw new Error('Shared inquiry response is invalid.');
       }
-      return { id: row.id, ...(typeof row.publicReference === 'string' ? { publicReference: row.publicReference } : {}), fullName: row.fullName, email: row.email, company: row.company as string | null,
+      return { kind: row.kind === 'project_proposal' ? 'project_proposal' : 'public_inquiry',
+        id: row.id, ...(typeof row.publicReference === 'string' ? { publicReference: row.publicReference } : {}), fullName: row.fullName, email: row.email, company: row.company as string | null,
         title: row.title, description: row.description, requestedDeadline: row.requestedDeadline as string | null,
         submittedAt: row.submittedAt,
         ...(row.status !== undefined ? { status: row.status as PmCentralIntakeItem['status'] } : {}),

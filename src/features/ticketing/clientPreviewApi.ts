@@ -69,6 +69,7 @@ const methods: Partial<typeof clientTicketApi> = {
   async getSession() { return { authenticated: true }; },
   async listWorkspaces() { return { items: [{ workspaceId: workspace, displayName: 'Northstar Demo Co. · fictional samples' }] }; },
   async listProjects() { return { items: [sampleProject] }; },
+  async listProjectProposals() { return { items: [] }; },
   async listRequests(options: ClientTicketQueueOptions = {}) { return requestPage(options); },
   async listProjectRequests(workspaceId: string, projectId: string, options: ClientTicketQueueOptions = {}) {
     assertWorkspace(workspaceId);
