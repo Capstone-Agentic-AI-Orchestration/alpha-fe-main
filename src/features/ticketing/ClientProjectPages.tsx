@@ -64,7 +64,7 @@ export function ClientOverviewPage({ requests, projects, requestsLoading, reques
 }
 
 export function ClientProjectsPage({ api = clientTicketApi, projects, loading, error, selectedProjectKey,
-  onSelectedProjectKeyChange, onOpenRequest, onNewRequest, inspectionOnly, newRequestEnabled, newRequestLoading }: {
+  onSelectedProjectKeyChange, onOpenRequest, onNewRequest, inspectionOnly, newRequestEnabled, newRequestLoading, projectFocusVersion, refreshToken }: {
   api?: typeof clientTicketApi;
   projects: ClientProject[];
   loading: boolean;
@@ -76,9 +76,12 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   inspectionOnly: boolean;
   newRequestEnabled: boolean;
   newRequestLoading: boolean;
+  projectFocusVersion: number;
+  refreshToken: number;
 }) {
   const selectedProject = projects.find(project => clientProjectKey(project) === selectedProjectKey) ?? null;
   const [tab, setTab] = useState<'overview' | 'preview' | 'requests'>('overview');
+  useEffect(() => { setTab('overview'); }, [selectedProjectKey, projectFocusVersion]);
   const [requestPage, setRequestPage] = useState<ClientProjectRequestQueue | null>(null);
   const [requestLoading, setRequestLoading] = useState(false);
   const [requestError, setRequestError] = useState('');
@@ -195,7 +198,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
       <button type="button" className="client-text-action" onClick={() => setTab('requests')}>View project requests <ArrowRight size={15} /></button>
     </div>}
     {tab === 'preview' && <ClientProjectQaStudio key={clientProjectKey(selectedProject)} workspaceId={selectedProject.workspaceId}
-      projectId={selectedProject.projectId} projectName={selectedProject.name} inspectionOnly={inspectionOnly} feedback={
+      projectId={selectedProject.projectId} projectName={selectedProject.name} inspectionOnly={inspectionOnly} refreshToken={refreshToken} feedback={
       <section className="client-feedback" aria-labelledby="client-feedback-title">
         <div className="client-section-heading"><div><h2 id="client-feedback-title">Project conversation</h2>
           <p>Feedback about this project preview, shared with your project manager.</p></div>
