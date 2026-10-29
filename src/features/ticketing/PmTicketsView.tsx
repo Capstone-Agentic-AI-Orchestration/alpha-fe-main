@@ -1002,7 +1002,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                 </form>}
 
               {deliveryAssessmentOpen && workflowActions === 'all' && canAssessTicketDelivery(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form"><PmDeliveryAssessment key={JSON.stringify([detail.id, detail.version, detail.scope?.id])}
-                ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onAssess={assessPreparedDelivery} /></div>}
+                ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onAssess={assessPreparedDelivery} onPrepared={refreshAll} /></div>}
               {deliveryReviewOpen && workflowActions === 'all' && detail.internal.deliveryAssessment && <div className="pm-tickets__action-form"><PmDeliveryReview key={JSON.stringify([detail.id, detail.version, detail.internal.deliveryAssessment.id, detail.internal.deliveryAssessment.pinnedAssetId])}
                 ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onShare={shareAssessedDelivery} /></div>}
               {scopeComposerOpen && <div className="pm-tickets__action-form">
@@ -1050,6 +1050,13 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                     <p className="pm-tickets__context-value">{detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? detail.request?.projectLabel ?? 'No project linked'}</p>
                     <p className="pm-tickets__context-detail">{detail.internal.projectId ? (detail.internal.projectClientVisible ? 'Client-visible project name' : 'PM-only project link') : 'Link a project after scope is agreed.'}</p>
                   </section>
+                  {detail.internal.requiredIssueIds.length > 0 && <section className="pm-tickets__context-section" aria-label="Tasks authorized for this ticket">
+                    <p className="pm-tickets__context-label">Authorized task IDs</p>
+                    <ul className="space-y-1">
+                      {detail.internal.requiredIssueIds.map(issueId => <li key={issueId} className="break-all font-mono text-[11px] text-content-secondary">{issueId}</li>)}
+                    </ul>
+                    <p className="pm-tickets__context-detail">These existing project Tasks are the approved work linked to this ticket.</p>
+                  </section>}
                   <section className="pm-tickets__context-section">
                     <p className="pm-tickets__context-label">Next step</p>
                     <p className="pm-tickets__context-value pm-tickets__context-value--accent"><CircleDot size={14} aria-hidden="true" />{selectedNextStep}</p>

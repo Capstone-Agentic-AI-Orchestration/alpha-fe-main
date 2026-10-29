@@ -155,6 +155,12 @@ export interface PmTicketScopeProposalInput {
 export interface PmTicketScopeProposalReceipt extends PmTicketReceipt {
   scopeVersionId: string;
 }
+export interface PmTicketResultInput {
+  schemaVersion: 1;
+  operationId: string;
+  expectedVersion: number;
+  publicSummary: string;
+}
 export interface PmTicketInvitationReceipt {
   ticketId: string;
   invitationId: string;
@@ -297,6 +303,12 @@ export const pmTicketApi = {
   async getDelivery(ticketId: string, deliveryId: string, signal?: AbortSignal) {
     const value = await apiService.ticketRequest<unknown>(`/tickets/${encodeId(ticketId)}/deliveries/${encodeId(deliveryId)}`, { signal });
     return parseClientDeliveryManifest(value, deliveryId);
+  },
+  prepareResult(ticketId: string, input: PmTicketResultInput, signal?: AbortSignal) {
+    // Do not automatically repeat an uncertain POST. Refresh candidates before retrying.
+    return apiService.ticketRequest<unknown>(`/tickets/${encodeId(ticketId)}/results`, {
+      method: 'POST', body: JSON.stringify(input), signal,
+    });
   },
   async getDeliveryCandidates(ticketId: string, after: string | null = null, signal?: AbortSignal) {
     return parsePmDeliveryCandidates(await apiService.ticketRequest<unknown>(
