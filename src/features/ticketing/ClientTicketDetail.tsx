@@ -163,17 +163,6 @@ export function ClientTicketDetail({
       <div className="client-chat-main">
       <section role="region" aria-label="Conversation"
         className="flex client-conversation">
-        <p className="sr-only">Private messages between you and your project manager</p>
-        <header className="client-conversation-heading">
-          <div className="client-conversation-heading-copy">
-            <span className="client-conversation-heading-icon" aria-hidden="true"><MessageSquare size={15} /></span>
-            <div>
-              <h2>Conversation</h2>
-              <p>Private messages between you and your project manager</p>
-            </div>
-          </div>
-          <span className="client-conversation-signal"><span className="client-conversation-signal-dot" aria-hidden="true" />Private conversation</span>
-        </header>
         {showConversationFeed ? <div ref={scroller} className="client-conversation-feed" aria-label="Messages, oldest first" aria-live="polite">
           {historyError && <p role="alert" className="client-detail-error">{historyError}</p>}
           {messageCursor && <button onClick={onLoadMore} disabled={historyLoading} className="client-load-messages">{historyLoading ? 'Loading…' : 'Load earlier messages'}</button>}
@@ -210,7 +199,7 @@ export function ClientTicketDetail({
             <button type="submit" aria-label="Send reply" disabled={busy || !body.trim()} className="client-send-reply"><Send size={15} /><span>Send</span></button>
           </div>
           <p className="client-reply-note">Only you and your project manager can see this. Enter sends · Shift + Enter starts a new line.</p>
-        </form> : <p className="shrink-0 border-t border-divider px-4 py-3 text-center text-xs text-content-secondary">{terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.'}</p>)}
+        </form> : <div className="client-reply-form"><p className="client-reply-note">{terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.'} Only you and your project manager can see this.</p></div>)}
       </section>
 
 

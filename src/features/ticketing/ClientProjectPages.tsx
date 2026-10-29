@@ -185,7 +185,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     </header>
     <div className="client-project-tabs" role="tablist" aria-label="Project sections">
       {(['overview', 'preview', 'requests'] as const).map(value => <button key={value} type="button" role="tab"
-        aria-selected={tab === value} onClick={() => setTab(value)}>{value === 'preview' ? 'QA Studio' : value[0].toUpperCase() + value.slice(1)}</button>)}
+        aria-selected={tab === value} onClick={() => setTab(value)}>{value === 'preview' ? 'Project Review' : value[0].toUpperCase() + value.slice(1)}</button>)}
     </div>
     {tab === 'overview' && <div className="client-project-overview">
       <div><p className="client-eyebrow">SHARED WITH YOU</p><h2>{selectedProject.name}</h2>

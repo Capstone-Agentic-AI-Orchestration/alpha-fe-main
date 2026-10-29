@@ -67,11 +67,13 @@
 
 /* Fill the host workspace instead of allocating chat a fixed viewport fraction. */
 .client-portal-shell .client-portal-main { width: 100%; max-width: none; padding: 16px 20px 20px; }
-.client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace { padding-top: 10px; padding-bottom: 12px; }
+.client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace { padding: 0; overflow: hidden; }
 .client-portal-shell .client-requests-page.has-selected-request > .client-portal-page-heading { display: none; }
 .client-portal-shell .client-portal-workspace { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 0; }
-.client-portal-shell .client-request-list { border-radius: 0; border-right: 0; box-shadow: none; background: rgb(var(--ui-shell)); }
-.client-portal-shell .client-request-detail-pane { border-radius: 0; box-shadow: none; }
+.client-portal-shell .client-request-list { border: 0; border-right: 1px solid rgb(var(--ui-divider)); border-radius: 0; box-shadow: none; background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-request-detail-pane { border: 0; border-radius: 0; box-shadow: none; background: rgb(var(--ui-canvas)); }
+.client-portal-shell--chat-open .client-request-detail-pane { overflow: hidden; }
+.client-portal-shell--chat-open .client-ticket-detail { min-height: 0; }
 .client-portal-shell .client-detail-header { padding: 9px 18px 7px; border-bottom: 1px solid rgb(var(--ui-divider)); }
 .client-portal-shell .client-detail-title-row { align-items: center; gap: 12px; }
 .client-portal-shell .client-detail-title { font-size: 18px; font-weight: 650; letter-spacing: -.02em; line-height: 1.25; }
@@ -107,19 +109,16 @@
 .client-portal-shell .client-sidebar-progress .client-progress-label { display: block; margin: 0; font-size: 12px; line-height: 1.6; }
 .client-portal-shell .client-sidebar-progress .client-progress-state { display: block; margin-top: 2px; font-size: 10px; }
 .client-portal-shell .client-sidebar-progress .client-progress-mobile-summary { display: none; }
-.client-portal-shell .client-detail-content.role-chat-layout { width: 100%; min-width: 0; align-self: stretch; flex-direction: row; padding: 0; }
-.client-portal-shell .client-chat-main { display: flex; min-width: 0; min-height: 0; flex: 1 1 0%; flex-direction: column; overflow: hidden; }
-.client-portal-shell .client-conversation { width: 100%; min-width: 0; border: 0; border-radius: 0; background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-detail-content.role-chat-layout { width: 100%; min-width: 0; min-height: 0; flex: 1; align-self: stretch; flex-direction: row; padding: 0; background: rgb(var(--ui-canvas)); }
+.client-portal-shell .client-chat-main { display: flex; min-width: 0; min-height: 0; flex: 1 1 0%; flex-direction: column; overflow: hidden; background: rgb(var(--ui-canvas)); }
+.client-portal-shell .client-conversation { width: 100%; min-width: 0; min-height: 0; border: 0; border-radius: 0; background: rgb(var(--ui-canvas)); }
 .client-portal-shell .client-conversation.hidden { display: none; }
-.client-portal-shell .client-conversation-heading { min-height: 52px; border: 0; padding: 12px 28px; }
-.client-portal-shell .client-conversation-feed { min-width: 0; gap: 16px; padding: 20px clamp(16px, 2vw, 32px); background: rgb(var(--ui-shell)); }
+
 .client-portal-shell .client-message { width: 100%; max-width: none; min-width: 0; align-self: stretch; margin: 0; }
 .client-portal-shell .client-message.is-theirs, .client-portal-shell .client-message.is-mine { justify-content: flex-start; }
 .client-portal-shell .client-message-bubble { width: fit-content; min-width: min(144px, calc(100% - 42px)); max-width: min(560px, calc(100% - 42px)); box-sizing: border-box; padding: 8px 13px 6px; font-size: 13px; line-height: 1.55; }
 .client-portal-shell .client-message-bubble p { margin: 3px 0 4px; font-size: 12px; line-height: 1.5; }
 .client-portal-shell .client-message-author, .client-portal-shell .client-message-bubble time { font-size: 9px; }
-.client-portal-shell .client-reply-form { min-width: 0; flex: none; padding: 14px 24px 18px; border: 0; }
-.client-portal-shell .client-reply-controls { width: 100%; min-width: 0; max-width: 800px; box-sizing: border-box; margin-inline: auto; border-radius: 20px; padding: 8px; }
 .client-portal-shell .client-reply-controls textarea { width: 0; min-width: 0; max-width: 100%; flex: 1 1 0%; box-sizing: border-box; min-height: 44px; max-height: 140px; }
 .client-portal-shell .client-portal-brand img { display: block !important; visibility: visible; flex-shrink: 0; }
 
@@ -166,7 +165,7 @@
   .client-portal-shell .client-detail-header { padding: 8px 12px; }
   .client-portal-shell .client-detail-status { margin-inline: 12px; padding: 10px; }
   .client-portal-shell .client-detail-title { font-size: 17px; }
-  .client-portal-shell .client-conversation-heading { padding-inline: 14px; }
+
   .client-portal-shell .client-conversation-feed { padding: 18px 12px; gap: 18px; }
   .client-portal-shell .client-reply-form { padding: 10px; }
   .client-portal-shell .client-message-bubble { max-width: 90%; }
@@ -221,36 +220,9 @@
 .pm-tickets__context-panel .pm-tickets__composer-buttons { min-width: 0; max-width: 100%; flex-wrap: wrap; }
 
 /* Client request chat: keep the conversation calm, readable, and primary. */
-.client-portal-shell .client-detail-content.role-chat-layout { background: rgb(var(--ui-canvas)); }
-.client-portal-shell .client-chat-main { border-right: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-canvas)); }
-.client-portal-shell .client-conversation-heading {
-  display: flex;
-  min-height: 64px;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 12px clamp(18px, 3.5vw, 48px);
-  border-bottom: 1px solid rgb(var(--ui-divider));
-  background: rgb(var(--ui-shell));
-}
-.client-portal-shell .client-conversation-heading-copy { display: flex; min-width: 0; align-items: center; gap: 10px; }
-.client-portal-shell .client-conversation-heading-icon {
-  display: grid;
-  width: 31px;
-  height: 31px;
-  flex: 0 0 auto;
-  place-items: center;
-  border: 1px solid rgb(var(--ui-accent) / .28);
-  border-radius: 9px;
-  background: rgb(var(--ui-selected));
-  color: rgb(var(--ui-link));
-}
-.client-portal-shell .client-conversation-heading h2 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 13px; font-weight: 700; letter-spacing: -.01em; }
-.client-portal-shell .client-conversation-heading p { margin: 3px 0 0; color: rgb(var(--ui-text-secondary)); font-size: 11px; line-height: 1.4; }
-.client-portal-shell .client-conversation-signal { display: inline-flex; flex: 0 0 auto; align-items: center; gap: 7px; color: rgb(var(--ui-text-muted)); font-size: 10px; white-space: nowrap; }
-.client-portal-shell .client-conversation-signal-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: rgb(var(--ui-success)); box-shadow: 0 0 0 3px rgb(var(--ui-success) / .12); }
+
 .client-portal-shell .client-conversation-feed {
+  min-width: 0;
   gap: 10px;
   padding: 24px clamp(18px, 3.5vw, 48px) 30px;
   background: rgb(var(--ui-canvas));
@@ -294,8 +266,8 @@
 .client-portal-shell .client-no-messages-icon { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid rgb(var(--ui-divider)); border-radius: 11px; background: rgb(var(--ui-shell)); color: rgb(var(--ui-link)); }
 .client-portal-shell .client-no-messages strong { color: rgb(var(--ui-text-primary)); font-size: 13px; }
 .client-portal-shell .client-no-messages p { margin: 0; color: rgb(var(--ui-text-secondary)); font-size: 11px; line-height: 1.55; }
-.client-portal-shell .client-reply-form { padding: 12px clamp(18px, 3.5vw, 48px) 16px; border-top: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-shell)); }
-.client-portal-shell .client-reply-controls { max-width: 820px; margin-inline: auto; gap: 6px; padding: 6px; border: 1px solid rgb(var(--ui-control)); border-radius: 15px; background: rgb(var(--ui-surface)); box-shadow: 0 7px 22px rgb(var(--ui-overlay) / .10); }
+.client-portal-shell .client-reply-form { min-width: 0; flex: none; padding: 12px clamp(18px, 3.5vw, 48px) 16px; border: 0; background: rgb(var(--ui-canvas)); }
+.client-portal-shell .client-reply-controls { width: 100%; min-width: 0; box-sizing: border-box; max-width: 820px; margin-inline: auto; gap: 6px; padding: 6px; border: 1px solid rgb(var(--ui-control)); border-radius: 15px; background: rgb(var(--ui-surface)); box-shadow: 0 7px 22px rgb(var(--ui-overlay) / .10); }
 .client-portal-shell .client-reply-controls:focus-within { border-color: rgb(var(--ui-focus)); box-shadow: 0 0 0 3px rgb(var(--ui-focus) / .16), 0 7px 22px rgb(var(--ui-overlay) / .10); }
 .client-portal-shell .client-reply-controls textarea { min-height: 44px; padding: 11px 10px; border: 0; border-radius: 9px; background: transparent; font-size: 13px; }
 .client-portal-shell .client-reply-controls textarea:focus { border-color: transparent; box-shadow: none; outline: 0; }
@@ -308,11 +280,7 @@
 .client-portal-shell .role-chat-context__header { position: sticky; top: 0; z-index: 1; background: rgb(var(--ui-shell)); }
 
 @media (max-width: 767px) {
-  .client-portal-shell .client-chat-main { border-right: 0; }
-  .client-portal-shell .client-conversation-heading { min-height: 58px; gap: 10px; padding: 10px 12px; }
-  .client-portal-shell .client-conversation-heading-icon { width: 29px; height: 29px; }
-  .client-portal-shell .client-conversation-heading p { font-size: 10px; }
-  .client-portal-shell .client-conversation-signal { display: none; }
+
   .client-portal-shell .client-conversation-feed { gap: 9px; padding: 18px 12px 22px; }
   .client-portal-shell .client-message { width: 100%; gap: 7px; }
   .client-portal-shell .client-message-bubble { max-width: calc(100% - 37px); min-width: min(120px, calc(100% - 37px)); padding: 10px 12px 8px; }

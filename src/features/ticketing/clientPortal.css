@@ -188,10 +188,6 @@
 :where(.client-portal-shell) .client-detail-tab.is-active { border-bottom-color: rgb(var(--ui-accent)); color: rgb(var(--ui-selected-content)); }
 :where(.client-portal-shell) .client-detail-content { display: flex; min-height: 0; flex: 1; flex-direction: column; padding: 16px 20px 20px; }
 :where(.client-portal-shell) .client-conversation { min-width: 0; min-height: 0; flex: 1; flex-direction: column; overflow: hidden; border: 1px solid rgb(var(--ui-divider)); border-radius: 14px; background: rgb(var(--ui-surface)); }
-:where(.client-portal-shell) .client-conversation-heading { display: flex; min-height: 62px; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid rgb(var(--ui-divider)); }
-:where(.client-portal-shell) .client-conversation-heading h2 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 13px; font-weight: 700; }
-:where(.client-portal-shell) .client-conversation-heading p { margin: 4px 0 0; color: rgb(var(--ui-text-secondary)); font-size: 11px; }
-:where(.client-portal-shell) .client-conversation-heading > span { color: rgb(var(--ui-text-secondary)); font-size: 9px; white-space: nowrap; }
 :where(.client-portal-shell) .client-conversation-feed { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 20px; overflow-y: auto; overscroll-behavior: contain; padding: 22px clamp(18px, 3.2vw, 42px); background: rgb(var(--ui-well)); }
 :where(.client-portal-shell) .client-message-day { display: flex; justify-content: center; padding: 2px 0; }
 :where(.client-portal-shell) .client-message-day span { padding: 4px 9px; border: 1px solid rgb(var(--ui-divider)); border-radius: 999px; background: rgb(var(--ui-surface)); color: rgb(var(--ui-text-secondary)); font-size: 9px; }
@@ -317,8 +313,6 @@
   :where(.client-portal-shell) .client-detail-tabs { min-height: 44px; margin-top: 7px; padding-inline: 10px; }
   :where(.client-portal-shell) .client-detail-tab { min-height: 42px; padding-inline: 9px; font-size: 10px; }
   :where(.client-portal-shell) .client-detail-content { padding: 8px; }
-  :where(.client-portal-shell) .client-conversation-heading { min-height: 54px; padding: 9px 11px; }
-  :where(.client-portal-shell) .client-conversation-heading > span { display: none; }
   :where(.client-portal-shell) .client-conversation-feed { gap: 14px; padding: 16px 12px; }
   :where(.client-portal-shell) .client-message { max-width: 94%; gap: 6px; }
   :where(.client-portal-shell) .client-message-avatar { width: 25px; height: 25px; }
