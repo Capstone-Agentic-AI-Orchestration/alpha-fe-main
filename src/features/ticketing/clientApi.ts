@@ -31,6 +31,22 @@ export interface ClientProject {
   intakeOptionId: string;
   preview: ClientProjectPreview | null;
 }
+export interface ClientProjectProposal {
+  id: string;
+  title: string;
+  description: string;
+  requestedDeadline: string | null;
+  submittedAt: string;
+  status: 'pending' | 'declined';
+}
+export interface ClientProjectProposalInput {
+  schemaVersion: 1;
+  operationId: string;
+  title: string;
+  description: string;
+  requestedDeadline: string | null;
+}
+export interface ClientProjectProposalReceipt { id: string }
 export interface ClientTicketIntakeContext {
   intakeContextId: string;
   canCreate: boolean;
@@ -287,6 +303,40 @@ export const clientTicketApi = {
         intakeOptionId: row.intakeOptionId, preview: preview as ClientProjectPreview | null };
     });
     return { items };
+  },
+  async listProjectProposals(): Promise<{ items: ClientProjectProposal[] }> {
+    const value = await requestJson<unknown>('/project-proposals');
+    if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray((value as Record<string, unknown>).items)) {
+      throw new ClientTicketApiError(null, 'Your project proposals could not be read. Reload the portal and try again.');
+    }
+    const items = ((value as { items: unknown[] }).items).map((raw): ClientProjectProposal => {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        throw new ClientTicketApiError(null, 'Your project proposals could not be read. Reload the portal and try again.');
+      }
+      const row = raw as Record<string, unknown>;
+      if (typeof row.id !== 'string' || !row.id.trim()
+        || typeof row.title !== 'string' || !row.title.trim()
+        || typeof row.description !== 'string' || !row.description.trim()
+        || (row.requestedDeadline !== null && (typeof row.requestedDeadline !== 'string'
+          || !/^\d{4}-\d{2}-\d{2}$/.test(row.requestedDeadline)))
+        || typeof row.submittedAt !== 'string' || !Number.isFinite(Date.parse(row.submittedAt))
+        || (row.status !== 'pending' && row.status !== 'declined')) {
+        throw new ClientTicketApiError(null, 'Your project proposals could not be read. Reload the portal and try again.');
+      }
+      return { id: row.id, title: row.title, description: row.description,
+        requestedDeadline: row.requestedDeadline as string | null, submittedAt: row.submittedAt,
+        status: row.status };
+    });
+    return { items };
+  },
+  async submitProjectProposal(input: ClientProjectProposalInput): Promise<ClientProjectProposalReceipt> {
+    const value = await requestJson<unknown>('/project-proposals', { method: 'POST', body: JSON.stringify(input) });
+    const proposalId = value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>).id : null;
+    if (typeof proposalId !== 'string' || !proposalId.trim()) {
+      throw new ClientTicketApiError(null, 'The proposal response could not be read. Refresh your proposals before retrying.');
+    }
+    return { id: proposalId };
   },
   listRequests(options: ClientTicketQueueOptions = {}) {
     return requestJson<ClientProjectRequestQueue>(`/requests${pageQuery(options)}`);

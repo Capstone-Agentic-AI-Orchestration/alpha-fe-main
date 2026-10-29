@@ -11,6 +11,7 @@ import { ApiRequestError } from '@/shared/services/apiService';
 import { activationFailureMessage, activationLink, scrubbedActivationUrl } from './ClientActivationUnavailable';
 import { ClientTicketApiError } from './clientApi';
 import { ClientPasswordSignIn } from './ClientPasswordSignIn';
+import { ClientProjectsPage } from './ClientProjectPages';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -102,11 +103,30 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).not.toContain('Create developer');
   });
 
-  it('shows PMs that accepting creates a ticket only in the selected workspace', () => {
+  it('shows the shared PM intake routing destination and purpose', () => {
     const html = renderToStaticMarkup(<PmCentralIntakeInbox workspaceId="workspace-a" workspaceName="Workspace A" workspaceCanReview onAccepted={() => undefined} />);
-    expect(html).toContain('One shared intake queue for Alpha');
+    expect(html).toContain('Review new client inquiries and project proposals');
     expect(html).toContain('Accept destination:');
     expect(html).toContain('Workspace A');
+  });
+
+  it('keeps client project proposals separate from projects and explains their next step', () => {
+    const html = renderToStaticMarkup(<ClientProjectsPage
+      projects={[]} loading={false} error="" selectedProjectKey={null}
+      onSelectedProjectKeyChange={() => undefined} onOpenRequest={() => undefined} onNewRequest={() => undefined}
+      inspectionOnly={false} newRequestEnabled={false} newRequestLoading={false} projectFocusVersion={0} refreshToken={0}
+      proposals={[
+        { id: 'proposal-pending', title: 'Client portal refresh', description: 'A simpler project space', requestedDeadline: null, submittedAt: '2026-10-29T10:00:00.000Z', status: 'pending' },
+        { id: 'proposal-declined', title: 'Archived data export', description: 'An older reporting request', requestedDeadline: '2026-12-01', submittedAt: '2026-10-28T10:00:00.000Z', status: 'declined' },
+      ]}
+      proposalsLoading={false} proposalsError="" onRefreshProposals={() => undefined} onProposalSubmitted={() => undefined}
+    />);
+    expect(html).toContain('Propose a project');
+    expect(html).toContain('Waiting for PM review');
+    expect(html).toContain('Not moving forward');
+    expect(html).toContain('Your project manager decided not to move forward. No project was created.');
+    expect(html.indexOf('Project proposals')).toBeLessThan(html.indexOf('No projects shared yet'));
+    expect(html).not.toContain('decline note');
   });
 
   it('checks the real inquiry link before enabling its form and preserves context on return', () => {
