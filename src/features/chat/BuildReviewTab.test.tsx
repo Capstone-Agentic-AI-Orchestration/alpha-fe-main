@@ -11,7 +11,7 @@ const render = (status: ProjectLiveBuild['status'], allowed = true) => renderToS
 describe('build review tab', () => {
   it('keeps the plan readable and directs approval to main chat', () => {
     const html = render('awaiting_plan_approval');
-    expect(html).toContain('reply start in the main chat');
+    expect(html).toContain('You can use your own words');
     expect(html).not.toContain('<input');
     expect(html).not.toContain('<form');
     expect(html).not.toContain('Approve and open the pull request');
@@ -19,7 +19,7 @@ describe('build review tab', () => {
   it('explains publication permissions instead of showing a disabled approval choice', () => {
     const html = render('awaiting_approval', false);
     expect(html).toContain('A project manager or admin must approve publication.');
-    expect(html).toContain('reply approve in the main chat');
+    expect(html).toContain('authorize pushing this revision');
     expect(html).not.toContain('<input');
     expect(html).not.toContain('Open the full review');
   });

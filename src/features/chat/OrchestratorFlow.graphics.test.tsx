@@ -72,6 +72,26 @@ describe('Canvas palette updates', () => {
     expect(html).toContain(`--scene-background:${rgbChannels(fixture.background)}`);
   });
 
+  it('shows the build steps as stars on the collapsed bar, with the next action', () => {
+    vi.mocked(useTheme).mockReturnValue({ theme: { scene: fixture } } as ReturnType<typeof useTheme>);
+    const html = renderToStaticMarkup(<OrchestratorFlow calls={[]} agents={[]} title="E-Commerce" isWorking={false}
+      build={{ runId: 'run', label: 'Ready for your review', running: false, status: 'awaiting_approval', agents: [] }}
+      action={{ label: 'Review changes', onClick: vi.fn() }} />);
+    expect(html).toContain('aria-label="Build steps"');
+    expect(html).toMatch(/aria-current="step"[^>]*>(?:(?!<\/li>).)*Review</);
+    expect(html).toContain('Review · waiting for you');
+    expect(html).toContain('>Review changes</button>');
+    expect(html).not.toContain('data-resting-wave');
+    expect(html).not.toContain('max-w-3xl');
+  });
+
+  it('rests a wave across the full-width bar only while no build steps are shown', () => {
+    vi.mocked(useTheme).mockReturnValue({ theme: { scene: fixture } } as ReturnType<typeof useTheme>);
+    const html = renderToStaticMarkup(<OrchestratorFlow calls={[]} agents={[]} title="E-Commerce" isWorking={false} />);
+    expect(html).toContain('data-resting-wave');
+    expect(html).not.toContain('aria-label="Build steps"');
+  });
+
   it('uses the same status palette in workflow labels and SVG fallback without changing layout', () => {
     const cards: LiveBuildRoomAgentCard[] = ['completed', 'failed'].map((status, index) => ({
       executionId: `run:${index}`, runId: `${index}`, agentId: `agent:${index}`, agentName: `Specialist ${index}`,

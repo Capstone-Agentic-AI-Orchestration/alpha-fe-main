@@ -12,6 +12,8 @@ import type { SceneAgent, SceneLink } from './OrchestratorScene3D';
 import { supportsWebGL } from './orchestratorSceneLayout';
 import { runningFlowAgentCount } from './flowExecution';
 import { drawCosmoMark } from './cosmoMark2d';
+import { BUILD_STEPS, buildStepFor } from './buildSteps';
+import { RestingWave } from './RestingWave';
 
 // three.js loads only when someone opens the flow, never with the chat itself.
 const OrchestratorScene3D = lazy(() => import('./OrchestratorScene3D'));
@@ -52,6 +54,8 @@ interface OrchestratorFlowProps {
   runtimes?: RuntimeEngine[];
   canEditAgents?: boolean;
   onUpdateAgent?: (id: string, updates: Partial<Agent>) => void;
+  /** The one thing the person can do next (for example, review the changes), shown on the collapsed bar. */
+  action?: { label: string; onClick: () => void } | null;
 }
 
 interface WaveAgent {
@@ -73,17 +77,13 @@ interface WaveState {
   hubId: string;
   flashRgb: string | null;
   flashAmount: number;
-  /** 0 shows the Orchestrator as a sphere, 1 as the Cosmo galaxy (while agents work). */
-  morph?: number;
 }
 
 /**
- * The collapsed bar shows the Orchestrator itself (a sphere at rest, the galaxy
- * during handoffs) in place of the dot wave. Set to false to bring the wave back.
+ * The collapsed bar shows the Orchestrator sphere in place of the dot wave.
+ * Set to false to bring the wave back.
  */
 const COLLAPSED_SHOWS_ORCHESTRATOR = true;
-/** Seconds for the 2D mark to change between sphere and galaxy, matching the 3D view. */
-const MORPH_SECONDS = 2.2;
 
 interface NodePosition {
   id: string;
@@ -253,12 +253,11 @@ export function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: n
   ctx.clearRect(0, 0, width, height);
 
   const { palette, expanded, working, agents, hoveredId, selectedId, hubId, flashRgb, flashAmount } = state;
-  const morph = state.morph ?? 0;
   if (!expanded && COLLAPSED_SHOWS_ORCHESTRATOR) {
     // Collapsed: only the Orchestrator, centred. Fewer, distinct dots snapped to
     // device pixels keep a mark this small sharp.
     const radius = height * 0.46;
-    drawCosmoMark(ctx, width / 2, height / 2, radius, morph, seconds, rgbChannels(palette.highlight), { pixelRatio: dpr, dot: 0.5, sphereScale: 0.72, intensity: 1.2 });
+    drawCosmoMark(ctx, width / 2, height / 2, radius, 0, seconds, rgbChannels(palette.highlight), { pixelRatio: dpr, dot: 0.5, sphereScale: 0.72, intensity: 1.2 });
     return [];
   }
   const t = seconds * (working ? 1.5 : 0.65);
@@ -348,18 +347,18 @@ export function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: n
     ctx.fillText(agent.initial, node.x, node.y + 0.5);
   });
 
-  // The Orchestrator: a dotted sphere at rest, the Cosmo galaxy while agents work.
+  // The Orchestrator: a dotted sphere.
   const hubGlow = mix(rgbChannels(palette.glow), flashRgb, flashAmount);
   const markRadius = core * 1.7;
   drawGlow(ctx, hub.x, hub.y, markRadius * 1.3, hubGlow, (working ? 0.16 : 0.1) + flashAmount * 0.15 + (selectedId === hubId ? 0.08 : 0));
   const grain = rgbChannels(palette.highlight);
-  drawCosmoMark(ctx, hub.x, hub.y, markRadius, morph, seconds, grain);
+  drawCosmoMark(ctx, hub.x, hub.y, markRadius, 0, seconds, grain);
   drawGlow(ctx, hub.x, hub.y, core * 0.6, grain, working ? 0.85 : 0.65);
   positions.push({ id: hubId, x: hub.x, y: hub.y, r: core });
   return positions;
 }
 
-export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent, sidePanelOpen = false, roster = [], runtimes = [], canEditAgents = false, onUpdateAgent }) => {
+export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent, sidePanelOpen = false, roster = [], runtimes = [], canEditAgents = false, onUpdateAgent, action = null }) => {
   const { theme } = useTheme();
   const palette = theme.scene;
   const idleRgb = rgbChannels(palette.idle);
@@ -367,6 +366,8 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   const [expanded, setExpanded] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** The small sphere on the collapsed bar; the large canvas is only used while the panel is open. */
+  const markRef = useRef<HTMLCanvasElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
   const positionsRef = useRef<NodePosition[]>([]);
   const paintSecondsRef = useRef(0);
@@ -536,6 +537,16 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   else if (working) statusText = 'Working';
   else statusText = orchestratorCall?.status === 'failed' ? 'Needs attention' : 'Ready';
 
+  // The collapsed bar's stars: the build's place in Plan → Approve → Build → Review → Pull request.
+  const step = build?.status ? buildStepFor(build.status) : null;
+  const stepIndex = !step ? -1 : build?.status === 'completed' ? BUILD_STEPS.length : BUILD_STEPS.findIndex(item => item.id === step.step);
+  const stepFailed = build?.status === 'failed';
+  const stepNeedsYou = Boolean(step?.attention) || stepFailed;
+  const pillStatus = !step ? statusText
+    : stepIndex >= BUILD_STEPS.length ? 'Pull request opened'
+      : BUILD_STEPS[stepIndex].label + ' · ' + (stepFailed ? 'needs attention' : step.attention ? 'waiting for you' : statusText);
+  const nowTone = stepFailed ? '--scene-danger' : step?.attention ? '--scene-warning' : '--scene-hub';
+
   // Open the flow once when a build starts working, so its agents are visible straight away.
   const autoOpenedRunRef = useRef<string | null>(null);
   useEffect(() => {
@@ -545,13 +556,13 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
   }, [build?.runId, build?.running]);
 
   // The animation loop reads the latest state from a ref so it never restarts.
-  const stateRef = useRef({ palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: false, dispatching: false });
-  stateRef.current = { palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: show3D, dispatching: runningCount > 0 };
-  /** Sphere (0) to galaxy (1), eased over time in the paint loop. */
-  const morphRef = useRef({ value: runningCount > 0 ? 1 : 0, last: 0 });
+  const stateRef = useRef({ palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: false });
+  stateRef.current = { palette, expanded, working, agents: waveAgents, hoveredId, selectedId, hubId, covered: show3D };
 
   // Historical outcomes remain in review/activity. The live scene returns directly to neutral.
   useEffect(() => { if (!working) flashRef.current = null; }, [working]);
+  /** Collapsed, only the bar's small sphere is drawn; open, the full scene canvas is. */
+  const paintTarget = (canvas: HTMLCanvasElement) => (!stateRef.current.expanded && markRef.current ? markRef.current : canvas);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -560,11 +571,6 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     let frame = 0;
     const paint = (seconds: number, now: number) => {
       paintSecondsRef.current = seconds;
-      const morph = morphRef.current;
-      const target = stateRef.current.dispatching ? 1 : 0;
-      const dt = morph.last ? Math.min(0.1, (now - morph.last) / 1000) : 0;
-      morph.last = now;
-      morph.value = reduceMotion ? target : morph.value + Math.sign(target - morph.value) * Math.min(Math.abs(target - morph.value), dt / MORPH_SECONDS);
       const flash = flashRef.current;
       let flashAmount = 0;
       if (flash && !reduceMotion) {
@@ -572,7 +578,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         flashAmount = elapsed < FLASH_HOLD_MS ? 1 : Math.max(0, 1 - (elapsed - FLASH_HOLD_MS) / FLASH_FADE_MS);
         if (flashAmount === 0) flashRef.current = null;
       }
-      positionsRef.current = drawWave(canvas, { ...stateRef.current, flashRgb: flash?.rgb ?? null, flashAmount, morph: morph.value }, seconds);
+      positionsRef.current = drawWave(paintTarget(canvas), { ...stateRef.current, flashRgb: flash?.rgb ?? null, flashAmount }, seconds);
       // The label follows its node as the wave carries it.
       const hovered = positionsRef.current.find(node => node.id === stateRef.current.hoveredId);
       if (hovered && tooltipRef.current) {
@@ -599,10 +605,9 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
     // Refresh appearance without restarting the loop or advancing a still frame.
     const canvas = canvasRef.current;
     if (canvas) {
-      if (reduceMotion) morphRef.current.value = runningCount > 0 ? 1 : 0;
-      positionsRef.current = drawWave(canvas, { ...stateRef.current, flashRgb: null, flashAmount: 0, morph: morphRef.current.value }, reduceMotion ? 0 : paintSecondsRef.current);
+      positionsRef.current = drawWave(paintTarget(canvas), { ...stateRef.current, flashRgb: null, flashAmount: 0 }, reduceMotion ? 0 : paintSecondsRef.current);
     }
-  }, [expanded, working, waveAgents, hoveredId, selectedId, hubId, palette, reduceMotion, runningCount]);
+  }, [expanded, working, waveAgents, hoveredId, selectedId, hubId, palette, reduceMotion]);
 
   useEffect(() => {
     if (!expanded) setHoveredId(null);
@@ -686,7 +691,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         onMouseMove={event => { const id = nodeAt(event); if (id !== hoveredId) setHoveredId(id); }}
         onMouseLeave={() => setHoveredId(null)}
         onClick={event => { const id = nodeAt(event); if (id) select(id); }}
-        className={(show3D ? 'hidden ' : '') + (expanded ? '' : 'pointer-events-none ') + 'absolute inset-0 h-full w-full ' + (hoveredCall || hoveredBuildAgent || (hubHovered && hubClickable) ? 'cursor-pointer' : '')}
+        className={(show3D || !expanded ? 'hidden ' : '') + 'absolute inset-0 h-full w-full ' + (hoveredCall || hoveredBuildAgent || (hubHovered && hubClickable) ? 'cursor-pointer' : '')}
       />
       {expanded && <div aria-hidden="true" className={'pointer-events-none absolute left-0 top-0 w-72 bg-gradient-to-r from-[rgba(var(--scene-background),1)] via-[rgba(var(--scene-background),0.7)] to-transparent ' + (show3D ? 'h-14' : 'bottom-0')} />}
       {expanded && !show3D && (hoveredCall || hoveredBuildAgent || hubHovered) && <div ref={tooltipRef} role="tooltip" style={{ visibility: 'hidden' }} className="pointer-events-none absolute left-0 top-0 z-20 whitespace-nowrap rounded-xl border border-[rgba(var(--scene-hub),0.2)] bg-[rgba(var(--scene-labelBackground),0.95)] px-3 py-2 shadow-xl shadow-[rgba(var(--scene-background),0.4)] backdrop-blur">
@@ -703,23 +708,54 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
       </div>}
 
       {!expanded && <div className="relative flex h-14 items-center justify-center">
-        {/* Collapsed: just the Orchestrator. Its project, status and running agents are in the tooltip. */}
-        <button
-          type="button"
-          aria-expanded={false}
-          aria-controls={panelId}
-          aria-label="Expand orchestrator"
-          aria-describedby={panelId + '-summary'}
-          onClick={() => setExpanded(true)}
-          className="group relative h-14 w-14 rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]"
-        >
-          {runningCount > 0 && <span aria-hidden="true" className="absolute right-0 top-1 min-w-4 rounded-full bg-[rgba(var(--scene-hub),1)] px-1 text-center text-[9px] font-semibold leading-4 text-[rgba(var(--scene-background),1)] shadow-[0_0_8px_rgba(var(--scene-glow),0.7)]">{runningCount}</span>}
-          <span id={panelId + '-summary'} role="tooltip" className="pointer-events-none absolute left-1/2 top-full z-40 mt-1 -translate-x-1/2 whitespace-nowrap rounded-xl border border-[rgba(var(--scene-hub),0.2)] bg-[rgba(var(--scene-labelBackground),0.95)] px-3 py-2 text-left opacity-0 shadow-xl shadow-[rgba(var(--scene-background),0.4)] backdrop-blur transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
-            <span className="block text-xs font-semibold text-[rgba(var(--scene-labelForeground),1)]">{title}</span>
-            <span className={'block text-[11px] ' + (working ? 'text-[rgba(var(--scene-hub),1)]' : 'text-[rgba(var(--scene-labelForeground),0.65)]')}>Orchestrator · {statusText}</span>
-            <span data-agent-execution-count={runningCount} className={'block text-[11px] ' + (runningCount ? 'text-[rgba(var(--scene-hub),1)]' : 'text-[rgba(var(--scene-labelForeground),0.65)]')}>{runningCount ? runningCount + (runningCount === 1 ? ' agent running' : ' agents running') : 'No agents running'}</span>
-          </span>
-        </button>
+        {/* Collapsed: the Orbit pill, as wide as the open panel. Agents at work circle the Orchestrator;
+            the build's steps are stars on its orbit, and with no build a slow wave rests in the middle. */}
+        <div className="relative isolate flex h-12 w-full items-center gap-3 rounded-full border border-[rgba(var(--scene-ring),0.16)] bg-[rgba(var(--scene-background),0.94)] pl-1.5 pr-2 shadow-[0_10px_32px_rgba(0,0,0,0.45)] backdrop-blur-md">
+          {!step && <RestingWave lively={working} colors={{ dot: rgbChannels(palette.wave), crest: rgbChannels(palette.waveActive), star: rgbChannels(palette.labelForeground) }} />}
+          <button
+            type="button"
+            aria-expanded={false}
+            aria-controls={panelId}
+            aria-label={'Expand orchestrator: ' + title + ', ' + pillStatus}
+            onClick={() => setExpanded(true)}
+            className="flex min-w-0 shrink items-center gap-2.5 rounded-full py-1 pl-1 pr-2 text-left hover:bg-[rgba(var(--scene-labelForeground),0.04)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]"
+          >
+            <span className="relative grid h-9 w-9 shrink-0 place-items-center" aria-hidden="true">
+              <span className="absolute inset-0 rounded-full border border-dashed border-[rgba(var(--scene-ring),0.28)]" />
+              {[6, 9, 12].slice(0, Math.min(runningCount, 3)).map((seconds, index) => <span key={seconds} style={{ animationDuration: seconds + 's', animationDelay: -index * 2.5 + 's' }} className="absolute inset-0 motion-safe:animate-spin">
+                <span className="absolute left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-[rgba(var(--scene-highlight),1)] shadow-[0_0_6px_rgba(var(--scene-glow),0.9)]" />
+              </span>)}
+              <canvas ref={markRef} className="h-7 w-7" />
+              {runningCount > 0 && <span className="absolute -bottom-0.5 -right-1 min-w-4 rounded-full bg-[rgba(var(--scene-hub),1)] px-1 text-center text-[9px] font-semibold leading-4 text-[rgba(var(--scene-background),1)] shadow-[0_0_8px_rgba(var(--scene-glow),0.7)]">{runningCount}</span>}
+            </span>
+            <span className="min-w-0 max-w-48">
+              <span className="block truncate text-xs font-semibold text-[rgba(var(--scene-labelForeground),1)]">{title}</span>
+              <span style={{ color: 'rgba(var(' + (step ? nowTone : '--scene-hub') + '),1)' }} className="block truncate text-[11px]">{pillStatus}</span>
+            </span>
+          </button>
+          <span data-agent-execution-count={runningCount} className="sr-only">{runningCount ? runningCount + (runningCount === 1 ? ' agent running' : ' agents running') : 'No agents running'}</span>
+          {step ? <ol aria-label="Build steps" className="hidden min-w-0 flex-1 items-start px-4 md:flex lg:px-8">
+            {BUILD_STEPS.map((item, index) => {
+              const done = index < stepIndex;
+              const now = index === stepIndex;
+              return <li key={item.id} aria-current={now ? 'step' : undefined} className={'flex min-w-0 items-start ' + (index > 0 ? 'flex-1' : '')}>
+                {index > 0 && <span aria-hidden="true" className={'mt-[5px] min-w-2 flex-1 ' + (done || now ? 'h-px bg-[rgba(var(--scene-labelForeground),0.55)]' : 'border-t border-dotted border-[rgba(var(--scene-ring),0.4)]')} />}
+                <span className="flex w-14 shrink-0 flex-col items-center gap-1">
+                  <span className="grid h-[11px] place-items-center" aria-hidden="true">
+                    {now
+                      ? <span style={{ backgroundColor: 'rgba(var(' + nowTone + '),1)', boxShadow: '0 0 0 3px rgba(var(' + nowTone + '),0.18), 0 0 12px rgba(var(' + nowTone + '),0.9)' }} className={'h-[11px] w-[11px] rounded-full ' + (stepNeedsYou ? 'motion-safe:animate-pulse' : '')} />
+                      : <span className={'h-[7px] w-[7px] rounded-full ' + (done ? 'bg-[rgba(var(--scene-labelForeground),0.95)] shadow-[0_0_6px_rgba(var(--scene-highlight),0.6)]' : 'bg-[rgba(var(--scene-labelForeground),0.22)]')} />}
+                  </span>
+                  <span className={'whitespace-nowrap text-[10px] leading-3 ' + (now ? 'font-semibold text-[rgba(var(--scene-labelForeground),1)]' : done ? 'text-[rgba(var(--scene-labelForeground),0.7)]' : 'text-[rgba(var(--scene-labelForeground),0.45)]')}>{item.label}</span>
+                </span>
+              </li>;
+            })}
+          </ol> : null}
+          {/* Keeps the action at the right edge when the star track is hidden on narrow screens. */}
+          <span aria-hidden="true" className={'flex-1 ' + (step ? 'md:hidden' : '')} />
+          {action && <button type="button" onClick={action.onClick} className="shrink-0 whitespace-nowrap rounded-full bg-[rgba(var(--scene-hub),1)] px-3 py-1.5 text-[11px] font-semibold text-[rgba(var(--scene-background),1)] shadow-[0_0_16px_rgba(var(--scene-glow),0.45)] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)] focus-visible:ring-offset-2 focus-visible:ring-offset-[rgba(var(--scene-background),1)]">{action.label}</button>}
+          <button type="button" aria-expanded={false} aria-controls={panelId} onClick={() => setExpanded(true)} aria-label="Open the agents view" title="Open the agents view" className="shrink-0 rounded-full p-1.5 text-[rgba(var(--scene-labelForeground),0.65)] hover:bg-[rgba(var(--scene-labelForeground),0.06)] hover:text-[rgba(var(--scene-labelForeground),1)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[rgba(var(--scene-hub),0.6)]"><ChevronDown className="h-4 w-4" aria-hidden="true" /></button>
+        </div>
       </div>}
       {expanded && <div className="relative flex h-14 items-center gap-3 px-4">
         <button

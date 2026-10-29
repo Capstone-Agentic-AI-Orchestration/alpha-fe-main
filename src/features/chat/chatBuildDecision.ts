@@ -1,16 +1,15 @@
-/** Decisions are explicit main-chat replies to the displayed plan or publication review. */
+/** Review context only. The server interprets the unchanged human message. */
 export interface ChatBuildDecision {
-  action: 'start' | 'approve' | 'retry_publication';
   runId: string;
   expectedRevision: number;
   planVersion: number;
   evidenceReady: boolean;
 }
 
-export function buildDecisionAction(content: string): ChatBuildDecision['action'] | undefined {
-  const text = content.trim().toLowerCase().replace(/[.!]+$/, '');
-  if (/^(?:please )?(?:start(?: it| the (?:plan|build|planned work))?|go ahead(?: with (?:this|the) plan)?|continue|proceed)$/.test(text)) return 'start';
-  if (/^(?:please )?(?:approve|approve (?:publication|the (?:publication|pull request))|publish (?:it|this build)|push and open (?:the |a )?pull request)$/.test(text)) return 'approve';
-  if (/^(?:please )?retry publication$/.test(text)) return 'retry_publication';
-  return undefined;
+export function buildDecisionContext(build: {
+  runId: string; revision: number; status: string; orchestration: { run: { planVersion: number } };
+} | null | undefined, readingAnotherBuild: boolean): ChatBuildDecision | undefined {
+  if (!build || !['awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(build.status)) return undefined;
+  return { runId: build.runId, expectedRevision: build.revision,
+    planVersion: build.orchestration.run.planVersion, evidenceReady: !readingAnotherBuild };
 }

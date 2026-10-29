@@ -7,15 +7,10 @@ import type { ScenePalette } from '@/shared/theme';
 import type { LiveBuildOrchestrationStatus } from '@/shared/types';
 
 /**
- * The Orchestrator: a quiet sphere of light at rest, the Cosmo galaxy while it
- * hands work to agents.
- *
- * Every grain has two homes, one on the sphere and one in the galaxy. When
- * agents start working the sphere unfurls from the core outwards, swirling as
- * it flattens into two stippled arms; when the work ends it folds back. The
- * galaxy has real thickness and sits tilted in the scene, so orbiting the
- * camera shows its depth. Hovering lifts the grains under the pointer and a
- * click sends one ripple through it. It turns slowly and eases between speeds.
+ * The Orchestrator: a quiet sphere of light. It stays a sphere while agents
+ * work; only its spin and brightness respond to activity. Hovering lifts the
+ * grains under the pointer and a click sends one ripple through it. It turns
+ * slowly and eases between speeds.
  */
 
 const RADIUS = 1.15;
@@ -27,11 +22,6 @@ const CORE_GRAINS = 480;
 // Keep the resting shell airy; the remaining grains appear as it unfurls.
 const SPHERE_STRIDE = 5;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
-const HAIRLINES = 18;
-const RINGS = 8;
-/** Seconds to unfurl into the galaxy, or fold back into the sphere. */
-const MORPH_SECONDS = 2.2;
-
 /** Radians an arm winds from the core to the rim: about one and a quarter turns. */
 const WIND = 7.6;
 const armAngle = (arm: number, r: number) => arm * Math.PI + WIND * Math.pow(r, 0.9);
@@ -202,44 +192,13 @@ function buildGalaxy() {
   grains.setAttribute('aPhase', new THREE.Float32BufferAttribute(phase, 1));
   // The grains move in the shader, beyond the bounds three.js would compute from `position`.
   grains.boundingSphere = new THREE.Sphere(new THREE.Vector3(), RADIUS * 1.6);
-
-  // Fine hairlines wound along the arms, the logo's brushed strokes.
-  const lines: number[] = [];
-  for (let h = 0; h < HAIRLINES; h++) {
-    const arm = h % 2;
-    const offset = ((Math.floor(h / 2) / (HAIRLINES / 2 - 1)) * 2 - 1) * 2.4;
-    let previous: [number, number] | null = null;
-    for (let step = 0; step <= 120; step++) {
-      const r = 0.06 + (step / 120) * 0.92;
-      const a = armAngle(arm, r);
-      const rr = (r + offset * armWidth(r)) * RADIUS;
-      const point: [number, number] = [Math.cos(a) * rr, Math.sin(a) * rr];
-      if (previous) lines.push(previous[0], previous[1], 0, point[0], point[1], 0);
-      previous = point;
-    }
-  }
-  // Faint rings between the arms, like the fine circular lines behind the logo's swirl.
-  for (let ring = 0; ring < RINGS; ring++) {
-    const rr = (0.18 + (ring / (RINGS - 1)) * 0.78) * RADIUS;
-    for (let step = 0; step < 96; step++) {
-      const a0 = (step / 96) * Math.PI * 2, a1 = ((step + 1) / 96) * Math.PI * 2;
-      lines.push(Math.cos(a0) * rr, Math.sin(a0) * rr, 0, Math.cos(a1) * rr, Math.sin(a1) * rr, 0);
-    }
-  }
-  const hairlines = new THREE.BufferGeometry();
-  hairlines.setAttribute('position', new THREE.Float32BufferAttribute(lines, 3));
-  return { grains, hairlines };
+  return grains;
 }
 
-const smooth = (v: number) => v * v * (3 - 2 * v);
-
-export function OrchestratorParticleSphere({ palette, glow, status, working, cosmo, selected, clickable, reduceMotion, onOver, onOut, onClick }: {
+export function OrchestratorParticleSphere({ palette, status, working, selected, clickable, reduceMotion, onOver, onOut, onClick }: {
   palette: ScenePalette;
-  glow: THREE.Texture;
   status: LiveBuildOrchestrationStatus | null;
   working: boolean;
-  /** Agents are working on handed-off tasks: unfurl into the galaxy. */
-  cosmo: boolean;
   selected: boolean;
   clickable: boolean;
   reduceMotion: boolean;
@@ -248,16 +207,13 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, cos
   onClick: () => void;
 }) {
   const disc = useRef<THREE.Group>(null);
-  const core = useRef<THREE.SpriteMaterial>(null);
-  const halo = useRef<THREE.SpriteMaterial>(null);
-  const hairlineMaterial = useRef<THREE.LineBasicMaterial>(null);
-  const motion = useRef({ spin: 0, angle: 0, hover: 0, hovering: false, pulse: -1, morph: cosmo ? 1 : 0 });
+  const motion = useRef({ spin: 0, angle: 0, hover: 0, hovering: false, pulse: -1 });
   const { gl, size, camera, invalidate } = useThree();
   const visual = status ? STATUS_MOTION[status] : null;
   const tint = visual ? palette[visual.color] : palette.hub;
   const targetSpin = visual?.spin ?? (working ? WORKING_SPIN : IDLE_SPIN);
 
-  const { grains, hairlines } = useMemo(buildGalaxy, []);
+  const grains = useMemo(buildGalaxy, []);
   const material = useMemo(() => new THREE.ShaderMaterial({
     vertexShader: VERTEX,
     fragmentShader: FRAGMENT,
@@ -279,8 +235,7 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, cos
     invalidate();
   }, [material, palette.highlight, palette.ring, tint, invalidate]);
 
-  useEffect(() => { invalidate(); }, [cosmo, invalidate]);
-  useEffect(() => () => { grains.dispose(); hairlines.dispose(); material.dispose(); }, [grains, hairlines, material]);
+  useEffect(() => () => { grains.dispose(); material.dispose(); }, [grains, material]);
 
   useFrame(({ clock }, delta) => {
     const dt = Math.min(delta, 0.05);
@@ -288,12 +243,6 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, cos
     const fov = (camera as THREE.PerspectiveCamera).fov ?? 34;
     material.uniforms.uScale.value = size.height / (2 * Math.tan((fov * Math.PI) / 360));
     material.uniforms.uPixel.value = gl.getPixelRatio();
-
-    const morphTarget = cosmo ? 1 : 0;
-    if (reduceMotion) m.morph = morphTarget;
-    else m.morph += Math.sign(morphTarget - m.morph) * Math.min(Math.abs(morphTarget - m.morph), dt / MORPH_SECONDS);
-    const shape = smooth(m.morph);
-    material.uniforms.uMorph.value = m.morph;
 
     if (!reduceMotion) {
       material.uniforms.uTime.value = clock.getElapsedTime();
@@ -308,15 +257,12 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, cos
     let animating = Math.abs((m.hovering ? 1 : 0) - m.hover) > 0.01;
     if (m.pulse >= 0) {
       m.pulse += dt / 1.4;
-      material.uniforms.uPulse.value = m.pulse * (SPHERE_RADIUS + (RADIUS * 1.3 - SPHERE_RADIUS) * shape);
+      material.uniforms.uPulse.value = m.pulse * SPHERE_RADIUS;
       material.uniforms.uPulseAmt.value = Math.max(0, 1 - m.pulse);
       if (m.pulse >= 1) { m.pulse = -1; material.uniforms.uPulseAmt.value = 0; }
       animating = true;
     }
     material.uniforms.uOpacity.value = 0.8 + (selected ? 0.15 : 0) + (working ? 0.05 : 0);
-    if (core.current) core.current.opacity = ((working ? 0.7 : 0.5) + (selected ? 0.2 : 0) + m.hover * 0.12 + material.uniforms.uPulseAmt.value * 0.3) * shape;
-    if (halo.current) halo.current.opacity = ((working ? 0.12 : 0.07) + (selected ? 0.06 : 0)) * shape;
-    if (hairlineMaterial.current) hairlineMaterial.current.opacity = (0.055 + m.hover * 0.05 + (selected ? 0.04 : 0)) * Math.max(0, shape * 1.4 - 0.4);
     if (reduceMotion && animating) invalidate();
   });
 
@@ -340,20 +286,8 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, cos
 
   return <group rotation={[TILT_X, 0, TILT_Z]}>
     <group ref={disc}>
-      <lineSegments geometry={hairlines}>
-        <lineBasicMaterial ref={hairlineMaterial} color={palette.highlight} transparent opacity={0} depthWrite={false} blending={THREE.AdditiveBlending} />
-      </lineSegments>
       <points geometry={grains} material={material} />
-      {/* Pointer targets: the sphere at rest, the disc as the galaxy. */}
-      {cosmo
-        ? <mesh {...pointerHandlers}><circleGeometry args={[RADIUS * 0.95, 48]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} side={THREE.DoubleSide} /></mesh>
-        : <mesh {...pointerHandlers}><sphereGeometry args={[SPHERE_RADIUS * 1.1, 24, 24]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} /></mesh>}
+      <mesh {...pointerHandlers}><sphereGeometry args={[SPHERE_RADIUS * 1.1, 24, 24]} /><meshBasicMaterial transparent opacity={0} depthWrite={false} /></mesh>
     </group>
-    <sprite scale={[0.5, 0.5, 1]}>
-      <spriteMaterial ref={core} map={glow} color={palette.highlight} transparent opacity={0.4} depthWrite={false} blending={THREE.AdditiveBlending} />
-    </sprite>
-    <sprite scale={[RADIUS * 2.1, RADIUS * 2.1, 1]}>
-      <spriteMaterial ref={halo} map={glow} color={tint} transparent opacity={0.16} depthWrite={false} blending={THREE.AdditiveBlending} />
-    </sprite>
   </group>;
 }
