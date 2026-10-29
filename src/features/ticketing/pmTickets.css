@@ -379,3 +379,99 @@
   .pm-tickets__chat-layout .pm-tickets__conversation-area:not(.pm-tickets__conversation-area--chat) { min-height: 360px; flex: none; }
   .pm-tickets__context-panel { flex: none; max-height: none; overflow: visible; padding: 18px; border-radius: 14px; }
 }
+
+/* Stable PM sub-navigation. Keep the selector in normal flow so it cannot be
+   covered by Alpha's floating workspace chrome when focus or scroll brings a
+   tab into view. */
+.pm-ticket-page--nested > .pm-ticket-page__tabs {
+  position: relative;
+  inset: auto;
+  z-index: 4;
+  display: flex;
+  width: 100%;
+  min-height: 58px;
+  height: 58px;
+  align-items: stretch;
+  gap: 4px;
+  padding: 0 clamp(16px, 3vw, 32px);
+  border-right: 0;
+  border-bottom: 1px solid rgb(var(--ui-divider));
+  background: rgb(var(--ui-shell));
+  scroll-margin-top: 76px;
+}
+.pm-ticket-page--nested > .pm-ticket-page__tabs button { min-height: 58px; }
+.pm-ticket-page--nested .pm-ticket-page__content { min-height: 0; flex: 1; overflow: hidden; }
+.pm-ticket-page--nested .pm-tickets__navigation { position: relative; padding-top: 22px !important; }
+.pm-ticket-page--nested .pm-tickets__navigation-heading { display: block; }
+.pm-ticket-page--nested .pm-tickets__navigation > .role-chat-navigation-toggle { position: absolute; z-index: 1; top: 16px; right: 12px; display: grid; margin: 0; }
+.pm-ticket-page--nested .pm-tickets__navigation-heading { padding-right: 42px; }
+.pm-ticket-page--nested .pm-tickets__header { min-height: 88px !important; }
+
+/* The page tabs are the one cross-workspace switch; make them read as a
+   compact segmented sub-navigation instead of two floating text links. */
+.pm-ticket-page__tabs { min-height: 58px; gap: 4px; padding-inline: clamp(16px, 3vw, 32px); background: rgb(var(--ui-shell)); }
+.pm-ticket-page__tab { display: inline-flex; min-width: 108px; min-height: 58px; align-items: center; justify-content: center; gap: 8px; padding: 0 15px !important; border: 0; border-bottom: 2px solid transparent !important; border-radius: 8px 8px 0 0; color: rgb(var(--ui-text-secondary)) !important; font-size: 13px !important; font-weight: 600 !important; transition: background-color 140ms ease, color 140ms ease; }
+.pm-ticket-page__tab::after { display: none !important; }
+.pm-ticket-page__tab svg { flex: none; color: rgb(var(--ui-text-muted)); stroke-width: 1.7; }
+.pm-ticket-page__tab:hover { background: rgb(var(--ui-raised)); color: rgb(var(--ui-text-primary)) !important; }
+.pm-ticket-page__tab:hover svg { color: rgb(var(--ui-link)); }
+.pm-ticket-page__tab.is-active { border-bottom-color: rgb(var(--ui-accent)) !important; background: rgb(var(--ui-selected)); color: rgb(var(--ui-selected-content)) !important; }
+.pm-ticket-page__tab.is-active svg { color: rgb(var(--ui-selected-content)); }
+.pm-ticket-page__tab:focus-visible { position: relative; z-index: 1; }
+
+/* Queue rows: emphasize the request and the next action without turning every
+   field into a separate card. */
+.pm-ticket-queue__columns { min-height: 42px; padding-inline: 18px 48px; border-bottom: 1px solid rgb(var(--ui-divider)); background: var(--pm-ground); font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
+.pm-ticket-queue__row { border-top-color: rgb(var(--ui-divider)); }
+.pm-ticket-queue__item { min-height: 98px; padding: 20px 48px 20px 18px; }
+.pm-ticket-queue__item:hover { background: rgb(var(--ui-raised) / .55); }
+.pm-ticket-queue__item.is-selected { background: rgb(var(--ui-selected) / .65); box-shadow: inset 3px 0 0 rgb(var(--ui-accent)); }
+.pm-ticket-queue__item:focus-visible { position: relative; z-index: 1; }
+.pm-ticket-queue__title { font-weight: 600; }
+.pm-ticket-queue__reference { font-variant-numeric: tabular-nums; }
+.pm-ticket-queue__status { font-weight: 600; }
+.pm-ticket-queue__next-action { max-width: 100%; }
+
+/* Inquiry inbox: a calm list/detail split with one clear decision footer. */
+.pm-inquiries { background: rgb(var(--ui-canvas)); }
+.pm-inquiries__header { padding-bottom: 18px; border-bottom: 1px solid rgb(var(--ui-divider)); }
+.pm-inquiries__heading h1 { letter-spacing: -.025em; }
+.pm-inquiries__heading > div:first-child svg { color: rgb(var(--ui-link)); stroke-width: 1.7; }
+.pm-inquiries__filters { display: inline-flex; width: fit-content; align-items: center; gap: 3px !important; padding: 3px; border: 1px solid rgb(var(--ui-divider)); border-radius: 10px; background: rgb(var(--ui-well)); }
+.pm-inquiries__filters button { min-height: 34px; border-color: transparent; border-radius: 7px; padding-inline: 12px; font-size: 12px; }
+.pm-inquiries__filters button[aria-pressed="true"] { border-color: rgb(var(--ui-divider)); background: rgb(var(--ui-selected)); color: rgb(var(--ui-selected-content)); box-shadow: 0 1px 2px rgb(var(--ui-overlay) / .12); }
+.pm-inquiries__list-panel, .pm-inquiries__detail-panel { border-color: rgb(var(--ui-divider)) !important; border-radius: 12px !important; background: rgb(var(--ui-surface)) !important; box-shadow: 0 10px 28px rgb(var(--ui-overlay) / .08); }
+.pm-inquiries__list-summary { min-height: 48px; display: flex; align-items: center; padding: 12px 18px !important; color: rgb(var(--ui-text-secondary)); font-size: 11px; }
+.pm-inquiries__list-item { min-height: 104px; border-left-width: 3px !important; padding: 16px 18px !important; }
+.pm-inquiries__list-item:hover { background: rgb(var(--ui-raised)) !important; }
+.pm-inquiries__list-item[aria-pressed="true"] { border-left-color: rgb(var(--ui-accent)) !important; background: rgb(var(--ui-selected)) !important; }
+.pm-inquiries__detail-panel { position: relative; }
+.pm-inquiries__detail-header { padding: 26px 30px 22px !important; background: rgb(var(--ui-surface)); }
+.pm-inquiries__detail-header h2 { letter-spacing: -.02em; }
+.pm-inquiries__meta-grid { padding: 20px 30px !important; }
+.pm-inquiries__info-card, .pm-inquiries__request { border-color: rgb(var(--ui-divider)) !important; border-radius: 10px !important; background: rgb(var(--ui-well)); }
+.pm-inquiries__info-card { min-height: 128px; }
+.pm-inquiries__request { margin-inline: 30px !important; }
+.pm-inquiries__decision { padding: 22px 30px !important; background: rgb(var(--ui-surface)); }
+.pm-inquiries__decision textarea { min-height: 72px; resize: vertical; }
+
+@media (max-width: 767px) {
+  /* The preview chrome wraps to two rows on phones. Reserve its full height
+     so the PM tabs remain visible and clickable instead of sitting underneath
+     the floating header. */
+  .pm-ticket-preview > div > main { padding-top: 104px; }
+  .pm-ticket-page--nested > .pm-ticket-page__tabs { height: 54px; min-height: 54px; padding-inline: 12px; }
+  .pm-ticket-page--nested > .pm-ticket-page__tabs button { min-height: 54px; }
+  .pm-ticket-page--nested .pm-tickets__navigation > .role-chat-navigation-toggle { display: none; }
+  .pm-ticket-page__tab { min-width: 0; min-height: 54px; padding-inline: 13px !important; }
+  .pm-ticket-page--nested .pm-tickets__header { min-height: 66px !important; }
+  .pm-ticket-queue__item { padding-inline: 0; }
+  .pm-inquiries__header { padding-bottom: 14px; }
+  .pm-inquiries__filters { width: 100%; overflow-x: auto; }
+  .pm-inquiries__filters button { flex: 1 0 auto; }
+  .pm-inquiries__list-panel, .pm-inquiries__detail-panel { box-shadow: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pm-ticket-page__tab { transition: none; }
+}
