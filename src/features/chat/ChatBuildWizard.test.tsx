@@ -54,7 +54,7 @@ describe('the build panel above the message box', () => {
   it('directs plan approval to its tab without numbered approval questions', () => {
     const html = render({ build: build('awaiting_plan_approval') });
     expect(html).toContain('Plan ready for your approval');
-    expect(html).toContain('reply start in the main chat');
+    expect(html).toContain('tell Alpha in the main chat whether to start it');
     expect(html).not.toContain('Start planned work');
     expect(html).not.toContain('Open the full plan');
     // The step track is on the Orchestrator bar now, not above the message box.

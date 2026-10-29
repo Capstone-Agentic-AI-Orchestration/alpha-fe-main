@@ -240,7 +240,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'awaiting_plan_approval':
         title = 'Plan ready for your approval';
         subtitle = build.orchestration.tasks.length + (build.orchestration.tasks.length === 1 ? ' task' : ' tasks') + ' · ' + buildRepositoriesLabel(build) + '. No code has changed yet.';
-        body = <p className="text-xs text-content-secondary">{props.canStart ? 'Read the saved plan on the right, then reply start in the main chat.' : 'Your workspace role cannot start builds.'}</p>;
+        body = <p className="text-xs text-content-secondary">{props.canStart ? 'Read the saved plan on the right, then tell Alpha in the main chat whether to start it.' : 'Your workspace role cannot start builds.'}</p>;
         options = [];
         break;
       case 'paused':
@@ -273,7 +273,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'publishing':
         title = build.status === 'publishing' ? 'Opening the pull request' : 'Build ready for your review';
         subtitle = buildRepositoriesLabel(build);
-        body = <p className="text-xs text-content-secondary">{build.status === 'publishing' ? 'Publication progress is in the Build review tab.' : 'Read the checks, findings and code changes on the right, then reply approve in the main chat.'}</p>;
+        body = <p className="text-xs text-content-secondary">{build.status === 'publishing' ? 'Publication progress is in the Build review tab.' : 'Read the checks, findings and code changes on the right, then tell Alpha in the main chat if it should push these changes and open the pull request.'}</p>;
         options = [];
         break;
       default: {

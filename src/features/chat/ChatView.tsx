@@ -1,4 +1,4 @@
-import { buildDecisionAction, type ChatBuildDecision } from './chatBuildDecision';
+import { buildDecisionContext } from './chatBuildDecision';
 import { ChatPanelHandle } from './ChatPanelHandle';
 import { LocalPreviewTab, WebPreviewCard, useLocalPreviews } from './LocalPreview';
 import { reconcileCallSnapshot } from './chatCallSnapshot';
@@ -1174,14 +1174,8 @@ export const ChatView: React.FC = () => {
     if (!message) return;
     // "Continue", "go ahead", "keep going": carry the open build to its next step.
     const continueRequest = !sendsBuild && Boolean(liveBuild) && isContinueRequest(message);
-    const decisionAction = buildDecisionAction(message);
-    const pendingDecision = liveBuild && ['awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(liveBuild.status);
     const readingAnotherBuild = liveBuild && (activeSideTab?.kind === 'review' || activeSideTab?.kind === 'plan' || activeSideTab?.kind === 'changes') && activeSideTab.runId !== liveBuild.runId;
-    const buildDecision: ChatBuildDecision | undefined = !sendsBuild && pendingDecision && decisionAction && !pendingFiles.length
-      ? { action: decisionAction, runId: liveBuild.runId, expectedRevision: liveBuild.revision,
-          planVersion: liveBuild.orchestration.run.planVersion,
-          evidenceReady: !readingAnotherBuild }
-      : undefined;
+    const buildDecision = !sendsBuild ? buildDecisionContext(liveBuild, Boolean(readingAnotherBuild)) : undefined;
     if (continueRequest && liveBuild?.status === 'paused') {
       setInput('');
       await resumePausedBuild();
@@ -1241,7 +1235,7 @@ export const ChatView: React.FC = () => {
       try {
         const plans = await apiService.getOrchestrationPlans(project.id, buildDecision.runId);
         buildDecision.evidenceReady = plans.documents.some(document => document.version === buildDecision.planVersion);
-        if (buildDecision.evidenceReady && buildDecision.action !== 'start') {
+        if (buildDecision.evidenceReady && liveBuild?.status !== 'awaiting_plan_approval') {
           const diff = await apiService.getOrchestrationDiffPreview(project.id, buildDecision.runId);
           buildDecision.evidenceReady = diff.reviewType === 'validated';
         }
