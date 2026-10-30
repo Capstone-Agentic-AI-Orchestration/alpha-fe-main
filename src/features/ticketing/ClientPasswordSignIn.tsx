@@ -19,7 +19,7 @@ export function ClientPasswordSignIn({ unavailable, error, onRetry, onSignedIn }
   const [visible, setVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState('');
-  return <ClientAuthShell><h2>Sign in to your requests</h2><p className="ca-description">Use the email your project manager invited and the password you chose during account setup.</p>
+  return <ClientAuthShell variant="sign-in"><h2>Sign in to your requests</h2><p className="ca-description">Use the email your project manager invited and the password you chose during account setup.</p>
     <form onSubmit={event => {
       event.preventDefault(); if (busy || unavailable) return;
       setBusy(true); setFailure('');

@@ -8,10 +8,10 @@ import './clientAuth.css';
 const ACCESS_PATH = ['Inquiry', 'Review', 'Invite', 'Portal'];
 
 /** Open, container-free layout shared by sign in, password recovery and invitation setup. */
-export function ClientAuthShell({ children }: Readonly<{ children: ReactNode }>) {
+export function ClientAuthShell({ children, variant }: Readonly<{ children: ReactNode; variant?: 'sign-in' }>) {
   const slug = typeof window === 'undefined' ? '' : publicInquirySlug(window.location);
   return <ClientPublicShell slug={slug} page="access">
-    <section className="ca-auth-layout public-container" aria-label="Client account access">
+    <section className={`ca-auth-layout public-container${variant === 'sign-in' ? ' ca-auth-layout--sign-in' : ''}`} aria-label="Client account access">
       <div className="ca-brand-copy">
         <p className="ca-eyebrow">Your client portal</p>
         <h1>Your requests.<br /><span>One clear view.</span></h1>

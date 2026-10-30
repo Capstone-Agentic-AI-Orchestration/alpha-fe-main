@@ -164,3 +164,29 @@
   .ca-field::after, .ca-submit, .ca-submit-icon { transition: none; }
   .ca-submit:hover:not(:disabled), .ca-submit:hover:not(:disabled) .ca-submit-icon { transform: none; }
 }
+
+/* Give the client sign-in form a focused, token-based control surface. */
+.ca-auth-layout--sign-in .ca-form {
+  padding: clamp(var(--client-space-5), 3vw, var(--client-space-7));
+  border: 1px solid color-mix(in srgb, var(--public-accent) 28%, var(--public-line));
+  border-radius: var(--client-radius-panel);
+  background: color-mix(in srgb, var(--public-bg) 96%, var(--public-accent) 4%);
+}
+.ca-auth-layout--sign-in .ca-field::after { display: none; }
+.ca-auth-layout--sign-in .ca-field input {
+  min-height: var(--client-control-large);
+  padding-inline: var(--client-space-3);
+  border: 1px solid var(--public-line);
+  border-radius: var(--client-radius-control);
+  background: color-mix(in srgb, var(--public-bg) 92%, var(--public-ink) 8%);
+}
+.ca-auth-layout--sign-in .ca-field:focus-within input {
+  border-color: var(--public-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--public-accent) 18%, transparent);
+}
+.ca-auth-layout--sign-in .ca-form form > .ca-link { margin-top: var(--client-space-2); }
+.ca-auth-layout--sign-in .ca-form .ca-submit { margin-top: var(--client-space-4); }
+
+@media (max-width: 560px) {
+  .ca-auth-layout--sign-in .ca-form { padding: var(--client-space-5); }
+}
