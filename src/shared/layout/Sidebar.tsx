@@ -116,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     if (collapsed) event?.currentTarget.blur();
   };
 
-  const navButton = (tab: NavigationTab) => {
+  const navButton = (tab: NavigationTab, compact: boolean) => {
     const active = activeTab === tab;
     const label = labelFor(tab);
 
@@ -314,7 +314,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span>{section.label}</span>
               <span className="h-px flex-1 bg-surface-raised" aria-hidden="true" />
             </div>
-            {items.map(item => navButton(item.id))}
+            {items.map(item => navButton(item.id, compact))}
           </div>
         ))}
       </div>
