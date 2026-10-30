@@ -343,8 +343,8 @@
   --client-space-5: 20px;
 }
 .client-portal-shell .client-portal-toolbar {
-  min-height: 36px;
-  padding: 2px clamp(12px, 2vw, 28px);
+  min-height: 56px;
+  padding: 10px clamp(24px, 4vw, 56px);
   border-bottom: 0;
   background: transparent;
 }
@@ -360,10 +360,10 @@
   background: rgb(var(--ui-raised));
 }
 .client-portal-shell .client-portal-main--workspace {
-  padding: var(--client-space-3) clamp(16px, 2.5vw, 28px) var(--client-space-4);
+  padding: 40px clamp(24px, 4vw, 56px) 48px;
 }
 .client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace {
-  padding: var(--client-space-2) 0 0;
+  padding: 16px clamp(16px, 3vw, 40px) 16px;
 }
 
 .client-portal-shell .client-portal-page-heading {
@@ -404,6 +404,7 @@
   min-height: 60px;
   align-items: center;
   gap: var(--client-space-4);
+  flex-wrap: wrap;
   margin-bottom: 0;
   padding: 8px 0 12px;
   border-bottom: 1px solid rgb(var(--ui-divider));
@@ -570,10 +571,10 @@
 }
 
 @media (max-width: 767px) {
-  .client-portal-shell .client-portal-toolbar { min-height: 32px; padding-inline: 8px; }
+  .client-portal-shell .client-portal-toolbar { min-height: 56px; padding: 8px 16px; }
   .client-portal-shell .client-portal-action { width: 30px; height: 30px; }
-  .client-portal-shell .client-portal-main--workspace,
-  .client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace { padding: 8px 10px 10px; }
+  .client-portal-shell .client-portal-main--workspace { padding: 24px 16px 32px; }
+  .client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace { padding: 12px 12px 12px; }
   .client-portal-shell .client-portal-page-heading { min-height: 54px; padding: 5px 0 9px; }
   .client-portal-shell .client-portal-page-heading h1 { font-size: 18px; }
   .client-portal-shell .client-page-description { font-size: 10px; }
@@ -597,18 +598,18 @@
   .client-portal-shell .client-detail-back span { display: inline; }
 }
 
-/* Keep the global actions in the page header instead of reserving a separate bar. */
+/* Keep the global actions in their own row so page actions never overlap them. */
 .client-portal-shell .client-portal-mainview { position: relative; }
 .client-portal-shell .client-portal-toolbar {
-  position: absolute;
+  position: relative;
   z-index: 12;
-  top: 8px;
-  right: clamp(12px, 2vw, 28px);
-  min-height: 32px;
-  padding: 0;
+  top: auto;
+  right: auto;
+  min-height: 56px;
+  padding: 10px clamp(24px, 4vw, 56px);
 }
-.client-portal-shell.client-portal-shell--inspection .client-portal-toolbar { top: 70px; }
-.client-portal-shell.client-portal-shell--chat-open.client-portal-shell--inspection .client-portal-toolbar { top: 8px; }
+.client-portal-shell.client-portal-shell--inspection .client-portal-toolbar,
+.client-portal-shell.client-portal-shell--chat-open.client-portal-shell--inspection .client-portal-toolbar { top: auto; }
 
 @media (min-width: 761px) {
   .client-portal-shell--workspace { grid-template-columns: 68px minmax(0, 1fr); }
@@ -618,7 +619,7 @@
 }
 
 @media (max-width: 760px) {
-  .client-portal-shell.client-portal-shell--inspection .client-portal-toolbar { top: 62px; }
+  .client-portal-shell.client-portal-shell--inspection .client-portal-toolbar { top: auto; }
 }
 
 /* Type hierarchy: make the subject obvious before its supporting detail. */
