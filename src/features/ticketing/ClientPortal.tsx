@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   AlertCircle, ArrowRight, Check, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
-  CircleHelp, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket,
+  CircleHelp, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Pin, PinOff, Plus, RefreshCw, Search, Ticket,
+  X, type LucideIcon,
 } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
@@ -24,6 +26,7 @@ import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './Clie
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
 import './clientPortal.css';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
+import { SidebarFrame } from '@/shared/layout/SidebarFrame';
 
 type Filter = NonNullable<Parameters<typeof clientTicketApi.listRequests>[0]>['filter'];
 type PortalState = 'checking' | 'signed_out' | 'unavailable' | 'ready';
@@ -37,6 +40,7 @@ interface PendingOperation {
   refresh?: boolean;
 }
 interface PendingProjectReview { ticketId: string; project: ClientProject }
+interface ClientPageMenuPosition { top: number; left: number }
 interface ClientToast { title: string; description?: string; tone: ToastTone }
 
 const filters: Array<{ id: NonNullable<Filter>; label: string }> = [
@@ -44,6 +48,12 @@ const filters: Array<{ id: NonNullable<Filter>; label: string }> = [
   { id: 'open', label: 'Active requests' },
   { id: 'needs_client', label: 'Needs your action' },
   { id: 'history', label: 'Past requests' },
+];
+
+const clientPages: Array<{ id: Page; label: string; Icon: LucideIcon }> = [
+  { id: 'overview', label: 'Overview', Icon: LayoutDashboard },
+  { id: 'projects', label: 'Projects', Icon: FolderKanban },
+  { id: 'requests', label: 'Requests', Icon: ListChecks },
 ];
 
 function friendlyError(error: unknown, context: 'session' | 'queue' | 'ticket' | 'write' | 'create' | 'projects'): string {
@@ -94,6 +104,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [projectProposalsLoading, setProjectProposalsLoading] = useState(false);
   const [projectProposalsError, setProjectProposalsError] = useState('');
   const [page, setPage] = useState<Page>('overview');
+  const [openClientPages, setOpenClientPages] = useState<Page[]>(['overview']);
+  const [clientPageMenuOpen, setClientPageMenuOpen] = useState(false);
+  const [clientPageMenuPosition, setClientPageMenuPosition] = useState<ClientPageMenuPosition | null>(null);
+  const clientPageMenuRef = useRef<HTMLDivElement>(null);
+  const clientPageMenuContentRef = useRef<HTMLDivElement>(null);
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
@@ -108,6 +123,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [selectedItemFallback, setSelectedItemFallback] = useState<ClientProjectRequestItem | null>(null);
   const [returnToProjects, setReturnToProjects] = useState(false);
   const [pendingProjectReview, setPendingProjectReview] = useState<PendingProjectReview | null>(null);
+  const [portalSidebarCollapsed, setPortalSidebarCollapsed] = useState(true);
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [quickGuideOpen, setQuickGuideOpen] = useState(false);
   const [notificationProjectFocus, setNotificationProjectFocus] = useState(0);
@@ -387,6 +403,55 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     inspectionOnly, writing, pending, signingOut, queueLoading, detailLoading, historyLoading, queueMoreLoading,
     workflowActionsDisabled, communicationEnabled]);
 
+  useEffect(() => {
+    setOpenClientPages(current => current.includes(page) ? current : [...current, page]);
+  }, [page]);
+
+  useEffect(() => {
+    if (!clientPageMenuOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && !clientPageMenuRef.current?.contains(target) && !clientPageMenuContentRef.current?.contains(target)) {
+        setClientPageMenuOpen(false);
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setClientPageMenuOpen(false);
+        clientPageMenuRef.current?.querySelector<HTMLButtonElement>('.client-portal-add-tab')?.focus();
+      }
+    };
+    document.addEventListener('pointerdown', closeOnOutsidePointer);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsidePointer);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [clientPageMenuOpen]);
+
+  useLayoutEffect(() => {
+    if (!clientPageMenuOpen) { setClientPageMenuPosition(null); return; }
+    const updatePosition = () => {
+      const trigger = clientPageMenuRef.current?.querySelector<HTMLButtonElement>('.client-portal-add-tab');
+      const rect = trigger?.getBoundingClientRect();
+      if (!rect) return;
+      const edge = 12;
+      const width = Math.min(220, Math.max(0, window.innerWidth - edge * 2));
+      setClientPageMenuPosition({
+        top: Math.min(rect.bottom + 8, Math.max(edge, window.innerHeight - 190)),
+        left: Math.min(Math.max(edge, rect.left), window.innerWidth - width - edge),
+      });
+    };
+    updatePosition();
+    clientPageMenuContentRef.current?.querySelector<HTMLButtonElement>('button')?.focus();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [clientPageMenuOpen]);
+
   async function loadMoreQueue() {
     if (!queue?.nextCursor || queueMoreLoading) return;
     const generation = queueGeneration.current; setQueueMoreLoading(true); setQueueError('');
@@ -560,9 +625,19 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   function navigate(nextPage: Page) {
     setPage(nextPage); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
+    setClientPageMenuOpen(false);
     if (nextPage !== 'requests') { setReturnToProjects(false); setQueueNotice(''); }
-    if (nextPage === 'projects') setSelectedProjectKey(null);
+    if (nextPage === 'projects' && !openClientPages.includes(nextPage)) setSelectedProjectKey(null);
     if (nextPage === 'requests') setRequestListShown(true);
+  }
+
+  function closeClientPageTab(closedPage: Page) {
+    if (openClientPages.length < 2) return;
+    const currentIndex = openClientPages.indexOf(closedPage);
+    const remaining = openClientPages.filter(openPage => openPage !== closedPage);
+    setOpenClientPages(remaining);
+    setClientPageMenuOpen(false);
+    if (page === closedPage) navigate(remaining[Math.min(Math.max(currentIndex, 0), remaining.length - 1)]);
   }
 
   function openPortalUpdate(update: ClientPortalUpdate) {
@@ -589,63 +664,156 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     && activeRequest.status !== 'declined' && activeRequest.status !== 'cancelled' ? pendingProjectReview : null;
   const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review' || Boolean(currentPendingProject);
   const currentNav = page;
+  const availableClientPages = clientPages.filter(item => !openClientPages.includes(item.id));
   const clientEmail = session?.email?.trim() ?? '';
 
   return <main className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}`}>
-    <aside className="client-sidebar" aria-label="Client portal navigation">
-      <div className="client-sidebar-brand"><img src={alphaMarkUrl} alt="" /><div><strong>Alphaexplora</strong><small>Client portal</small></div></div>
-      <nav className="client-sidebar-nav">
-        <button type="button" aria-current={currentNav === 'overview' ? 'page' : undefined} onClick={() => navigate('overview')}>
-          <LayoutDashboard size={18} /><span>Overview</span>
-        </button>
-        <button type="button" aria-current={currentNav === 'projects' ? 'page' : undefined} onClick={() => navigate('projects')}>
-          <FolderKanban size={18} /><span>Projects</span>
-        </button>
-        <button type="button" aria-current={currentNav === 'requests' ? 'page' : undefined} onClick={() => navigate('requests')}>
-          <ListChecks size={18} /><span>Requests</span>
-        </button>
-      </nav>
-      <div className="client-sidebar-footer">
-        <div className="client-sidebar-account" role="group"
-          aria-label={clientEmail ? `Client account for ${clientEmail}` : 'Client account controls'}>
-          <span className="client-sidebar-avatar" aria-hidden="true">{clientEmail ? clientEmail[0].toUpperCase() : 'C'}</span>
-          <span className="client-sidebar-account-copy">
-            <strong title={clientEmail || 'Signed in'}>{clientEmail || 'Signed in'}</strong><small>Client</small>
-          </span>
-          <div className="client-sidebar-account-actions">
-            <button type="button" className="client-sidebar-action" aria-label={signingOut ? 'Signing out' : 'Sign out'}
-              title={signingOut ? 'Signing out…' : 'Sign out'} onClick={() => void signOut()}
-              disabled={inspectionOnly || signingOut || Boolean(pending)} aria-busy={signingOut}>
-              <LogOut size={16} />
+    <SidebarFrame collapsed={portalSidebarCollapsed} setCollapsed={setPortalSidebarCollapsed}
+      ariaLabel="Client portal navigation" className="client-sidebar-frame" asideClassName="client-sidebar">
+      {({ compact, togglePinned }) => <>
+        <div className={`space-y-3 pb-3 pt-3 ${compact ? 'px-2' : 'px-3'} client-sidebar-brand-row`}>
+          <div className={`flex items-center ${compact ? 'flex-col gap-1' : 'gap-1'}`}>
+            <div className={`flex min-w-0 items-center rounded-lg py-1.5 ${compact ? 'w-9 justify-center px-0' : 'flex-1 gap-2.5 px-2'}`}>
+              <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-action ring-1 ring-inset ring-content/[0.08]">
+                <img src={alphaMarkUrl} alt="" aria-hidden="true" className="h-7 w-6 object-contain" />
+              </span>
+              <span className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible min-w-0'}`}>
+                <span className="block truncate text-sm font-semibold text-content">Alphaexplora</span>
+                <span className="block text-[11px] text-content-muted">Client portal</span>
+              </span>
+            </div>
+            <button type="button" onClick={togglePinned}
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-surface-high hover:text-content focus-visible:ring-2 focus-visible:ring-focus"
+              title={portalSidebarCollapsed ? 'Keep sidebar open' : 'Use hover to open sidebar'}
+              aria-label={portalSidebarCollapsed ? 'Keep sidebar open' : 'Use hover to open sidebar'}
+              aria-pressed={!portalSidebarCollapsed}>
+              {portalSidebarCollapsed ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
             </button>
           </div>
         </div>
-        <div className="client-sidebar-help">
-          <button type="button" className="client-sidebar-guide" aria-label="Open client quick guide"
-            title="Client quick guide" onClick={() => setQuickGuideOpen(true)}>
-            <CircleHelp size={17} /><span>Quick guide</span>
-          </button>
-          <span className="client-sidebar-version" aria-label="Client portal version 2.0">2.0<span>v2.0.0</span></span>
+
+        <nav aria-label="Client pages" className={`client-sidebar-nav no-scrollbar min-h-0 flex-1 space-y-4 overflow-y-auto py-2 ${compact ? 'px-1.5' : 'px-2'}`}>
+          <div className="space-y-0.5">
+            {clientPages.map(({ id, label, Icon }) => {
+              const active = currentNav === id;
+              return <button key={id} type="button" aria-current={active ? 'page' : undefined}
+                onClick={() => navigate(id)} title={compact ? label : undefined} aria-label={label}
+                className={`group relative flex w-full items-center rounded-lg transition-colors ${compact ? 'justify-center px-0 py-2.5' : 'justify-between px-3 py-2'} ${active ? 'bg-selected font-semibold text-selected-content ring-1 ring-inset ring-content/[0.06]' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>
+                <span className={`flex items-center ${compact ? 'justify-center' : 'gap-3'} ${active ? 'text-link' : 'text-content-muted group-hover:text-content-secondary'}`}>
+                  <Icon className="h-4 w-4" /><span className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}>{label}</span>
+                </span>
+              </button>;
+            })}
+          </div>
+        </nav>
+
+        <div className={`border-t border-divider py-2.5 ${compact ? 'px-1.5' : 'px-2.5'} client-sidebar-footer`}>
+          <div className={`flex w-full items-center ${compact ? 'flex-col gap-1' : 'gap-2.5 px-2.5 py-2'}`}>
+            <div role="group" className={`client-sidebar-account flex min-w-0 items-center ${compact ? 'h-9 w-9 justify-center' : 'flex-1 gap-2.5 px-1.5'}`}
+              title={`${clientEmail || 'Signed in'} · Client`} aria-label={`${clientEmail || 'Signed in'}, Client`}>
+              <span className="client-sidebar-avatar flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-divider bg-surface-raised text-xs font-semibold text-content" aria-hidden="true">
+                {clientEmail ? clientEmail[0].toUpperCase() : 'C'}
+              </span>
+              <span className={`client-sidebar-account-copy sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible min-w-0 flex-1'}`}>
+                <span className="block truncate text-xs text-content">{clientEmail || 'Signed in'}</span>
+                <span className="block text-[11px] text-content-muted">Client</span>
+              </span>
+            </div>
+            <button type="button" onClick={() => void signOut()} disabled={inspectionOnly || signingOut || Boolean(pending)}
+              aria-busy={signingOut} className={`client-sidebar-action flex flex-shrink-0 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-surface-high hover:text-content focus-visible:ring-2 focus-visible:ring-focus ${compact ? 'h-9 w-9' : 'p-1.5'}`}
+              title={signingOut ? 'Signing out…' : 'Sign out'} aria-label={signingOut ? 'Signing out' : 'Sign out'}>
+              <LogOut className="h-4 w-4" />
+            </button>
+          </div>
         </div>
-      </div>
-    </aside>
+
+        <div className={`border-t border-divider py-2.5 text-xs text-content-secondary ${compact ? 'px-1.5' : 'px-4'} client-sidebar-help`}>
+          <div className={`flex items-center ${compact ? 'flex-col gap-2' : 'justify-between'}`}>
+            <button type="button" onClick={() => setQuickGuideOpen(true)}
+              className={`client-sidebar-guide flex items-center rounded-lg font-medium transition-colors hover:bg-surface-high hover:text-content focus-visible:ring-2 focus-visible:ring-focus ${compact ? 'h-9 w-9 justify-center' : 'gap-2'}`}
+              title={compact ? 'Client quick guide' : undefined} aria-label="Open client quick guide">
+              <CircleHelp className="h-4 w-4 text-content-muted" />
+              <span className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}>Quick guide</span>
+            </button>
+            <span className="client-sidebar-version font-mono text-[10px] font-medium text-link">{compact ? '2.0' : 'v2.0.0'}</span>
+          </div>
+        </div>
+      </>}
+    </SidebarFrame>
     <ClientQuickGuide isOpen={quickGuideOpen} onClose={() => setQuickGuideOpen(false)} onNavigate={page => {
       setQuickGuideOpen(false);
       navigate(page);
     }} />
 
     <div className="client-portal-mainview">
-      <header className="client-portal-toolbar" aria-label="Client portal actions">
-        <button type="button" aria-label="Refresh portal" title="Refresh portal"
-          onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
-          disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
-          <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
-        </button>
-        <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
-          loading={notificationsLoading} error={notificationsError}
-          onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
+      <header className="client-portal-toolbar" aria-label="Client portal navigation">
+        <div className="client-portal-header-tabs">
+          <div role="tablist" aria-label="Open client pages" className="client-page-tab-strip">
+            {openClientPages.map(openPage => {
+              const item = clientPages.find(candidate => candidate.id === openPage)!;
+              const Icon = item.Icon;
+              const active = page === openPage;
+              return <div key={openPage} role="presentation" className={`client-page-tab ${active ? 'is-active' : ''}`}>
+                <button type="button" role="tab" aria-selected={active} tabIndex={active ? 0 : -1}
+                  id={`client-page-tab-${openPage}`} aria-controls="client-page-panel" data-page={openPage}
+                  onClick={() => navigate(openPage)} title={item.label}
+                  onKeyDown={event => {
+                    if (!['ArrowRight', 'ArrowLeft', 'Home', 'End'].includes(event.key)) return;
+                    const tabs = event.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+                    if (!tabs?.length) return;
+                    const currentIndex = Array.from(tabs).indexOf(event.currentTarget);
+                    const nextIndex = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+                      : (currentIndex + (event.key === 'ArrowRight' ? 1 : -1) + tabs.length) % tabs.length;
+                    const nextTab = tabs[nextIndex];
+                    const nextPage = nextTab.dataset.page as Page | undefined;
+                    if (!nextPage) return;
+                    event.preventDefault();
+                    nextTab.focus();
+                    navigate(nextPage);
+                  }}>
+                  <Icon className="h-3.5 w-3.5" /><span>{item.label}</span>
+                </button>
+                {openClientPages.length > 1 && <button type="button" className="client-page-tab-close"
+                  aria-label={`Close ${item.label} tab`} title={`Close ${item.label} tab`}
+                  onClick={() => closeClientPageTab(openPage)}><X className="h-3 w-3" /></button>}
+              </div>;
+            })}
+          </div>
+
+          <div className="client-page-menu-anchor" ref={clientPageMenuRef}>
+            <button type="button" className={`client-portal-add-tab ${clientPageMenuOpen ? 'is-open' : ''}`}
+              onClick={() => setClientPageMenuOpen(open => !open)} aria-label="Open another client page"
+              aria-expanded={clientPageMenuOpen} aria-controls="client-page-menu" title="Open another client page">
+              <Plus className="h-4 w-4" />
+            </button>
+            {clientPageMenuOpen && clientPageMenuPosition && createPortal(<div id="client-page-menu" ref={clientPageMenuContentRef}
+              role="group" aria-label="Open client page" className="client-page-menu"
+              style={{ top: clientPageMenuPosition.top, left: clientPageMenuPosition.left, width: Math.min(220, window.innerWidth - 24) }}>
+              <p>Open client page</p>
+              {availableClientPages.length ? availableClientPages.map(({ id, label, Icon }) => <button type="button" key={id}
+                onClick={() => {
+                  navigate(id);
+                  clientPageMenuRef.current?.querySelector<HTMLButtonElement>('.client-portal-add-tab')?.focus();
+                }}>
+                <Icon className="h-4 w-4" /><span>{label}</span>
+              </button>) : <span className="client-page-menu-empty">All client pages are open</span>}
+            </div>, document.body)}
+          </div>
+
+          <div className="client-portal-header-actions">
+            <button type="button" aria-label="Refresh portal" title="Refresh portal"
+              onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
+              disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
+              <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
+            </button>
+            <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
+              loading={notificationsLoading} error={notificationsError}
+              onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
+          </div>
+        </div>
       </header>
-      <div className="client-portal-main client-portal-main--workspace">
+      <div id="client-page-panel" role="tabpanel" aria-labelledby={`client-page-tab-${page}`} tabIndex={-1}
+        className="client-portal-main client-portal-main--workspace">
         {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
         {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
         {refreshError && <div role="status" className="client-portal-error">{refreshError}</div>}
