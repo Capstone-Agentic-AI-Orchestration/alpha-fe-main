@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, Edit3, FlaskConical, HelpCircle, Inbox, Pin, PinOff, Plus, Search, Ticket as TicketIcon, Trash2 } from 'lucide-react';
+import { ChevronDown, Edit3, FlaskConical, HelpCircle, Inbox, Pin, PinOff, Plus, RefreshCw, Search, Ticket as TicketIcon, Trash2 } from 'lucide-react';
 import alphaMarkUrl from '@/assets/alpha-mark.png';
+import { Button } from '@/shared/components/ui/button';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import type { PreviewRole } from './previewModel';
 import { pmPreviewApi, pmPreviewDocumentsApi, pmPreviewIntakeApi } from './ticketingPreviewFixtures';
@@ -23,6 +24,7 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const [previewSection, setPreviewSection] = useState<'tickets' | 'inquiries'>('tickets');
+  const [previewRefreshToken, setPreviewRefreshToken] = useState(0);
   const expanded = pinnedOpen || hovered || focused;
   const sections = useMemo(() => sectionsFor('pm'), []);
 
@@ -108,18 +110,25 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
           {/* Kept visible so sample content cannot be mistaken for live records. */}
           <div className="flex h-full min-h-0 flex-col">
             <div className="pm-ticket-preview__notice"><FlaskConical size={12} />Design preview · fictional tickets · changes are disabled</div>
-            <div className="pm-ticket-page pm-ticket-page--nested"><nav role="tablist" aria-label="Ticket work queues" className="pm-ticket-page__tabs">
-              <button id="preview-pm-ticket-tab" type="button" role="tab" aria-selected={previewSection === 'tickets'} aria-pressed={previewSection === 'tickets'} aria-controls="preview-pm-ticket-panel"
-                onClick={() => setPreviewSection('tickets')} className={`pm-ticket-page__tab${previewSection === 'tickets' ? ' is-active' : ''}`}>
-                <TicketIcon size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Tickets</span>
-              </button>
-              <button id="preview-pm-inquiry-tab" type="button" role="tab" aria-selected={previewSection === 'inquiries'} aria-pressed={previewSection === 'inquiries'} aria-controls="preview-pm-inquiry-panel"
-                onClick={() => setPreviewSection('inquiries')} className={`pm-ticket-page__tab${previewSection === 'inquiries' ? ' is-active' : ''}`}>
-                <Inbox size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Inquiries</span>
-              </button>
+            <div className="pm-ticket-page pm-ticket-page--nested"><nav aria-label="Ticket work queues" className="pm-ticket-page__tabs">
+              <div role="tablist" className="pm-ticket-page__tab-list">
+                <button id="preview-pm-ticket-tab" type="button" role="tab" aria-selected={previewSection === 'tickets'} aria-pressed={previewSection === 'tickets'} aria-controls="preview-pm-ticket-panel"
+                  onClick={() => setPreviewSection('tickets')} className={`pm-ticket-page__tab${previewSection === 'tickets' ? ' is-active' : ''}`}>
+                  <TicketIcon size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Tickets</span>
+                </button>
+                <button id="preview-pm-inquiry-tab" type="button" role="tab" aria-selected={previewSection === 'inquiries'} aria-pressed={previewSection === 'inquiries'} aria-controls="preview-pm-inquiry-panel"
+                  onClick={() => setPreviewSection('inquiries')} className={`pm-ticket-page__tab${previewSection === 'inquiries' ? ' is-active' : ''}`}>
+                  <Inbox size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Inquiries</span>
+                </button>
+              </div>
+              <div className="pm-ticket-page__tab-actions">
+                <Button variant="ghost" size="sm" onClick={() => setPreviewRefreshToken(value => value + 1)} aria-label={`Refresh ${previewSection}`} title={`Refresh ${previewSection}`}>
+                  <RefreshCw size={14} aria-hidden="true" /><span>Refresh</span>
+                </Button>
+              </div>
             </nav><div id={previewSection === 'inquiries' ? 'preview-pm-inquiry-panel' : 'preview-pm-ticket-panel'} role="tabpanel"
-              aria-labelledby={previewSection === 'inquiries' ? 'preview-pm-inquiry-tab' : 'preview-pm-ticket-tab'} className="pm-ticket-page__content">{previewSection === 'tickets' ? <PmTicketsView api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} communicationEnabled />
-              : <PmCentralIntakeInbox workspaceId="preview-workspace" workspaceName="Northstar Demo" workspaceCanReview onAccepted={() => setPreviewSection('tickets')} api={pmPreviewIntakeApi} />}</div></div>
+              aria-labelledby={previewSection === 'inquiries' ? 'preview-pm-inquiry-tab' : 'preview-pm-ticket-tab'} className="pm-ticket-page__content">{previewSection === 'tickets' ? <PmTicketsView api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} communicationEnabled refreshToken={previewRefreshToken} />
+              : <PmCentralIntakeInbox workspaceId="preview-workspace" workspaceName="Northstar Demo" workspaceCanReview onAccepted={() => setPreviewSection('tickets')} api={pmPreviewIntakeApi} refreshToken={previewRefreshToken} />}</div></div>
           </div>
         </div>
       </main>

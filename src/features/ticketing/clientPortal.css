@@ -87,11 +87,15 @@
 :where(.client-portal-shell) .client-new-request { display: inline-flex; min-height: 38px; align-items: center; gap: 6px; padding: 0 10px; border: 1px solid rgb(var(--ui-divider)); border-radius: 8px; background: rgb(var(--ui-surface)); color: rgb(var(--ui-link)); font-size: 11px; font-weight: 600; cursor: pointer; }
 :where(.client-portal-shell) .client-new-request:hover:not(:disabled) { border-color: rgb(var(--ui-divider)); background: rgb(var(--ui-raised)); }
 :where(.client-portal-shell) .client-new-request:disabled { opacity: .55; cursor: not-allowed; }
+:where(.client-portal-shell) .client-request-toolbar { display: flex; min-width: 0; align-items: center; gap: 8px; padding: 0 10px 8px; border-bottom: 1px solid rgb(var(--ui-divider)); }
+:where(.client-portal-shell) .client-request-toolbar.is-list { display: grid; grid-template-columns: minmax(0, 1fr) minmax(220px, 380px); }
 :where(.client-portal-shell) .client-search { position: relative; display: flex; min-height: 42px; align-items: center; gap: 9px; margin: 3px 13px 10px; padding: 0 11px; border: 1px solid rgb(var(--ui-divider)); border-radius: 9px; background: rgb(var(--ui-well)); color: rgb(var(--ui-text-secondary)); }
+:where(.client-portal-shell) .client-request-toolbar.is-list > .client-search { width: 100%; min-width: 0; margin: 0; }
 :where(.client-portal-shell) .client-search:focus-within { border-color: rgb(var(--ui-focus)); box-shadow: 0 0 0 3px rgb(var(--ui-focus) / .18); }
 :where(.client-portal-shell) .client-search input { width: 100%; min-width: 0; border: 0; outline: 0; background: transparent; color: rgb(var(--ui-text-primary)); font: inherit; font-size: 12px; }
 :where(.client-portal-shell) .client-search input::placeholder { color: rgb(var(--ui-text-muted)); opacity: 1; }
 :where(.client-portal-shell) .client-search input:focus-visible { outline: none; }
+:where(.client-portal-shell) .client-request-toolbar.is-list .client-request-filters { min-width: 0; padding: 0; border-bottom: 0; }
 :where(.client-portal-shell) .client-request-filters { display: flex; min-height: 45px; flex-wrap: wrap; gap: 3px; overflow: visible; padding: 0 10px 8px; border-bottom: 1px solid rgb(var(--ui-divider)); }
 :where(.client-portal-shell) .client-request-filter { position: relative; display: inline-flex; min-height: 36px; flex: 0 0 auto; align-items: center; gap: 5px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; color: rgb(var(--ui-text-secondary)); font-size: 10px; font-weight: 550; cursor: pointer; white-space: nowrap; }
 :where(.client-portal-shell) .client-request-filter:hover { background: rgb(var(--ui-raised)); color: rgb(var(--ui-text-primary)); }
@@ -343,10 +347,49 @@
 }
 
 /* Signed-in project portal. The existing ticket detail styles above remain in use. */
-.client-portal-shell--workspace { display: grid; grid-template-columns: 72px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; height: 100dvh; }
+.client-portal-shell--workspace { display: grid; grid-template-columns: 80px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); min-height: 0; height: 100dvh; }
 .ticketing-client-preview { display: flex; height: 100dvh; min-height: 0; flex-direction: column; overflow: hidden; }
 .ticketing-client-preview > .client-portal-shell--workspace { height: auto; min-height: 0; flex: 1 1 0%; }
+.client-sidebar { position: relative; z-index: 4; display: flex; width: 80px; min-height: 0; flex-direction: column; overflow: hidden; border-right: 1px solid var(--cp-line); background: rgb(var(--ui-shell)); transition: width .16s ease; }
+.client-sidebar:hover, .client-sidebar:focus-within { z-index: 20; width: 272px; box-shadow: 12px 0 32px rgb(var(--ui-overlay) / .24); }
+.client-sidebar-brand { display: flex; min-height: 72px; align-items: center; gap: 11px; padding: 15px 21px; border-bottom: 1px solid var(--cp-line); white-space: nowrap; }
+.client-sidebar-brand img { width: 35px; height: 35px; flex: 0 0 auto; padding: 5px; border-radius: 10px; background: rgb(var(--ui-selected)); object-fit: contain; }
+.client-sidebar-brand div { display: grid; gap: 3px; opacity: 0; transition: opacity .12s ease; }
+.client-sidebar-brand strong { color: var(--cp-ink); font-size: 14px; }
+.client-sidebar-brand small { color: var(--cp-muted); font-size: 10px; }
+.client-sidebar:hover .client-sidebar-brand div, .client-sidebar:focus-within .client-sidebar-brand div { opacity: 1; }
+.client-sidebar-nav { display: grid; gap: 5px; padding: 14px 9px; }
+.client-sidebar-nav button { display: flex; min-height: 44px; width: 100%; align-items: center; justify-content: center; gap: 0; padding: 0; border: 1px solid transparent; border-radius: 9px; background: transparent; color: var(--cp-muted); text-align: left; white-space: nowrap; cursor: pointer; }
+.client-sidebar-nav button svg { flex: 0 0 auto; }
+.client-sidebar-nav button span { overflow: hidden; max-width: 0; opacity: 0; font-size: 12px; font-weight: 550; transition: opacity .12s ease, max-width .12s ease; }
+.client-sidebar:hover .client-sidebar-nav button, .client-sidebar:focus-within .client-sidebar-nav button { justify-content: flex-start; gap: 13px; padding: 0 14px; }
+.client-sidebar:hover .client-sidebar-nav button span, .client-sidebar:focus-within .client-sidebar-nav button span { max-width: 150px; opacity: 1; }
+.client-sidebar-nav button:hover { background: rgb(var(--ui-raised)); color: var(--cp-ink); }
+.client-sidebar-nav button[aria-current="page"] { border-color: rgb(var(--ui-divider)); background: rgb(var(--ui-selected)); color: rgb(var(--ui-link)); }
 .client-sidebar button:focus-visible { outline: 2px solid rgb(var(--ui-link)); outline-offset: 2px; }
+.client-sidebar-footer { display: grid; gap: 8px; margin-top: auto; padding: 9px 5px 8px; border-top: 1px solid var(--cp-line); }
+.client-sidebar-account { display: flex; min-width: 0; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+.client-sidebar-avatar { display: flex; width: 32px; height: 32px; flex: 0 0 auto; align-items: center; justify-content: center; border: 1px solid var(--cp-line); border-radius: 50%; background: rgb(var(--ui-raised)); color: var(--cp-ink); font-size: 12px; font-weight: 650; }
+.client-sidebar-account-copy { display: grid; min-width: 0; flex: none; overflow: hidden; max-width: 0; gap: 2px; opacity: 0; white-space: nowrap; transition: max-width .12s ease, opacity .12s ease; }
+.client-sidebar-account-copy strong { overflow: hidden; color: var(--cp-ink); font-size: 11px; font-weight: 550; text-overflow: ellipsis; }
+.client-sidebar-account-copy small { color: var(--cp-muted); font-size: 10px; }
+.client-sidebar-account-actions { display: flex; }
+.client-sidebar-action { display: flex; min-width: 32px; min-height: 32px; align-items: center; justify-content: center; gap: 9px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--cp-faint); cursor: pointer; white-space: nowrap; }
+.client-sidebar-action:hover:not(:disabled) { background: rgb(var(--ui-raised)); color: var(--cp-ink); }
+.client-sidebar-action:disabled { cursor: not-allowed; opacity: .48; }
+.client-sidebar-help { display: grid; justify-items: center; gap: 6px; padding-top: 8px; border-top: 1px solid var(--cp-line); color: var(--cp-faint); }
+.client-sidebar-guide { display: flex; width: 36px; min-height: 36px; align-items: center; justify-content: center; gap: 9px; padding: 0; border: 1px solid transparent; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; white-space: nowrap; }
+.client-sidebar-guide:hover { background: rgb(var(--ui-raised)); color: var(--cp-ink); }
+.client-sidebar-guide span, .client-sidebar-version > span { display: none; }
+.client-sidebar-version { color: rgb(var(--ui-link)); font: 600 10px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; }
+.client-sidebar:hover .client-sidebar-account, .client-sidebar:focus-within .client-sidebar-account { flex-direction: row; justify-content: flex-start; gap: 8px; }
+.client-sidebar:hover .client-sidebar-account-copy, .client-sidebar:focus-within .client-sidebar-account-copy { max-width: 180px; flex: 1; opacity: 1; }
+.client-sidebar:hover .client-sidebar-account-actions, .client-sidebar:focus-within .client-sidebar-account-actions { margin-left: auto; }
+.client-sidebar:hover .client-sidebar-help, .client-sidebar:focus-within .client-sidebar-help { grid-template-columns: minmax(0,1fr) auto; align-items: center; justify-items: stretch; padding: 8px 8px 0; }
+.client-sidebar:hover .client-sidebar-guide, .client-sidebar:focus-within .client-sidebar-guide { width: 100%; justify-content: flex-start; padding-inline: 8px; }
+.client-sidebar:hover .client-sidebar-guide span, .client-sidebar:focus-within .client-sidebar-guide span,
+.client-sidebar:hover .client-sidebar-version > span, .client-sidebar:focus-within .client-sidebar-version > span { display: inline; }
+.client-sidebar-version > span { margin-left: 3px; }
 .client-quick-guide-list { display: grid; gap: 8px; }
 .client-quick-guide-item { display: grid; grid-template-columns: 36px minmax(0,1fr); gap: 12px; padding: 14px; border: 1px solid var(--cp-line); border-radius: 11px; background: rgb(var(--ui-surface)); }
 .client-quick-guide-icon { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid rgb(var(--ui-divider)); border-radius: 9px; background: rgb(var(--ui-selected)); color: rgb(var(--ui-link)); }
@@ -359,31 +402,10 @@
 .client-quick-guide-note svg { flex: 0 0 auto; margin-top: 1px; color: rgb(var(--ui-link)); }
 .client-portal-mainview { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
 .client-portal-toolbar { position: relative; z-index: 12; display: flex; min-height: 48px; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px clamp(16px, 3vw, 42px); border-bottom: 1px solid var(--cp-line); background: rgb(var(--ui-shell)); }
-.client-portal-toolbar { min-height: 64px; justify-content: initial; padding: 9px 14px; border-bottom: 0; }
-.client-portal-header-tabs { display: flex; width: 100%; min-width: 0; min-height: 44px; align-items: center; gap: 6px; padding: 5px; border: 1px solid var(--cp-line); border-radius: 14px; background: rgb(var(--ui-surface) / .82); box-shadow: 0 8px 24px rgb(var(--ui-overlay) / .12); }
-.client-page-tab-strip { display: flex; min-width: 0; flex: 1; align-items: center; gap: 4px; overflow-x: auto; }
-.client-page-tab { display: flex; min-width: 112px; max-width: 220px; height: 36px; flex: 0 1 220px; align-items: center; gap: 2px; padding: 0 5px 0 11px; border: 1px solid transparent; border-radius: 10px; color: var(--cp-muted); }
-.client-page-tab.is-active { border-color: rgb(var(--ui-divider)); background: rgb(var(--ui-selected)); color: rgb(var(--ui-text)); }
-.client-page-tab > button:first-child { display: flex; min-width: 0; height: 100%; flex: 1; align-items: center; gap: 8px; overflow: hidden; border: 0; background: transparent; color: inherit; text-align: left; white-space: nowrap; cursor: pointer; }
-.client-page-tab > button:first-child svg { flex: 0 0 auto; color: rgb(var(--ui-link)); }
-.client-page-tab > button:first-child span { overflow: hidden; text-overflow: ellipsis; }
-.client-page-tab-close { display: grid; width: 24px; height: 24px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 6px; background: transparent; color: var(--cp-faint); cursor: pointer; }
-.client-page-tab-close:hover { background: rgb(var(--ui-raised)); color: var(--cp-ink); }
-.client-page-menu-anchor { position: relative; flex: 0 0 auto; }
-.client-portal-add-tab { display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 9px; background: transparent; color: var(--cp-muted); cursor: pointer; }
-.client-portal-add-tab:hover, .client-portal-add-tab.is-open { background: rgb(var(--ui-selected)); color: rgb(var(--ui-link)); }
-.client-page-menu { position: fixed; z-index: 60; display: grid; max-height: min(240px, calc(100vh - 24px)); gap: 3px; overflow-y: auto; padding: 8px; border: 1px solid var(--cp-line); border-radius: 13px; background: rgb(var(--ui-surface)); box-shadow: 0 18px 48px rgb(var(--ui-overlay) / .4); }
-.client-page-menu p { margin: 2px 7px 5px; color: var(--cp-faint); font-size: 10px; font-weight: 600; }
-.client-page-menu button { display: flex; min-height: 38px; align-items: center; gap: 9px; padding: 0 8px; border: 0; border-radius: 8px; background: transparent; color: var(--cp-muted); text-align: left; cursor: pointer; }
-.client-page-menu button:hover { background: rgb(var(--ui-raised)); color: var(--cp-ink); }
-.client-page-menu button svg { color: rgb(var(--ui-link)); }
-.client-page-menu-empty { padding: 8px; color: var(--cp-faint); font-size: 11px; }
-.client-portal-header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 4px; margin-left: auto; }
 .client-portal-action { position: relative; display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border: 1px solid var(--cp-line); border-radius: 9px; background: rgb(var(--ui-surface)); color: var(--cp-muted); cursor: pointer; }
 .client-portal-action:hover:not(:disabled) { background: rgb(var(--ui-raised)); color: var(--cp-ink); }
 .client-portal-action:disabled { opacity: .5; cursor: not-allowed; }
 .client-portal-action:focus-visible { outline: 2px solid rgb(var(--ui-focus)); outline-offset: 2px; }
-.client-page-tab button:focus-visible, .client-page-tab-close:focus-visible, .client-portal-add-tab:focus-visible, .client-page-menu button:focus-visible { outline: 2px solid rgb(var(--ui-focus)); outline-offset: 2px; }
 .client-notification-trigger { color: var(--cp-muted); }
 .client-notification-count { position: absolute; top: -5px; right: -5px; display: grid; min-width: 16px; height: 16px; place-items: center; padding: 0 4px; border: 2px solid rgb(var(--ui-shell)); border-radius: 999px; background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); font-size: 9px; font-weight: 700; line-height: 1; }
 .client-notification-popover { z-index: 80; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--cp-line); border-radius: 14px; background: rgb(var(--ui-surface)); color: var(--cp-ink); box-shadow: 0 22px 64px rgb(var(--ui-overlay) / .48); outline: none; }
@@ -546,34 +568,25 @@
 
 @media (max-width: 760px) {
   .client-portal-shell--workspace { grid-template-columns: minmax(0,1fr); grid-template-rows: minmax(0,1fr) 58px; }
-  .client-sidebar-frame { position: relative; z-index: 6; grid-row: 2; width: 100%; height: 58px; flex-shrink: 0; }
-  .client-sidebar-frame > .client-sidebar { position: relative; inset: auto; z-index: 6; width: 100% !important; height: 58px; flex-direction: row; overflow: visible; border-top: 1px solid var(--cp-line); border-right: 0; box-shadow: none !important; }
-  .client-sidebar-brand-row { display: none; }
-  .client-sidebar-nav { display: flex; width: auto; min-width: 0; flex: 1; align-items: stretch; gap: 4px; padding: 4px 8px; overflow: visible; }
-  .client-sidebar-nav > div { display: flex; min-width: 0; flex: 1; align-items: stretch; gap: 4px; }
-  .client-sidebar-nav > div > :not([hidden]) ~ :not([hidden]) { margin-top: 0; }
-  .client-sidebar-nav button { min-height: 48px; min-width: 0; flex: 1; flex-direction: column; justify-content: center; gap: 3px; padding: 3px; }
-  .client-sidebar .sidebar-label--hidden { max-width: 12rem; opacity: 1; pointer-events: auto; transform: none; }
-  .client-sidebar-nav .sidebar-label { font-size: 9px; }
+  .client-sidebar, .client-sidebar:hover, .client-sidebar:focus-within { position: relative; z-index: 6; grid-row: 2; width: 100%; height: 58px; flex-direction: row; overflow: visible; border-top: 1px solid var(--cp-line); border-right: 0; background: rgb(var(--ui-shell)); box-shadow: none; }
+  .client-sidebar-brand { display: none; }
+  .client-sidebar-nav { width: auto; min-width: 0; flex: 1; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; gap: 4px; padding: 4px 8px; }
+  .client-sidebar-nav button { min-height: 48px; flex-direction: column; justify-content: center; gap: 3px; padding: 3px; }
+  .client-sidebar:hover .client-sidebar-nav button, .client-sidebar:focus-within .client-sidebar-nav button { justify-content: center; gap: 3px; padding: 3px; }
+  .client-sidebar-nav button span { max-width: none; opacity: 1; font-size: 9px; }
   .client-sidebar-footer { display: flex; width: auto; flex: 0 0 auto; align-items: center; margin: 0; padding: 4px 6px; border-top: 0; border-left: 1px solid var(--cp-line); }
-  .client-sidebar-footer > div { flex-direction: row; gap: 2px; padding: 0; }
   .client-sidebar-account { flex-direction: row; gap: 2px; }
   .client-sidebar-account-copy { display: none; }
+  .client-sidebar-account-actions { flex-direction: row; gap: 2px; }
   .client-sidebar-action { width: 32px; min-width: 32px; min-height: 42px; padding: 0; }
   .client-sidebar-help { display: flex; flex-direction: row; gap: 2px; margin-left: 5px; padding: 0 0 0 5px; border-top: 0; border-left: 1px solid var(--cp-line); }
-  .client-sidebar-help > div { flex-direction: row; gap: 2px; }
   .client-sidebar-guide { width: 32px; min-height: 42px; }
-  .client-sidebar-guide .sidebar-label { display: none; }
   .client-sidebar-version { display: none; }
+  .client-sidebar:hover .client-sidebar-help, .client-sidebar:focus-within .client-sidebar-help { grid-template-columns: none; justify-items: center; margin-left: 5px; padding: 0 0 0 5px; border-top: 0; border-left: 1px solid var(--cp-line); }
+  .client-sidebar:hover .client-sidebar-guide, .client-sidebar:focus-within .client-sidebar-guide { width: 32px; justify-content: center; padding-inline: 0; }
+  .client-sidebar:hover .client-sidebar-guide span, .client-sidebar:focus-within .client-sidebar-guide span { display: none; }
   .client-portal-mainview { grid-row: 1; }
-  .client-portal-toolbar { min-height: 52px; padding: 5px 8px; }
-  .client-portal-header-tabs { min-height: 40px; gap: 3px; padding: 3px; border-radius: 11px; }
-  .client-page-tab { min-width: 96px; max-width: 150px; height: 32px; padding-left: 7px; font-size: 10px; }
-  .client-page-tab > button:first-child { gap: 5px; }
-  .client-page-tab-close { width: 21px; height: 21px; }
-  .client-portal-add-tab { width: 30px; height: 32px; }
-  .client-portal-header-actions { gap: 2px; }
-  .client-portal-header-actions .client-portal-action { width: 32px; height: 32px; }
+  .client-portal-toolbar { min-height: 44px; padding: 4px 10px; }
   .client-portal-main--workspace { padding: 14px 12px 20px; }
   .client-page-heading { min-height: 58px; margin-bottom: 13px; }
   .client-page-heading h1, .client-project-detail-heading h1 { font-size: 23px; }

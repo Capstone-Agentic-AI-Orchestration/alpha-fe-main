@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowLeft, Check, ChevronDown, CircleDot, FileText, Info,
-  LockKeyhole, MessageSquare, PanelLeftClose, PanelLeftOpen, Paperclip, RefreshCw, Search, Send, StickyNote,
+  LockKeyhole, MessageSquare, PanelLeftOpen, Paperclip, RefreshCw, Search, Send, StickyNote,
   Ticket as TicketIcon, UserRound,
 } from 'lucide-react';
 
@@ -34,6 +34,8 @@ type Filter = NonNullable<PmTicketQueueOptions['filter']>;
 type Panel = 'conversation' | 'notes';
 type TicketSection = 'conversation' | 'notes' | 'details' | 'documents';
 type WorkflowActions = 'none' | 'triage' | 'review_scope' | 'all';
+type DateRange = 'all' | '7d' | '30d' | 'older';
+type SortOrder = 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc';
 interface PendingOperation {
   ticketId: string;
   operationId: string;
@@ -48,12 +50,40 @@ interface PendingOperation {
 
 const filters: Array<{ id: Filter; label: string; counter?: 'needsPm' | 'inProgress' | 'waitingClient' | 'closedMonth' }> = [
   { id: 'all', label: 'All tickets' },
+  { id: 'open', label: 'Open tickets' },
   { id: 'needs_pm', label: 'Needs attention', counter: 'needsPm' },
   { id: 'in_progress', label: 'In progress', counter: 'inProgress' },
   { id: 'waiting_client', label: 'Waiting for client', counter: 'waitingClient' },
   { id: 'closed_month', label: 'Closed this month', counter: 'closedMonth' },
   { id: 'history', label: 'History' },
 ];
+
+const dateRanges: Array<{ id: DateRange; label: string }> = [
+  { id: 'all', label: 'Any date' },
+  { id: '7d', label: 'Updated in 7 days' },
+  { id: '30d', label: 'Updated in 30 days' },
+  { id: 'older', label: 'Updated earlier' },
+];
+
+const sortOrders: Array<{ id: SortOrder; label: string }> = [
+  { id: 'updated_desc', label: 'Recently updated' },
+  { id: 'updated_asc', label: 'Oldest updated' },
+  { id: 'created_desc', label: 'Recently created' },
+  { id: 'created_asc', label: 'Oldest created' },
+];
+
+function timestamp(value: string): number {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function matchesDateRange(updatedAt: string, range: DateRange): boolean {
+  if (range === 'all') return true;
+  const age = Date.now() - timestamp(updatedAt);
+  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+  if (range === 'older') return age >= thirtyDays;
+  return age <= (range === '7d' ? 7 * 24 * 60 * 60 * 1000 : thirtyDays);
+}
 
 function statusLabel(status: TicketStatus): string {
   const label = status.replace(/_/g, ' ');
@@ -156,7 +186,7 @@ export function PmContactVerification({ verification }: { verification: unknown 
   return <span className="text-content-muted">Unable to verify status</span>;
 }
 
-export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false }: {
+export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false, refreshToken }: {
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsApi;
   intakeEnabled?: boolean;
@@ -164,11 +194,15 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   workflowActions?: WorkflowActions;
   /** Enable only the conversation and document capabilities of Phase 5. */
   communicationEnabled?: boolean;
+  /** Parent-owned refresh control used by the compact Tickets/Inquiries toolbar. */
+  refreshToken?: number;
 } = {}) {
   const [queue, setQueue] = useState<PmTicketQueuePage | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const [dateRange, setDateRange] = useState<DateRange>('all');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('updated_desc');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [detail, setDetail] = useState<PmTicketDetail | null>(null);
@@ -273,7 +307,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     }
   }, [api, filter, search, intakeEnabled]);
 
-  useEffect(() => { void loadQueue(); }, [loadQueue, refreshVersion]);
+  useEffect(() => { void loadQueue(); }, [loadQueue, refreshVersion, refreshToken]);
 
   useEffect(() => {
     const refreshIfVisible = () => {
@@ -288,6 +322,16 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     () => queue?.items.find(item => item.id === selectedId) ?? null,
     [queue, selectedId],
   );
+  const visibleQueueItems = useMemo(() => {
+    const items = (queue?.items ?? []).filter(item => matchesDateRange(item.updatedAt, dateRange));
+    const [field, direction] = sortOrder.split('_') as ['updated' | 'created', 'asc' | 'desc'];
+    return [...items].sort((left, right) => {
+      const leftValue = timestamp(field === 'created' ? left.createdAt : left.updatedAt);
+      const rightValue = timestamp(field === 'created' ? right.createdAt : right.updatedAt);
+      const difference = direction === 'asc' ? leftValue - rightValue : rightValue - leftValue;
+      return difference || left.id.localeCompare(right.id);
+    });
+  }, [dateRange, queue, sortOrder]);
   const selectedInvitation = selectedQueueItem?.internal.clientInvitation ?? null;
   const selectedNextStep = useMemo(() => {
     if (!selectedQueueItem) return null;
@@ -324,7 +368,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       current = false;
       if (historyGeneration.current === historyVersion) historyGeneration.current += 1;
     };
-  }, [api, selectedId, selectedQueueItem?.internal.clientAccessActive, refreshVersion]);
+  }, [api, selectedId, selectedQueueItem?.internal.clientAccessActive, refreshVersion, refreshToken]);
 
   useEffect(() => {
     if (!selectedId || panel !== 'conversation' || !selectedQueueItem) return;
@@ -342,7 +386,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       if (current) setHistoryLoading(false);
     });
     return () => { current = false; };
-  }, [api, selectedId, panel, selectedQueueItem?.internal.clientAccessActive, selectedQueueItem?.updatedAt, refreshVersion]);
+  }, [api, selectedId, panel, selectedQueueItem?.internal.clientAccessActive, selectedQueueItem?.updatedAt, refreshVersion, refreshToken]);
 
   useEffect(() => {
     if (!selectedId || panel !== 'notes' || !selectedQueueItem) return;
@@ -356,7 +400,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       if (current) setHistoryLoading(false);
     });
     return () => { current = false; };
-  }, [api, selectedId, panel, refreshVersion]);
+  }, [api, selectedId, panel, refreshVersion, refreshToken]);
 
 
   const refreshAll = () => {
@@ -846,11 +890,18 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   ) : null;
 
   return <div className={`pm-tickets${selectedId ? ' pm-tickets--ticket-open' : ''}${navigationCollapsed ? ' is-navigation-collapsed' : ''}`}>
-    <aside className="pm-tickets__navigation" aria-label="Ticket views">
-      <button type="button" className="role-chat-navigation-toggle" aria-label={navigationCollapsed ? 'Show ticket navigation' : 'Collapse ticket navigation'} aria-expanded={!navigationCollapsed} onClick={() => setNavigationCollapsed(value => !value)}>{navigationCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
+    {selectedId && <aside className="pm-tickets__navigation" aria-label="Ticket views"
+      title="Click empty sidebar space to collapse or expand"
+      onClick={event => {
+        if (event.target instanceof Element && event.target.closest('button, a, select, input, textarea')) return;
+        setNavigationCollapsed(value => !value);
+      }}>
       <header className="pm-tickets__navigation-heading">
-        <h1 className="pm-tickets__title"><TicketIcon size={19} aria-hidden="true" />Tickets</h1>
-        <p>Client requests</p>
+        <div className="pm-tickets__navigation-title"><TicketIcon size={17} aria-hidden="true" /><span>Tickets</span></div>
+        {navigationCollapsed && <button type="button" className="role-chat-navigation-toggle" aria-label="Show ticket navigation" title="Show ticket navigation"
+          onClick={event => { event.stopPropagation(); setNavigationCollapsed(false); }}>
+          <PanelLeftOpen size={16} aria-hidden="true" /><span className="sr-only">Show ticket navigation</span>
+        </button>}
       </header>
       <label className="pm-tickets__compact-filter"><span className="sr-only">Filter requests</span>
         <select aria-label="Filter requests" value={filter} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => activeFilter(event.target.value as Filter)}>
@@ -865,23 +916,40 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
         </button>)}
         {queue?.nextCursor && <button type="button" disabled={queueMoreLoading || queueLoading} onClick={() => void loadMoreQueue()}>{queueMoreLoading ? 'Loading…' : 'Load more tickets'}</button>}
       </nav>}
-    </aside>
+    </aside>}
     <div className="pm-tickets__main">
-    <header className="pm-tickets__header">
+    {!selectedId && <header className="pm-tickets__header">
       <div className="pm-tickets__view-heading">
-        {selectedId ? <button type="button" onClick={backToQueue} disabled={writing || Boolean(pending)} className="pm-tickets__back"><ArrowLeft size={16} />{filters.find(option => option.id === filter)?.label}</button>
-          : <><h2>{filters.find(option => option.id === filter)?.label}</h2><span className="pm-tickets__view-count">{queue ? queue.items.length : '…'}</span></>}
+        <h2>{filters.find(option => option.id === filter)?.label}</h2><span className="pm-tickets__view-count">{queue ? visibleQueueItems.length : '…'}</span>
       </div>
       <div className="pm-tickets__header-actions">
         {!selectedId && <label className="pm-tickets__search"><Search size={15} aria-hidden="true" />
           <span className="sr-only">Search tickets</span>
           <input value={searchInput} disabled={!intakeEnabled} onChange={event => setSearchInput(event.target.value)} placeholder="Search tickets…" className="pm-tickets__search-input" />
         </label>}
-        <button type="button" onClick={refreshAll} disabled={!intakeEnabled || queueLoading || Boolean(pending)} className="pm-tickets__refresh" title="Refresh tickets">
+        {!selectedId && <label className="pm-tickets__queue-select">
+          <span className="sr-only">Filter requests</span>
+          <select aria-label="Filter requests" value={filter} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => activeFilter(event.target.value as Filter)}>
+            {filters.map(option => <option key={option.id} value={option.id}>{option.label}{option.counter && queue?.counters.kind === 'pm' ? ` · ${queue.counters[option.counter]}` : ''}</option>)}
+          </select>
+        </label>}
+        {!selectedId && <label className="pm-tickets__queue-select">
+          <span className="sr-only">Filter by date</span>
+          <select aria-label="Filter by date" value={dateRange} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => setDateRange(event.target.value as DateRange)}>
+            {dateRanges.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+          </select>
+        </label>}
+        {!selectedId && <label className="pm-tickets__queue-select">
+          <span className="sr-only">Sort tickets</span>
+          <select aria-label="Sort tickets" value={sortOrder} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => setSortOrder(event.target.value as SortOrder)}>
+            {sortOrders.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+          </select>
+        </label>}
+        {refreshToken === undefined && <button type="button" onClick={refreshAll} disabled={!intakeEnabled || queueLoading || Boolean(pending)} className="pm-tickets__refresh" title="Refresh tickets">
           <RefreshCw size={15} className={queueLoading ? 'animate-spin' : ''} /><span>Refresh</span>
-        </button>
+        </button>}
       </div>
-    </header>
+    </header>}
 
     {!intakeEnabled && <div role="status" className="pm-tickets__service-notice">
       <Info size={15} aria-hidden="true" />
@@ -904,15 +972,15 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
           {requestAccessError && <p role="alert" className="pm-tickets__error">{requestAccessError}</p>}
           {!intakeEnabled ? <EmptyPanel title="Live tickets are not connected yet" detail="No ticket data is loaded while ticketing is disabled." />
             : queueLoading && !queue ? <div className="p-6 text-center text-xs text-content-muted">Loading tickets…</div>
-            : queue && queue.items.length > 0 ? <PmTicketQueueList items={queue.items} selectedId={selectedId}
+            : queue && visibleQueueItems.length > 0 ? <PmTicketQueueList items={visibleQueueItems} selectedId={selectedId}
               disabled={Boolean(pending)} requestAccessSaving={requestAccessSaving}
               onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }}
               onToggleRequests={(ticketId, enabled) => void setClientRequestAccess(ticketId, enabled)} />
-              : queue && <div className="pm-tickets__empty-state"><EmptyPanel title="No tickets in this view" detail={filter === 'all' && !search ? 'Accepted inquiries will appear here. New inquiries are reviewed in the separate intake inbox.' : 'Try another view or clear your search.'} />
-                {(search || filter !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); activeFilter('all'); }}>Show all tickets</button>}</div>}
+              : queue && <div className="pm-tickets__empty-state"><EmptyPanel title="No tickets in this view" detail={filter === 'all' && !search && dateRange === 'all' ? 'Accepted inquiries will appear here. New inquiries are reviewed in the separate intake inbox.' : 'Try another view or clear your filters.'} />
+                {(search || filter !== 'all' || dateRange !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); setDateRange('all'); setSortOrder('updated_desc'); activeFilter('all'); }}>Show all tickets</button>}</div>}
         </div>
         {queue && <div className="pm-tickets__queue-footer">
-          <span>Showing {queue.items.length} ticket{queue.items.length === 1 ? '' : 's'}</span>
+          <span>Showing {visibleQueueItems.length} ticket{visibleQueueItems.length === 1 ? '' : 's'}</span>
           {queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading} className="text-link hover:text-link-hover disabled:opacity-50">{queueMoreLoading ? 'Loading…' : 'Load more'}</button>}
         </div>}
       </div>
@@ -924,13 +992,20 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
             : detailError ? <div role="alert" className="m-4 rounded-lg border border-status-danger-border bg-status-danger-subtle p-4 text-xs text-status-danger">{detailError}</div>
               : detail && selectedQueueItem && <div className="pm-tickets__detail-shell">
                 <header className="pm-tickets__detail-header">
-                  <div className="pm-tickets__detail-meta">
-                    <div className="pm-tickets__detail-identity"><span className="pm-tickets__reference" title={detail.reference}>{detail.reference.length > 20 ? `${detail.reference.slice(0, 16)}…` : detail.reference}</span><span className={`pm-tickets__status ${statusStyle(detail.status)}`}>{statusLabel(detail.status)}</span></div>
-                    <span className="pm-tickets__updated">Updated {time(detail.updatedAt)}</span>
+                  <div className="pm-tickets__detail-heading">
+                    <button type="button" onClick={backToQueue} disabled={writing || Boolean(pending)} className="pm-tickets__detail-back" aria-label="Back to tickets" title="Back to tickets">
+                      <ArrowLeft size={17} aria-hidden="true" /><span className="sr-only">Back to tickets</span>
+                    </button>
+                    <div className="pm-tickets__detail-heading-copy">
+                      <div className="pm-tickets__detail-meta">
+                        <div className="pm-tickets__detail-identity"><TicketIcon size={16} aria-hidden="true" /><span className="pm-tickets__reference" title={detail.reference}>{detail.reference.length > 20 ? `${detail.reference.slice(0, 16)}…` : detail.reference}</span><span className={`pm-tickets__status ${statusStyle(detail.status)}`}>{statusLabel(detail.status)}</span></div>
+                        <span className="pm-tickets__updated">Updated {time(detail.updatedAt)}</span>
+                      </div>
+                      <h2 ref={detailHeading} tabIndex={-1} className="pm-tickets__detail-title">{detail.title}</h2>
+                      <p className="pm-tickets__ticket-context">{detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? detail.companyLabel}
+                        <span>·</span>{detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? detail.request?.projectLabel ?? 'No project linked'}</p>
+                    </div>
                   </div>
-                  <h2 ref={detailHeading} tabIndex={-1} className="pm-tickets__detail-title">{detail.title}</h2>
-                  <p className="pm-tickets__ticket-context">{detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? detail.companyLabel}
-                    <span>·</span>{detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? detail.request?.projectLabel ?? 'No project linked'}</p>
                   {invitationEmailError && <p role="alert" className="pm-tickets__detail-notice pm-tickets__detail-notice--error">{invitationEmailError}</p>}
                 </header>
 

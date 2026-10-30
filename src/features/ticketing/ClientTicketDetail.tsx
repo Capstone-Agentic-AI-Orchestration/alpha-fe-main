@@ -128,21 +128,23 @@ export function ClientTicketDetail({
 
   return <section className="client-ticket-detail">
     <header className="client-detail-header">
-      <button onClick={onBack} disabled={busy} className="client-detail-back"><ArrowLeft size={15} />Back to requests</button>
-      <div className="client-detail-title-row">
-        <div className="min-w-0">
-          <h2 className="client-detail-title">{ticket.title}</h2>
-          <div className="client-detail-reference-row">
-            <span className="client-detail-reference">{ticket.reference}</span>
-            <button type="button" onClick={copyReference} aria-label="Copy request reference" className="client-copy-reference">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
-            {copied && <span role="status" className="client-copied-note">Copied</span>}
+      <div className="client-detail-heading">
+        <button onClick={onBack} disabled={busy} className="client-detail-back" aria-label="Back to requests"><ArrowLeft size={15} /><span>Back to requests</span></button>
+        <div className="client-detail-title-row">
+          <div className="min-w-0">
+            <h2 className="client-detail-title">{ticket.title}</h2>
+            <div className="client-detail-reference-row">
+              <span className="client-detail-reference">{ticket.reference}</span>
+              <button type="button" onClick={copyReference} aria-label="Copy request reference" className="client-copy-reference">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
+              {copied && <span role="status" className="client-copied-note">Copied</span>}
+            </div>
+            <p className="client-detail-date">Created {time(ticket.createdAt)} <span aria-hidden="true">·</span> Updated {time(ticket.updatedAt)}</p>
           </div>
-          <p className="client-detail-date">Created {time(ticket.createdAt)} <span aria-hidden="true">·</span> Updated {time(ticket.updatedAt)}</p>
-        </div>
-        <div className="client-detail-heading-actions">
-          <Status status={ticket.status} label={progress.statusLabel} />
-          {needsAction && canReply && tab !== 'details' && <button type="button" onClick={() => setTab('details')} className="client-header-review">{scopeDecision ? 'Review proposed work' : 'Review result'}</button>}
-          {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className={`${secondary} min-h-[44px]`}>Request additional work</button>}
+          <div className="client-detail-heading-actions">
+            <Status status={ticket.status} label={progress.statusLabel} />
+            {needsAction && canReply && tab !== 'details' && <button type="button" onClick={() => setTab('details')} className="client-header-review">{scopeDecision ? 'Review proposed work' : 'Review result'}</button>}
+            {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className={`${secondary} min-h-[44px]`}>Request additional work</button>}
+          </div>
         </div>
       </div>
     </header>

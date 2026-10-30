@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, FolderKanban, RefreshCw, Send, Plus, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, CircleDot, FolderKanban, MessageSquare, RefreshCw, Send, Plus, X } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectProposal, ClientProjectProposalInput,
   ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
@@ -27,34 +27,52 @@ export function ClientOverviewPage({ requests, projects, requestsLoading, reques
   const attention = requests?.items.filter(item => item.requestedAction !== null && item.status !== 'closed'
     && item.status !== 'declined' && item.status !== 'cancelled') ?? [];
   const recent = [...(requests?.items ?? [])].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 5);
+  const inProgress = requests?.items.filter(item => item.status === 'in_progress').length ?? 0;
+  const completed = requests?.items.filter(item => item.status === 'closed').length ?? 0;
+  const summaryValue = (value: number) => requests ? String(value) : '—';
   return <section className="client-page client-overview-page" aria-labelledby="client-overview-title">
-    <header className="client-page-heading">
-      <div><p className="client-eyebrow">CLIENT PORTAL</p><h1 id="client-overview-title">Overview</h1>
-        <p className="client-page-description">What needs your attention and what changed recently.</p></div>
+    <header className="client-page-heading client-overview-heading">
+      <div><h1 id="client-overview-title">Overview</h1>
+        <h2 className="client-overview-welcome">Welcome back</h2>
+        <p className="client-page-description">Here’s what’s happening with your requests and projects.</p></div>
     </header>
-    <section className="client-overview-section" aria-labelledby="client-attention-title">
+    <section className="client-overview-summary" aria-label="Request summary">
+      <div className="client-overview-summary-item">
+        <span className="client-overview-summary-icon"><MessageSquare size={17} aria-hidden /></span>
+        <span><strong>{summaryValue(attention.length)}</strong><small>Needs your reply</small></span>
+      </div>
+      <div className="client-overview-summary-item is-progress">
+        <span className="client-overview-summary-icon"><CircleDot size={17} aria-hidden /></span>
+        <span><strong>{summaryValue(inProgress)}</strong><small>In progress</small></span>
+      </div>
+      <div className="client-overview-summary-item is-complete">
+        <span className="client-overview-summary-icon"><CheckCircle2 size={17} aria-hidden /></span>
+        <span><strong>{summaryValue(completed)}</strong><small>Completed</small></span>
+      </div>
+    </section>
+    <section className="client-overview-section is-primary" aria-labelledby="client-attention-title">
       <div className="client-section-heading"><div><h2 id="client-attention-title">Needs your attention</h2>
-        <p>Requests where your project manager is waiting for you.</p></div>
-        <button type="button" className="client-text-action" onClick={onGoToRequests}>All requests <ArrowRight size={15} /></button></div>
+        <p>A few things are waiting for your reply.</p></div>
+        <button type="button" className="client-text-action" onClick={onGoToRequests}>View all requests <ArrowRight size={15} /></button></div>
       {requestsError && <p role="alert" className="client-project-error">{requestsError}</p>}
       {!requests && requestsLoading ? <p role="status" className="client-section-state">Loading requests…</p>
         : !requests ? null
         : attention.length ? <div className="client-activity-list">{attention.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}</div>
           : <p className="client-section-state">You’re all caught up. There are no requests waiting for your reply.</p>}
     </section>
-    <section className="client-overview-section" aria-labelledby="client-recent-title">
+    <section className="client-overview-section is-supporting" aria-labelledby="client-recent-title">
       <div className="client-section-heading"><div><h2 id="client-recent-title">Recent request updates</h2>
-        <p>Latest activity across your requests.</p></div></div>
+        <p>The latest updates from your project manager.</p></div></div>
       {!requests && requestsLoading ? <p role="status" className="client-section-state">Loading updates…</p>
         : !requests ? null
         : recent.length ? <div className="client-activity-list">{recent.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}</div>
           : <p className="client-section-state">No request updates yet. Your project manager will share requests here.</p>}
       {requests?.nextCursor && <button type="button" className="client-text-action" onClick={onGoToRequests}>See all requests <ArrowRight size={15} /></button>}
     </section>
-    <section className="client-overview-section" aria-labelledby="client-projects-title">
+    <section className="client-overview-section is-supporting" aria-labelledby="client-projects-title">
       <div className="client-section-heading"><div><h2 id="client-projects-title">Your projects</h2>
-        <p>Projects your account can currently access.</p></div>
-        <button type="button" className="client-text-action" onClick={onGoToProjects}>View projects <ArrowRight size={15} /></button></div>
+        <p>Projects shared with you.</p></div>
+        <button type="button" className="client-text-action" onClick={onGoToProjects}>View all projects <ArrowRight size={15} /></button></div>
       {projectsError && <p role="alert" className="client-project-error">{projectsError}</p>}
       {projectsLoading && !projects.length ? <p role="status" className="client-section-state">Loading projects…</p>
         : projects.length ? <div className="client-project-preview-list">{projects.slice(0, 3).map(project => <div key={clientProjectKey(project)}>
@@ -304,6 +322,19 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
       </button>}
     </header>
     {error && <p role="alert" className="client-project-error">{error}</p>}
+    <section className="client-existing-projects" aria-labelledby="client-existing-projects-title">
+      <div className="client-section-heading"><div><h2 id="client-existing-projects-title">Your projects</h2>
+        <p>Project spaces already shared with your account.</p></div></div>
+      {loading ? <p role="status" className="client-section-state">Loading your projects…</p>
+        : projects.length ? <div className="client-project-list">{[...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(project => <button
+          key={clientProjectKey(project)} type="button" onClick={() => { onSelectedProjectKeyChange(clientProjectKey(project)); setTab('overview'); }}>
+          <span className="client-project-list-icon"><FolderKanban size={18} /></span>
+          <span><strong>{project.name}</strong><small>{project.preview ? 'Preview available' : 'No preview shared'} · Updated {time(project.updatedAt)}</small></span>
+          <ArrowRight size={16} aria-hidden />
+        </button>)}</div>
+          : !error && <div className="client-project-empty"><FolderKanban size={24} /><h2>No projects shared yet</h2>
+            <p>When your project manager gives your account access to a project, it will appear here.</p></div>}
+    </section>
     {proposalFormOpen && <form id="client-proposal-form" className="client-proposal-form" onSubmit={submitProposal}>
       <div><h2>Propose a new project</h2><p>Describe the outcome you want. Your project manager will review it and choose the right workspace.</p></div>
       <label htmlFor="client-proposal-title">Project title<input id="client-proposal-title" value={proposalTitle} onChange={event => setProposalTitle(event.target.value)} maxLength={160} required disabled={proposalSubmitting || proposalNeedsRetry} /></label>
@@ -337,15 +368,6 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         </article>)}</div>
           : !proposalsError && <p className="client-section-state">No project proposals yet.</p>}
     </section>
-    {loading ? <p role="status" className="client-section-state">Loading your projects…</p>
-      : projects.length ? <div className="client-project-list">{[...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(project => <button
-        key={clientProjectKey(project)} type="button" onClick={() => { onSelectedProjectKeyChange(clientProjectKey(project)); setTab('overview'); }}>
-        <span className="client-project-list-icon"><FolderKanban size={18} /></span>
-        <span><strong>{project.name}</strong><small>{project.preview ? 'Preview available' : 'No preview shared'} · Updated {time(project.updatedAt)}</small></span>
-        <ArrowRight size={16} aria-hidden />
-      </button>)}</div>
-        : !error && <div className="client-project-empty"><FolderKanban size={24} /><h2>No projects shared yet</h2>
-          <p>When your project manager gives your account access to a project, it will appear here.</p></div>}
   </section>;
 }
 
