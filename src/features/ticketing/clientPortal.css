@@ -655,6 +655,7 @@
 /* Signed-in portal: use the available workspace and keep its chrome aligned. */
 .client-portal-shell .client-page,
 .client-portal-shell .client-requests-page { width: 100%; max-width: none; margin-inline: 0; }
+.client-portal-shell .ticket-chat__group { width: 100%; max-width: none; margin-inline: 0; }
 .client-portal-shell .client-create-view--project,
 .client-portal-shell .client-create-view--project > section { margin-inline: 0; }
 .client-portal-shell .client-create-project-context { padding-inline: 0; }
