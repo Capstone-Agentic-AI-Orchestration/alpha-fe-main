@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, CircleDot, FolderKanban, MessageSquare, RefreshCw, Send, Plus, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, CircleDot, FolderKanban, MessageSquare, RefreshCw, Send, Plus } from 'lucide-react';
+import { Modal } from '@/shared/components/Modal';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectProposal, ClientProjectProposalInput,
   ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
@@ -317,8 +318,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   return <section className="client-page client-projects-page" aria-labelledby="client-projects-page-title">
     <header className="client-projects-heading"><div><p className="client-eyebrow">CLIENT PORTAL</p><h1 id="client-projects-page-title">Projects</h1>
       <p className="client-page-description">Projects your project manager has shared with you.</p></div>
-      {!inspectionOnly && <button type="button" className="client-primary-action" aria-expanded={proposalFormOpen} aria-controls={proposalFormOpen ? 'client-proposal-form' : undefined} onClick={() => { setProposalFormOpen(value => !value); setProposalError(''); setProposalSuccess(''); }}>
-        {proposalFormOpen ? <X size={15} /> : <Plus size={15} />}{proposalFormOpen ? 'Close' : 'Propose a project'}
+      {!inspectionOnly && <button type="button" className="client-primary-action" aria-haspopup="dialog" aria-expanded={proposalFormOpen} onClick={() => { setProposalFormOpen(true); setProposalSuccess(''); }}>
+        <Plus size={15} />Propose a project
       </button>}
     </header>
     {error && <p role="alert" className="client-project-error">{error}</p>}
@@ -335,20 +336,23 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
           : !error && <div className="client-project-empty"><FolderKanban size={24} /><h2>No projects shared yet</h2>
             <p>When your project manager gives your account access to a project, it will appear here.</p></div>}
     </section>
-    {proposalFormOpen && <form id="client-proposal-form" className="client-proposal-form" onSubmit={submitProposal}>
-      <div><h2>Propose a new project</h2><p>Describe the outcome you want. Your project manager will review it and choose the right workspace.</p></div>
+    <Modal isOpen={proposalFormOpen} onClose={() => setProposalFormOpen(false)} closeDisabled={proposalSubmitting}
+      title="Propose a project" subtitle="Describe the outcome you want. Your project manager will review it and choose the right workspace."
+      dialogClassName="client-proposal-modal" maxWidth="max-w-xl">
+    <form id="client-proposal-form" className="client-proposal-form" onSubmit={submitProposal}>
       <label htmlFor="client-proposal-title">Project title<input id="client-proposal-title" value={proposalTitle} onChange={event => setProposalTitle(event.target.value)} maxLength={160} required disabled={proposalSubmitting || proposalNeedsRetry} /></label>
       <label htmlFor="client-proposal-description">What would you like to accomplish?<textarea id="client-proposal-description" value={proposalDescription} onChange={event => setProposalDescription(event.target.value)} maxLength={6000} rows={4} required disabled={proposalSubmitting || proposalNeedsRetry} /></label>
-      <label htmlFor="client-proposal-deadline">Target date <span>(optional)</span><input id="client-proposal-deadline" type="date" value={proposalDeadline} onChange={event => setProposalDeadline(event.target.value)} disabled={proposalSubmitting || proposalNeedsRetry} /></label>
+      <label htmlFor="client-proposal-deadline">Target date (optional)<input id="client-proposal-deadline" type="date" value={proposalDeadline} onChange={event => setProposalDeadline(event.target.value)} disabled={proposalSubmitting || proposalNeedsRetry} /></label>
       <p id="client-proposal-note" className="client-proposal-note">Sending this proposal does not create a project or promise a start date. If your PM accepts it, a request will appear here so you can discuss the scope together.</p>
       {proposalError && <p role="alert" className="client-project-error">{proposalError}</p>}
       <div className="client-proposal-actions">
-        {!proposalNeedsRetry && <button type="button" className="client-proposal-cancel" disabled={proposalSubmitting} onClick={() => { setProposalFormOpen(false); setProposalError(''); }}>Cancel</button>}
+        {!proposalNeedsRetry && <button type="button" className="client-proposal-cancel" disabled={proposalSubmitting} onClick={() => setProposalFormOpen(false)}>Cancel</button>}
         <button type="submit" className="client-primary-action" aria-describedby="client-proposal-note" disabled={proposalSubmitting || (!proposalNeedsRetry && (!proposalTitle.trim() || !proposalDescription.trim()))}>
           <Send size={14} />{proposalSubmitting ? 'Sending…' : proposalNeedsRetry ? 'Retry same proposal' : 'Send proposal'}
         </button>
       </div>
-    </form>}
+    </form>
+    </Modal>
     {proposalSuccess && <p role="status" className="client-proposal-success">{proposalSuccess}</p>}
     <section className="client-proposals" aria-labelledby="client-proposals-title">
       <div className="client-section-heading"><div><h2 id="client-proposals-title">Project proposals</h2>
