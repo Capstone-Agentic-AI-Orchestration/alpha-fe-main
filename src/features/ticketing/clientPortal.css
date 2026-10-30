@@ -11,7 +11,7 @@
   width: 100%;
   box-sizing: border-box;
   height: 100dvh;
-  min-height: 560px;
+  min-height: 0;
   flex-direction: column;
   overflow: hidden;
   background: rgb(var(--ui-canvas));
