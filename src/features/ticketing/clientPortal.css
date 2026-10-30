@@ -651,3 +651,39 @@
   :where(.client-portal-shell) .client-detail-content { flex: 0 0 240px; }
   :where(.client-portal-shell) .client-conversation { min-height: 220px; }
 }
+
+/* Signed-in portal: use the available workspace and keep its chrome aligned. */
+.client-portal-shell .client-page,
+.client-portal-shell .client-requests-page { width: 100%; max-width: none; margin-inline: 0; }
+.client-portal-shell .ticket-chat__group { width: 100%; max-width: none; margin-inline: 0; }
+.client-portal-shell .client-create-view--project,
+.client-portal-shell .client-create-view--project > section { margin-inline: 0; }
+.client-portal-shell .client-create-project-context { padding-inline: 0; }
+.client-portal-shell .client-proposal-modal .client-proposal-form { max-width: none; margin: 0; padding: 0; border: 0; gap: var(--client-space-4); }
+.client-portal-shell .client-proposal-modal .client-proposal-form > label { gap: var(--client-space-2); }
+.client-portal-shell .client-proposal-modal .client-proposal-form input { min-height: var(--client-control); }
+.client-portal-shell .client-proposal-modal .client-proposal-actions { padding-top: var(--client-space-2); }
+.client-portal-shell .pqa-client-controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--client-space-4); padding-block: var(--client-space-4); }
+.client-portal-shell .pqa-client-controls .pqa-heading { flex: 1 1 260px; }
+.client-portal-shell .pqa-client-controls .pqa-round-picker { flex: 0 1 280px; width: 100%; max-width: 320px; }
+.client-portal-shell .pqa-client-controls .pqa-error { flex-basis: 100%; }
+
+@media (min-width: 768px) {
+  .client-portal-shell .client-sidebar-brand,
+  .client-portal-shell .client-portal-toolbar { height: 72px; min-height: 72px; flex-shrink: 0; }
+  .client-portal-shell .client-sidebar-account-copy { display: none; }
+  .client-portal-shell .client-sidebar:is(:hover, :focus-within) .client-sidebar-account-copy { display: grid; }
+  .client-portal-shell .client-sidebar-account { gap: var(--client-space-1); }
+}
+
+@media (min-width: 1000px) {
+  .client-portal-shell .client-project-detail:has(.pqa-client) { display: flex; min-height: 0; flex: 1 0 auto; flex-direction: column; }
+  .client-portal-shell .client-project-detail:has(.pqa-client) > :is(.client-project-detail-heading, .client-project-tabs) { flex-shrink: 0; }
+  .client-portal-shell .pqa-client { display: grid; flex: 1; height: auto; min-height: 560px; grid-template-columns: minmax(0, 1fr) minmax(320px, 390px); grid-template-rows: auto minmax(360px, 1fr); gap: 0; padding-top: var(--client-space-4); }
+  .client-portal-shell .pqa-client-controls { grid-column: 1; grid-row: 1; padding: 0 var(--client-space-4) var(--client-space-4) 0; }
+  .client-portal-shell .pqa-client > [role=status] { grid-column: 1 / -1; }
+  .client-portal-shell .pqa-client .pqa-workspace { display: contents; }
+  .client-portal-shell .pqa-client .pqa-preview { grid-column: 1; grid-row: 2; border-top: 1px solid rgb(var(--ui-divider)); }
+  .client-portal-shell .pqa-client .pqa-review { grid-column: 2; grid-row: 1 / span 2; }
+  .client-portal-shell .pqa-client .pqa-panel-tabs { padding-top: 0; }
+}

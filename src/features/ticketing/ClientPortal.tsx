@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowRight, Check, ChevronDown, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
-  CircleHelp, ListChecks, LogOut, PanelLeftOpen, RefreshCw, Search, Ticket,
+  CircleHelp, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket,
 } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
@@ -697,8 +697,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
               }}>
               <div className="client-list-header">
                 <div className="client-list-title"><h2>Requests</h2></div>
-                {selectedId && navigationCollapsed && <button type="button" className="role-chat-navigation-toggle" aria-label="Show request navigation" aria-expanded="false"
-                  onClick={event => { event.stopPropagation(); setNavigationCollapsed(false); }}><PanelLeftOpen size={17} /></button>}
+                {selectedId && <button type="button" className="role-chat-navigation-toggle"
+                  aria-label={navigationCollapsed ? 'Show request navigation' : 'Collapse request navigation'} aria-expanded={!navigationCollapsed}
+                  onClick={event => { event.stopPropagation(); setNavigationCollapsed(value => !value); }}>
+                  {navigationCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+                </button>}
               </div>
               <div className={`client-request-toolbar ${selectedId ? 'is-detail' : 'is-list'}`}>
                 {selectedId ? <label className="client-request-filter-select">
