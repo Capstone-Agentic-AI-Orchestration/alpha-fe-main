@@ -23,6 +23,7 @@ import { clientTicketProgress } from './clientTicketProgress';
 import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink';
 import { secondary, time } from './ticketUi';
 import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './ClientProjectPages';
+import { Toast, type ToastTone } from '@/shared/components/ui/toast';
 import './clientPortal.css';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
 import { SidebarFrame } from '@/shared/layout/SidebarFrame';
@@ -35,9 +36,12 @@ interface PendingOperation {
   label: string;
   run: () => Promise<ClientTicketReceipt>;
   onSuccess?: (receipt: ClientTicketReceipt) => void;
+  /** Skip the broad portal reload when the active conversation is updated in place. */
+  refresh?: boolean;
 }
 interface PendingProjectReview { ticketId: string; project: ClientProject }
 interface ClientPageMenuPosition { top: number; left: number }
+interface ClientToast { title: string; description?: string; tone: ToastTone }
 
 const filters: Array<{ id: NonNullable<Filter>; label: string }> = [
   { id: 'all', label: 'All requests' },
@@ -72,6 +76,10 @@ function friendlyError(error: unknown, context: 'session' | 'queue' | 'ticket' |
 }
 
 function rowKey(item: ClientProjectRequestItem): string { return `${item.workspaceId}\u0000${item.id}`; }
+
+function appendClientMessage(messages: ClientTicketMessage[], message: ClientTicketMessage): ClientTicketMessage[] {
+  return messages.some(current => current.id === message.id) ? messages : [...messages, message];
+}
 
 export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false,
   workflowActionsDisabled: workflowActionsDisabledOverride = false, newRequestsDisabled = true,
@@ -144,12 +152,19 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [sessionCheckVersion, setSessionCheckVersion] = useState(0);
   const [refreshError, setRefreshError] = useState('');
   const [queueNotice, setQueueNotice] = useState('');
+  const [clientToast, setClientToast] = useState<ClientToast | null>(null);
   const [requestListShown, setRequestListShown] = useState(true);
   const queueGeneration = useRef(0);
   const historyGeneration = useRef(0);
   const writeLock = useRef(false);
   const queueSnapshot = useRef(queue);
   queueSnapshot.current = queue;
+
+  useEffect(() => {
+    if (!clientToast) return;
+    const timer = window.setTimeout(() => setClientToast(null), 4800);
+    return () => window.clearTimeout(timer);
+  }, [clientToast]);
 
   const workflowActionsDisabled = workflowActionsDisabledOverride || !phaseWorkflowEnabled;
   const canStartProjectRequest = !newRequestsDisabled && !inspectionOnly;
@@ -327,7 +342,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }
     let current = true;
     const generation = ++historyGeneration.current;
-    setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setHistoryError(''); setHistoryLoading(false); setDetailLoading(true);
+    setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setHistoryError(''); setHistoryLoading(!(workflowActionsDisabled && !communicationEnabled)); setDetailLoading(true);
     const load = workflowActionsDisabled && !communicationEnabled
       ? api.getTicket(activeWorkspaceId, selectedId).then(ticket => [ticket, null] as const)
       : Promise.all([api.getTicket(activeWorkspaceId, selectedId), api.getMessages(activeWorkspaceId, selectedId, { limit: 50 })] as const);
@@ -336,7 +351,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       setDetail(ticket); setMessages(messagePage?.items ?? []); setMessageCursor(messagePage?.nextCursor ?? null);
     }).catch(error => {
       if (current && !isExpiredClientSession(error)) setDetailError(friendlyError(error, 'ticket'));
-    }).finally(() => { if (current) setDetailLoading(false); });
+    }).finally(() => { if (current) { setDetailLoading(false); setHistoryLoading(false); } });
     return () => {
       current = false;
       if (historyGeneration.current === generation) historyGeneration.current += 1;
@@ -475,7 +490,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     writeLock.current = true; setWriting(true); setWriteError('');
     try {
       const receipt = await operation.run(); setPending(null); setWriteError(''); operation.onSuccess?.(receipt);
-      setRefreshVersion(value => value + 1); return receipt;
+      if (operation.refresh !== false) setRefreshVersion(value => value + 1);
+      return receipt;
     } catch (error) {
       if (isExpiredClientSession(error)) setWriteError('');
       else {
@@ -485,6 +501,28 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       }
       throw error;
     } finally { writeLock.current = false; setWriting(false); }
+  }
+
+  function applyLocalClientMessage(ticketId: string, body: string, receipt: ClientTicketReceipt): void {
+    const updatedAt = new Date().toISOString();
+    const messageId = receipt.messageId;
+    if (messageId) {
+      setMessages(current => appendClientMessage(current, {
+        id: messageId, author: 'client', body: body.trim(), createdAt: updatedAt,
+      }));
+    }
+    setDetail(current => current && current.id === ticketId
+      ? { ...current, version: receipt.version, status: receipt.status, updatedAt }
+      : current);
+    setQueue(current => current ? {
+      ...current,
+      items: current.items.map(item => item.id === ticketId
+        ? { ...item, status: receipt.status, requestedAction: null, updatedAt }
+        : item),
+    } : current);
+    setSelectedItemFallback(current => current && current.id === ticketId
+      ? { ...current, status: receipt.status, requestedAction: null, updatedAt }
+      : current);
   }
 
   async function openCreateForm(project: ClientProject) {
@@ -525,6 +563,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       onSuccess: receipt => {
         setPendingProjectReview({ ticketId: receipt.ticketId, project: target });
         setQueueNotice(`Request sent for PM review. It will appear under ${target.name} after your project manager confirms the link.`);
+        setClientToast({ title: 'Request submitted', description: `Your request is waiting for ${target.name} to review it.`, tone: 'success' });
         setPage('requests'); setView('portal'); setFilter('all'); setSearchInput(''); setSearch('');
         setSelectedId(receipt.ticketId); setSelectedWorkspaceId(target.workspaceId); setSelectedItemFallback(null);
         setRequestListShown(true); setCreateContext(null); setCreateProject(null);
@@ -542,9 +581,13 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   function sendReply(body: string): Promise<void> {
     const activeWorkspaceId = selectedQueueItem?.workspaceId ?? selectedWorkspaceId;
     if (!detail || !activeWorkspaceId || pending) return Promise.reject(new Error('A ticket change is already being reconciled.'));
+    const ticketId = detail.id;
     const payload: ClientTicketReplyInput = { schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version, body, action: { type: 'reply' } };
-    return performWrite({ operationId: payload.operationId, label: 'message', run: () => api.reply(activeWorkspaceId, detail.id, payload),
-      onSuccess: () => setReplyResetVersion(value => value + 1) }).then(() => undefined);
+    return performWrite({ operationId: payload.operationId, label: 'message', refresh: false,
+      run: () => api.reply(activeWorkspaceId, ticketId, payload), onSuccess: receipt => {
+        applyLocalClientMessage(ticketId, body, receipt);
+        setReplyResetVersion(value => value + 1);
+      } }).then(() => undefined);
   }
 
   function sendCorrection(body: string, deliveryId: string): Promise<void> {
@@ -555,8 +598,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }
     const payload: ClientTicketReplyInput = { schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
       body, action: { type: 'request_correction', deliveryId } };
-    return performWrite({ operationId: payload.operationId, label: 'correction feedback',
-      run: () => api.reply(activeWorkspaceId, detail.id, payload) }).then(() => undefined);
+    const ticketId = detail.id;
+    return performWrite({ operationId: payload.operationId, label: 'correction feedback', refresh: false,
+      run: () => api.reply(activeWorkspaceId, ticketId, payload), onSuccess: receipt => {
+        applyLocalClientMessage(ticketId, body, receipt);
+      } }).then(() => undefined);
   }
 
   function makeDecision(command: Extract<ClientTicketCommandInput['command'], { type: 'agree_scope' | 'accept_delivery' }>) {
@@ -874,6 +920,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {pending && <div role="status" className="client-pending-operation">
           <span>We’re checking whether your update was saved. Please don’t send it again yet.</span>
           <button onClick={() => void performWrite(pending).catch(() => undefined)} disabled={writing} className={secondary}>{writing ? 'Checking…' : 'Check update status'}</button>
+        </div>}
+        {clientToast && <div className="pointer-events-none fixed right-5 top-5 z-[80] w-[calc(100%-2.5rem)] max-w-sm" aria-live="polite" aria-atomic="true">
+          <Toast {...clientToast} onDismiss={() => setClientToast(null)} className="pointer-events-auto" />
         </div>}
         {session?.expiresAt && <span className="sr-only">Session expires {session.expiresAt}</span>}
       </div>

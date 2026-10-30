@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowLeft, Check, ChevronDown, CircleDot, FileText, Info,
   LockKeyhole, MessageSquare, PanelLeftClose, PanelLeftOpen, Paperclip, RefreshCw, Search, Send, StickyNote,
@@ -26,6 +26,8 @@ import { PmDeliveryAssessment } from './PmDeliveryAssessment';
 import { input, primary, secondary, time } from './ticketUi';
 import { TicketDocumentsPanel } from './TicketDocumentsPanel';
 import type { TicketDocumentsApi } from './ticketDocuments';
+import { TicketChat } from './TicketChat';
+import { Button } from '@/shared/components/ui/button';
 import './pmTickets.css';
 
 type Filter = NonNullable<PmTicketQueueOptions['filter']>;
@@ -39,6 +41,9 @@ interface PendingOperation {
   run: () => Promise<PmTicketReceipt>;
   clearDraft?: boolean;
   draftPanel?: Panel;
+  onSuccess?: (receipt: PmTicketReceipt) => void;
+  /** Keep the active ticket mounted when its conversation was updated locally. */
+  refresh?: boolean;
 }
 
 const filters: Array<{ id: Filter; label: string; counter?: 'needsPm' | 'inProgress' | 'waitingClient' | 'closedMonth' }> = [
@@ -63,16 +68,18 @@ function statusStyle(status: TicketStatus): string {
   return 'pm-status--review';
 }
 
-function timelineDayKey(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+function appendPmMessage(messages: PmTicketMessage[], message: PmTicketMessage): PmTicketMessage[] {
+  return messages.some(current => current.id === message.id) ? messages : [...messages, message];
 }
 
-function timelineDayLabel(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+function mergePmMessages(previous: PmTicketMessage[], latest: PmTicketMessage[]): PmTicketMessage[] {
+  const messages = new Map(previous.map(message => [message.id, message]));
+  for (const message of latest) messages.set(message.id, message);
+  return [...messages.values()].sort((left, right) => Date.parse(left.createdAt) - Date.parse(right.createdAt) || left.id.localeCompare(right.id));
+}
+
+function appendPmNote(notes: PmTicketNote[], note: PmTicketNote): PmTicketNote[] {
+  return notes.some(current => current.id === note.id) ? notes : [...notes, note];
 }
 
 type ClientInvitationSummary = PmTicketQueueItem['internal']['clientInvitation'];
@@ -187,8 +194,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   const [reviewAction, setReviewAction] = useState<'correction' | 'close' | null>(null);
   const [messageAction, setMessageAction] = useState<'reply' | 'request_details'>('reply');
   const [drafts, setDrafts] = useState<Record<Panel, string>>({ conversation: '', notes: '' });
-  const draft = drafts[panel];
-  const setDraft = (value: string) => setDrafts(current => ({ ...current, [panel]: value }));
   const [queueLoading, setQueueLoading] = useState(intakeEnabled);
   const [queueMoreLoading, setQueueMoreLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -325,14 +330,16 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     if (!selectedId || panel !== 'conversation' || !selectedQueueItem) return;
     let current = true;
     if (!selectedQueueItem.internal.clientAccessActive) {
-      setMessages([]); setMessageCursor(null); setHistoryError('');
+      setMessages([]); setMessageCursor(null); setHistoryError(''); setHistoryLoading(false);
       return () => { current = false; };
     }
-    setHistoryError('');
+    setHistoryError(''); setHistoryLoading(true);
     api.getMessages(selectedId).then(page => {
-      if (current) { setMessages(page.items); setMessageCursor(page.nextCursor); }
+      if (current) { setMessages(previous => mergePmMessages(previous, page.items)); setMessageCursor(page.nextCursor); }
     }).catch(error => {
       if (current) setHistoryError(safeError(error, 'ticket'));
+    }).finally(() => {
+      if (current) setHistoryLoading(false);
     });
     return () => { current = false; };
   }, [api, selectedId, panel, selectedQueueItem?.internal.clientAccessActive, selectedQueueItem?.updatedAt, refreshVersion]);
@@ -340,11 +347,13 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   useEffect(() => {
     if (!selectedId || panel !== 'notes' || !selectedQueueItem) return;
     let current = true;
-    setHistoryError('');
+    setHistoryError(''); setHistoryLoading(true);
     api.getNotes(selectedId).then(page => {
       if (current) { setNotes(page.items); setNoteCursor(page.nextCursor); }
     }).catch(error => {
       if (current) setHistoryError(safeError(error, 'ticket'));
+    }).finally(() => {
+      if (current) setHistoryLoading(false);
     });
     return () => { current = false; };
   }, [api, selectedId, panel, refreshVersion]);
@@ -404,11 +413,12 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     const draftPanel = operation.draftPanel ?? panel;
     setWriting(true); setWriteError('');
     try {
-      await operation.run();
+      const receipt = await operation.run();
       setPending(null);
       if (clearDraft) setDrafts(current => ({ ...current, [draftPanel]: '' }));
+      operation.onSuccess?.(receipt);
       setWriteError('');
-      refreshAll();
+      if (operation.refresh !== false) refreshAll();
       return true;
     } catch (error) {
       if (error instanceof ApiRequestError && error.reconciliationRequired) setPending({ ...operation, clearDraft, draftPanel });
@@ -419,6 +429,37 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       writeLock.current = false;
       setWriting(false);
     }
+  }
+
+  function applyLocalPmReceipt(
+    receipt: PmTicketReceipt, body: string, kind: 'message' | 'note', requestedAction?: PmTicketDetail['requestedAction'],
+  ): void {
+    const updatedAt = new Date().toISOString();
+    const waitingForClient = kind === 'message' && requestedAction === 'reply';
+    const messageId = receipt.messageId;
+    if (messageId) {
+      if (kind === 'message') {
+        setMessages(current => appendPmMessage(current, {
+          id: messageId, author: 'pm', body: body.trim(), createdAt: updatedAt,
+        }));
+      } else {
+        setNotes(current => appendPmNote(current, {
+          id: messageId, author: 'pm', authorId: 'current-pm', body: body.trim(), createdAt: updatedAt,
+        }));
+      }
+    }
+    setDetail(current => current && current.id === receipt.ticketId ? {
+      ...current, version: receipt.version, status: receipt.status, updatedAt,
+      ...(kind === 'message' && requestedAction !== undefined ? { requestedAction } : {}),
+      internal: { ...current.internal, updatedAt, ...(waitingForClient ? { actionOwner: 'client' as const, nextAction: 'reply' as const } : {}) },
+    } : current);
+    setQueue(current => current ? {
+      ...current,
+      items: current.items.map(item => item.id === receipt.ticketId ? {
+        ...item, status: receipt.status, updatedAt,
+        internal: { ...item.internal, updatedAt, ...(waitingForClient ? { actionOwner: 'client' as const, nextAction: 'reply' as const } : {}) },
+      } : item),
+    } : current);
   }
 
   async function shareAssessedDelivery(): Promise<boolean> {
@@ -438,27 +479,37 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   }
 
   function submitReply() {
+    const body = drafts.conversation;
     if (!detail || !selectedQueueItem?.internal.clientAccessActive || !detail.writesAvailable
-      || (!communicationEnabled && workflowActions === 'triage') || !draft.trim() || pending) return;
+      || (!communicationEnabled && workflowActions === 'triage') || !body.trim() || pending) return;
     const inputValue: PmTicketMessageInput = {
       schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
-      body: draft, action: { type: communicationEnabled ? 'reply' : messageAction },
+      body, action: { type: communicationEnabled ? 'reply' : messageAction },
     };
+    const ticketId = detail.id;
     void performWrite({
-      ticketId: detail.id, operationId: inputValue.operationId,
+      ticketId, operationId: inputValue.operationId, refresh: false, draftPanel: 'conversation',
       label: messageAction === 'request_details' ? 'request for details' : 'public reply',
-      run: () => api.reply(detail.id, inputValue),
+      run: () => api.reply(ticketId, inputValue),
+      onSuccess: receipt => {
+        applyLocalPmReceipt(receipt, inputValue.body, 'message', inputValue.action?.type === 'request_details' ? 'reply' : null);
+      },
     }, true);
   }
 
   function submitNote() {
-    if (!detail || !detail.writesAvailable || !draft.trim() || pending) return;
+    const body = drafts.notes;
+    if (!detail || !detail.writesAvailable || !body.trim() || pending) return;
     const inputValue: PmTicketNoteInput = {
-      schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version, body: draft,
+      schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version, body,
     };
+    const ticketId = detail.id;
     void performWrite({
-      ticketId: detail.id, operationId: inputValue.operationId, label: 'private note',
-      run: () => api.addNote(detail.id, inputValue),
+      ticketId, operationId: inputValue.operationId, label: 'private note', refresh: false, draftPanel: 'notes',
+      run: () => api.addNote(ticketId, inputValue),
+      onSuccess: receipt => {
+        applyLocalPmReceipt(receipt, inputValue.body, 'note');
+      },
     }, true);
   }
 
@@ -686,112 +737,69 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
 
   function renderConversation(mode: Panel) {
     if (!detail || !selectedQueueItem) return null;
-
-    const renderDayDivider = (value: string) => <div className="pm-tickets__timeline-divider" aria-label={`Messages from ${timelineDayLabel(value)}`}>
-      <span><time dateTime={value}>{timelineDayLabel(value)}</time></span>
-    </div>;
-
-    let previousMessageDay = '';
-    const messageTimeline = messages.map(message => {
-      const day = timelineDayKey(message.createdAt);
-      const showDayDivider = day !== previousMessageDay;
-      previousMessageDay = day;
-      return <Fragment key={message.id}>
-        {showDayDivider && renderDayDivider(message.createdAt)}
-        <article data-message-author={message.author} className={`pm-tickets__message${message.author === 'pm' ? ' pm-tickets__message--pm' : ''}`}>
-          <span className="pm-tickets__message-avatar" aria-hidden="true">{message.author === 'pm' ? 'PM' : (detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? 'Client').slice(0, 1)}</span>
-          <div className="pm-tickets__message-content"><div className="pm-tickets__message-meta"><span>{message.author === 'pm' ? 'Project Manager' : detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? 'Client'}</span><time dateTime={message.createdAt}>{time(message.createdAt)}</time></div>
-          <p className="pm-tickets__message-body">{message.body}</p>
-          </div>
-        </article>
-      </Fragment>;
-    });
-
-    let previousNoteDay = '';
-    const noteTimeline = notes.map(note => {
-      const day = timelineDayKey(note.createdAt);
-      const showDayDivider = day !== previousNoteDay;
-      previousNoteDay = day;
-      return <Fragment key={note.id}>
-        {showDayDivider && renderDayDivider(note.createdAt)}
-        <article className="pm-tickets__message pm-tickets__message--note">
-          <span className="pm-tickets__message-avatar" aria-hidden="true"><LockKeyhole size={14} /></span>
-          <div className="pm-tickets__message-content"><div className="pm-tickets__message-meta"><span>PM-only note</span><time dateTime={note.createdAt}>{time(note.createdAt)}</time></div>
-          <p className="pm-tickets__message-body">{note.body}</p>
-          </div>
-        </article>
-      </Fragment>;
-    });
-
-    const canCompose = mode === 'notes' || ((communicationEnabled || workflowActions !== 'triage') && selectedQueueItem.internal.clientAccessActive);
+    const clientName = detail.internal.request?.contact?.fullName ?? selectedQueueItem.internal.clientGroup?.displayName ?? 'Client';
+    const canCompose = detail.writesAvailable && (mode === 'notes' || ((communicationEnabled || workflowActions !== 'triage') && selectedQueueItem.internal.clientAccessActive));
     const openComposer = () => {
       setPanel(mode);
       setTicketSection(mode === 'notes' ? 'notes' : 'conversation');
       setComposerOpen(true);
     };
 
-    return (
-                <div className={`pm-tickets__conversation-area${mode === 'conversation' ? ' pm-tickets__conversation-area--chat' : ''}`}>
-                  {mode === 'notes' && <p className="pm-tickets__privacy-notice"><LockKeyhole size={13} />Only authorized project managers can see these notes.</p>}
-                  <div className="pm-tickets__conversation-history">
-                    {(mode === 'conversation' ? messageCursor : noteCursor) && <button type="button" onClick={() => void loadMoreHistory(mode)} disabled={historyLoading} className="pm-tickets__load-more">{historyLoading ? 'Loading…' : 'Load more'}</button>}
-                    {mode === panel && historyError && <div role="alert" className="pm-tickets__error">{historyError}</div>}
-                    {mode === 'conversation' && !selectedQueueItem.internal.clientAccessActive
-                      ? <div className="pm-tickets__locked"><LockKeyhole size={18} aria-hidden="true" /><p>Client conversation is available after the invited client activates access.</p><p>The invitation email contains a one-time activation link. Use private notes for internal triage until then.</p></div>
-                      : mode === 'conversation' && messages.length === 0
-                        ? <p className="pm-tickets__conversation-empty">No messages yet.</p>
-                        : mode === 'notes' && notes.length === 0
-                          ? <p className="pm-tickets__conversation-empty">No private notes yet. These notes are visible only to authorized PMs.</p>
-                          : mode === 'conversation' ? messageTimeline : noteTimeline}
-                  </div>
+    const chatMessages = mode === 'conversation'
+      ? messages
+      : notes.map(note => ({ id: note.id, author: 'note' as const, body: note.body, createdAt: note.createdAt }));
+    const composerIsOpen = mode === 'conversation' || (composerOpen && mode === panel);
+    const composerToolbar = mode === 'conversation' && !communicationEnabled ? <div className="ticket-chat__mode-toggle" role="group" aria-label="Reply type">
+      <Button type="button" size="sm" variant={messageAction === 'reply' ? 'outline' : 'ghost'} aria-pressed={messageAction === 'reply'} onClick={() => setMessageAction('reply')}>Send update</Button>
+      <Button type="button" size="sm" variant={messageAction === 'request_details' ? 'outline' : 'ghost'} aria-pressed={messageAction === 'request_details'}
+        onClick={() => setMessageAction('request_details')} disabled={!['under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)}>Request details</Button>
+      {messageAction === 'request_details' && <span>Sets the next action for the client.</span>}
+    </div> : undefined;
 
-                  {canCompose && mode === 'conversation' && <form className="pm-tickets__composer pm-tickets__composer--compact" onSubmit={event => { event.preventDefault(); submitReply(); }}>
-                    <span className="pm-tickets__composer-leading-icon" aria-hidden="true"><Paperclip size={17} /></span>
-                    <div className="pm-tickets__composer-field">
-                      { !communicationEnabled && <div className="pm-tickets__message-actions">
-                        <button type="button" aria-pressed={messageAction === 'reply'} onClick={() => setMessageAction('reply')} className={messageAction === 'reply' ? 'is-active' : ''}>Send update</button>
-                        <button type="button" aria-pressed={messageAction === 'request_details'} onClick={() => setMessageAction('request_details')} disabled={!['under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)} className={messageAction === 'request_details' ? 'is-active' : ''}>Request details</button>
-                        {messageAction === 'request_details' && <span>Sets the next action to the client.</span>}
-                      </div>}
-                      <textarea id={`ticket-${mode}-draft`} value={drafts[mode]} onChange={event => setDrafts(current => ({ ...current, [mode]: event.target.value }))} onKeyDown={event => {
-                        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && drafts[mode].trim() && detail.writesAvailable && !writing && !pending) {
-                          event.preventDefault(); event.currentTarget.form?.requestSubmit();
-                        }
-                      }} disabled={!detail.writesAvailable || writing || Boolean(pending)} maxLength={4000} rows={1} placeholder="Write a message to the client…" className="pm-tickets__composer-input" />
-                      <kbd className="pm-tickets__composer-shortcut" aria-label="Command or control plus enter">⌘↵</kbd>
-                    </div>
-                    <button type="submit" disabled={!detail.writesAvailable || !drafts[mode].trim() || writing || Boolean(pending)} className={`pm-tickets__composer-send ${primary}`}>
-                      <Send size={14} aria-hidden="true" /><span>{messageAction === 'request_details' ? 'Ask for details' : 'Reply'}</span><ChevronDown size={14} aria-hidden="true" />
-                    </button>
-                  </form>}
-
-                  {canCompose && mode === 'notes' && <>
-                    {(!composerOpen || mode !== panel) && <button type="button" className="pm-tickets__reply-prompt" onClick={openComposer}>
-                      <span>{'Write a private note…'}</span>
-                      <span>Add note<StickyNote size={15} aria-hidden="true" /></span>
-                    </button>}
-                    {composerOpen && mode === panel && <form className="pm-tickets__composer" onSubmit={event => { event.preventDefault(); submitNote(); }}>
-                      <label className="sr-only" htmlFor={`ticket-${mode}-draft`}>{mode === 'notes' ? 'Private note' : 'Message to client'}</label>
-                      <textarea autoFocus id={`ticket-${mode}-draft`} value={drafts[mode]} onChange={event => setDrafts(current => ({ ...current, [mode]: event.target.value }))} onKeyDown={event => {
-                        if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && drafts[mode].trim() && detail.writesAvailable && !writing && !pending) {
-                          event.preventDefault(); event.currentTarget.form?.requestSubmit();
-                        }
-                      }} disabled={!detail.writesAvailable || writing || Boolean(pending)} maxLength={4000} rows={3} placeholder="Write a private PM note…" className="pm-tickets__composer-input" />
-                      <span className="pm-tickets__composer-shortcut" aria-hidden="true">⌘↵</span>
-                      <div className="pm-tickets__composer-footer">
-                        <span className="pm-tickets__composer-visibility"><LockKeyhole size={12} />Only PMs can see this note</span>
-                        <div className="pm-tickets__composer-buttons">
-                          <button type="button" onClick={() => setComposerOpen(false)} disabled={writing} className={secondary}>Close</button>
-                          <button type="submit" disabled={!detail.writesAvailable || !drafts[mode].trim() || writing || Boolean(pending)} className={mode === 'notes' ? secondary : primary}>
-                            <StickyNote size={13} />Save note
-                          </button>
-                        </div>
-                      </div>
-                    </form>}
-                  </>}
-                  {!detail.writesAvailable && <div className="pm-tickets__readonly">This ticket is read-only or ticket changes are disabled.</div>}
-                </div>
-    );
+    return <TicketChat
+      role="pm"
+      mode={mode}
+      showHeader={false}
+      title={mode === 'notes' ? 'Private notes' : 'Conversation'}
+      subtitle={mode === 'notes' ? 'Visible only to authorized project managers' : 'Messages shared with the client'}
+      privacyLabel={mode === 'notes' ? 'Only authorized project managers can see these notes.' : 'Private conversation'}
+      messages={chatMessages}
+      clientName={clientName}
+      clientInitial={clientName.trim().slice(0, 1).toUpperCase() || 'C'}
+      historyError={mode === panel ? historyError : ''}
+      messageCursor={mode === 'conversation' ? messageCursor : noteCursor}
+      historyLoading={historyLoading}
+      onLoadMore={() => void loadMoreHistory(mode)}
+      locked={mode === 'conversation' && !selectedQueueItem.internal.clientAccessActive}
+      lockedTitle="Client conversation is unavailable"
+      lockedDescription="The client conversation is available after the invited client activates access. Use private notes for internal triage until then."
+      emptyTitle={mode === 'notes' ? 'No private notes yet' : 'No messages yet'}
+      emptyDescription={mode === 'notes' ? 'Keep internal context here for the project team.' : 'Start the conversation with a question or update.'}
+      draft={drafts[mode]}
+      onDraftChange={value => setDrafts(current => ({ ...current, [mode]: value }))}
+      onSubmit={event => { event.preventDefault(); if (mode === 'notes') submitNote(); else submitReply(); }}
+      canCompose={canCompose}
+      busy={writing || Boolean(pending)}
+      writesAvailable={detail.writesAvailable}
+      inputId={`ticket-${mode}-draft`}
+      placeholder={mode === 'notes' ? 'Write a private note…' : 'Write a message to the client…'}
+      sendLabel={mode === 'notes' ? 'Save note' : messageAction === 'request_details' ? 'Ask for details' : 'Reply'}
+      sendAriaLabel={mode === 'notes' ? 'Save private note' : 'Send reply'}
+      sendIcon={mode === 'notes' ? <StickyNote size={14} aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
+      sendVariant={mode === 'notes' ? 'outline' : 'default'}
+      submitSuffix={mode === 'conversation' ? <ChevronDown size={14} aria-hidden="true" /> : undefined}
+      composerToolbar={composerToolbar}
+      leadingAction={<span className="ticket-chat__leading" aria-hidden="true"><Paperclip size={17} /></span>}
+      composerOpen={composerIsOpen}
+      composerPrompt={mode === 'notes'}
+      onOpenComposer={openComposer}
+      onCloseComposer={mode === 'notes' ? () => setComposerOpen(false) : undefined}
+      composerVisibility={mode === 'notes' ? 'Only PMs can see this note' : undefined}
+      rows={mode === 'notes' ? 3 : 1}
+      submitOnShortcut
+      showShortcut
+      readOnlyLabel={!detail.writesAvailable ? 'This ticket is read-only or ticket changes are disabled.' : undefined}
+    />;
   }
 
   const workflowToolbar = detail && selectedQueueItem && (primaryAction || hasMoreActions) ? (
@@ -852,7 +860,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       {selectedId && <nav className="pm-tickets__chat-list" aria-label="Ticket conversations">
         <p>Conversations</p>
         {queue?.items.map(item => <button key={item.id} type="button" aria-current={selectedId === item.id ? 'page' : undefined}
-          disabled={writing || Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setPanel('conversation'); setTicketSection('conversation'); setMessageAction('reply'); setDraft(''); setWriteError(''); }}>
+          disabled={writing || Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setPanel('conversation'); setTicketSection('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }}>
           <MessageSquare size={15} aria-hidden="true" /><span><strong>{item.title}</strong><small>{statusLabel(item.status)}</small></span>
         </button>)}
         {queue?.nextCursor && <button type="button" disabled={queueMoreLoading || queueLoading} onClick={() => void loadMoreQueue()}>{queueMoreLoading ? 'Loading…' : 'Load more tickets'}</button>}
@@ -898,7 +906,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
             : queueLoading && !queue ? <div className="p-6 text-center text-xs text-content-muted">Loading tickets…</div>
             : queue && queue.items.length > 0 ? <PmTicketQueueList items={queue.items} selectedId={selectedId}
               disabled={Boolean(pending)} requestAccessSaving={requestAccessSaving}
-              onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDraft(''); setWriteError(''); }}
+              onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }}
               onToggleRequests={(ticketId, enabled) => void setClientRequestAccess(ticketId, enabled)} />
               : queue && <div className="pm-tickets__empty-state"><EmptyPanel title="No tickets in this view" detail={filter === 'all' && !search ? 'Accepted inquiries will appear here. New inquiries are reviewed in the separate intake inbox.' : 'Try another view or clear your search.'} />
                 {(search || filter !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); activeFilter('all'); }}>Show all tickets</button>}</div>}
