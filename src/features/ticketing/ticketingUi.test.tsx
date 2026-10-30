@@ -125,7 +125,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toContain('Waiting for PM review');
     expect(html).toContain('Not moving forward');
     expect(html).toContain('Your project manager decided not to move forward. No project was created.');
-    expect(html.indexOf('Project proposals')).toBeLessThan(html.indexOf('No projects shared yet'));
+    expect(html.indexOf('No projects shared yet')).toBeLessThan(html.indexOf('Project proposals'));
     expect(html).not.toContain('decline note');
   });
 

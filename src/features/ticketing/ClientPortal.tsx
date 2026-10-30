@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, ArrowRight, Check, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
-  CircleHelp, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket,
+  AlertCircle, ArrowRight, Check, ChevronDown, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
+  CircleHelp, ListChecks, LogOut, PanelLeftOpen, RefreshCw, Search, Ticket,
 } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
@@ -194,6 +194,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     if (workflowChecked && effectivePortalFilter(filter, !workflowActionsDisabled) !== filter) setFilter('all');
   }, [workflowChecked, workflowActionsDisabled, filter]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
   function clearExpiredClientSession(): void {
     setSession({ authenticated: false }); setPortalState('signed_out');
     setProjects(null); setQueue(null); setNotificationRequests(null); setNotificationsLoaded(false); setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null);
@@ -209,11 +214,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     clearExpiredClientSession();
     return true;
   }
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
 
   useEffect(() => {
     let current = true;
@@ -301,14 +301,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     return () => { current = false; };
   }, [portalState, filter, search, refreshVersion, api, pendingProjectReview?.ticketId,
     selectedItemFallback?.id, selectedItemFallback?.workspaceId, selectedWorkspaceId]);
-
-  useEffect(() => {
-    if (page !== 'requests' || !queue || queueLoading || selectedId || !window.matchMedia('(min-width: 900px)').matches) return;
-    const mostRecent = [...queue.items].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
-    if (mostRecent) {
-      setSelectedId(mostRecent.id); setSelectedWorkspaceId(mostRecent.workspaceId); setSelectedItemFallback(mostRecent); setRequestListShown(true);
-    }
-  }, [page, queue, queueLoading, selectedId]);
 
   useEffect(() => {
     if (pendingProjectReview && queue?.items.some(item => item.id === pendingProjectReview.ticketId
@@ -508,7 +500,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   function openRequest(item: ClientProjectRequestItem, fromProject = false) {
     historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setSelectedWorkspaceId(item.workspaceId);
-    setSelectedItemFallback(item); setReturnToProjects(fromProject); setPage('requests'); setView('portal'); setWriteError('');
+    setSelectedItemFallback(item); setReturnToProjects(fromProject); setPage('requests'); setView('portal'); setWriteError(''); setNavigationCollapsed(false);
     if (fromProject) { setFilter('all'); setSearchInput(''); setSearch(''); }
     setRequestListShown(false);
   }
@@ -591,7 +583,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const currentNav = page;
   const clientEmail = session?.email?.trim() ?? '';
 
-  return <main className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}`}>
+  return <main className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}${inspectionOnly ? ' client-portal-shell--inspection' : ''}`}>
     <aside className="client-sidebar" aria-label="Client portal navigation">
       <div className="client-sidebar-brand"><img src={alphaMarkUrl} alt="" /><div><strong>Alphaexplora</strong><small>Client portal</small></div></div>
       <nav className="client-sidebar-nav">
@@ -684,20 +676,41 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </section>
           {queueNotice && <p role="status" className="client-project-pending-notice">{queueNotice}</p>}
           {queueError && <p role="alert" className="client-project-error">{queueError}</p>}
-          <section className={`client-portal-workspace client-portal-workspace--requests ${navigationCollapsed ? 'is-navigation-collapsed' : ''}`} aria-label="Your requests and updates">
-            <aside className={`client-request-list ${navigationCollapsed ? 'is-collapsed' : ''} ${selectedId && !requestListShown ? 'client-mobile-hidden' : ''}`} aria-label="Request list">
+          <section className={`client-portal-workspace client-portal-workspace--requests ${selectedId ? 'has-selected-request' : ''} ${navigationCollapsed ? 'is-navigation-collapsed' : ''}`} aria-label="Your requests and updates">
+            <aside className={`client-request-list ${navigationCollapsed ? 'is-collapsed' : ''} ${selectedId && !requestListShown ? 'client-mobile-hidden' : ''}`} aria-label="Request list"
+              title={selectedId ? 'Click empty space to collapse or expand request navigation' : undefined}
+              onClick={event => {
+                if (!selectedId) return;
+                const target = event.target;
+                if (target instanceof HTMLElement && target.closest('button,a,input,textarea,select')) return;
+                setNavigationCollapsed(value => !value);
+              }}>
               <div className="client-list-header">
-                <div className="client-list-title"><h2>All requests</h2></div>
-                <button type="button" className="role-chat-navigation-toggle" aria-label={navigationCollapsed ? 'Show requests' : 'Collapse requests'} aria-expanded={!navigationCollapsed} onClick={() => setNavigationCollapsed(value => !value)}>{navigationCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
+                <div className="client-list-title"><h2>Requests</h2></div>
+                {selectedId && navigationCollapsed && <button type="button" className="role-chat-navigation-toggle" aria-label="Show request navigation" aria-expanded="false"
+                  onClick={event => { event.stopPropagation(); setNavigationCollapsed(false); }}><PanelLeftOpen size={17} /></button>}
               </div>
-              <label className="client-search"><Search size={16} /><span className="sr-only">Search requests</span>
-                <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search requests" /></label>
-              <div className="client-request-filters" aria-label="Filter requests">{filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => {
-                const count = queue?.counters.kind !== 'client' ? null : option.id === 'open' ? queue.counters.open : option.id === 'needs_client' ? queue.counters.needsClient : null;
-                const active = filter === option.id;
-                return <button key={option.id} aria-pressed={active} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`client-request-filter ${active ? 'is-active' : ''}`}>
-                  {option.label}{count !== null && <span>{count}</span>}</button>;
-              })}</div>
+              <div className="client-request-toolbar">
+                {selectedId ? <label className="client-request-filter-select">
+                  <span className="sr-only">Filter requests</span>
+                  <select value={filter} disabled={Boolean(pending)} onChange={event => setFilter(event.target.value as NonNullable<Filter>)}>
+                    {filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => {
+                      const count = queue?.counters.kind !== 'client' ? null : option.id === 'open' ? queue.counters.open : option.id === 'needs_client' ? queue.counters.needsClient : null;
+                      return <option key={option.id} value={option.id}>{count === null ? option.label : `${option.label} (${count})`}</option>;
+                    })}
+                  </select>
+                  <ChevronDown size={14} aria-hidden />
+                </label> : <>
+                  <div className="client-request-filters" aria-label="Filter requests">{filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => {
+                    const count = queue?.counters.kind !== 'client' ? null : option.id === 'open' ? queue.counters.open : option.id === 'needs_client' ? queue.counters.needsClient : null;
+                    const active = filter === option.id;
+                    return <button key={option.id} aria-pressed={active} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`client-request-filter ${active ? 'is-active' : ''}`}>
+                      {option.label}{count !== null && <span>{count}</span>}</button>;
+                  })}</div>
+                  <label className="client-search"><Search size={16} /><span className="sr-only">Search requests</span>
+                    <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search requests" /></label>
+                </>}
+              </div>
               <div className="client-request-items">
                 {queueLoading && !queue ? <p role="status" className="client-list-loading">Loading your requests…</p>
                   : queue?.items.length ? queue.items.map(item => {
@@ -713,7 +726,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                         <time dateTime={item.updatedAt}>Updated {time(item.updatedAt)}</time>
                       </span><ArrowRight size={16} className="client-request-chevron" aria-hidden="true" />
                     </button>;
-                  }) : !queueError && <EmptyState title={search ? 'No requests match your search' : 'No requests yet'}
+                  }) : !queueError && <EmptyState title={search ? 'No requests match your search' : 'No requests in this filter'}
                     body={search ? 'Try a shorter search or clear the search field.' : 'Requests from your project manager and requests awaiting review will appear here.'} />}
               </div>
               {queue && <div className="client-list-footer"><span>{queue.items.length} shown</span>{queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading}>
