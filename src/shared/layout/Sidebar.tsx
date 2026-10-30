@@ -4,6 +4,7 @@ import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
 import { CreateWorkspaceModal } from '@/features/settings/CreateWorkspaceModal';
+import { SidebarFrame } from './SidebarFrame';
 import {
   ChevronDown,
   Edit3,
@@ -58,19 +59,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
-  const [isPointerInside, setIsPointerInside] = useState(false);
-  const [isFocusWithin, setIsFocusWithin] = useState(false);
-  /**
-   * Hover intent. The rail opens after a short dwell and closes after a short
-   * grace period, so brushing past it on the way to the left edge of the
-   * content does not open and close the panel over the page.
-   */
-  const hoverTimer = useRef<number | undefined>(undefined);
-  const setPointerInsideAfter = (inside: boolean, delayMs: number) => {
-    window.clearTimeout(hoverTimer.current);
-    hoverTimer.current = window.setTimeout(() => setIsPointerInside(inside), delayMs);
-  };
-  useEffect(() => () => window.clearTimeout(hoverTimer.current), []);
   // Creating is the only way into a workspace from here. Nobody joins one:
   // a project manager puts people in theirs, straight away, as they make it.
   const [createOpen, setCreateOpen] = useState(false);
@@ -93,11 +81,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     .map(group => ({ ...group, items: group.items.filter(item => visibleTabSet.has(item.id)) }))
     .filter(group => group.items.length > 0);
 
-  // The rail is the stable layout surface. Hover and keyboard focus temporarily
-  // reveal the full panel over the workspace, while an explicit pin keeps it
-  // open for people who prefer a persistent navigation column.
-  const expanded = !collapsed || isPointerInside || isFocusWithin;
-  const compact = !expanded;
   const sidebarModeLabel = collapsed ? 'Keep sidebar open' : 'Use hover to open sidebar';
 
   /**
@@ -130,23 +113,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setWorkspaceMenuOpen(false);
     // When the rail is in hover mode, a focused menu item must not keep the
     // entire sidebar expanded after the action is complete.
-    if (collapsed) {
-      setIsFocusWithin(false);
-      event?.currentTarget.blur();
-    }
-  };
-
-  const toggleSidebar = (event: React.MouseEvent<HTMLButtonElement>) => {
-    const nextCollapsed = !collapsed;
-    if (nextCollapsed) closeWorkspaceMenu(event);
-    setCollapsed(nextCollapsed);
-    if (nextCollapsed) {
-      // A click on the pin is an explicit request to return to the rail. Move
-      // focus off the control so the focus-within reveal does not immediately
-      // undo that request.
-      setIsFocusWithin(false);
-      event.currentTarget.blur();
-    }
+    if (collapsed) event?.currentTarget.blur();
   };
 
   const navButton = (tab: NavigationTab) => {
@@ -184,25 +151,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   };
 
   return (
-    <div className="relative z-40 h-full w-[4.5rem] flex-shrink-0 select-none overflow-visible">
-      <aside
-        aria-label="Application sidebar"
-        aria-expanded={expanded}
-        onPointerEnter={() => setPointerInsideAfter(true, 90)}
-        onPointerLeave={() => setPointerInsideAfter(false, 140)}
-        onFocusCapture={() => setIsFocusWithin(true)}
-        onBlurCapture={event => {
-          const nextTarget = event.relatedTarget as Node | null;
-          if (!nextTarget || !event.currentTarget.contains(nextTarget)) {
-            setIsFocusWithin(false);
-          }
-        }}
-        className={`sidebar-flyout app-no-drag absolute inset-y-0 left-0 flex h-full flex-col border-r border-divider bg-shell font-sans text-sm text-content-secondary ${
-          expanded
-            ? 'w-64 shadow-[14px_0_36px_-28px_rgb(var(--ui-overlay)/0.9)]'
-            : 'w-[4.5rem] shadow-none'
-        }`}
-      >
+    <SidebarFrame
+      collapsed={collapsed}
+      setCollapsed={setCollapsed}
+      ariaLabel="Application sidebar"
+      onBeforeCollapse={() => closeWorkspaceMenu()}
+    >
+      {({ compact, togglePinned }) => <>
       {/* Workspace and primary actions */}
       <div className={`space-y-3 pb-3 pt-3 ${compact ? 'px-2' : 'px-3'}`}>
         <div ref={workspaceMenuRef} className="relative">
@@ -235,7 +190,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
 
             <button
-              onClick={toggleSidebar}
+              onClick={togglePinned}
               className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-surface-high hover:text-content"
               title={sidebarModeLabel}
               aria-label={sidebarModeLabel}
@@ -469,7 +424,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         // Staffed already; Settings is where the rest of it is set up.
         onCreated={() => setActiveTab('settings')}
       />
-    </aside>
-    </div>
+      </>}
+    </SidebarFrame>
   );
 };
