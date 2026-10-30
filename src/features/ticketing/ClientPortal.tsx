@@ -690,7 +690,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                 {selectedId && navigationCollapsed && <button type="button" className="role-chat-navigation-toggle" aria-label="Show request navigation" aria-expanded="false"
                   onClick={event => { event.stopPropagation(); setNavigationCollapsed(false); }}><PanelLeftOpen size={17} /></button>}
               </div>
-              <div className="client-request-toolbar">
+              <div className={`client-request-toolbar ${selectedId ? 'is-detail' : 'is-list'}`}>
                 {selectedId ? <label className="client-request-filter-select">
                   <span className="sr-only">Filter requests</span>
                   <select value={filter} disabled={Boolean(pending)} onChange={event => setFilter(event.target.value as NonNullable<Filter>)}>
