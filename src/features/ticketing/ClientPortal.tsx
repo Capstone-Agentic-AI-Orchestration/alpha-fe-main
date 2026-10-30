@@ -22,6 +22,7 @@ import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink'
 import { secondary, time } from './ticketUi';
 import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './ClientProjectPages';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
+import './clientDesignTokens.css';
 import './clientPortal.css';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
 

@@ -3,6 +3,7 @@ import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
 import cosmoLogoUrl from '@/assets/cosmo-logo.png';
 import cosmoWordmarkUrl from '@/assets/cosmo-wordmark.png';
 import { clientLandingHref, clientPortalHref, publicInquiryHref, publicInquirySlug } from '@/features/ticketing/publicIntakeApi';
+import '@/features/ticketing/clientDesignTokens.css';
 import '@/features/ticketing/publicClient/clientPublic.css';
 import { GALAXY_BEATS, journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
 import { LandingMenu } from './LandingMenu';
