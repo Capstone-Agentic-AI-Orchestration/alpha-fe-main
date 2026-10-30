@@ -628,14 +628,23 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
     <div className="client-portal-mainview">
       <header className="client-portal-toolbar" aria-label="Client portal actions">
-        <button type="button" aria-label="Refresh portal" title="Refresh portal"
-          onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
-          disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
-          <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
-        </button>
-        <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
-          loading={notificationsLoading} error={notificationsError}
-          onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
+        <div className="client-portal-mobile-brand" aria-label="Alphaexplora client portal">
+          <img src={alphaMarkUrl} alt="" aria-hidden="true" />
+          <span className="client-portal-mobile-brand-copy">
+            <strong>Alphaexplora</strong>
+            <small>Client portal</small>
+          </span>
+        </div>
+        <div className="client-portal-toolbar-actions">
+          <button type="button" aria-label="Refresh portal" title="Refresh portal"
+            onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
+            disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
+            <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
+          </button>
+          <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
+            loading={notificationsLoading} error={notificationsError}
+            onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
+        </div>
       </header>
       <div className="client-portal-main client-portal-main--workspace">
         {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
