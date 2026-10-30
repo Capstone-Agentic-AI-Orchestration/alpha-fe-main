@@ -88,7 +88,7 @@ export function ClientCreateTicketForm({
             {context.sharedProjects.map(project => <option key={project.optionId} value={project.optionId}>{project.displayName}</option>)}
           </select>}
         </>}
-        <p className="text-[10px] text-content-muted">This is a request preference, not a project link or access grant. Your PM must review and link the request.</p>
+        <p className="text-xs text-content-muted">This is a request preference, not a project link or access grant. Your PM must review and link the request.</p>
       </fieldset>
       <label className="block max-w-xs space-y-2"><span className="text-xs font-medium text-content-secondary">Requested date <span className="text-content-muted">(optional, not guaranteed)</span></span>
         <input className={input} type="date" value={deadline} disabled={busy} onChange={event => { edited(); setDeadline(event.target.value); }} /></label>
@@ -96,7 +96,7 @@ export function ClientCreateTicketForm({
         <p>Submitting asks the PM to review the request. It does not automatically create a project, assign a developer, or start AI work.</p></div>
       {error && <p role="alert" className="text-sm text-status-danger">{error}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider pt-5">
-        <p className="max-w-xs text-[11px] text-content-muted">{submissionEnabled ? 'Only share information needed to describe the request. Documents are handled separately.' : 'UI inspection only. You can fill this form, but submission and document uploads are not enabled.'}</p>
+        <p className="max-w-xs text-xs text-content-muted">{submissionEnabled ? 'Only share information needed to describe the request. Documents are handled separately.' : 'UI inspection only. You can fill this form, but submission and document uploads are not enabled.'}</p>
         <div className="flex gap-2"><button type="button" onClick={onCancel} disabled={busy} className={secondary}>Cancel</button><button className={primary} type="submit" disabled={!submissionEnabled || busy || !pinnedProjectValid || (effectiveProjectPreference === 'shared_project' && !effectiveProjectOptionId)}><Plus size={15} />{busy ? 'Submitting…' : 'Submit request'}</button></div>
       </div>
     </form>
