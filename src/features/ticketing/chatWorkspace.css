@@ -554,6 +554,9 @@
   .client-portal-shell .client-portal-workspace--requests.has-selected-request {
     grid-template-columns: 250px minmax(0, 1fr);
   }
+  .client-portal-shell .client-portal-workspace--requests.has-selected-request.is-navigation-collapsed {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
   .client-portal-shell .client-portal-workspace--requests:not(.has-selected-request) .client-request-detail-pane {
     display: none !important;
   }
