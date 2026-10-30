@@ -653,7 +653,11 @@
 }
 
 /* Signed-in portal: use the available workspace and keep its chrome aligned. */
-.client-portal-shell .client-requests-page { width: 100%; max-width: none; }
+.client-portal-shell .client-page,
+.client-portal-shell .client-requests-page { width: 100%; max-width: none; margin-inline: 0; }
+.client-portal-shell .client-create-view--project,
+.client-portal-shell .client-create-view--project > section { margin-inline: 0; }
+.client-portal-shell .client-create-project-context { padding-inline: 0; }
 .client-portal-shell .client-proposal-modal .client-proposal-form { max-width: none; margin: 0; padding: 0; border: 0; gap: var(--client-space-4); }
 .client-portal-shell .client-proposal-modal .client-proposal-form > label { gap: var(--client-space-2); }
 .client-portal-shell .client-proposal-modal .client-proposal-form input { min-height: var(--client-control); }
@@ -666,10 +670,13 @@
 @media (min-width: 768px) {
   .client-portal-shell .client-sidebar-brand,
   .client-portal-shell .client-portal-toolbar { height: 72px; min-height: 72px; flex-shrink: 0; }
+  .client-portal-shell .client-sidebar-account-copy { display: none; }
+  .client-portal-shell .client-sidebar:is(:hover, :focus-within) .client-sidebar-account-copy { display: grid; }
+  .client-portal-shell .client-sidebar-account { gap: var(--client-space-1); }
 }
 
 @media (min-width: 1000px) {
-  .client-portal-shell .client-project-detail:has(.pqa-client) { display: flex; width: 100%; max-width: none; min-height: 0; flex: 1; flex-direction: column; }
+  .client-portal-shell .client-project-detail:has(.pqa-client) { display: flex; min-height: 0; flex: 1 0 auto; flex-direction: column; }
   .client-portal-shell .client-project-detail:has(.pqa-client) > :is(.client-project-detail-heading, .client-project-tabs) { flex-shrink: 0; }
   .client-portal-shell .pqa-client { display: grid; flex: 1; height: auto; min-height: 560px; grid-template-columns: minmax(0, 1fr) minmax(320px, 390px); grid-template-rows: auto minmax(360px, 1fr); gap: 0; padding-top: var(--client-space-4); }
   .client-portal-shell .pqa-client-controls { grid-column: 1; grid-row: 1; padding: 0 var(--client-space-4) var(--client-space-4) 0; }
