@@ -402,6 +402,12 @@
 .client-quick-guide-note svg { flex: 0 0 auto; margin-top: 1px; color: rgb(var(--ui-link)); }
 .client-portal-mainview { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
 .client-portal-toolbar { position: relative; z-index: 12; display: flex; min-height: 48px; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: 8px; padding: 6px clamp(16px, 3vw, 42px); border-bottom: 1px solid var(--cp-line); background: rgb(var(--ui-shell)); }
+.client-portal-toolbar-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.client-portal-mobile-brand { display: none; min-width: 0; align-items: center; gap: 8px; }
+.client-portal-mobile-brand img { display: block; width: 30px; height: 30px; flex: 0 0 30px; padding: 4px; border-radius: 8px; background: rgb(var(--ui-selected)); object-fit: contain; }
+.client-portal-mobile-brand-copy { display: grid; min-width: 0; gap: 1px; }
+.client-portal-mobile-brand-copy strong { overflow: hidden; color: var(--cp-ink); font-size: 12px; font-weight: 700; letter-spacing: -.015em; text-overflow: ellipsis; white-space: nowrap; }
+.client-portal-mobile-brand-copy small { color: var(--cp-muted); font-size: 9px; line-height: 1.2; }
 .client-portal-action { position: relative; display: grid; width: 36px; height: 36px; flex: 0 0 auto; place-items: center; border: 1px solid var(--cp-line); border-radius: 9px; background: rgb(var(--ui-surface)); color: var(--cp-muted); cursor: pointer; }
 .client-portal-action:hover:not(:disabled) { background: rgb(var(--ui-raised)); color: var(--cp-ink); }
 .client-portal-action:disabled { opacity: .5; cursor: not-allowed; }
@@ -586,7 +592,10 @@
   .client-sidebar:hover .client-sidebar-guide, .client-sidebar:focus-within .client-sidebar-guide { width: 32px; justify-content: center; padding-inline: 0; }
   .client-sidebar:hover .client-sidebar-guide span, .client-sidebar:focus-within .client-sidebar-guide span { display: none; }
   .client-portal-mainview { grid-row: 1; }
-  .client-portal-toolbar { min-height: 44px; padding: 4px 10px; }
+  .client-portal-toolbar { min-height: 56px; justify-content: space-between; gap: 10px; padding: 8px 16px; }
+  .client-portal-toolbar-actions { gap: 4px; }
+  .client-portal-mobile-brand { display: flex; }
+  .client-portal-mobile-brand img { width: 28px; height: 28px; flex-basis: 28px; }
   .client-portal-main--workspace { padding: 20px 16px 28px; }
   .client-page-heading { min-height: 58px; margin-bottom: 13px; }
   .client-page-heading h1, .client-project-detail-heading h1 { font-size: 23px; }
