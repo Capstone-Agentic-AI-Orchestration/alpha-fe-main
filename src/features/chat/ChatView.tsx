@@ -878,7 +878,11 @@ export const ChatView: React.FC = () => {
     const updateFromSocket = (payload: Partial<AgentCall> & Pick<AgentCall, 'id'>) => {
       if (!payload?.id) return;
       const existing = callsRef.current[payload.id];
-      if ((!existing && payload.threadId !== threadId) || (existing && existing.threadId !== threadId)) return;
+      if (existing && existing.threadId !== threadId) return;
+      // The broadcast leaves out the thread id, so an unknown call (the first
+      // turn of a new conversation) is looked up once it ends; the authorized
+      // read below decides whether it belongs to this thread.
+      if (!existing && !['completed', 'failed', 'cancelled'].includes(String(payload.status ?? ''))) return;
       const sequence = (requests.get(payload.id) ?? 0) + 1;
       requests.set(payload.id, sequence);
       // Socket frames are notifications. Fetch current, authorized state instead of trusting a late started frame.

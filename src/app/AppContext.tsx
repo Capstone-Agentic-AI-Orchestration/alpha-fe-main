@@ -45,7 +45,7 @@ import {
   normalizeSettings
 } from '@/data/defaults';
 import { apiService, normalizeGitHubRepo, normalizeSkill, onWorkspaceRefused, setActiveWorkspaceId } from '@/shared/services/apiService';
-import { mergeThreadsWithCachedMessages } from './chatThreadHydration';
+import { applyChatReplies, mergeLoadedTranscript, mergeThreadsWithCachedMessages } from './chatThreadHydration';
 import { createBoardSyncCoordinator } from './boardSyncCoordinator';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
@@ -1264,7 +1264,7 @@ ${e.detail}`;
         if (!Array.isArray(messages)) throw new Error('Chat messages response was invalid');
         loadedThreadsRef.current.add(threadId);
         setChatThreads(prev =>
-          prev.map(t => (t.id === threadId ? { ...t, messages } : t))
+          prev.map(t => (t.id === threadId ? { ...t, messages: mergeLoadedTranscript(messages, t.messages) } : t))
         );
       })
       .catch(() => {
@@ -2969,6 +2969,10 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       projectId: isClientThread ? undefined : projectId,
       messages: []
     };
+    // Nothing exists on the daemon for a thread created here, so there is no
+    // transcript to read. Reading it anyway raced the first send: the read
+    // returned the question without the reply and replaced the transcript.
+    loadedThreadsRef.current.add(newThreadId);
     setChatThreads(prev => [newThread, ...prev]);
     setActiveThreadId(newThreadId);
 
@@ -2992,6 +2996,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
          * is the phantom this change exists to remove — it would take a project
          * that will not save and refuse to be deleted.
          */
+        loadedThreadsRef.current.delete(newThreadId);
         setChatThreads(prev => prev.filter(t => t.id !== newThreadId));
         setActiveThreadId(prev => (prev === newThreadId ? null : prev));
         showToast('Conversation not created', msg, 'error');
@@ -3022,8 +3027,11 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
   const refreshChatThread = async (threadId: string): Promise<ChatMessage[]> => {
     const messages = await apiService.getChatMessages(threadId);
     loadedThreadsRef.current.add(threadId);
-    setChatThreads(prev => prev.map(thread => thread.id === threadId ? { ...thread, messages } : thread));
-    if (activeThreadId === threadId) setChatMessages(messages);
+    setChatThreads(prev => prev.map(thread => thread.id === threadId
+      ? { ...thread, messages: mergeLoadedTranscript(messages, thread.messages) }
+      : thread
+    ));
+    if (activeThreadId === threadId) setChatMessages(prev => mergeLoadedTranscript(messages, prev));
     return messages;
   };
 
@@ -3221,8 +3229,6 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
         })
       );
 
-      const [firstReply, ...laterReplies] = replies;
-
       setChatThreads(prev => prev.map(t => {
         if (t.id !== targetThreadId) return t;
         const msgs = t.messages || [];
@@ -3230,14 +3236,11 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
           ...t,
           // The last speaker is what the thread list should preview.
           lastMessageSnippet: replies[replies.length - 1].content.slice(0, 60) + '...',
-          messages: [...msgs.map(m => m.id === streamingMsgId ? firstReply : m), ...laterReplies]
+          messages: applyChatReplies(msgs, streamingMsgId, replies)
         };
       }));
 
-      setChatMessages(prev => [
-        ...prev.map(m => m.id === streamingMsgId ? firstReply : m),
-        ...laterReplies
-      ]);
+      setChatMessages(prev => applyChatReplies(prev, streamingMsgId, replies));
     } catch (err: any) {
       console.warn('Real AI chat service unavailable, falling back to local persona:', err);
 
@@ -3272,11 +3275,11 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
         return {
           ...t,
           lastMessageSnippet: 'Could not reach the Alpha daemon.',
-          messages: msgs.map(m => m.id === streamingMsgId ? fallbackMsg : m)
+          messages: applyChatReplies(msgs, streamingMsgId, [fallbackMsg])
         };
       }));
 
-      setChatMessages(prev => prev.map(m => m.id === streamingMsgId ? fallbackMsg : m));
+      setChatMessages(prev => applyChatReplies(prev, streamingMsgId, [fallbackMsg]));
     } finally {
       setChatTypingByThread(prev => {
         if (!prev[targetThreadId!]) return prev;
