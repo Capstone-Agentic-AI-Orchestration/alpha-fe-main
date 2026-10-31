@@ -1178,12 +1178,8 @@ ${e.detail}`;
   }, []);
 
   /**
-   * Keep the analytics cards current while someone is looking at them.
-   *
-   * This used to refresh every 30 seconds for as long as the app was open,
-   * hidden or not, and each refresh read the workspace's whole run history.
-   * Now it refreshes on opening Delivery Health or the overview, every minute
-   * while that view is on screen, and on returning to the window.
+   * Refresh analytics when someone opens Delivery Health or the overview, and
+   * when they return to the window. The screen does not need a periodic read.
    */
   const analyticsOnScreen = activeTab === 'analytics' || activeTab === 'portal';
   useEffect(() => {
@@ -1203,11 +1199,9 @@ ${e.detail}`;
     };
 
     void refresh();
-    const id = window.setInterval(refresh, 60_000);
     document.addEventListener('visibilitychange', refresh);
     return () => {
       cancelled = true;
-      window.clearInterval(id);
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [analyticsOnScreen, activeWorkspaceId]);
