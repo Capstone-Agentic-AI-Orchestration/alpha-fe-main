@@ -183,7 +183,6 @@ export function applyBoardChangePage(state: BoardState, page: BoardChangePage): 
   }
 
   let next: BoardState = state;
-  const affected = new Set<keyof BoardState>();
   for (const change of page.changes) {
     switch (change.table) {
       case 'projects': {
@@ -197,7 +196,6 @@ export function applyBoardChangePage(state: BoardState, page: BoardChangePage): 
               ? upsert(next.projects, { ...(change.row as unknown as Project), id })
               : next.projects
         };
-        affected.add('projects');
         break;
       }
       case 'agents': {
@@ -211,16 +209,13 @@ export function applyBoardChangePage(state: BoardState, page: BoardChangePage): 
               ? upsert(next.agents, { ...(change.row as unknown as Agent), id })
               : next.agents
         };
-        affected.add('agents');
         break;
       }
       case 'issues':
         next = { ...next, issues: applyIssueChange(next.issues, change) };
-        affected.add('issues');
         break;
       case 'issue_comments':
         next = { ...next, issues: applyCommentChange(next.issues, change) };
-        affected.add('issues');
         break;
       default:
         // Squads and workspace bindings are not represented in browser board state.
