@@ -58,3 +58,11 @@ export function saveToStorage<T>(key: string, value: T): void {
 export function saveToStorageStrict<T>(key: string, value: T): void {
   localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value));
 }
+
+export function removeFromStorage(key: string): void {
+  try {
+    localStorage.removeItem(STORAGE_PREFIX + key);
+  } catch {
+    /* storage unavailable; nothing to remove */
+  }
+}

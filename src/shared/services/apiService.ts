@@ -839,7 +839,9 @@ export const apiService = {
   scanRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes/scan', { method: 'POST' }),
 
   // Runs
-  getRuns: () => fetchJson<PrototypeRun[]>('/runs'),
+  /** 'summary' omits stage logs and activity; open one run with getRun for those. */
+  getRuns: (view?: 'summary') => fetchJson<PrototypeRun[]>(view === 'summary' ? '/runs?view=summary' : '/runs'),
+  getRun: (id: string) => fetchJson<PrototypeRun>(`/runs/${encodeURIComponent(id)}`),
   getAnalytics: () => fetchJson<AnalyticsData>('/analytics'),
   getOperationsSnapshot: () => fetchJson<OperationsSnapshot>('/operations', { cache: 'no-store' }),
   getOperationsNotifications: () => fetchJson<OperationsNotification[]>('/operations/notifications', { cache: 'no-store' }),

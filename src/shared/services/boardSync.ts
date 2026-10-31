@@ -1,5 +1,5 @@
 import type { Agent, Issue, IssueComment, Project } from '@/shared/types';
-import { loadFromStorage, saveToStorageStrict } from '@/shared/lib/storage';
+import { loadFromStorage, removeFromStorage, saveToStorageStrict } from '@/shared/lib/storage';
 import type {
   BoardBootstrap,
   BoardChange,
@@ -22,31 +22,63 @@ function compareCursor(left: string, right: string): number {
 }
 
 /**
- * Where a workspace's board cursor is kept. Versioned: a cursor only means
- * "the cache holds everything before this point". Earlier caches can still
- * contain retired local personas absent from the shared board: delta pages
- * have no deletion to replay for records that never belonged to that board.
- * Version 3 replaces those caches with one authoritative workspace snapshot.
+ * Where a workspace's cached board is kept: projects, agents, issues and the
+ * cursor in one record, written in one step by this module only.
+ *
+ * Version 3 kept the arrays and the cursor under separate keys, and the app
+ * also saved the arrays whenever the selected workspace changed. When those
+ * disagreed -- another workspace's arrays under this workspace's key, with a
+ * current cursor -- delta sync had nothing to replay and the wrong list stayed
+ * forever. Version 4 starts every device with one authoritative snapshot.
  */
 export function cursorStorageKey(workspaceId: string): string {
-  return `board_cursor_v3:${workspaceId}`;
+  return `board_v4:${workspaceId}`;
 }
 
-function readBoardState(workspaceId: string): BoardState {
+/** One workspace's cached board, as one unit. */
+interface BoardCacheRecord extends BoardState {
+  workspaceId: string;
+  /** The login the server read this board for; absent from older servers. */
+  userId?: string;
+  cursor: BoardCursor;
+}
+
+function readRecord(workspaceId: string): BoardCacheRecord | null {
+  const record = loadFromStorage<BoardCacheRecord | null>(cursorStorageKey(workspaceId), null);
+  if (!record || typeof record !== 'object' || record.workspaceId !== workspaceId
+    || !validCursor(record.cursor, workspaceId)
+    || !Array.isArray(record.projects) || !Array.isArray(record.agents) || !Array.isArray(record.issues)) {
+    return null;
+  }
+  return record;
+}
+
+/** Older per-array keys; removed so nothing can read a stale copy of them. */
+function removeLegacyKeys(workspaceId: string): void {
+  for (const key of [`projects:${workspaceId}`, `agents:${workspaceId}`, `issues:${workspaceId}`, `board_cursor_v3:${workspaceId}`]) {
+    removeFromStorage(key);
+  }
+}
+
+function writeRecord(record: BoardCacheRecord): void {
+  // One write: the cursor can never be saved without the rows it covers.
+  saveToStorageStrict(cursorStorageKey(record.workspaceId), record);
+  removeLegacyKeys(record.workspaceId);
+}
+
+/** The cached board for a workspace, for showing something before the first sync. */
+export function loadCachedBoard(workspaceId: string | null): {
+  state: BoardState;
+  cursor: BoardCursor | null;
+  userId?: string;
+} {
+  const record = workspaceId ? readRecord(workspaceId) : null;
+  if (!record) return { state: { projects: [], agents: [], issues: [] }, cursor: null };
   return {
-    projects: loadFromStorage<Project[]>(`projects:${workspaceId}`, []),
-    agents: loadFromStorage<Agent[]>(`agents:${workspaceId}`, []),
-    issues: loadFromStorage<Issue[]>(`issues:${workspaceId}`, [])
+    state: { projects: record.projects, agents: record.agents, issues: record.issues },
+    cursor: record.cursor,
+    userId: record.userId
   };
-}
-
-function persistBoardState(state: BoardState, cursor: BoardCursor, affected: Set<keyof BoardState>): void {
-  // The cursor acknowledges everything before it. Save it only after every
-  // array affected by this page has been written successfully.
-  if (affected.has('projects')) saveToStorageStrict(`projects:${cursor.workspaceId}`, state.projects);
-  if (affected.has('agents')) saveToStorageStrict(`agents:${cursor.workspaceId}`, state.agents);
-  if (affected.has('issues')) saveToStorageStrict(`issues:${cursor.workspaceId}`, state.issues);
-  saveToStorageStrict(cursorStorageKey(cursor.workspaceId), cursor);
 }
 
 function persistBootstrap(bootstrap: BoardBootstrap): BoardSyncResult {
@@ -62,7 +94,7 @@ function persistBootstrap(bootstrap: BoardBootstrap): BoardSyncResult {
     agents: bootstrap.agents,
     issues: bootstrap.issues
   };
-  persistBoardState(state, bootstrap.cursor, new Set(['projects', 'agents', 'issues']));
+  writeRecord({ ...state, workspaceId: bootstrap.workspaceId, userId: bootstrap.userId, cursor: bootstrap.cursor });
   return { state, cursor: bootstrap.cursor };
 }
 
@@ -145,9 +177,8 @@ export function applyBoardChangePage(state: BoardState, page: BoardChangePage): 
     || !/^(0|[1-9]\d*)$/.test(page.nextCursor.value)) {
     throw new Error('The board change page does not match a valid workspace cursor.');
   }
-  const currentCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(page.workspaceId), null);
-  if (validCursor(currentCursor, page.workspaceId)
-    && compareCursor(page.nextCursor.value, currentCursor.value) < 0) {
+  const current = readRecord(page.workspaceId);
+  if (current && compareCursor(page.nextCursor.value, current.cursor.value) < 0) {
     throw new Error('The board change cursor cannot move backwards.');
   }
 
@@ -196,35 +227,42 @@ export function applyBoardChangePage(state: BoardState, page: BoardChangePage): 
         break;
     }
   }
-  persistBoardState(next, page.nextCursor, affected);
+  writeRecord({
+    ...next,
+    workspaceId: page.workspaceId,
+    userId: page.userId ?? current?.userId,
+    cursor: page.nextCursor
+  });
   return next;
 }
 
-/** Read only board-change pages, bootstrapping when this workspace has no usable cursor. */
-export async function catchUpBoard(
-  workspaceId: string,
-  cachedCursor: BoardCursor | null
-): Promise<BoardSyncResult> {
-  if (!workspaceId.trim()) throw new Error('A workspace is required to sync the board.');
-  let currentState = readBoardState(workspaceId);
-  let currentCursor = validCursor(cachedCursor, workspaceId) ? cachedCursor : null;
+async function bootstrapBoard(workspaceId: string): Promise<BoardSyncResult> {
+  const bootstrap = await apiService.getBoardBootstrap();
+  if (bootstrap.workspaceId !== workspaceId) throw new Error('The board bootstrap belongs to another workspace.');
+  return persistBootstrap(bootstrap);
+}
 
-  if (!currentCursor) {
-    const bootstrap = await apiService.getBoardBootstrap();
-    if (bootstrap.workspaceId !== workspaceId) throw new Error('The board bootstrap belongs to another workspace.');
-    return persistBootstrap(bootstrap);
-  }
+/**
+ * Bring a workspace's cached board up to date with delta pages, or replace it
+ * with one snapshot when there is no usable cache, the server says the history
+ * expired, or the cache was read for a different account.
+ */
+export async function catchUpBoard(workspaceId: string): Promise<BoardSyncResult> {
+  if (!workspaceId.trim()) throw new Error('A workspace is required to sync the board.');
+  const record = readRecord(workspaceId);
+  if (!record) return bootstrapBoard(workspaceId);
+  let currentState: BoardState = { projects: record.projects, agents: record.agents, issues: record.issues };
+  let currentCursor: BoardCursor = record.cursor;
 
   while (true) {
     const page = await apiService.getBoardChanges(currentCursor, PAGE_SIZE);
     if (page.workspaceId !== workspaceId || page.nextCursor.workspaceId !== workspaceId) {
       throw new Error('The board change page belongs to another workspace.');
     }
-    if (page.resetRequired) {
-      const bootstrap = await apiService.getBoardBootstrap();
-      if (bootstrap.workspaceId !== workspaceId) throw new Error('The board bootstrap belongs to another workspace.');
-      return persistBootstrap(bootstrap);
-    }
+    // Another account's cache on a shared machine: deltas cannot remove rows
+    // this account may not see, so start from this account's snapshot.
+    const accountChanged = Boolean(page.userId && record.userId && page.userId !== record.userId);
+    if (page.resetRequired || accountChanged) return bootstrapBoard(workspaceId);
     const previousCursor = currentCursor;
     currentState = applyBoardChangePage(currentState, page);
     currentCursor = page.nextCursor;

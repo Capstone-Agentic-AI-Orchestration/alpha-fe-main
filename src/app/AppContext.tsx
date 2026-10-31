@@ -50,8 +50,7 @@ import { createBoardSyncCoordinator } from './boardSyncCoordinator';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '@/shared/services/serverSync';
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
-import { catchUpBoard, cursorStorageKey } from '@/shared/services/boardSync';
-import type { BoardCursor } from '@/shared/types/boardSync';
+import { catchUpBoard, loadCachedBoard } from '@/shared/services/boardSync';
 import { supabase } from '@/shared/lib/supabase';
 import { isDesktop } from '@/shared/desktop';
 import type { OperationsNotification } from '@/shared/types/operations';
@@ -152,6 +151,8 @@ interface AppContextType {
   startPrototypeRun: (issueId: string, agentId: string, plan: string[], scenario: PrototypeRun['scenario']) => PrototypeRun | null;
   cancelPrototypeRun: (runId: string) => void;
   retryPrototypeRun: (runId: string) => void;
+  /** Load a summarized run's stage logs and activity, for a screen that shows them. */
+  loadRunDetail: (runId: string) => void;
   
   // Projects
   projects: Project[];
@@ -551,6 +552,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [activeWorkspaceId, setActiveWorkspaceIdState] = useState<string | null>(() =>
     loadFromStorage<string | null>('active_workspace_id', null)
   );
+  /** The selected workspace right now, for async work that must not apply to another one. */
+  const activeWorkspaceRef = useRef<string | null>(activeWorkspaceId);
+  activeWorkspaceRef.current = activeWorkspaceId;
   /**
    * Board caches are per workspace. Seeding state from the unscoped keys let an
    * old roster from a retired build be written straight into the active
@@ -590,10 +594,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   /** Sync warnings already shown this session. */
   const reportedSyncErrorsRef = useRef(new Set<string>());
   const syncBoardRef = useRef<() => Promise<void>>(async () => {});
-  const catchUpWorkspaceBoard = useCallback((workspaceId: string) => {
-    const cachedCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(workspaceId), null);
-    return catchUpBoard(workspaceId, cachedCursor);
-  }, []);
+  const catchUpWorkspaceBoard = useCallback((workspaceId: string) => catchUpBoard(workspaceId), []);
 
   /**
    * Pull the board from GitHub.
@@ -840,11 +841,20 @@ ${e.detail}`;
   // Raw collections. These are never handed to a view directly — the scoped
   // derivations further down are what the provider exposes, so a view cannot
   // accidentally render another persona's data.
-  const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(loadFromStorage<Issue[]>(initialWorkspaceCacheKey('issues'), [])));
+  // Seeded from the workspace's own cached board record. Board arrays are
+  // saved only by the sync code, together with their cursor, never by an
+  // effect that can run while the selected workspace is changing.
+  const [issues, setIssues] = useState<Issue[]>(() => normalizeLegacyIssues(
+    loadCachedBoard(loadFromStorage<string | null>('active_workspace_id', null)).state.issues
+  ));
   /** Saved tasks whose author asked for a build when creating them; see `CreateIssueOptions.planBuild`. */
   const [issuesAwaitingBuild, setIssuesAwaitingBuild] = useState<string[]>([]);
-  const [projects, setProjects] = useState<Project[]>(() => loadFromStorage<Project[]>(initialWorkspaceCacheKey('projects'), []));
-  const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(loadFromStorage<Agent[]>(initialWorkspaceCacheKey('agents'), [])));
+  const [projects, setProjects] = useState<Project[]>(() =>
+    loadCachedBoard(loadFromStorage<string | null>('active_workspace_id', null)).state.projects
+  );
+  const [agents, setAgents] = useState<Agent[]>(() => normalizeLegacyAgents(
+    loadCachedBoard(loadFromStorage<string | null>('active_workspace_id', null)).state.agents
+  ));
   const [runtimes, setRuntimes] = useState<RuntimeEngine[]>(() => loadFromStorage<RuntimeEngine[]>('runtimes', []));
   const [skills, setSkills] = useState<Skill[]>(() => {
     const saved = loadFromStorage<unknown[]>('skills', []);
@@ -939,6 +949,23 @@ ${e.detail}`;
     setPrototypeRuns(normalized);
   };
   /**
+   * The web lists run summaries without stage logs or activity. A screen that
+   * shows one run asks for the rest once, when it opens.
+   */
+  const loadingRunDetailsRef = useRef(new Set<string>());
+  const loadRunDetail = useCallback((runId: string) => {
+    if (!runId || loadingRunDetailsRef.current.has(runId)) return;
+    loadingRunDetailsRef.current.add(runId);
+    void apiService.getRun(runId)
+      .then(full => {
+        const [normalized] = normalizeLegacyPrototypeRuns([full]);
+        if (!normalized) return;
+        setPrototypeRuns(prev => prev.map(run => run.id === runId ? { ...normalized, logsOmitted: undefined } : run));
+      })
+      .catch(() => { /* keep the summary; the screen can be reopened */ })
+      .finally(() => { loadingRunDetailsRef.current.delete(runId); });
+  }, []);
+  /**
    * Backend run IDs do not exist until POST /runs/start returns. Keeping this
    * small pending map lets a user cancel during that window without sending a
    * request for the optimistic ID and without allowing the response to revive
@@ -981,6 +1008,14 @@ ${e.detail}`;
           selectedWorkspaceId = selected?.id ?? null;
           setActiveWorkspaceIdState(selectedWorkspaceId);
           setActiveWorkspaceId(selectedWorkspaceId);
+          if (selectedWorkspaceId !== activeWorkspaceId) {
+            // Show the selected workspace's own cache while it loads, never
+            // the previously selected workspace's rows.
+            const cached = loadCachedBoard(selectedWorkspaceId).state;
+            setProjects(cached.projects);
+            setAgents(normalizeLegacyAgents(cached.agents));
+            setIssues(normalizeLegacyIssues(cached.issues));
+          }
           try {
             const roomProjects = await apiService.getLiveBuildRoomProjects();
             if (!cancelled) setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
@@ -1004,8 +1039,7 @@ ${e.detail}`;
 
       let result;
       try {
-        const cachedCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(selectedWorkspaceId), null);
-        result = await fetchServerSnapshot(selectedWorkspaceId, cachedCursor);
+        result = await fetchServerSnapshot(selectedWorkspaceId);
       } catch (error) {
         console.warn('[sync] workspace hydration failed:', error instanceof Error ? error.message : error);
         if (!cancelled) {
@@ -1123,6 +1157,8 @@ ${e.detail}`;
    */
   useEffect(() => {
     const REFRESH_MS = 30_000;
+    // Agent CLIs exist only on a desktop; the hosted API always answers [].
+    if (!isDesktop) return;
     let cancelled = false;
 
     const refresh = async () => {
@@ -1140,12 +1176,21 @@ ${e.detail}`;
     return () => { cancelled = true; window.clearInterval(id); };
   }, []);
 
-  /** Keep the analytics cards tied to persisted daemon runs, not demo counters. */
+  /**
+   * Keep the analytics cards current while someone is looking at them.
+   *
+   * This used to refresh every 30 seconds for as long as the app was open,
+   * hidden or not, and each refresh read the workspace's whole run history.
+   * Now it refreshes on opening Delivery Health or the overview, every minute
+   * while that view is on screen, and on returning to the window.
+   */
+  const analyticsOnScreen = activeTab === 'analytics' || activeTab === 'portal';
   useEffect(() => {
-    const REFRESH_MS = 30_000;
+    if (!analyticsOnScreen) return;
     let cancelled = false;
 
     const refresh = async () => {
+      if (document.visibilityState !== 'visible') return;
       try {
         const latest = await apiService.getAnalytics();
         if (!cancelled && latest && typeof latest === 'object') {
@@ -1156,9 +1201,30 @@ ${e.detail}`;
       }
     };
 
-    const id = window.setInterval(refresh, REFRESH_MS);
-    return () => { cancelled = true; window.clearInterval(id); };
-  }, []);
+    void refresh();
+    const id = window.setInterval(refresh, 60_000);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [analyticsOnScreen, activeWorkspaceId]);
+
+  /**
+   * A board cached for another account is not shown to this one. The next
+   * sync replaces it with this account's snapshot.
+   */
+  useEffect(() => {
+    const login = identity?.login;
+    if (!login || !activeWorkspaceId) return;
+    const cachedFor = loadCachedBoard(activeWorkspaceId).userId;
+    if (cachedFor && cachedFor !== login) {
+      setProjects([]);
+      setAgents([]);
+      setIssues([]);
+    }
+  }, [identity?.login, activeWorkspaceId]);
 
   /**
    * Load a thread's transcript from the daemon when it is opened.
@@ -1217,9 +1283,9 @@ ${e.detail}`;
   useEffect(() => { saveToStorage('active_workspace_id', activeWorkspaceId); }, [activeWorkspaceId]);
   useEffect(() => { saveToStorage('workspace_tabs_v3', tabs); }, [tabs]);
   useEffect(() => { saveToStorage('active_tab_id_v3', activeTabId); }, [activeTabId]);
-  useEffect(() => { saveToStorage(workspaceStorageKey('issues'), issues); }, [issues, activeWorkspaceId]);
-  useEffect(() => { saveToStorage(workspaceStorageKey('projects'), projects); }, [projects, activeWorkspaceId]);
-  useEffect(() => { saveToStorage(workspaceStorageKey('agents'), agents); }, [agents, activeWorkspaceId]);
+  // Issues, projects and agents are cached by the board sync code with their
+  // cursor. Saving them here wrote one workspace's rows under another's key
+  // whenever the selection changed before the new rows arrived.
   useEffect(() => { saveToStorage('runtimes', runtimes); }, [runtimes]);
   useEffect(() => { saveToStorage('skills', skills); }, [skills]);
   useEffect(() => { saveToStorage(workspaceStorageKey('deployments_v2'), deployments); }, [deployments, activeWorkspaceId]);
@@ -1304,8 +1370,8 @@ ${e.detail}`;
       setWorkspaces(available);
       const selected = available.find(workspace => workspace.id === activeWorkspaceId) ?? available[0];
       if (selected && selected.id !== activeWorkspaceId) {
-        setActiveWorkspaceIdState(selected.id);
-        setActiveWorkspaceId(selected.id);
+        // A full switch, so the board shown is the selected workspace's.
+        await switchWorkspace(selected.id, selected);
       }
     } catch (error) {
       showToast('Workspaces unavailable', error instanceof Error ? error.message : String(error), 'error');
@@ -1327,10 +1393,11 @@ ${e.detail}`;
     if (!target || workspaceId === activeWorkspaceId) return;
 
     setWorkspaceSwitching(true);
+    activeWorkspaceRef.current = workspaceId;
     setActiveWorkspaceIdState(workspaceId);
     setActiveWorkspaceId(workspaceId);
     setLiveBuildRoomProjectIds([]);
-    const cachedCursor = loadFromStorage<BoardCursor | null>(cursorStorageKey(workspaceId), null);
+    const superseded = () => activeWorkspaceRef.current !== workspaceId;
     setActiveThreadId(null);
     // The next workspace may have thread IDs loaded earlier in this session.
     // Clear this cache so opening one always rehydrates its transcript from
@@ -1338,9 +1405,10 @@ ${e.detail}`;
     loadedThreadsRef.current.clear();
     setRunSetupIssueId(null);
     setRunSetupAgentId(null);
-    setProjects(loadFromStorage<Project[]>(`projects:${workspaceId}`, []));
-    setIssues(normalizeLegacyIssues(loadFromStorage<Issue[]>(`issues:${workspaceId}`, [])));
-    setAgents(normalizeLegacyAgents(loadFromStorage<Agent[]>(`agents:${workspaceId}`, [])));
+    const cachedBoard = loadCachedBoard(workspaceId).state;
+    setProjects(cachedBoard.projects);
+    setIssues(normalizeLegacyIssues(cachedBoard.issues));
+    setAgents(normalizeLegacyAgents(cachedBoard.agents));
     setChatThreads(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
     setChatMessages(loadFromStorage<ChatMessage[]>(`chat_messages:${workspaceId}`, []));
     hydratePrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, []));
@@ -1350,7 +1418,9 @@ ${e.detail}`;
     setAnalytics(normalizeAnalytics(loadFromStorage<AnalyticsData>(`analytics_v2:${workspaceId}`, emptyAnalytics)));
 
     try {
-      const result = await fetchServerSnapshot(workspaceId, cachedCursor);
+      const result = await fetchServerSnapshot(workspaceId);
+      // Another switch started while this one loaded; its result wins.
+      if (superseded()) return;
       try {
         const roomProjects = await apiService.getLiveBuildRoomProjects();
         setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
@@ -1378,9 +1448,9 @@ ${e.detail}`;
       setActiveTabId(nextTabId);
       showToast('Workspace switched', `Now viewing ${target.name}.`, 'success');
     } catch (error) {
-      showToast('Workspace switch failed', error instanceof Error ? error.message : String(error), 'error');
+      if (!superseded()) showToast('Workspace switch failed', error instanceof Error ? error.message : String(error), 'error');
     } finally {
-      setWorkspaceSwitching(false);
+      if (!superseded()) setWorkspaceSwitching(false);
     }
   };
 
@@ -1412,6 +1482,9 @@ ${e.detail}`;
     }
     setActiveWorkspaceIdState(null);
     setActiveWorkspaceId(null);
+    setProjects([]);
+    setAgents([]);
+    setIssues([]);
     showToast('No workspace access', 'This account is not a member of any workspace. Ask a project manager to add you.', 'error');
   };
 
@@ -3729,6 +3802,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       startPrototypeRun,
       cancelPrototypeRun,
       retryPrototypeRun,
+      loadRunDetail,
       projects: scopedProjects,
       createProject,
       updateProject,

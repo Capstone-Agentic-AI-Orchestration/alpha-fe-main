@@ -1,6 +1,7 @@
 import { apiService } from './apiService';
 import { catchUpBoard } from './boardSync';
-import type { BoardCursor, BoardSyncResult } from '@/shared/types/boardSync';
+import { isDesktop } from '@/shared/desktop';
+import type { BoardSyncResult } from '@/shared/types/boardSync';
 
 /**
  * Hydration from the local Alpha daemon.
@@ -70,24 +71,25 @@ async function settleSnapshot(
  * that are migrated in the next plan task.
  */
 export function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>>;
-export function fetchServerSnapshot(workspaceId: string, cachedCursor: BoardCursor | null): Promise<ServerSyncResult>;
+export function fetchServerSnapshot(workspaceId: string): Promise<ServerSyncResult>;
 export async function fetchServerSnapshot(
-  workspaceId?: string,
-  cachedCursor?: BoardCursor | null
+  workspaceId?: string
 ): Promise<Partial<ServerSnapshot> | ServerSyncResult> {
   if (workspaceId !== undefined) {
     const calls = {
       skills: apiService.getSkills(),
       runtimes: apiService.getRuntimes(),
       chatThreads: apiService.getChatThreads(),
-      runs: apiService.getRuns(),
+      // The web reads summaries: full runs carry every stage log, and the
+      // desktop's own list is local so it keeps the full rows.
+      runs: apiService.getRuns(isDesktop ? undefined : 'summary'),
       analytics: apiService.getAnalytics(),
       // History for builds started before squads were removed.
       squadRuns: apiService.getSquadRuns()
     } as const;
     const [snapshot, board] = await Promise.all([
       settleSnapshot(calls),
-      catchUpBoard(workspaceId, cachedCursor ?? null)
+      catchUpBoard(workspaceId)
     ]);
     return { snapshot, board };
   }

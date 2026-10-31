@@ -27,7 +27,8 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
     cancelPrototypeRun,
     retryPrototypeRun,
     setActiveTab,
-    setNotificationPanelOpen
+    setNotificationPanelOpen,
+    loadRunDetail
   } = useApp();
   const [confirmCancel, setConfirmCancel] = useState(false);
 
@@ -35,6 +36,11 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
     () => prototypeRuns.find(item => item.issueId === issueId),
     [prototypeRuns, issueId]
   );
+
+  // Lists carry summaries; this panel shows logs and activity, so load them.
+  useEffect(() => {
+    if (run?.id && run.logsOmitted) loadRunDetail(run.id);
+  }, [run?.id, run?.logsOmitted, loadRunDetail]);
 
   useEffect(() => {
     if (run?.id && ['queued', 'running'].includes(run.status)) {

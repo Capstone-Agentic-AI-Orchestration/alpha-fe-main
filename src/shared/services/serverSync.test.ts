@@ -29,13 +29,15 @@ describe('server hydration with a board cursor', () => {
     vi.spyOn(apiService, 'getSkills').mockResolvedValue([]);
     vi.spyOn(apiService, 'getRuntimes').mockResolvedValue([]);
     vi.spyOn(apiService, 'getChatThreads').mockResolvedValue([]);
-    vi.spyOn(apiService, 'getRuns').mockResolvedValue([]);
+    const runs = vi.spyOn(apiService, 'getRuns').mockResolvedValue([]);
     vi.spyOn(apiService, 'getAnalytics').mockResolvedValue({} as never);
     vi.spyOn(apiService, 'getSquadRuns').mockResolvedValue([]);
 
-    const result = await fetchServerSnapshot('ws-1', null);
+    const result = await fetchServerSnapshot('ws-1');
 
     expect(fullBoardReads.every(call => !call.mock.calls.length)).toBe(true);
+    // The web reads run summaries; stage logs load when a run is opened.
+    expect(runs).toHaveBeenCalledWith('summary');
     expect(result.snapshot).toMatchObject({ skills: [], runtimes: [], chatThreads: [], runs: [], squadRuns: [], analytics: {} });
     expect(result.board.cursor).toEqual({ workspaceId: 'ws-1', value: '12' });
   });
