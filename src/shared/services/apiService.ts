@@ -78,6 +78,10 @@ export function setActiveWorkspaceId(workspaceId: string | null): void {
   activeWorkspaceId = workspaceId;
 }
 
+export function getActiveWorkspaceId(): string | null {
+  return activeWorkspaceId;
+}
+
 /** What `workspaceContext` answers when the caller is not in the workspace named by `X-Workspace-Id`. */
 const WORKSPACE_REFUSED = 'You do not have access to the requested workspace.';
 

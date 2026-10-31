@@ -52,7 +52,7 @@ import { fetchServerSnapshot, persist, describeWriteError, ServerStatus } from '
 import { loadFromStorage, saveToStorage } from '@/shared/lib/storage';
 import { catchUpBoard, cursorStorageKey } from '@/shared/services/boardSync';
 import type { BoardCursor } from '@/shared/types/boardSync';
-import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
+import { supabase } from '@/shared/lib/supabase';
 import { isDesktop } from '@/shared/desktop';
 import type { OperationsNotification } from '@/shared/types/operations';
 
@@ -679,7 +679,7 @@ ${e.detail}`;
    * workspace matches the channel's.
    */
   useEffect(() => {
-    if (localMode || !activeWorkspaceId || !isSupabaseConfigured() || !supabase) return;
+    if (localMode || !activeWorkspaceId || workspaceLoading || workspaceSwitching || identityStatus !== 'ready') return;
 
     let cancelled = false;
     const coordinator = createBoardSyncCoordinator(async () => {
@@ -692,20 +692,28 @@ ${e.detail}`;
     });
     const onVisibilityChange = () => coordinator.onVisible();
     document.addEventListener('visibilitychange', onVisibilityChange);
+    // The fallback and focus catch-up also work in builds without Realtime.
     const channel = supabase
-      .channel(`workspace:${activeWorkspaceId}:board`, { config: { private: true } })
-      .on('broadcast', { event: 'board_changed' }, () => coordinator.notify())
-      .subscribe(status => {
-        if (status === 'SUBSCRIBED') coordinator.onSubscribed();
-      });
+      ? supabase
+        .channel(`workspace:${activeWorkspaceId}:board`, { config: { private: true } })
+        .on('broadcast', { event: 'board_changed' }, () => coordinator.notify())
+      : null;
+    if (channel && supabase) {
+      void supabase.realtime.setAuth().then(() => {
+        if (cancelled) return;
+        channel.subscribe(status => {
+          if (status === 'SUBSCRIBED') coordinator.onSubscribed();
+        });
+      }).catch(() => { /* The cursor fallback still works if Realtime is unavailable. */ });
+    }
 
     return () => {
       cancelled = true;
       coordinator.dispose();
       document.removeEventListener('visibilitychange', onVisibilityChange);
-      void supabase?.removeChannel(channel);
+      if (channel) void supabase?.removeChannel(channel);
     };
-  }, [activeWorkspaceId, catchUpWorkspaceBoard, localMode]);
+  }, [activeWorkspaceId, catchUpWorkspaceBoard, localMode, workspaceLoading, workspaceSwitching, identityStatus]);
 
   /**
     * The role you chose, which is an override rather than the answer.

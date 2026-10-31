@@ -1,6 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
-import { apiService } from '@/shared/services/apiService';
+import { apiService, getActiveWorkspaceId } from '@/shared/services/apiService';
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
@@ -12,8 +12,8 @@ export const isSupabaseConfigured = (): boolean => {
 /** Refresh this long before the token expires, so a join never uses a stale one. */
 const REFRESH_MARGIN_MS = 60 * 1000;
 
-let cached: { token: string; expiresAt: number } | null = null;
-let inFlight: Promise<string> | null = null;
+let cached: { token: string; expiresAt: number; workspaceId: string | null } | null = null;
+let inFlight: { workspaceId: string | null; promise: Promise<string> } | null = null;
 
 /**
  * The token Supabase sees, from this session rather than the anon key.
@@ -28,19 +28,25 @@ let inFlight: Promise<string> | null = null;
  * answer for someone the API cannot vouch for.
  */
 async function databaseToken(): Promise<string> {
-  if (cached && Date.now() < cached.expiresAt - REFRESH_MARGIN_MS) return cached.token;
+  const workspaceId = getActiveWorkspaceId();
+  if (cached?.workspaceId === workspaceId && Date.now() < cached.expiresAt - REFRESH_MARGIN_MS) return cached.token;
+  if (inFlight?.workspaceId === workspaceId) return inFlight.promise;
 
-  inFlight ??= apiService
+  const promise = apiService
     .getDatabaseToken()
     .then(({ token, expiresAt }) => {
-      cached = { token, expiresAt: Date.parse(expiresAt) };
+      // A workspace switch must not cache or reuse the previous workspace's
+      // claims, including a token request that completed after the switch.
+      if (getActiveWorkspaceId() !== workspaceId) return supabaseAnonKey;
+      cached = { token, expiresAt: Date.parse(expiresAt), workspaceId };
       return token;
     })
     .catch(() => supabaseAnonKey)
     .finally(() => {
-      inFlight = null;
+      if (inFlight?.promise === promise) inFlight = null;
     });
-  return inFlight;
+  inFlight = { workspaceId, promise };
+  return promise;
 }
 
 /**
