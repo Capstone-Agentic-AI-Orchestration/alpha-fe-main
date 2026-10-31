@@ -1,14 +1,19 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useApp } from '@/app/AppContext';
 
 
 export function useAgentRunViewModel(runId?: string) {
-  const { prototypeRuns, cancelPrototypeRun, retryPrototypeRun, agents, issues } = useApp();
+  const { prototypeRuns, cancelPrototypeRun, retryPrototypeRun, agents, issues, loadRunDetail } = useApp();
 
   const currentRun = useMemo(() => {
     if (!runId) return prototypeRuns[0] || null;
     return prototypeRuns.find(r => r.id === runId) || null;
   }, [prototypeRuns, runId]);
+
+  // Lists carry summaries; the run view shows stage logs, so load them.
+  useEffect(() => {
+    if (currentRun?.id && currentRun.logsOmitted) loadRunDetail(currentRun.id);
+  }, [currentRun?.id, currentRun?.logsOmitted, loadRunDetail]);
 
   const assignedAgent = useMemo(() => {
     if (!currentRun) return null;

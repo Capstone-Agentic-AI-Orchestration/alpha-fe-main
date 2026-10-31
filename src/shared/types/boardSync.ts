@@ -46,6 +46,8 @@ export interface BoardSyncResult {
 
 export interface BoardChangePage {
   workspaceId: string;
+  /** The login the server read this page for; absent from older servers. */
+  userId?: string;
   nextCursor: BoardCursor;
   hasMore: boolean;
   resetRequired: boolean;
@@ -54,5 +56,7 @@ export interface BoardChangePage {
 
 export interface BoardBootstrap extends BoardState {
   workspaceId: string;
+  /** The login the server read this snapshot for; absent from older servers. */
+  userId?: string;
   cursor: BoardCursor;
 }

@@ -173,6 +173,8 @@ export interface PrototypeRun {
   squadRunId?: string;
   /** This member's position in the squad's order, 0-based. */
   squadOrder?: number;
+  /** Set on list summaries: stage logs and activity load when the run is opened. */
+  logsOmitted?: boolean;
 }
 
 /**

@@ -1,10 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Agent, Issue, Project } from '@/shared/types';
-import { loadFromStorage } from '@/shared/lib/storage';
 import type { BoardBootstrap, BoardChangePage, BoardCursor, BoardState } from '@/shared/types/boardSync';
 import { apiService } from './apiService';
-import { applyBoardChangePage, catchUpBoard, cursorStorageKey } from './boardSync';
+import { applyBoardChangePage, catchUpBoard, cursorStorageKey, loadCachedBoard } from './boardSync';
 
 const workspaceId = 'workspace-board-sync';
 const cursor = (value: string): BoardCursor => ({ workspaceId, value });
@@ -42,61 +41,93 @@ let storage: Storage;
 beforeEach(() => { storage = memoryStorage(); vi.stubGlobal('localStorage', storage); });
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
+const recordKey = `alpha_multica_${cursorStorageKey(workspaceId)}`;
+function seedRecord(over: Partial<BoardState & { userId: string; cursor: BoardCursor }> = {}) {
+  localStorage.setItem(recordKey, JSON.stringify({
+    workspaceId, cursor: cursor('5'), projects: [project('project-1')], agents: [], issues: [], ...over
+  }));
+}
+
 describe('browser board cursor sync', () => {
   it('bootstraps when there is no cached cursor and saves the snapshot before its cursor', async () => {
     const bootstrapSpy = vi.spyOn(apiService, 'getBoardBootstrap').mockResolvedValue(bootstrap);
     const changesSpy = vi.spyOn(apiService, 'getBoardChanges');
 
-    const result = await catchUpBoard(workspaceId, null);
+    const result = await catchUpBoard(workspaceId);
 
     expect(bootstrapSpy).toHaveBeenCalledOnce();
     expect(changesSpy).not.toHaveBeenCalled();
     expect(result).toEqual({ state: { projects: bootstrap.projects, agents: bootstrap.agents, issues: bootstrap.issues }, cursor: cursor('5') });
-    expect(loadFromStorage(`projects:${workspaceId}`, [])).toEqual(bootstrap.projects);
-    expect(loadFromStorage(cursorStorageKey(workspaceId), null)).toEqual(cursor('5'));
+    expect(loadCachedBoard(workspaceId)).toEqual({
+      state: { projects: bootstrap.projects, agents: bootstrap.agents, issues: bootstrap.issues },
+      cursor: cursor('5'),
+      userId: undefined
+    });
   });
 
-  it('replaces a legacy persona cache even when its previous cursor was current', async () => {
-    localStorage.setItem(`alpha_multica_board_cursor_v2:${workspaceId}`, JSON.stringify(cursor('5')));
-    localStorage.setItem(`alpha_multica_agents:${workspaceId}`, JSON.stringify([
-      { ...agent('agent-orion'), name: 'Orion Cross' }
-    ]));
+  /**
+   * The desktop failure this version fixes: another workspace's projects saved
+   * under this workspace's key, beside a cursor the server considers current.
+   * Delta pages had nothing to replay, so the wrong list stayed forever.
+   */
+  it('replaces a version-3 cache holding another workspace\u2019s rows with one snapshot', async () => {
+    localStorage.setItem(`alpha_multica_board_cursor_v3:${workspaceId}`, JSON.stringify(cursor('5')));
+    localStorage.setItem(`alpha_multica_projects:${workspaceId}`, JSON.stringify([project('money-tracker')]));
     vi.spyOn(apiService, 'getBoardBootstrap').mockResolvedValue(bootstrap);
     const changesSpy = vi.spyOn(apiService, 'getBoardChanges');
 
-    const result = await catchUpBoard(workspaceId, loadFromStorage(cursorStorageKey(workspaceId), null));
+    const result = await catchUpBoard(workspaceId);
 
     expect(changesSpy).not.toHaveBeenCalled();
-    expect(result.state.agents).toEqual(bootstrap.agents);
-    expect(loadFromStorage(`agents:${workspaceId}`, [])).toEqual(bootstrap.agents);
+    expect(result.state.projects.map(row => row.id)).toEqual(['project-1']);
+    expect(localStorage.getItem(`alpha_multica_projects:${workspaceId}`)).toBeNull();
+    expect(localStorage.getItem(`alpha_multica_board_cursor_v3:${workspaceId}`)).toBeNull();
+
+    // Back to deltas afterwards.
+    changesSpy.mockResolvedValue({ workspaceId, nextCursor: cursor('5'), hasMore: false, resetRequired: false, changes: [] });
+    await catchUpBoard(workspaceId);
+    expect(changesSpy).toHaveBeenCalledOnce();
+  });
+
+  it('replaces a cache read for another account on a shared machine', async () => {
+    seedRecord({ userId: 'LloydLim1', projects: [project('pm-only')] });
+    vi.spyOn(apiService, 'getBoardChanges').mockResolvedValue({
+      workspaceId, userId: 'Lloyd1020', nextCursor: cursor('5'), hasMore: false, resetRequired: false, changes: []
+    });
+    vi.spyOn(apiService, 'getBoardBootstrap').mockResolvedValue({ ...bootstrap, userId: 'Lloyd1020' });
+
+    const result = await catchUpBoard(workspaceId);
+
+    expect(result.state.projects.map(row => row.id)).toEqual(['project-1']);
+    expect(loadCachedBoard(workspaceId).userId).toBe('Lloyd1020');
   });
 
   it('uses only delta pages when a valid cursor exists', async () => {
     const previous = cursor('5');
-    localStorage.setItem(`alpha_multica_projects:${workspaceId}`, JSON.stringify([project('project-1')]));
-    localStorage.setItem(`alpha_multica_agents:${workspaceId}`, JSON.stringify([]));
-    localStorage.setItem(`alpha_multica_issues:${workspaceId}`, JSON.stringify([]));
+    seedRecord({ cursor: previous });
     const bootstrapSpy = vi.spyOn(apiService, 'getBoardBootstrap');
     const changesSpy = vi.spyOn(apiService, 'getBoardChanges').mockResolvedValue({
       workspaceId, nextCursor: cursor('6'), hasMore: false, resetRequired: false,
       changes: [{ cursor: '6', table: 'projects', rowKey: { id: 'project-2' }, operation: 'insert', row: project('project-2') as unknown as Record<string, unknown> }]
     });
 
-    const result = await catchUpBoard(workspaceId, previous);
+    const result = await catchUpBoard(workspaceId);
 
     expect(bootstrapSpy).not.toHaveBeenCalled();
     expect(changesSpy).toHaveBeenCalledExactlyOnceWith(previous, 100);
     expect(result.state.projects.map(row => row.id)).toEqual(['project-1', 'project-2']);
     expect(result.cursor).toEqual(cursor('6'));
+    expect(loadCachedBoard(workspaceId).cursor).toEqual(cursor('6'));
   });
 
   it('replaces an expired cursor with exactly one fresh bootstrap', async () => {
+    seedRecord({ cursor: cursor('1') });
     const bootstrapSpy = vi.spyOn(apiService, 'getBoardBootstrap').mockResolvedValue(bootstrap);
     const changesSpy = vi.spyOn(apiService, 'getBoardChanges').mockResolvedValue({
       workspaceId, nextCursor: cursor('9'), hasMore: false, resetRequired: true, changes: []
     });
 
-    const result = await catchUpBoard(workspaceId, cursor('1'));
+    const result = await catchUpBoard(workspaceId);
 
     expect(changesSpy).toHaveBeenCalledOnce();
     expect(bootstrapSpy).toHaveBeenCalledOnce();
@@ -142,12 +173,12 @@ describe('browser board cursor sync', () => {
     expect(issueDeleted.issues).toEqual([]);
   });
 
-  it('does not save the next cursor when a board-array storage write fails', () => {
+  it('keeps the previous cache whole when the combined write fails', () => {
     const previous = cursor('5');
-    localStorage.setItem(`alpha_multica_${cursorStorageKey(workspaceId)}`, JSON.stringify(previous));
+    seedRecord({ cursor: previous });
     const originalSetItem = storage.setItem.bind(storage);
     const setItem = vi.spyOn(storage, 'setItem').mockImplementation((key, value) => {
-      if (key === `alpha_multica_projects:${workspaceId}`) throw new DOMException('quota exceeded', 'QuotaExceededError');
+      if (key === recordKey) throw new DOMException('quota exceeded', 'QuotaExceededError');
       return originalSetItem(key, value);
     });
 
@@ -155,7 +186,8 @@ describe('browser board cursor sync', () => {
       workspaceId, nextCursor: cursor('6'), hasMore: false, resetRequired: false,
       changes: [{ cursor: '6', table: 'projects', rowKey: { id: 'project-2' }, operation: 'insert', row: project('project-2') as unknown as Record<string, unknown> }]
     })).toThrow(/quota exceeded/i);
-    expect(loadFromStorage(cursorStorageKey(workspaceId), null)).toEqual(previous);
+    expect(loadCachedBoard(workspaceId).cursor).toEqual(previous);
+    expect(loadCachedBoard(workspaceId).state.projects.map(row => row.id)).toEqual(['project-1']);
     expect(setItem).toHaveBeenCalled();
   });
 });
