@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { drawWave, OrchestratorFlow } from './OrchestratorFlow';
 import { rgbChannels, useTheme, type ScenePalette } from '@/shared/theme';
-import type { LiveBuildRoomAgentCard } from '@/shared/types';
-import { AgentHandoffGraph } from '@/features/live-build-room/AgentHandoffGraph';
+import type { ProjectBuildAgentCard } from '@/shared/types';
+import { AgentHandoffGraph } from '@/features/project-build-review/AgentHandoffGraph';
 
 const fixture: ScenePalette = {
   background: '#f0f1f2', hub: '#112233', hubEmissive: '#223344', idle: '#334455',
@@ -93,10 +93,10 @@ describe('Canvas palette updates', () => {
   });
 
   it('uses the same status palette in workflow labels and SVG fallback without changing layout', () => {
-    const cards: LiveBuildRoomAgentCard[] = ['completed', 'failed'].map((status, index) => ({
+    const cards: ProjectBuildAgentCard[] = ['completed', 'failed'].map((status, index) => ({
       executionId: `run:${index}`, runId: `${index}`, agentId: `agent:${index}`, agentName: `Specialist ${index}`,
       agentRole: 'Specialist', source: 'agent_run', sourceLabel: 'Build',
-      status: status as LiveBuildRoomAgentCard['status'], progress: 0, currentTask: 'Assigned work', activity: [],
+      status: status as ProjectBuildAgentCard['status'], progress: 0, currentTask: 'Assigned work', activity: [],
     }));
     const render = (palette: ScenePalette) => {
       vi.mocked(useTheme).mockReturnValue({ theme: { scene: palette } } as ReturnType<typeof useTheme>);

@@ -1,18 +1,18 @@
-import type { LiveBuildRoomAgentCard, LiveBuildRoomOrchestration } from '@/shared/types';
+import type { ProjectBuildAgentCard, ProjectBuildOrchestration } from '@/shared/types';
 
-type Task = LiveBuildRoomOrchestration['tasks'][number];
+type Task = ProjectBuildOrchestration['tasks'][number];
 export interface WorkflowTaskLeaf {
   id: string;
   title: string;
   status: string;
-  card: LiveBuildRoomAgentCard;
+  card: ProjectBuildAgentCard;
   task?: Task;
   x: number;
   y: number;
 }
 
 /** Ownership defines the tree. Execution status and dependency changes never rank its nodes. */
-export function layoutAgentHierarchy(cards: LiveBuildRoomAgentCard[], tasks: Task[], expandedAgents: ReadonlySet<string>, viewportWidth: number) {
+export function layoutAgentHierarchy(cards: ProjectBuildAgentCard[], tasks: Task[], expandedAgents: ReadonlySet<string>, viewportWidth: number) {
   const ownerOrder = new Map<string, number>();
   tasks.forEach(task => {
     if (task.ownerAgentId && !ownerOrder.has(task.ownerAgentId)) ownerOrder.set(task.ownerAgentId, ownerOrder.size);

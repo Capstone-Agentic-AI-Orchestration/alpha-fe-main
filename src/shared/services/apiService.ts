@@ -33,10 +33,10 @@ import {
   AnalyticsData,
   WorkspaceSummary,
   WorkspaceProjectAssignment,
-  LiveBuildRoomSnapshot,
-  LiveBuildRoomDiffPreview,
+  ProjectBuildSnapshot,
+  ProjectBuildDiffPreview,
   LiveBuildChanges,
-  LiveBuildRoomOrchestration,
+  ProjectBuildOrchestration,
   LiveBuildRecoveryState,
   LiveBuildRecoveryAction,
   LiveBuildPlanningRecoveryPreview,
@@ -704,28 +704,26 @@ export const apiService = {
 
   /** The latest Orchestrator build per issue, for board status chips. Desktop only. */
   getIssueBuildStatuses: () => fetchJson<IssueBuildStatus[]>('/issues/build-status'),
-  getLiveBuildRoom: async (projectId: string, runId?: string, threadId?: string) => {
+  getProjectBuildSnapshot: async (projectId: string, runId?: string, threadId?: string) => {
     const query = new URLSearchParams();
     if (runId) query.set('runId', runId);
     if (threadId) query.set('threadId', threadId);
     // Keep percent-encoded spaces for compatibility with existing request URLs.
     const search = query.toString().replace(/\+/g, '%20');
-    const snapshot = await fetchJson<LiveBuildRoomSnapshot>(
-      `/projects/${encodeURIComponent(projectId)}/live-build-room${search ? `?${search}` : ''}`,
+    const snapshot = await fetchJson<ProjectBuildSnapshot>(
+      `/projects/${encodeURIComponent(projectId)}/build-snapshot${search ? `?${search}` : ''}`,
       { cache: 'no-store' },
     );
     if (!snapshot || typeof snapshot !== 'object' || !snapshot.summary
       || typeof snapshot.summary.review !== 'number'
       || typeof snapshot.summary.failed !== 'number'
       || typeof snapshot.summary.stale !== 'number') {
-      throw new Error('The project room returned incomplete data. Retry to load a fresh snapshot.');
+      throw new Error('The project build snapshot returned incomplete data. Retry to load a fresh snapshot.');
     }
     return snapshot;
   },
-  getLiveBuildRoomProjects: () =>
-    fetchJson<Array<Pick<Project, 'id' | 'key' | 'name' | 'color'>>>('/live-build-room/projects'),
   getOrchestrationDiffPreview: (projectId: string, runId: string) =>
-    fetchJson<LiveBuildRoomDiffPreview>(
+    fetchJson<ProjectBuildDiffPreview>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/diff`
     ),
   getOrchestrationLiveChanges: (projectId: string, runId: string) =>
@@ -809,7 +807,7 @@ export const apiService = {
       { method: 'POST', body: '{}' }
     ),
   approveOrchestration: (projectId: string, runId: string, expectedRevision: number) =>
-    fetchJson<{ runId: string; status: string; issueId: string; publication?: LiveBuildRoomOrchestration['run']['publication'] }>(
+    fetchJson<{ runId: string; status: string; issueId: string; publication?: ProjectBuildOrchestration['run']['publication'] }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/approve`,
       { method: 'POST', body: JSON.stringify({ expectedRevision }) }
     ),

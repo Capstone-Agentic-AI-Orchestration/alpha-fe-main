@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 vi.hoisted(() => { (globalThis as { window?: unknown }).window ??= globalThis; });
-vi.mock('@/features/live-build-room/OrchestrationWorkflowPanel', () => ({ ReviewDiff: () => null }));
+vi.mock('@/features/project-build-review/OrchestrationWorkflowPanel', () => ({ ReviewDiff: () => null }));
 import { BuildReviewTab } from './BuildReviewTab';
 import type { ProjectLiveBuild } from './useProjectLiveBuild';
 const fixture = (status: ProjectLiveBuild['status']) => ({ runId: 'r', status, revision: 3, repository: 'acme/web', agents: [],

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LiveBuildRoomSnapshot } from '@/shared/types';
+import type { ProjectBuildSnapshot } from '@/shared/types';
 import { buildAgentNodes, snapshotBelongsToThread } from './useProjectLiveBuild';
 
 describe('chat build isolation', () => {
@@ -41,7 +41,7 @@ describe('buildAgentNodes', () => {
           { id: 'a3', taskId: 'frontend', status: 'running', changedPaths: ['src/App.tsx'] }
         ]
       }
-    } as unknown as LiveBuildRoomSnapshot;
+    } as unknown as ProjectBuildSnapshot;
 
     const nodes = buildAgentNodes(snapshot);
     expect(nodes.find(node => node.agentId === 'agent-backend')?.changedFiles)

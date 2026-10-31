@@ -128,23 +128,23 @@ describe('multi-repository project builds', () => {
     });
   });
 
-  it('requests the selected repository run in the Live Build Room', async () => {
+  it('requests the selected repository build snapshot', async () => {
     const snapshot = { summary: { review: 0, failed: 0, stale: 0 } };
     const fetchMock = vi.fn().mockResolvedValue(json(snapshot));
     vi.stubGlobal('fetch', fetchMock);
 
-    await expect(apiService.getLiveBuildRoom('project-1', 'run/with space')).resolves.toEqual(snapshot);
+    await expect(apiService.getProjectBuildSnapshot('project-1', 'run/with space')).resolves.toEqual(snapshot);
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('runId=run%2Fwith%20space');
     expect((fetchMock.mock.calls[0][1] as RequestInit).cache).toBe('no-store');
   });
 
-  it('passes the chat session identity with its Live Build Room request', async () => {
+  it('passes the chat session identity with its build snapshot request', async () => {
     const snapshot = { summary: { review: 0, failed: 0, stale: 0 } };
     const fetchMock = vi.fn().mockResolvedValue(json(snapshot));
     vi.stubGlobal('fetch', fetchMock);
 
-    await apiService.getLiveBuildRoom('project-1', undefined, 'thread/one');
+    await apiService.getProjectBuildSnapshot('project-1', undefined, 'thread/one');
 
     expect(String(fetchMock.mock.calls[0][0])).toContain('threadId=thread%2Fone');
   });
@@ -168,10 +168,10 @@ describe('multi-repository project builds', () => {
   });
 
   it.each([{}, { summary: {} }, { summary: { review: '0', failed: 0, stale: 0 } }])(
-    'rejects an incomplete Live Build Room snapshot before rendering: %j', async snapshot => {
+    'rejects an incomplete project build snapshot before rendering: %j', async snapshot => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json(snapshot)));
 
-      await expect(apiService.getLiveBuildRoom('project-1')).rejects.toThrow('incomplete data');
+      await expect(apiService.getProjectBuildSnapshot('project-1')).rejects.toThrow('incomplete data');
     }
   );
 });

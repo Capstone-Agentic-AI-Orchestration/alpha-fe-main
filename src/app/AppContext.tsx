@@ -286,7 +286,6 @@ interface AppContextType {
   switchWorkspace: (workspaceId: string) => Promise<void>;
   createWorkspace: (name: string, members?: Array<{ userId: string; role: UserRole }>) => Promise<WorkspaceSummary | null>;
   refreshWorkspaces: () => Promise<void>;
-  refreshLiveBuildRoomProjects: () => Promise<void>;
 
   // Requirement documents
   requirementDocs: RequirementDoc[];
@@ -480,7 +479,7 @@ export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
   'portal', 'intake', 'documents', 'chat', 'issues', 'projects', 'tickets', 'agents',
-  'live_build_room', 'analytics', 'runtimes', 'skills', 'deployments', 'operations',
+  'analytics', 'runtimes', 'skills', 'deployments', 'operations',
   'build_room', 'settings'
 ];
 
@@ -567,8 +566,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [workspaceLoading, setWorkspaceLoading] = useState(true);
   const [workspaceSwitching, setWorkspaceSwitching] = useState(false);
   const [workspaceMembers, setWorkspaceMembers] = useState<WorkspaceMemberRecord[]>([]);
-  /** Project ids whose Live Build Room the current role may open. */
-  const [liveBuildRoomProjectIds, setLiveBuildRoomProjectIds] = useState<string[]>([]);
 
   const activeWorkspace = workspaces.find(workspace => workspace.id === activeWorkspaceId) ?? null;
   /**
@@ -1017,12 +1014,6 @@ ${e.detail}`;
             setAgents(normalizeLegacyAgents(cached.agents));
             setIssues(normalizeLegacyIssues(cached.issues));
           }
-          try {
-            const roomProjects = await apiService.getLiveBuildRoomProjects();
-            if (!cancelled) setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
-          } catch {
-            if (!cancelled) setLiveBuildRoomProjectIds([]);
-          }
         }
       } catch {
         // Keep the local cache usable when the daemon is offline or still on an
@@ -1373,16 +1364,6 @@ ${e.detail}`;
     }
   };
 
-  const refreshLiveBuildRoomProjects = async () => {
-    try {
-      const roomProjects = await apiService.getLiveBuildRoomProjects();
-      setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
-    } catch {
-      // Fail closed: an unavailable room index must never expose a stale room.
-      setLiveBuildRoomProjectIds([]);
-    }
-  };
-
   const switchWorkspace = async (workspaceId: string, knownTarget?: WorkspaceSummary) => {
     const target = knownTarget ?? workspaces.find(workspace => workspace.id === workspaceId);
     if (!target || workspaceId === activeWorkspaceId) return;
@@ -1391,7 +1372,6 @@ ${e.detail}`;
     activeWorkspaceRef.current = workspaceId;
     setActiveWorkspaceIdState(workspaceId);
     setActiveWorkspaceId(workspaceId);
-    setLiveBuildRoomProjectIds([]);
     const superseded = () => activeWorkspaceRef.current !== workspaceId;
     setActiveThreadId(null);
     // The next workspace may have thread IDs loaded earlier in this session.
@@ -1416,12 +1396,6 @@ ${e.detail}`;
       const result = await fetchServerSnapshot(workspaceId);
       // Another switch started while this one loaded; its result wins.
       if (superseded()) return;
-      try {
-        const roomProjects = await apiService.getLiveBuildRoomProjects();
-        setLiveBuildRoomProjectIds(roomProjects.map(project => project.id));
-      } catch {
-        setLiveBuildRoomProjectIds([]);
-      }
       setProjects(result.board.state.projects);
       setAgents(result.board.state.agents);
       setIssues(result.board.state.issues);
@@ -2659,7 +2633,7 @@ ${e.detail}`;
    * Build a board issue with the Orchestrator.
    *
    * The build runs through project chat so its plan approval, recovery panel,
-   * and Live Build Room link work exactly as they do for a chat request. The
+   * and build review link work exactly as they do for a chat request. The
    * issue id goes with the message, so the Orchestrator builds this issue
    * instead of filing a second one.
    */
@@ -3364,8 +3338,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       role
     };
   }, [identity, role, users]);
-  const roomVisible = role !== 'client' && liveBuildRoomProjectIds.some(projectId => projects.some(project => project.id === projectId));
-  const visibleTabs = roleTabs.filter(tab => tab !== 'live_build_room' || roomVisible);
+  const visibleTabs = roleTabs;
   const can = (capability: Capability) => ROLE_CAPABILITIES[role].includes(capability);
   const requireCapability = (capability: Capability): boolean => {
     if (can(capability)) return true;
@@ -3376,12 +3349,6 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
     );
     return false;
   };
-
-  useEffect(() => {
-    if (activeTab === 'live_build_room' && !visibleTabs.includes('live_build_room')) {
-      setActiveTab(roleTabs[0]);
-    }
-  }, [activeTab, roleTabs, visibleTabs]);
 
   /* ---------------------------------------------------------------------
    * Requirement documents
@@ -3890,7 +3857,6 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       switchWorkspace,
       createWorkspace,
       refreshWorkspaces,
-      refreshLiveBuildRoomProjects,
       requirementDocs: scopedDocs,
       submitIntake,
       updateRequirementDoc,

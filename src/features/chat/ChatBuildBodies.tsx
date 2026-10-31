@@ -1,8 +1,8 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
 
-import { ReviewDiff } from '@/features/live-build-room/OrchestrationWorkflowPanel';
-import type { LiveBuildRoomOrchestration } from '@/shared/types';
+import { ReviewDiff } from '@/features/project-build-review/OrchestrationWorkflowPanel';
+import type { ProjectBuildOrchestration } from '@/shared/types';
 
 type Command = { script?: string; display?: string; exitCode: number | null; signal: string | null };
 
@@ -16,14 +16,14 @@ function commandResult(command: Command): string {
   return command.exitCode === null ? 'unknown' : 'exit ' + command.exitCode;
 }
 
-function finalChecks(orchestration: LiveBuildRoomOrchestration): Array<{ repository?: string; commands: Command[]; missingScripts: string[] }> {
+function finalChecks(orchestration: ProjectBuildOrchestration): Array<{ repository?: string; commands: Command[]; missingScripts: string[] }> {
   const validation = orchestration.finalValidation;
   if (!validation) return [];
   if (validation.repositories?.length) return validation.repositories;
   return [{ commands: validation.commands, missingScripts: validation.missingScripts }];
 }
 
-export const PlanBody: React.FC<{ orchestration: LiveBuildRoomOrchestration }> = ({ orchestration }) => {
+export const PlanBody: React.FC<{ orchestration: ProjectBuildOrchestration }> = ({ orchestration }) => {
   const order = new Map(orchestration.tasks.map((task, index) => [task.id, index + 1]));
   return <>
     {orchestration.run.goal && <p className="text-xs leading-5 text-content-secondary">{orchestration.run.goal}</p>}
@@ -55,7 +55,7 @@ export const PlanBody: React.FC<{ orchestration: LiveBuildRoomOrchestration }> =
   </>;
 };
 
-export const ReviewBody: React.FC<{ projectId: string; orchestration: LiveBuildRoomOrchestration; expandedDiff?: boolean; onDiffReady?: () => void }> = ({ projectId, orchestration, expandedDiff, onDiffReady }) => {
+export const ReviewBody: React.FC<{ projectId: string; orchestration: ProjectBuildOrchestration; expandedDiff?: boolean; onDiffReady?: () => void }> = ({ projectId, orchestration, expandedDiff, onDiffReady }) => {
   const checks = finalChecks(orchestration);
   const openFindings = orchestration.findings.filter(finding => finding.status === 'open');
   return <>

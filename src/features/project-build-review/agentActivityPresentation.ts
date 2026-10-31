@@ -1,10 +1,10 @@
-import type { LiveBuildRoomActivity, LiveBuildRoomAgentCard } from '@/shared/types';
+import type { ProjectBuildActivity, ProjectBuildAgentCard } from '@/shared/types';
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
-export function describeAgentActivity(activity: LiveBuildRoomActivity) {
+export function describeAgentActivity(activity: ProjectBuildActivity) {
   let payload: Record<string, unknown> | undefined;
   try { payload = record(JSON.parse(activity.detail ?? '')); } catch { /* Plain text is also a supported event format. */ }
   let input = record(payload?.input) ?? record(payload?.arguments) ?? record(payload?.args);
@@ -22,11 +22,11 @@ export function describeAgentActivity(activity: LiveBuildRoomActivity) {
   return { command, exitCode, detail: activity.detail, output };
 }
 
-export function orderedAgentActivity(activities: LiveBuildRoomActivity[]): LiveBuildRoomActivity[] {
+export function orderedAgentActivity(activities: ProjectBuildActivity[]): ProjectBuildActivity[] {
   return [...activities].sort((a, b) => (Date.parse(a.createdAt) || 0) - (Date.parse(b.createdAt) || 0) || a.sequence - b.sequence || a.id.localeCompare(b.id));
 }
 
-export function latestAgentAction(card: LiveBuildRoomAgentCard): { text: string; command: boolean } {
+export function latestAgentAction(card: ProjectBuildAgentCard): { text: string; command: boolean } {
   const activity = orderedAgentActivity(card.activity).at(-1);
   if (!activity) return { text: card.currentStage || 'Awaiting activity', command: false };
   const { command } = describeAgentActivity(activity);

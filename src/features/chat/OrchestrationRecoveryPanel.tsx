@@ -27,7 +27,6 @@ interface OrchestrationRecoveryPanelProps {
   recovery?: LiveBuildRecoveryProjection;
   canControl: boolean;
   threadId?: string;
-  onOpenRoom?: () => void;
   onOpenReview?: () => void;
   onActionComplete?: (state?: LiveBuildRecoveryState) => void | Promise<void>;
   compact?: boolean;
@@ -51,7 +50,7 @@ function idempotencyKey(): string {
 }
 
 export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProps> = ({
-  projectId, runId, runRevision, taskRevision, recovery, canControl, threadId, onOpenRoom, onOpenReview, onActionComplete, compact = false
+  projectId, runId, runRevision, taskRevision, recovery, canControl, threadId, onOpenReview, onActionComplete, compact = false
 }) => {
   const [guidance, setGuidance] = useState('');
   const [showGuidance, setShowGuidance] = useState(false);
@@ -73,7 +72,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
     'plan_final_validation_corrections', 'resume_checkpoint', 'review_saved_changes', 'keep_paused', 'cancel_build'] as LiveBuildRecoveryAction[])
     .filter(action => available.has(action) &&
       (canControl || action === 'explain_failure' || action === 'review_saved_changes') &&
-      (action !== 'review_saved_changes' || Boolean(onOpenReview ?? onOpenRoom)));
+      (action !== 'review_saved_changes' || Boolean(onOpenReview)));
   const phaseLabel = recovery.phase === 'repairing' ? 'Recovery in progress'
     : recovery.phase === 'ready_to_continue' ? 'Ready to continue' : 'Waiting for your direction';
   const recoveryUsage = recovery.category === 'project_code' && recovery.taskTitle
@@ -110,7 +109,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
       }
       if (action === 'cancel_build') setConfirmCancel(false);
       await onActionComplete?.(result.state);
-      if (action === 'review_saved_changes') (onOpenReview ?? onOpenRoom)?.();
+      if (action === 'review_saved_changes') onOpenReview?.();
     } catch (caught: any) {
       setError(caught?.message ?? 'Alpha could not complete this recovery action. Refresh the build and try again.');
     } finally {
@@ -151,7 +150,6 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
               {busyAction === action ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : actionMeta[action].icon}{actionMeta[action].label}
             </button>;
           })}
-          {!onOpenReview && onOpenRoom && !available.has('review_saved_changes') && <button type="button" onClick={onOpenRoom} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-divider px-2.5 text-[10px] font-semibold text-content hover:bg-surface-high">Open Live Build Room</button>}
         </div>}
         {showGuidance && available.has('provide_guidance') && <div className="mt-3 space-y-2">
           <label htmlFor={`recovery-guidance-${recovery.id}`} className="block text-[10px] font-medium text-content-secondary">What should the specialist change or check?</label>

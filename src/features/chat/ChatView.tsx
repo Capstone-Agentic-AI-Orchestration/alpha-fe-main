@@ -4,7 +4,7 @@ import { LocalPreviewTab, WebPreviewCard, useLocalPreviews } from './LocalPrevie
 import { reconcileCallSnapshot } from './chatCallSnapshot';
 import { WorkUsageRow, useChatUsage, entriesAtMessage } from './ChatUsage';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { OrchestrationPlanPreview, PlanDocumentTab, PlanPanelContext, planFileName, type PlanPanelRequest } from '../live-build-room/OrchestrationPlanPreview';
+import { OrchestrationPlanPreview, PlanDocumentTab, PlanPanelContext, planFileName, type PlanPanelRequest } from '../project-build-review/OrchestrationPlanPreview';
 import {
   AlertTriangle,
   Activity,
@@ -59,7 +59,7 @@ import {
   ChatAttachmentReference,
   ProjectChatAgent,
   ProjectChatSnapshot,
-  LiveBuildRoomSnapshot,
+  ProjectBuildSnapshot,
   ChatSyncStatus,
   LiveBuildRecoveryAction
 } from '@/shared/types';
@@ -235,7 +235,7 @@ function OrchestratorBuildActivityRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [autoExpanded, setAutoExpanded] = useState(false);
-  const [snapshot, setSnapshot] = useState<LiveBuildRoomSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<ProjectBuildSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [retryBusy, setRetryBusy] = useState(false);
@@ -249,7 +249,7 @@ function OrchestratorBuildActivityRow({
     setLoading(true);
     const sync = async () => {
       try {
-        const next = await apiService.getLiveBuildRoom(projectId, runId);
+        const next = await apiService.getProjectBuildSnapshot(projectId, runId);
         if (cancelled) return;
         setSnapshot(next);
         if (next.orchestration?.run.id !== runId) {
@@ -327,7 +327,7 @@ function OrchestratorBuildActivityRow({
   const retryAvailable = Boolean(snapshot?.canControlOrchestration ?? snapshot?.canRun) &&
     failedTask?.retryAvailable === true && !activeRecovery;
   const refreshAfterRecovery = async () => {
-    const refreshed = await apiService.getLiveBuildRoom(projectId, runId);
+    const refreshed = await apiService.getProjectBuildSnapshot(projectId, runId);
     setSnapshot(refreshed);
   };
   const retryFailedTask = async () => {
@@ -337,7 +337,7 @@ function OrchestratorBuildActivityRow({
     setRetryNotice('');
     try {
       await apiService.retryOrchestrationTask(projectId, runId, failedTask.id, failedTask.revision);
-      const refreshed = await apiService.getLiveBuildRoom(projectId, runId);
+      const refreshed = await apiService.getProjectBuildSnapshot(projectId, runId);
       setSnapshot(refreshed);
       if (refreshed.orchestration?.run.currentTaskId === failedTask.id) {
         setRetryNotice('The task restarted. Alpha will check its new result before handing work to the next specialist.');
@@ -942,7 +942,7 @@ export const ChatView: React.FC = () => {
         if (cancelled) return;
         result.calls.forEach(call => acceptCallSnapshot(call, activeThread.id));
       } catch {
-        // Live room updates may be delayed while workspace access refreshes.
+        // Live updates may be delayed while workspace access refreshes.
       }
     };
     void refreshTurnActivity();
@@ -1136,7 +1136,7 @@ export const ChatView: React.FC = () => {
         guidance: action === 'provide_guidance' || action === 'repair_and_continue' ? message : undefined,
         // Only the conversation that started the build may name itself; for a build started
         // in another chat of this project the server attributes the action without a thread,
-        // as the Live Build Room does. Naming this chat made every action fail as "not
+        // as other project build actions do. Naming this chat made every action fail as "not
         // attached to your project conversation".
         threadId: currentMessages.some(item => item.orchestrationRunId === selected.runId) ? activeThread.id : undefined
       });

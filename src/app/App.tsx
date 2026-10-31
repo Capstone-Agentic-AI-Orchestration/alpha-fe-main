@@ -26,7 +26,6 @@ import { OperationsCenterView } from '@/features/operations/OperationsCenterView
 import { RuntimesView } from '@/features/runtimes/RuntimesView';
 import { SkillsView } from '@/features/skills/SkillsView';
 import { DeploymentsView } from '@/features/deployments/DeploymentsView';
-import { LiveBuildRoomView } from '@/features/live-build-room/LiveBuildRoomView';
 import { SettingsView } from '@/features/settings/SettingsView';
 import { ClientPortalView } from '@/features/delivery/ClientPortalView';
 import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
@@ -60,7 +59,6 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
     case 'issues': content = <IssuesView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'projects': content = <ProjectsView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'agents': content = <AgentsView />; break;
-    case 'live_build_room': content = <LiveBuildRoomView />; break;
     case 'analytics': content = <AnalyticsView />; break;
     case 'operations': content = <OperationsCenterView />; break;
     case 'runtimes': content = <RuntimesView />; break;
@@ -146,9 +144,6 @@ export const App: React.FC = () => {
       : undefined;
     const contextualTitle = (label: string | undefined) => label ? `${getTabTitle(view)} · ${label}` : getTabTitle(view);
 
-    if (view === 'live_build_room') {
-      return contextualTitle(projectTitle(session.liveBuildProjectId));
-    }
     if (view === 'chat') {
       const threadId = session.activeThreadId;
       const thread = typeof threadId === 'string' ? chatThreads.find(item => item.id === threadId) : undefined;

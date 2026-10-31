@@ -11,7 +11,7 @@ export interface PlanPanelRequest { projectId: string; runId: string; planVersio
 
 /**
  * Where a saved plan opens. The chat provides one so the plan becomes a tab in its side
- * panel beside the agents; without it (the Live Build Room) the plan opens as an overlay.
+ * panel beside the agents; without a chat panel handler the plan opens as an overlay.
  */
 export const PlanPanelContext = createContext<((request: PlanPanelRequest) => void) | null>(null);
 

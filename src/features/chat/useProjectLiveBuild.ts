@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
-import type { LiveBuildOrchestrationStatus, LiveBuildRoomAgentCard, LiveBuildRoomOrchestration, LiveBuildRoomSnapshot } from '@/shared/types';
+import type { LiveBuildOrchestrationStatus, ProjectBuildAgentCard, ProjectBuildOrchestration, ProjectBuildSnapshot } from '@/shared/types';
 
 /** Builds that still hold the project's repositories, so the chat bar keeps showing them. */
 export const OPEN_BUILD_STATUSES: LiveBuildOrchestrationStatus[] = [
@@ -24,7 +24,7 @@ export interface BuildAgentNode {
   tasks: Array<{ id: string; title: string; status: string; kind?: string; assignmentReason?: string;
     repository?: string; scope?: { includePaths: string[]; excludePaths: string[] }; requiredChecks?: string[]; dependsOn?: string[] }>;
   /** Live execution for this agent in this build, once it has started. */
-  card?: LiveBuildRoomAgentCard;
+  card?: ProjectBuildAgentCard;
   /** Every file this agent changed in this build, across its tasks and attempts. */
   changedFiles: string[];
   audits?: import('@/shared/types').DependencyAuditSummary[];
@@ -40,7 +40,7 @@ export interface ProjectLiveBuild {
   canControl: boolean;
   agents: BuildAgentNode[];
   /** The full plan, checks and findings, for decisions made from the chat. */
-  orchestration: LiveBuildRoomOrchestration;
+  orchestration: ProjectBuildOrchestration;
 }
 
 export function needsSecurityAuditPlan(build: ProjectLiveBuild | null): boolean {
@@ -73,7 +73,7 @@ export interface BuildHandoff {
 const HANDOFF_RANK: Record<BuildHandoff['state'], number> = { pending: 0, done: 1, active: 2 };
 
 /** Who hands work to whom in this build, one entry per pair of agents, read from the plan's dependencies. */
-export function buildHandoffs(orchestration: Pick<LiveBuildRoomOrchestration, 'tasks'>): BuildHandoff[] {
+export function buildHandoffs(orchestration: Pick<ProjectBuildOrchestration, 'tasks'>): BuildHandoff[] {
   const byId = new Map(orchestration.tasks.map(task => [task.id, task]));
   const pairs = new Map<string, BuildHandoff>();
   for (const task of orchestration.tasks) {
@@ -91,7 +91,7 @@ export function buildHandoffs(orchestration: Pick<LiveBuildRoomOrchestration, 't
 }
 
 /** One node per agent the plan assigned work to, in the order they first appear in the plan. */
-export function buildAgentNodes(snapshot: LiveBuildRoomSnapshot): BuildAgentNode[] {
+export function buildAgentNodes(snapshot: ProjectBuildSnapshot): BuildAgentNode[] {
   const orchestration = snapshot.orchestration;
   if (!orchestration) return [];
   const runIds = new Set(orchestration.attempts.map(attempt => attempt.prototypeRunId).filter(Boolean));
@@ -139,15 +139,15 @@ export function buildAgentNodes(snapshot: LiveBuildRoomSnapshot): BuildAgentNode
   });
 }
 
-/** Fail closed if an old or malformed room response does not belong to this chat. */
-export function snapshotBelongsToThread(snapshot: LiveBuildRoomSnapshot | null, threadId?: string | null): boolean {
+/** Fail closed if an old or malformed build snapshot does not belong to this chat. */
+export function snapshotBelongsToThread(snapshot: ProjectBuildSnapshot | null, threadId?: string | null): boolean {
   return !threadId || snapshot?.orchestration?.run.originChatThreadId === threadId;
 }
 
 /** The originating chat's open Orchestrator build, kept live for its chat bar. */
 export function useProjectLiveBuild(projectId: string | undefined, enabled: boolean, threadId?: string | null) {
   const scopeKey = `${projectId ?? ''}:${threadId ?? ''}`;
-  const [loaded, setLoaded] = useState<{ key: string; snapshot: LiveBuildRoomSnapshot; fresh: boolean } | null>(null);
+  const [loaded, setLoaded] = useState<{ key: string; snapshot: ProjectBuildSnapshot; fresh: boolean } | null>(null);
   // A thread switch hides the previous response synchronously, before effects run.
   const snapshot = loaded?.key === scopeKey ? loaded.snapshot : null;
   const requestRef = useRef(0);
@@ -156,7 +156,7 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
     if (!projectId || !enabled) return;
     const request = ++requestRef.current;
     try {
-      const next = await apiService.getLiveBuildRoom(projectId, undefined, threadId ?? undefined);
+      const next = await apiService.getProjectBuildSnapshot(projectId, undefined, threadId ?? undefined);
       if (request === requestRef.current) setLoaded({ key: scopeKey, snapshot: next, fresh: true });
     } catch {
       if (request === requestRef.current) setLoaded(previous => previous?.key === scopeKey ? { ...previous, fresh: false } : previous);
