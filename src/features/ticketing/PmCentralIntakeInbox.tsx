@@ -15,7 +15,11 @@ function friendlyError(error: unknown): string {
   if (error instanceof ApiRequestError) {
     if (error.status === 401) return 'Your sign-in expired. Sign in again to review shared intake.';
     if (error.status === 403) return 'You need PM access in the selected workspace to review or route intake items.';
-    if (error.status === 404 || error.status === 409) return 'This item has already been handled or is no longer available. Refresh the inbox.';
+    if (error.status === 404) return 'This item is no longer available. Refresh the inbox.';
+    if (error.status === 409) {
+      if (error.code === 'client_access_unavailable') return 'Client access is not enabled for this workspace. Enable client access, then try again.';
+      return 'Another PM has already handled this item. Refresh the inbox.';
+    }
     if (error.status === 429) return 'There were too many requests. Wait a moment, then refresh.';
     if (error.status !== null && error.status >= 500) return 'The shared inquiry service is temporarily unavailable.';
   }
