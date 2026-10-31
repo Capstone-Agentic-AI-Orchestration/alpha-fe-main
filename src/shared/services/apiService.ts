@@ -65,11 +65,11 @@ import {
   RepoDeletionResult
 } from '@/shared/types';
 
-import { API_BASE } from '@/shared/config';
+import { API_BASE, LOCAL_TOKEN } from '@/shared/config';
 import type { ActionsFilters, ActionsRun, ActionsRunsPage, ActionsWorkflowsPage, ActionsJobsPage, ActionsLog, ActionsArtifactsPage } from '@/shared/types/actions';
 import type { BoardBootstrap, BoardChangePage, BoardCursor } from '@/shared/types/boardSync';
 
-const API_TOKEN = import.meta.env.VITE_ALPHA_LOCAL_TOKEN;
+const API_TOKEN = LOCAL_TOKEN;
 const CLIENT_VERSION = import.meta.env.VITE_ALPHA_CLIENT_VERSION || 'unknown';
 let activeWorkspaceId: string | null = null;
 
