@@ -2,6 +2,7 @@ export interface BoardSyncCoordinator {
   notify(): void;
   onVisible(visible?: boolean): void;
   onSubscribed(): void;
+  onRealtimeUnavailable(): void;
   dispose(): void;
 }
 
@@ -17,6 +18,8 @@ export function createBoardSyncCoordinator(
   let dirty = false;
   let rerunRequested = false;
   let disposed = false;
+  let realtimeConnected = false;
+  let fallback: ReturnType<typeof setInterval> | null = null;
 
   const schedule = () => {
     if (disposed || !visible) return;
@@ -60,6 +63,17 @@ export function createBoardSyncCoordinator(
     schedule();
   };
 
+  const startFallback = () => {
+    if (disposed || realtimeConnected || fallback) return;
+    fallback = setInterval(notify, 30_000);
+  };
+
+  const stopFallback = () => {
+    if (!fallback) return;
+    clearInterval(fallback);
+    fallback = null;
+  };
+
   const onVisible = (nextVisible?: boolean) => {
     if (disposed) return;
     const wasVisible = visible;
@@ -74,18 +88,34 @@ export function createBoardSyncCoordinator(
     }
   };
 
-  // Cursor-based catch-up is a safety net when Realtime is unavailable. Hidden
-  // windows do no reads; visibility restore catches up immediately.
-  const fallback = setInterval(notify, 30_000);
+  // Cursor polling covers missing or disconnected Realtime subscriptions. Stop
+  // polling while subscribed; reconnecting triggers one catch-up below.
+  startFallback();
+
+  const onSubscribed = () => {
+    if (disposed) return;
+    const wasConnected = realtimeConnected;
+    realtimeConnected = true;
+    stopFallback();
+    if (!wasConnected) notify();
+  };
+
+  const onRealtimeUnavailable = () => {
+    if (disposed) return;
+    const wasConnected = realtimeConnected;
+    realtimeConnected = false;
+    startFallback();
+    if (wasConnected) notify();
+  };
 
   const dispose = () => {
     disposed = true;
-    clearInterval(fallback);
+    stopFallback();
     if (timer) clearTimeout(timer);
     timer = null;
     dirty = false;
     rerunRequested = false;
   };
 
-  return { notify, onVisible, onSubscribed: notify, dispose };
+  return { notify, onVisible, onSubscribed, onRealtimeUnavailable, dispose };
 }

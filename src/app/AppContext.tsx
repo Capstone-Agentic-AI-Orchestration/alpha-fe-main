@@ -704,6 +704,7 @@ ${e.detail}`;
         if (cancelled) return;
         channel.subscribe(status => {
           if (status === 'SUBSCRIBED') coordinator.onSubscribed();
+          else coordinator.onRealtimeUnavailable();
         });
       }).catch(() => { /* The cursor fallback still works if Realtime is unavailable. */ });
     }
