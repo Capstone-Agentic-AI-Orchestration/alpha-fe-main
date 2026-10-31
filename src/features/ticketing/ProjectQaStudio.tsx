@@ -59,7 +59,7 @@ export function ReadOnlyChecks({round,extra}:{round:QaRound;extra?:(item:QaRound
 }
 
 /** Panels stay mounted so switching to feedback/history never discards an unsaved result. */
-export function StudioPanels({checklist,feedback,history,ariaLabel='QA Studio panels'}:{checklist:ReactNode;feedback:ReactNode;history:ReactNode;ariaLabel?:string}) {
+export function StudioPanels({checklist,feedback,history,ariaLabel='Project review panels'}:{checklist:ReactNode;feedback:ReactNode;history:ReactNode;ariaLabel?:string}) {
   const [active,setActive]=useState<'checklist'|'feedback'|'history'>('checklist');
   const base=useId(),tabs=['checklist','feedback','history'] as const;
   const refs=useRef<Partial<Record<typeof active,HTMLButtonElement|null>>>({});

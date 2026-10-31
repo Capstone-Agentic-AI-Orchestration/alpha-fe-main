@@ -56,13 +56,13 @@ export function PmProjectQaStudio({projectId,projectName,feedback,issues=[]}:{pr
   async function older(){if(!page?.nextBefore)return;try{const next=await pmProjectQaApi.list(projectId,clientId,page.nextBefore);setPage({items:[...page.items,...next.items],nextBefore:next.nextBefore});}catch(cause){setError(qaError(cause));}}
   function retest(){if(round){setChecks(round.items.map(({title,steps,expectedResult,required})=>({title,steps,expectedResult,required})));setTitle(`${round.title.replace(/ · retest$/,'')} · retest`);setSelected('');setRound(null);setAck(false);}}
   const preview=round?.preview??(build?{branch:'uat' as const,url:build.frontend.url,embeddable:build.embeddable,reason:build.reason}:null);
-  return <section className="project-qa-studio" aria-label={`${projectName} QA Studio`}>
-    <header className="pqa-heading"><div><p>PROJECT QA STUDIO</p><h2>{projectName}</h2><span>Review UAT first, then hand the reviewed build to your client.</span></div>
+  return <section className="project-qa-studio" aria-label={`${projectName} Project Review`}>
+    <header className="pqa-heading"><div><p>PROJECT REVIEW</p><h2>{projectName}</h2><span>Review UAT first, then hand the reviewed build to your client.</span></div>
       <button type="button" disabled={busy||uncertain} onClick={()=>{pending.current=null;setRefresh(value=>value+1);}}><RefreshCw size={14}/> Refresh</button></header>
     <Notice error={error}/>
     {uncertain&&<p className="pqa-error">The last action needs reconciliation. Retry that same action before starting another.
       <button type="button" disabled={busy} onClick={()=>void run('retry',()=>Promise.resolve())}>Retry pending action</button></p>}
-    {loading?<p role="status">Loading this project’s QA Studio…</p>:<>
+    {loading?<p role="status">Loading this project’s review…</p>:<>
       <div className="pqa-setup"><label>UAT frontend<select value={repository} disabled={busy||uncertain} onChange={event=>{setRepository(event.target.value);setSelected('');setRound(null);setError('');}}>
         <option value="">Choose this project’s frontend</option>{targets.map(item=><option key={item.repository}>{item.repository}</option>)}</select></label>
         <label>Client<select value={clientId} disabled={busy||uncertain} onChange={event=>setClientId(event.target.value)}><option value="">Choose a client</option>

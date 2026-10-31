@@ -119,7 +119,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
       {previewLoading && <span role="status" className="block text-[10px] text-content-muted">Checking ready hosted frontend previews…</span>}
       {previewError && <span role="alert" className="block text-[10px] text-status-warning">Hosted previews could not be checked. You can still save the project link without sharing one.</span>}
       {!previewLoading && !previewError && projectId && previews.length === 0 && <span className="block text-[10px] text-content-muted">No ready UAT frontend preview was found.</span>}
-      <span className="block text-[10px] text-content-muted">Preview configuration stays internal. Review the UAT build and hand it off through this project’s QA Studio before the client can see it.</span>
+      <span className="block text-[10px] text-content-muted">Preview configuration stays internal. Review the UAT build and hand it off from this project’s Review tab before the client can see it.</span>
     </label>
     <div className="flex flex-wrap justify-end gap-2 border-t border-divider pt-3">
       <button type="button" disabled={disabled} onClick={onCancel} className={secondary}>Cancel</button>
