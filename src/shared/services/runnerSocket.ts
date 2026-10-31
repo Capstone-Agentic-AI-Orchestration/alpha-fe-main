@@ -1,5 +1,5 @@
 import { supabase, isSupabaseConfigured } from '@/shared/lib/supabase';
-import { WS_URL } from '@/shared/config';
+import { WS_URL, localStreamProtocols } from '@/shared/config';
 
 type SocketEventCallback = (payload: any) => void;
 
@@ -30,7 +30,7 @@ class RunnerSocketClient {
       this.isConnecting = true;
 
       try {
-        this.ws = new WebSocket(WS_URL);
+        this.ws = new WebSocket(WS_URL, localStreamProtocols());
 
         this.ws.onopen = () => {
           this.isConnecting = false;

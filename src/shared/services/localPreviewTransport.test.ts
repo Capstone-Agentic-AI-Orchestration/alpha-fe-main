@@ -4,7 +4,7 @@ afterEach(() => { vi.unstubAllGlobals(); vi.doUnmock('@/shared/config'); vi.rese
 
 describe.each(['/api', 'http://127.0.0.1:60233/api'])('preview transport with base %s', base => {
   it('prefixes list/start/stop exactly once and preserves caller scope', async () => {
-    vi.resetModules(); vi.doMock('@/shared/config', () => ({ API_BASE: base }));
+    vi.resetModules(); vi.doMock('@/shared/config', () => ({ API_BASE: base, LOCAL_TOKEN: undefined }));
     const fetchMock = vi.fn().mockImplementation(() => Promise.resolve(new Response('{}', { headers: { 'Content-Type': 'application/json' } })));
     vi.stubGlobal('fetch', fetchMock);
     const transport = await import('./apiService');

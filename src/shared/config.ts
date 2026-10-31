@@ -19,3 +19,15 @@ export const API_BASE: string = desktop?.apiBase || import.meta.env.VITE_API_URL
  * cloud mode never opens it -- so absent means "do not connect".
  */
 export const WS_URL: string | undefined = desktop?.wsUrl || import.meta.env.VITE_WS_URL || undefined;
+
+/**
+ * The local engine's launch token: the desktop's, read at runtime, or one set
+ * for a source run (VITE_ALPHA_LOCAL_TOKEN, matching the daemon's
+ * ALPHA_LOCAL_TOKEN). The web build has neither.
+ */
+export const LOCAL_TOKEN: string | undefined = desktop?.localToken || import.meta.env.VITE_ALPHA_LOCAL_TOKEN || undefined;
+
+/** Subprotocols for the engine's WebSocket; the second carries the token and is never echoed. */
+export function localStreamProtocols(token: string | undefined = LOCAL_TOKEN): string[] | undefined {
+  return token ? ['alpha.v1', `alpha.token.${token}`] : undefined;
+}

@@ -27,6 +27,13 @@ export interface DesktopBridge {
   apiBase?: string;
   /** Runtime WebSocket address for this app instance's local engine. */
   wsUrl?: string;
+  /**
+   * This launch's secret for the local engine, handed over by main over IPC
+   * and never put on a command line. Sent as X-Alpha-Token on API calls and as
+   * a WebSocket subprotocol, so other pages and programs on the machine cannot
+   * drive the engine.
+   */
+  localToken?: string;
   versions: { electron: string; node: string; chrome: string };
   checkForUpdates?: () => Promise<UpdateCheck>;
   /** The packaged app's own version. The renderer cannot read package.json. */
