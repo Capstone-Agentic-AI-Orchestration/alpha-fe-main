@@ -30,18 +30,18 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
   const editable=round?.status==='published'&&!inspectionOnly;
   const completed=round?.items.filter(item=>item.result.status!=='not_tested').length??0;
   const incomplete=round?.items.some(item=>item.required&&item.result.status==='not_tested');
-  return <section className="project-qa-studio pqa-client" aria-label={`${projectName} QA Studio`}>
+  return <section className="project-qa-studio pqa-client" aria-label={`${projectName} Project Review`}>
     <div className="pqa-client-controls">
-    <header className="pqa-heading"><div><h2>QA Studio</h2><span>Test the UAT build reviewed and shared by your project manager.</span></div></header>
+    <header className="pqa-heading"><div><h2>Project Review</h2><span>Test the UAT build reviewed and shared by your project manager.</span></div></header>
     <Notice error={error} onRetry={()=>setRefresh(value=>value+1)}/>
     <RoundPicker disabled={busy||hasUnsaved} page={page} selected={selected} onChange={value=>{setSelected(value);submission.current=null;}} onOlder={()=>void older()}/>
     </div>
     {loading?<p role="status">Loading your project review…</p>:<>
-      <div className="pqa-mobile-switch" role="group" aria-label="Studio view"><button type="button" aria-pressed={mobile==='preview'} onClick={()=>setMobile('preview')}>Preview</button>
+      <div className="pqa-mobile-switch" role="group" aria-label="Review view"><button type="button" aria-pressed={mobile==='preview'} onClick={()=>setMobile('preview')}>Preview</button>
         <button type="button" aria-pressed={mobile==='review'} onClick={()=>setMobile('review')}>Review</button></div>
-      <div className="pqa-workspace" data-mobile={mobile}><QaPreview preview={round?.preview??null} version={round?`Review ${round.number}`:undefined}/>
+      <div className="pqa-workspace" data-mobile={mobile}><QaPreview preview={round?.preview??null} version={round?`Review ${round.number}`:undefined} audience="client"/>
         <aside className="pqa-review" aria-label="Your project review">
-          <StudioPanels feedback={feedback} history={round?<History round={round}/>:<p>No review history yet.</p>} checklist={round?<>
+          <StudioPanels ariaLabel="Project review panels" feedback={feedback} history={round?<History round={round}/>:<p>No review history yet.</p>} checklist={round?<>
             <div className="pqa-review-heading"><h3>{round.title}</h3><span>{completed}/{round.items.length} tested</span></div>
             <progress max={round.items.length} value={completed} aria-label="Checks tested"/>
             <p className="pqa-hint">{round.status==='published'?'Save each result, then submit your review.':`This review is ${label(round.status).toLowerCase()}${round.outcome?` · ${label(round.outcome)}`:''}. Results are preserved.`}</p>
@@ -58,7 +58,7 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
               {hasUnsaved&&<span>Save or discard your changes before submitting or switching rounds.</span>}
               {incomplete&&<span>Test every required check before submitting.</span>}
             </div>}
-          </>:<div className="pqa-empty"><h3>No review shared yet</h3><p>Your project manager will review this project’s UAT preview before handing it off to you. You can still send a message in Feedback.</p></div>}/>
+          </>:<div className="pqa-empty"><h3>No review shared yet</h3><p>Your project manager will share a review here when it is ready. You can send a message in Feedback.</p></div>}/>
         </aside>
       </div>
     </>}

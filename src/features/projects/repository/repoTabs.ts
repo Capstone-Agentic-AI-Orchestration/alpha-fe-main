@@ -5,7 +5,7 @@ export const REPO_TABS = [
   { id: 'pulls', label: 'Pull requests' },
   { id: 'runs', label: 'Pipeline runs' },
   { id: 'previews', label: 'Previews' },
-  { id: 'qa', label: 'QA Studio' },
+  { id: 'qa', label: 'Review' },
   { id: 'logs', label: 'Logs' },
   { id: 'environment', label: 'Environment' }
 ] as const;

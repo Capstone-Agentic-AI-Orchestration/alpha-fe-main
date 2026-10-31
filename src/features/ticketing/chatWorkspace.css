@@ -70,8 +70,10 @@
 .client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace { padding-top: var(--client-space-3); padding-bottom: var(--client-space-3); }
 .client-portal-shell .client-requests-page.has-selected-request > .client-portal-page-heading { display: none; }
 .client-portal-shell .client-portal-workspace { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 0; }
-.client-portal-shell .client-request-list { border-radius: 0; border-right: 0; box-shadow: none; background: rgb(var(--ui-shell)); }
-.client-portal-shell .client-request-detail-pane { border-radius: 0; box-shadow: none; }
+.client-portal-shell .client-request-list { border: 0; border-right: 1px solid rgb(var(--ui-divider)); border-radius: 0; box-shadow: none; background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-request-detail-pane { border: 0; border-radius: 0; box-shadow: none; background: rgb(var(--ui-canvas)); }
+.client-portal-shell--chat-open .client-request-detail-pane { overflow: hidden; }
+.client-portal-shell--chat-open .client-ticket-detail { min-height: 0; }
 .client-portal-shell .client-detail-header { padding: 9px 18px 7px; border-bottom: 1px solid rgb(var(--ui-divider)); }
 .client-portal-shell .role-chat-context__header button { width: var(--client-control-compact); height: var(--client-control-compact); border-radius: var(--client-radius-control); }
 .client-portal-shell .role-chat-context button:focus-visible { outline: var(--client-focus-width) solid rgb(var(--ui-focus)); outline-offset: var(--client-focus-offset); }
@@ -109,9 +111,9 @@
 .client-portal-shell .client-sidebar-progress .client-progress-label { display: block; margin: 0; font-size: var(--client-type-meta); line-height: var(--client-line-copy); }
 .client-portal-shell .client-sidebar-progress .client-progress-state { display: block; margin-top: 2px; font-size: var(--client-type-meta); }
 .client-portal-shell .client-sidebar-progress .client-progress-mobile-summary { display: none; }
-.client-portal-shell .client-detail-content.role-chat-layout { width: 100%; min-width: 0; align-self: stretch; flex-direction: row; padding: 0; }
-.client-portal-shell .client-chat-main { display: flex; min-width: 0; min-height: 0; flex: 1 1 0%; flex-direction: column; overflow: hidden; }
-.client-portal-shell .client-conversation { width: 100%; min-width: 0; border: 0; border-radius: 0; background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-detail-content.role-chat-layout { width: 100%; min-width: 0; min-height: 0; flex: 1; align-self: stretch; flex-direction: row; padding: 0; background: rgb(var(--ui-canvas)); }
+.client-portal-shell .client-chat-main { display: flex; min-width: 0; min-height: 0; flex: 1 1 0%; flex-direction: column; overflow: hidden; background: rgb(var(--ui-canvas)); }
+.client-portal-shell .client-conversation { width: 100%; min-width: 0; min-height: 0; border: 0; border-radius: 0; background: rgb(var(--ui-canvas)); }
 .client-portal-shell .client-conversation.hidden { display: none; }
 .client-portal-shell .client-conversation-heading { min-height: 52px; border: 0; padding: var(--client-space-3) 28px; }
 .client-portal-shell .client-conversation-feed { min-width: 0; gap: var(--client-space-4); padding: var(--client-space-5) clamp(var(--client-space-4), 2vw, var(--client-space-7)); background: rgb(var(--ui-shell)); }
