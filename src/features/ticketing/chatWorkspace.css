@@ -36,10 +36,10 @@
 .pm-tickets__navigation-heading p { display: none; }
 .role-chat-context [hidden] { display: none !important; }
 .client-portal-shell .role-chat-context .client-other-panels { flex: none; min-height: 0; overflow: visible; }
-.client-portal-shell .role-chat-context .client-detail-panel { padding: 20px 0; overflow: visible; }
+.client-portal-shell .role-chat-context .client-detail-panel { padding: var(--client-space-5) 0; overflow: visible; }
 .client-portal-shell .role-chat-context .client-detail-card { padding: 0; border: 0; border-radius: 0; background: none; box-shadow: none; }
-.client-portal-shell .role-chat-context .client-detail-card + .client-detail-card { padding-top: 20px; border-top: 1px solid rgb(var(--ui-divider)); }
-.client-portal-shell .role-chat-context .client-detail-card h2 { font-size: 13px; }
+.client-portal-shell .role-chat-context .client-detail-card + .client-detail-card { padding-top: var(--client-space-5); border-top: 1px solid rgb(var(--ui-divider)); }
+.client-portal-shell .role-chat-context .client-detail-card h2 { font-size: var(--client-type-compact); }
 .pm-tickets.pm-tickets--ticket-open .pm-tickets__context-panel .pm-tickets__details-view,
 .pm-tickets.pm-tickets--ticket-open .pm-tickets__context-panel .pm-tickets__documents-view { flex: none; padding: 20px 0; overflow: visible; }
 .pm-tickets__context-panel .pm-tickets__overview { grid-template-columns: minmax(0, 1fr); gap: 24px; }
@@ -66,8 +66,8 @@
 }
 
 /* Fill the host workspace instead of allocating chat a fixed viewport fraction. */
-.client-portal-shell .client-portal-main { width: 100%; max-width: none; padding: 16px 20px 20px; }
-.client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace { padding: 0; overflow: hidden; }
+.client-portal-shell .client-portal-main { width: 100%; max-width: none; padding: var(--client-space-4) var(--client-portal-gutter) var(--client-space-5); }
+.client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace { padding-top: var(--client-space-3); padding-bottom: var(--client-space-3); }
 .client-portal-shell .client-requests-page.has-selected-request > .client-portal-page-heading { display: none; }
 .client-portal-shell .client-portal-workspace { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 0; }
 .client-portal-shell .client-request-list { border: 0; border-right: 1px solid rgb(var(--ui-divider)); border-radius: 0; box-shadow: none; background: rgb(var(--ui-shell)); }
@@ -75,50 +75,55 @@
 .client-portal-shell--chat-open .client-request-detail-pane { overflow: hidden; }
 .client-portal-shell--chat-open .client-ticket-detail { min-height: 0; }
 .client-portal-shell .client-detail-header { padding: 9px 18px 7px; border-bottom: 1px solid rgb(var(--ui-divider)); }
-.client-portal-shell .client-detail-title-row { align-items: center; gap: 12px; }
-.client-portal-shell .client-detail-title { font-size: 18px; font-weight: 650; letter-spacing: -.02em; line-height: 1.25; }
-.client-portal-shell .client-detail-reference-row { min-height: 22px; gap: 4px; }
+.client-portal-shell .role-chat-context__header button { width: var(--client-control-compact); height: var(--client-control-compact); border-radius: var(--client-radius-control); }
+.client-portal-shell .role-chat-context button:focus-visible { outline: var(--client-focus-width) solid rgb(var(--ui-focus)); outline-offset: var(--client-focus-offset); }
+.client-portal-shell .client-detail-title-row { align-items: center; gap: var(--client-space-3); }
+.client-portal-shell .client-detail-title { font-size: var(--client-type-subheading); font-weight: var(--client-weight-semibold); letter-spacing: -.02em; line-height: var(--client-line-heading); }
+.client-portal-shell .client-detail-reference-row { min-height: 22px; gap: var(--client-space-1); }
 .client-portal-shell .client-detail-reference { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
-.client-portal-shell .client-copy-reference { width: 24px; height: 24px; }
-.client-portal-shell .client-ticket-detail .client-status { min-height: 24px; padding-inline: 9px; font-size: 10px; }
+.client-portal-shell .client-copy-reference { width: var(--client-control-compact); height: var(--client-control-compact); }
+.client-portal-shell .client-ticket-detail .client-status { min-height: 24px; padding-inline: 9px; font-size: var(--client-type-meta); }
 .client-portal-shell .client-detail-date { display: none; }
-.client-portal-shell .client-detail-status { margin: 0 24px 8px; padding: 12px 16px; }
+.client-portal-shell .client-detail-status { margin: 0 var(--client-space-5) var(--client-space-3); padding: var(--client-space-4); }
 .client-portal-shell .client-detail-status.is-collapsed .client-detail-status-copy p,
 .client-portal-shell .client-detail-status.is-collapsed .client-detail-status-eyebrow { display: none; }
 .client-portal-shell .client-detail-tabs { flex: none; }
-.client-portal-shell .client-header-review { min-height: 36px; padding: 6px 10px; border-radius: 8px; color: rgb(var(--ui-link)); font-size: 12px; }
+.client-portal-shell .client-header-review { min-height: var(--client-control); padding: 0 var(--client-space-3); border-radius: var(--client-radius-control); color: rgb(var(--ui-link)); font-size: var(--client-type-caption); }
 .client-portal-shell .client-header-review:hover { background: rgb(var(--ui-selected)); }
-.client-portal-shell .client-sidebar-progress { margin: 0; padding: 18px 0; border: 0; border-bottom: 1px solid rgb(var(--ui-divider)); border-radius: 0; background: none; box-shadow: none; }
-.client-portal-shell .client-sidebar-progress .client-detail-status-head { display: flex; align-items: stretch; flex-direction: column; gap: 12px; }
+.client-portal-shell .client-sidebar-progress { margin: 0; padding: var(--client-space-4) 0; border: 0; border-bottom: 1px solid rgb(var(--ui-divider)); border-radius: 0; background: none; box-shadow: none; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-head { display: flex; align-items: stretch; flex-direction: column; gap: var(--client-space-3); }
 .client-portal-shell .client-sidebar-progress .client-detail-status-copy { align-items: flex-start; gap: 0; }
 .client-portal-shell .client-sidebar-progress .client-detail-status-icon { display: none; }
-.client-portal-shell .client-sidebar-progress .client-detail-status-copy h2 { margin: 0; font-size: 13px; font-weight: 600; line-height: 1.55; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-copy h2 { margin: 0; font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); line-height: var(--client-line-body); }
 .client-portal-shell .client-sidebar-progress.is-collapsed .client-detail-status-copy p,
-.client-portal-shell .client-sidebar-progress .client-detail-status-copy p { display: block; margin: 8px 0 0; font-size: 12px; line-height: 1.7; color: rgb(var(--ui-text-secondary)); }
+.client-portal-shell .client-sidebar-progress .client-detail-status-copy p { display: block; margin: var(--client-space-2) 0 0; font-size: var(--client-type-meta); line-height: var(--client-line-copy); color: rgb(var(--ui-text-secondary)); }
 .client-portal-shell .client-sidebar-progress .client-detail-status-eyebrow { display: none; }
-.client-portal-shell .client-sidebar-progress .client-detail-status-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 8px; }
-.client-portal-shell .client-sidebar-progress .client-detail-status-toggle { min-height: 36px; padding: 0; border: 0; background: none; font-size: 12px; }
+.client-portal-shell .client-sidebar-progress .client-detail-status-actions { display: flex; flex-wrap: wrap; justify-content: flex-start; gap: var(--client-space-2); }
+.client-portal-shell .client-sidebar-progress .client-detail-status-toggle { min-height: var(--client-control-compact); padding: 0; border: 0; background: none; font-size: var(--client-type-meta); }
 .client-portal-shell .client-sidebar-progress .client-detail-status-toggle span { display: inline; }
-.client-portal-shell .client-sidebar-progress .client-detail-progress { margin-top: 12px; padding-top: 14px; }
+.client-portal-shell .client-sidebar-progress .client-detail-progress { margin-top: var(--client-space-3); padding-top: var(--client-space-3); }
 .client-portal-shell .client-sidebar-progress .client-progress-steps { display: flex; flex-direction: column; gap: 0; }
-.client-portal-shell .client-sidebar-progress .client-progress-step { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: 10px; padding-bottom: 18px; flex: none; }
+.client-portal-shell .client-sidebar-progress .client-progress-step { position: relative; display: grid; grid-template-columns: 24px minmax(0, 1fr); column-gap: var(--client-space-2); padding-bottom: var(--client-space-4); flex: none; }
 .client-portal-shell .client-sidebar-progress .client-progress-step:last-child { padding-bottom: 0; }
 .client-portal-shell .client-sidebar-progress .client-progress-node-row { grid-column: 1; grid-row: 1 / span 2; }
-.client-portal-shell .client-sidebar-progress .client-progress-node { width: 22px; height: 22px; font-size: 10px; }
+.client-portal-shell .client-sidebar-progress .client-progress-node { width: 22px; height: 22px; font-size: var(--client-type-meta); }
 .client-portal-shell .client-sidebar-progress .client-progress-connector { position: absolute; top: 26px; bottom: 4px; left: 10px; width: 1px; height: auto; margin: 0; }
-.client-portal-shell .client-sidebar-progress .client-progress-label { display: block; margin: 0; font-size: 12px; line-height: 1.6; }
-.client-portal-shell .client-sidebar-progress .client-progress-state { display: block; margin-top: 2px; font-size: 10px; }
+.client-portal-shell .client-sidebar-progress .client-progress-label { display: block; margin: 0; font-size: var(--client-type-meta); line-height: var(--client-line-copy); }
+.client-portal-shell .client-sidebar-progress .client-progress-state { display: block; margin-top: 2px; font-size: var(--client-type-meta); }
 .client-portal-shell .client-sidebar-progress .client-progress-mobile-summary { display: none; }
 .client-portal-shell .client-detail-content.role-chat-layout { width: 100%; min-width: 0; min-height: 0; flex: 1; align-self: stretch; flex-direction: row; padding: 0; background: rgb(var(--ui-canvas)); }
 .client-portal-shell .client-chat-main { display: flex; min-width: 0; min-height: 0; flex: 1 1 0%; flex-direction: column; overflow: hidden; background: rgb(var(--ui-canvas)); }
 .client-portal-shell .client-conversation { width: 100%; min-width: 0; min-height: 0; border: 0; border-radius: 0; background: rgb(var(--ui-canvas)); }
 .client-portal-shell .client-conversation.hidden { display: none; }
-
+.client-portal-shell .client-conversation-heading { min-height: 52px; border: 0; padding: var(--client-space-3) 28px; }
+.client-portal-shell .client-conversation-feed { min-width: 0; gap: var(--client-space-4); padding: var(--client-space-5) clamp(var(--client-space-4), 2vw, var(--client-space-7)); background: rgb(var(--ui-shell)); }
 .client-portal-shell .client-message { width: 100%; max-width: none; min-width: 0; align-self: stretch; margin: 0; }
 .client-portal-shell .client-message.is-theirs, .client-portal-shell .client-message.is-mine { justify-content: flex-start; }
-.client-portal-shell .client-message-bubble { width: fit-content; min-width: min(144px, calc(100% - 42px)); max-width: min(560px, calc(100% - 42px)); box-sizing: border-box; padding: 8px 13px 6px; font-size: 13px; line-height: 1.55; }
-.client-portal-shell .client-message-bubble p { margin: 3px 0 4px; font-size: 12px; line-height: 1.5; }
-.client-portal-shell .client-message-author, .client-portal-shell .client-message-bubble time { font-size: 9px; }
+.client-portal-shell .client-message-bubble { width: fit-content; min-width: min(144px, calc(100% - 42px)); max-width: min(560px, calc(100% - 42px)); box-sizing: border-box; padding: var(--client-space-2) 13px 6px; font-size: var(--client-type-compact); line-height: var(--client-line-body); }
+.client-portal-shell .client-message-bubble p { margin: 3px 0 var(--client-space-1); font-size: var(--client-type-meta); line-height: var(--client-line-body); }
+.client-portal-shell .client-message-author, .client-portal-shell .client-message-bubble time { font-size: var(--client-type-meta); }
+.client-portal-shell .client-reply-form { min-width: 0; flex: none; padding: 14px var(--client-space-6) 18px; border: 0; }
+.client-portal-shell .client-reply-controls { width: 100%; min-width: 0; max-width: 800px; box-sizing: border-box; margin-inline: auto; border-radius: 20px; padding: var(--client-space-2); }
 .client-portal-shell .client-reply-controls textarea { width: 0; min-width: 0; max-width: 100%; flex: 1 1 0%; box-sizing: border-box; min-height: 44px; max-height: 140px; }
 .client-portal-shell .client-portal-brand img { display: block !important; visibility: visible; flex-shrink: 0; }
 
@@ -160,13 +165,14 @@
   .pm-tickets__compact-filter { margin: 0; }
   .role-chat-context, .role-chat-context.is-open { flex-basis: 0; width: 0; border: 0; }
   .role-chat-context__toggle { position: absolute; z-index: 3; top: 4px; right: 4px; width: 36px; min-height: 36px; border: 1px solid rgb(var(--ui-divider)); border-radius: 8px; background: rgb(var(--ui-shell)); }
+  .client-portal-shell .role-chat-context__toggle { width: var(--client-control-compact); min-height: var(--client-control-compact); border-radius: var(--client-radius-control); }
   .client-portal-shell .client-portal-workspace { display: flex; }
-  .client-portal-shell .client-portal-main { padding: 10px; }
-  .client-portal-shell .client-detail-header { padding: 8px 12px; }
-  .client-portal-shell .client-detail-status { margin-inline: 12px; padding: 10px; }
-  .client-portal-shell .client-detail-title { font-size: 17px; }
-
-  .client-portal-shell .client-conversation-feed { padding: 18px 12px; gap: 18px; }
+  .client-portal-shell .client-portal-main { padding: var(--client-space-3) var(--client-portal-gutter); }
+  .client-portal-shell .client-detail-header { padding: var(--client-space-2) var(--client-space-3); }
+  .client-portal-shell .client-detail-status { margin-inline: var(--client-space-3); padding: 10px; }
+  .client-portal-shell .client-detail-title { font-size: var(--client-type-subheading); }
+  .client-portal-shell .client-conversation-heading { padding-inline: 14px; }
+  .client-portal-shell .client-conversation-feed { padding: 18px var(--client-space-3); gap: 18px; }
   .client-portal-shell .client-reply-form { padding: 10px; }
   .client-portal-shell .client-message-bubble { max-width: 90%; }
   .pm-tickets.pm-tickets--ticket-open { grid-template-columns: minmax(0, 1fr); }
@@ -220,77 +226,108 @@
 .pm-tickets__context-panel .pm-tickets__composer-buttons { min-width: 0; max-width: 100%; flex-wrap: wrap; }
 
 /* Client request chat: keep the conversation calm, readable, and primary. */
-
+.client-portal-shell .client-detail-content.role-chat-layout { background: rgb(var(--ui-canvas)); }
+.client-portal-shell .client-chat-main { border-right: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-canvas)); }
+.client-portal-shell .client-conversation-heading {
+  display: flex;
+  min-height: 64px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--client-space-4);
+  padding: var(--client-space-3) var(--client-portal-gutter);
+  border-bottom: 1px solid rgb(var(--ui-divider));
+  background: rgb(var(--ui-shell));
+}
+.client-portal-shell .client-conversation-heading-copy { display: flex; min-width: 0; align-items: center; gap: var(--client-space-3); }
+.client-portal-shell .client-conversation-heading-icon {
+  display: grid;
+  width: 31px;
+  height: 31px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid rgb(var(--ui-accent) / .28);
+  border-radius: var(--client-radius-surface);
+  background: rgb(var(--ui-selected));
+  color: rgb(var(--ui-link));
+}
+.client-portal-shell .client-conversation-heading h2 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: var(--client-type-compact); font-weight: var(--client-weight-bold); letter-spacing: -.01em; }
+.client-portal-shell .client-conversation-heading p { margin: 3px 0 0; color: rgb(var(--ui-text-secondary)); font-size: var(--client-type-meta); line-height: var(--client-line-heading); }
+.client-portal-shell .client-conversation-signal { display: inline-flex; flex: 0 0 auto; align-items: center; gap: var(--client-space-2); color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); white-space: nowrap; }
+.client-portal-shell .client-conversation-signal-dot { width: 6px; height: 6px; flex: 0 0 auto; border-radius: 50%; background: rgb(var(--ui-success)); box-shadow: 0 0 0 3px rgb(var(--ui-success) / .12); }
 .client-portal-shell .client-conversation-feed {
-  min-width: 0;
-  gap: 10px;
-  padding: 24px clamp(18px, 3.5vw, 48px) 30px;
+  gap: var(--client-space-3);
+  padding: var(--client-space-6) var(--client-portal-gutter) var(--client-space-7);
   background: rgb(var(--ui-canvas));
   scrollbar-gutter: stable;
 }
-.client-portal-shell .client-message-day { width: min(100%, 820px); margin: 5px auto 2px; }
-.client-portal-shell .client-message-day span { padding: 4px 9px; border-color: rgb(var(--ui-divider)); background: rgb(var(--ui-shell)); color: rgb(var(--ui-text-muted)); font-size: 9px; }
-.client-portal-shell .client-message { width: min(100%, 820px); max-width: 100%; margin-inline: auto; gap: 10px; }
-.client-portal-shell .client-message.is-grouped { margin-top: -3px; }
+.client-portal-shell .client-message-day { width: min(100%, 820px); margin: var(--client-space-1) auto; }
+.client-portal-shell .client-message-day span { padding: var(--client-space-1) var(--client-space-2); border-color: rgb(var(--ui-divider)); background: rgb(var(--ui-shell)); color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); }
+.client-portal-shell .client-message { width: 100%; max-width: none; min-width: 0; align-self: stretch; margin: 0; gap: var(--client-space-2); }
+.client-portal-shell .client-message.is-grouped { margin-top: -4px; }
 .client-portal-shell .client-message.is-grouped .client-message-avatar { visibility: hidden; }
 .client-portal-shell .client-message.is-grouped .client-message-author { display: none; }
-.client-portal-shell .client-message-avatar { width: 30px; height: 30px; border-radius: 9px; background: rgb(var(--ui-selected)); color: rgb(var(--ui-text-secondary)); }
+.client-portal-shell .client-message-avatar { width: 30px; height: 30px; border-radius: var(--client-radius-surface); background: rgb(var(--ui-selected)); color: rgb(var(--ui-text-secondary)); }
 .client-portal-shell .client-message.is-mine .client-message-avatar { border-color: rgb(var(--ui-accent) / .32); background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); }
 .client-portal-shell .client-message-bubble {
   min-width: min(150px, calc(100% - 40px));
   max-width: min(640px, calc(100% - 40px));
-  padding: 11px 14px 9px;
+  padding: var(--client-space-3) var(--client-space-4) var(--client-space-2);
   border-color: rgb(var(--ui-divider));
-  border-radius: 13px 13px 13px 5px;
+  border-radius: var(--client-radius-panel) var(--client-radius-panel) var(--client-radius-panel) var(--client-space-1);
   background: rgb(var(--ui-surface));
-  box-shadow: 0 5px 18px rgb(var(--ui-overlay) / .08);
+  box-shadow: var(--client-shadow-list);
 }
-.client-portal-shell .client-message.is-mine .client-message-bubble { border-color: rgb(var(--ui-accent) / .28); border-radius: 13px 13px 5px 13px; background: rgb(var(--ui-selected)); }
-.client-portal-shell .client-message-author { color: rgb(var(--ui-text-secondary)); font-size: 10px; font-weight: 700; letter-spacing: .01em; }
+.client-portal-shell .client-message.is-mine .client-message-bubble { border-color: rgb(var(--ui-accent) / .28); border-radius: var(--client-radius-panel) var(--client-radius-panel) var(--client-space-1) var(--client-radius-panel); background: rgb(var(--ui-selected)); }
+.client-portal-shell .client-message-author { color: rgb(var(--ui-text-secondary)); font-size: var(--client-type-meta); font-weight: var(--client-weight-bold); letter-spacing: .01em; }
 .client-portal-shell .client-message.is-mine .client-message-author { color: rgb(var(--ui-selected-content)); }
-.client-portal-shell .client-message-bubble p { margin: 5px 0 6px; color: rgb(var(--ui-text-primary)); font-size: 13px; line-height: 1.6; }
-.client-portal-shell .client-message-bubble time { color: rgb(var(--ui-text-muted)); font-size: 9px; }
+.client-portal-shell .client-message-bubble p { margin: 5px 0 6px; color: rgb(var(--ui-text-primary)); font-size: var(--client-type-compact); line-height: var(--client-line-copy); }
+.client-portal-shell .client-message-bubble time { color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); }
 .client-portal-shell .client-load-messages {
   align-self: center;
-  min-height: 34px;
+  min-height: var(--client-control-compact);
   padding: 0 11px;
   border: 1px solid rgb(var(--ui-divider));
-  border-radius: 8px;
+  border-radius: var(--client-radius-control);
   background: rgb(var(--ui-shell));
   color: rgb(var(--ui-link));
-  font-size: 10px;
-  font-weight: 650;
+  font-size: var(--client-type-meta);
+  font-weight: var(--client-weight-semibold);
 }
 .client-portal-shell .client-load-messages:hover { background: rgb(var(--ui-raised)); text-decoration: none; }
-.client-portal-shell .client-no-messages { display: flex; max-width: 280px; flex-direction: column; align-items: center; gap: 7px; margin: auto; color: rgb(var(--ui-text-secondary)); text-align: center; }
-.client-portal-shell .client-no-messages-icon { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid rgb(var(--ui-divider)); border-radius: 11px; background: rgb(var(--ui-shell)); color: rgb(var(--ui-link)); }
-.client-portal-shell .client-no-messages strong { color: rgb(var(--ui-text-primary)); font-size: 13px; }
-.client-portal-shell .client-no-messages p { margin: 0; color: rgb(var(--ui-text-secondary)); font-size: 11px; line-height: 1.55; }
-.client-portal-shell .client-reply-form { min-width: 0; flex: none; padding: 12px clamp(18px, 3.5vw, 48px) 16px; border: 0; background: rgb(var(--ui-canvas)); }
-.client-portal-shell .client-reply-controls { width: 100%; min-width: 0; box-sizing: border-box; max-width: 820px; margin-inline: auto; gap: 6px; padding: 6px; border: 1px solid rgb(var(--ui-control)); border-radius: 15px; background: rgb(var(--ui-surface)); box-shadow: 0 7px 22px rgb(var(--ui-overlay) / .10); }
-.client-portal-shell .client-reply-controls:focus-within { border-color: rgb(var(--ui-focus)); box-shadow: 0 0 0 3px rgb(var(--ui-focus) / .16), 0 7px 22px rgb(var(--ui-overlay) / .10); }
-.client-portal-shell .client-reply-controls textarea { min-height: 44px; padding: 11px 10px; border: 0; border-radius: 9px; background: transparent; font-size: 13px; }
+.client-portal-shell .client-no-messages { display: flex; max-width: 280px; flex-direction: column; align-items: center; gap: var(--client-space-2); margin: auto; color: rgb(var(--ui-text-secondary)); text-align: center; }
+.client-portal-shell .client-no-messages-icon { display: grid; width: 38px; height: 38px; place-items: center; border: 1px solid rgb(var(--ui-divider)); border-radius: var(--client-radius-surface); background: rgb(var(--ui-shell)); color: rgb(var(--ui-link)); }
+.client-portal-shell .client-no-messages strong { color: rgb(var(--ui-text-primary)); font-size: var(--client-type-compact); }
+.client-portal-shell .client-no-messages p { margin: 0; color: rgb(var(--ui-text-secondary)); font-size: var(--client-type-meta); line-height: var(--client-line-body); }
+.client-portal-shell .client-reply-form { padding: var(--client-space-3) var(--client-portal-gutter) var(--client-space-4); border-top: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-shell)); }
+.client-portal-shell .client-reply-controls { max-width: 820px; margin-inline: auto; gap: var(--client-space-2); padding: var(--client-space-2); border: 1px solid rgb(var(--ui-control)); border-radius: var(--client-radius-panel); background: rgb(var(--ui-surface)); box-shadow: var(--client-shadow-status); }
+.client-portal-shell .client-reply-controls:focus-within { border-color: rgb(var(--ui-focus)); box-shadow: 0 0 0 var(--client-focus-width) rgb(var(--ui-focus) / .16), var(--client-shadow-status); }
+.client-portal-shell .client-reply-controls textarea { min-height: var(--client-control); padding: var(--client-space-2) var(--client-space-3); border: 0; border-radius: var(--client-radius-control); background: transparent; font-size: var(--client-type-compact); }
 .client-portal-shell .client-reply-controls textarea:focus { border-color: transparent; box-shadow: none; outline: 0; }
-.client-portal-shell .client-attach-button { width: 42px; min-width: 42px; min-height: 42px; border: 0; border-radius: 10px; background: transparent; color: rgb(var(--ui-text-secondary)); }
+.client-portal-shell .client-attach-button { width: var(--client-control); min-width: var(--client-control); min-height: var(--client-control); border: 0; border-radius: var(--client-radius-control); background: transparent; color: rgb(var(--ui-text-secondary)); }
 .client-portal-shell .client-attach-button:hover { background: rgb(var(--ui-raised)); color: rgb(var(--ui-text-primary)); }
-.client-portal-shell .client-send-reply { min-height: 42px; border-radius: 10px; }
-.client-portal-shell .client-reply-note { max-width: 820px; margin: 7px auto 0; padding-inline: 2px; color: rgb(var(--ui-text-muted)); font-size: 10px; }
+.client-portal-shell .client-send-reply { min-height: var(--client-control); border-radius: var(--client-radius-control); }
+.client-portal-shell .client-reply-note { max-width: 820px; margin: var(--client-space-2) auto 0; padding-inline: var(--client-space-1); color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); }
 .client-portal-shell .role-chat-context { background: rgb(var(--ui-shell)); }
 .client-portal-shell .role-chat-context__panel { background: rgb(var(--ui-shell)); }
 .client-portal-shell .role-chat-context__header { position: sticky; top: 0; z-index: 1; background: rgb(var(--ui-shell)); }
 
 @media (max-width: 767px) {
-
-  .client-portal-shell .client-conversation-feed { gap: 9px; padding: 18px 12px 22px; }
-  .client-portal-shell .client-message { width: 100%; gap: 7px; }
-  .client-portal-shell .client-message-bubble { max-width: calc(100% - 37px); min-width: min(120px, calc(100% - 37px)); padding: 10px 12px 8px; }
-  .client-portal-shell .client-message-bubble p { font-size: 12px; line-height: 1.55; }
-  .client-portal-shell .client-reply-form { padding: 8px 10px 12px; }
-  .client-portal-shell .client-reply-controls { border-radius: 13px; }
-  .client-portal-shell .client-reply-controls textarea { font-size: 12px; }
+  .client-portal-shell .client-chat-main { border-right: 0; }
+  .client-portal-shell .client-conversation-heading { min-height: 58px; gap: var(--client-space-3); padding: var(--client-space-3) var(--client-space-3); }
+  .client-portal-shell .client-conversation-heading-icon { width: 29px; height: 29px; }
+  .client-portal-shell .client-conversation-heading p { font-size: var(--client-type-meta); }
+  .client-portal-shell .client-conversation-signal { display: none; }
+  .client-portal-shell .client-conversation-feed { gap: var(--client-space-2); padding: var(--client-space-4) var(--client-space-3) var(--client-space-5); }
+  .client-portal-shell .client-message { width: 100%; gap: var(--client-space-2); }
+  .client-portal-shell .client-message-bubble { max-width: calc(100% - 37px); min-width: min(120px, calc(100% - 37px)); padding: var(--client-space-3); }
+  .client-portal-shell .client-message-bubble p { font-size: var(--client-type-meta); line-height: var(--client-line-body); }
+  .client-portal-shell .client-reply-form { padding: var(--client-space-2) var(--client-space-3) var(--client-space-3); }
+  .client-portal-shell .client-reply-controls { border-radius: var(--client-radius-panel); }
+  .client-portal-shell .client-reply-controls textarea { font-size: var(--client-type-meta); }
   .client-portal-shell .client-send-reply { width: 42px; min-width: 42px; padding: 0; }
   .client-portal-shell .client-send-reply span { display: none; }
-  .client-portal-shell .client-reply-note { font-size: 9px; }
+  .client-portal-shell .client-reply-note { font-size: var(--client-type-meta); }
 }
 .pm-tickets__context-panel .ticket-documents-panel,
 .pm-tickets__context-panel .ticket-documents-panel > *,
@@ -301,6 +338,606 @@
 .pm-tickets__context-panel .ticket-document-meta,
 .pm-tickets__context-panel .ticket-document-selected-file { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .pm-tickets__context-panel .ticket-document-input { width: 100%; min-width: 0; max-width: 100%; }
+
+/* Client portal rhythm: one compact spacing system for queues, detail views, and chat. */
+.client-portal-shell .client-portal-toolbar {
+  min-height: 56px;
+  padding: var(--client-space-2) var(--client-portal-gutter);
+  border-bottom: 0;
+  background: transparent;
+}
+.client-portal-shell .client-portal-action {
+  width: var(--client-control-compact);
+  height: var(--client-control-compact);
+  border: 0;
+  border-radius: var(--client-radius-control);
+  background: transparent;
+  box-shadow: none;
+}
+.client-portal-shell .client-portal-action:hover:not(:disabled) {
+  background: rgb(var(--ui-raised));
+}
+.client-portal-shell .client-portal-main--workspace {
+  padding: var(--client-space-6) var(--client-portal-gutter) var(--client-space-7);
+}
+.client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace {
+  padding: var(--client-space-3) var(--client-portal-gutter);
+}
+
+.client-portal-shell .client-portal-page-heading {
+  min-height: 60px;
+  gap: var(--client-space-4);
+  padding: var(--client-space-2) 0 var(--client-space-3);
+  border-bottom: 1px solid rgb(var(--ui-divider));
+}
+.client-portal-shell .client-portal-page-heading > div:first-child {
+  min-width: 0;
+}
+.client-portal-shell .client-portal-page-heading .client-eyebrow {
+  display: none;
+}
+.client-portal-shell .client-portal-page-heading h1 {
+  font-size: var(--client-type-page);
+  letter-spacing: -.025em;
+}
+.client-portal-shell .client-page-description {
+  margin-top: 3px;
+  font-size: var(--client-type-meta);
+}
+.client-portal-shell .client-attention-link {
+  min-height: var(--client-control);
+  max-width: 380px;
+  gap: 9px;
+  padding: 7px 10px;
+  border-radius: var(--client-radius-control);
+}
+.client-portal-shell .client-attention-link strong { font-size: var(--client-type-meta); }
+.client-portal-shell .client-attention-link small { font-size: var(--client-type-meta); }
+.client-portal-shell .client-all-caught-up { font-size: var(--client-type-meta); }
+
+/* Use the same heading and section rhythm on Overview and Projects. */
+.client-portal-shell .client-page-heading,
+.client-portal-shell .client-projects-heading,
+.client-portal-shell .client-project-detail-heading {
+  min-height: 60px;
+  align-items: center;
+  gap: var(--client-space-4);
+  flex-wrap: wrap;
+  margin-bottom: 0;
+  padding: var(--client-space-2) 0 var(--client-space-3);
+  border-bottom: 1px solid rgb(var(--ui-divider));
+}
+.client-portal-shell .client-page-heading > div:first-child,
+.client-portal-shell .client-projects-heading > div:first-child,
+.client-portal-shell .client-project-heading-copy {
+  min-width: 0;
+}
+.client-portal-shell .client-page-heading h1,
+.client-portal-shell .client-projects-heading h1,
+.client-portal-shell .client-project-detail-heading h1 {
+  font-size: var(--client-type-page);
+  letter-spacing: -.025em;
+}
+.client-portal-shell .client-page-heading .client-eyebrow,
+.client-portal-shell .client-projects-heading .client-eyebrow { display: none; }
+.client-portal-shell .client-overview-page,
+.client-portal-shell .client-projects-page { gap: var(--client-space-5); }
+.client-portal-shell .client-overview-section { gap: var(--client-space-2); }
+.client-portal-shell .client-section-heading { gap: var(--client-space-3); }
+.client-portal-shell .client-section-heading h2,
+.client-portal-shell .client-project-overview h2,
+.client-portal-shell .client-preview-destination h2 { font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
+.client-portal-shell .client-section-heading p,
+.client-portal-shell .client-project-overview > div > p,
+.client-portal-shell .client-preview-destination p { font-size: var(--client-type-meta); }
+.client-portal-shell .client-overview-page .client-activity-row {
+  min-height: 64px;
+  gap: var(--client-space-3);
+  padding: var(--client-space-3) 0;
+}
+.client-portal-shell .client-overview-page .client-activity-copy strong { font-size: var(--client-type-compact); }
+.client-portal-shell .client-overview-page .client-activity-copy small,
+.client-portal-shell .client-overview-page .client-activity-row time,
+.client-portal-shell .client-overview-page .client-activity-status { font-size: var(--client-type-meta); }
+.client-portal-shell .client-project-preview-list { gap: var(--client-space-3); }
+.client-portal-shell .client-project-preview-list > div { padding: var(--client-space-3) 0; }
+.client-portal-shell .client-proposals { gap: var(--client-space-2); margin-top: 0; }
+.client-portal-shell .client-proposals .client-section-heading { padding-bottom: var(--client-space-2); }
+.client-portal-shell .client-project-list > button {
+  min-height: 72px;
+  gap: var(--client-space-3);
+  padding: var(--client-space-3) var(--client-space-1);
+}
+.client-portal-shell .client-project-list-icon { width: 32px; height: 32px; border-radius: var(--client-radius-control); }
+.client-portal-shell .client-project-list > button > span:nth-child(2) { gap: var(--client-space-1); }
+
+.client-portal-shell .client-portal-workspace--requests {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 0;
+}
+.client-portal-shell .client-request-list,
+.client-portal-shell .client-request-detail-pane {
+  border: 0;
+  border-radius: 0;
+  background: rgb(var(--ui-canvas));
+  box-shadow: none;
+}
+.client-portal-shell .client-request-list { overflow: hidden; }
+.client-portal-shell .client-list-header {
+  min-height: 50px;
+  padding: 10px 14px 6px;
+  border-bottom: 1px solid rgb(var(--ui-divider));
+}
+.client-portal-shell .client-list-title h2 {
+  font-size: var(--client-type-compact);
+  font-weight: var(--client-weight-semibold);
+}
+.client-portal-shell .client-portal-workspace--requests:not(.has-selected-request) .client-list-header {
+  display: none;
+}
+.client-portal-shell .client-search {
+  min-height: var(--client-control);
+  margin: var(--client-space-3) 14px var(--client-space-2);
+  padding-inline: 10px;
+  border-radius: var(--client-radius-control);
+  background: transparent;
+}
+.client-portal-shell .client-request-filters {
+  min-height: var(--client-control-compact);
+  gap: var(--client-space-1);
+  padding: 0 var(--client-space-4) var(--client-space-2);
+}
+.client-portal-shell .client-request-filter {
+  min-height: var(--client-control-compact);
+  padding-inline: 9px;
+  border-radius: var(--client-radius-control);
+  font-size: var(--client-type-meta);
+}
+.client-portal-shell .client-request-items { border-top: 1px solid rgb(var(--ui-divider)); }
+.client-portal-shell .client-request-row {
+  grid-template-columns: minmax(0, 1fr) 16px;
+  min-height: 86px;
+  gap: var(--client-space-3);
+  padding: var(--client-space-4);
+  background: transparent;
+}
+.client-portal-shell .client-request-row:hover { background: rgb(var(--ui-raised) / .42); }
+.client-portal-shell .client-request-icon { display: none; }
+.client-portal-shell .client-request-copy { gap: var(--client-space-1); }
+.client-portal-shell .client-request-title { font-size: var(--client-type-compact); line-height: var(--client-line-heading); }
+.client-portal-shell .client-request-meta { justify-content: flex-start; gap: var(--client-space-2); }
+.client-portal-shell .client-status { min-height: 20px; padding: 2px 7px; font-size: var(--client-type-meta); }
+.client-portal-shell .client-request-progress { font-size: var(--client-type-meta); }
+.client-portal-shell .client-request-copy time { font-size: var(--client-type-meta); }
+.client-portal-shell .client-request-row.is-selected {
+  box-shadow: inset 3px 0 rgb(var(--ui-accent));
+}
+.client-portal-shell .client-list-footer {
+  min-height: var(--client-control);
+  padding-inline: var(--client-space-4);
+  border-top: 1px solid rgb(var(--ui-divider));
+}
+.client-portal-shell .client-request-detail-pane { display: none; }
+
+.client-portal-shell .client-detail-header {
+  padding: var(--client-space-3) var(--client-space-4);
+  border-bottom: 1px solid rgb(var(--ui-divider));
+}
+.client-portal-shell .client-detail-heading {
+  display: grid;
+  grid-template-columns: var(--client-control) minmax(0, 1fr);
+  gap: var(--client-space-3);
+  min-width: 0;
+  align-items: start;
+}
+.client-portal-shell .client-detail-back {
+  display: grid !important;
+  width: var(--client-control);
+  height: var(--client-control);
+  min-height: var(--client-control);
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--client-radius-control);
+}
+.client-portal-shell .client-detail-back span { display: none; }
+.client-portal-shell .client-detail-title-row { min-width: 0; gap: var(--client-space-3); }
+.client-portal-shell .client-detail-title { font-size: var(--client-type-subheading); font-weight: var(--client-weight-semibold); letter-spacing: -.02em; line-height: var(--client-line-heading); }
+.client-portal-shell .client-detail-reference-row { min-height: 22px; gap: var(--client-space-1); }
+.client-portal-shell .client-detail-date { display: none; }
+
+@media (min-width: 768px) {
+  .client-portal-shell .client-portal-workspace--requests {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .client-portal-shell .client-portal-workspace--requests.has-selected-request {
+    grid-template-columns: 250px minmax(0, 1fr);
+  }
+  .client-portal-shell .client-portal-workspace--requests.has-selected-request.is-navigation-collapsed {
+    grid-template-columns: 48px minmax(0, 1fr);
+  }
+  .client-portal-shell .client-portal-workspace--requests:not(.has-selected-request) .client-request-detail-pane {
+    display: none !important;
+  }
+  .client-portal-shell .client-portal-workspace--requests.has-selected-request .client-request-list,
+  .client-portal-shell .client-portal-workspace--requests.has-selected-request .client-request-detail-pane {
+    display: flex !important;
+  }
+  .client-portal-shell .client-portal-workspace--requests.has-selected-request .client-request-list {
+    border-right: 1px solid rgb(var(--ui-divider));
+  }
+}
+
+@media (max-width: 767px) {
+  .client-portal-shell .client-portal-toolbar { min-height: 56px; padding: var(--client-space-2) var(--client-portal-gutter); }
+  .client-portal-shell .client-portal-action { width: var(--client-control); height: var(--client-control); }
+  .client-portal-shell .client-portal-main--workspace { padding: var(--client-space-6) var(--client-portal-gutter) var(--client-space-7); }
+  .client-portal-shell.client-portal-shell--chat-open .client-portal-main--workspace { padding: var(--client-space-3) var(--client-portal-gutter); }
+  .client-portal-shell .client-portal-page-heading { min-height: 54px; padding: 5px 0 9px; }
+  .client-portal-shell .client-portal-page-heading h1 { font-size: var(--client-type-page); }
+  .client-portal-shell .client-page-description { font-size: var(--client-type-meta); }
+  .client-portal-shell .client-attention-link { max-width: 48%; min-height: var(--client-control); padding: var(--client-space-2) var(--client-space-3); }
+  .client-portal-shell .client-attention-link small { display: none; }
+  .client-portal-shell .client-request-row { min-height: 78px; padding: var(--client-space-3); }
+  .client-portal-shell .client-portal-workspace--requests.has-selected-request .client-request-detail-pane:not(.client-mobile-hidden) {
+    display: flex !important;
+  }
+  .client-portal-shell .client-detail-heading { display: block; }
+  .client-portal-shell .client-detail-back {
+    display: inline-flex !important;
+    width: auto;
+    height: var(--client-control);
+    min-height: var(--client-control);
+    align-items: center;
+    gap: var(--client-space-2);
+    margin: calc(0px - var(--client-space-1)) 0 var(--client-space-1) calc(0px - var(--client-space-2));
+    padding: 0 var(--client-space-2);
+  }
+  .client-portal-shell .client-detail-back span { display: inline; }
+}
+
+/* Keep the global actions in their own row so page actions never overlap them. */
+.client-portal-shell .client-portal-mainview { position: relative; }
+.client-portal-shell .client-portal-toolbar {
+  position: relative;
+  z-index: 12;
+  top: auto;
+  right: auto;
+  min-height: 56px;
+  padding: var(--client-space-2) var(--client-portal-gutter);
+}
+.client-portal-shell.client-portal-shell--inspection .client-portal-toolbar,
+.client-portal-shell.client-portal-shell--chat-open.client-portal-shell--inspection .client-portal-toolbar { top: auto; }
+
+@media (min-width: 768px) {
+  .client-portal-shell--workspace { grid-template-columns: 4.5rem minmax(0, 1fr); }
+  .client-portal-shell .client-sidebar { width: 4.5rem; }
+  .client-portal-shell .client-sidebar:hover,
+  .client-portal-shell .client-sidebar:focus-within { width: 16rem; }
+}
+
+@media (max-width: 767px) {
+  .client-portal-shell.client-portal-shell--inspection .client-portal-toolbar { top: auto; }
+}
+
+/* Type hierarchy: make the subject obvious before its supporting detail. */
+.client-portal-shell .client-portal-page-heading h1,
+.client-portal-shell .client-page-heading h1,
+.client-portal-shell .client-projects-heading h1 {
+  font-size: var(--client-type-page);
+  font-weight: var(--client-weight-bold);
+  line-height: var(--client-line-heading);
+  letter-spacing: -.03em;
+}
+.client-portal-shell .client-project-detail-heading h1 {
+  font-size: var(--client-type-title);
+  font-weight: var(--client-weight-bold);
+  line-height: var(--client-line-heading);
+  letter-spacing: -.03em;
+}
+.client-portal-shell .client-section-heading h2,
+.client-portal-shell .client-project-overview h2,
+.client-portal-shell .client-preview-destination h2 {
+  font-size: var(--client-type-body);
+  font-weight: var(--client-weight-bold);
+  line-height: var(--client-line-heading);
+}
+.client-portal-shell .client-project-heading-copy .client-eyebrow,
+.client-portal-shell .client-project-overview .client-eyebrow {
+  margin: 0 0 6px;
+  color: rgb(var(--ui-link));
+  font-size: var(--client-type-meta);
+  font-weight: var(--client-weight-bold);
+  letter-spacing: .14em;
+}
+.client-portal-shell .client-project-tabs button[aria-selected="true"] { font-weight: var(--client-weight-semibold); }
+.client-portal-shell .client-project-preview-list span,
+.client-portal-shell .client-project-list strong,
+.client-portal-shell .client-proposal-row strong { font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
+.client-portal-shell .client-project-overview-meta strong { color: rgb(var(--ui-text-primary)); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); }
+.client-portal-shell .client-list-title h2 { font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
+.client-portal-shell .client-request-title { font-weight: var(--client-weight-semibold); }
+.client-portal-shell .role-chat-context__header h2 { font-size: var(--client-type-body); font-weight: var(--client-weight-bold); }
+.client-portal-shell .role-chat-context__section h3 { font-weight: var(--client-weight-semibold); }
+.client-portal-shell .role-chat-context .client-detail-card > h2 { font-size: var(--client-type-meta); font-weight: var(--client-weight-bold); }
+
+@media (max-width: 767px) {
+  .client-portal-shell .client-portal-page-heading h1,
+  .client-portal-shell .client-page-heading h1,
+  .client-portal-shell .client-projects-heading h1 { font-size: var(--client-type-page); }
+  .client-portal-shell .client-project-detail-heading h1 { font-size: var(--client-type-page); }
+}
+
+/* Overview: friendly hierarchy with a light purple accent, kept flat and scannable. */
+.client-portal-shell .client-overview-page { gap: var(--client-space-5); }
+.client-portal-shell .client-overview-heading {
+  min-height: 0;
+  padding: 2px 0 0;
+  border-bottom: 0;
+}
+.client-portal-shell .client-overview-heading h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--client-type-page);
+  font-weight: var(--client-weight-bold);
+}
+.client-portal-shell .client-overview-heading h1::before {
+  display: block;
+  width: 3px;
+  height: 24px;
+  flex: 0 0 3px;
+  border-radius: var(--client-radius-pill);
+  background: rgb(var(--ui-accent));
+  content: '';
+}
+.client-portal-shell .client-overview-welcome {
+  margin: 18px 0 0;
+  color: rgb(var(--ui-text-primary));
+  font-size: var(--client-type-title);
+  font-weight: var(--client-weight-bold);
+  letter-spacing: -.03em;
+  line-height: var(--client-line-heading);
+}
+.client-portal-shell .client-overview-heading .client-page-description {
+  max-width: 650px;
+  margin-top: 5px;
+  font-size: var(--client-type-compact);
+}
+.client-portal-shell .client-overview-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border-bottom: 1px solid rgb(var(--ui-divider));
+}
+.client-portal-shell .client-overview-summary-item {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  gap: var(--client-space-3);
+  padding: var(--client-space-3) 18px var(--client-space-4) 0;
+  border-right: 1px solid rgb(var(--ui-divider));
+}
+.client-portal-shell .client-overview-summary-item + .client-overview-summary-item { padding-left: 22px; }
+.client-portal-shell .client-overview-summary-item:last-child { border-right: 0; }
+.client-portal-shell .client-overview-summary-icon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 1px solid rgb(var(--ui-divider));
+  border-radius: var(--client-radius-surface);
+  background: rgb(var(--ui-selected));
+  color: rgb(var(--ui-accent));
+}
+.client-portal-shell .client-overview-summary-item.is-progress .client-overview-summary-icon {
+  background: rgb(var(--ui-status-info-subtle));
+  color: rgb(var(--ui-status-info));
+}
+.client-portal-shell .client-overview-summary-item.is-complete .client-overview-summary-icon {
+  background: rgb(var(--ui-status-success-subtle));
+  color: rgb(var(--ui-status-success));
+}
+.client-portal-shell .client-overview-summary-item strong {
+  display: block;
+  color: rgb(var(--ui-text-primary));
+  font-size: var(--client-type-page);
+  font-weight: var(--client-weight-bold);
+  line-height: 1;
+}
+.client-portal-shell .client-overview-summary-item small {
+  display: block;
+  margin-top: 5px;
+  color: rgb(var(--ui-text-secondary));
+  font-size: var(--client-type-meta);
+}
+.client-portal-shell .client-overview-page .client-section-heading h2 {
+  font-size: var(--client-type-body);
+  font-weight: var(--client-weight-bold);
+}
+.client-portal-shell .client-overview-page .client-section-heading p { font-size: var(--client-type-meta); }
+
+@media (max-width: 767px) {
+  .client-portal-shell .client-overview-welcome {
+    margin-top: 14px;
+    font-size: var(--client-type-page);
+  }
+  .client-portal-shell .client-overview-heading .client-page-description { font-size: var(--client-type-meta); }
+  .client-portal-shell .client-overview-summary { grid-template-columns: 1fr; }
+  .client-portal-shell .client-overview-summary-item,
+  .client-portal-shell .client-overview-summary-item + .client-overview-summary-item {
+    min-height: 54px;
+    padding: 10px 0;
+    border-right: 0;
+    border-bottom: 1px solid rgb(var(--ui-divider));
+  }
+  .client-portal-shell .client-overview-summary-item:last-child { border-bottom: 0; }
+}
+
+/* Keep request filtering compact with one accessible dropdown. */
+.client-portal-shell .client-request-toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--client-space-2);
+  padding: var(--client-space-2) var(--client-space-4);
+  border-bottom: 1px solid rgb(var(--ui-divider));
+}
+.client-portal-shell .client-request-filter-select {
+  position: relative;
+  display: flex;
+  width: min(240px, 100%);
+  min-height: var(--client-control-compact);
+  align-items: center;
+}
+.client-portal-shell .client-request-filter-select select {
+  width: 100%;
+  min-height: var(--client-control-compact);
+  padding: 0 var(--client-space-7) 0 var(--client-space-3);
+  border: 1px solid rgb(var(--ui-control));
+  border-radius: var(--client-radius-control);
+  appearance: none;
+  background: rgb(var(--ui-well));
+  color: rgb(var(--ui-text-primary));
+  font: inherit;
+  font-size: var(--client-type-meta);
+  font-weight: var(--client-weight-semibold);
+  outline: 0;
+}
+.client-portal-shell .client-request-filter-select select:focus-visible {
+  border-color: rgb(var(--ui-focus));
+  box-shadow: 0 0 0 2px rgb(var(--ui-focus) / .18);
+}
+.client-portal-shell .client-request-filter-select > svg {
+  position: absolute;
+  right: 10px;
+  color: rgb(var(--ui-text-secondary));
+  pointer-events: none;
+}
+.client-portal-shell .client-request-toolbar .client-request-filters {
+  display: flex;
+  min-width: 0;
+  min-height: var(--client-control-compact);
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--client-space-1);
+  overflow-x: auto;
+  padding: 0;
+  scrollbar-width: thin;
+}
+.client-portal-shell .client-request-toolbar .client-request-filter {
+  min-height: var(--client-control-compact);
+  flex: 0 0 auto;
+  padding-inline: var(--client-space-2);
+  border-radius: var(--client-radius-control);
+  font-size: var(--client-type-meta);
+  font-weight: var(--client-weight-semibold);
+}
+.client-portal-shell .client-request-toolbar .client-search {
+  min-width: 92px;
+  min-height: var(--client-control);
+  max-width: 380px;
+  flex: 1 1 380px;
+  margin: 0;
+  padding-inline: var(--client-space-2);
+}
+
+@media (max-width: 767px) {
+  .client-portal-shell .client-request-toolbar {
+    gap: var(--client-space-2);
+    padding: var(--client-space-2) var(--client-space-3);
+  }
+  .client-portal-shell .client-request-toolbar .client-search {
+    min-width: 86px;
+    max-width: none;
+    flex-basis: 110px;
+  }
+}
+
+/* Give the overview a clear reading order: action first, updates and projects second. */
+.client-portal-shell .client-overview-page .client-overview-section .client-section-heading h2 {
+  color: rgb(var(--ui-text-primary));
+  font-size: var(--client-type-body);
+  font-weight: var(--client-weight-semibold);
+  letter-spacing: -.015em;
+  line-height: var(--client-line-heading);
+}
+.client-portal-shell .client-overview-page .client-overview-section.is-primary {
+  padding-top: 2px;
+}
+.client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--client-space-2);
+  font-size: var(--client-type-subheading);
+  font-weight: var(--client-weight-bold);
+  letter-spacing: -.025em;
+}
+.client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading h2::before {
+  width: 4px;
+  height: 18px;
+  flex: 0 0 4px;
+  border-radius: var(--client-radius-pill);
+  background: rgb(var(--ui-accent));
+  content: '';
+}
+.client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading p {
+  font-size: var(--client-type-meta);
+}
+.client-portal-shell .client-overview-page .client-overview-section:not(.is-primary) {
+  padding-top: var(--client-space-1);
+}
+.client-portal-shell .client-overview-page .client-overview-section:not(.is-primary) .client-section-heading h2 {
+  color: rgb(var(--ui-text-primary));
+}
+.client-portal-shell .client-overview-page .client-overview-section.is-supporting .client-section-heading h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--client-space-2);
+}
+.client-portal-shell .client-overview-page .client-overview-section.is-supporting .client-section-heading h2::before {
+  width: 3px;
+  height: 14px;
+  flex: 0 0 3px;
+  border-radius: var(--client-radius-pill);
+  background: rgb(var(--ui-accent));
+  content: '';
+}
+
+/* Shared projects lead the projects page; proposals stay available below them. */
+.client-portal-shell .client-existing-projects {
+  display: grid;
+  gap: var(--client-space-2);
+}
+.client-portal-shell .client-existing-projects .client-section-heading h2 {
+  font-size: var(--client-type-subheading);
+  font-weight: var(--client-weight-bold);
+  letter-spacing: -.02em;
+}
+.client-portal-shell .client-existing-projects .client-section-heading p { font-size: var(--client-type-meta); }
+.client-portal-shell .client-proposals { margin-top: var(--client-space-2); }
+.client-portal-shell .client-proposals .client-section-heading h2 {
+  color: rgb(var(--ui-text-secondary));
+  font-size: var(--client-type-compact);
+  font-weight: var(--client-weight-semibold);
+}
+
+@media (max-width: 767px) {
+  .client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading h2 { font-size: var(--client-type-body); }
+  .client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading h2::before {
+    width: 3px;
+    height: 16px;
+    flex-basis: 3px;
+  }
+  .client-portal-shell .client-overview-page .client-overview-section.is-supporting .client-section-heading h2::before {
+    width: 3px;
+    height: 13px;
+    flex-basis: 3px;
+  }
+}
 .pm-tickets__context-panel .ticket-documents-panel button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
 .pm-ticket-preview > div > main { padding-top: 65px; }
@@ -632,5 +1269,50 @@
   .pm-tickets.pm-tickets--ticket-open .pm-tickets__composer-send span,
   .pm-tickets.pm-tickets--ticket-open .pm-tickets__composer-send svg:last-child {
     display: none;
+  }
+}
+
+/* Use the same purple title cue across the client portal's main pages. */
+.client-portal-shell .client-portal-page-heading h1,
+.client-portal-shell .client-projects-heading h1,
+.client-portal-shell .client-project-detail-heading h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.client-portal-shell .client-portal-page-heading h1::before,
+.client-portal-shell .client-projects-heading h1::before,
+.client-portal-shell .client-project-detail-heading h1::before {
+  width: 3px;
+  height: 24px;
+  flex: 0 0 3px;
+  border-radius: var(--client-radius-pill);
+  background: rgb(var(--ui-accent));
+  content: '';
+}
+.client-portal-shell .client-detail-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.client-portal-shell .client-detail-title::before {
+  width: 3px;
+  height: 20px;
+  flex: 0 0 3px;
+  border-radius: var(--client-radius-pill);
+  background: rgb(var(--ui-accent));
+  content: '';
+}
+
+@media (max-width: 767px) {
+  .client-portal-shell .client-portal-page-heading h1::before,
+  .client-portal-shell .client-projects-heading h1::before,
+  .client-portal-shell .client-project-detail-heading h1::before {
+    height: 21px;
+  }
+  .client-portal-shell .client-detail-title::before { height: 18px; }
+  .client-portal-shell .client-request-toolbar .client-request-filter {
+    padding-inline: 6px;
+    font-size: var(--client-type-meta);
   }
 }

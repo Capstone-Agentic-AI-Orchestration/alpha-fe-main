@@ -33,6 +33,18 @@ describe('PM ticket transport', () => {
     request.mockResolvedValue({ items: [{ ...row, status: 'unknown' }], nextCursor: null } as never);
     await expect(pmTicketApi.listCentralIntakes(null, 'handled')).rejects.toThrow('status is invalid');
   });
+  it('distinguishes authenticated project proposals in the shared PM intake', async () => {
+    const proposal = { id: 'proposal-1', publicReference: `INQ-${'B'.repeat(32)}`, kind: 'project_proposal',
+      fullName: 'Client account', email: 'client@example.test', company: null, title: 'A new project',
+      description: 'Desired outcome', requestedDeadline: null, submittedAt: '2026-10-29T01:00:00Z', status: 'pending',
+      clientUserId: 'must-not-be-exposed' };
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ items: [proposal], nextCursor: null } as never);
+    const result = await pmTicketApi.listCentralIntakes();
+    expect(result.items[0]).toMatchObject({ kind: 'project_proposal', email: proposal.email });
+    expect(JSON.stringify(result)).not.toContain('must-not-be-exposed');
+    request.mockResolvedValue({ items: [{ ...proposal, kind: 'unknown' }], nextCursor: null } as never);
+    await expect(pmTicketApi.listCentralIntakes()).rejects.toThrow('Shared intake item kind is invalid');
+  });
   it('loads the server-owned Phase 7–9 capability without making it a UI grant', async () => {
     const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ phaseWorkflowEnabled: true } as never);
     await expect(pmTicketApi.getWorkflowCapabilities()).resolves.toEqual({ phaseWorkflowEnabled: true });

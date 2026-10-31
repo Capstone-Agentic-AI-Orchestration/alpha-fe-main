@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, Clock3, Inbox, Mail, RefreshCw, Send, UserRound, XCircle } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AlertCircle, ArrowLeft, CheckCircle2, Inbox, Mail, PanelLeftOpen, RefreshCw, Search, UserRound, XCircle } from 'lucide-react';
+import { Skeleton } from '@/shared/components/ui/skeleton';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, type PmCentralIntakeItem } from './pmApi';
-import { primary, secondary } from './ticketUi';
+import { secondary } from './ticketUi';
 
 interface CentralIntakeApi {
   listCentralIntakes(after?: string | null, filter?: 'pending' | 'handled'): ReturnType<typeof pmTicketApi.listCentralIntakes>;
@@ -12,9 +13,9 @@ interface CentralIntakeApi {
 
 function friendlyError(error: unknown): string {
   if (error instanceof ApiRequestError) {
-    if (error.status === 401) return 'Your sign-in expired. Sign in again to review inquiries.';
-    if (error.status === 403) return 'You need PM access in the selected workspace to view or accept inquiries.';
-    if (error.status === 404 || error.status === 409) return 'This inquiry has already been handled or is no longer available. Refresh the inbox.';
+    if (error.status === 401) return 'Your sign-in expired. Sign in again to review shared intake.';
+    if (error.status === 403) return 'You need PM access in the selected workspace to review or route intake items.';
+    if (error.status === 404 || error.status === 409) return 'This item has already been handled or is no longer available. Refresh the inbox.';
     if (error.status === 429) return 'There were too many requests. Wait a moment, then refresh.';
     if (error.status !== null && error.status >= 500) return 'The shared inquiry service is temporarily unavailable.';
   }
@@ -26,12 +27,19 @@ function formatDate(value: string): string {
   return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Date unavailable';
 }
 
-export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanReview, onAccepted, api = pmTicketApi }: {
+function formatCompactDate(value: string): string {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Date unavailable';
+}
+
+export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanReview, onAccepted, api = pmTicketApi, refreshToken }: {
   workspaceName: string | null;
   workspaceId: string | null;
   workspaceCanReview: boolean;
   onAccepted: (reference: string) => void;
   api?: CentralIntakeApi;
+  /** Parent-owned refresh control shared with the Tickets/Inquiries subtab. */
+  refreshToken?: number;
 }) {
   const [items, setItems] = useState<PmCentralIntakeItem[]>([]);
   const [filter, setFilter] = useState<'pending' | 'handled'>('pending');
@@ -43,13 +51,22 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   const [accepting, setAccepting] = useState(false);
   const [declining, setDeclining] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState('');
   const itemsRef = useRef<PmCentralIntakeItem[]>([]);
   const operationIds = useRef(new Map<string, string>());
   const declineOperationIds = useRef(new Map<string, string>());
   const initialized = useRef(false);
-  const selected = items.find(item => item.id === selectedId) ?? items[0] ?? null;
+  const selected = items.find(item => item.id === selectedId) ?? null;
+  const visibleItems = useMemo(() => {
+    const needle = search.trim().toLowerCase();
+    if (!needle) return items;
+    return items.filter(item => [item.title, item.fullName, item.email, item.company ?? '', item.publicReference ?? '']
+      .some(value => value.toLowerCase().includes(needle)));
+  }, [items, search]);
 
   const load = useCallback(async (after: string | null = null) => {
     if (!workspaceId || !workspaceCanReview) return;
@@ -74,7 +91,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
         initialized.current = true;
         itemsRef.current = page.items;
         setItems(page.items);
-        setSelectedId(current => current && page.items.some(item => item.id === current) ? current : page.items[0]?.id ?? null);
+        setSelectedId(current => current && page.items.some(item => item.id === current) ? current : null);
       }
       setNextCursor(page.nextCursor);
     } catch (loadError) {
@@ -92,7 +109,12 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     setDeclineReason(''); setNewIds(new Set()); initialized.current = false;
     void load();
     return () => { loadGeneration.current += 1; };
-  }, [load]);
+  }, [load, refreshToken]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 200);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
 
   useEffect(() => {
     if (!workspaceId || !workspaceCanReview) return;
@@ -150,7 +172,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
       const remaining = items.filter(item => item.id !== selected.id);
       itemsRef.current = remaining;
       setItems(remaining);
-      setSelectedId(remaining[0]?.id ?? null);
+      setSelectedId(null);
       setDeclineReason('');
     } catch (declineError) {
       if (!(declineError instanceof ApiRequestError) || (declineError.status !== null && declineError.status < 500)) {
@@ -162,95 +184,148 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     }
   };
 
-  return <section className="pm-inquiries flex h-full min-h-0 flex-col px-4 pb-4 pt-5 md:px-6" aria-label="Shared PM inquiry inbox">
-    <header className="pm-inquiries__header mb-4 flex flex-wrap items-start justify-between gap-3">
-      <div className="pm-inquiries__heading">
-        <div className="flex items-center gap-2"><Inbox size={18} className="text-link" /><h1 className="text-lg font-semibold text-content">Shared inquiries</h1></div>
-        <p className="mt-1 max-w-2xl text-xs leading-relaxed text-content-secondary">One shared intake queue for Alpha. Review and route new requests.</p>
-        {workspaceName && <p className="mt-2 text-[11px] text-content-muted">Accept destination: <span className="font-medium text-content-secondary">{workspaceName}</span></p>}
-      </div>
-      <button type="button" className={secondary} onClick={() => void load()} disabled={loading || accepting || declining || !workspaceId || !workspaceCanReview}>
-        <RefreshCw size={14} className={loading ? 'animate-spin' : ''} /> Refresh
-      </button>
-    </header>
-    <nav aria-label="Inquiry status" className="pm-inquiries__filters mb-4 flex gap-2">
-      {(['pending', 'handled'] as const).map(value => <button key={value} type="button" aria-pressed={filter === value}
-        disabled={accepting || declining} onClick={() => setFilter(value)} className={filter === value ? primary : secondary}>
-        {value === 'pending' ? 'Pending review' : 'Handled'}
-      </button>)}
-    </nav>
+  const selectInquiry = (id: string) => {
+    setSelectedId(id);
+    setNavigationCollapsed(false);
+    setNewIds(current => { const next = new Set(current); next.delete(id); return next; });
+    setDeclineReason('');
+  };
 
+  const renderInquiryItem = (item: PmCentralIntakeItem, variant: 'queue' | 'sidebar') => {
+    const statusText = filter === 'pending'
+      ? item.kind === 'project_proposal' ? 'Proposal · verified client' : 'Inquiry · email not verified'
+      : item.status === 'accepted' ? 'Accepted' : 'Declined';
+    const statusTone = filter === 'pending' ? 'pending' : item.status;
+    return <button key={item.id} type="button" onClick={() => selectInquiry(item.id)} aria-pressed={selected?.id === item.id}
+      className={`pm-inquiries__list-item pm-inquiries__list-item--${variant}${selected?.id === item.id ? ' is-selected' : ''}`}>
+      <span className="pm-inquiries__item-request"><strong>{item.title}</strong><small>{item.publicReference ?? (item.kind === 'project_proposal' ? 'Project proposal' : 'Inquiry')}</small></span>
+      <span className="pm-inquiries__item-client"><strong>{item.fullName}</strong><small>{item.email}</small></span>
+      <span className={`pm-inquiries__item-status pm-inquiries__item-status--${statusTone}`}><strong>{statusText}</strong><small>{item.company ?? 'No company linked'}</small></span>
+      <time dateTime={item.submittedAt}>{formatCompactDate(item.submittedAt)}</time>
+      {newIds.has(item.id) && <span className="pm-inquiries__new-marker">New</span>}
+    </button>;
+  };
+
+  const statusControls = (className: string) => <div className={`pm-inquiries__status-toggle ${className}`} role="group" aria-label="Inquiry status">
+    {(['pending', 'handled'] as const).map(value => <button key={value} type="button" aria-pressed={filter === value}
+      disabled={accepting || declining} onClick={() => setFilter(value)} className={filter === value ? 'is-active' : ''}>
+      {value === 'pending' ? 'Pending review' : 'Handled'}
+    </button>)}
+  </div>;
+
+  const loadingRows = <div role="status" aria-label="Loading inquiries" className="pm-inquiries__skeleton-list">
+    {Array.from({ length: 4 }, (_, index) => <div key={index} className="pm-inquiries__skeleton-row">
+      <Skeleton className="h-3 w-2/5" /><Skeleton className="h-2.5 w-1/4" /><Skeleton className="h-2.5 w-1/5" />
+    </div>)}
+  </div>;
+
+  return <section className={`pm-inquiries${selected ? ' pm-inquiries--selected' : ''}${navigationCollapsed ? ' is-navigation-collapsed' : ''}`} aria-label="Shared PM intake inbox">
+    <p className="sr-only">Review new client inquiries and project proposals, then route accepted items into the selected workspace.{workspaceName ? ` Accept destination: ${workspaceName}.` : ''}</p>
     {!workspaceId ? <div className="pm-inquiries__notice rounded-xl border border-status-warning-border bg-status-warning-subtle p-4 text-sm text-status-warning">
       Select a PM workspace to review inquiries.
     </div> : !workspaceCanReview ? <div className="pm-inquiries__notice rounded-xl border border-status-warning-border bg-status-warning-subtle p-4 text-sm text-status-warning">
       PM access is required to review inquiries.
-    </div> : <div className="pm-inquiries__workspace grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(16rem,0.85fr)_minmax(0,1.5fr)]">
-      <div className="pm-inquiries__list-panel flex min-h-0 flex-col overflow-hidden rounded-xl border border-divider bg-surface">
-        <div className="pm-inquiries__list-summary border-b border-divider px-4 py-3 text-xs text-content-secondary">{items.length} {items.length === 1 ? 'inquiry' : 'inquiries'} · {filter === 'pending' ? 'Pending review' : 'Handled'}{newIds.size > 0 ? ` · ${newIds.size} new` : ''}</div>
-        <div className="pm-inquiries__list-scroll min-h-0 flex-1 overflow-y-auto">
-          {loading && items.length === 0 ? <p role="status" className="p-5 text-xs text-content-secondary">Loading shared inquiries…</p>
-            : items.length === 0 ? <div className="p-5 text-center"><Inbox size={22} className="mx-auto text-content-muted" /><p className="mt-3 text-sm text-content-secondary">{filter === 'pending' ? 'No pending inquiries' : 'No handled inquiries'}</p><p className="mt-1 text-xs text-content-muted">{filter === 'pending' ? 'New requests will appear here.' : 'Handled requests stay here for reference.'}</p></div>
-              : items.map(item => <button key={item.id} type="button" onClick={() => { setSelectedId(item.id); setNewIds(current => { const next = new Set(current); next.delete(item.id); return next; }); setDeclineReason(''); }} aria-pressed={selected?.id === item.id}
-                className={`pm-inquiries__list-item block w-full border-b border-divider border-l-2 p-4 text-left transition-colors ${selected?.id === item.id ? 'border-l-control bg-selected' : 'border-l-transparent hover:bg-surface-high'}`}>
-                <span className="flex items-center justify-between gap-2"><span className="block truncate text-sm font-medium text-content">{item.title}</span>{newIds.has(item.id) && <span className="shrink-0 rounded bg-selected px-1.5 py-0.5 text-[9px] text-selected-content">New</span>}</span>
-                <span className="mt-1 block truncate text-xs text-content-secondary">{item.fullName} · {item.email}</span>
-                <span className="mt-2 flex items-center gap-1 text-[11px] text-status-warning"><Clock3 size={12} />{filter === 'pending' ? 'Email not verified' : item.status === 'accepted' ? 'Accepted' : 'Declined'}</span>
-              </button>)}
-        </div>
-        {nextCursor && <button type="button" className={`${secondary} m-3 justify-center`} onClick={() => void load(nextCursor)} disabled={loadingMore}>
-          {loadingMore ? 'Loading…' : 'Load more inquiries'}
-        </button>}
-      </div>
+    </div> : <div className="pm-inquiries__shell">
+      {selected && <aside className="pm-inquiries__navigation" aria-label="Inquiry views" title="Click empty sidebar space to collapse or expand"
+        onClick={event => {
+          if (event.target instanceof Element && event.target.closest('button, a, select, input, textarea')) return;
+          setNavigationCollapsed(value => !value);
+        }}>
+        <header className="pm-inquiries__navigation-heading">
+          <div className="pm-inquiries__navigation-title"><Inbox size={17} aria-hidden="true" /><span>Inquiries</span></div>
+          {navigationCollapsed && <button type="button" className="pm-inquiries__navigation-expand" aria-label="Show inquiry navigation" title="Show inquiry navigation"
+            onClick={event => { event.stopPropagation(); setNavigationCollapsed(false); }}>
+            <PanelLeftOpen size={16} aria-hidden="true" /><span className="sr-only">Show inquiry navigation</span>
+          </button>}
+        </header>
+        {statusControls('pm-inquiries__status-toggle--sidebar')}
+        <nav className="pm-inquiries__chat-list" aria-label="Inquiry conversations">
+          <div className="pm-inquiries__list-summary">{visibleItems.length} {visibleItems.length === 1 ? 'inquiry' : 'inquiries'} · {filter === 'pending' ? 'Pending review' : 'Handled'}</div>
+          <div className="pm-inquiries__list-scroll">
+            {loading && items.length === 0 ? loadingRows : visibleItems.length === 0 ? <p className="pm-inquiries__empty-copy">{search ? 'No inquiries match your search.' : 'No inquiries in this view.'}</p> : visibleItems.map(item => renderInquiryItem(item, 'sidebar'))}
+          </div>
+          {nextCursor && <button type="button" className={`${secondary} pm-inquiries__load-more`} onClick={() => void load(nextCursor)} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more'}</button>}
+        </nav>
+      </aside>}
 
-      <div className="pm-inquiries__detail-panel flex min-h-0 flex-col overflow-y-auto rounded-xl border border-divider bg-surface">
-        {error && <p role="alert" className="m-4 flex items-start gap-2 rounded-lg border border-status-danger-border bg-status-danger-subtle p-3 text-xs text-status-danger"><AlertCircle size={15} className="mt-0.5 shrink-0" />{error}</p>}
-        {selected ? <>
-          <div className="pm-inquiries__detail-header border-b border-divider p-5">
-            <p className="text-[11px] uppercase tracking-wide text-content-muted">{filter === 'pending' ? 'Inquiry · Not yet a ticket' : selected.status === 'accepted' ? 'Accepted inquiry' : 'Declined inquiry'}</p>
-            <h2 className="mt-2 text-lg font-semibold text-content">{selected.title}</h2>
-            {selected.publicReference && <p className="mt-1 font-mono text-[10px] text-content-muted">{selected.publicReference}</p>}
-            <p className="mt-2 text-xs text-content-muted">Received {formatDate(selected.submittedAt)}</p>
+      <div className="pm-inquiries__main">
+        {!selected && <header className="pm-inquiries__queue-header">
+          <div className="pm-inquiries__view-heading"><h1>Inquiries</h1><span>{visibleItems.length}</span></div>
+          <div className="pm-inquiries__queue-actions">
+            <label className="pm-inquiries__search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search inquiries</span>
+              <input value={searchInput} disabled={loading && items.length === 0} onChange={event => setSearchInput(event.target.value)} placeholder="Search inquiries…" /></label>
+            {statusControls('pm-inquiries__status-toggle--queue')}
           </div>
-          <div className="pm-inquiries__meta-grid grid gap-3 p-5 md:grid-cols-2">
-            <div className="pm-inquiries__info-card rounded-lg border border-divider p-4">
-              <p className="text-[10px] uppercase tracking-wide text-content-muted">{filter === 'pending' ? 'Client contact · Unverified' : 'Original inquiry contact'}</p>
-              <p className="mt-3 flex items-center gap-2 text-sm text-content"><UserRound size={14} />{selected.fullName}</p>
-              <p className="mt-2 flex items-center gap-2 break-all text-xs text-content-secondary"><Mail size={14} className="shrink-0" />{selected.email}</p>
-              {selected.company && <p className="mt-2 text-xs text-content-secondary">{selected.company}</p>}
+        </header>}
+
+        {selected && <header className="pm-inquiries__detail-header">
+          <div className="pm-inquiries__detail-heading">
+            <button type="button" className="pm-inquiries__detail-back" aria-label="Back to inquiries" title="Back to inquiries" onClick={() => setSelectedId(null)}>
+              <ArrowLeft size={17} aria-hidden="true" /><span className="sr-only">Back to inquiries</span>
+            </button>
+            <div className="pm-inquiries__detail-heading-copy">
+              <div className="pm-inquiries__detail-meta">
+                <div className="pm-inquiries__detail-identity"><Inbox size={16} aria-hidden="true" /><span>{selected.publicReference ?? 'Inquiry'}</span><span className={`pm-inquiries__detail-status pm-inquiries__detail-status--${filter === 'pending' ? 'pending' : selected.status}`}>{filter === 'pending' ? 'Pending review' : selected.status === 'accepted' ? 'Accepted' : 'Declined'}</span></div>
+                <span>Submitted {formatCompactDate(selected.submittedAt)}</span>
+              </div>
+              <h2>{selected.title}</h2>
+              <p>{selected.fullName}<span>·</span>{selected.company ?? selected.email}</p>
             </div>
-            <div className="pm-inquiries__info-card rounded-lg border border-divider p-4">
-              <p className="text-[10px] uppercase tracking-wide text-content-muted">Requested date</p>
-              <p className="mt-3 text-sm text-content">{selected.requestedDeadline ?? 'Not specified'}</p>
-              <p className="mt-2 text-xs text-content-muted">The date is a client preference, not a commitment.</p>
+          </div>
+        </header>}
+
+        {error && <p role="alert" className="pm-inquiries__error"><AlertCircle size={15} aria-hidden="true" />{error}</p>}
+
+        {selected ? <div className="pm-inquiries__detail-content">
+          <div className="pm-inquiries__meta-grid">
+            <div className="pm-inquiries__info-card">
+              <p className="pm-inquiries__eyebrow">{selected.kind === 'project_proposal' ? 'Client account · Verified email' : filter === 'pending' ? 'Client contact · Unverified' : 'Original inquiry contact'}</p>
+              <p className="pm-inquiries__info-value"><UserRound size={14} aria-hidden="true" />{selected.fullName}</p>
+              <p className="pm-inquiries__info-secondary"><Mail size={14} aria-hidden="true" />{selected.email}</p>
+              {selected.company && <p className="pm-inquiries__info-secondary">{selected.company}</p>}
+            </div>
+            <div className="pm-inquiries__info-card">
+              <p className="pm-inquiries__eyebrow">{selected.kind === 'project_proposal' ? 'Target date' : 'Requested date'}</p>
+              <p className="pm-inquiries__info-value">{selected.requestedDeadline ?? 'Not specified'}</p>
+              <p className="pm-inquiries__info-secondary">{selected.kind === 'project_proposal' ? 'Preferred date' : 'Client preference'}</p>
             </div>
           </div>
-          <div className="pm-inquiries__request mx-5 rounded-lg border border-divider p-4">
-            <p className="text-[10px] uppercase tracking-wide text-content-muted">What they need</p>
-            <p className="mt-3 whitespace-pre-wrap break-words text-sm leading-relaxed text-content-secondary">{selected.description}</p>
+          <div className="pm-inquiries__request">
+            <p className="pm-inquiries__eyebrow">{selected.kind === 'project_proposal' ? 'Project goal' : 'What they need'}</p>
+            <p className="pm-inquiries__description">{selected.description}</p>
           </div>
-          {filter === 'pending' ? <div className="pm-inquiries__decision mt-auto border-t border-divider p-5">
-            <p className="mb-3 text-xs leading-relaxed text-content-secondary">Creates a ticket in <span className="font-medium text-content">{workspaceName ?? 'the selected workspace'}</span>. Email verification and portal access stay separate.</p>
-            <label className="mb-3 block space-y-1.5"><span className="text-[11px] font-medium text-content-secondary">Optional internal decline note</span><textarea maxLength={1000} rows={2} value={declineReason} disabled={declining || accepting} onChange={event => setDeclineReason(event.target.value)} className="w-full rounded-lg border border-divider bg-well p-2.5 text-xs text-content outline-none focus:border-control" placeholder="For your team's records only" /></label>
-            <p className="mb-3 text-[10px] text-content-muted">The note stays private. Declining creates no ticket or portal access.</p>
-            <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void decline()} disabled={declining || accepting || !workspaceName}
+          {filter === 'pending' ? <div className="pm-inquiries__decision">
+            <p className="pm-inquiries__decision-copy">{selected.kind === 'project_proposal'
+              ? <>Route this proposal to <span className="font-medium text-content">{workspaceName ?? 'the selected workspace'}</span> after reviewing the requested scope.</>
+              : <>Accepting creates a normal ticket in <span className="font-medium text-content">{workspaceName ?? 'the selected workspace'}</span>.</>}</p>
+            <label className="pm-inquiries__decline-note"><span>Optional internal decline note</span><textarea maxLength={1000} rows={2} value={declineReason} disabled={declining || accepting} onChange={event => setDeclineReason(event.target.value)} placeholder="For your team's records only" /></label>
+            <div className="pm-inquiries__decision-actions"><button type="button" onClick={() => void decline()} disabled={declining || accepting || !workspaceName}
               className="inline-flex items-center gap-2 rounded-lg border border-status-danger-border px-4 py-2.5 text-sm font-medium text-status-danger hover:bg-status-danger-subtle disabled:cursor-not-allowed disabled:opacity-50">
               {declining ? <RefreshCw size={15} className="animate-spin" /> : <XCircle size={15} />}
-              {declining ? 'Declining…' : 'Decline inquiry'}
+              {declining ? 'Declining…' : selected.kind === 'project_proposal' ? 'Decline proposal' : 'Decline inquiry'}
             </button><button type="button" onClick={() => void accept()} disabled={accepting || declining || !workspaceName}
               className="inline-flex items-center gap-2 rounded-lg bg-action px-4 py-2.5 text-sm font-medium text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50">
               {accepting ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-              {accepting ? 'Accepting…' : `Accept into ${workspaceName ?? 'workspace'}`}
+              {accepting ? 'Routing…' : selected.kind === 'project_proposal' ? `Route proposal to ${workspaceName ?? 'workspace'}` : `Accept into ${workspaceName ?? 'workspace'}`}
             </button></div>
-          </div> : <div className="pm-inquiries__decision mt-auto border-t border-divider p-5 text-xs leading-relaxed text-content-secondary">
+          </div> : <div className="pm-inquiries__decision pm-inquiries__decision--handled">
             {selected.handledAt && <p>Handled {formatDate(selected.handledAt)}</p>}
-            <p className="mt-2">{selected.status === 'accepted' ? 'Accepted. Manage the ticket from its workspace.' : 'Declined. No ticket or client access was created.'}</p>
-            {selected.status === 'declined' && <p className="mt-2">{selected.outcomeEmailStatus === 'delivered'
+            <p>{selected.status === 'accepted' ? selected.kind === 'project_proposal'
+              ? 'A request was created in its workspace and linked to this client.'
+              : 'Accepted into a workspace. The regular ticket is managed in that workspace’s Tickets page.'
+              : selected.kind === 'project_proposal' ? 'Declined. No ticket or project was created.' : 'Declined. This record creates no ticket or client access.'}</p>
+            {selected.status === 'declined' && selected.kind === 'public_inquiry' && <p>{selected.outcomeEmailStatus === 'delivered'
               ? 'Outcome email accepted by the provider; inbox delivery is not confirmed.'
               : selected.outcomeEmailStatus === 'dead' ? 'Outcome email could not be sent. Contact the client directly.'
                 : selected.outcomeEmailStatus ? 'Outcome email queued. The internal note is kept private.' : 'No outcome email was recorded for this older inquiry.'}</p>}
           </div>}
-        </> : <div className="flex min-h-64 flex-1 flex-col items-center justify-center p-6 text-center">
-          {error ? <><AlertCircle size={22} className="text-status-danger" /><p className="mt-3 text-sm text-content-secondary">The inbox could not be loaded.</p></> : <><Send size={22} className="text-content-muted" /><p className="mt-3 text-sm text-content-secondary">Select an inquiry to review</p></>}
+        </div> : <div className="pm-inquiries__queue-panel">
+          <div className="pm-inquiries__queue-toolbar"><span>{visibleItems.length} {visibleItems.length === 1 ? 'inquiry' : 'inquiries'} · {filter === 'pending' ? 'Pending review' : 'Handled'}{newIds.size > 0 ? ` · ${newIds.size} new` : ''}</span><span>Open an inquiry to review</span></div>
+          <div className="pm-inquiries__queue-columns" aria-hidden="true"><span>INQUIRY</span><span>CLIENT</span><span>STATUS</span><span>SUBMITTED</span></div>
+          <div className="pm-inquiries__queue-scroll">
+            {loading && items.length === 0 ? loadingRows : visibleItems.length === 0 ? <div className="pm-inquiries__empty"><Inbox size={20} aria-hidden="true" /><p>{search ? 'No inquiries match your search.' : filter === 'pending' ? 'No inquiries waiting for review' : 'No handled inquiries yet'}</p></div> : visibleItems.map(item => renderInquiryItem(item, 'queue'))}
+          </div>
+          {nextCursor && <button type="button" className={`${secondary} pm-inquiries__queue-load-more`} onClick={() => void load(nextCursor)} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more'}</button>}
         </div>}
       </div>
     </div>}

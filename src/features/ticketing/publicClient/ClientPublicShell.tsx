@@ -4,6 +4,7 @@ import cosmoLogoUrl from '@/assets/cosmo-logo.png';
 import { clientLandingHref, clientPortalHref, publicInquiryHref } from '../publicIntakeApi';
 import { CosmoBackdrop } from './CosmoBackdrop';
 import { InteractiveBackdrop } from './InteractiveBackdrop';
+import '../clientDesignTokens.css';
 import './clientPublic.css';
 
 export function ClientPublicShell({ children, page = 'landing', slug = '', navigationLocked = false, hasDraft = false }: {

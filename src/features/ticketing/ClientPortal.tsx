@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, ArrowRight, Check, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
+  AlertCircle, ArrowRight, Check, ChevronDown, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
   CircleHelp, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket,
 } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import type {
-  ClientProject, ClientProjectRequestItem, ClientProjectRequestQueue, ClientSession,
+  ClientProject, ClientProjectProposal, ClientProjectRequestItem, ClientProjectRequestQueue, ClientSession,
   ClientTicketCommandInput, ClientTicketCreateInput, ClientTicketDetail as TicketDetail,
   ClientTicketMessage, ClientTicketReceipt, ClientTicketReplyInput,
 } from './clientApi';
@@ -21,6 +21,8 @@ import { clientTicketProgress } from './clientTicketProgress';
 import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink';
 import { secondary, time } from './ticketUi';
 import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './ClientProjectPages';
+import { Toast, type ToastTone } from '@/shared/components/ui/toast';
+import './clientDesignTokens.css';
 import './clientPortal.css';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
 
@@ -32,8 +34,11 @@ interface PendingOperation {
   label: string;
   run: () => Promise<ClientTicketReceipt>;
   onSuccess?: (receipt: ClientTicketReceipt) => void;
+  /** Skip the broad portal reload when the active conversation is updated in place. */
+  refresh?: boolean;
 }
 interface PendingProjectReview { ticketId: string; project: ClientProject }
+interface ClientToast { title: string; description?: string; tone: ToastTone }
 
 const filters: Array<{ id: NonNullable<Filter>; label: string }> = [
   { id: 'all', label: 'All requests' },
@@ -63,6 +68,10 @@ function friendlyError(error: unknown, context: 'session' | 'queue' | 'ticket' |
 
 function rowKey(item: ClientProjectRequestItem): string { return `${item.workspaceId}\u0000${item.id}`; }
 
+function appendClientMessage(messages: ClientTicketMessage[], message: ClientTicketMessage): ClientTicketMessage[] {
+  return messages.some(current => current.id === message.id) ? messages : [...messages, message];
+}
+
 export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false,
   workflowActionsDisabled: workflowActionsDisabledOverride = false, newRequestsDisabled = true,
   communicationEnabled = false }: {
@@ -82,6 +91,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [projects, setProjects] = useState<ClientProject[] | null>(null);
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [projectsError, setProjectsError] = useState('');
+  const [projectProposals, setProjectProposals] = useState<ClientProjectProposal[] | null>(null);
+  const [projectProposalsLoading, setProjectProposalsLoading] = useState(false);
+  const [projectProposalsError, setProjectProposalsError] = useState('');
   const [page, setPage] = useState<Page>('overview');
   const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
@@ -125,12 +137,19 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [sessionCheckVersion, setSessionCheckVersion] = useState(0);
   const [refreshError, setRefreshError] = useState('');
   const [queueNotice, setQueueNotice] = useState('');
+  const [clientToast, setClientToast] = useState<ClientToast | null>(null);
   const [requestListShown, setRequestListShown] = useState(true);
   const queueGeneration = useRef(0);
   const historyGeneration = useRef(0);
   const writeLock = useRef(false);
   const queueSnapshot = useRef(queue);
   queueSnapshot.current = queue;
+
+  useEffect(() => {
+    if (!clientToast) return;
+    const timer = window.setTimeout(() => setClientToast(null), 4800);
+    return () => window.clearTimeout(timer);
+  }, [clientToast]);
 
   const workflowActionsDisabled = workflowActionsDisabledOverride || !phaseWorkflowEnabled;
   const canStartProjectRequest = !newRequestsDisabled && !inspectionOnly;
@@ -176,6 +195,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     if (workflowChecked && effectivePortalFilter(filter, !workflowActionsDisabled) !== filter) setFilter('all');
   }, [workflowChecked, workflowActionsDisabled, filter]);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchInput]);
+
   function clearExpiredClientSession(): void {
     setSession({ authenticated: false }); setPortalState('signed_out');
     setProjects(null); setQueue(null); setNotificationRequests(null); setNotificationsLoaded(false); setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null);
@@ -191,11 +215,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     clearExpiredClientSession();
     return true;
   }
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
 
   useEffect(() => {
     let current = true;
@@ -221,6 +240,21 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         if (!current || isExpiredClientSession(error)) return;
         setProjects(null); setProjectsError(friendlyError(error, 'projects'));
       }).finally(() => { if (current) setProjectsLoading(false); });
+    return () => { current = false; };
+  }, [api, portalState, refreshVersion]);
+
+  useEffect(() => {
+    if (portalState !== 'ready') return;
+    let current = true;
+    setProjectProposalsLoading(true); setProjectProposalsError('');
+    void api.listProjectProposals().then(result => { if (current) setProjectProposals(result.items); })
+      .catch(error => {
+        if (!current || isExpiredClientSession(error)) return;
+        setProjectProposals(null);
+        setProjectProposalsError(error instanceof ClientTicketApiError && (error.status === 404 || error.status === 503)
+          ? 'Project proposals are temporarily unavailable. Please try again later.'
+          : 'We could not load your project proposals. Refresh and try again.');
+      }).finally(() => { if (current) setProjectProposalsLoading(false); });
     return () => { current = false; };
   }, [api, portalState, refreshVersion]);
 
@@ -270,14 +304,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     selectedItemFallback?.id, selectedItemFallback?.workspaceId, selectedWorkspaceId]);
 
   useEffect(() => {
-    if (page !== 'requests' || !queue || queueLoading || selectedId || !window.matchMedia('(min-width: 900px)').matches) return;
-    const mostRecent = [...queue.items].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))[0];
-    if (mostRecent) {
-      setSelectedId(mostRecent.id); setSelectedWorkspaceId(mostRecent.workspaceId); setSelectedItemFallback(mostRecent); setRequestListShown(true);
-    }
-  }, [page, queue, queueLoading, selectedId]);
-
-  useEffect(() => {
     if (pendingProjectReview && queue?.items.some(item => item.id === pendingProjectReview.ticketId
       && item.workspaceId === pendingProjectReview.project.workspaceId
       && (item.projectId !== null || item.status === 'declined' || item.status === 'cancelled'))) {
@@ -293,7 +319,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }
     let current = true;
     const generation = ++historyGeneration.current;
-    setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setHistoryError(''); setHistoryLoading(false); setDetailLoading(true);
+    setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setHistoryError(''); setHistoryLoading(!(workflowActionsDisabled && !communicationEnabled)); setDetailLoading(true);
     const load = workflowActionsDisabled && !communicationEnabled
       ? api.getTicket(activeWorkspaceId, selectedId).then(ticket => [ticket, null] as const)
       : Promise.all([api.getTicket(activeWorkspaceId, selectedId), api.getMessages(activeWorkspaceId, selectedId, { limit: 50 })] as const);
@@ -302,7 +328,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       setDetail(ticket); setMessages(messagePage?.items ?? []); setMessageCursor(messagePage?.nextCursor ?? null);
     }).catch(error => {
       if (current && !isExpiredClientSession(error)) setDetailError(friendlyError(error, 'ticket'));
-    }).finally(() => { if (current) setDetailLoading(false); });
+    }).finally(() => { if (current) { setDetailLoading(false); setHistoryLoading(false); } });
     return () => {
       current = false;
       if (historyGeneration.current === generation) historyGeneration.current += 1;
@@ -392,7 +418,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     writeLock.current = true; setWriting(true); setWriteError('');
     try {
       const receipt = await operation.run(); setPending(null); setWriteError(''); operation.onSuccess?.(receipt);
-      setRefreshVersion(value => value + 1); return receipt;
+      if (operation.refresh !== false) setRefreshVersion(value => value + 1);
+      return receipt;
     } catch (error) {
       if (isExpiredClientSession(error)) setWriteError('');
       else {
@@ -402,6 +429,28 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       }
       throw error;
     } finally { writeLock.current = false; setWriting(false); }
+  }
+
+  function applyLocalClientMessage(ticketId: string, body: string, receipt: ClientTicketReceipt): void {
+    const updatedAt = new Date().toISOString();
+    const messageId = receipt.messageId;
+    if (messageId) {
+      setMessages(current => appendClientMessage(current, {
+        id: messageId, author: 'client', body: body.trim(), createdAt: updatedAt,
+      }));
+    }
+    setDetail(current => current && current.id === ticketId
+      ? { ...current, version: receipt.version, status: receipt.status, updatedAt }
+      : current);
+    setQueue(current => current ? {
+      ...current,
+      items: current.items.map(item => item.id === ticketId
+        ? { ...item, status: receipt.status, requestedAction: null, updatedAt }
+        : item),
+    } : current);
+    setSelectedItemFallback(current => current && current.id === ticketId
+      ? { ...current, status: receipt.status, requestedAction: null, updatedAt }
+      : current);
   }
 
   async function openCreateForm(project: ClientProject) {
@@ -442,6 +491,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       onSuccess: receipt => {
         setPendingProjectReview({ ticketId: receipt.ticketId, project: target });
         setQueueNotice(`Request sent for PM review. It will appear under ${target.name} after your project manager confirms the link.`);
+        setClientToast({ title: 'Request submitted', description: `Your request is waiting for ${target.name} to review it.`, tone: 'success' });
         setPage('requests'); setView('portal'); setFilter('all'); setSearchInput(''); setSearch('');
         setSelectedId(receipt.ticketId); setSelectedWorkspaceId(target.workspaceId); setSelectedItemFallback(null);
         setRequestListShown(true); setCreateContext(null); setCreateProject(null);
@@ -451,7 +501,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   function openRequest(item: ClientProjectRequestItem, fromProject = false) {
     historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setSelectedWorkspaceId(item.workspaceId);
-    setSelectedItemFallback(item); setReturnToProjects(fromProject); setPage('requests'); setView('portal'); setWriteError('');
+    setSelectedItemFallback(item); setReturnToProjects(fromProject); setPage('requests'); setView('portal'); setWriteError(''); setNavigationCollapsed(false);
     if (fromProject) { setFilter('all'); setSearchInput(''); setSearch(''); }
     setRequestListShown(false);
   }
@@ -459,9 +509,13 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   function sendReply(body: string): Promise<void> {
     const activeWorkspaceId = selectedQueueItem?.workspaceId ?? selectedWorkspaceId;
     if (!detail || !activeWorkspaceId || pending) return Promise.reject(new Error('A ticket change is already being reconciled.'));
+    const ticketId = detail.id;
     const payload: ClientTicketReplyInput = { schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version, body, action: { type: 'reply' } };
-    return performWrite({ operationId: payload.operationId, label: 'message', run: () => api.reply(activeWorkspaceId, detail.id, payload),
-      onSuccess: () => setReplyResetVersion(value => value + 1) }).then(() => undefined);
+    return performWrite({ operationId: payload.operationId, label: 'message', refresh: false,
+      run: () => api.reply(activeWorkspaceId, ticketId, payload), onSuccess: receipt => {
+        applyLocalClientMessage(ticketId, body, receipt);
+        setReplyResetVersion(value => value + 1);
+      } }).then(() => undefined);
   }
 
   function sendCorrection(body: string, deliveryId: string): Promise<void> {
@@ -472,8 +526,11 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }
     const payload: ClientTicketReplyInput = { schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
       body, action: { type: 'request_correction', deliveryId } };
-    return performWrite({ operationId: payload.operationId, label: 'correction feedback',
-      run: () => api.reply(activeWorkspaceId, detail.id, payload) }).then(() => undefined);
+    const ticketId = detail.id;
+    return performWrite({ operationId: payload.operationId, label: 'correction feedback', refresh: false,
+      run: () => api.reply(activeWorkspaceId, ticketId, payload), onSuccess: receipt => {
+        applyLocalClientMessage(ticketId, body, receipt);
+      } }).then(() => undefined);
   }
 
   function makeDecision(command: Extract<ClientTicketCommandInput['command'], { type: 'agree_scope' | 'accept_delivery' }>) {
@@ -527,7 +584,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const currentNav = page;
   const clientEmail = session?.email?.trim() ?? '';
 
-  return <main className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}`}>
+  return <main className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}${inspectionOnly ? ' client-portal-shell--inspection' : ''}`}>
     <aside className="client-sidebar" aria-label="Client portal navigation">
       <div className="client-sidebar-brand"><img src={alphaMarkUrl} alt="" /><div><strong>Alphaexplora</strong><small>Client portal</small></div></div>
       <nav className="client-sidebar-nav">
@@ -572,14 +629,23 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
     <div className="client-portal-mainview">
       <header className="client-portal-toolbar" aria-label="Client portal actions">
-        <button type="button" aria-label="Refresh portal" title="Refresh portal"
-          onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
-          disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
-          <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
-        </button>
-        <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
-          loading={notificationsLoading} error={notificationsError}
-          onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
+        <div className="client-portal-mobile-brand" aria-label="Alphaexplora client portal">
+          <img src={alphaMarkUrl} alt="" aria-hidden="true" />
+          <span className="client-portal-mobile-brand-copy">
+            <strong>Alphaexplora</strong>
+            <small>Client portal</small>
+          </span>
+        </div>
+        <div className="client-portal-toolbar-actions">
+          <button type="button" aria-label="Refresh portal" title="Refresh portal"
+            onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
+            disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
+            <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
+          </button>
+          <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
+            loading={notificationsLoading} error={notificationsError}
+            onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
+        </div>
       </header>
       <div className="client-portal-main client-portal-main--workspace">
         {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
@@ -604,7 +670,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             selectedProjectKey={selectedProjectKey} onSelectedProjectKeyChange={setSelectedProjectKey}
             onOpenRequest={item => openRequest(item, true)} onNewRequest={project => void openCreateForm(project)}
             inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading}
-            projectFocusVersion={notificationProjectFocus} refreshToken={refreshVersion} />
+            projectFocusVersion={notificationProjectFocus} refreshToken={refreshVersion}
+            proposals={projectProposals ?? []} proposalsLoading={projectProposalsLoading} proposalsError={projectProposalsError}
+            onRefreshProposals={() => setRefreshVersion(value => value + 1)}
+            onProposalSubmitted={() => setRefreshVersion(value => value + 1)} />
         </>)}
 
         {page === 'requests' && <div className={`client-requests-page ${selectedId ? 'has-selected-request' : ''}`}>
@@ -617,20 +686,44 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </section>
           {queueNotice && <p role="status" className="client-project-pending-notice">{queueNotice}</p>}
           {queueError && <p role="alert" className="client-project-error">{queueError}</p>}
-          <section className={`client-portal-workspace client-portal-workspace--requests ${navigationCollapsed ? 'is-navigation-collapsed' : ''}`} aria-label="Your requests and updates">
-            <aside className={`client-request-list ${navigationCollapsed ? 'is-collapsed' : ''} ${selectedId && !requestListShown ? 'client-mobile-hidden' : ''}`} aria-label="Request list">
+          <section className={`client-portal-workspace client-portal-workspace--requests ${selectedId ? 'has-selected-request' : ''} ${navigationCollapsed ? 'is-navigation-collapsed' : ''}`} aria-label="Your requests and updates">
+            <aside className={`client-request-list ${navigationCollapsed ? 'is-collapsed' : ''} ${selectedId && !requestListShown ? 'client-mobile-hidden' : ''}`} aria-label="Request list"
+              title={selectedId ? 'Click empty space to collapse or expand request navigation' : undefined}
+              onClick={event => {
+                if (!selectedId) return;
+                const target = event.target;
+                if (target instanceof HTMLElement && target.closest('button,a,input,textarea,select')) return;
+                setNavigationCollapsed(value => !value);
+              }}>
               <div className="client-list-header">
-                <div className="client-list-title"><h2>All requests</h2></div>
-                <button type="button" className="role-chat-navigation-toggle" aria-label={navigationCollapsed ? 'Show requests' : 'Collapse requests'} aria-expanded={!navigationCollapsed} onClick={() => setNavigationCollapsed(value => !value)}>{navigationCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}</button>
+                <div className="client-list-title"><h2>Requests</h2></div>
+                {selectedId && <button type="button" className="role-chat-navigation-toggle"
+                  aria-label={navigationCollapsed ? 'Show request navigation' : 'Collapse request navigation'} aria-expanded={!navigationCollapsed}
+                  onClick={event => { event.stopPropagation(); setNavigationCollapsed(value => !value); }}>
+                  {navigationCollapsed ? <PanelLeftOpen size={17} /> : <PanelLeftClose size={17} />}
+                </button>}
               </div>
-              <label className="client-search"><Search size={16} /><span className="sr-only">Search requests</span>
-                <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search requests" /></label>
-              <div className="client-request-filters" aria-label="Filter requests">{filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => {
-                const count = queue?.counters.kind !== 'client' ? null : option.id === 'open' ? queue.counters.open : option.id === 'needs_client' ? queue.counters.needsClient : null;
-                const active = filter === option.id;
-                return <button key={option.id} aria-pressed={active} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`client-request-filter ${active ? 'is-active' : ''}`}>
-                  {option.label}{count !== null && <span>{count}</span>}</button>;
-              })}</div>
+              <div className={`client-request-toolbar ${selectedId ? 'is-detail' : 'is-list'}`}>
+                {selectedId ? <label className="client-request-filter-select">
+                  <span className="sr-only">Filter requests</span>
+                  <select value={filter} disabled={Boolean(pending)} onChange={event => setFilter(event.target.value as NonNullable<Filter>)}>
+                    {filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => {
+                      const count = queue?.counters.kind !== 'client' ? null : option.id === 'open' ? queue.counters.open : option.id === 'needs_client' ? queue.counters.needsClient : null;
+                      return <option key={option.id} value={option.id}>{count === null ? option.label : `${option.label} (${count})`}</option>;
+                    })}
+                  </select>
+                  <ChevronDown size={14} aria-hidden />
+                </label> : <>
+                  <div className="client-request-filters" aria-label="Filter requests">{filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => {
+                    const count = queue?.counters.kind !== 'client' ? null : option.id === 'open' ? queue.counters.open : option.id === 'needs_client' ? queue.counters.needsClient : null;
+                    const active = filter === option.id;
+                    return <button key={option.id} aria-pressed={active} disabled={Boolean(pending)} onClick={() => setFilter(option.id)} className={`client-request-filter ${active ? 'is-active' : ''}`}>
+                      {option.label}{count !== null && <span>{count}</span>}</button>;
+                  })}</div>
+                  <label className="client-search"><Search size={16} /><span className="sr-only">Search requests</span>
+                    <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search requests" /></label>
+                </>}
+              </div>
               <div className="client-request-items">
                 {queueLoading && !queue ? <p role="status" className="client-list-loading">Loading your requests…</p>
                   : queue?.items.length ? queue.items.map(item => {
@@ -646,7 +739,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                         <time dateTime={item.updatedAt}>Updated {time(item.updatedAt)}</time>
                       </span><ArrowRight size={16} className="client-request-chevron" aria-hidden="true" />
                     </button>;
-                  }) : !queueError && <EmptyState title={search ? 'No requests match your search' : 'No requests yet'}
+                  }) : !queueError && <EmptyState title={search ? 'No requests match your search' : 'No requests in this filter'}
                     body={search ? 'Try a shorter search or clear the search field.' : 'Requests from your project manager and requests awaiting review will appear here.'} />}
               </div>
               {queue && <div className="client-list-footer"><span>{queue.items.length} shown</span>{queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading}>
@@ -685,6 +778,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {pending && <div role="status" className="client-pending-operation">
           <span>We’re checking whether your update was saved. Please don’t send it again yet.</span>
           <button onClick={() => void performWrite(pending).catch(() => undefined)} disabled={writing} className={secondary}>{writing ? 'Checking…' : 'Check update status'}</button>
+        </div>}
+        {clientToast && <div className="pointer-events-none fixed right-5 top-5 z-[80] w-[calc(100%-2.5rem)] max-w-sm" aria-live="polite" aria-atomic="true">
+          <Toast {...clientToast} onDismiss={() => setClientToast(null)} className="pointer-events-auto" />
         </div>}
         {session?.expiresAt && <span className="sr-only">Session expires {session.expiresAt}</span>}
       </div>

@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { FlaskConical, Inbox, Ticket as TicketIcon } from 'lucide-react';
+import { FlaskConical, Inbox, RefreshCw, Ticket as TicketIcon } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
+import { Button } from '@/shared/components/ui/button';
 import { PmTicketsView } from './PmTicketsView';
 import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
 import { pmTicketApi } from './pmApi';
@@ -21,6 +22,7 @@ export function PmTicketsPage() {
   const [samples, setSamples] = useState(false);
   const [section, setSection] = useState<'tickets' | 'inquiries'>('tickets');
   const [workflowActions, setWorkflowActions] = useState<'triage' | 'all'>('triage');
+  const [refreshToken, setRefreshToken] = useState(0);
   const { activeWorkspace, showToast } = useApp();
 
   useEffect(() => {
@@ -42,23 +44,30 @@ export function PmTicketsPage() {
         {samples ? 'Hide sample data' : 'Show sample data'}
       </button>
     </div>}
-    {!samples && <nav role="tablist" aria-label="Ticket work queues" className="pm-ticket-page__tabs">
-      <button id="pm-ticket-tab" type="button" role="tab" aria-selected={section === 'tickets'} aria-pressed={section === 'tickets'} aria-controls="pm-ticket-panel"
-        onClick={() => setSection('tickets')} className={`pm-ticket-page__tab${section === 'tickets' ? ' is-active' : ''}`}>
-        <TicketIcon size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Tickets</span>
-      </button>
-      <button id="pm-inquiry-tab" type="button" role="tab" aria-selected={section === 'inquiries'} aria-pressed={section === 'inquiries'} aria-controls="pm-inquiry-panel"
-        onClick={() => setSection('inquiries')} className={`pm-ticket-page__tab${section === 'inquiries' ? ' is-active' : ''}`}>
-        <Inbox size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Inquiries</span>
-      </button>
+    {!samples && <nav aria-label="Ticket work queues" className="pm-ticket-page__tabs">
+      <div role="tablist" className="pm-ticket-page__tab-list">
+        <button id="pm-ticket-tab" type="button" role="tab" aria-selected={section === 'tickets'} aria-pressed={section === 'tickets'} aria-controls="pm-ticket-panel"
+          onClick={() => setSection('tickets')} className={`pm-ticket-page__tab${section === 'tickets' ? ' is-active' : ''}`}>
+          <TicketIcon size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Tickets</span>
+        </button>
+        <button id="pm-inquiry-tab" type="button" role="tab" aria-selected={section === 'inquiries'} aria-pressed={section === 'inquiries'} aria-controls="pm-inquiry-panel"
+          onClick={() => setSection('inquiries')} className={`pm-ticket-page__tab${section === 'inquiries' ? ' is-active' : ''}`}>
+          <Inbox size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Inquiries</span>
+        </button>
+      </div>
+      <div className="pm-ticket-page__tab-actions">
+        <Button variant="ghost" size="sm" onClick={() => setRefreshToken(value => value + 1)} aria-label={`Refresh ${section}`} title={`Refresh ${section}`}>
+          <RefreshCw size={14} aria-hidden="true" /><span>Refresh</span>
+        </Button>
+      </div>
     </nav>}
     <div id={section === 'inquiries' ? 'pm-inquiry-panel' : 'pm-ticket-panel'} role={samples ? undefined : 'tabpanel'}
       aria-labelledby={samples ? undefined : section === 'inquiries' ? 'pm-inquiry-tab' : 'pm-ticket-tab'} className="pm-ticket-page__content">
       {samples && SampleTickets ? <Suspense fallback={<p role="status" className="p-6 text-xs text-content-secondary">Loading sample tickets…</p>}><SampleTickets /></Suspense>
         : section === 'inquiries' ? <PmCentralIntakeInbox workspaceId={activeWorkspace?.id ?? null} workspaceName={activeWorkspace?.name ?? null}
           workspaceCanReview={activeWorkspace?.role === 'pm'}
-          onAccepted={reference => { showToast('Inquiry accepted', `${reference} was created in ${activeWorkspace?.name ?? 'your workspace'}. It is now in Tickets; client invitation and access remain separate.`, 'success'); setSection('tickets'); }} />
-          : <PmTicketsView intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled />}
+          onAccepted={reference => { showToast('Inquiry accepted', `${reference} was created in ${activeWorkspace?.name ?? 'your workspace'}. It is now in Tickets; client invitation and access remain separate.`, 'success'); setSection('tickets'); }} refreshToken={refreshToken} />
+          : <PmTicketsView intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled refreshToken={refreshToken} />}
     </div>
   </div>;
 }

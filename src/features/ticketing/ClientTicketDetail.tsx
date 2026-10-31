@@ -1,5 +1,5 @@
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Clock3, Copy, ExternalLink, FileText, FolderKanban, LockKeyhole, MessageSquare, Paperclip, Send, ShieldCheck, User } from 'lucide-react';
+import { useCallback, useEffect, useState } from 'react';
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Clock3, Copy, ExternalLink, FileText, FolderKanban, LockKeyhole, MessageSquare, Paperclip, Send, ShieldCheck } from 'lucide-react';
 
 import type {
   ClientTicketCommandInput, ClientTicketDetail as ClientTicketRecord,
@@ -18,13 +18,11 @@ import { clientTicketProgress } from './clientTicketProgress';
 import { clientProgressSteps } from './clientProgressSteps';
 import { ClientProgressStrip } from './ClientProgressStrip';
 import { ChatContextPanel } from './ChatContextPanel';
+import { TicketChat } from './TicketChat';
+import { Button } from '@/shared/components/ui/button';
 
 type Decision = Extract<ClientTicketCommandInput['command'], { type: 'agree_scope' | 'accept_delivery' }>;
 export type ClientTicketTab = 'conversation' | 'details' | 'documents';
-
-const dayKey = (value: string) => new Date(value).toDateString();
-const dayLabel = (value: string) => new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' });
-const clockTime = (value: string) => new Date(value).toLocaleTimeString(undefined, { timeStyle: 'short' });
 
 export function ClientTicketDetail({
   workspaceId, ticket, messages, messageCursor, historyLoading, historyError, busy, error, replyResetVersion,
@@ -68,7 +66,6 @@ export function ClientTicketDetail({
   const [scopeChangeOpen, setScopeChangeOpen] = useState(false);
   const [scopeChangeBody, setScopeChangeBody] = useState('');
   const [progressOpen, setProgressOpen] = useState(false);
-  const scroller = useRef<HTMLDivElement>(null);
   const deliveryKey = clientDeliveryReviewKey(ticket);
   const inspected = useCallback((verified: boolean) => {
     setInspectedKey(verified ? deliveryKey : ''); setReviewAcknowledged(false); setConfirming(null);
@@ -89,10 +86,6 @@ export function ClientTicketDetail({
   useEffect(() => { setCorrectionBody(''); setCorrectionOpen(false); setConfirming(null); setReviewAcknowledged(false); }, [deliveryKey]);
   useEffect(() => { setScopeChangeBody(''); setScopeChangeOpen(false); }, [ticket.scope?.id]);
   useEffect(() => { if (!canReview) { setConfirming(null); setReviewAcknowledged(false); } }, [canReview]);
-  useEffect(() => {
-    const element = scroller.current;
-    if (element) element.scrollTop = element.scrollHeight;
-  }, [messages.length]);
   useEffect(() => {
     if (!copied) return;
     const timer = window.setTimeout(() => setCopied(false), 1600);
@@ -135,21 +128,23 @@ export function ClientTicketDetail({
 
   return <section className="client-ticket-detail">
     <header className="client-detail-header">
-      <button onClick={onBack} disabled={busy} className="client-detail-back"><ArrowLeft size={15} />Back to requests</button>
-      <div className="client-detail-title-row">
-        <div className="min-w-0">
-          <h2 className="client-detail-title">{ticket.title}</h2>
-          <div className="client-detail-reference-row">
-            <span className="client-detail-reference">{ticket.reference}</span>
-            <button type="button" onClick={copyReference} aria-label="Copy request reference" className="client-copy-reference">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
-            {copied && <span role="status" className="client-copied-note">Copied</span>}
+      <div className="client-detail-heading">
+        <button onClick={onBack} disabled={busy} className="client-detail-back" aria-label="Back to requests"><ArrowLeft size={15} /><span>Back to requests</span></button>
+        <div className="client-detail-title-row">
+          <div className="min-w-0">
+            <h2 className="client-detail-title">{ticket.title}</h2>
+            <div className="client-detail-reference-row">
+              <span className="client-detail-reference">{ticket.reference}</span>
+              <button type="button" onClick={copyReference} aria-label="Copy request reference" className="client-copy-reference">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
+              {copied && <span role="status" className="client-copied-note">Copied</span>}
+            </div>
+            <p className="client-detail-date">Created {time(ticket.createdAt)} <span aria-hidden="true">·</span> Updated {time(ticket.updatedAt)}</p>
           </div>
-          <p className="client-detail-date">Created {time(ticket.createdAt)} <span aria-hidden="true">·</span> Updated {time(ticket.updatedAt)}</p>
-        </div>
-        <div className="client-detail-heading-actions">
-          <Status status={ticket.status} label={progress.statusLabel} />
-          {needsAction && canReply && tab !== 'details' && <button type="button" onClick={() => setTab('details')} className="client-header-review">{scopeDecision ? 'Review proposed work' : 'Review result'}</button>}
-          {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className={`${secondary} min-h-[44px]`}>Request additional work</button>}
+          <div className="client-detail-heading-actions">
+            <Status status={ticket.status} label={progress.statusLabel} />
+            {needsAction && canReply && tab !== 'details' && <button type="button" onClick={() => setTab('details')} className="client-header-review">{scopeDecision ? 'Review proposed work' : 'Review result'}</button>}
+            {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className={`${secondary} min-h-[44px]`}>Request additional work</button>}
+          </div>
         </div>
       </div>
     </header>
@@ -161,46 +156,37 @@ export function ClientTicketDetail({
 
     <div className="client-detail-content role-chat-layout">
       <div className="client-chat-main">
-      <section role="region" aria-label="Conversation"
-        className="flex client-conversation">
-        {showConversationFeed ? <div ref={scroller} className="client-conversation-feed" aria-label="Messages, oldest first" aria-live="polite">
-          {historyError && <p role="alert" className="client-detail-error">{historyError}</p>}
-          {messageCursor && <button onClick={onLoadMore} disabled={historyLoading} className="client-load-messages">{historyLoading ? 'Loading…' : 'Load earlier messages'}</button>}
-          {messages.length === 0 ? <div className="client-no-messages">
-            <span className="client-no-messages-icon" aria-hidden="true"><MessageSquare size={17} /></span>
-            <strong>No messages yet</strong>
-            <p>Send a note below if you have a question or an update.</p>
-          </div> : messages.map((message, index) => {
-            const mine = message.author === 'client';
-            const newDay = index === 0 || dayKey(message.createdAt) !== dayKey(messages[index - 1].createdAt);
-            const grouped = !newDay && messages[index - 1]?.author === message.author;
-            return <Fragment key={message.id}>
-              {newDay && <div className="client-message-day"><span>{dayLabel(message.createdAt)}</span></div>}
-              <article aria-label={`${mine ? 'You' : 'Project Manager'} message at ${clockTime(message.createdAt)}`} className={`client-message ${mine ? 'is-mine' : 'is-theirs'}${grouped ? ' is-grouped' : ''}`}>
-                <span aria-hidden="true" className="client-message-avatar">{mine ? clientInitial : <User size={16} />}</span>
-                <div className="client-message-bubble">
-                  <span className="client-message-author">{grouped ? <span className="sr-only">{mine ? 'You' : 'Project Manager'}</span> : (mine ? 'You' : 'Project Manager')}</span>
-                  <p>{message.body}</p>
-                  <time dateTime={message.createdAt}>{clockTime(message.createdAt)}</time>
-                </div>
-              </article>
-            </Fragment>;
-          })}
-        </div> : <div className="min-h-0 flex-1 overflow-y-auto p-5">
-          <h3 className="text-sm font-medium text-content">About this conversation</h3>
-          <p className="mt-2 text-xs leading-relaxed text-content-secondary">The conversation and result review are not available for this request yet. Try again later or contact your project manager.</p>
-        </div>}
-        {showConversationFeed && (canReply ? <form onSubmit={submitReply} className="client-reply-form">
-          <label className="sr-only" htmlFor="client-ticket-reply">Message to your project manager</label>
-          <div className="client-reply-controls">
-            {communicationEnabled && !terminal && <button type="button" onClick={() => setTab('documents')} aria-label="Open documents" className="client-attach-button"><Paperclip size={17} /></button>}
-            <textarea id="client-ticket-reply" value={body} onChange={event => setBody(event.target.value)} disabled={busy} maxLength={4000} rows={1} placeholder="Write a message…"
-              onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} />
-            <button type="submit" aria-label="Send reply" disabled={busy || !body.trim()} className="client-send-reply"><Send size={15} /><span>Send</span></button>
-          </div>
-          <p className="client-reply-note">Only you and your project manager can see this. Enter sends · Shift + Enter starts a new line.</p>
-        </form> : <div className="client-reply-form"><p className="client-reply-note">{terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.'} Only you and your project manager can see this.</p></div>)}
-      </section>
+      <TicketChat
+        role="client"
+        messages={messages}
+        clientInitial={clientInitial}
+        title="Conversation"
+        subtitle="Private messages between you and your project manager"
+        showHeader={false}
+        historyError={historyError}
+        messageCursor={messageCursor}
+        historyLoading={historyLoading}
+        onLoadMore={onLoadMore}
+        showFeed={showConversationFeed}
+        unavailableTitle="About this conversation"
+        unavailableDescription="The conversation and result review are not available for this request yet. Try again later or contact your project manager."
+        emptyTitle="No messages yet"
+        emptyDescription="Send a note below if you have a question or an update."
+        draft={body}
+        onDraftChange={setBody}
+        onSubmit={submitReply}
+        canCompose={canReply}
+        busy={busy}
+        writesAvailable={canReply}
+        inputId="client-ticket-reply"
+        placeholder="Write a message…"
+        sendAriaLabel="Send reply"
+        composerClassName="client-reply-form"
+        composerNote="Only you and your project manager can see this. Enter sends · Shift + Enter starts a new line."
+        submitOnEnter
+        readOnlyLabel={terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.'}
+        leadingAction={communicationEnabled && !terminal ? <span className="ticket-chat__leading"><Button type="button" variant="outline" size="icon" onClick={() => setTab('documents')} aria-label="Open documents"><Paperclip size={17} /></Button></span> : undefined}
+      />
 
 
       </div>

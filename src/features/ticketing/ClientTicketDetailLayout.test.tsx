@@ -28,9 +28,8 @@ describe('client ticket detail layout', () => {
     expect(html).toContain('Decision needed');
     expect(html).toContain('Review proposed work');
     expect(html).toContain('Write a message…');
-    expect(html).toContain('aria-label="Conversation"');
-    expect(html).not.toContain('client-conversation-heading');
-    expect(html.match(/Only you and your project manager can see this\./g)).toHaveLength(1);
+    expect(html).not.toContain('Private messages between you and your project manager');
+    expect(html).not.toContain('ticket-chat__header');
     expect(html).toContain('class="client-reply-form"');
     expect(html).toContain('aria-label="Send reply"');
     expect(html).toContain('Hello there');

@@ -1,0 +1,49 @@
+/* Shared client-facing design values. Keep these scoped away from staff pages. */
+:where(.alpha-public, .client-portal-shell, .client-landing) {
+  --client-font-family: 'DM Sans', Inter, sans-serif;
+
+  --client-space-1: 0.25rem;
+  --client-space-2: 0.5rem;
+  --client-space-3: 0.75rem;
+  --client-space-4: 1rem;
+  --client-space-5: 1.25rem;
+  --client-space-6: 1.5rem;
+  --client-space-7: 2rem;
+  --client-space-8: 2.5rem;
+
+  --client-type-meta: 0.75rem;
+  --client-type-caption: 0.8125rem;
+  --client-type-compact: 0.875rem;
+  --client-type-body: 1rem;
+  --client-type-subheading: 1.125rem;
+  --client-type-page: clamp(1.25rem, 1.8vw, 1.5rem);
+  --client-type-title: 1.5rem;
+
+  --client-weight-normal: 400;
+  --client-weight-medium: 500;
+  --client-weight-semibold: 600;
+  --client-weight-bold: 700;
+
+  --client-line-heading: 1.25;
+  --client-line-single: 1;
+  --client-line-body: 1.55;
+  --client-line-copy: 1.65;
+
+  --client-radius-control: 0.5rem;
+  --client-radius-surface: 0.75rem;
+  --client-radius-panel: 0.875rem;
+  --client-radius-pill: 9999px;
+
+  --client-control-compact: 2.5rem;
+  --client-control: 2.75rem;
+  --client-control-large: 3rem;
+
+  --client-public-gutter: clamp(1.25rem, 4vw, 3rem);
+  --client-portal-gutter: clamp(1rem, 2.6vw, 2.5rem);
+  --client-focus-width: 0.125rem;
+  --client-focus-offset: 0.125rem;
+
+  --client-shadow-list: 0 3px 12px rgb(var(--ui-overlay) / .12);
+  --client-shadow-status: 0 8px 24px rgb(var(--ui-overlay) / .10);
+  --client-shadow-popover: 0 22px 64px rgb(var(--ui-overlay) / .48);
+}

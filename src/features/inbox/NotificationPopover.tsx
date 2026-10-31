@@ -382,7 +382,7 @@ export const NotificationPopover: React.FC = () => {
                         <div className="flex items-center gap-2 text-xs font-semibold text-status-danger">
                           <AlertTriangle className="h-4 w-4" /> Run needs attention
                         </div>
-                        <p className="mt-2 text-[11px] leading-5 text-status-danger">Open the related task for run details and next steps.</p>
+                        <p className="mt-2 text-[11px] leading-5 text-status-danger">Open the related task for its agent activity and next steps.</p>
                         {canRunAgents && selectedNotification.entityType === 'issue' && selectedNotification.entityId && (
                           <button
                             type="button"

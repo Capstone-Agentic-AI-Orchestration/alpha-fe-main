@@ -190,6 +190,43 @@ describe('client browser transport', () => {
     await expect(clientTicketApi.listProjects()).rejects.toThrow('shared projects could not be read');
   });
 
+  it('loads only client-safe project proposal fields and rejects unknown proposal status', async () => {
+    browser();
+    const item = { id: 'proposal-1', title: 'New portal', description: 'A new client portal', requestedDeadline: null,
+      submittedAt: '2026-10-29T08:00:00Z', status: 'pending', declineReason: 'private PM note' };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { items: [item] }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(clientTicketApi.listProjectProposals()).resolves.toEqual({ items: [{
+      id: item.id, title: item.title, description: item.description, requestedDeadline: null,
+      submittedAt: item.submittedAt, status: 'pending',
+    }] });
+    expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/client/project-proposals');
+    expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'same-origin', cache: 'no-store' });
+
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { items: [{ ...item, status: 'accepted' }] }));
+    await expect(clientTicketApi.listProjectProposals()).rejects.toThrow('project proposals could not be read');
+  });
+
+  it('submits a project proposal without client identity or workspace fields', async () => {
+    browser();
+    const input = { schemaVersion: 1 as const, operationId: '10000000-0000-4000-8000-000000000001', title: 'New portal',
+      description: 'A new client portal', requestedDeadline: null };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(201, { id: 'proposal-1' }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(clientTicketApi.submitProjectProposal(input)).resolves.toEqual({ id: 'proposal-1' });
+    expect(fetchMock).toHaveBeenCalledWith('/api/client/project-proposals', expect.objectContaining({
+      method: 'POST', credentials: 'same-origin', mode: 'same-origin', body: JSON.stringify(input),
+    }));
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const headers = new Headers(options.headers);
+    expect(headers.get('X-CSRF-Token')).toBe(csrf);
+    expect(headers.get('Authorization')).toBeNull();
+    expect(options.body).not.toContain('email');
+    expect(options.body).not.toContain('workspaceId');
+  });
+
   it('uses global and exact workspace/project request endpoints for the client project portal', async () => {
     browser();
     const item = { id: 'ticket-1', reference: 'REQ-1', title: 'A request', status: 'received',

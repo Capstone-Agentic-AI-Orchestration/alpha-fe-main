@@ -30,9 +30,12 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
   const editable=round?.status==='published'&&!inspectionOnly;
   const completed=round?.items.filter(item=>item.result.status!=='not_tested').length??0;
   const incomplete=round?.items.some(item=>item.required&&item.result.status==='not_tested');
-  return <section className="project-qa-studio pqa-client" aria-label={`${projectName} Project Review`}>
+  return <section className="project-qa-studio pqa-client" aria-label={`${projectName} QA Studio`}>
+    <div className="pqa-client-controls">
+    <header className="pqa-heading"><div><h2>QA Studio</h2><span>Test the UAT build reviewed and shared by your project manager.</span></div></header>
     <Notice error={error} onRetry={()=>setRefresh(value=>value+1)}/>
     <RoundPicker disabled={busy||hasUnsaved} page={page} selected={selected} onChange={value=>{setSelected(value);submission.current=null;}} onOlder={()=>void older()}/>
+    </div>
     {loading?<p role="status">Loading your project review…</p>:<>
       <div className="pqa-mobile-switch" role="group" aria-label="Review view"><button type="button" aria-pressed={mobile==='preview'} onClick={()=>setMobile('preview')}>Preview</button>
         <button type="button" aria-pressed={mobile==='review'} onClick={()=>setMobile('review')}>Review</button></div>
