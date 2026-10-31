@@ -22,13 +22,14 @@ import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink'
 import { secondary, time } from './ticketUi';
 import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './ClientProjectPages';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
+import { WorkspaceToolbar, WorkspaceTabStrip, WorkspaceTab, WorkspaceNewTabMenu } from '@/shared/layout/WorkspaceToolbar';
+import { useClientWorkspaceTabs, type ClientPage as Page } from './clientWorkspaceTabs';
 import './clientDesignTokens.css';
 import './clientPortal.css';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
 
 type Filter = NonNullable<Parameters<typeof clientTicketApi.listRequests>[0]>['filter'];
 type PortalState = 'checking' | 'signed_out' | 'unavailable' | 'ready';
-type Page = 'overview' | 'projects' | 'requests';
 interface PendingOperation {
   operationId: string;
   label: string;
@@ -84,6 +85,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   /** Enables ticket-scoped messages and documents independently of workflow decisions. */
   communicationEnabled?: boolean;
 } = {}) {
+  const { tabs, activeTabId, tabState, openTab, activateTab, closeTab, resetTabs, selectProject } = useClientWorkspaceTabs(
+    typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash));
+  const portalRootRef = useRef<HTMLElement>(null);
+  const workspaceFrameRef = useRef<HTMLDivElement>(null);
   const [portalState, setPortalState] = useState<PortalState>('checking');
   const [session, setSession] = useState<ClientSession | null>(null);
   const [phaseWorkflowEnabled, setPhaseWorkflowEnabled] = useState(false);
@@ -94,24 +99,25 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [projectProposals, setProjectProposals] = useState<ClientProjectProposal[] | null>(null);
   const [projectProposalsLoading, setProjectProposalsLoading] = useState(false);
   const [projectProposalsError, setProjectProposalsError] = useState('');
-  const [page, setPage] = useState<Page>('overview');
-  const [selectedProjectKey, setSelectedProjectKey] = useState<string | null>(null);
+  const [page, setPage] = tabState('page');
+  const [selectedProjectKey, setSelectedProjectKey] = tabState('selectedProjectKey');
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
   const [notificationsLoaded, setNotificationsLoaded] = useState(false);
   const [notificationsError, setNotificationsError] = useState('');
-  const [filter, setFilter] = useState<NonNullable<Filter>>(() => (typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash)));
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(null);
-  const [selectedItemFallback, setSelectedItemFallback] = useState<ClientProjectRequestItem | null>(null);
-  const [returnToProjects, setReturnToProjects] = useState(false);
+  const [filter, setFilter] = tabState('filter');
+  const [searchInput, setSearchInput] = tabState('searchInput');
+  const [search, setSearch] = tabState('search');
+  const [replyDrafts, setReplyDrafts] = tabState('replyDrafts');
+  const [selectedId, setSelectedId] = tabState('selectedId');
+  const [selectedWorkspaceId, setSelectedWorkspaceId] = tabState('selectedWorkspaceId');
+  const [selectedItemFallback, setSelectedItemFallback] = tabState('selectedItemFallback');
+  const [returnToProjects, setReturnToProjects] = tabState('returnToProjects');
   const [pendingProjectReview, setPendingProjectReview] = useState<PendingProjectReview | null>(null);
-  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
+  const [navigationCollapsed, setNavigationCollapsed] = tabState('navigationCollapsed');
   const [quickGuideOpen, setQuickGuideOpen] = useState(false);
-  const [notificationProjectFocus, setNotificationProjectFocus] = useState(0);
+  const [, setNotificationProjectFocus] = tabState('notificationProjectFocus');
   const [detail, setDetail] = useState<TicketDetail | null>(null);
   const [messages, setMessages] = useState<ClientTicketMessage[]>([]);
   const [messageCursor, setMessageCursor] = useState<string | null>(null);
@@ -138,7 +144,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [refreshError, setRefreshError] = useState('');
   const [queueNotice, setQueueNotice] = useState('');
   const [clientToast, setClientToast] = useState<ClientToast | null>(null);
-  const [requestListShown, setRequestListShown] = useState(true);
+  const [requestListShown, setRequestListShown] = tabState('requestListShown');
   const queueGeneration = useRef(0);
   const historyGeneration = useRef(0);
   const writeLock = useRef(false);
@@ -198,9 +204,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   useEffect(() => {
     const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
     return () => window.clearTimeout(timer);
-  }, [searchInput]);
+  }, [activeTabId, searchInput]);
 
   function clearExpiredClientSession(): void {
+    resetTabs();
     setSession({ authenticated: false }); setPortalState('signed_out');
     setProjects(null); setQueue(null); setNotificationRequests(null); setNotificationsLoaded(false); setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null);
     setDetail(null); setMessages([]); setMessageCursor(null); setPending(null);
@@ -300,7 +307,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       setQueue(null); setSelectedId(null); setQueueError(friendlyError(error, 'queue'));
     }).finally(() => { if (current && generation === queueGeneration.current) setQueueLoading(false); });
     return () => { current = false; };
-  }, [portalState, filter, search, refreshVersion, api, pendingProjectReview?.ticketId,
+  }, [activeTabId, portalState, filter, search, refreshVersion, api, pendingProjectReview?.ticketId,
     selectedItemFallback?.id, selectedItemFallback?.workspaceId, selectedWorkspaceId]);
 
   useEffect(() => {
@@ -334,7 +341,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       if (historyGeneration.current === generation) historyGeneration.current += 1;
     };
   }, [portalState, selectedId, selectedWorkspaceId, selectedQueueItem?.workspaceId, selectedQueueItem?.id,
-    refreshVersion, api, workflowActionsDisabled, communicationEnabled]);
+    refreshVersion, api, workflowActionsDisabled, communicationEnabled, activeTabId]);
 
   useEffect(() => {
     if (inspectionOnly || portalState !== 'ready' || page === 'projects' || view === 'create'
@@ -376,7 +383,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       }
     });
     return () => { current = false; stop(); };
-  }, [api, portalState, page, view, selectedWorkspaceId, selectedQueueItem?.workspaceId, selectedId, filter, search,
+  }, [activeTabId, api, portalState, page, view, selectedWorkspaceId, selectedQueueItem?.workspaceId, selectedId, filter, search,
     inspectionOnly, writing, pending, signingOut, queueLoading, detailLoading, historyLoading, queueMoreLoading,
     workflowActionsDisabled, communicationEnabled]);
 
@@ -558,6 +565,13 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     if (nextPage === 'requests') setRequestListShown(true);
   }
 
+  function changeWorkspaceTab(change: () => void) {
+    if (writing || pending || view === 'create') return;
+    historyGeneration.current += 1;
+    setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setHistoryError(''); setWriteError('');
+    change();
+  }
+
   function openPortalUpdate(update: ClientPortalUpdate) {
     if (update.target.kind === 'request') {
       setFilter('all'); setSearchInput(''); setSearch('');
@@ -583,8 +597,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review' || Boolean(currentPendingProject);
   const currentNav = page;
   const clientEmail = session?.email?.trim() ?? '';
+  const clientName = session?.fullName?.trim() || 'Client';
+  const clientInitials = clientName.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 
-  return <main className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}${inspectionOnly ? ' client-portal-shell--inspection' : ''}`}>
+  return <main ref={portalRootRef} className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}${inspectionOnly ? ' client-portal-shell--inspection' : ''}`}>
     <aside className="client-sidebar" aria-label="Client portal navigation">
       <div className="client-sidebar-brand"><img src={alphaMarkUrl} alt="" /><div><strong>Alphaexplora</strong><small>Client portal</small></div></div>
       <nav className="client-sidebar-nav">
@@ -600,10 +616,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       </nav>
       <div className="client-sidebar-footer">
         <div className="client-sidebar-account" role="group"
-          aria-label={clientEmail ? `Client account for ${clientEmail}` : 'Client account controls'}>
-          <span className="client-sidebar-avatar" aria-hidden="true">{clientEmail ? clientEmail[0].toUpperCase() : 'C'}</span>
+          aria-label={`Client account for ${clientName}`}>
+          <span className="client-sidebar-avatar" aria-hidden="true">{clientInitials}</span>
           <span className="client-sidebar-account-copy">
-            <strong title={clientEmail || 'Signed in'}>{clientEmail || 'Signed in'}</strong><small>Client</small>
+            <strong title={clientName}>{clientName}</strong><small>Client</small>
           </span>
           <div className="client-sidebar-account-actions">
             <button type="button" className="client-sidebar-action" aria-label={signingOut ? 'Signing out' : 'Sign out'}
@@ -627,16 +643,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       navigate(page);
     }} />
 
-    <div className="client-portal-mainview">
-      <header className="client-portal-toolbar" aria-label="Client portal actions">
-        <div className="client-portal-mobile-brand" aria-label="Alphaexplora client portal">
-          <img src={alphaMarkUrl} alt="" aria-hidden="true" />
-          <span className="client-portal-mobile-brand-copy">
-            <strong>Alphaexplora</strong>
-            <small>Client portal</small>
-          </span>
-        </div>
-        <div className="client-portal-toolbar-actions">
+    <div ref={workspaceFrameRef} className="client-portal-mainview">
+      <header className="client-portal-toolbar client-portal-toolbar--shared" aria-label="Client portal navigation and actions">
+        <WorkspaceToolbar actions={<>
           <button type="button" aria-label="Refresh portal" title="Refresh portal"
             onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
             disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
@@ -645,9 +654,26 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
             loading={notificationsLoading} error={notificationsError}
             onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
-        </div>
+        </>}>
+          <WorkspaceTabStrip label="Client portal pages">
+            {tabs.map(tab => <WorkspaceTab key={tab.id} title={tab.navigation.page === 'overview' ? 'Overview' : tab.navigation.page === 'projects' ? 'Projects' : 'Requests'}
+              icon={tab.navigation.page === 'overview' ? <LayoutDashboard size={14} /> : tab.navigation.page === 'projects' ? <FolderKanban size={14} /> : <ListChecks size={14} />}
+              active={activeTabId === tab.id} onActivate={() => { if (activeTabId !== tab.id) changeWorkspaceTab(() => activateTab(tab.id)); }}
+              onClose={() => {
+                if (writing || pending || view === 'create') return;
+                if (tab.id === activeTabId) changeWorkspaceTab(() => closeTab(tab.id));
+                else closeTab(tab.id);
+              }} closable={tabs.length > 1 && !writing && !pending && view !== 'create'} controls="client-portal-page" />)}
+          </WorkspaceTabStrip>
+          <WorkspaceNewTabMenu boundaryRef={workspaceFrameRef} portalRootRef={portalRootRef} disabled={writing || Boolean(pending) || view === 'create'}
+            items={[
+              { id: 'overview', title: 'Overview', subtitle: 'Your shared projects and request updates', icon: <LayoutDashboard size={18} /> },
+              { id: 'projects', title: 'Projects', subtitle: 'Projects shared by your project manager', icon: <FolderKanban size={18} /> },
+              { id: 'requests', title: 'Requests', subtitle: 'Follow requests and message your project manager', icon: <ListChecks size={18} /> },
+            ]} onSelect={id => changeWorkspaceTab(() => openTab(id as Page))} />
+        </WorkspaceToolbar>
       </header>
-      <div className="client-portal-main client-portal-main--workspace">
+      <div id="client-portal-page" role="tabpanel" aria-label={currentNav === 'overview' ? 'Overview' : currentNav === 'projects' ? 'Projects' : 'Requests'} className="client-portal-main client-portal-main--workspace">
         {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
         {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
         {refreshError && <div role="status" className="client-portal-error">{refreshError}</div>}
@@ -657,24 +683,25 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           onOpenRequest={item => openRequest(item)} onGoToProjects={() => navigate('projects')}
           onGoToRequests={() => navigate('requests')} />}
 
-        {page === 'projects' && (view === 'create' && createContext && createProject ? <div className="client-create-view client-create-view--project">
+        {page === 'projects' && view === 'create' && createContext && createProject && <div className="client-create-view client-create-view--project">
           <div className="client-create-project-context"><button type="button" className="client-back-link" onClick={cancelCreateForm}><ChevronLeft size={15} />Back to {createProject.name}</button>
             {createError && <p role="alert" className="client-project-error">{createError}</p>}
           </div>
           <ClientCreateTicketForm key={clientProjectKey(createProject)} context={createContext} submissionEnabled={!inspectionOnly && createContext.canCreate}
             relatedTicket={null} busy={writing || Boolean(pending)} error={writeError} onCreate={submitNewTicket} onCancel={cancelCreateForm}
             selectedProjectOptionId={createProject.intakeOptionId} selectedProjectName={createProject.name} />
-        </div> : <>
-          {createError && <p role="alert" className="client-project-error">{createError}</p>}
-          <ClientProjectsPage api={api} projects={projects ?? []} loading={projectsLoading} error={projectsError}
-            selectedProjectKey={selectedProjectKey} onSelectedProjectKeyChange={setSelectedProjectKey}
+        </div>}
+        {tabs.filter(tab => tab.navigation.page === 'projects').map(tab => <div key={tab.id} hidden={tab.id !== activeTabId || view === 'create'} className="client-project-tab-pane">
+          {tab.id === activeTabId && createError && <p role="alert" className="client-project-error">{createError}</p>}
+          <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} loading={projectsLoading} error={projectsError}
+            selectedProjectKey={tab.navigation.selectedProjectKey} onSelectedProjectKeyChange={key => selectProject(tab.id, key)}
             onOpenRequest={item => openRequest(item, true)} onNewRequest={project => void openCreateForm(project)}
             inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading}
-            projectFocusVersion={notificationProjectFocus} refreshToken={refreshVersion}
+            projectFocusVersion={tab.navigation.notificationProjectFocus} refreshToken={refreshVersion}
             proposals={projectProposals ?? []} proposalsLoading={projectProposalsLoading} proposalsError={projectProposalsError}
             onRefreshProposals={() => setRefreshVersion(value => value + 1)}
             onProposalSubmitted={() => setRefreshVersion(value => value + 1)} />
-        </>)}
+        </div>)}
 
         {page === 'requests' && <div className={`client-requests-page ${selectedId ? 'has-selected-request' : ''}`}>
           <section className={`client-portal-page-heading ${selectedId && !requestListShown ? 'client-mobile-heading-hidden' : ''}`} aria-label="Request overview">
@@ -761,7 +788,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                           {showPendingLinkNotice && <div role="status" className="client-project-pending-notice">
                             <strong>PM review pending</strong><span>This request is not linked to a project yet. Your project manager must review and confirm the project link before it appears in that project.</span>
                           </div>}
-                          <ClientTicketDetail workspaceId={activeRequest.workspaceId} api={api} key={`${activeRequest.workspaceId}:${detail.id}`}
+                          <ClientTicketDetail workspaceId={activeRequest.workspaceId} api={api} key={`${activeTabId}:${activeRequest.workspaceId}:${detail.id}`}
+                            replyDraft={replyDrafts[`${activeRequest.workspaceId}:${detail.id}`] ?? ''}
+                            onReplyDraftChange={value => setReplyDrafts(previous => ({ ...previous, [`${activeRequest.workspaceId}:${detail.id}`]: value }))}
                             ticket={detail} messages={messages} messageCursor={messageCursor} historyLoading={historyLoading} historyError={historyError}
                             busy={writing || Boolean(pending)} error={writeError} replyResetVersion={replyResetVersion}
                             workflowActionsDisabled={workflowActionsDisabled} newRequestsDisabled communicationEnabled={communicationEnabled && !inspectionOnly}

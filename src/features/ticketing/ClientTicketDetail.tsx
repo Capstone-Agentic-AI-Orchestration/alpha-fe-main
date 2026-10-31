@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronUp, Clock3, Copy, ExternalLink, FileText, FolderKanban, LockKeyhole, MessageSquare, Paperclip, Send, ShieldCheck } from 'lucide-react';
 
 import type {
@@ -28,7 +28,7 @@ export function ClientTicketDetail({
   workspaceId, ticket, messages, messageCursor, historyLoading, historyError, busy, error, replyResetVersion,
   onBack, onLoadMore, onReply, onDecision, onAdditionalWork, onCorrection, api = clientTicketApi,
   documentsApi = clientTicketDocumentsApi, workflowActionsDisabled = false, newRequestsDisabled = true, communicationEnabled = false,
-  defaultTab = 'conversation', readOnlyPreview = false,
+  defaultTab = 'conversation', readOnlyPreview = false, replyDraft, onReplyDraftChange,
 }: {
   workspaceId: string;
   api?: typeof clientTicketApi;
@@ -39,6 +39,8 @@ export function ClientTicketDetail({
   defaultTab?: ClientTicketTab;
   /** Show fictional history in the development preview, with every reply disabled. */
   readOnlyPreview?: boolean;
+  replyDraft?: string;
+  onReplyDraftChange?: (value: string) => void;
   ticket: ClientTicketRecord;
   messages: ClientTicketMessage[];
   messageCursor: string | null;
@@ -55,7 +57,10 @@ export function ClientTicketDetail({
   onCorrection: (body: string, deliveryId: string) => Promise<void>;
 }) {
   const [tab, setTab] = useState<ClientTicketTab>(defaultTab);
-  const [body, setBody] = useState('');
+  const [localBody, setLocalBody] = useState('');
+  const body = replyDraft ?? localBody;
+  const setBody = (value: string) => { setLocalBody(value); onReplyDraftChange?.(value); };
+  const previousReplyReset = useRef(replyResetVersion);
   const [copied, setCopied] = useState(false);
   const [confirming, setConfirming] = useState<Decision | null>(null);
   const [inspectedKey, setInspectedKey] = useState('');
@@ -82,7 +87,10 @@ export function ClientTicketDetail({
   const clientInitial = (ticket.companyLabel?.trim()[0] ?? 'Y').toUpperCase();
   const showConversationFeed = readOnlyPreview || !(workflowActionsDisabled && !communicationEnabled);
 
-  useEffect(() => { setBody(''); }, [replyResetVersion]);
+  useEffect(() => {
+    if (previousReplyReset.current !== replyResetVersion) setBody('');
+    previousReplyReset.current = replyResetVersion;
+  }, [replyResetVersion]);
   useEffect(() => { setCorrectionBody(''); setCorrectionOpen(false); setConfirming(null); setReviewAcknowledged(false); }, [deliveryKey]);
   useEffect(() => { setScopeChangeBody(''); setScopeChangeOpen(false); }, [ticket.scope?.id]);
   useEffect(() => { if (!canReview) { setConfirming(null); setReviewAcknowledged(false); } }, [canReview]);

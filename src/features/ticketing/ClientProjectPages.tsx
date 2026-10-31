@@ -85,7 +85,8 @@ export function ClientOverviewPage({ requests, projects, requestsLoading, reques
 
 export function ClientProjectsPage({ api = clientTicketApi, projects, loading, error, selectedProjectKey,
   onSelectedProjectKeyChange, onOpenRequest, onNewRequest, inspectionOnly, newRequestEnabled, newRequestLoading, projectFocusVersion, refreshToken,
-  proposals, proposalsLoading, proposalsError, onRefreshProposals, onProposalSubmitted }: {
+  proposals, proposalsLoading, proposalsError, onRefreshProposals, onProposalSubmitted, idPrefix = 'client' }: {
+  idPrefix?: string;
   api?: typeof clientTicketApi;
   projects: ClientProject[];
   loading: boolean;
@@ -241,13 +242,13 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     finally { setSending(false); }
   }
 
-  if (selectedProject) return <section className="client-page client-project-detail" aria-labelledby="client-project-title">
+  if (selectedProject) return <section className="client-page client-project-detail" aria-labelledby={`${idPrefix}-project-title`}>
     <header className="client-project-detail-heading">
       <div className="client-project-heading-copy">
         <button type="button" className="client-back-link" onClick={() => { onSelectedProjectKeyChange(null); setTab('overview'); }}>
           <ArrowLeft size={15} /> Projects
         </button>
-        <p className="client-eyebrow">PROJECT</p><h1 id="client-project-title">{selectedProject.name}</h1>
+        <p className="client-eyebrow">PROJECT</p><h1 id={`${idPrefix}-project-title`}>{selectedProject.name}</h1>
         <p className="client-page-description">Project space shared with your account · updated {time(selectedProject.updatedAt)}</p>
       </div>
       {newRequestEnabled && <button type="button" className="client-primary-action" disabled={newRequestLoading} onClick={() => onNewRequest(selectedProject)}>
@@ -269,8 +270,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     </div>}
     {tab === 'preview' && <ClientProjectQaStudio key={clientProjectKey(selectedProject)} workspaceId={selectedProject.workspaceId}
       projectId={selectedProject.projectId} projectName={selectedProject.name} inspectionOnly={inspectionOnly} refreshToken={refreshToken} feedback={
-      <section className="client-feedback" aria-labelledby="client-feedback-title">
-        <div className="client-section-heading"><div><h2 id="client-feedback-title">Project conversation</h2>
+      <section className="client-feedback" aria-labelledby={`${idPrefix}-feedback-title`}>
+        <div className="client-section-heading"><div><h2 id={`${idPrefix}-feedback-title`}>Project conversation</h2>
           <p>Feedback about this project preview, shared with your project manager.</p></div>
           <button type="button" className="client-icon-action" aria-label="Refresh project conversation" disabled={feedbackLoading}
             onClick={() => setFeedbackRefresh(value => value + 1)}><RefreshCw size={15} /></button></div>
@@ -285,8 +286,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
             </> : !feedbackError && <p className="client-section-state">No project messages yet. Send a note if you have feedback or a question.</p>}
         </div>
         <form className="client-feedback-composer" onSubmit={event => void sendFeedback(event)}>
-          <label className="sr-only" htmlFor="client-project-feedback">Message your project manager about this project</label>
-          <textarea id="client-project-feedback" value={draft} maxLength={4000} disabled={inspectionOnly || sending}
+          <label className="sr-only" htmlFor={`${idPrefix}-project-feedback`}>Message your project manager about this project</label>
+          <textarea id={`${idPrefix}-project-feedback`} value={draft} maxLength={4000} disabled={inspectionOnly || sending}
             onChange={event => setDraft(event.target.value)} placeholder="Write a message about this project…" />
           {sendError && <p role="alert" className="client-project-error">{sendError}</p>}
           <div><span>Only you and your project manager can see this conversation.</span>
@@ -296,8 +297,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         </form>
       </section>
     }/>}
-    {tab === 'requests' && <section className="client-project-requests" aria-labelledby="client-project-requests-title">
-      <div className="client-section-heading"><div><h2 id="client-project-requests-title">Requests in this project</h2>
+    {tab === 'requests' && <section className="client-project-requests" aria-labelledby={`${idPrefix}-project-requests-title`}>
+      <div className="client-section-heading"><div><h2 id={`${idPrefix}-project-requests-title`}>Requests in this project</h2>
         <p>Only requests returned for this shared project are shown here.</p></div>
         <button type="button" className="client-icon-action" aria-label="Refresh project requests" disabled={requestLoading}
           onClick={() => setRequestRefresh(value => value + 1)}><RefreshCw size={15} /></button></div>
@@ -315,8 +316,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     </section>}
   </section>;
 
-  return <section className="client-page client-projects-page" aria-labelledby="client-projects-page-title">
-    <header className="client-projects-heading"><div><p className="client-eyebrow">CLIENT PORTAL</p><h1 id="client-projects-page-title">Projects</h1>
+  return <section className="client-page client-projects-page" aria-labelledby={`${idPrefix}-projects-page-title`}>
+    <header className="client-projects-heading"><div><p className="client-eyebrow">CLIENT PORTAL</p><h1 id={`${idPrefix}-projects-page-title`}>Projects</h1>
       <p className="client-page-description">Projects your project manager has shared with you.</p></div>
       {!inspectionOnly && <button type="button" className="client-primary-action" aria-haspopup="dialog" aria-expanded={proposalFormOpen} onClick={() => { setProposalFormOpen(true); setProposalSuccess(''); }}>
         <Plus size={15} />Propose a project

@@ -414,6 +414,9 @@
 .client-portal-mainview { display: flex; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
 .client-portal-toolbar { position: relative; z-index: 12; display: flex; min-height: 48px; flex: 0 0 auto; align-items: center; justify-content: flex-end; gap: var(--client-space-2); padding: 6px clamp(var(--client-space-4), 3vw, 42px); border-bottom: 1px solid var(--cp-line); background: rgb(var(--ui-shell)); }
 .client-portal-toolbar-actions { display: flex; align-items: center; gap: var(--client-space-2); margin-left: auto; }
+.client-portal-shell .client-portal-toolbar--shared { padding: 12px 16px; }
+.client-portal-toolbar--shared .workspace-tab-strip { max-width: none; }
+.client-portal-shell .client-project-tab-pane:not([hidden]) { display: contents; }
 .client-portal-mobile-brand { display: none; min-width: 0; align-items: center; gap: var(--client-space-2); }
 .client-portal-mobile-brand img { display: block; width: 30px; height: 30px; flex: 0 0 30px; padding: var(--client-space-1); border-radius: var(--client-radius-control); background: rgb(var(--ui-selected)); object-fit: contain; }
 .client-portal-mobile-brand-copy { display: grid; min-width: 0; gap: 1px; }
@@ -439,7 +442,7 @@
 .client-notification-item.is-unread { background: rgb(var(--ui-selected) / .28); }
 .client-notification-item.is-unread:hover { background: rgb(var(--ui-selected) / .48); }
 .client-notification-icon { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--cp-line); border-radius: var(--client-radius-surface); background: rgb(var(--ui-surface)); color: rgb(var(--ui-link)); }
-.client-notification-copy { display: grid; min-width: 0; gap: var(--client-space-1); }
+.client-notification-copy { display: grid; min-width: 0; gap: var(--client-space-1); overflow-wrap: anywhere; }
 .client-notification-copy strong { overflow: hidden; color: var(--cp-ink); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); text-overflow: ellipsis; }
 .client-notification-copy > span { color: var(--cp-muted); font-size: var(--client-type-meta); line-height: var(--client-line-body); }
 .client-notification-copy time { color: var(--cp-faint); font-size: var(--client-type-meta); font-variant-numeric: tabular-nums; }

@@ -74,12 +74,12 @@ export function ClientNotificationBell({ email, updates, ready, loading, error, 
       if (!rect) return;
       const edge = 12;
       const width = Math.min(380, Math.max(0, window.innerWidth - edge * 2));
-      const top = rect.bottom + 8;
+      const top = Math.max(edge, Math.min(rect.bottom + 8, window.innerHeight - 220));
       setPosition({
-        top: Math.min(top, window.innerHeight - 220),
+        top,
         left: Math.min(Math.max(edge, rect.right - width), window.innerWidth - width - edge),
         width,
-        maxHeight: Math.max(180, Math.min(560, window.innerHeight - top - edge)),
+        maxHeight: Math.max(0, Math.min(560, window.innerHeight - top - edge)),
       });
     };
     updatePosition();
@@ -135,6 +135,6 @@ export function ClientNotificationBell({ email, updates, ready, loading, error, 
           }) : <div className="client-notification-empty"><Bell size={20} /><strong>No updates yet</strong><span>Project and request updates will appear here.</span></div>}
       </div>
       {ready && !loading && !error && <footer className="client-notification-footer">Updates from your shared projects and requests</footer>}
-    </section>, document.body)}
+    </section>, triggerRef.current?.closest('.client-portal-shell') ?? document.body)}
   </>;
 }

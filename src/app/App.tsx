@@ -1,5 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useRef, useEffect } from 'react';
 import { NAV_ITEMS, navIcon, navLabel } from '@/config/navigation';
 import { NoTeamAccess } from '@/features/onboarding/NoTeamAccess';
 import { GitHubSetup } from '@/features/onboarding/GitHubSetup';
@@ -11,6 +10,7 @@ import { apiService } from '@/shared/services/apiService';
 import { API_BASE } from '@/shared/config';
 import { TabSessionContext, useApp, useTabSessionState } from '@/app/AppContext';
 import { Sidebar } from '@/shared/layout/Sidebar';
+import { WorkspaceToolbar, WorkspaceTabStrip, WorkspaceTab, WorkspaceNewTabMenu } from '@/shared/layout/WorkspaceToolbar';
 import { CommandPalette } from '@/shared/components/CommandPalette';
 import { CreateIssueModal } from '@/features/issues/CreateIssueModal';
 import { AgentRunModal } from '@/features/runs/AgentRunModal';
@@ -33,7 +33,6 @@ import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
 import { DocumentsView } from '@/features/delivery/DocumentsView';
 import { PmTicketsPage } from '@/features/ticketing/PmTicketsPage';
 import { NavigationTab } from '@/shared/types';
-import { Plus, X } from 'lucide-react';
 // Whether this is the packaged desktop app rather than a browser tab, read from
 // the preload bridge. Shared with the settings panel rather than defined twice.
 import { desktop, isDesktop } from '@/shared/desktop';
@@ -202,96 +201,9 @@ export const App: React.FC = () => {
   // Start in the compact rail. The sidebar reveals itself on pointer hover or
   // keyboard focus, and users can pin it open from the rail's control.
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
-  const [newTabMenuOpen, setNewTabMenuOpen] = useState(false);
-  const newTabMenuRef = useRef<HTMLDivElement>(null);
-  const newTabButtonRef = useRef<HTMLButtonElement>(null);
-  const newTabMenuContentRef = useRef<HTMLDivElement>(null);
   const workspaceFrameRef = useRef<HTMLDivElement>(null);
   // The desktop app on Windows draws its own title bar area; see main.js.
   const nativeWindowControls = isDesktop && desktop?.platform === 'win32';
-  const [newTabMenuPosition, setNewTabMenuPosition] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
-
-  // Close new tab dropdown on click outside or Escape
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const target = event.target as Node;
-      const clickedTrigger = newTabMenuRef.current?.contains(target);
-      const clickedMenu = newTabMenuContentRef.current?.contains(target);
-      if (!clickedTrigger && !clickedMenu) {
-        setNewTabMenuOpen(false);
-      }
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setNewTabMenuOpen(false);
-      }
-    };
-    if (newTabMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('keydown', handleKeyDown);
-    }
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [newTabMenuOpen]);
-
-  // The menu is portaled out of the workspace frame so it cannot be clipped
-  // by the frame's overflow boundary. Keep it inside the visible workspace
-  // area even when the plus button is near either edge of the window.
-  useLayoutEffect(() => {
-    if (!newTabMenuOpen) {
-      setNewTabMenuPosition(null);
-      return;
-    }
-
-    const updateMenuPosition = () => {
-      const button = newTabButtonRef.current;
-      if (!button) return;
-
-      const buttonRect = button.getBoundingClientRect();
-      const workspaceRect = workspaceFrameRef.current?.getBoundingClientRect();
-      const viewportPadding = 12;
-      const workspaceLeft = Math.max(viewportPadding, workspaceRect?.left ?? viewportPadding);
-      const workspaceRight = Math.min(
-        window.innerWidth - viewportPadding,
-        workspaceRect?.right ?? window.innerWidth - viewportPadding,
-      );
-      const availableWidth = Math.max(0, workspaceRight - workspaceLeft);
-      const width = Math.min(288, availableWidth);
-      const left = Math.min(
-        Math.max(workspaceLeft, buttonRect.left),
-        workspaceRight - width,
-      );
-
-      setNewTabMenuPosition({
-        top: buttonRect.bottom + 8,
-        left,
-        width,
-      });
-    };
-
-    updateMenuPosition();
-    window.addEventListener('resize', updateMenuPosition);
-    window.addEventListener('scroll', updateMenuPosition, true);
-
-    const resizeObserver = typeof ResizeObserver !== 'undefined'
-      ? new ResizeObserver(updateMenuPosition)
-      : null;
-    if (resizeObserver && workspaceFrameRef.current) {
-      resizeObserver.observe(workspaceFrameRef.current);
-    }
-
-    return () => {
-      window.removeEventListener('resize', updateMenuPosition);
-      window.removeEventListener('scroll', updateMenuPosition, true);
-      resizeObserver?.disconnect();
-    };
-  }, [newTabMenuOpen, sidebarCollapsed]);
 
   // Rendered smaller here than in the sidebar; the table serves both.
   const getTabIcon = (tab: NavigationTab) => navIcon(tab, 'w-3.5 h-3.5');
@@ -418,139 +330,30 @@ export const App: React.FC = () => {
         {nativeWindowControls && <div aria-hidden="true" className="app-drag-region absolute inset-x-0 top-0 z-20 h-3 sm:h-4" />}
         {/* Floating workspace toolbar */}
         <div className={`pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4 ${nativeWindowControls ? 'pr-[9.5rem] sm:pr-[9.5rem]' : ''}`}>
-          <div className={`pointer-events-auto mx-auto flex w-full max-w-[1800px] items-center gap-1.5 rounded-2xl border border-divider bg-surface/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-content/[0.04] ${nativeWindowControls ? 'app-drag-region' : ''}`}>
+          <WorkspaceToolbar draggable={nativeWindowControls} actions={<NotificationPopover />}>
             {/* Scrollable Open Tabs List */}
-            <div
-              role="tablist"
-              aria-label="Open workspace tabs"
-              className="workspace-tab-strip app-no-drag flex min-w-0 flex-1 items-center gap-1 overflow-x-auto no-scrollbar"
-            >
+            <WorkspaceTabStrip label="Open workspace tabs">
             {tabs.map((tab) => {
-              const isActive = activeTabId === tab.id;
               const title = getTabContextTitle(tab);
               return (
-                <div
-                  key={tab.id}
-                  onClick={() => activateTab(tab.id)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter' || event.key === ' ') {
-                      event.preventDefault();
-                      activateTab(tab.id);
-                    }
-                  }}
-                  onMouseDown={(e) => {
-                    if (e.button === 1) {
-                      e.preventDefault();
-                      closeWorkspaceTab(tab.id);
-                    }
-                  }}
-                  role="tab"
-                  aria-selected={isActive}
-                  tabIndex={isActive ? 0 : -1}
-                  title={title}
-                  className={`group flex h-9 min-w-[112px] max-w-[220px] cursor-pointer select-none items-center gap-2 rounded-xl border px-3 text-xs font-medium transition-all ${
-                    isActive
-                      ? 'border-divider bg-selected text-selected-content shadow-sm'
-                      : 'border-transparent text-content-muted hover:bg-surface-high hover:text-content'
-                  }`}
-                >
-                  <span className={`flex-shrink-0 ${isActive ? 'text-link' : 'text-content-muted group-hover:text-content-secondary'}`}>
-                    {getTabIcon(resolveView(tab.view))}
-                  </span>
-                  <span className="truncate flex-1 text-left">{title}</span>
-                  {tabs.length > 1 && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        closeWorkspaceTab(tab.id);
-                      }}
-                      className="rounded-md p-1 text-content-muted opacity-0 transition-all hover:bg-surface-high hover:text-content focus:opacity-100 group-hover:opacity-100"
-                      title="Close tab"
-                      aria-label={`Close ${title} tab`}
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
+                <WorkspaceTab key={tab.id} active={activeTabId === tab.id} title={title}
+                  icon={getTabIcon(resolveView(tab.view))} onActivate={() => activateTab(tab.id)}
+                  onClose={() => closeWorkspaceTab(tab.id)} closable={tabs.length > 1} />
               );
             })}
-            </div>
+            </WorkspaceTabStrip>
 
-            {/* New Tab Button & Dropdown Picker */}
-            <div className="app-no-drag relative flex-shrink-0" ref={newTabMenuRef}>
-              <button
-                ref={newTabButtonRef}
-                onClick={() => setNewTabMenuOpen(prev => !prev)}
-                className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors ${
-                  newTabMenuOpen
-                    ? 'bg-selected text-selected-content'
-                    : 'text-content-secondary hover:bg-surface-high hover:text-content'
-                }`}
-                title="Open new tab"
-                aria-label="Open new tab"
-                aria-expanded={newTabMenuOpen}
-                aria-haspopup="menu"
-              >
-                <Plus className="w-4 h-4" />
-              </button>
-
-            </div>
-
-            <div className="app-no-drag ml-auto flex-shrink-0">
-              <NotificationPopover />
-            </div>
-
-            {/* The picker is portaled to the document so the workspace frame
-                cannot clip its left edge when the plus button is near the rail. */}
-            {newTabMenuOpen && newTabMenuPosition && createPortal(
-              <div
-                ref={newTabMenuContentRef}
-                role="menu"
-                style={{
-                  top: newTabMenuPosition.top,
-                  left: newTabMenuPosition.left,
-                  width: newTabMenuPosition.width,
-                }}
-                className="fixed z-[60] space-y-1 rounded-2xl border border-divider bg-surface p-2 shadow-2xl animate-slide-up"
-              >
-                <div className="px-2.5 py-1 text-xs font-medium text-content-muted">
-                  Open new tab
-                </div>
-                <div className="max-h-80 space-y-0.5 overflow-y-auto">
-                  {availableTabs.map((item) => {
-                    return (
-                      <button
-                        key={item.id}
-                        role="menuitem"
-                        onClick={() => {
-                          const tabId = openNewTab(item.id);
-                          setMountedTabIds(previous => new Set(previous).add(tabId));
-                          setNewTabMenuOpen(false);
-                        }}
-                        className="flex w-full items-center justify-between rounded-xl p-2 text-left text-content-secondary transition-colors hover:bg-surface-high hover:text-content"
-                      >
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <div className="flex-shrink-0 p-1 text-content-muted">
-                            {navIcon(item.id)}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="truncate text-xs font-medium">{item.title}</div>
-                            <div className="truncate text-[10px] text-content-muted">{item.subtitle}</div>
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>,
-              document.body,
-            )}
-
+            <WorkspaceNewTabMenu boundaryRef={workspaceFrameRef}
+              items={availableTabs.map(item => ({ id: item.id, title: item.title, subtitle: item.subtitle, icon: navIcon(item.id) }))}
+              onSelect={id => {
+                const tabId = openNewTab(id as NavigationTab);
+                setMountedTabIds(previous => new Set(previous).add(tabId));
+              }} />
             {/* No download here: the desktop app is where developers work, and
                 a developer signing in on the web is sent to its download
                 page (DeveloperGateway) instead. Everyone who reaches this
                 header works in the browser. */}
-          </div>
+          </WorkspaceToolbar>
         </div>
 
         {/* Dynamic View Content */}

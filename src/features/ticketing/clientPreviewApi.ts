@@ -66,7 +66,7 @@ const sampleProject: ClientProject = {
 
 const methods: Partial<typeof clientTicketApi> = {
   async getWorkflowCapabilities() { return { phaseWorkflowEnabled: false }; },
-  async getSession() { return { authenticated: true }; },
+  async getSession() { return { authenticated: true, fullName: 'Alex Morgan', email: 'alex.morgan@example.test' }; },
   async listWorkspaces() { return { items: [{ workspaceId: workspace, displayName: 'Northstar Demo Co. · fictional samples' }] }; },
   async listProjects() { return { items: [sampleProject] }; },
   async listProjectProposals() { return { items: [] }; },
