@@ -3,9 +3,9 @@ import { useGesture } from '@use-gesture/react';
 import { useTheme, rgbChannels, type ScenePalette } from '@/shared/theme';
 import { ChevronDown, Code2, GitBranch, Minus, Plus, Scan } from 'lucide-react';
 import type {
-  LiveBuildRoomAgentCard,
-  LiveBuildRoomHandoff,
-  LiveBuildRoomOrchestration,
+  ProjectBuildAgentCard,
+  ProjectBuildHandoff,
+  ProjectBuildOrchestration,
 } from '@/shared/types';
 import { taskBranchGeometry, workflowSvgPath, type WorkflowCurveConnection, type WorkflowSceneNode } from './workflowPaths';
 import { layoutAgentHierarchy } from './agentWorkflowLayout';
@@ -15,20 +15,20 @@ import { supportsWebGL } from '@/features/chat/orchestratorSceneLayout';
 
 const AgentWorkflowScene3D = lazy(() => import('./AgentWorkflowScene3D').then(module => ({ default: module.AgentWorkflowScene3D })));
 
-type WorkflowTask = LiveBuildRoomOrchestration['tasks'][number];
+type WorkflowTask = ProjectBuildOrchestration['tasks'][number];
 type EdgeState = 'complete' | 'active' | 'pending' | 'attention';
 
 interface AgentHandoffGraphProps {
-  cards: LiveBuildRoomAgentCard[];
+  cards: ProjectBuildAgentCard[];
   allAgentCount: number;
-  workflow?: LiveBuildRoomOrchestration | null;
-  handoffs: LiveBuildRoomHandoff[];
+  workflow?: ProjectBuildOrchestration | null;
+  handoffs: ProjectBuildHandoff[];
   selectedExecutionId?: string | null;
   selectedConnectionId?: string | null;
   selectedTaskId?: string | null;
   selectedOrchestrator?: boolean;
   visible?: boolean;
-  onSelect: (card: LiveBuildRoomAgentCard, trigger: HTMLButtonElement, taskId?: string) => void;
+  onSelect: (card: ProjectBuildAgentCard, trigger: HTMLButtonElement, taskId?: string) => void;
   onSelectConnection?: (selection: WorkflowConnectionSelection, trigger: HTMLElement) => void;
   onSelectOrchestrator?: (trigger: HTMLButtonElement) => void;
   onClearFilters?: () => void;
@@ -94,7 +94,7 @@ const Workflow2DFallback: React.FC<{
   </>
 );
 
-function cardToneColor(card: LiveBuildRoomAgentCard, palette: ScenePalette): string {
+function cardToneColor(card: ProjectBuildAgentCard, palette: ScenePalette): string {
   if (card.status === 'completed') return palette.success;
   if (card.status === 'running') return palette.hub;
   if (card.status === 'review') return palette.warning;
@@ -113,21 +113,21 @@ function taskTone(status: string, palette: ScenePalette): { label: string; color
   return { label: 'Waiting', color: palette.info };
 }
 
-function dependencyState(fromTask: WorkflowTask, toTask: WorkflowTask, toCard: LiveBuildRoomAgentCard): EdgeState {
+function dependencyState(fromTask: WorkflowTask, toTask: WorkflowTask, toCard: ProjectBuildAgentCard): EdgeState {
   if (['failed', 'blocked'].includes(fromTask.status) || ['failed', 'blocked'].includes(toTask.status)) return 'attention';
   if (!toCard.isStale && (toCard.status === 'running' || toTask.status === 'running' || toTask.status === 'submitted')) return 'active';
   if (fromTask.status === 'accepted' && toTask.status === 'accepted') return 'complete';
   return 'pending';
 }
 
-function taskState(task: WorkflowTask, card: LiveBuildRoomAgentCard): EdgeState {
+function taskState(task: WorkflowTask, card: ProjectBuildAgentCard): EdgeState {
   if (['failed', 'blocked'].includes(task.status) || card.status === 'failed') return 'attention';
   if (!card.isStale && (card.status === 'running' || task.status === 'running' || task.status === 'submitted')) return 'active';
   if (task.status === 'accepted') return 'complete';
   return 'pending';
 }
 
-function handoffMatchesCards(handoff: LiveBuildRoomHandoff, cards: LiveBuildRoomAgentCard[]): boolean {
+function handoffMatchesCards(handoff: ProjectBuildHandoff, cards: ProjectBuildAgentCard[]): boolean {
   return cards.some(card =>
     card.executionId === handoff.executionId ||
     Boolean(handoff.agentCallId && card.agentCallId === handoff.agentCallId) ||
@@ -136,9 +136,9 @@ function handoffMatchesCards(handoff: LiveBuildRoomHandoff, cards: LiveBuildRoom
 }
 
 function buildEdges(
-  cards: LiveBuildRoomAgentCard[],
-  workflow: LiveBuildRoomOrchestration | null | undefined,
-  handoffs: LiveBuildRoomHandoff[],
+  cards: ProjectBuildAgentCard[],
+  workflow: ProjectBuildOrchestration | null | undefined,
+  handoffs: ProjectBuildHandoff[],
 ): WorkflowEdge[] {
   const cardForTask = (taskId: string, agentId?: string) =>
     cards.find(card => card.orchestrationTaskId === taskId) ??
@@ -158,7 +158,7 @@ function buildEdges(
     edges.push(edge);
   };
 
-  const latestHandoffByPair = new Map<string, LiveBuildRoomHandoff>();
+  const latestHandoffByPair = new Map<string, ProjectBuildHandoff>();
   const cardByAgent = new Map(cards.map(card => [card.agentId, card]));
   for (const handoff of handoffs) {
     if (!handoff.fromAgentId || !handoff.toAgentId) continue;
@@ -232,7 +232,7 @@ function buildEdges(
 
 const AgentNode: React.FC<{
   palette: ScenePalette;
-  card: LiveBuildRoomAgentCard;
+  card: ProjectBuildAgentCard;
   tasks: WorkflowTask[];
   expanded: boolean;
   onToggle: () => void;
@@ -436,7 +436,7 @@ export const AgentHandoffGraph: React.FC<AgentHandoffGraphProps> = ({
     },
   }, { drag: { filterTaps: true }, pinch: { scaleBounds: { min: 0.25, max: 1.4 }, from: () => [zoom, 0] }, eventOptions: { passive: false } });
 
-  const selectAgent = (card: LiveBuildRoomAgentCard, trigger: HTMLButtonElement, taskId?: string) => {
+  const selectAgent = (card: ProjectBuildAgentCard, trigger: HTMLButtonElement, taskId?: string) => {
     onSelect(card, trigger, taskId);
   };
   const selectConnection = (id: string, trigger: HTMLElement) => {

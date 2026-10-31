@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { OrchestrationPlanPreview } from '../live-build-room/OrchestrationPlanPreview';
+import { OrchestrationPlanPreview } from '../project-build-review/OrchestrationPlanPreview';
 import { PlanBody, ReviewBody } from './ChatBuildBodies';
 import { OrchestratorReport } from './ChatBuildWizard';
 import type { ProjectLiveBuild } from './useProjectLiveBuild';
@@ -24,7 +24,7 @@ export const SavedBuildReviewTab: React.FC<{ projectId: string; runId: string; t
     let cancelled = false;
     setBuild(null);
     setError('');
-    void apiService.getLiveBuildRoom(projectId, runId, threadId).then(snapshot => {
+    void apiService.getProjectBuildSnapshot(projectId, runId, threadId).then(snapshot => {
       if (cancelled) return;
       const orchestration = snapshot.orchestration;
       if (!orchestration || orchestration.run.id !== runId || !snapshotBelongsToThread(snapshot, threadId)) throw new Error('This review does not belong to this conversation.');

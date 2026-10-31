@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, ArrowRightLeft, CheckCircle2, Circle, FileCode2, Flag, Radio, Sparkles, Wrench } from 'lucide-react';
 
-import type { LiveBuildRoomActivity } from '@/shared/types';
+import type { ProjectBuildActivity } from '@/shared/types';
 import type { BuildAgentNode, BuildAgentState } from './useProjectLiveBuild';
 import { LiveChangesView } from './LiveChangesView';
 
@@ -13,7 +13,7 @@ const STATE: Record<BuildAgentState, { label: string; tone: string }> = {
   failed: { label: 'Needs attention', tone: 'text-status-danger bg-status-danger-subtle' }
 };
 
-function activityIcon(kind: LiveBuildRoomActivity['kind']) {
+function activityIcon(kind: ProjectBuildActivity['kind']) {
   const className = 'h-3.5 w-3.5';
   switch (kind) {
     case 'tool':

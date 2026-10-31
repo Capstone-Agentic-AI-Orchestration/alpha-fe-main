@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { TerminalSquare } from 'lucide-react';
-import type { LiveBuildRoomActivity, LiveBuildRoomOrchestration } from '@/shared/types';
+import type { ProjectBuildActivity, ProjectBuildOrchestration } from '@/shared/types';
 import { describeAgentActivity, orderedAgentActivity } from './agentActivityPresentation';
 
 export function AgentCommandHistory({ activities, attempts }: {
-  activities: LiveBuildRoomActivity[];
-  attempts: LiveBuildRoomOrchestration['attempts'];
+  activities: ProjectBuildActivity[];
+  attempts: ProjectBuildOrchestration['attempts'];
 }) {
   const [follow, setFollow] = useState(true);
   const endRef = useRef<HTMLDivElement>(null);

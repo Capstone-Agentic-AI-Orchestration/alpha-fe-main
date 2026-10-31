@@ -22,11 +22,11 @@ import {
   Workflow
 } from 'lucide-react';
 import { apiService } from '@/shared/services/apiService';
-import type { LiveBuildRoomDiffPreview, LiveBuildRoomOrchestration, LiveBuildTaskStatus } from '@/shared/types';
+import type { ProjectBuildDiffPreview, ProjectBuildOrchestration, LiveBuildTaskStatus } from '@/shared/types';
 
 interface OrchestrationWorkflowPanelProps {
   projectId: string;
-  workflow: LiveBuildRoomOrchestration;
+  workflow: ProjectBuildOrchestration;
   canManage: boolean;
   canResume?: boolean;
   busyAction?: string | null;
@@ -43,7 +43,7 @@ interface OrchestrationWorkflowPanelProps {
   publicationSynced?: boolean;
 }
 
-const runStatusMeta: Record<LiveBuildRoomOrchestration['run']['status'], { label: string; tone: string; icon: React.ReactNode }> = {
+const runStatusMeta: Record<ProjectBuildOrchestration['run']['status'], { label: string; tone: string; icon: React.ReactNode }> = {
   planning: { label: 'Preparing plan', tone: 'border-status-info-border bg-status-info-subtle text-status-info', icon: <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> },
   awaiting_plan_approval: { label: 'Plan ready to review', tone: 'border-status-info-border bg-status-info-subtle text-status-info', icon: <ListChecks className="h-3.5 w-3.5" /> },
   executing: { label: 'In progress', tone: 'border-divider bg-selected text-selected-content', icon: <CircleDot className="h-3.5 w-3.5" /> },
@@ -99,7 +99,7 @@ function ReportResponseDisclosure({ response, truncated }: { response?: string; 
   </details>;
 }
 
-function ReportContractVersion({ attempt }: { attempt: LiveBuildRoomOrchestration['attempts'][number] }) {
+function ReportContractVersion({ attempt }: { attempt: ProjectBuildOrchestration['attempts'][number] }) {
   const expected = attempt.reportSchemaVersionExpected;
   const received = attempt.reportSchemaVersionReceived;
   if (expected === undefined || (!attempt.reportError && received === expected)) return null;
@@ -112,9 +112,9 @@ function ReportContractVersion({ attempt }: { attempt: LiveBuildRoomOrchestratio
 }
 
 function TaskEvidence({ workflow, taskId, taskById }: {
-  workflow: LiveBuildRoomOrchestration;
+  workflow: ProjectBuildOrchestration;
   taskId: string;
-  taskById: Map<string, LiveBuildRoomOrchestration['tasks'][number]>;
+  taskById: Map<string, ProjectBuildOrchestration['tasks'][number]>;
 }) {
   const attempts = workflow.attempts.filter(attempt => attempt.taskId === taskId).slice().reverse();
   const findings = workflow.findings.filter(finding => finding.taskId === taskId);
@@ -164,7 +164,7 @@ function TaskEvidence({ workflow, taskId, taskById }: {
   </div>;
 }
 
-const attemptStatusMeta: Record<LiveBuildRoomOrchestration['attempts'][number]['status'], { label: string; tone: string }> = {
+const attemptStatusMeta: Record<ProjectBuildOrchestration['attempts'][number]['status'], { label: string; tone: string }> = {
   starting: { label: 'Sending assignment', tone: 'border-status-info-border bg-status-info-subtle text-status-info' },
   running: { label: 'Working', tone: 'border-divider bg-selected text-selected-content' },
   submitted: { label: 'Checking result', tone: 'border-status-info-border bg-status-info-subtle text-status-info' },
@@ -175,7 +175,7 @@ const attemptStatusMeta: Record<LiveBuildRoomOrchestration['attempts'][number]['
   recovery_required: { label: 'Saved for review', tone: 'border-status-warning-border bg-status-warning-subtle text-status-warning' }
 };
 
-function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration }) {
+function HandoffTimeline({ workflow }: { workflow: ProjectBuildOrchestration }) {
   const taskById = new Map(workflow.tasks.map(task => [task.id, task]));
   const entries = workflow.attempts.map((attempt, index) => ({ attempt, index })).sort((left, right) => {
     const leftTime = Date.parse(left.attempt.startedAt ?? left.attempt.completedAt ?? '');
@@ -242,7 +242,7 @@ function HandoffTimeline({ workflow }: { workflow: LiveBuildRoomOrchestration })
 
 export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string; savedCheckpoint?: boolean; expanded?: boolean; onReady?: () => void }> = ({ projectId, runId, branchName, savedCheckpoint = false, expanded = false, onReady }) => {
   const [open, setOpen] = useState(expanded);
-  const [preview, setPreview] = useState<LiveBuildRoomDiffPreview | null>(null);
+  const [preview, setPreview] = useState<ProjectBuildDiffPreview | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 

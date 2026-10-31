@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, PenLine, FileText, MessageSquare, Activity,
   CheckSquare, FolderKanban, Rocket, Bot, BarChart3, Monitor, BookOpen, Settings,
-  RadioTower, Ticket
+  Ticket
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
@@ -157,7 +157,6 @@ export const NAV_ITEMS: NavItem[] = [
  */
 export const ARCHIVED_NAV_ITEMS: NavItem[] = [
   { id: 'documents', label: 'Specifications', labels: { client: 'Shared Documents' }, title: 'Specifications', subtitle: 'Requirement documents & acceptance criteria', group: 'workspace', section: 'communication', sectionByRole: { client: 'documents' }, icon: FileText },
-  { id: 'live_build_room', label: 'Live Build Room', labels: { pm: 'Build Rooms', admin: 'Build Rooms' }, title: 'Live Build Room', subtitle: 'Watch project chat agents work in real time', group: 'workspace', section: 'automation', icon: RadioTower },
   { id: 'deployments', label: 'CI/CD Platform', labels: { dev: 'CI/CD & Deployments', pm: 'Deployments', admin: 'Deployments' }, title: 'CI/CD Platform', subtitle: 'Release pipelines & preview builds', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Rocket }
 ];
 

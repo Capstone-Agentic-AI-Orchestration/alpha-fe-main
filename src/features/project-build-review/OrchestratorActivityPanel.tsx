@@ -1,8 +1,8 @@
 import { Workflow, X } from 'lucide-react';
-import type { LiveBuildRoomOrchestration } from '@/shared/types';
+import type { ProjectBuildOrchestration } from '@/shared/types';
 
 export function OrchestratorActivityPanel({ workflow, onClose, onViewPlan, onViewTask }: {
-  workflow: LiveBuildRoomOrchestration;
+  workflow: ProjectBuildOrchestration;
   onClose: () => void;
   onViewPlan: () => void;
   onViewTask: (taskId: string) => void;

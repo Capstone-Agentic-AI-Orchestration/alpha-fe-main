@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { OrchestrationPlanPreview } from '../live-build-room/OrchestrationPlanPreview';
+import { OrchestrationPlanPreview } from '../project-build-review/OrchestrationPlanPreview';
 import { AlertTriangle, ChevronDown, ExternalLink, LoaderCircle } from 'lucide-react';
 
 import { buildStepFor, type WizardStep } from './buildSteps';

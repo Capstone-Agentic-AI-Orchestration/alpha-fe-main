@@ -7,7 +7,6 @@ export type NavigationTab =
   | 'issues'
   | 'projects'
   | 'agents'
-  | 'live_build_room'
   | 'analytics'
   | 'runtimes'
   | 'skills'
@@ -19,7 +18,7 @@ export type NavigationTab =
 export interface TabItem {
   id: string;
   view: NavigationTab;
-  /** Optional project context for project-scoped tabs such as the Build Room. */
+  /** Optional project context for project-scoped tabs. */
   projectId?: string;
   /** Optional run context when a tab was opened from a specific execution. */
   buildRunId?: string;
@@ -660,7 +659,7 @@ export type BuildStepPhase =
   | 'review'
   | 'delivery';
 
-/** A project's explicit, ordered build-room pipeline. */
+/** A project's explicit, ordered build pipeline. */
 export interface ProjectBuildStep {
   id: string;
   projectId: string;
@@ -938,9 +937,9 @@ export interface Squad {
   ownerId?: string;
 }
 
-export type LiveBuildRoomCardStatus = 'completed' | 'running' | 'waiting' | 'review' | 'failed' | 'idle';
+export type ProjectBuildCardStatus = 'completed' | 'running' | 'waiting' | 'review' | 'failed' | 'idle';
 
-export interface LiveBuildRoomPhase {
+export interface ProjectBuildPhase {
   id: string;
   label: string;
   description: string;
@@ -948,7 +947,7 @@ export interface LiveBuildRoomPhase {
   progress: number;
 }
 
-export type LiveBuildRoomActivityKind =
+export type ProjectBuildActivityKind =
   | 'status'
   | 'stage'
   | 'assistant'
@@ -961,10 +960,10 @@ export type LiveBuildRoomActivityKind =
   | 'attachment'
   | 'steering';
 
-export interface LiveBuildRoomActivity {
+export interface ProjectBuildActivity {
   id: string;
   sequence: number;
-  kind: LiveBuildRoomActivityKind;
+  kind: ProjectBuildActivityKind;
   message: string;
   toolName?: string;
   detail?: string;
@@ -973,7 +972,7 @@ export interface LiveBuildRoomActivity {
   createdAt: string;
 }
 
-export interface LiveBuildRoomAgentCard {
+export interface ProjectBuildAgentCard {
   /** A run or agent call. Agent ids alone are not unique across executions. */
   executionId: string;
   source: 'squad' | 'project_chat' | 'agent_run';
@@ -983,7 +982,7 @@ export interface LiveBuildRoomAgentCard {
   agentRole: string;
   avatar?: string;
   color?: string;
-  status: LiveBuildRoomCardStatus;
+  status: ProjectBuildCardStatus;
   progress: number;
   currentTask: string;
   currentStage?: string;
@@ -993,7 +992,7 @@ export interface LiveBuildRoomAgentCard {
   orchestrationTaskId?: string;
   orchestrationAttemptNumber?: number;
   orchestrationTaskCount?: number;
-  activity: LiveBuildRoomActivity[];
+  activity: ProjectBuildActivity[];
   filePaths?: string[];
   branchName?: string;
   updatedAt?: string | null;
@@ -1001,7 +1000,7 @@ export interface LiveBuildRoomAgentCard {
   output?: { kind: string; label: string; value: string };
 }
 
-export interface LiveBuildRoomHandoff {
+export interface ProjectBuildHandoff {
   id: string;
   executionId: string;
   source: 'squad' | 'project_chat';
@@ -1027,7 +1026,7 @@ export interface AgentCallActivity {
   createdAt: string;
 }
 
-export interface LiveBuildRoomChatCall {
+export interface ProjectBuildChatCall {
   id: string;
   threadId?: string;
   messageId?: string;
@@ -1077,7 +1076,7 @@ export type LiveBuildTaskStatus =
   | 'cancelled'
   | 'superseded';
 
-export interface LiveBuildRoomDiffPreview {
+export interface ProjectBuildDiffPreview {
   reviewType?: 'validated' | 'saved_checkpoint';
   repository?: string;
   baseCommit: string;
@@ -1144,7 +1143,7 @@ export interface DependencyAuditSummary {
   findings: Array<{ package: string; severity: string; range: string; advisories: string[] }>;
 }
 
-export interface LiveBuildRoomOrchestration {
+export interface ProjectBuildOrchestration {
   milestones?: Array<{ id: string; title: string; status: 'unplanned' | 'active' | 'accepted' }>;
   run: {
     id: string;
@@ -1333,7 +1332,7 @@ export interface LiveBuildRecoveryState {
   history: LiveBuildRecoveryProjection[];
 }
 
-export interface LiveBuildRoomSnapshot {
+export interface ProjectBuildSnapshot {
   project: Pick<Project, 'id' | 'name' | 'key' | 'description' | 'color' | 'status'>;
   squad: (Squad & { projectIds: string[]; memberCount: number }) | null;
   squads: Array<Squad & { assignment?: WorkspaceSquadProjectAssignment }>;
@@ -1353,7 +1352,7 @@ export interface LiveBuildRoomSnapshot {
     stale: number;
     progress: number;
   };
-  phases: LiveBuildRoomPhase[];
+  phases: ProjectBuildPhase[];
   buildRuns: Array<{
     id: string;
     kind: 'squad' | 'orchestration';
@@ -1366,9 +1365,9 @@ export interface LiveBuildRoomSnapshot {
   }>;
   issue?: Issue;
   activeRun: (SquadRun & { memberRuns: PrototypeRun[]; activities: RunActivity[] }) | null;
-  agentCards: LiveBuildRoomAgentCard[];
-  activity: LiveBuildRoomActivity[];
-  handoffs: LiveBuildRoomHandoff[];
+  agentCards: ProjectBuildAgentCard[];
+  activity: ProjectBuildActivity[];
+  handoffs: ProjectBuildHandoff[];
   handoff: {
     from: string;
     to: string;
@@ -1383,8 +1382,8 @@ export interface LiveBuildRoomSnapshot {
     status: string;
     runId: string;
   }>;
-  chatCalls: LiveBuildRoomChatCall[];
-  orchestration?: LiveBuildRoomOrchestration | null;
+  chatCalls: ProjectBuildChatCall[];
+  orchestration?: ProjectBuildOrchestration | null;
   planningRecoveries?: LiveBuildPlanningRecovery[];
   lastUpdated: string;
 }

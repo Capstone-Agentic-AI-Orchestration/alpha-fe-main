@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 vi.hoisted(() => { (globalThis as { window?: unknown }).window ??= globalThis; });
-vi.mock('@/features/live-build-room/OrchestrationWorkflowPanel', () => ({ ReviewDiff: () => null }));
+vi.mock('@/features/project-build-review/OrchestrationWorkflowPanel', () => ({ ReviewDiff: () => null }));
 
 import { ChatBuildWizard, buildRepositoriesLabel, continueChoice, planningFailureReason, wizardStepFor, type ChatBuildWizardProps } from './ChatBuildWizard';
 import { buildHandoffs, type ProjectLiveBuild } from './useProjectLiveBuild';

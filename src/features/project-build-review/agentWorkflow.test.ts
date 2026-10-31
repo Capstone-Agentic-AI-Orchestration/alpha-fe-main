@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { LiveBuildRoomActivity, LiveBuildRoomAgentCard, LiveBuildRoomOrchestration, LiveBuildRoomSnapshot } from '@/shared/types';
+import type { ProjectBuildActivity, ProjectBuildAgentCard, ProjectBuildOrchestration, ProjectBuildSnapshot } from '@/shared/types';
 import { layoutAgentHierarchy } from './agentWorkflowLayout';
 import { describeAgentActivity, latestAgentAction } from './agentActivityPresentation';
 import { agentActivityScope } from './agentActivityScope';
 import { taskBranchGeometry, workflowPathSegments } from './workflowPaths';
 
-function activity(id: string, detail: string, kind: LiveBuildRoomActivity['kind'] = 'tool'): LiveBuildRoomActivity {
+function activity(id: string, detail: string, kind: ProjectBuildActivity['kind'] = 'tool'): ProjectBuildActivity {
   return { id, sequence: 1, kind, toolName: 'Bash', message: kind === 'tool' ? 'Running command' : 'Tool finished', detail, createdAt: '2026-10-24T08:00:00Z' };
 }
-function card(agentId: string, runId = agentId): LiveBuildRoomAgentCard {
+function card(agentId: string, runId = agentId): ProjectBuildAgentCard {
   return { executionId: `run:${runId}`, runId, agentId, agentName: agentId, agentRole: 'Specialist', source: 'agent_run', sourceLabel: 'Build', status: 'running', progress: 0, currentTask: 'Assigned work', activity: [activity('command', `build-${runId}`)] };
 }
-function task(id: string, ownerAgentId: string, status: LiveBuildRoomOrchestration['tasks'][number]['status'] = 'pending'): LiveBuildRoomOrchestration['tasks'][number] {
+function task(id: string, ownerAgentId: string, status: ProjectBuildOrchestration['tasks'][number]['status'] = 'pending'): ProjectBuildOrchestration['tasks'][number] {
   return { id, ownerAgentId, title: id, status, ownerName: ownerAgentId, description: '', kind: 'implementation', repository: 'app', assignmentReason: 'Assigned specialist', dependsOn: [], requirementIds: [], acceptanceCriteria: [], requiredChecks: [], scope: { includePaths: [], excludePaths: [] }, required: true, revision: 1, attemptCount: 0 };
 }
 
@@ -94,7 +94,7 @@ describe('inspector activity scope', () => {
         { id: 'two', taskId: 'tests', agentId: 'frontend', prototypeRunId: second.runId, changedPaths: ['src/App.test.tsx'] },
       ],
     },
-  } as unknown as LiveBuildRoomSnapshot;
+  } as unknown as ProjectBuildSnapshot;
 
   it('includes all this build’s agent executions and excludes other builds and agents', () => {
     const scope = agentActivityScope(snapshot, second);

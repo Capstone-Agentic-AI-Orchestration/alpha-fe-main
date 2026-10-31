@@ -4,7 +4,7 @@ import { ARCHIVED_NAV_ITEMS, landingTab, NAV_ITEMS, ROLE_NAV, sectionsFor } from
 import { AI_FEATURES_BY_ROLE, AI_NAV_TABS } from './features';
 
 /**
- * Navigation destinations retained after archiving standalone specifications and build rooms.
+ * Navigation destinations retained after archiving standalone specifications.
  * Project managers do not see the AI destinations while their AI features are off (config/features.ts).
  */
 const existing: Record<UserRole, NavigationTab[]> = {
@@ -69,12 +69,17 @@ describe('existing navigation compatibility', () => {
     expect(sectionsFor('pm').map(group => group.section.id)).not.toEqual(expect.arrayContaining(['automation']));
     expect(sectionsFor('pm').map(group => group.section.id)).not.toContain('operations');
   });
-  it('archives specifications and build rooms for every role and all shared menus', () => {
-    for (const tab of ['documents', 'live_build_room'] as const) {
+  it('archives specifications for every role and all shared menus', () => {
+    for (const tab of ['documents'] as const) {
       expect(ARCHIVED_NAV_ITEMS.some(item => item.id === tab)).toBe(true);
       expect(NAV_ITEMS.some(item => item.id === tab)).toBe(false);
       for (const role of Object.keys(existing) as UserRole[]) expect(ROLE_NAV[role]).not.toContain(tab);
     }
+  });
+  it('removes the standalone Live Build Room destination', () => {
+    expect(ARCHIVED_NAV_ITEMS.some(item => (item.id as string) === 'live_build_room')).toBe(false);
+    expect(NAV_ITEMS.some(item => (item.id as string) === 'live_build_room')).toBe(false);
+    for (const role of Object.keys(existing) as UserRole[]) expect(ROLE_NAV[role]).not.toContain('live_build_room');
   });
   it('places the agent directory under Resources without enabling PM AI access', () => {
     for (const role of ['dev', 'admin'] as const) {

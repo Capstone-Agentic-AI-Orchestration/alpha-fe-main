@@ -1,8 +1,8 @@
-import type { LiveBuildRoomAgentCard, LiveBuildRoomSnapshot } from '@/shared/types';
+import type { ProjectBuildAgentCard, ProjectBuildSnapshot } from '@/shared/types';
 import { orderedAgentActivity } from './agentActivityPresentation';
 
 /** Never show a different assignment's commands when an unstarted task is selected. */
-export function agentActivityScope(snapshot: LiveBuildRoomSnapshot, card: LiveBuildRoomAgentCard, taskId?: string | null, executionOnly = false) {
+export function agentActivityScope(snapshot: ProjectBuildSnapshot, card: ProjectBuildAgentCard, taskId?: string | null, executionOnly = false) {
   const workflow = snapshot.orchestration;
   const selectedTask = workflow?.tasks.find(task => task.id === taskId && task.ownerAgentId === card.agentId);
   const attempts = workflow?.attempts.filter(attempt =>
