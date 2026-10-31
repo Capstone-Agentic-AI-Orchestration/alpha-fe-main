@@ -5,7 +5,7 @@ export interface BoardSyncCoordinator {
   dispose(): void;
 }
 
-/** Debounce doorbells and keep only one board catch-up request in flight. */
+/** Debounce doorbells, recover missed notices, and keep one catch-up in flight. */
 export function createBoardSyncCoordinator(
   catchUp: () => Promise<void>,
   debounceMs = 400
@@ -42,7 +42,7 @@ export function createBoardSyncCoordinator(
     try {
       await catchUp();
     } catch {
-      // A later doorbell, reconnect, or visibility restore will retry.
+      // A later doorbell, fallback tick, reconnect, or visibility restore retries.
     } finally {
       running = false;
       if (disposed) return;
@@ -74,8 +74,13 @@ export function createBoardSyncCoordinator(
     }
   };
 
+  // Cursor-based catch-up is a safety net when Realtime is unavailable. Hidden
+  // windows do no reads; visibility restore catches up immediately.
+  const fallback = setInterval(notify, 30_000);
+
   const dispose = () => {
     disposed = true;
+    clearInterval(fallback);
     if (timer) clearTimeout(timer);
     timer = null;
     dirty = false;
