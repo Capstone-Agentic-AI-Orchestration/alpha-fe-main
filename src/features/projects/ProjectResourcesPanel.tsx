@@ -146,7 +146,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
 
   const handleCreateRepo = async () => {
     if (readOnly || !canCreateRepository) return;
-    const repoName = ghRepoName.trim();
+    // Lowercase: the frontend's Vercel project takes this name, and Vercel refuses uppercase.
+    const repoName = ghRepoName.trim().toLowerCase();
     if (!repoName) return;
 
     const org = effectiveOrg.trim();
@@ -407,7 +408,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                 <input
                   type="text"
                   value={ghRepoName}
-                  onChange={(e) => setGhRepoName(e.target.value)}
+                  onChange={(e) => setGhRepoName(e.target.value.toLowerCase())}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
                       e.preventDefault();
