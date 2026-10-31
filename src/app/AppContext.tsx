@@ -2150,7 +2150,7 @@ ${e.detail}`;
                 authorName: assignedAgent.name,
                 authorAvatar: assignedAgent.avatar,
                 agentId: assignedAgent.id,
-                content: run.testSummary || 'The agent run failed. Review the run details and retry when ready.',
+                content: run.testSummary || 'The agent run failed. Review the agent activity and retry when ready.',
                 createdAt: now
               }],
           updatedAt: now
@@ -2159,7 +2159,7 @@ ${e.detail}`;
           id: `notif-${run.id}-failed`,
           type: 'agent_failed',
           title: `Run needs attention: ${targetIssue.identifier}`,
-          message: `${assignedAgent.name} stopped because the run failed. Open the run details for the provider error and next action.`,
+          message: `${assignedAgent.name} stopped because the run failed. Open the task's agent activity for the provider error and next action.`,
           read: false,
           timestamp: now,
           entityType: 'issue',

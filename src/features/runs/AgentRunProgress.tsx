@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AlertCircle, Check, CheckCircle2, ChevronDown, Circle, ExternalLink, GitBranch, Loader2, MinusCircle, RotateCcw, Square } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle2, Circle, ExternalLink, GitBranch, Loader2, MinusCircle, RotateCcw, Square } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
 import { RemoteActivity } from '@/features/runs/RemoteActivity';
 import { HostingApprovals } from '@/features/runs/HostingApprovals';
@@ -29,7 +29,6 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
     setActiveTab,
     setNotificationPanelOpen
   } = useApp();
-  const [logsOpen, setLogsOpen] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
 
   const run = useMemo(
@@ -55,7 +54,6 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
   const progress = run.status === 'completed' || run.status === 'awaiting_approval' || run.status === 'validating'
     ? 100
     : Math.round((completedStages / run.stages.length) * 100);
-  const currentStage = run.stages[run.currentStageIndex];
 
   return (
     <section className="space-y-3 border-y border-divider py-4" aria-label="Agent run progress">
@@ -118,26 +116,13 @@ export const AgentRunProgress: React.FC<AgentRunProgressProps> = ({ issueId }) =
         </div>
       )}
 
-      {(currentStage?.logs.length || run.testSummary) && (
-        <div>
-          <button
-            type="button"
-            onClick={() => setLogsOpen(value => !value)}
-            className="flex items-center gap-1 text-[11px] font-medium text-content-muted transition-colors hover:text-content-secondary"
-            aria-expanded={logsOpen}
-          >
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${logsOpen ? 'rotate-180' : ''}`} />
-            Run details
-          </button>
-          {logsOpen && (
-            <div className="mt-2 space-y-1 bg-canvas p-3 font-mono text-[10px] leading-relaxed text-content-muted">
-              {currentStage?.logs.map(log => <p key={log}>{log}</p>)}
-              {run.testSummary && <p className="text-content-secondary">{run.testSummary}</p>}
-              {run.changedFiles ? <p>+{run.insertions || 0} / -{run.deletions || 0} across {run.changedFiles} files</p> : null}
-            </div>
-          )}
+      {/* The raw log is not repeated here: every line already appears in the activity feed above. */}
+      {(run.testSummary || run.changedFiles) ? (
+        <div className="space-y-1 text-[11px] leading-relaxed text-content-muted">
+          {run.testSummary && <p className="text-content-secondary">{run.testSummary}</p>}
+          {run.changedFiles ? <p>+{run.insertions || 0} / -{run.deletions || 0} across {run.changedFiles} files</p> : null}
         </div>
-      )}
+      ) : null}
 
       {['queued', 'running'].includes(run.status) && (
         confirmCancel ? (
