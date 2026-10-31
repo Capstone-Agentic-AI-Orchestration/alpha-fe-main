@@ -54,6 +54,7 @@ const EVENTS = [
   'squad_member_started', 'squad_run_completed', 'squad_run_failed', 'squad_run_cancelled',
   'agent_call.activity', 'orchestration_event'
 ];
+const EVENT_REFRESH_MIN_INTERVAL_MS = 5_000;
 
 function buildSnapshotEventIds(snapshot: ProjectBuildSnapshot): Set<string> {
   return new Set([
@@ -171,10 +172,12 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
   const snapshot = loaded?.key === scopeKey ? loaded.snapshot : null;
   const requestRef = useRef(0);
   const trackedEventIdsRef = useRef<Set<string>>(new Set());
+  const lastSnapshotRefreshAtRef = useRef(0);
 
   const refresh = useCallback(async () => {
     if (!projectId || !enabled || document.visibilityState === 'hidden') return;
     const request = ++requestRef.current;
+    lastSnapshotRefreshAtRef.current = Date.now();
     try {
       const next = await apiService.getProjectBuildSnapshot(projectId, undefined, threadId ?? undefined);
       if (request === requestRef.current) {
@@ -193,14 +196,30 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
     if (!projectId || !enabled) return undefined;
     void refresh();
     let debounce: number | undefined;
+    const runScheduledRefresh = () => {
+      debounce = undefined;
+      if (document.visibilityState !== 'visible') return;
+      const wait = EVENT_REFRESH_MIN_INTERVAL_MS - (Date.now() - lastSnapshotRefreshAtRef.current);
+      if (wait > 0) {
+        debounce = window.setTimeout(runScheduledRefresh, wait);
+        return;
+      }
+      void refresh();
+    };
     const schedule = (payload: unknown) => {
       if (document.visibilityState === 'hidden' || !eventRunIds(payload).some(id => trackedEventIdsRef.current.has(id))) return;
-      if (debounce !== undefined) window.clearTimeout(debounce);
-      debounce = window.setTimeout(() => void refresh(), 500);
+      if (debounce !== undefined) return;
+      const sinceRefresh = Date.now() - lastSnapshotRefreshAtRef.current;
+      const delay = Math.max(500, EVENT_REFRESH_MIN_INTERVAL_MS - sinceRefresh);
+      debounce = window.setTimeout(runScheduledRefresh, delay);
     };
     const unsubs = EVENTS.map(event => runnerSocket.on(event, schedule));
     const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void refresh();
+      if (document.visibilityState === 'visible') {
+        if (debounce !== undefined) window.clearTimeout(debounce);
+        debounce = undefined;
+        void refresh();
+      }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
