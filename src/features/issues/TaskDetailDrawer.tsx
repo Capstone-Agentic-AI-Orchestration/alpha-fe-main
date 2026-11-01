@@ -1,9 +1,10 @@
-import React, { useId } from 'react';
-import { ArrowUpRight, Bot, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react';
+import React, { useId, useState } from 'react';
+import { ArrowUpRight, Bot, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import type { Issue, IssuePriority, IssueStatus } from '@/shared/types';
 import type { IssueBuildStatus } from '@/shared/services/apiService';
 import { CopyButton } from '@/shared/components/CopyButton';
+import { Modal } from '@/shared/components/Modal';
 import { AgentRunProgress } from '@/features/runs/AgentRunProgress';
 import { BuildChip } from './BuildChip';
 import { TASK_PRIORITIES, TASK_STATUSES, nextStepFor, type NextStepAction } from './taskFlow';
@@ -16,6 +17,8 @@ interface TaskDetailDrawerProps {
   buildActive: boolean;
   canStartBuild: boolean;
   onClose: () => void;
+  /** Remove the task after the user confirms the destructive action. */
+  onRemove: (issue: Issue) => void;
   /** Status changes go through the board so Building and Done keep their confirmations. */
   onRequestStatus: (issue: Issue, status: IssueStatus) => void;
   onPlanBuild: (issue: Issue) => void;
@@ -54,17 +57,19 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   buildActive,
   canStartBuild,
   onClose,
+  onRemove,
   onRequestStatus,
   onPlanBuild,
   onOpenBuildChat,
   onHandOff
 }) => {
-  const { updateIssue, addIssueComment, can, identity, currentUser, projects } = useApp();
+  const { updateIssue, addIssueComment, can, identity, currentUser, projects, role } = useApp();
   const ids = useId();
   const canManageIssues = can('manage_issues');
   const [tab, setTab] = useTabSessionState<DrawerTab>(`${sessionPrefix}.drawerTab`, 'overview');
   const [newSubtask, setNewSubtask] = useTabSessionState<string>(`${sessionPrefix}.newSubtaskTitle`, '');
   const [comment, setComment] = useTabSessionState<string>(`${sessionPrefix}.newComment`, '');
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   const project = projects.find(item => item.id === issue.projectId);
   const statusIndex = TASK_STATUSES.findIndex(item => item.id === issue.status);
@@ -148,6 +153,17 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
         <span className="font-mono text-xs text-content-secondary">{issue.identifier}</span>
         <CopyButton value={issue.identifier} label={`task ID ${issue.identifier}`} />
         {project && <span className="truncate">in {project.name}</span>}
+        {canManageIssues && (
+          <button
+            type="button"
+            onClick={() => setRemoveDialogOpen(true)}
+            aria-label={`Remove task ${issue.identifier}`}
+            title="Remove task"
+            className="rounded-md p-1.5 text-content-muted transition-colors hover:bg-status-danger-subtle hover:text-status-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          >
+            <Trash2 aria-hidden="true" className="h-4 w-4" />
+          </button>
+        )}
         <button type="button" onClick={onClose} aria-label="Close task details" className="ml-auto rounded-md p-1.5 text-content-muted hover:bg-surface-high hover:text-content">
           <X className="h-4 w-4" />
         </button>
@@ -360,7 +376,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     )}
                   </div>
                 )
-                : <p className="text-[13px] text-content-muted">No build yet. {canStartBuild ? 'Plan one to have the Orchestrator do this task.' : ''}</p>}
+                : <p className="text-[13px] text-content-muted">No build yet. {canStartBuild ? 'Plan one to have the Orchestrator do this task.' : role === 'pm' ? 'A developer can plan and run this task.' : ''}</p>}
               {!build && canStartBuild && (
                 <button type="button" onClick={() => onPlanBuild(issue)} className="inline-flex h-8 items-center gap-2 rounded-md border border-divider px-3 text-[12.5px] font-medium text-content-secondary hover:bg-surface-high hover:text-content">
                   <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-link" /> Plan a build
@@ -400,6 +416,49 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
           </div>
         </div>
       </form>
+
+      <Modal
+        isOpen={removeDialogOpen}
+        onClose={() => setRemoveDialogOpen(false)}
+        title="Remove task?"
+        subtitle={`${issue.identifier} · ${issue.title}`}
+        maxWidth="max-w-md"
+        footer={(
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setRemoveDialogOpen(false)}
+              className="rounded-md border border-divider px-3.5 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            >
+              Keep task
+            </button>
+            <button
+              type="button"
+              disabled={buildActive}
+              onClick={() => {
+                if (buildActive) return;
+                setRemoveDialogOpen(false);
+                onRemove(issue);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-status-danger px-3.5 py-2 text-sm font-semibold text-on-accent transition-colors hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
+              Remove task
+            </button>
+          </div>
+        )}
+      >
+        <div className="space-y-3 text-sm leading-relaxed text-content-secondary">
+          <p>This permanently removes the task, its subtasks, comments, and task history from the workspace.</p>
+          {buildActive ? (
+            <p role="alert" className="rounded-md border border-status-warning-border bg-status-warning-subtle px-3 py-2 text-status-warning">
+              This task has an active build. Wait for the build to stop before removing it.
+            </p>
+          ) : (
+            <p>This cannot be undone.</p>
+          )}
+        </div>
+      </Modal>
     </aside>
   );
 };

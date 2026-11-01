@@ -18,7 +18,7 @@ describe('build review tab', () => {
   });
   it('explains publication permissions instead of showing a disabled approval choice', () => {
     const html = render('awaiting_approval', false);
-    expect(html).toContain('A project manager or admin must approve publication.');
+    expect(html).toContain('A developer or admin must approve publication.');
     expect(html).toContain('authorize pushing this revision');
     expect(html).not.toContain('<input');
     expect(html).not.toContain('Open the full review');

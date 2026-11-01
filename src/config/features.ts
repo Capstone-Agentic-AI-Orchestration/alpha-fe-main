@@ -5,14 +5,14 @@ import type { NavigationTab, UserRole } from '@/shared/types';
  * runtimes and integrations, and repository setup when creating
  * a project, and attaching folders or repositories to a project.
  *
- * Project managers do not use AI for now, so it is hidden for them. Hidden, not
- * removed: the views, components and backend APIs all stay. Set `pm` back to
- * true to bring every one of these surfaces back for project managers.
+ * Project managers can inspect agents, ask/review agent work, and inspect
+ * cached runtime/skill catalogs. Capability checks keep execution, runtime
+ * scans, and configuration read-only for them.
  */
 export const AI_FEATURES_BY_ROLE: Record<UserRole, boolean> = {
   client: true,
   dev: true,
-  pm: false,
+  pm: true,
   admin: true
 };
 

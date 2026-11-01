@@ -189,8 +189,10 @@ export function nextStepFor(input: NextStepInput): NextStep {
             secondary: plan
           }
         : {
-            title: 'Ready to build',
-            text: 'The Orchestrator drafts a plan and picks an agent for each step. Nothing in the code changes until the plan is approved.',
+            title: plan ? 'Ready to build' : 'Ready for a developer',
+            text: plan
+              ? 'The Orchestrator drafts a plan and picks an agent for each step. Nothing in the code changes until the plan is approved.'
+              : 'A developer will plan and run this task. You can review the resulting work here.',
             primary: plan
           };
   }

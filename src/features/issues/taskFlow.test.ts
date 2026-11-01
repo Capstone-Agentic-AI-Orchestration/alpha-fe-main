@@ -60,6 +60,13 @@ describe('nextStepFor', () => {
     expect(step.secondary?.action).toBe('plan_build');
   });
 
+  it('explains that review-only roles wait for a developer', () => {
+    const step = nextStepFor({ ...base, canStartBuild: false });
+    expect(step.title).toBe('Ready for a developer');
+    expect(step.text).toContain('review the resulting work');
+    expect(step.primary).toBeUndefined();
+  });
+
   it('sends active builds to their chat', () => {
     const step = nextStepFor({ ...base, buildActive: true, buildStatus: 'awaiting_plan_approval', hasBuildChat: true });
     expect(step.title).toBe('Plan ready to approve');

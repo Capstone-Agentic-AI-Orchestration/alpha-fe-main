@@ -370,7 +370,7 @@ export const RuntimesView: React.FC = () => {
                       <Check className="w-3.5 h-3.5" />
                       <span>Default</span>
                     </span>
-                  ) : (
+                  ) : canManageRuntimes ? (
                     <button
                       disabled={rt.status !== 'online' || models.length === 0}
                       onClick={(e) => {
@@ -381,6 +381,10 @@ export const RuntimesView: React.FC = () => {
                     >
                       Make default
                     </button>
+                  ) : (
+                    <span className="text-[10px] text-content-muted" title="Only developers and admins can change the default runtime">
+                      Read only
+                    </span>
                   )}
                 </div>
               </div>
@@ -388,8 +392,8 @@ export const RuntimesView: React.FC = () => {
           })}
         </div>
         {filteredRuntimes.length === 0 && <div role="status" className="py-16 text-center">
-          <p className="text-sm font-medium text-content-secondary">{runtimes.length ? 'No runtimes match your filters' : 'No runtimes detected yet'}</p>
-          <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-content-muted">{runtimes.length ? 'Try another search or clear the filters to see your detected engines.' : 'Start an installed engine, then scan this host to discover its available models.'}</p>
+          <p className="text-sm font-medium text-content-secondary">{runtimes.length ? 'No runtimes match your filters' : canManageRuntimes ? 'No runtimes detected yet' : 'No cached runtimes available'}</p>
+          <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-content-muted">{runtimes.length ? 'Try another search or clear the filters to see your detected engines.' : canManageRuntimes ? 'Start an installed engine, then scan this host to discover its available models.' : 'A developer or admin must scan the host before a runtime can be reviewed here.'}</p>
         </div>}
       </div>
 
@@ -546,7 +550,7 @@ export const RuntimesView: React.FC = () => {
             </div>
 
             {/* Set as default action */}
-            {!selectedRuntime.isDefault && (
+            {!selectedRuntime.isDefault && canManageRuntimes && (
               <div className="pt-2 border-t border-divider">
                 <button
                   onClick={() => setDefaultRuntime(selectedRuntime.id)}
@@ -556,6 +560,11 @@ export const RuntimesView: React.FC = () => {
                   Set as Default LLM Engine
                 </button>
               </div>
+            )}
+            {!selectedRuntime.isDefault && !canManageRuntimes && (
+              <p className="border-t border-divider pt-3 text-[11px] leading-relaxed text-content-muted">
+                Runtime selection is read-only for PMs. Ask a developer or admin to change the default engine.
+              </p>
             )}
 
           </div>

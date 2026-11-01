@@ -74,7 +74,7 @@ export const BuildReviewTab: React.FC<BuildReviewTabProps> = ({ projectId, build
         ? 'Read the plan here, then tell Alpha in the main chat whether to start it. You can use your own words.'
         : retrying ? 'Tell Alpha in the main chat if you want to retry the previously approved publication.'
           : 'Read the checks, findings and diff here, then tell Alpha in the main chat if you authorize pushing this revision and creating its pull request.'}</p>
-      {!(planning ? canStart : canApprove) && <p className="text-[11px] text-status-warning">{planning ? 'Your workspace role cannot start builds.' : 'A project manager or admin must approve publication.'}</p>}
+      {!(planning ? canStart : canApprove) && <p className="text-[11px] text-status-warning">{planning ? 'Your workspace role cannot start builds.' : 'A developer or admin must approve publication.'}</p>}
       {blocking && !planning && <p className="text-[11px] text-status-warning">Blocking findings must be resolved before approval.</p>}
       {busy && <p role="status" className="text-xs text-content-secondary">Processing the main-chat decision…</p>}
       {error && <p role="alert" className="text-xs text-status-danger">{error}</p>}
