@@ -513,6 +513,9 @@ type SideTab =
 export const ChatView: React.FC = () => {
   const {
     chatThreads,
+    chatThreadsLoadState,
+    chatThreadsError,
+    retryChatThreads,
     activeThreadId,
     setActiveThreadId,
     createNewThread,
@@ -1516,6 +1519,11 @@ export const ChatView: React.FC = () => {
     .filter(thread => !thread.projectId || !assignedProjects.some(project => project.id === thread.projectId))
     .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt));
   const visibleProjects = showAllProjects ? chatProjects : chatProjects.slice(0, 6);
+  const chatListEmptyLabel = chatThreadsLoadState === 'loading'
+    ? 'Loading chats…'
+    : chatThreadsLoadState === 'error' || chatThreadsLoadState === 'stale'
+      ? 'Chats unavailable'
+      : 'No chats';
   useEffect(() => {
     const projectId = activeThread?.projectId;
     if (projectId && assignedProjects.some(project => project.id === projectId)) {
@@ -1736,6 +1744,8 @@ export const ChatView: React.FC = () => {
         <button type="button" onClick={() => setThreadListCollapsed(false)} aria-label="Show conversations" title="Show conversations" className="flex h-16 w-5 items-center justify-center rounded-full border border-divider bg-surface-raised/90 text-content-secondary opacity-0 shadow-lg shadow-black/40 transition-all duration-200 hover:border-divider hover:text-content group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"><ChevronRight className="h-3.5 w-3.5" /></button>
       </div> : <aside aria-label="Project conversations" className="relative z-30 flex h-full w-full min-w-0 flex-col border-r border-divider bg-shell">
         <div className="flex items-start justify-between gap-2 border-b border-divider px-4 py-3"><div className="min-w-0"><h2 className="text-base font-semibold text-content">{isClient ? 'Messages' : 'Project chat'}</h2><p className="mt-0.5 truncate text-[10px] text-content-muted">{activeWorkspace?.name ?? 'Workspace'}</p></div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={startNewThread} aria-label="New chat" title="New chat" className="rounded-lg p-1.5 text-content-secondary hover:bg-surface-high hover:text-content"><Plus className="h-4 w-4" /></button><button type="button" onClick={() => setThreadListCollapsed(true)} aria-label="Collapse conversations" title="Collapse conversations" className="rounded-lg p-1.5 text-content-secondary hover:bg-surface-high hover:text-content"><PanelLeftClose className="h-4 w-4" /></button></div></div>
+        {chatThreadsLoadState === 'loading' && <div role="status" className="mx-3 mt-3 flex items-center gap-2 rounded-lg border border-divider bg-surface-raised px-3 py-2 text-[11px] text-content-secondary"><Loader2 className="h-3.5 w-3.5 animate-spin" />Loading conversations…</div>}
+        {chatThreadsError && <div role="alert" className="mx-3 mt-3 rounded-lg border border-status-warning-border bg-status-warning-subtle px-3 py-2.5 text-[11px] text-status-warning"><div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><div className="min-w-0 flex-1"><p className="font-semibold">Conversations could not be loaded</p><p className="mt-1 break-words text-status-warning/80">{chatThreadsError}</p></div><button type="button" onClick={() => void retryChatThreads()} disabled={chatThreadsLoadState === 'loading'} className="inline-flex shrink-0 items-center gap-1 rounded-md border border-status-warning-border px-2 py-1 font-semibold hover:bg-status-warning-subtle disabled:opacity-50"><RefreshCw className="h-3 w-3" />Retry</button></div></div>}
         <div className="flex-1 overflow-y-auto px-2 py-3">
           {isClient ? <div className="space-y-1">{chatThreads.map(thread => renderThreadRow(thread))}</div> : <>
             <div className="mb-2 flex items-center justify-between px-2"><h3 className="text-[11px] font-semibold uppercase tracking-wider text-content-muted">Projects</h3>{can('create_project') && <button type="button" onClick={() => setShowCreateProject(true)} aria-label="Create project" title="Create project" className="rounded-md p-1 text-content-secondary hover:bg-surface-high hover:text-content"><Plus className="h-4 w-4" /></button>}</div>
@@ -1751,13 +1761,13 @@ export const ChatView: React.FC = () => {
                   <div className="relative"><button type="button" onClick={() => setOpenProjectMenuId(value => value === item.id ? null : item.id)} aria-label={'Options for ' + item.name} aria-expanded={projectMenuOpen} className={'rounded p-1 text-content-muted hover:bg-surface-high hover:text-content focus:opacity-100 ' + (projectMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100')}><MoreHorizontal className="h-3.5 w-3.5" /></button>
                     {projectMenuOpen && <div role="menu" aria-label={'Options for ' + item.name} className="absolute right-0 top-full z-40 mt-1 w-44 rounded-xl border border-divider bg-surface-raised p-1.5 shadow-xl"><button type="button" role="menuitem" onClick={() => { setOpenProjectMenuId(null); startDraft(item.id); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-content-secondary hover:bg-surface-high"><Plus className="h-3.5 w-3.5" />New chat</button><button type="button" role="menuitem" onClick={() => { setOpenProjectMenuId(null); setTabSessionState(activeTabId, 'projects.boardView', 'repository'); setActiveTab('projects'); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-content-secondary hover:bg-surface-high"><FolderGit2 className="h-3.5 w-3.5" />Open project</button></div>}</div>
                 </div>
-                {expanded && <div className="ml-3 border-l border-divider pl-2">{threads.length ? <div className="space-y-0.5">{visible.map(thread => renderThreadRow(thread, true))}{threads.length > 5 && <button type="button" onClick={() => setShowMoreThreads(previous => ({ ...previous, [item.id]: !previous[item.id] }))} className="w-full rounded-md px-3 py-1.5 text-left text-[10px] text-content-muted hover:bg-surface-high hover:text-content-secondary">{more ? 'Show less' : 'Show ' + (threads.length - 5) + ' more'}</button>}</div> : <div className="px-3 py-2 text-[10px] text-content-muted">No chats</div>}</div>}
+                {expanded && <div className="ml-3 border-l border-divider pl-2">{threads.length ? <div className="space-y-0.5">{visible.map(thread => renderThreadRow(thread, true))}{threads.length > 5 && <button type="button" onClick={() => setShowMoreThreads(previous => ({ ...previous, [item.id]: !previous[item.id] }))} className="w-full rounded-md px-3 py-1.5 text-left text-[10px] text-content-muted hover:bg-surface-high hover:text-content-secondary">{more ? 'Show less' : 'Show ' + (threads.length - 5) + ' more'}</button>}</div> : <div className="px-3 py-2 text-[10px] text-content-muted">{chatListEmptyLabel}</div>}</div>}
               </section>;
             })}{!chatProjects.length && <div className="px-2 py-3 text-[11px] text-content-muted">No projects assigned yet.</div>}{chatProjects.length > 6 && <button type="button" onClick={() => setShowAllProjects(value => !value)} className="w-full px-2 py-2 text-left text-[11px] text-content-muted hover:text-content-secondary">{showAllProjects ? 'Show fewer projects' : 'Show ' + (chatProjects.length - 6) + ' more projects'}</button>}</div>
             <div className="mb-2 mt-6 px-2"><h3 className="text-[11px] font-semibold uppercase tracking-wider text-content-muted">Recents</h3></div>
-            <div className="space-y-1">{recentThreads.map(thread => renderThreadRow(thread))}{!recentThreads.length && <div className="px-2 py-2 text-[10px] text-content-muted">No recent chats</div>}</div>
+            <div className="space-y-1">{recentThreads.map(thread => renderThreadRow(thread))}{!recentThreads.length && <div className="px-2 py-2 text-[10px] text-content-muted">{chatThreadsLoadState === 'ready' || chatThreadsLoadState === 'idle' ? 'No recent chats' : chatListEmptyLabel}</div>}</div>
           </>}
-          {!chatThreads.length && <div className="px-3 py-6 text-xs text-content-muted">No conversations yet. Start one with +.</div>}
+          {!chatThreads.length && (chatThreadsLoadState === 'ready' || chatThreadsLoadState === 'idle') && <div className="px-3 py-6 text-xs text-content-muted">No conversations yet. Start one with +.</div>}
         </div>
       </aside>}
       </div>
