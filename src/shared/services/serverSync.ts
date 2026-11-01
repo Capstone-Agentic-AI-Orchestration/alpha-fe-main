@@ -33,6 +33,14 @@ export interface ServerSnapshot {
 export interface ServerSyncResult {
   snapshot: Partial<ServerSnapshot>;
   board: BoardSyncResult;
+  /** Endpoint failures are partial: the board may still be usable. */
+  failures: Partial<Record<keyof ServerSnapshot, string>>;
+}
+
+function describeSyncFailure(reason: unknown): string {
+  const message = reason instanceof Error ? reason.message : String(reason);
+  const compact = message.replace(/\s+/g, ' ').trim();
+  return compact.length > 240 ? `${compact.slice(0, 240)}…` : compact || 'The service did not return a reason.';
 }
 
 /**
@@ -45,10 +53,14 @@ export interface ServerSyncResult {
  */
 async function settleSnapshot(
   calls: Partial<Record<keyof ServerSnapshot, Promise<unknown>>>
-): Promise<Partial<ServerSnapshot>> {
+): Promise<{
+  snapshot: Partial<ServerSnapshot>;
+  failures: Partial<Record<keyof ServerSnapshot, string>>;
+}> {
   const entries = Object.entries(calls) as [keyof ServerSnapshot, Promise<unknown>][];
   const settled = await Promise.allSettled(entries.map(([, request]) => request));
   const snapshot: Partial<ServerSnapshot> = {};
+  const failures: Partial<Record<keyof ServerSnapshot, string>> = {};
 
   settled.forEach((result, i) => {
     const key = entries[i][0];
@@ -58,11 +70,17 @@ async function settleSnapshot(
     ) {
       snapshot[key] = result.value as never;
     } else if (result.status === 'rejected') {
-      console.warn(`[sync] ${String(key)} failed to load:`, result.reason?.message ?? result.reason);
+      const message = describeSyncFailure(result.reason);
+      failures[key] = message;
+      console.warn(`[sync] ${String(key)} failed to load:`, message);
+    } else {
+      const message = 'The service returned an invalid response.';
+      failures[key] = message;
+      console.warn(`[sync] ${String(key)} failed to load:`, message);
     }
   });
 
-  return snapshot;
+  return { snapshot, failures };
 }
 
 /**
@@ -87,11 +105,11 @@ export async function fetchServerSnapshot(
       // History for builds started before squads were removed.
       squadRuns: apiService.getSquadRuns()
     } as const;
-    const [snapshot, board] = await Promise.all([
+    const [settled, board] = await Promise.all([
       settleSnapshot(calls),
       catchUpBoard(workspaceId)
     ]);
-    return { snapshot, board };
+    return { ...settled, board };
   }
 
   return fetchLegacyServerSnapshot();
@@ -112,7 +130,7 @@ async function fetchLegacyServerSnapshot(): Promise<Partial<ServerSnapshot>> {
     squadRuns: apiService.getSquadRuns()
   } as const;
 
-  return settleSnapshot(calls);
+  return (await settleSnapshot(calls)).snapshot;
 }
 
 /** Cheap liveness probe. Never throws. */

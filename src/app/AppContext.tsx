@@ -111,6 +111,8 @@ export interface RunPlanDraft {
   updatedAt: string;
 }
 
+export type ChatThreadsLoadState = 'idle' | 'loading' | 'ready' | 'stale' | 'error';
+
 interface AppContextType {
   /** Reachability of the local Alpha daemon. Agents cannot run while 'offline'. */
   serverStatus: ServerStatus;
@@ -222,6 +224,10 @@ interface AppContextType {
   
   // Chat
   chatThreads: ChatThread[];
+  /** Whether the project conversation list is authoritative, stale, or unavailable. */
+  chatThreadsLoadState: ChatThreadsLoadState;
+  chatThreadsError: string | null;
+  retryChatThreads: () => Promise<void>;
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
   createNewThread: (title?: string, projectId?: string) => string;
@@ -902,7 +908,19 @@ ${e.detail}`;
   const [settings, setSettings] = useState<WorkspaceSettings>(() =>
     normalizeSettings(loadFromStorage('settings', defaultSettings))
   );
-  const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => loadFromStorage<ChatThread[]>('chat_threads', []));
+  /** Do not persist a fallback empty list over a workspace cache before the daemon answers. */
+  const chatCacheWriteEnabledRef = useRef(false);
+  const chatLoadGenerationRef = useRef(0);
+  const [chatThreads, setChatThreadsState] = useState<ChatThread[]>(() =>
+    loadFromStorage<ChatThread[]>(initialWorkspaceCacheKey('chat_threads'), [])
+  );
+  const chatThreadsRef = useRef(chatThreads);
+  chatThreadsRef.current = chatThreads;
+  /** Local mutations are still persisted, even after a temporary read failure. */
+  const setChatThreads = useCallback((next: React.SetStateAction<ChatThread[]>) => {
+    chatCacheWriteEnabledRef.current = true;
+    setChatThreadsState(next);
+  }, []);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   /**
    * Threads whose messages have been fetched this session.
@@ -912,7 +930,9 @@ ${e.detail}`;
    * would re-fetch on every switch.
    */
   const loadedThreadsRef = useRef<Set<string>>(new Set());
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage<ChatMessage[]>('chat_messages', []));
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() =>
+    loadFromStorage<ChatMessage[]>(initialWorkspaceCacheKey('chat_messages'), [])
+  );
   const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() =>
     normalizeLegacyPrototypeRuns(loadFromStorage<PrototypeRun[]>(initialWorkspaceCacheKey('prototype_runs'), []))
   );
@@ -971,6 +991,11 @@ ${e.detail}`;
   const [chatTypingByThread, setChatTypingByThread] = useState<Record<string, boolean>>({});
   const isAgentTyping = activeThreadId ? Boolean(chatTypingByThread[activeThreadId]) : false;
   const [activeChatAgentId, setActiveChatAgentId] = useState<string | null>(null);
+  const [chatThreadsLoadState, setChatThreadsLoadState] = useState<ChatThreadsLoadState>(
+    activeWorkspaceId ? 'loading' : 'idle'
+  );
+  const [chatThreadsError, setChatThreadsError] = useState<string | null>(null);
+  const chatRetryIdentityRef = useRef<string | null>(null);
 
   /* ---------------------------------------------------------------------------
    * Daemon hydration
@@ -984,6 +1009,37 @@ ${e.detail}`;
    * whenever the daemon is reachable.
    * ------------------------------------------------------------------------ */
   const [serverStatus, setServerStatus] = useState<ServerStatus>('connecting');
+
+  const describeChatLoadError = (error: unknown): string => {
+    const message = error instanceof Error ? error.message : String(error);
+    const compact = message.replace(/\s+/g, ' ').trim();
+    return compact.length > 240 ? `${compact.slice(0, 240)}…` : compact || 'The conversation service did not return a reason.';
+  };
+
+  const applyChatThreadsSnapshot = useCallback((threads: ChatThread[]) => {
+    chatCacheWriteEnabledRef.current = true;
+    setChatThreadsState(previous => mergeThreadsWithCachedMessages(threads, previous));
+    setChatThreadsLoadState('ready');
+    setChatThreadsError(null);
+  }, []);
+
+  const retryChatThreads = useCallback(async () => {
+    const workspaceId = activeWorkspaceRef.current;
+    if (!workspaceId || localMode) return;
+
+    const generation = ++chatLoadGenerationRef.current;
+    setChatThreadsLoadState('loading');
+    setChatThreadsError(null);
+    try {
+      const threads = await apiService.getChatThreads();
+      if (generation !== chatLoadGenerationRef.current || activeWorkspaceRef.current !== workspaceId) return;
+      applyChatThreadsSnapshot(threads);
+    } catch (error) {
+      if (generation !== chatLoadGenerationRef.current || activeWorkspaceRef.current !== workspaceId) return;
+      setChatThreadsError(describeChatLoadError(error));
+      setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
+    }
+  }, [applyChatThreadsSnapshot, localMode]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1016,10 +1072,17 @@ ${e.detail}`;
       if (!selectedWorkspaceId) {
         if (!cancelled) {
           setServerStatus('offline');
+          setChatThreadsLoadState('idle');
+          setChatThreadsError(null);
           setWorkspaceLoading(false);
         }
         return;
       }
+
+      chatCacheWriteEnabledRef.current = false;
+      const hydrationGeneration = ++chatLoadGenerationRef.current;
+      setChatThreadsLoadState('loading');
+      setChatThreadsError(null);
 
       let result;
       try {
@@ -1028,6 +1091,8 @@ ${e.detail}`;
         console.warn('[sync] workspace hydration failed:', error instanceof Error ? error.message : error);
         if (!cancelled) {
           setServerStatus('offline');
+          setChatThreadsError(describeChatLoadError(error));
+          setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
           setWorkspaceLoading(false);
         }
         return;
@@ -1057,10 +1122,11 @@ ${e.detail}`;
        * ask for it back. Merging keeps what is in hand; `loadThreadMessages`
        * fetches the rest when a thread is opened.
        */
-      if (snapshot.chatThreads) {
-        setChatThreads(prev => {
-          return mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev);
-        });
+      if (hydrationGeneration === chatLoadGenerationRef.current && snapshot.chatThreads) {
+        applyChatThreadsSnapshot(snapshot.chatThreads as ChatThread[]);
+      } else if (hydrationGeneration === chatLoadGenerationRef.current && result.failures.chatThreads) {
+        setChatThreadsError(result.failures.chatThreads);
+        setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
       }
       if (snapshot.runs) hydratePrototypeRuns(snapshot.runs);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
@@ -1126,6 +1192,22 @@ ${e.detail}`;
 
     return () => { cancelled = true; };
   }, []);
+
+  /** A session can finish resuming after the first collection hydration. Retry chats once for that identity. */
+  useEffect(() => {
+    if (
+      localMode ||
+      identityStatus !== 'ready' ||
+      !identity?.login ||
+      !activeWorkspaceId ||
+      !['error', 'stale'].includes(chatThreadsLoadState)
+    ) return;
+
+    const retryKey = `${activeWorkspaceId}:${identity.login}`;
+    if (chatRetryIdentityRef.current === retryKey) return;
+    chatRetryIdentityRef.current = retryKey;
+    void retryChatThreads();
+  }, [activeWorkspaceId, chatThreadsLoadState, identity?.login, identityStatus, localMode, retryChatThreads]);
 
   /**
    * Keep detected runtimes fresh.
@@ -1292,7 +1374,10 @@ ${e.detail}`;
   }, [role, activeWorkspaceId, localMode]);
   useEffect(() => { saveToStorage(workspaceStorageKey('analytics_v2'), analytics); }, [analytics, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('settings'), settings); }, [settings, activeWorkspaceId]);
-  useEffect(() => { saveToStorage(workspaceStorageKey('chat_threads'), chatThreads); }, [chatThreads, activeWorkspaceId]);
+  useEffect(() => {
+    if (!activeWorkspaceId || !chatCacheWriteEnabledRef.current) return;
+    saveToStorage(workspaceStorageKey('chat_threads'), chatThreads);
+  }, [chatThreads, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('chat_messages'), chatMessages); }, [chatMessages, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('prototype_runs'), prototypeRuns); }, [prototypeRuns, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('squad_runs'), squadRuns); }, [squadRuns, activeWorkspaceId]);
@@ -1364,6 +1449,10 @@ ${e.detail}`;
     activeWorkspaceRef.current = workspaceId;
     setActiveWorkspaceIdState(workspaceId);
     setActiveWorkspaceId(workspaceId);
+    chatCacheWriteEnabledRef.current = false;
+    const hydrationGeneration = ++chatLoadGenerationRef.current;
+    setChatThreadsLoadState('loading');
+    setChatThreadsError(null);
     const superseded = () => activeWorkspaceRef.current !== workspaceId;
     setActiveThreadId(null);
     // The next workspace may have thread IDs loaded earlier in this session.
@@ -1376,7 +1465,7 @@ ${e.detail}`;
     setProjects(cachedBoard.projects);
     setIssues(normalizeLegacyIssues(cachedBoard.issues));
     setAgents(normalizeLegacyAgents(cachedBoard.agents));
-    setChatThreads(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
+    setChatThreadsState(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
     setChatMessages(loadFromStorage<ChatMessage[]>(`chat_messages:${workspaceId}`, []));
     hydratePrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, []));
     setSquadRuns(loadFromStorage<SquadRun[]>(`squad_runs:${workspaceId}`, []));
@@ -1394,8 +1483,11 @@ ${e.detail}`;
       const snapshot = result.snapshot;
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
-      if (snapshot.chatThreads) {
-        setChatThreads(prev => mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev));
+      if (hydrationGeneration === chatLoadGenerationRef.current && snapshot.chatThreads) {
+        applyChatThreadsSnapshot(snapshot.chatThreads as ChatThread[]);
+      } else if (hydrationGeneration === chatLoadGenerationRef.current && result.failures.chatThreads) {
+        setChatThreadsError(result.failures.chatThreads);
+        setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
       }
       if (snapshot.runs) hydratePrototypeRuns(snapshot.runs);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
@@ -1409,7 +1501,11 @@ ${e.detail}`;
       setActiveTabId(nextTabId);
       showToast('Workspace switched', `Now viewing ${target.name}.`, 'success');
     } catch (error) {
-      if (!superseded()) showToast('Workspace switch failed', error instanceof Error ? error.message : String(error), 'error');
+      if (!superseded()) {
+        setChatThreadsError(describeChatLoadError(error));
+        setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
+        showToast('Workspace switch failed', error instanceof Error ? error.message : String(error), 'error');
+      }
     } finally {
       if (!superseded()) setWorkspaceSwitching(false);
     }
@@ -3794,7 +3890,10 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
           const next = await apiService.getIdentity(true);
           setIdentity(next);
           setIdentityStatus('ready');
-          if (next.github === 'ok') setLocalMode(false);
+          if (next.github === 'ok') {
+            setLocalMode(false);
+            void retryChatThreads();
+          }
         } catch {
           // An unreachable daemon leaves the last answer standing.
           setIdentityStatus(prev => (prev === 'ready' ? prev : 'unreachable'));
@@ -3818,6 +3917,9 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       handleApproval,
       analytics: scopedAnalytics,
       chatThreads: scopedChatThreads,
+      chatThreadsLoadState,
+      chatThreadsError,
+      retryChatThreads,
       activeThreadId,
       setActiveThreadId,
       createNewThread,
