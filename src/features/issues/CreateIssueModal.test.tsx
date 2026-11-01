@@ -22,7 +22,7 @@ const render = () => renderToStaticMarkup(<CreateIssueModal isOpen onClose={() =
 describe('New task dialog', () => {
   it('is one form, with no agent mode and no create-another toggle', () => {
     const html = render();
-    for (const shown of ['New task', 'What needs to happen?', 'Status', 'Priority', 'Assignee', 'Labels', 'Suggest from description', 'Create task']) {
+    for (const shown of ['New task', 'Task title', 'What needs to happen?', 'Description', 'Status', 'Priority', 'Assignee', 'Labels', 'Suggest from description', 'Create task']) {
       expect(html).toContain(shown);
     }
     for (const gone of ['Create another', 'Switch to', 'Create with agent', 'Deconstruct user prompt']) {
@@ -35,6 +35,13 @@ describe('New task dialog', () => {
     expect(render()).toContain('Plan a build when it’s created');
     canRunBuilds = false;
     expect(render()).not.toContain('Plan a build when it’s created');
+    expect(render()).toContain('Build planning is available to developers and admins');
     canRunBuilds = true;
+  });
+
+  it('explains why creation is disabled until the required title is present', () => {
+    const html = render();
+    expect(html).toContain('Enter a task title first.');
+    expect(html).toContain('disabled:cursor-default');
   });
 });

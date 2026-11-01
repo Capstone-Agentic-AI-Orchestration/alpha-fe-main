@@ -256,7 +256,7 @@ export const AgentsView: React.FC = () => {
 
   // Add env var
   const handleAddEnvVar = (agentId: string) => {
-    if (!newEnvKey.trim() || !newEnvValue.trim() || !selectedAgent) return;
+    if (!canManageAgents || !newEnvKey.trim() || !newEnvValue.trim() || !selectedAgent) return;
     const updatedEnv = [
       ...(selectedAgent.envVars || []),
       { key: newEnvKey.trim().toUpperCase(), value: newEnvValue.trim(), isSecret: newEnvIsSecret }
@@ -269,7 +269,7 @@ export const AgentsView: React.FC = () => {
 
   // Remove env var
   const handleRemoveEnvVar = (agentId: string, key: string) => {
-    if (!selectedAgent) return;
+    if (!canManageAgents || !selectedAgent) return;
     const updatedEnv = (selectedAgent.envVars || []).filter(e => e.key !== key);
     updateAgent(agentId, { envVars: updatedEnv });
   };
@@ -468,12 +468,14 @@ export const AgentsView: React.FC = () => {
         {/* Table Column Headers */}
         <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-content-muted border-b border-divider items-center">
           <div className="col-span-4 flex items-center gap-3">
-            <input
-              type="checkbox"
-              checked={selectedAgentIds.length > 0 && selectedAgentIds.length === filteredAgents.length}
-              onChange={selectAllFiltered}
-              className="rounded bg-surface-raised border-control text-link focus:ring-0 cursor-pointer"
-            />
+            {canManageAgents && (
+              <input
+                type="checkbox"
+                checked={selectedAgentIds.length > 0 && selectedAgentIds.length === filteredAgents.length}
+                onChange={selectAllFiltered}
+                className="rounded bg-surface-raised border-control text-link focus:ring-0 cursor-pointer"
+              />
+            )}
             <span>Agent</span>
           </div>
           <div className="col-span-2">Status</div>
@@ -500,13 +502,15 @@ export const AgentsView: React.FC = () => {
               >
                 {/* 1. Avatar, Name, Role, Description */}
                 <div className="col-span-4 flex items-center gap-3 min-w-0">
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onClick={(e) => toggleSelectAgent(agent.id, e)}
-                    onChange={() => {}}
-                    className="rounded bg-surface-raised border-control text-link focus:ring-0 cursor-pointer flex-shrink-0"
-                  />
+                  {canManageAgents && (
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onClick={(e) => toggleSelectAgent(agent.id, e)}
+                      onChange={() => {}}
+                      className="rounded bg-surface-raised border-control text-link focus:ring-0 cursor-pointer flex-shrink-0"
+                    />
+                  )}
 
                   <div className="relative flex-shrink-0">
                     <img
@@ -708,6 +712,7 @@ export const AgentsView: React.FC = () => {
                     <input
                       type="text"
                       value={selectedAgent.description || ''}
+                      readOnly={!canManageAgents || isManagedByFile(selectedAgent, 'description')}
                       onChange={(e) => updateAgent(selectedAgent.id, { description: e.target.value })}
                       className="w-full bg-well border border-control rounded-xl px-3 py-2 text-content text-xs focus:outline-none focus:border-control font-mono"
                     />
@@ -725,10 +730,10 @@ export const AgentsView: React.FC = () => {
                     <textarea
                       rows={7}
                       value={selectedAgent.systemPrompt || ''}
-                      readOnly={isManagedByFile(selectedAgent, 'systemPrompt')}
+                      readOnly={!canManageAgents || isManagedByFile(selectedAgent, 'systemPrompt')}
                       onChange={(e) => updateAgent(selectedAgent.id, { systemPrompt: e.target.value })}
                       className={`w-full bg-well border border-control rounded-xl p-3 text-content text-xs leading-relaxed font-mono focus:outline-none focus:border-control ${
-                        isManagedByFile(selectedAgent, 'systemPrompt') ? MANAGED_INPUT_CLASS : ''
+                        !canManageAgents || isManagedByFile(selectedAgent, 'systemPrompt') ? MANAGED_INPUT_CLASS : ''
                       }`}
                     />
                     {/* Say so here rather than let someone edit this field and
@@ -752,6 +757,7 @@ export const AgentsView: React.FC = () => {
                       </div>
                       <select
                         value={selectedAgent.modelProvider || 'Anthropic'}
+                        disabled={!canManageAgents || isManagedByFile(selectedAgent, 'modelProvider')}
                         onChange={(e) => {
                           const prov = e.target.value as ModelProvider;
                           const modelName = defaultModelFor(runtimes, prov) || selectedAgent.modelName;
@@ -792,6 +798,7 @@ export const AgentsView: React.FC = () => {
                             <input
                               type="text"
                               value={selectedAgent.modelName || ''}
+                              disabled={!canManageAgents || isManagedByFile(selectedAgent, 'modelName')}
                               onChange={(e) => updateAgent(selectedAgent.id, { modelName: e.target.value })}
                               placeholder="no models detected — type an id"
                               className="w-full bg-well border border-control rounded-lg px-2.5 py-1.5 text-content font-mono text-xs focus:outline-none focus:border-control"
@@ -802,6 +809,7 @@ export const AgentsView: React.FC = () => {
                         return (
                           <select
                             value={current}
+                            disabled={!canManageAgents || isManagedByFile(selectedAgent, 'modelName')}
                             onChange={(e) => {
                               const modelName = e.target.value;
                               const availableEfforts = reasoningEffortsForProviderModel(
@@ -852,7 +860,7 @@ export const AgentsView: React.FC = () => {
                         return (
                           <select
                             value={current}
-                            disabled={isManagedByFile(selectedAgent, 'reasoningEffort')}
+                            disabled={!canManageAgents || isManagedByFile(selectedAgent, 'reasoningEffort')}
                             onChange={(e) =>
                               updateAgent(selectedAgent.id, {
                                 // `null` is intentional: JSON.stringify drops
@@ -889,6 +897,7 @@ export const AgentsView: React.FC = () => {
                       </div>
                       <select
                         value={selectedAgent.autonomyLevel || 'Semi-Autonomous (Requires Approval)'}
+                        disabled={!canManageAgents || isManagedByFile(selectedAgent, 'autonomyLevel')}
                         onChange={(e) => updateAgent(selectedAgent.id, { autonomyLevel: e.target.value as any })}
                         className="w-full bg-well border border-control rounded-lg px-2.5 py-1.5 text-content text-xs focus:outline-none focus:border-control"
                       >
@@ -921,12 +930,13 @@ export const AgentsView: React.FC = () => {
                         <div
                           key={skill.id}
                           onClick={() => {
+                            if (!canManageAgents) return;
                             const updated = isEnabled
                               ? (selectedAgent.skills || []).filter(s => s !== skill.id)
                               : [...(selectedAgent.skills || []), skill.id];
                             updateAgent(selectedAgent.id, { skills: updated });
                           }}
-                          className={`p-3 rounded-xl border flex items-center justify-between cursor-pointer transition-colors ${
+                          className={`p-3 rounded-xl border flex items-center justify-between transition-colors ${canManageAgents ? 'cursor-pointer' : 'cursor-default opacity-80'} ${
                             isEnabled
                               ? 'bg-surface-raised border-divider text-content'
                               : 'bg-transparent border-divider text-content-muted hover:text-content-secondary'
@@ -939,8 +949,9 @@ export const AgentsView: React.FC = () => {
                           <input
                             type="checkbox"
                             checked={isEnabled}
+                            disabled={!canManageAgents}
                             onChange={() => {}}
-                            className="rounded bg-surface-raised border-control text-link focus:ring-0 ml-3"
+                            className="rounded bg-surface-raised border-control text-link focus:ring-0 ml-3 disabled:cursor-not-allowed"
                           />
                         </div>
                       );
@@ -987,12 +998,15 @@ export const AgentsView: React.FC = () => {
                                   {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                 </button>
                               )}
-                              <button
-                                onClick={() => handleRemoveEnvVar(selectedAgent.id, ev.key)}
-                                className="p-1 text-content-muted hover:text-status-danger"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {canManageAgents && (
+                                <button
+                                  onClick={() => handleRemoveEnvVar(selectedAgent.id, ev.key)}
+                                  className="p-1 text-content-muted hover:text-status-danger"
+                                  aria-label={`Remove ${ev.key}`}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
                             </div>
                           </div>
                         );
@@ -1000,44 +1014,49 @@ export const AgentsView: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Add New Key */}
-                  <div className="p-3 rounded-xl bg-surface-raised border border-divider space-y-2">
-                    <div className="text-[11px] font-medium text-content-secondary">Add Variable</div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        value={newEnvKey}
-                        onChange={(e) => setNewEnvKey(e.target.value)}
-                        placeholder="KEY_NAME"
-                        className="bg-well border border-control rounded-lg px-2.5 py-1.5 text-xs text-content uppercase font-mono focus:outline-none focus:border-control"
-                      />
-                      <input
-                        type="text"
-                        value={newEnvValue}
-                        onChange={(e) => setNewEnvValue(e.target.value)}
-                        placeholder="value"
-                        className="bg-well border border-control rounded-lg px-2.5 py-1.5 text-xs text-content font-mono focus:outline-none focus:border-control"
-                      />
-                    </div>
-                    <div className="flex items-center justify-between pt-1">
-                      <label className="flex items-center gap-1.5 text-[11px] text-content-secondary cursor-pointer">
+                  {canManageAgents ? (
+                    <div className="p-3 rounded-xl bg-surface-raised border border-divider space-y-2">
+                      <div className="text-[11px] font-medium text-content-secondary">Add Variable</div>
+                      <div className="grid grid-cols-2 gap-2">
                         <input
-                          type="checkbox"
-                          checked={newEnvIsSecret}
-                          onChange={(e) => setNewEnvIsSecret(e.target.checked)}
-                          className="rounded bg-surface-raised border-control text-link focus:ring-0"
+                          type="text"
+                          value={newEnvKey}
+                          onChange={(e) => setNewEnvKey(e.target.value)}
+                          placeholder="KEY_NAME"
+                          className="bg-well border border-control rounded-lg px-2.5 py-1.5 text-xs text-content uppercase font-mono focus:outline-none focus:border-control"
                         />
-                        <span>Treat as masked secret</span>
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => handleAddEnvVar(selectedAgent.id)}
-                        className="px-3 py-1 rounded-lg bg-surface-raised hover:bg-surface-high text-content font-medium text-xs transition-colors"
-                      >
-                        Add Key
-                      </button>
+                        <input
+                          type="text"
+                          value={newEnvValue}
+                          onChange={(e) => setNewEnvValue(e.target.value)}
+                          placeholder="value"
+                          className="bg-well border border-control rounded-lg px-2.5 py-1.5 text-xs text-content font-mono focus:outline-none focus:border-control"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between pt-1">
+                        <label className="flex items-center gap-1.5 text-[11px] text-content-secondary cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={newEnvIsSecret}
+                            onChange={(e) => setNewEnvIsSecret(e.target.checked)}
+                            className="rounded bg-surface-raised border-control text-link focus:ring-0"
+                          />
+                          <span>Treat as masked secret</span>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => handleAddEnvVar(selectedAgent.id)}
+                          className="px-3 py-1 rounded-lg bg-surface-raised hover:bg-surface-high text-content font-medium text-xs transition-colors"
+                        >
+                          Add Key
+                        </button>
+                      </div>
                     </div>
-                  </div>
+                  ) : (
+                    <p className="rounded-xl border border-divider bg-surface-raised p-3 text-[11px] leading-relaxed text-content-muted">
+                      Agent environment variables are read-only for PMs.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -1059,9 +1078,10 @@ export const AgentsView: React.FC = () => {
                     <input
                       type="text"
                       value={selectedAgent.customCliArgs || ''}
+                      disabled={!canManageAgents}
                       onChange={(e) => updateAgent(selectedAgent.id, { customCliArgs: e.target.value })}
                       placeholder="e.g. --debug --fallback-model haiku"
-                      className="w-full bg-well border border-control rounded-xl px-3 py-2 text-content font-mono text-xs focus:outline-none focus:border-control"
+                      className="w-full bg-well border border-control rounded-xl px-3 py-2 text-content font-mono text-xs focus:outline-none focus:border-control disabled:cursor-not-allowed disabled:opacity-60"
                     />
                     {/* These flags are now actually passed to the CLI, so say
                         which ones will not be — a refused flag is otherwise
@@ -1172,7 +1192,7 @@ export const AgentsView: React.FC = () => {
       )}
 
       {/* ================= FLOATING BULK ACTIONS TOOLBAR ================= */}
-      {selectedAgentIds.length > 0 && (
+      {canManageAgents && selectedAgentIds.length > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-surface-raised border border-divider rounded-2xl shadow-2xl px-5 py-3 flex items-center gap-4 z-40 animate-slide-up text-xs">
           <span className="font-mono text-content font-medium">
             {selectedAgentIds.length} agents selected

@@ -5,11 +5,13 @@ import type { Issue } from '@/shared/types';
 // Project modules read `window` when they load; this suite renders to static markup in Node.
 vi.hoisted(() => { (globalThis as { window?: unknown }).window ??= globalThis; });
 
+let currentRole: 'dev' | 'pm' = 'dev';
 vi.mock('@/app/AppContext', () => ({
   useApp: () => ({
     updateIssue: vi.fn(),
     addIssueComment: vi.fn(),
-    can: () => true,
+    can: (capability: string) => capability !== 'run_builds' || currentRole !== 'pm',
+    role: currentRole,
     identity: { login: 'maya-reyes', name: 'Maya Reyes' },
     currentUser: { name: 'Maya Reyes' },
     projects: [{ id: 'p1', name: 'Website refresh', key: 'WEB' }]
@@ -26,13 +28,14 @@ const issue = (status: Issue['status']): Issue => ({
   subtasks: [{ id: 's1', title: 'Shorten the headline', completed: true }, { id: 's2', title: 'Swap the photo', completed: false }]
 });
 
-const render = (status: Issue['status'], handOff: boolean) => renderToStaticMarkup(
+const render = (status: Issue['status'], handOff: boolean, canStartBuild = true) => renderToStaticMarkup(
   <TaskDetailDrawer
     issue={issue(status)}
     sessionPrefix="issues"
     buildActive={false}
-    canStartBuild
+    canStartBuild={canStartBuild}
     onClose={() => undefined}
+    onRemove={() => undefined}
     onRequestStatus={() => undefined}
     onPlanBuild={() => undefined}
     onHandOff={handOff ? () => undefined : undefined}
@@ -42,7 +45,7 @@ const render = (status: Issue['status'], handOff: boolean) => renderToStaticMark
 describe('Task details', () => {
   it('shows the status track, properties and tabs', () => {
     const html = render('todo', false);
-    for (const shown of ['WEB-19', 'Backlog', 'In review', 'Priority', 'Assignee', 'Overview', 'Activity', 'Build', '1 of 2', 'Leave a comment']) {
+    for (const shown of ['WEB-19', 'Backlog', 'In review', 'Priority', 'Assignee', 'Overview', 'Activity', 'Build', 'Remove task WEB-19', '1 of 2', 'Leave a comment']) {
       expect(html).toContain(shown);
     }
     expect(html).not.toContain('Live Build Room');
@@ -54,10 +57,15 @@ describe('Task details', () => {
     expect(html).toContain('Work on this in chat');
   });
 
-  it('offers project managers a build plan instead', () => {
-    const html = render('todo', false);
-    expect(html).toContain('Plan a build');
-    expect(html).not.toContain('Work on this in chat');
+  it('keeps PMs in review mode while developers own build planning', () => {
+    currentRole = 'pm';
+    try {
+      const html = render('todo', false, false);
+      expect(html).toContain('A developer will plan and run this task. You can review the resulting work here.');
+      expect(html).not.toContain('Plan a build');
+    } finally {
+      currentRole = 'dev';
+    }
   });
 
   it('lets a manager finish or return reviewed work', () => {

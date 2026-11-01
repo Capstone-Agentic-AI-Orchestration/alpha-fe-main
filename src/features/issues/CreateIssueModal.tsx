@@ -85,7 +85,15 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   const activeProject = projects.find(p => p.id === selectedProjectId) || projects[0];
   const kept = subtasks.filter(subtask => subtask.keep);
   const hasSuggestions = subtasks.some(subtask => subtask.suggested);
+  // Building is entered only by the explicit Orchestrator run command. A
+  // stale tab-session value must not let an old draft create a task in it.
+  const safeStatus: IssueStatus = status === 'agent_running' ? 'todo' : status;
   const canSubmit = Boolean(title.trim() && activeProject);
+  const submitHint = !activeProject
+    ? 'Create a project before creating a task.'
+    : !title.trim()
+      ? 'Enter a task title first.'
+      : 'Create task (Ctrl or Cmd + Enter)';
 
   const reset = () => {
     setTitle('');
@@ -125,12 +133,12 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         description: description.trim(),
         projectId: activeProject.id,
         priority,
-        status,
+        status: safeStatus,
         labels,
         assignedHuman: assignee || undefined,
         subtasks: kept.map(subtask => subtask.title)
       },
-      { planBuild: planBuild && canRunBuilds && status !== 'done' }
+      { planBuild: planBuild && canRunBuilds && safeStatus !== 'done' }
     );
     if (!created) return;
     reset();
@@ -145,20 +153,24 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   };
 
   const footer = (
-    <div className="flex items-center justify-end gap-2">
-      <button type="button" onClick={onClose} className="h-8 rounded-md border border-divider px-3 text-[13px] font-medium text-content-secondary hover:bg-surface-high hover:text-content">
-        Cancel
-      </button>
-      <button
-        type="button"
-        onClick={handleSubmit}
-        disabled={!canSubmit}
-        title="Create task (Ctrl or Cmd + Enter)"
-        className="inline-flex h-8 items-center gap-2.5 rounded-md bg-action px-3 text-[13px] font-semibold text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-40"
-      >
-        Create task
-        <kbd className="font-mono text-[10.5px] font-medium opacity-70">Ctrl ↵</kbd>
-      </button>
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      {!canSubmit && <p id={`${ids}-submit-hint`} className="text-xs text-content-muted" role="status">{submitHint}</p>}
+      <div className="ml-auto flex items-center justify-end gap-2">
+        <button type="button" onClick={onClose} className="h-8 rounded-md border border-divider px-3 text-[13px] font-medium text-content-secondary hover:bg-surface-high hover:text-content">
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!canSubmit}
+          title={submitHint}
+          aria-describedby={!canSubmit ? `${ids}-submit-hint` : undefined}
+          className="inline-flex h-8 items-center gap-2.5 rounded-md bg-action px-3 text-[13px] font-semibold text-on-action hover:bg-action-hover disabled:cursor-default disabled:opacity-40"
+        >
+          Create task
+          <kbd className="font-mono text-[10.5px] font-medium opacity-70">Ctrl ↵</kbd>
+        </button>
+      </div>
     </div>
   );
 
@@ -173,16 +185,23 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     >
       <div className="space-y-5" onKeyDown={onKeyDown}>
         <div className="space-y-2">
-          <label htmlFor={`${ids}-title`} className="sr-only">Title</label>
+          <label htmlFor={`${ids}-title`} className="block text-[12px] font-medium text-content-secondary">
+            Task title <span className="text-content-muted">(required)</span>
+          </label>
           <input
             id={`${ids}-title`}
             autoFocus
             value={title}
             onChange={event => setTitle(event.target.value)}
             placeholder="What needs to happen?"
+            required
+            aria-required="true"
+            aria-invalid={!title.trim()}
             className="w-full bg-transparent py-1 text-xl font-semibold tracking-tight text-content placeholder-content-muted focus:outline-none"
           />
-          <label htmlFor={`${ids}-description`} className="sr-only">Description</label>
+          <label htmlFor={`${ids}-description`} className="block pt-1 text-[12px] font-medium text-content-secondary">
+            Description <span className="font-normal text-content-muted">(optional, but helps with planning)</span>
+          </label>
           <textarea
             id={`${ids}-description`}
             rows={4}
@@ -202,7 +221,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           </label>
           <label className="space-y-1">
             <span className="block text-[11.25px] text-content-muted">Status</span>
-            <select value={status} onChange={event => setStatus(event.target.value as IssueStatus)} className={fieldClass}>
+            <select value={safeStatus} onChange={event => setStatus(event.target.value as IssueStatus)} className={fieldClass}>
               {/* Building is a real Orchestrator build, chosen below, not a status to type in. */}
               {TASK_STATUSES.filter(item => item.id !== 'agent_running').map(item => <option key={item.id} value={item.id}>{item.label}</option>)}
             </select>
@@ -311,7 +330,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               type="checkbox"
               checked={planBuild}
               onChange={event => setPlanBuild(event.target.checked)}
-              disabled={status === 'done'}
+              disabled={safeStatus === 'done'}
               className="mt-0.5 h-3.5 w-3.5 accent-brand-500"
             />
             <span>
@@ -321,6 +340,11 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               </span>
             </span>
           </label>
+        )}
+        {!canRunBuilds && (
+          <p className="rounded-md border border-divider bg-surface-high px-3 py-2 text-xs text-content-muted">
+            Build planning is available to developers and admins. After creating this task, you can review the resulting work here.
+          </p>
         )}
       </div>
     </Modal>

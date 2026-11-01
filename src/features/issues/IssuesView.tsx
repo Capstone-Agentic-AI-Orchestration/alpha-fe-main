@@ -62,6 +62,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const {
     issues,
     updateIssueStatus,
+    deleteIssue,
     projects,
     startIssueBuild,
     identity,
@@ -86,7 +87,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const canManageIssues = can('manage_issues');
   const canRunBuilds = can('run_builds');
 
-  // Project managers plan on the kanban board, so it is where they land; everyone else starts on the list.
+  // PMs review product work on the kanban board; everyone else starts on the list.
   const [viewMode, setViewMode] = useTabSessionState<'board' | 'list'>(`${sessionPrefix}.viewMode`, role === 'pm' ? 'board' : 'list');
   /**
    * `mine` is issues you created, which is what My Issues always claimed to be.
@@ -416,7 +417,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     setSelectedIssueId(null);
     setActiveTab('chat');
   };
-  // Project managers plan and approve; developers do the work, so they get the hand-off.
+
+  const removeTask = (issue: Issue) => {
+    deleteIssue(issue.id);
+    setSelectedIssueId(null);
+  };
+
+  // Developers own implementation hand-offs; PMs review the resulting work.
   const canHandOff = chatAvailable && can('manage_chat') && (role === 'dev' || role === 'admin');
 
   /** Tasks waiting on a person: a plan or finished build to approve, a stuck build, or work to review. */
@@ -680,22 +687,32 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
           <div className="flex flex-1 overflow-x-auto">
             {columns.map(column => {
               const colIssues = filteredIssues.filter(i => boardColumnFor(i) === column.id);
+              const readOnlyBuildColumn = column.id === 'agent_running' && !canRunBuilds;
 
               return (
                 <div
                   key={column.id}
                   onDragOver={event => {
+                    if (readOnlyBuildColumn) {
+                      event.dataTransfer.dropEffect = 'none';
+                      return;
+                    }
                     event.preventDefault();
                     event.dataTransfer.dropEffect = 'move';
                     setDragOverColumn(column.id);
                   }}
-                  onDrop={event => handleIssueDrop(event, column.id)}
+                  onDrop={event => {
+                    if (!readOnlyBuildColumn) handleIssueDrop(event, column.id);
+                  }}
                   className={`flex w-[272px] flex-shrink-0 flex-col border-r border-divider transition-colors ${
+                    readOnlyBuildColumn ? 'cursor-not-allowed' : ''
+                  } ${
                     dragOverColumn === column.id ? 'bg-selected' : ''
                   }`}
+                  aria-disabled={readOnlyBuildColumn || undefined}
                   aria-label={
                     column.id === 'agent_running'
-                      ? 'Drop tasks here to start an Orchestrator build'
+                      ? canRunBuilds ? 'Drop tasks here to start an Orchestrator build' : 'Tasks currently being built by developers'
                       : column.id === 'done'
                         ? 'Drop tasks here to request confirmation before marking done'
                         : `Drop tasks here to move them to ${column.title}`
@@ -713,7 +730,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       always supplies it; on the global board it appears the
                       moment you filter to a single project.
                     */}
-                    {canManageIssues && (
+                    {canManageIssues && column.id !== 'agent_running' && (
                       <button
                         onClick={() =>
                           canQuickAdd
@@ -938,6 +955,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             buildActive={hasActiveBuild(selectedIssue)}
             canStartBuild={canStartBuild(selectedIssue)}
             onClose={() => setSelectedIssueId(null)}
+            onRemove={removeTask}
             onRequestStatus={requestIssueStatusChange}
             onPlanBuild={issue => setPendingBuildIssueId(issue.id)}
             onOpenBuildChat={chatAvailable && buildChatFor(selectedIssue) ? openBuildChat : undefined}
