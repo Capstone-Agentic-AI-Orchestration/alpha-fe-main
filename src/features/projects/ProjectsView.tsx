@@ -22,6 +22,7 @@ import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectRepositoryView } from '@/features/projects/repository/ProjectRepositoryView';
 import { ProjectClientPreviewPanel } from '@/features/projects/ProjectClientPreviewPanel';
+import { ProjectBuildReviewView } from '@/features/project-build-review/ProjectBuildReviewView';
 import { PmProjectQaStudio } from '@/features/ticketing/PmProjectQaStudio';
 import { useProjectRepos } from '@/features/projects/repository/useProjectRepos';
 import { deriveProjectKey } from '@/features/projects/useProjectsViewModel';
@@ -73,6 +74,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [savingProject, setSavingProject] = useState(false);
   const [resourcesModalOpen, setResourcesModalOpen] = useState<boolean>(false);
+  const [buildReviewOpen, setBuildReviewOpen] = useState(false);
   const [orchestrationSettings, setOrchestrationSettings] = useState<ProjectOrchestrationSettings | null>(null);
   const [orchestrationSettingsLoading, setOrchestrationSettingsLoading] = useState(false);
   const [repositoryFocus, setRepositoryFocus] = useState<{ projectId: string; repo: string } | null>(null);
@@ -269,6 +271,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             <span className="text-xs tabular-nums text-status-success" aria-label="Project progress">
               {doneCount}/{totalCount} done ({progressPercent}%)
             </span>
+            {showAi && can('publish_build') && (
+              <button
+                type="button"
+                onClick={() => setBuildReviewOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-divider bg-selected px-3 py-1.5 text-xs font-medium text-selected-content transition-colors hover:bg-surface-high"
+              >
+                <Workflow className="h-3.5 w-3.5" aria-hidden />
+                Build review
+              </button>
+            )}
             {/* Edit Project */}
             {canEditProjects && (
               <button
@@ -388,6 +400,19 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             </div>
           )}
         />
+
+        {buildReviewOpen && (
+          <Modal
+            isOpen={true}
+            onClose={() => setBuildReviewOpen(false)}
+            title="Build review and UAT delivery"
+            subtitle={`${selectedProject.name} · review, publish, and enable controlled delivery to UAT`}
+            maxWidth="max-w-7xl"
+            contentClassName="min-h-0 overflow-y-auto p-0"
+          >
+            <ProjectBuildReviewView projectId={selectedProject.id} />
+          </Modal>
+        )}
 
         {/* ================= RESOURCES MODAL =================
             Repo creation and attachment both changed the project the moment you

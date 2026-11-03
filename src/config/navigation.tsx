@@ -128,8 +128,8 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
-  // Chat is where work is planned and built with the Orchestrator, so internal roles find it
-  // first, under Build. A client's chat is still a conversation with their project manager.
+  // Chat is the developer-only build workspace. PMs and admins review and publish
+  // from Projects, while client communication stays in the client portal.
   { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Plan and build with Alpha and your agents', group: 'primary', section: 'build', sectionByRole: { client: 'communication' }, icon: MessageSquare },
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
@@ -196,14 +196,14 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  * necessarily one that can change workspace settings.
  */
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
-  client: ['portal', 'intake', 'chat', 'settings'],
+  client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'chat', 'settings'],
   pm: [
-    'issues', 'projects', 'tickets', 'chat',
+    'issues', 'projects', 'tickets',
     'agents', 'runtimes', 'skills', 'analytics', 'settings'
   ],
   admin: [
-    'issues', 'projects', 'chat',
+    'issues', 'projects',
     'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'
   ]
 };

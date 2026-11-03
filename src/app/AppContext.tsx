@@ -326,6 +326,10 @@ export type Capability =
   | 'manage_runtimes'
   | 'view_runs'
   | 'approve_runs'
+  /** Approve a reviewed Orchestrator build and open its code pull request(s). */
+  | 'publish_build'
+  /** Enable, pause, and resume the reviewed delivery pipeline to UAT. */
+  | 'control_uat_delivery'
   | 'manage_chat'
   | 'view_integrations'
   | 'manage_integrations'
@@ -351,7 +355,7 @@ export type Capability =
 const KNOWN_ROLES: UserRole[] = ['client', 'dev', 'pm', 'admin'];
 
 const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
-  client: ['view_identity', 'view_projects', 'manage_chat', 'approve_scope', 'submit_intake'],
+  client: ['view_identity', 'view_projects', 'approve_scope', 'submit_intake'],
   dev: [
     'view_identity',
     'view_projects',
@@ -369,6 +373,8 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'view_runtimes',
     'manage_runtimes',
     'view_runs',
+    'publish_build',
+    'control_uat_delivery',
     'manage_chat',
     'view_integrations',
     'sync_board',
@@ -391,7 +397,8 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'view_skills',
     'view_runtimes',
     'view_runs',
-    'manage_chat',
+    'publish_build',
+    'control_uat_delivery',
     'manage_documents',
     'view_integrations',
     'manage_integrations',
@@ -422,7 +429,8 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'manage_runtimes',
     'view_runs',
     'approve_runs',
-    'manage_chat',
+    'publish_build',
+    'control_uat_delivery',
     'manage_documents',
     'approve_scope',
     'view_integrations',
@@ -1025,7 +1033,7 @@ ${e.detail}`;
 
   const retryChatThreads = useCallback(async () => {
     const workspaceId = activeWorkspaceRef.current;
-    if (!workspaceId || localMode) return;
+    if (!workspaceId || localMode || !ROLE_CAPABILITIES[role].includes('manage_chat')) return;
 
     const generation = ++chatLoadGenerationRef.current;
     setChatThreadsLoadState('loading');
@@ -1039,7 +1047,7 @@ ${e.detail}`;
       setChatThreadsError(describeChatLoadError(error));
       setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
     }
-  }, [applyChatThreadsSnapshot, localMode]);
+  }, [applyChatThreadsSnapshot, localMode, role]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1086,7 +1094,7 @@ ${e.detail}`;
 
       let result;
       try {
-        result = await fetchServerSnapshot(selectedWorkspaceId);
+        result = await fetchServerSnapshot(selectedWorkspaceId, { includeChat: ROLE_CAPABILITIES[role].includes('manage_chat') });
       } catch (error) {
         console.warn('[sync] workspace hydration failed:', error instanceof Error ? error.message : error);
         if (!cancelled) {
@@ -1122,7 +1130,10 @@ ${e.detail}`;
        * ask for it back. Merging keeps what is in hand; `loadThreadMessages`
        * fetches the rest when a thread is opened.
        */
-      if (hydrationGeneration === chatLoadGenerationRef.current && snapshot.chatThreads) {
+      if (!ROLE_CAPABILITIES[role].includes('manage_chat')) {
+        setChatThreadsLoadState('idle');
+        setChatThreadsError(null);
+      } else if (hydrationGeneration === chatLoadGenerationRef.current && snapshot.chatThreads) {
         applyChatThreadsSnapshot(snapshot.chatThreads as ChatThread[]);
       } else if (hydrationGeneration === chatLoadGenerationRef.current && result.failures.chatThreads) {
         setChatThreadsError(result.failures.chatThreads);
@@ -1200,14 +1211,15 @@ ${e.detail}`;
       identityStatus !== 'ready' ||
       !identity?.login ||
       !activeWorkspaceId ||
-      !['error', 'stale'].includes(chatThreadsLoadState)
+      !ROLE_CAPABILITIES[role].includes('manage_chat') ||
+      !['error', 'stale', 'idle'].includes(chatThreadsLoadState)
     ) return;
 
-    const retryKey = `${activeWorkspaceId}:${identity.login}`;
+    const retryKey = `${activeWorkspaceId}:${identity.login}:${role}`;
     if (chatRetryIdentityRef.current === retryKey) return;
     chatRetryIdentityRef.current = retryKey;
     void retryChatThreads();
-  }, [activeWorkspaceId, chatThreadsLoadState, identity?.login, identityStatus, localMode, retryChatThreads]);
+  }, [activeWorkspaceId, chatThreadsLoadState, identity?.login, identityStatus, localMode, retryChatThreads, role]);
 
   /**
    * Keep detected runtimes fresh.
@@ -1474,7 +1486,7 @@ ${e.detail}`;
     setAnalytics(normalizeAnalytics(loadFromStorage<AnalyticsData>(`analytics_v2:${workspaceId}`, emptyAnalytics)));
 
     try {
-      const result = await fetchServerSnapshot(workspaceId);
+      const result = await fetchServerSnapshot(workspaceId, { includeChat: ROLE_CAPABILITIES[target.role].includes('manage_chat') });
       // Another switch started while this one loaded; its result wins.
       if (superseded()) return;
       setProjects(result.board.state.projects);
@@ -1483,7 +1495,10 @@ ${e.detail}`;
       const snapshot = result.snapshot;
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
-      if (hydrationGeneration === chatLoadGenerationRef.current && snapshot.chatThreads) {
+      if (!ROLE_CAPABILITIES[target.role].includes('manage_chat')) {
+        setChatThreadsLoadState('idle');
+        setChatThreadsError(null);
+      } else if (hydrationGeneration === chatLoadGenerationRef.current && snapshot.chatThreads) {
         applyChatThreadsSnapshot(snapshot.chatThreads as ChatThread[]);
       } else if (hydrationGeneration === chatLoadGenerationRef.current && result.failures.chatThreads) {
         setChatThreadsError(result.failures.chatThreads);

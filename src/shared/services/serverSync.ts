@@ -37,6 +37,11 @@ export interface ServerSyncResult {
   failures: Partial<Record<keyof ServerSnapshot, string>>;
 }
 
+export interface ServerSnapshotOptions {
+  /** Chat is a developer-only capability; skip the request for other roles. */
+  includeChat?: boolean;
+}
+
 function describeSyncFailure(reason: unknown): string {
   const message = reason instanceof Error ? reason.message : String(reason);
   const compact = message.replace(/\s+/g, ' ').trim();
@@ -89,15 +94,17 @@ async function settleSnapshot(
  * that are migrated in the next plan task.
  */
 export function fetchServerSnapshot(): Promise<Partial<ServerSnapshot>>;
-export function fetchServerSnapshot(workspaceId: string): Promise<ServerSyncResult>;
+export function fetchServerSnapshot(workspaceId: string, options?: ServerSnapshotOptions): Promise<ServerSyncResult>;
 export async function fetchServerSnapshot(
-  workspaceId?: string
+  workspaceId?: string,
+  options?: ServerSnapshotOptions
 ): Promise<Partial<ServerSnapshot> | ServerSyncResult> {
   if (workspaceId !== undefined) {
+    const includeChat = options?.includeChat ?? true;
     const calls = {
       skills: apiService.getSkills(),
       runtimes: apiService.getRuntimes(),
-      chatThreads: apiService.getChatThreads(),
+      ...(includeChat ? { chatThreads: apiService.getChatThreads() } : {}),
       // The web reads summaries: full runs carry every stage log, and the
       // desktop's own list is local so it keeps the full rows.
       runs: apiService.getRuns(isDesktop ? undefined : 'summary'),

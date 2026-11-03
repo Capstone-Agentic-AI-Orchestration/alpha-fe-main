@@ -1715,7 +1715,7 @@ export const ChatView: React.FC = () => {
       case 'preview': return <LocalPreviewTab record={previews.record} error={previews.error} onStop={() => void previews.stop()} blocked={Boolean(!isActiveTab || memoryThreadId || threadPendingDelete || showCreateProject || repositoryMenuOpen)} />;
       case 'plan': return <PlanDocumentTab key={tab.id + ':' + tab.planVersion} projectId={tab.projectId} runId={tab.runId} planVersion={tab.planVersion} />;
       case 'review': return latestBuild?.runId === tab.runId
-        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('approve_runs')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} />
+        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('publish_build')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} />
         : activeThreadId ? <SavedBuildReviewTab key={tab.id} projectId={tab.projectId} runId={tab.runId} threadId={activeThreadId} /> : null;
       case 'changes': return <div key={tab.id} className="min-h-0 flex-1 overflow-y-auto p-4"><LiveChangesView projectId={tab.projectId} runId={tab.runId} live={Boolean(liveBuild?.running && liveBuild.runId === tab.runId)} /></div>;
       case 'agent': {
@@ -1829,7 +1829,7 @@ export const ChatView: React.FC = () => {
                 build={liveBuild}
                 failure={buildFailure}
                 canStart={Boolean(liveBuild?.canControl) && can('run_builds')}
-                canApprove={can('approve_runs')}
+                canApprove={can('publish_build')}
                 canStop={canStopBuild}
                 busy={stoppingProjectRunId ? 'stop' : buildDecisionBusy}
                 error={buildDecisionError}
