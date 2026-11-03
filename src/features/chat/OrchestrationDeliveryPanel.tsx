@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { apiService } from '@/shared/services/apiService';
 import type { DeliveryAction, DeliveryResponse, OrchestrationDelivery } from '@/shared/types/delivery';
 
-export function deliveryActionFor(delivery: OrchestrationDelivery, canControl: boolean, _canPromote: boolean): { action: DeliveryAction; label: string } | null {
-  if (!canControl) return null;
+export function deliveryActionFor(delivery: OrchestrationDelivery, canControl: boolean, canPromote: boolean): { action: DeliveryAction; label: string } | null {
+  if (!canControl || !canPromote) return null;
   if (delivery.authorization?.paused) return { action: 'resume_delivery', label: 'Resume delivery to UAT' };
   if (delivery.stage === 'repair_required') return delivery.repairAttempts < 2 && !delivery.repairRunId ? { action: 'prepare_repair', label: 'Prepare CI repair plan' } : null;
   if (delivery.authorization) return null;

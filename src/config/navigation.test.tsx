@@ -8,20 +8,20 @@ import { AI_FEATURES_BY_ROLE, AI_NAV_TABS } from './features';
  * Project managers see the AI destinations in review-only mode (config/features.ts).
  */
 const existing: Record<UserRole, NavigationTab[]> = {
-  client: ['portal', 'intake', 'chat', 'settings'],
+  client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'chat', 'settings'],
-  pm: ['issues', 'projects', 'chat', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
-  admin: ['issues', 'projects', 'chat', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
+  pm: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
+  admin: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
  * Existing sidebar ordering differs from ROLE_NAV; preserve it independently.
- * Internal roles find Chat first, under Build, since it is where work is planned and built.
+ * Developer chat is the build workspace; PMs and admins review and publish from Projects.
  */
 const existingVisible: Record<UserRole, NavigationTab[]> = {
-  client: ['portal', 'intake', 'chat', 'settings'],
+  client: ['portal', 'intake', 'settings'],
   dev: ['chat', 'issues', 'projects', 'agents', 'runtimes', 'skills', 'settings'],
-  pm: ['chat', 'projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
-  admin: ['chat', 'projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
+  pm: ['projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
+  admin: ['projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
 };
 describe('existing navigation compatibility', () => {
   it('shows Tasks while preserving the existing issues route identifier', () => {
@@ -44,10 +44,14 @@ describe('existing navigation compatibility', () => {
     expect(visible.every(tab => ROLE_NAV[role].includes(tab))).toBe(true);
     expect(visible.length).toBe(new Set(visible).size);
   });
-  it('adds Tickets only to PM navigation without replacing Tasks or Chat', () => {
+  it('adds Tickets only to PM navigation without replacing Tasks', () => {
     expect(ROLE_NAV.pm).toContain('tickets');
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('tickets');
     for (const role of ['client', 'dev', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('tickets');
+  });
+  it('exposes build chat only to developers', () => {
+    expect(ROLE_NAV.dev).toContain('chat');
+    for (const role of ['client', 'pm', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('chat');
   });
   it('places the Operations Center in Administration for workspace admins only', () => {
     expect(NAV_ITEMS.find(item => item.id === 'operations')).toMatchObject({ title: 'Operations Center', section: 'administration' });
@@ -60,6 +64,10 @@ describe('existing navigation compatibility', () => {
   it('shows PM AI destinations while keeping their actions capability-gated', () => {
     expect(AI_FEATURES_BY_ROLE.pm).toBe(true);
     for (const tab of AI_NAV_TABS) {
+      if (tab === 'chat') {
+        expect(ROLE_NAV.pm).not.toContain(tab);
+        continue;
+      }
       expect(ROLE_NAV.pm).toContain(tab);
       if (NAV_ITEMS.some(item => item.id === tab)) {
         expect(ROLE_NAV.dev).toContain(tab);

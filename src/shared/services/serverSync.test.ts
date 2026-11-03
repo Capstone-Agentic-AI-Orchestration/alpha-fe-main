@@ -61,4 +61,22 @@ describe('server hydration with a board cursor', () => {
       chatThreads: 'API Error [403]: Sign in with GitHub to use Alpha.'
     });
   });
+
+  it('does not request chat data for a role without the chat capability', async () => {
+    vi.spyOn(apiService, 'getBoardBootstrap').mockResolvedValue({
+      workspaceId: 'ws-1', cursor: { workspaceId: 'ws-1', value: '12' }, projects: [], agents: [], issues: []
+    });
+    vi.spyOn(apiService, 'getSkills').mockResolvedValue([]);
+    vi.spyOn(apiService, 'getRuntimes').mockResolvedValue([]);
+    const chat = vi.spyOn(apiService, 'getChatThreads').mockResolvedValue([]);
+    vi.spyOn(apiService, 'getRuns').mockResolvedValue([]);
+    vi.spyOn(apiService, 'getAnalytics').mockResolvedValue({} as never);
+    vi.spyOn(apiService, 'getSquadRuns').mockResolvedValue([]);
+
+    const result = await fetchServerSnapshot('ws-1', { includeChat: false });
+
+    expect(chat).not.toHaveBeenCalled();
+    expect(result.snapshot).not.toHaveProperty('chatThreads');
+    expect(result.failures).toEqual({});
+  });
 });

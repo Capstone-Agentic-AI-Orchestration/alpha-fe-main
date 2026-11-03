@@ -1164,7 +1164,7 @@ export const apiService = {
     }
     return res.blob();
   },
-  /** Open (or find) the pull request that moves work one step along the pipeline. PM and admin only. */
+  /** Open (or find) the next pipeline PR; UAT delivery is available to dev, PM, and admin, while production remains PM/admin. */
   promoteRepoBranch: (projectId: string, repo: string, step: { from: 'dev'; to: 'uat' } | { from: 'uat'; to: 'main' }) =>
     fetchJson<PromoteResult>(`${projectRepoPath(projectId, repo)}/promote`, {
       method: 'POST',

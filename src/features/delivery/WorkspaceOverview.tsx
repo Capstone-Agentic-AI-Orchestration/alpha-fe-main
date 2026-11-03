@@ -247,7 +247,7 @@ export const WorkspaceOverview: React.FC = () => {
     ...(can('create_project') ? [{ label: 'Create a project', detail: 'Set a delivery goal and invite the right people.', icon: Plus, onClick: () => setActiveTab('projects') }] : []),
     { label: 'Review notifications', detail: unreadNotifications.length > 0 ? `${unreadNotifications.length} unread notification${unreadNotifications.length === 1 ? '' : 's'}` : 'Nothing waiting right now.', icon: Bell, onClick: () => setNotificationPanelOpen(true) },
     { label: role === 'dev' ? 'Open assigned work' : 'Review tasks', detail: openIssues.length > 0 ? `${openIssues.length} open task${openIssues.length === 1 ? '' : 's'}` : 'No open tasks yet.', icon: ListChecks, onClick: () => setActiveTab('issues') },
-    { label: 'Message the team', detail: 'Keep a decision or handoff in one shared thread.', icon: MessageSquare, onClick: () => setActiveTab('chat') },
+    ...(can('manage_chat') ? [{ label: 'Message the team', detail: 'Keep a decision or handoff in one shared thread.', icon: MessageSquare, onClick: () => setActiveTab('chat') }] : []),
   ];
 
   return (

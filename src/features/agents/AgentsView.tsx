@@ -65,6 +65,7 @@ export const AgentsView: React.FC = () => {
   } = useApp();
 
   const canManageAgents = can('manage_agents');
+  const canManageChat = can('manage_chat');
 
   // Selected agent for centered pop-up modal
   const [selectedAgentId, setSelectedAgentId] = useTabSessionState<string | null>('agents.selectedAgent', null);
@@ -482,7 +483,7 @@ export const AgentsView: React.FC = () => {
           <div className="col-span-2">Machine & Model</div>
           <div className="col-span-2">Runs & Active</div>
           <div className="col-span-1 text-left">Access</div>
-          <div className="col-span-1 text-right">Chat</div>
+          {canManageChat && <div className="col-span-1 text-right">Chat</div>}
         </div>
 
         {/* Table Rows (No Pills / Clean Typography) */}
@@ -584,8 +585,8 @@ export const AgentsView: React.FC = () => {
                   {agent.allowedUsers || 'team'}
                 </div>
 
-                {/* 6. Chat Action */}
-                <div className="col-span-1 text-right">
+                {/* 6. Chat Action — build chat is developer-only. */}
+                {canManageChat && <div className="col-span-1 text-right">
                   <button
                     onClick={(e) => handleChatWithAgent(agent.id, e)}
                     className="p-1.5 rounded-lg text-content-muted hover:text-content hover:bg-surface-high transition-colors"
@@ -593,7 +594,7 @@ export const AgentsView: React.FC = () => {
                   >
                     <MessageSquare className="w-3.5 h-3.5" />
                   </button>
-                </div>
+                </div>}
               </div>
             );
           })}
@@ -646,7 +647,7 @@ export const AgentsView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
+                {canManageChat && <button
                   onClick={() => {
                     handleChatWithAgent(selectedAgent.id);
                     setSelectedAgentId(null);
@@ -655,7 +656,7 @@ export const AgentsView: React.FC = () => {
                 >
                   <MessageSquare className="w-3.5 h-3.5" />
                   <span>Chat</span>
-                </button>
+                </button>}
                 <button
                   onClick={() => setSelectedAgentId(null)}
                   className="p-1.5 rounded-lg hover:bg-surface-high text-content-secondary hover:text-content transition-colors"
