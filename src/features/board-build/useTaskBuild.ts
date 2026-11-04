@@ -240,4 +240,3 @@ export function useFeatureSpec(issue: Pick<Issue, 'id' | 'projectId'>, enabled: 
     })
   };
 }
-

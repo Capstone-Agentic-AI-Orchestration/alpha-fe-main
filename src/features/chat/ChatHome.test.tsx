@@ -23,4 +23,3 @@ describe('fresh chat home', () => {
     expect(client?.section.id).toBe('communication');
   });
 });
-

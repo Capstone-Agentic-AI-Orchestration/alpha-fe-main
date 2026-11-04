@@ -137,4 +137,3 @@ describe('feature spec panel', () => {
     expect(html).toContain('approve it again before the next build');
   });
 });
-

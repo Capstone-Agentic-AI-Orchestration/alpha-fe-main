@@ -391,4 +391,3 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
     </div>
   );
 };
-

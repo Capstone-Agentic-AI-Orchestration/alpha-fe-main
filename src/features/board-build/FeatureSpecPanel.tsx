@@ -217,4 +217,3 @@ export const FeatureSpecPanel: React.FC<FeatureSpecPanelProps> = ({ issue, spec,
     </section>
   );
 };
-
