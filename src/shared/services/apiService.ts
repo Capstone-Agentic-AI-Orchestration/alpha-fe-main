@@ -21,6 +21,9 @@ import {
   SquadRun,
   ChatThread,
   ChatThreadMemory,
+  FeatureSpec,
+  FeatureSpecRecord,
+  SystemProposal,
   ChatMessage,
   ChatAttachmentReference,
   ChatSyncStatus,
@@ -222,9 +225,12 @@ export function scaffoldedRepositories(response: ScaffoldResponse) {
  */
 export function parseApiError(err: unknown): { status: number | null; message: string } {
   const text = err instanceof Error ? err.message : String(err);
-  const match = text.match(/^API Error \[(\d+)\]:\s*([\s\S]*)$/);
-  if (!match) return { status: null, message: text };
-  return { status: Number(match[1]), message: match[2].trim() || `Request failed (${match[1]})` };
+  const prefix = 'API Error [';
+  const end = text.indexOf(']:', prefix.length);
+  if (!text.startsWith(prefix) || end < 0) return { status: null, message: text };
+  const code = text.slice(prefix.length, end);
+  if (!/^[0-9]{3}$/.test(code)) return { status: null, message: text };
+  return { status: Number(code), message: text.slice(end + 2).trim() || `Request failed (${code})` };
 }
 
 /** Structured metadata for ticket operation reconciliation; message format stays compatible with existing callers. */
@@ -327,11 +333,16 @@ function ticketApiError(res: Response, detail: string): ApiRequestError {
 
 /** Latest Orchestrator build for one issue, as the board shows it. */
 export interface IssueBuildStatus {
+  branchName?: string;
   issueId: string;
   projectId: string;
   runId: string;
   status: string;
   updatedAt: string;
+  fresh?: boolean;
+  observedAt?: string;
+  blocker?: { projectId?: string; issueId?: string; runId?: string; identifier?: string; status: string; repository: string };
+  request?: { id: string; status: string; reason?: string };
 }
 
 /** What happened to one repository when cloning a project into a chosen folder. */
@@ -352,6 +363,19 @@ export interface CodeFolderSetting {
 }
 
 export const apiService = {
+  reviseIssueBuildPlan: (projectId: string, runId: string, expectedRevision: number, instruction: string) =>
+    fetchJson(`/projects/${projectId}/orchestrations/${runId}/revise-plan`, { method: 'POST', body: JSON.stringify({ expectedRevision, instruction }) }),
+  getRecoveryCandidate: (projectId: string, runId: string) =>
+    fetchJson<{ runRevision: number; taskId: string; taskRevision: number; candidateHash: string; changes: unknown; restartAvailable: boolean;
+      archives: Array<{ id: string; hash: string; savedAt: string; files: string[]; patch: string; patchTruncated: boolean; untracked: Array<{ path: string; content: string; truncated: boolean }> }> }>(`/projects/${projectId}/orchestrations/${runId}/recovery-candidate`),
+  restoreRecoveryArchive: (projectId: string, runId: string, body: { expectedRevision: number; taskId: string; archiveId: string; archiveHash: string; candidateHash: string }) =>
+    fetchJson(`/projects/${projectId}/orchestrations/${runId}/restore-archive`, { method: 'POST', body: JSON.stringify(body) }),
+  restartReviewedRecovery: (projectId: string, runId: string, body: { expectedRevision: number; taskId: string; taskRevision: number; candidateHash: string; guidance: string }) =>
+    fetchJson(`/projects/${projectId}/orchestrations/${runId}/restart-recovery`, { method: 'POST', body: JSON.stringify(body) }),
+  requestIssueBuild: (projectId: string, issueId: string, body: { requestId: string; instructions?: string; queue?: boolean }) =>
+    fetchJson<{ id: string; threadId: string; status: string; reason?: string }>(`/projects/${projectId}/issues/${issueId}/build-request`, { method: 'POST', body: JSON.stringify(body) }),
+  cancelBuildRequest: (projectId: string, requestId: string) =>
+    fetchJson(`/projects/${projectId}/build-requests/${requestId}/cancel`, { method: 'POST' }),
   /** Internal ticket API path; preserves the existing session, workspace and desktop relay transport. */
   ticketRequest: async <T>(path: string, options?: RequestInit): Promise<T> => {
     if (!validInternalTicketPath(path)) throw new Error('Invalid internal ticket API path.');
@@ -801,11 +825,42 @@ export const apiService = {
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/resume`,
       { method: 'POST', body: '{}' }
     ),
-  cancelOrchestration: (projectId: string, runId: string) =>
+  cancelOrchestration: (projectId: string, runId: string, expectedRevision?: number) =>
     fetchJson<{ runId: string; status: string }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/cancel`,
-      { method: 'POST', body: '{}' }
+      { method: 'POST', body: JSON.stringify({ expectedRevision }) }
     ),
+  /** Send finished work back from final review; owners correct it and it is reviewed and validated again. */
+  requestOrchestrationChanges: (projectId: string, runId: string, expectedRevision: number, feedback: string) =>
+    fetchJson<{ runId: string; status: string; currentTaskId?: string; planVersion: number }>(
+      `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/request-changes`,
+      { method: 'POST', body: JSON.stringify({ expectedRevision, feedback }) }
+    ),
+  /** The caller's private board conversation: a task's build thread, or the project's Ask Alpha thread. */
+  getBoardThread: (projectId: string, issueId?: string) =>
+    fetchJson<ChatThread>(`/projects/${encodeURIComponent(projectId)}/board-thread`, {
+      method: 'POST', body: JSON.stringify(issueId ? { issueId } : {})
+    }),
+  getFeatureSpec: (projectId: string, issueId: string) =>
+    fetchJson<{ spec: FeatureSpecRecord | null }>(`/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/feature-spec`, { cache: 'no-store' }),
+  draftFeatureSpec: (projectId: string, issueId: string, body: { expectedVersion: number; request?: string; revision?: string }) =>
+    fetchJson<{ spec: FeatureSpecRecord }>(`/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/feature-spec/draft`, {
+      method: 'POST', body: JSON.stringify(body)
+    }),
+  saveFeatureSpec: (projectId: string, issueId: string, expectedVersion: number, spec: FeatureSpec) =>
+    fetchJson<{ spec: FeatureSpecRecord }>(`/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/feature-spec`, {
+      method: 'PUT', body: JSON.stringify({ expectedVersion, spec })
+    }),
+  approveFeatureSpec: (projectId: string, issueId: string, expectedVersion: number) =>
+    fetchJson<{ spec: FeatureSpecRecord; issue: Issue }>(`/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/feature-spec/approve`, {
+      method: 'POST', body: JSON.stringify({ expectedVersion })
+    }),
+  deleteFeatureSpec: (projectId: string, issueId: string) =>
+    fetchJson<{ success: boolean }>(`/projects/${encodeURIComponent(projectId)}/issues/${encodeURIComponent(issueId)}/feature-spec`, { method: 'DELETE' }),
+  proposeSystemEpics: (projectId: string, description: string) =>
+    fetchJson<SystemProposal>(`/projects/${encodeURIComponent(projectId)}/system-proposal`, {
+      method: 'POST', body: JSON.stringify({ description })
+    }),
   approveOrchestration: (projectId: string, runId: string, expectedRevision: number) =>
     fetchJson<{ runId: string; status: string; issueId: string; publication?: ProjectBuildOrchestration['run']['publication'] }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/approve`,
@@ -927,7 +982,7 @@ export const apiService = {
     const res = await fetch(`${API_BASE}/chat/threads/${encodeURIComponent(threadId)}/attachments`, {
       method: 'POST', body: file, credentials: 'include', headers,
     });
-    if (!res.ok) throw await ticketApiError(res, await res.text().catch(() => res.statusText));
+    if (!res.ok) throw ticketApiError(res, await res.text().catch(() => res.statusText));
     return res.json() as Promise<{ attachment: ChatAttachmentReference }>;
   },
   deleteChatAttachment: (threadId: string, attachmentId: string) =>

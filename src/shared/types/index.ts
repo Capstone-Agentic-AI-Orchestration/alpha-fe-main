@@ -34,6 +34,10 @@ export interface Subtask {
   title: string;
   completed: boolean;
   assignedAgentId?: string;
+  /** 'spec' for an item written from an approved feature spec; absent for items a person added. */
+  source?: 'spec';
+  /** The approved requirement this item checks, when it came from a feature spec. */
+  requirementId?: string;
 }
 
 export interface IssueComment {
@@ -149,6 +153,9 @@ export interface RunActivity {
 }
 
 export interface PrototypeRun {
+  orchestrationRunId?: string;
+  orchestrationTaskId?: string;
+  orchestrationAttemptId?: string;
   id: string;
   issueId: string;
   projectId: string;
@@ -2006,3 +2013,32 @@ export interface AgentPerformance {
   accepted: string[];
 }
 
+/** Who a change is for, how they use it, and the checklist that says when it is done. */
+export interface FeatureSpec {
+  schemaVersion: 1;
+  epicTitle: string;
+  summary: string;
+  personas: Array<{ id: string; name: string; goal: string }>;
+  journeys: Array<{ id: string; personaId: string; title: string; steps: string[] }>;
+  requirements: Array<{ id: string; behavior: string; acceptanceCriteria: string[]; journeyIds: string[] }>;
+  exclusions: string[];
+  openQuestions: string[];
+}
+
+export interface FeatureSpecRecord {
+  issueId: string;
+  version: number;
+  status: 'draft' | 'approved';
+  spec: FeatureSpec;
+  /** The task changed after approval; approve again before building. */
+  stale: boolean;
+  updatedBy: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  updatedAt: string;
+}
+
+export interface SystemProposal {
+  schemaVersion: 1;
+  epics: Array<{ title: string; outcome: string; personas: string[] }>;
+}

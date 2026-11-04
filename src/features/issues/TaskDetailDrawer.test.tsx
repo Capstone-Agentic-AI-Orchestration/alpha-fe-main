@@ -71,6 +71,6 @@ describe('Task details', () => {
   it('lets a manager finish or return reviewed work', () => {
     const html = render('review', false);
     expect(html).toContain('Mark done');
-    expect(html).toContain('Request changes');
+    expect(html).toContain('Request revisions');
   });
 });

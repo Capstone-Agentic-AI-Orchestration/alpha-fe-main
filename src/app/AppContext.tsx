@@ -1,3 +1,4 @@
+import { CHAT_TAB_ENABLED } from '@/config/features';
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ROLE_NAV } from '@/config/navigation';
 import {
@@ -140,6 +141,8 @@ interface AppContextType {
   createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }, options?: CreateIssueOptions) => Issue | null;
   updateIssueStatus: (id: string, status: IssueStatus) => void;
   updateIssue: (id: string, updates: Partial<Issue>) => void;
+  /** Show a task the server already saved (for example after approving its spec) without writing it again. */
+  applySavedIssue: (issue: Issue) => void;
   addIssueComment: (issueId: string, comment: IssueComment) => void;
   deleteIssue: (id: string) => void;
   runAgentOnIssue: (issueId: string, agentId?: string) => void;
@@ -189,7 +192,8 @@ interface AppContextType {
    * Start an Orchestrator build for a board issue. Opens a project chat thread
    * for it and returns that thread's id, or null when the build cannot start.
    */
-  startIssueBuild: (issueId: string) => Promise<string | null>;
+  /** Plan a board task's build in the task's private thread; planChanges asks for a different plan. */
+  startIssueBuild: (issueId: string, planChanges?: string) => Promise<string | null>;
   
   // Runtimes
   runtimes: RuntimeEngine[];
@@ -468,6 +472,8 @@ export interface CreateIssueOptions {
    * needs both, so this waits for the save rather than building the placeholder.
    */
   planBuild?: boolean;
+  /** Called with the saved task, which has its real id and identifier. */
+  onSaved?: (issue: Issue) => void;
 }
 
 export interface ChatSendOptions {
@@ -481,6 +487,15 @@ export interface ChatSendOptions {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+/**
+ * A new task's temporary id, mapped to the id the daemon saved it under.
+ *
+ * A task published to GitHub is saved under GitHub's id, so anything still
+ * holding the temporary one, such as an open drawer, follows it here.
+ */
+const savedIssueIds = new Map<string, string>();
+export const currentIssueId = (id: string): string => savedIssueIds.get(id) ?? id;
 export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
@@ -1675,6 +1690,7 @@ ${e.detail}`;
     const unsubComplete = runnerSocket.on('run_completed', (finalRun) => {
       setPrototypeRuns(prev => prev.map(r => r.id === finalRun.id ? finalRun : r));
 
+      if (finalRun.orchestrationRunId) return;
       if (finalRun.squadRunId) {
         // Only the last member opens a pull request. Record the link the moment
         // it exists, but leave the card where it is until the squad is done.
@@ -1699,13 +1715,14 @@ ${e.detail}`;
       setPrototypeRuns(prev => prev.map(r => r.id === failedRun.id ? failedRun : r));
       // A failed member stops its squad, and `squad_run_failed` says so with the
       // reason and the position it stopped at. Reporting both is reporting twice.
-      if (failedRun.squadRunId) return;
+      if (failedRun.squadRunId || failedRun.orchestrationRunId) return;
       setIssues(prev => prev.map(i => i.id === failedRun.issueId ? { ...i, status: 'in_progress', updatedAt: new Date().toISOString() } : i));
       showToast('Run failed', failedRun.testSummary || 'Agent encountered an error.', 'error');
     });
 
     const unsubCancelled = runnerSocket.on('run_cancelled', (cancelledRun) => {
       setPrototypeRuns(prev => prev.map(r => r.id === cancelledRun.id ? cancelledRun : r));
+      if (cancelledRun.orchestrationRunId || cancelledRun.squadRunId) return;
       setIssues(prev => prev.map(issue => issue.id === cancelledRun.issueId
         ? { ...issue, status: 'in_progress', updatedAt: new Date().toISOString() }
         : issue
@@ -1728,8 +1745,9 @@ ${e.detail}`;
       setSquadRuns(prev => prev.map(sr => sr.id === squadRunId
         ? { ...sr, currentMemberIndex: memberIndex, status: 'running' as const, updatedAt: new Date().toISOString() }
         : sr));
-      // Handoffs only, for builds started before squads were removed.
-      if (memberIndex > 0) {
+      // Handoffs only, for builds started before squads were removed. The board keeps
+      // agent handoffs out of view while the Chat tab is off.
+      if (memberIndex > 0 && CHAT_TAB_ENABLED) {
         showToast('Build handoff', `${agentName} picked up step ${memberIndex + 1} of ${memberCount}.`, 'info');
       }
     });
@@ -1838,8 +1856,10 @@ ${e.detail}`;
     persist(
       () => apiService.createIssue(newIssue),
       saved => {
+        if (saved.id !== newIssue.id) savedIssueIds.set(newIssue.id, saved.id);
         setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i)));
         if (options.planBuild) setIssuesAwaitingBuild(prev => [...prev, saved.id]);
+        options.onSaved?.(saved);
       },
       msg => showToast('Task not saved', msg, 'error')
     );
@@ -1863,6 +1883,10 @@ ${e.detail}`;
         showToast('Status not saved', msg, 'error');
       }
     );
+  };
+
+  const applySavedIssue = (saved: Issue) => {
+    setIssues(prev => prev.map(issue => issue.id === saved.id ? { ...issue, ...saved } : issue));
   };
 
   const updateIssue = (id: string, updates: Partial<Issue>) => {
@@ -2274,6 +2298,7 @@ ${e.detail}`;
   // Materialize review and failure events into the existing issue and inbox views.
   useEffect(() => {
     prototypeRuns.forEach(run => {
+      if (run.orchestrationRunId) return;
       if (!['awaiting_approval', 'failed'].includes(run.status)) return;
       const eventKey = `${run.id}:${run.status}`;
       if (handledRunEventsRef.current.has(eventKey)) return;
@@ -2740,23 +2765,41 @@ ${e.detail}`;
    * issue id goes with the message, so the Orchestrator builds this issue
    * instead of filing a second one.
    */
-  const startIssueBuild = async (issueId: string): Promise<string | null> => {
+  const pendingIssueBuilds = useRef(new Map<string, Promise<string | null>>());
+  const issueBuildRequestKeys = useRef(new Map<string, string>());
+  const startIssueBuild = (issueId: string, planChanges?: string): Promise<string | null> => {
+    const pending = pendingIssueBuilds.current.get(issueId);
+    if (pending) return pending;
+    const work = submitIssueBuild(issueId, planChanges);
+    pendingIssueBuilds.current.set(issueId, work);
+    void work.finally(() => pendingIssueBuilds.current.delete(issueId));
+    return work;
+  };
+  const submitIssueBuild = async (issueId: string, planChanges?: string): Promise<string | null> => {
     if (!requireCapability('run_builds')) return null;
+    // Board builds run in the person's private task thread, so they need chat access, as before.
+    if (!requireCapability('manage_chat')) return null;
     const issue = issues.find(item => item.id === issueId);
     if (!issue?.projectId) {
       showToast('Build not started', 'Choose a project for this task before building it.', 'error');
       return null;
     }
-    const threadId = createNewThread(`Build ${issue.identifier}`, issue.projectId);
-    if (!threadId) return null;
-    const details = issue.description?.trim() ? `
-
-${issue.description.trim().slice(0, 3_500)}` : '';
-    void sendChatMessage(`/build ${issue.identifier}: ${issue.title}${details}`, threadId, undefined, 'build', [], {
-      issueId: issue.id,
-      projectId: issue.projectId
-    });
-    return threadId;
+    try {
+      const key = JSON.stringify([issueId, planChanges ?? '']);
+      const requestId = issueBuildRequestKeys.current.get(key) ?? crypto.randomUUID();
+      issueBuildRequestKeys.current.set(key, requestId);
+      const result = await apiService.requestIssueBuild(issue.projectId, issue.id, { requestId, instructions: planChanges });
+      issueBuildRequestKeys.current.delete(key);
+      if (['failed', 'needs_review', 'cancelled'].includes(result.status)) {
+        issueBuildRequestKeys.current.delete(key);
+        throw new Error(result.reason ?? 'Review the task before submitting another request.');
+      }
+      showToast('Plan request accepted', 'Follow planning and review the plan on this task. Code changes require your approval.', 'info');
+      return result.threadId;
+    } catch (error) {
+      showToast('Plan request not accepted', error instanceof Error ? error.message : 'The planning request could not be accepted.', 'error');
+      return null;
+    }
   };
 
   /**
@@ -2771,9 +2814,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
     if (!ready.length) return;
     setIssuesAwaitingBuild(prev => prev.filter(id => !ready.includes(id)));
     for (const id of ready) {
-      void startIssueBuild(id).then(threadId => {
-        if (threadId) showToast('Planning a build', 'The plan will appear in the project chat for you to approve. Nothing in the code changes before that.', 'info');
-      });
+      void startIssueBuild(id);
     }
   }, [issuesAwaitingBuild, issues]);
 
@@ -2936,6 +2977,11 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
       return;
     }
+    const task = issues.find(issue => issue.id === notif.entityId);
+    if (task?.labels.includes('alpha:task-orchestration') || task?.labels.includes('alpha:chat-build')) {
+      showToast('Review the task build', 'Open the task’s Build tab to review the current build and its allowed actions.', 'info');
+      return;
+    }
 
     const run = prototypeRuns.find(item =>
       item.issueId === notif.entityId && item.status === 'awaiting_approval'
@@ -2943,8 +2989,11 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
 
     // Preserve approval behavior for older seeded notifications that are not tied to a run.
     if (!run) {
+      if (action === 'approved') {
+        try { applySavedIssue(await apiService.completeIssue(notif.entityId)); }
+        catch (error) { showToast('Review not saved', error instanceof Error ? error.message : 'The task could not be completed.', 'error'); return; }
+      }
       setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
-      if (action === 'approved') updateIssueStatus(notif.entityId, 'done');
       showToast(action === 'approved' ? 'Work approved' : 'Changes requested', undefined, action === 'approved' ? 'success' : 'info');
       return;
     }
@@ -3858,6 +3907,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       createIssue,
       updateIssueStatus,
       updateIssue,
+      applySavedIssue,
       deleteIssue,
       runAgentOnIssue,
       prototypeRuns,
@@ -4051,14 +4101,8 @@ export const useApp = () => {
       if (!threadId) threadId = createScopedThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
       if (threadId) await context.sendChatMessage(content, threadId, repositories, intent, attachments, options);
     },
-    startIssueBuild: async (issueId: string) => {
-      const threadId = await context.startIssueBuild(issueId);
-      if (threadId) {
-        setSessionValue('activeThreadId', threadId);
-        context.setTabView(tab.id, 'chat');
-      }
-      return threadId;
-    },
+    // Board builds are followed on the task card, so starting one no longer switches tabs.
+    startIssueBuild: (issueId: string, planChanges?: string) => context.startIssueBuild(issueId, planChanges),
     clearChat: () => context.clearChat(activeThreadId),
     chatMessages: activeThreadId
       ? context.chatThreads.find(thread => thread.id === activeThreadId)?.messages ?? []
@@ -4087,12 +4131,24 @@ export function useTabSessionState<T>(
     ? (isArrayState && !Array.isArray(storedValue) ? fallback : storedValue as T)
     : fallback;
 
+  // The latest default, for updates to a value this tab has never saved.
+  const fallbackRef = useRef(fallback);
+  fallbackRef.current = fallback;
+
   const setValue = useCallback<React.Dispatch<React.SetStateAction<T>>>(next => {
-    app.setTabSessionState(tabId, key, (current: unknown) =>
-      typeof next === 'function'
-        ? (next as (previous: T) => T)(isArrayState && !Array.isArray(current) ? [] as T : current as T)
-        : next
-    );
+    app.setTabSessionState(tabId, key, (current: unknown) => {
+      if (typeof next !== 'function') return next;
+      /*
+       * An update function gets what the component is showing. A key this tab
+       * never saved reads as the default above, so the update starts from that
+       * default too. Passing undefined instead crashed object updates such as
+       * { ...prev, [section]: !prev[section] } the first time they ran.
+       */
+      const previous = current === undefined
+        ? fallbackRef.current
+        : isArrayState && !Array.isArray(current) ? [] as T : current as T;
+      return (next as (previous: T) => T)(previous);
+    });
   }, [app.setTabSessionState, isArrayState, key, tabId]);
 
   return [value, setValue];

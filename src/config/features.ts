@@ -20,3 +20,13 @@ export const AI_FEATURES_BY_ROLE: Record<UserRole, boolean> = {
 export const AI_NAV_TABS: readonly NavigationTab[] = ['chat', 'agents', 'runtimes', 'skills'];
 
 export const aiFeaturesEnabled = (role: UserRole): boolean => AI_FEATURES_BY_ROLE[role];
+
+/**
+ * Whether the standalone Chat tab is in the navigation.
+ *
+ * Off while project work happens on the board: each task builds through its own
+ * private conversation, and the board shows the decisions that need a person.
+ * Turning this back on restores the tab exactly as it was; board builds stay
+ * out of the Chat list, and "Open in chat" on a card opens that task's thread.
+ */
+export const CHAT_TAB_ENABLED = false;

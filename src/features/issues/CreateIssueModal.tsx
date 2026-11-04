@@ -263,7 +263,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
         <section aria-labelledby={`${ids}-subtasks`} className="space-y-2">
           <div className="flex items-center gap-2">
-            <h4 id={`${ids}-subtasks`} className="text-[13px] font-semibold text-content-secondary">Subtasks</h4>
+            <h4 id={`${ids}-subtasks`} className="text-[13px] font-semibold text-content-secondary">Checklist</h4>
             {subtasks.length > 0 && <span className="text-xs tabular-nums text-content-muted">{kept.length} of {subtasks.length} kept</span>}
             <button
               type="button"
@@ -276,6 +276,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               {hasSuggestions ? 'Suggest again' : 'Suggest from description'}
             </button>
           </div>
+          <p className="text-xs text-content-muted">What done looks like. The build must meet each item.</p>
           {hasSuggestions && <p className="text-xs text-content-muted">Suggested from your description. Untick any you don’t want.</p>}
           {noSuggestions && <p className="text-xs text-content-muted">Nothing to suggest yet. Describe the work in a few sentences or as a list.</p>}
           {subtasks.length > 0 && (
@@ -315,7 +316,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                   addSubtask();
                 }
               }}
-              placeholder="Add a subtask"
+              placeholder="Add a checklist item"
               className="min-w-0 flex-1 bg-transparent text-[13px] text-content placeholder-content-muted focus:outline-none"
             />
             <button type="button" onClick={addSubtask} disabled={!newSubtask.trim()} className="text-xs font-semibold text-link disabled:opacity-40">

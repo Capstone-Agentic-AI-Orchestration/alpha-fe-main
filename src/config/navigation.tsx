@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
-import { AI_NAV_TABS, aiFeaturesEnabled } from './features';
+import { AI_NAV_TABS, CHAT_TAB_ENABLED, aiFeaturesEnabled } from './features';
 
 /**
  * Every fact about a navigation destination, in one place.
@@ -216,7 +216,9 @@ const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
 export const ROLE_NAV: Record<UserRole, NavigationTab[]> = Object.fromEntries(
   (Object.entries(ROLE_NAV_ALL) as Array<[UserRole, NavigationTab[]]>).map(([role, tabs]) => [
     role,
-    aiFeaturesEnabled(role) ? tabs : tabs.filter(tab => !AI_NAV_TABS.includes(tab))
+    (aiFeaturesEnabled(role) ? tabs : tabs.filter(tab => !AI_NAV_TABS.includes(tab)))
+      // The board owns builds while the Chat tab is off; the view itself is kept.
+      .filter(tab => CHAT_TAB_ENABLED || tab !== 'chat')
   ])
 ) as Record<UserRole, NavigationTab[]>;
 

@@ -11,7 +11,6 @@ import {
   Edit3,
   Trash2,
   GitBranch,
-  Sparkles,
   Flame,
   Minus,
   Workflow,
@@ -52,7 +51,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     showToast,
 
 
-    agents,
     role,
     can,
     activeWorkspaceId,
@@ -76,7 +74,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const [resourcesModalOpen, setResourcesModalOpen] = useState<boolean>(false);
   const [buildReviewOpen, setBuildReviewOpen] = useState(false);
   const [orchestrationSettings, setOrchestrationSettings] = useState<ProjectOrchestrationSettings | null>(null);
-  const [orchestrationSettingsLoading, setOrchestrationSettingsLoading] = useState(false);
   const [repositoryFocus, setRepositoryFocus] = useState<{ projectId: string; repo: string } | null>(null);
   const clearRepositoryFocus = useCallback(() => setRepositoryFocus(null), []);
 
@@ -112,7 +109,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       setOrchestrationSettings(null);
       return () => { current = false; };
     }
-    setOrchestrationSettingsLoading(true);
     void apiService.getProjectOrchestrationSettings(selectedProject.id)
       .then(settings => { if (current) setOrchestrationSettings(settings); })
       .catch(error => {
@@ -121,7 +117,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             reason: error instanceof Error ? error.message : 'Could not read local orchestration settings.' });
         }
       })
-      .finally(() => { if (current) setOrchestrationSettingsLoading(false); });
     return () => { current = false; };
   }, [selectedProject?.id, showAi]);
 
@@ -178,17 +173,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const projectIssues = useMemo(() => issues.filter(issue => issue.projectId === selectedProject?.id),
     [issues, selectedProject?.id]);
 
-  // Bound Agents in this project
-  const boundAgents = useMemo(() => {
-    if (!selectedProject) return [];
-    const agentIds = new Set<string>();
-    projectIssues.forEach(i => {
-      if (i.assignedAgentId) agentIds.add(i.assignedAgentId);
-    });
-    if (selectedProject.leadAgentId) agentIds.add(selectedProject.leadAgentId);
-    return agents.filter(a => agentIds.has(a.id));
-  }, [selectedProject, projectIssues, agents]);
-
   // Helper for Circular Progress Ring
   const renderProgressRing = (done: number, total: number) => {
     if (total === 0) {
@@ -204,7 +188,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
     return (
       <div className="flex items-center gap-2">
-        <svg className="w-4 h-4 -rotate-90" viewBox="0 0 16 16">
+        <svg aria-hidden="true" className="w-4 h-4 -rotate-90" viewBox="0 0 16 16">
           <circle
             cx="8"
             cy="8"
@@ -243,32 +227,38 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     return (
       <div className="h-full flex flex-col overflow-hidden bg-shell text-content-secondary select-none font-sans">
 
-        {/* ================= WORKSPACE TOP BREADCRUMB & ACTION BAR ================= */}
-        <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-divider bg-shell px-4 py-3 sm:px-5">
+        <ProjectRepositoryView
+          renderHeader={tabs => (
+        <div className="flex shrink-0 items-center gap-3 border-b border-divider bg-shell px-4 py-2 sm:px-5">
 
           {/* Left: Breadcrumbs navigation */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex min-w-0 max-w-[32%] shrink-0 items-center gap-2">
             <button
               onClick={() => setSelectedProjectId(null)}
-              className="flex items-center gap-1 text-xs text-content-secondary hover:text-content transition-colors"
+              className="flex shrink-0 items-center gap-1 text-xs text-content-secondary hover:text-content transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
-              <span>Projects</span>
+              <span className="hidden xl:inline">Projects</span>
             </button>
 
             <span className="text-content-muted font-mono">/</span>
 
             <div className="flex items-center gap-2 min-w-0">
               <span className="text-base flex-shrink-0">{selectedProject.icon || '⚡'}</span>
-              <h1 className="truncate text-base font-semibold tracking-tight text-content">
+              <h1 title={selectedProject.name} className="truncate text-base font-semibold tracking-tight text-content">
                 {selectedProject.name}
               </h1>
-              <span className="text-xs text-content-muted font-mono">#{selectedProject.key}</span>
+              <span className="hidden shrink-0 font-mono text-xs text-content-muted 2xl:inline">#{selectedProject.key}</span>
+              <span className="hidden shrink-0 text-xs text-content-muted min-[1800px]:inline">
+                · <span className="capitalize">{selectedProject.status.replace('_', ' ')}</span> · {projectRepos.length} {projectRepos.length === 1 ? 'repository' : 'repositories'}
+              </span>
             </div>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
-            <span className="text-xs tabular-nums text-status-success" aria-label="Project progress">
+          <div className="ml-auto flex min-w-0 justify-end">{tabs}</div>
+
+          <div className="flex shrink-0 items-center gap-2">
+            <span className="hidden text-xs tabular-nums text-status-success xl:inline" aria-label="Project progress">
               {doneCount}/{totalCount} done ({progressPercent}%)
             </span>
             {showAi && can('publish_build') && (
@@ -294,8 +284,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
           </div>
         </div>
-
-        <ProjectRepositoryView
+          )}
           qaStudio={role==='pm'?<PmProjectQaStudio key={`${activeWorkspaceId}:${selectedProject.id}`} projectId={selectedProject.id} projectName={selectedProject.name}
             issues={projectIssues}
             feedback={clientId=><ProjectClientPreviewPanel key={clientId} projectId={selectedProject.id} canManage={canEditProjects} conversationOnly requestedClientId={clientId}/>}/>:undefined}
@@ -307,99 +296,73 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
           onInitialRepositoryApplied={clearRepositoryFocus}
           onManageRepositories={canEditProjects ? () => setResourcesModalOpen(true) : undefined}
           overview={(
-            <div className="flex h-full min-h-0 flex-col">
-              <details className="group shrink-0 border-b border-divider text-xs">
-                <summary className="cursor-pointer px-5 py-3 text-content-secondary transition-colors hover:text-content focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
-                  <span className="ml-1 font-medium">Project details</span>
-                  <span className="ml-3 capitalize text-content-muted">{selectedProject.status.replace('_', ' ')}</span>
-                  <span className="ml-3 text-content-muted">{projectRepos.length} repositories</span>
-                </summary>
-                <div className="grid max-h-[45vh] gap-5 overflow-y-auto px-5 pb-5 md:grid-cols-2 xl:grid-cols-3">
-                  <section className="space-y-3">
-                    <h2 className="font-medium text-content-secondary">Properties</h2>
-                    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-3">
-                      <dt className="text-content-muted">Status</dt>
-                      <dd className="capitalize">{selectedProject.status.replace('_', ' ')}</dd>
-                      <dt className="text-content-muted">Priority</dt>
-                      <dd className="capitalize">{selectedProject.priority || 'Medium'}</dd>
-                      <dt className="text-content-muted">Build lead</dt>
-                      <dd className="flex min-w-0 items-center gap-1.5">
-                        <Workflow className="h-3.5 w-3.5 shrink-0 text-link" aria-hidden />
-                        <span>Orchestrator</span>
-                      </dd>
-                      <dt className="text-content-muted">Target date</dt>
-                      <dd>{selectedProject.targetDate || 'No deadline'}</dd>
-                    </dl>
-                    {showAi && boundAgents.length > 0 && (
-                      <div className="space-y-2 pt-2">
-                        <h3 className="text-content-secondary">Active agents ({boundAgents.length})</h3>
-                        <div className="flex flex-wrap gap-2">
-                          {boundAgents.map(agent => (
-                            <div key={agent.id} className="flex min-w-0 items-center gap-2 rounded-lg border border-divider px-2 py-1.5" title={agent.role}>
-                              <img src={agent.avatar} alt="" className="h-5 w-5 rounded-full object-cover" />
-                              <span className="truncate">{agent.name}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+            <IssuesView
+              embedded
+              lockedProjectId={selectedProject.id}
+              onOpenNewIssue={canManageIssues ? () => onOpenNewIssue?.() : () => {}}
+            />
+          )}
+          details={(
+            <div className="mx-auto grid max-w-6xl gap-4 text-xs lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+              <div className="space-y-4">
+                <section aria-labelledby="project-about" className="rounded-xl border border-divider bg-surface-raised p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h2 id="project-about" className="text-[13px] font-semibold text-content">About this project</h2>
+                    {canEditProjects && (
+                      <button type="button" onClick={() => setEditingProject(selectedProject)} className="inline-flex items-center gap-1 text-content-secondary hover:text-content">
+                        <Edit3 className="h-3 w-3" aria-hidden />Edit
+                      </button>
                     )}
-                  </section>
-                  <section className="space-y-2">
-                    {showAi && <section aria-label="Orchestrated build workflow" className="space-y-2 rounded-xl border border-divider bg-selected p-3">
-                      <div className="flex items-center gap-2">
-                        <Workflow className="h-3.5 w-3.5 text-link" aria-hidden />
-                        <h2 className="font-semibold text-content">Orchestrator builds</h2>
-                        {orchestrationSettings?.available && <span className="ml-auto rounded-full border border-status-success-border bg-status-success-subtle px-1.5 py-0.5 text-[9px] font-semibold text-status-success">ALWAYS ON</span>}
-                      </div>
-                      <p className="text-[11px] leading-relaxed text-content-secondary">
-                        The Orchestrator leads every desktop product build. It shows its plan and specialist assignments first, then coordinates the selected codebases together. You review the finished change before it is sent to GitHub.
-                      </p>
-                      <p className="text-[10px] leading-relaxed text-content-muted">
-                        {orchestrationSettingsLoading ? 'Checking this desktop…'
-                          : orchestrationSettings?.available ? 'Always enabled. One product plan can cover the frontend, backend, and other selected codebases.'
-                            : orchestrationSettings?.reason ?? 'The Orchestrator is unavailable in this environment.'}
-                      </p>
-                    </section>}
-                    <h2 className="flex items-center gap-1.5 font-medium text-content-secondary">
-                      <Sparkles className="h-3.5 w-3.5 text-link" aria-hidden />Ground Rules &amp; Context
-                    </h2>
-                    <p className="select-text whitespace-pre-wrap break-words rounded-xl border border-divider bg-well p-3 font-mono text-[11px] leading-relaxed">
-                      {selectedProject.description || 'No specific ground rules configured.'}
-                    </p>
-                  </section>
-                  <section className="space-y-2 md:col-span-2 xl:col-span-1">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h2 className="flex items-center gap-1.5 font-medium text-content-secondary">
-                        <GitBranch className="h-3.5 w-3.5 text-status-info" aria-hidden />Connected Repositories
-                      </h2>
-                      {canEditProjects && (
-                        <button type="button" onClick={() => setResourcesModalOpen(true)} className="inline-flex items-center gap-1 text-content-secondary hover:text-content">
-                          <Plus className="h-3 w-3" aria-hidden />
-                          {canProvisionRepositories ? 'Add repository' : 'Attach existing'}
-                        </button>
-                      )}
-                    </div>
-                    <ProjectResourcesPanel
-                      variant="inline"
-                      projectId={selectedProject.id}
-                      resources={selectedProject.resources || []}
-                      onChange={next => updateProject(selectedProject.id, { resources: next })}
-                      readOnly={!canEditProjects}
-                      canCreateRepository={canProvisionRepositories}
-                    />
-                  </section>
-                </div>
-              </details>
-              <div className="min-h-0 flex-1">
-                <IssuesView
-                  embedded
-                  lockedProjectId={selectedProject.id}
-                  onOpenNewIssue={canManageIssues ? () => onOpenNewIssue?.() : () => {}}
-                />
+                  </div>
+                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-6 gap-y-3">
+                    <dt className="text-content-muted">Status</dt>
+                    <dd className="capitalize text-content">{selectedProject.status.replace('_', ' ')}</dd>
+                    <dt className="text-content-muted">Priority</dt>
+                    <dd className="capitalize text-content">{selectedProject.priority || 'Medium'}</dd>
+                    <dt className="text-content-muted">Target date</dt>
+                    <dd className="text-content">{selectedProject.targetDate || 'No deadline'}</dd>
+                    <dt className="text-content-muted">Progress</dt>
+                    <dd className="text-content">{doneCount} of {totalCount} tasks done</dd>
+                  </dl>
+                </section>
+                <section aria-labelledby="project-rules" className="rounded-xl border border-divider bg-surface-raised p-4">
+                  <h2 id="project-rules" className="mb-1 text-[13px] font-semibold text-content">Ground rules and context</h2>
+                  <p className="mb-3 text-content-muted">Every build in this project follows these.</p>
+                  <p className="select-text whitespace-pre-wrap break-words rounded-lg border border-divider bg-well p-3 font-mono text-[11px] leading-relaxed text-content-secondary">
+                    {selectedProject.description || 'No ground rules yet.'}
+                  </p>
+                </section>
+                {showAi && orchestrationSettings && !orchestrationSettings.available && (
+                  <p role="status" className="rounded-xl border border-status-warning-border bg-status-warning-subtle p-3 text-status-warning">
+                    Builds cannot run on this desktop: {orchestrationSettings.reason ?? 'the build service is unavailable.'}
+                  </p>
+                )}
               </div>
+              <section aria-labelledby="project-repos" className="rounded-xl border border-divider bg-surface-raised p-4">
+                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                  <h2 id="project-repos" className="flex items-center gap-1.5 text-[13px] font-semibold text-content">
+                    <GitBranch className="h-3.5 w-3.5 text-status-info" aria-hidden />Repositories
+                  </h2>
+                  {canEditProjects && (
+                    <button type="button" onClick={() => setResourcesModalOpen(true)} className="inline-flex items-center gap-1 text-content-secondary hover:text-content">
+                      <Plus className="h-3 w-3" aria-hidden />
+                      {canProvisionRepositories ? 'Add repository' : 'Attach existing'}
+                    </button>
+                  )}
+                </div>
+                <ProjectResourcesPanel
+                  variant="inline"
+                  projectId={selectedProject.id}
+                  resources={selectedProject.resources || []}
+                  onChange={next => updateProject(selectedProject.id, { resources: next })}
+                  readOnly={!canEditProjects}
+                  canCreateRepository={canProvisionRepositories}
+                />
+              </section>
             </div>
           )}
         />
+
 
         {buildReviewOpen && (
           <Modal
@@ -507,8 +470,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 <div className="w-24">
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Key</label>
+                  <label htmlFor="edit-project-key" className="block text-[11px] font-medium text-content-secondary mb-1">Key</label>
                   <input
+                    id="edit-project-key"
                     type="text"
                     maxLength={5}
                     value={editingProject.key}
@@ -531,10 +495,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               )}
 
               <div>
-                <label className="block text-[11px] font-medium text-content-secondary mb-1">
+                <label htmlFor="edit-project-goal" className="block text-[11px] font-medium text-content-secondary mb-1">
                   Goal & Ground Rules (Agent Context)
                 </label>
                 <textarea
+                    id="edit-project-goal"
                   rows={3}
                   maxLength={8000}
                   value={editingProject.description ?? ''}
@@ -546,8 +511,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Status</label>
+                  <label htmlFor="edit-project-status" className="block text-[11px] font-medium text-content-secondary mb-1">Status</label>
                   <select
+                    id="edit-project-status"
                     value={editingProject.status}
                     onChange={(e) => setEditingProject({ ...editingProject, status: e.target.value as ProjectStatus })}
                     className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content focus:outline-none focus:border-control"
@@ -561,8 +527,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Priority</label>
+                  <label htmlFor="edit-project-priority" className="block text-[11px] font-medium text-content-secondary mb-1">Priority</label>
                   <select
+                    id="edit-project-priority"
                     value={editingProject.priority || 'none'}
                     onChange={(e) => setEditingProject({ ...editingProject, priority: e.target.value as ProjectPriority })}
                     className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content focus:outline-none focus:border-control"
@@ -580,8 +547,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Start Date</label>
+                  <label htmlFor="edit-project-start-date" className="block text-[11px] font-medium text-content-secondary mb-1">Start Date</label>
                   <input
+                    id="edit-project-start-date"
                     type="date"
                     value={editingProject.startDate || ''}
                     onChange={(e) => setEditingProject({ ...editingProject, startDate: e.target.value })}
@@ -590,8 +558,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Target Date</label>
+                  <label htmlFor="edit-project-target-date" className="block text-[11px] font-medium text-content-secondary mb-1">Target Date</label>
                   <input
+                    id="edit-project-target-date"
                     type="date"
                     value={editingProject.targetDate || ''}
                     onChange={(e) => setEditingProject({ ...editingProject, targetDate: e.target.value })}

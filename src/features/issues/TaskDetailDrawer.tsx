@@ -5,11 +5,15 @@ import type { Issue, IssuePriority, IssueStatus } from '@/shared/types';
 import type { IssueBuildStatus } from '@/shared/services/apiService';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { Modal } from '@/shared/components/Modal';
-import { AgentRunProgress } from '@/features/runs/AgentRunProgress';
-import { BuildChip } from './BuildChip';
+import { isEpic } from '@/features/board-build/epic';
+import { FeatureSpecPanel } from '@/features/board-build/FeatureSpecPanel';
+import { TaskBuildPanel, type SpecState } from '@/features/board-build/TaskBuildPanel';
+import { useFeatureSpec } from '@/features/board-build/useTaskBuild';
+import { isDesktop } from '@/shared/desktop';
 import { TASK_PRIORITIES, TASK_STATUSES, nextStepFor, type NextStepAction } from './taskFlow';
 
 interface TaskDetailDrawerProps {
+  onOpenTask?: (id: string, projectId: string) => void;
   issue: Issue;
   /** Tab-session key prefix of the board this drawer belongs to. */
   sessionPrefix: string;
@@ -26,6 +30,8 @@ interface TaskDetailDrawerProps {
   onOpenBuildChat?: (issue: Issue) => void;
   /** Open project chat with a hand-off message; absent for roles without chat. */
   onHandOff?: (issue: Issue) => void;
+  /** A build decision was made on this task; the board re-reads build statuses. */
+  onBuildChanged?: () => void;
 }
 
 type DrawerTab = 'overview' | 'activity' | 'build';
@@ -61,9 +67,11 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   onRequestStatus,
   onPlanBuild,
   onOpenBuildChat,
-  onHandOff
+  onHandOff,
+  onBuildChanged,
+  onOpenTask,
 }) => {
-  const { updateIssue, addIssueComment, can, identity, currentUser, projects, role } = useApp();
+  const { updateIssue, addIssueComment, can, identity, currentUser, projects } = useApp();
   const ids = useId();
   const canManageIssues = can('manage_issues');
   const [tab, setTab] = useTabSessionState<DrawerTab>(`${sessionPrefix}.drawerTab`, 'overview');
@@ -72,11 +80,19 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   const project = projects.find(item => item.id === issue.projectId);
-  const statusIndex = TASK_STATUSES.findIndex(item => item.id === issue.status);
+  const spec = useFeatureSpec(issue, isDesktop);
+  const specState: SpecState = !spec.record ? 'none' : spec.record.status === 'approved' ? (spec.record.stale ? 'stale' : 'approved') : 'draft';
+  // A task with a build under way sits in Building on the board; the track says the same.
+  const shownStatus = buildActive && issue.status !== 'done' ? 'agent_running' : issue.status;
+  const shownBranch = buildActive ? build?.branchName : issue.branchName;
+  const statusIndex = TASK_STATUSES.findIndex(item => item.id === shownStatus);
   const done = issue.subtasks.filter(subtask => subtask.completed).length;
   const step = nextStepFor({
     status: issue.status,
     buildStatus: build?.status,
+    blocker: build?.blocker,
+    fresh: build?.fresh,
+    requestStatus: build?.request?.status,
     buildActive,
     canManageIssues,
     canStartBuild,
@@ -100,6 +116,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
   const run = (action: NextStepAction) => {
     switch (action) {
+      case 'open_build': setTab('build'); break;
       case 'open_chat': onOpenBuildChat?.(issue); break;
       case 'handoff_chat': onHandOff?.(issue); break;
       case 'plan_build': onPlanBuild(issue); break;
@@ -151,6 +168,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
     >
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-divider pl-5 pr-2 text-[12.5px] text-content-muted">
         <span className="font-mono text-xs text-content-secondary">{issue.identifier}</span>
+        {isEpic(issue.labels) && <span className="rounded bg-selected px-1.5 text-[10.5px] font-semibold text-selected-content">Epic</span>}
         <CopyButton value={issue.identifier} label={`task ID ${issue.identifier}`} />
         {project && <span className="truncate">in {project.name}</span>}
         {canManageIssues && (
@@ -263,12 +281,12 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
             <dt className="border-b border-divider py-2 text-content-muted">Labels</dt>
             <dd className="border-b border-divider py-2 text-content-secondary">{issue.labels.join(', ')}</dd>
           </>}
-          {issue.branchName && <>
+          {shownBranch && <>
             <dt className="border-b border-divider py-2 text-content-muted">Branch</dt>
             <dd className="flex min-w-0 items-center gap-1.5 border-b border-divider py-1.5 text-content-secondary">
               <GitBranch aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-content-muted" />
-              <span className="truncate font-mono text-[11.5px]">{issue.branchName}</span>
-              <CopyButton value={issue.branchName} label={`branch ${issue.branchName}`} />
+              <span className="truncate font-mono text-[11.5px]">{shownBranch}</span>
+              <CopyButton value={shownBranch} label={`branch ${shownBranch}`} />
             </dd>
           </>}
           {issue.prUrl && <>
@@ -309,9 +327,12 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                 />
               </div>
 
+              {/* Writing a spec is an agent step, so only developers start one; anyone sees a spec that exists. */}
+              {isDesktop && (spec.record || (can('run_builds') && can('manage_chat'))) && <FeatureSpecPanel issue={issue} spec={spec} />}
+
               <section aria-labelledby={`${ids}-subtasks`}>
                 <div className="mb-2 flex items-center gap-2.5">
-                  <h3 id={`${ids}-subtasks`} className="text-[13px] font-semibold text-content-secondary">Subtasks</h3>
+                  <h3 id={`${ids}-subtasks`} className="text-[13px] font-semibold text-content-secondary" title="The build must meet each open item">Checklist</h3>
                   {issue.subtasks.length > 0 && <>
                     <span className="text-xs tabular-nums text-content-muted">{done} of {issue.subtasks.length}</span>
                     <span aria-hidden="true" className="relative h-1 w-16 overflow-hidden rounded-full bg-surface-high">
@@ -330,8 +351,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                 {canManageIssues && (
                   <form onSubmit={addSubtask} className="mt-1.5 flex h-8 items-center gap-2 rounded-md border border-dashed border-divider px-2.5">
                     <Plus aria-hidden="true" className="h-3.5 w-3.5 text-content-muted" />
-                    <label htmlFor={`${ids}-new-subtask`} className="sr-only">New subtask</label>
-                    <input id={`${ids}-new-subtask`} value={newSubtask} onChange={event => setNewSubtask(event.target.value)} placeholder="Add a subtask" className="min-w-0 flex-1 bg-transparent text-[13px] text-content placeholder-content-muted focus:outline-none" />
+                    <label htmlFor={`${ids}-new-subtask`} className="sr-only">New checklist item</label>
+                    <input id={`${ids}-new-subtask`} value={newSubtask} onChange={event => setNewSubtask(event.target.value)} placeholder="Add a checklist item" className="min-w-0 flex-1 bg-transparent text-[13px] text-content placeholder-content-muted focus:outline-none" />
                     <button type="submit" disabled={!newSubtask.trim()} className="text-xs font-semibold text-link disabled:opacity-40">Add</button>
                   </form>
                 )}
@@ -364,25 +385,13 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
           {tab === 'build' && (
             <div className="space-y-4">
-              {build
-                ? (
-                  <div className="flex flex-wrap items-center gap-3 text-[12.5px] text-content-muted">
-                    <BuildChip build={build} />
-                    <span className="tabular-nums">Updated {formatTime(build.updatedAt)}</span>
-                    {onOpenBuildChat && (
-                      <button type="button" onClick={() => onOpenBuildChat(issue)} className="inline-flex items-center gap-1 font-medium text-link hover:text-link-hover">
-                        Open in chat <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                )
-                : <p className="text-[13px] text-content-muted">No build yet. {canStartBuild ? 'Plan one to have the Orchestrator do this task.' : role === 'pm' ? 'A developer can plan and run this task.' : ''}</p>}
-              {!build && canStartBuild && (
-                <button type="button" onClick={() => onPlanBuild(issue)} className="inline-flex h-8 items-center gap-2 rounded-md border border-divider px-3 text-[12.5px] font-medium text-content-secondary hover:bg-surface-high hover:text-content">
-                  <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-link" /> Plan a build
+              <TaskBuildPanel issue={issue} build={build} canStartBuild={canStartBuild} specState={specState} onPlanBuild={onPlanBuild} onBuildChanged={onBuildChanged} onOpenTask={onOpenTask} />
+              {/* A build started from chat before the board took over still opens in its chat while the Chat tab is on. */}
+              {build && onOpenBuildChat && (
+                <button type="button" onClick={() => onOpenBuildChat(issue)} className="inline-flex items-center gap-1 text-[12.5px] font-medium text-link hover:text-link-hover">
+                  Open in chat <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
                 </button>
               )}
-              <AgentRunProgress issueId={issue.id} />
             </div>
           )}
         </div>
@@ -411,7 +420,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
           <div className="flex items-center gap-2 px-3 pb-2 text-[11.25px] text-content-muted">
             <span>Ctrl ↵ to send</span>
             <button type="submit" disabled={!comment.trim()} className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-md bg-action px-2.5 text-xs font-semibold text-on-action hover:bg-action-hover disabled:opacity-40">
-              <Send aria-hidden="true" className="h-3.5 w-3.5" /> Send
+              <Send aria-hidden="true" className="h-3.5 w-3.5" /> Post comment
             </button>
           </div>
         </div>

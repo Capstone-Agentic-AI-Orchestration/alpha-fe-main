@@ -1,0 +1,274 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ListPlus, Play, Send, Sparkles } from 'lucide-react';
+import { useApp } from '@/app/AppContext';
+import { ChatSidePanel } from '@/features/chat/ChatSidePanel';
+import { MessageMarkdown } from '@/features/chat/MessageMarkdown';
+import { apiService } from '@/shared/services/apiService';
+import type { ChatMessage, Issue, IssueStatus, SystemProposal } from '@/shared/types';
+import { isBoardThreadId } from './useTaskBuild';
+
+/** Separates what the person typed from the board context sent with it. */
+export const SCOPE_MARKER = '\n\n[Board scope]\n';
+/** Enough tasks to talk about, few enough to keep each request small. */
+export const MAX_SCOPE_TASKS = 20;
+const MAX_ASK_CHARS = 5_800;
+const MAX_DRAFT_CHARS = 4_000;
+
+/** Saved task context, bounded per description and per request. */
+export function scopeLines(tasks: Issue[], columnTitle: (issue: Issue) => string): string {
+  return tasks.slice(0, MAX_SCOPE_TASKS).map(issue => {
+    const open = (issue.subtasks ?? []).filter(item => !item.completed).map(item => item.title);
+    const description = (issue.description ?? '').trim().replace(/\s+/g, ' ');
+    const details = description ? ' | Details: ' + description.slice(0, 1_600) + (description.length > 1_600 ? ' [description shortened]' : '') : '';
+    return '- ' + issue.identifier + ' [' + columnTitle(issue) + '] ' + issue.title + (open.length ? ' (checklist: ' + open.join('; ') + ')' : '') + details;
+  }).join('\n');
+}
+
+/** The part of a sent message the person wrote, without the attached scope. */
+export const visibleText = (content: string) => content.split(SCOPE_MARKER)[0];
+
+interface BoardAlphaPanelProps {
+  projectId: string;
+  projectKey?: string;
+  /** The project's tasks, in board order. */
+  issues: Issue[];
+  columns: { id: IssueStatus; title: string }[];
+  columnFor: (issue: Issue) => IssueStatus;
+  /** Whether this person can start a build on the task from here. */
+  canStartBuild: (issue: Issue) => boolean;
+  onStartBuild: (issue: Issue) => void;
+  onOpenIssue: (issueId: string) => void;
+  onClose: () => void;
+}
+
+const button = 'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium disabled:opacity-40';
+const primary = button + ' bg-action font-semibold text-on-action hover:bg-action-hover';
+const secondary = button + ' border border-divider text-content-secondary hover:bg-surface-high hover:text-content';
+
+/**
+ * A developer's Alpha panel beside the board.
+ *
+ * The person picks the columns, and the tasks in them, that Alpha should look
+ * at. Ask answers questions about them and never starts a build. Suggest tasks
+ * asks the Manager Agent for new tasks; nothing is added until the person
+ * keeps them. Builds start one task at a time through the board's own
+ * confirmation, so the orchestration is unchanged.
+ */
+export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
+  projectId, projectKey, issues, columns, columnFor, canStartBuild, onStartBuild, onOpenIssue, onClose
+}) => {
+  const { createIssue } = useApp();
+  const [scopeColumns, setScopeColumns] = useState<Set<IssueStatus>>(() => new Set<IssueStatus>(['todo']));
+  const [excluded, setExcluded] = useState<Set<string>>(new Set());
+  const [threadId, setThreadId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [notes, setNotes] = useState<string[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState<'ask' | 'draft' | null>(null);
+  const [error, setError] = useState('');
+  const [proposal, setProposal] = useState<SystemProposal | null>(null);
+  const [kept, setKept] = useState<Set<number>>(new Set());
+  const endRef = useRef<HTMLDivElement>(null);
+
+  const titleOf = (status: IssueStatus) => columns.find(column => column.id === status)?.title ?? status;
+  const columnTasks = useMemo(() => issues.filter(issue => scopeColumns.has(columnFor(issue))), [issues, scopeColumns, columnFor]);
+  const inScope = columnTasks.filter(issue => !excluded.has(issue.id)).slice(0, MAX_SCOPE_TASKS);
+  const scopeText = scopeLines(inScope, issue => titleOf(columnFor(issue)));
+
+  // The project's private ask conversation, and what was said in it before.
+  useEffect(() => {
+    let cancelled = false;
+    setThreadId(null); setMessages([]); setProposal(null); setNotes([]); setError('');
+    apiService.getBoardThread(projectId)
+      .then(async thread => {
+        if (cancelled || !isBoardThreadId(thread.id)) return;
+        setThreadId(thread.id);
+        const history = await apiService.getChatMessages(thread.id);
+        if (!cancelled) setMessages(history.filter(message => message.senderType !== 'system'));
+      })
+      .catch(failure => { if (!cancelled) setError(failure instanceof Error ? failure.message : 'Alpha could not open this conversation.'); });
+    return () => { cancelled = true; };
+  }, [projectId]);
+
+  useEffect(() => { endRef.current?.scrollIntoView?.({ block: 'end' }); }, [messages.length, proposal, notes.length, busy]);
+
+  const toggleColumn = (status: IssueStatus) => setScopeColumns(current => {
+    const next = new Set(current);
+    if (next.has(status)) next.delete(status); else next.add(status);
+    return next;
+  });
+  const toggleTask = (issueId: string) => setExcluded(current => {
+    const next = new Set(current);
+    if (next.has(issueId)) next.delete(issueId); else next.add(issueId);
+    return next;
+  });
+
+  const ask = async () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    setBusy('ask'); setError('');
+    try {
+      const content = scopeText ? text + SCOPE_MARKER + scopeText : text;
+      if (content.length > MAX_ASK_CHARS) throw new Error('The selected task context is too large. Select fewer tasks or shorten your message.');
+      const id = threadId ?? (await apiService.getBoardThread(projectId)).id;
+      if (!isBoardThreadId(id)) throw new Error('Alpha could not open this conversation.');
+      setThreadId(id);
+      setMessages(current => [...current, { id: 'pending-' + Date.now(), senderType: 'user', senderName: 'You', content, timestamp: new Date().toISOString() }]);
+      setInput('');
+      await apiService.sendChatMessage({ threadId: id, content, projectId, intent: 'ask', clientMessageId: 'msg-' + Date.now() + '-' + crypto.randomUUID() });
+      const history = await apiService.getChatMessages(id);
+      setMessages(history.filter(message => message.senderType !== 'system'));
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Your question was not sent.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const suggest = async () => {
+    const text = input.trim();
+    if (!text || busy) return;
+    setBusy('draft'); setError(''); setProposal(null);
+    try {
+      const existing = scopeText ? '\n\nAlready on the board, so do not repeat these:\n' + scopeText : '';
+      if ((text + existing).length > MAX_DRAFT_CHARS) throw new Error('The selected task context is too large. Select fewer tasks or shorten your message.');
+      const next = await apiService.proposeSystemEpics(projectId, text + existing);
+      setProposal(next);
+      setKept(new Set(next.epics.map((_epic, index) => index)));
+      setInput('');
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : 'Alpha could not suggest tasks.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const addKept = () => {
+    if (!proposal) return;
+    let added = 0;
+    proposal.epics.forEach((epic, index) => {
+      if (!kept.has(index)) return;
+      const created = createIssue({
+        title: epic.title,
+        description: epic.outcome + (epic.personas.length ? '\n\nFor: ' + epic.personas.join(', ') : ''),
+        projectId, priority: 'medium', status: 'backlog', labels: []
+      });
+      if (created) added += 1;
+    });
+    setProposal(null);
+    if (added) setNotes(current => [...current, 'Added ' + added + (added === 1 ? ' task' : ' tasks') + ' to Backlog.']);
+  };
+
+  const close = () => { if (!busy) onClose(); };
+
+  return (
+    <ChatSidePanel
+      tabs={[{ id: 'alpha', title: 'Alpha' + (projectKey ? ' · ' + projectKey : ''), icon: <Sparkles aria-hidden="true" className="h-3.5 w-3.5" />, live: Boolean(busy) }]}
+      activeId="alpha"
+      onSelect={() => undefined}
+      onClose={close}
+      onCloseAll={close}
+    >
+      <section aria-label="What Alpha looks at" className="shrink-0 space-y-2 border-b border-divider p-3">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[12px] font-semibold text-content-secondary">Work on</h2>
+          <span className="text-[11.5px] text-content-muted">{inScope.length} {inScope.length === 1 ? 'task' : 'tasks'}</span>
+        </div>
+        <div role="group" aria-label="Columns" className="flex flex-wrap gap-1.5">
+          {columns.map(column => {
+            const on = scopeColumns.has(column.id);
+            return (
+              <button key={column.id} type="button" aria-pressed={on} onClick={() => toggleColumn(column.id)}
+                className={'h-7 rounded-md border px-2 text-[11.5px] font-medium ' + (on ? 'border-divider bg-selected text-selected-content' : 'border-divider text-content-secondary hover:bg-surface-high hover:text-content')}>
+                {column.title}
+              </button>
+            );
+          })}
+        </div>
+        {columnTasks.length > 0 ? (
+          <ul className="max-h-44 space-y-0.5 overflow-y-auto">
+            {columnTasks.map(issue => (
+              <li key={issue.id} className="flex min-h-8 items-center gap-2 rounded-md px-1.5 hover:bg-surface-high">
+                <input type="checkbox" aria-label={'Include ' + issue.identifier} checked={inScope.some(item => item.id === issue.id)}
+                  disabled={!inScope.some(item => item.id === issue.id) && inScope.length >= MAX_SCOPE_TASKS}
+                  onChange={() => toggleTask(issue.id)} className="h-3.5 w-3.5 shrink-0 accent-brand-500 disabled:opacity-40" />
+                <button type="button" onClick={() => onOpenIssue(issue.id)} className="min-w-0 flex-1 truncate text-left text-[12.5px] text-content hover:underline">
+                  <span className="font-mono text-[11px] text-content-muted">{issue.identifier}</span> {issue.title}
+                </button>
+                {canStartBuild(issue) && (
+                  <button type="button" onClick={() => onStartBuild(issue)} title={'Start a build for ' + issue.identifier}
+                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-action px-2 text-[11px] font-semibold text-on-action hover:bg-action-hover">
+                    <Play aria-hidden="true" className="h-3 w-3" /> Build
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[12px] text-content-muted">{scopeColumns.size ? 'No tasks in these columns.' : 'Pick a column. With none picked, Alpha answers about the project as a whole.'}</p>
+        )}
+        {columnTasks.length > MAX_SCOPE_TASKS && <p className="text-[11.5px] text-content-muted">Up to {MAX_SCOPE_TASKS} tasks are included. Untick a task to include the next one.</p>}
+      </section>
+
+      <div aria-live="polite" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+        {messages.length === 0 && !proposal && !busy && (
+          <p className="text-[12.5px] leading-relaxed text-content-muted">Ask about the tasks you picked, or describe new work and choose Suggest tasks. Alpha never changes code from here; start a build from a task.</p>
+        )}
+        {messages.map(message => message.senderType === 'user' ? (
+          <div key={message.id} className="flex justify-end">
+            <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-surface-raised px-3 py-2 text-[13px] text-content">{visibleText(message.content)}</p>
+          </div>
+        ) : (
+          <div key={message.id} className="text-[13px] text-content"><MessageMarkdown content={message.content} /></div>
+        ))}
+        {busy === 'ask' && <p role="status" className="text-[12.5px] text-content-muted">Alpha is answering.</p>}
+        {busy === 'draft' && <p role="status" className="text-[12.5px] text-content-muted">Drafting task suggestions. Review them before adding them to Backlog.</p>}
+        {proposal && (
+          <div className="space-y-2 rounded-lg border border-divider p-2.5">
+            <p className="text-[12px] font-semibold text-content-secondary">Suggested tasks</p>
+            <ul className="space-y-1.5">
+              {proposal.epics.map((epic, index) => (
+                <li key={epic.title + index}>
+                  <label className="flex gap-2.5 rounded-md border border-divider p-2">
+                    <input aria-label={`Include ${epic.title}`} type="checkbox" checked={kept.has(index)} onChange={() => setKept(current => {
+                      const next = new Set(current);
+                      if (next.has(index)) next.delete(index); else next.add(index);
+                      return next;
+                    })} className="mt-0.5 h-3.5 w-3.5 accent-brand-500" />
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-medium text-content">{epic.title}</span>
+                      <span className="block text-[12px] text-content-secondary">{epic.outcome}</span>
+                    </span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setProposal(null)} className={secondary}>Discard</button>
+              <button type="button" disabled={!kept.size} onClick={addKept} className={primary}>Add {kept.size} to Backlog</button>
+            </div>
+          </div>
+        )}
+        {notes.map((note, index) => <p key={index} role="status" className="text-[12px] text-status-success">{note}</p>)}
+        <div ref={endRef} />
+      </div>
+
+      <form className="shrink-0 space-y-2 border-t border-divider p-3" onSubmit={event => { event.preventDefault(); void ask(); }}>
+        {error && <p role="alert" className="text-[12.5px] text-status-danger">{error}</p>}
+        <label htmlFor="board-alpha-input" className="sr-only">Message Alpha</label>
+        <textarea id="board-alpha-input" rows={3} value={input} maxLength={3_000} onChange={event => setInput(event.target.value)}
+          onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void ask(); } }}
+          placeholder="Ask about these tasks, or describe work to split into tasks"
+          className="w-full resize-none rounded-md border border-control bg-well px-3 py-2 text-[13px] text-content placeholder-content-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" />
+        <div className="flex justify-end gap-2">
+          <button type="button" disabled={!input.trim() || Boolean(busy)} onClick={() => void suggest()} className={secondary}>
+            <ListPlus aria-hidden="true" className="h-3.5 w-3.5" /> Suggest tasks
+          </button>
+          <button type="submit" disabled={!input.trim() || Boolean(busy)} className={primary}>
+            <Send aria-hidden="true" className="h-3.5 w-3.5" /> Ask
+          </button>
+        </div>
+      </form>
+    </ChatSidePanel>
+  );
+};
