@@ -32,18 +32,22 @@ export const BUILD_STATES: Record<string, { label: string; tone: Tone; live?: bo
   awaiting_plan_approval: { label: 'Plan ready', tone: 'review' },
   executing: { label: 'Building', tone: 'info', live: true },
   validating: { label: 'Checking', tone: 'info', live: true },
-  publishing: { label: 'Publishing', tone: 'info', live: true },
+  publishing: { label: 'Opening PR', tone: 'info', live: true },
   paused: { label: 'Paused', tone: 'wait' },
   cancelling: { label: 'Stopping', tone: 'muted' },
-  blocked: { label: 'Needs you', tone: 'alert' },
-  recovery_required: { label: 'Needs you', tone: 'alert' },
+  blocked: { label: 'Recovery needed', tone: 'alert' },
+  recovery_required: { label: 'Interrupted', tone: 'alert' },
   awaiting_approval: { label: 'Ready for review', tone: 'review' },
-  completed: { label: 'Built', tone: 'done' },
+  completed: { label: 'Output ready', tone: 'done' },
+  cancelled: { label: 'Previous build stopped', tone: 'muted' },
   failed: { label: 'Build failed', tone: 'alert' }
 };
 
 /** A build's state as a dot and a word: status reads as text, not as a pill. */
 export const BuildChip: React.FC<{ build?: IssueBuildStatus }> = ({ build }) => {
+  if (build?.fresh === false) return <span className="text-[11px] text-content-muted">Status unavailable</span>;
+  if (build?.blocker && !ACTIVE_BUILD_STATUSES.has(build.status)) return <span className="text-[11px] text-status-warning">Waiting for {build.blocker.identifier ?? 'another build'}</span>;
+  if (build?.request && ['waiting', 'planning'].includes(build.request.status) && !ACTIVE_BUILD_STATUSES.has(build.status)) return <span className="text-[11px] text-status-info">{build.request.status === 'waiting' ? 'Plan queued' : 'Preparing plan'}</span>;
   const state = build ? BUILD_STATES[build.status] : undefined;
   if (!state) return null;
   return (

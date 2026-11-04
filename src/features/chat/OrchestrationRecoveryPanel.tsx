@@ -35,7 +35,7 @@ interface OrchestrationRecoveryPanelProps {
 const actionMeta: Record<LiveBuildRecoveryAction, { label: string; icon: React.ReactNode; tone: string }> = {
   explain_failure: { label: 'Explain issue', icon: <MessageSquareText className="h-3.5 w-3.5" />, tone: 'border-divider text-content hover:bg-surface-high' },
   retry_report_format: { label: 'Retry report format', icon: <ClipboardCheck className="h-3.5 w-3.5" />, tone: 'border-status-info-border bg-status-info-subtle text-status-info hover:bg-status-info-subtle' },
-  repair_and_continue: { label: 'Fix and continue', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
+  repair_and_continue: { label: 'Retry failed step', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
   provide_guidance: { label: 'Provide direction', icon: <MessageSquareText className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
   recheck_prerequisite: { label: 'Recheck and resume', icon: <RefreshCw className="h-3.5 w-3.5" />, tone: 'border-status-info-border bg-status-info-subtle text-status-info hover:bg-status-info-subtle' },
   plan_final_validation_corrections: { label: 'Fix failed checks', icon: <Wrench className="h-3.5 w-3.5" />, tone: 'border-divider bg-selected text-selected-content hover:bg-selected' },
@@ -74,7 +74,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
       (canControl || action === 'explain_failure' || action === 'review_saved_changes') &&
       (action !== 'review_saved_changes' || Boolean(onOpenReview)));
   const phaseLabel = recovery.phase === 'repairing' ? 'Recovery in progress'
-    : recovery.phase === 'ready_to_continue' ? 'Ready to continue' : 'Waiting for your direction';
+    : recovery.phase === 'ready_to_continue' ? 'Review continuation' : recovery.attemptsUsed >= 4 ? 'Recovery limit reached' : recovery.category === 'configuration' || recovery.category === 'provider' ? 'Setup needs review' : 'Recovery needs review';
   const recoveryUsage = recovery.category === 'project_code' && recovery.taskTitle
     ? `${Math.min(2, Math.max(0, recovery.attemptsUsed - 1))} of 2 automatic repairs used${recovery.attemptsUsed > 3 ? ` · ${recovery.attemptsUsed - 3} guided retry used` : ''}`
     : recovery.category === 'report' && recovery.taskTitle

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { greetingName } from './ChatHome';
 import { sectionsFor } from '@/config/navigation';
-import { aiFeaturesEnabled } from '@/config/features';
+import { CHAT_TAB_ENABLED } from '@/config/features';
 
 describe('fresh chat home', () => {
   it('greets the person by their first name', () => {
@@ -12,12 +12,13 @@ describe('fresh chat home', () => {
     expect(greetingName('')).toBe('');
   });
 
-  it('lists Chat first, under Build, for internal roles with AI features, and keeps a client chat under Communication', () => {
-    for (const role of (['dev', 'pm', 'admin'] as const).filter(aiFeaturesEnabled)) {
-      const [first] = sectionsFor(role);
-      expect(first.section.id).toBe('build');
-      expect(first.items.map(item => item.id)).toEqual(['chat']);
+  it('honors the standalone Chat visibility flag without removing its role-aware destination metadata', () => {
+    if (!CHAT_TAB_ENABLED) {
+      for (const role of ['dev', 'pm', 'admin', 'client'] as const) expect(sectionsFor(role).flatMap(group => group.items).some(item => item.id === 'chat')).toBe(false);
+      return;
     }
+    const developer = sectionsFor('dev').find(group => group.items.some(item => item.id === 'chat'));
+    expect(developer?.section.id).toBe('build');
     const client = sectionsFor('client').find(group => group.items.some(item => item.id === 'chat'));
     expect(client?.section.id).toBe('communication');
   });

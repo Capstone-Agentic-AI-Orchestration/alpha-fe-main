@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { NavigationTab, UserRole } from '@/shared/types';
 import { ARCHIVED_NAV_ITEMS, landingTab, NAV_ITEMS, ROLE_NAV, sectionsFor } from './navigation';
-import { AI_FEATURES_BY_ROLE, AI_NAV_TABS } from './features';
+import { AI_FEATURES_BY_ROLE, AI_NAV_TABS, CHAT_TAB_ENABLED } from './features';
+
+/** While the Chat tab is off, every role's navigation is the existing one without it. */
+const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB_ENABLED || tab !== 'chat');
 
 /**
  * Navigation destinations retained after archiving standalone specifications.
@@ -37,10 +40,10 @@ describe('existing navigation compatibility', () => {
     for (const role of ['client', 'dev', 'pm'] as const) expect(ROLE_NAV[role]).not.toContain('operations');
   });
   it.each(Object.keys(existing) as UserRole[])('preserves every existing %s destination and landing page', role => {
-    expect(ROLE_NAV[role].filter(tab => tab !== 'tickets')).toEqual(existing[role]);
-    expect(landingTab(role)).toBe(existing[role][0]);
+    expect(ROLE_NAV[role].filter(tab => tab !== 'tickets')).toEqual(withoutHiddenChat(existing[role]));
+    expect(landingTab(role)).toBe(withoutHiddenChat(existing[role])[0]);
     const visible = sectionsFor(role).flatMap(group => group.items.map(item => item.id));
-    expect(visible.filter(tab => tab !== 'tickets')).toEqual(existingVisible[role]);
+    expect(visible.filter(tab => tab !== 'tickets')).toEqual(withoutHiddenChat(existingVisible[role]));
     expect(visible.every(tab => ROLE_NAV[role].includes(tab))).toBe(true);
     expect(visible.length).toBe(new Set(visible).size);
   });
@@ -49,9 +52,25 @@ describe('existing navigation compatibility', () => {
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('tickets');
     for (const role of ['client', 'dev', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('tickets');
   });
-  it('exposes build chat only to developers', () => {
-    expect(ROLE_NAV.dev).toContain('chat');
-    for (const role of ['client', 'pm', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('chat');
+  it('hides the Chat tab from every role while builds happen on the board, and keeps the view', () => {
+    expect(CHAT_TAB_ENABLED).toBe(false);
+    for (const role of Object.keys(existing) as UserRole[]) expect(ROLE_NAV[role]).not.toContain('chat');
+    expect(NAV_ITEMS.some(item => item.id === 'chat')).toBe(true);
+  });
+
+  it('restores build chat for developers only, exactly as before, when the flag is turned back on', async () => {
+    vi.resetModules();
+    vi.doMock('./features', async importOriginal => ({ ...(await importOriginal<typeof import('./features')>()), CHAT_TAB_ENABLED: true }));
+    try {
+      const restored = await import('./navigation');
+      expect(restored.ROLE_NAV.dev).toEqual(existing.dev);
+      expect(restored.sectionsFor('dev').flatMap(group => group.items.map(item => item.id))).toEqual(existingVisible.dev);
+      expect(restored.landingTab('dev')).toBe('issues');
+      for (const role of ['client', 'pm', 'admin'] as const) expect(restored.ROLE_NAV[role]).not.toContain('chat');
+    } finally {
+      vi.doUnmock('./features');
+      vi.resetModules();
+    }
   });
   it('places the Operations Center in Administration for workspace admins only', () => {
     expect(NAV_ITEMS.find(item => item.id === 'operations')).toMatchObject({ title: 'Operations Center', section: 'administration' });

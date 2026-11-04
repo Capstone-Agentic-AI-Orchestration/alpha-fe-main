@@ -51,7 +51,7 @@ describe('task hand-off', () => {
 
 describe('nextStepFor', () => {
   it('offers a build plan to a role without chat', () => {
-    expect(nextStepFor(base).primary).toEqual({ label: 'Plan a build', action: 'plan_build' });
+    expect(nextStepFor(base).primary).toEqual({ label: 'Plan build', action: 'plan_build' });
   });
 
   it('offers the chat hand-off first to a role with chat', () => {
@@ -67,14 +67,20 @@ describe('nextStepFor', () => {
     expect(step.primary).toBeUndefined();
   });
 
-  it('sends active builds to their chat', () => {
+  it('sends active build decisions to the task, with chat as a secondary way in', () => {
     const step = nextStepFor({ ...base, buildActive: true, buildStatus: 'awaiting_plan_approval', hasBuildChat: true });
     expect(step.title).toBe('Plan ready to approve');
-    expect(step.primary?.action).toBe('open_chat');
+    expect(step.primary?.action).toBe('open_build');
+    expect(step.secondary?.action).toBe('open_chat');
   });
 
-  it('has no chat button when the build chat is unknown', () => {
-    expect(nextStepFor({ ...base, buildActive: true, buildStatus: 'executing' }).primary).toBeUndefined();
+  it('needs no chat to act on a build', () => {
+    for (const buildStatus of ['awaiting_approval', 'blocked', 'recovery_required', 'paused', 'executing']) {
+      const step = nextStepFor({ ...base, buildActive: true, buildStatus });
+      expect(step.primary?.action).toBe('open_build');
+      expect(step.secondary).toBeUndefined();
+      expect(step.text).not.toMatch(/project chat/);
+    }
   });
 
   it('lets managers finish or return reviewed work', () => {

@@ -3,7 +3,7 @@ import { isRepoTab, REPO_TABS, tabForKey } from './repoTabs';
 
 describe('moving between repository tabs by keyboard', () => {
   it('steps with the arrows and wraps at both ends', () => {
-    expect(tabForKey('overview', 'ArrowRight')).toBe('code');
+    expect(tabForKey('overview', 'ArrowRight')).toBe('details');
     expect(tabForKey('environment', 'ArrowRight')).toBe('overview');
     expect(tabForKey('overview', 'ArrowLeft')).toBe('environment');
   });
