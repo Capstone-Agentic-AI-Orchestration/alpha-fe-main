@@ -63,6 +63,8 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
 
   if (!recovery) return null;
   const active = recovery.phase !== 'resolved' && recovery.phase !== 'cancelled';
+  const summaryBoundary = recovery.summary.search(/Agent's last update:|Recent output:/);
+  const shortSummary = summaryBoundary < 0 ? recovery.summary : recovery.summary.slice(0, summaryBoundary).trim();
   const availabilityNote = recovery.actionReasons.provide_guidance
     ?? recovery.actionReasons.recheck_prerequisite
     ?? recovery.actionReasons.retry_report_format
@@ -128,7 +130,11 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
           <span className="rounded border border-divider bg-well px-1.5 py-0.5 text-[9px] capitalize text-content-secondary">{recovery.category.replace(/_/g, ' ')}</span>
           {recovery.taskTitle && <span className="min-w-0 truncate text-[10px] text-content-secondary">· {recovery.taskTitle}</span>}
         </div>
-        <p className="mt-1.5 whitespace-pre-wrap break-words text-[11px] leading-5 text-content-secondary">{recovery.summary}</p>
+        <p className="mt-1.5 whitespace-pre-wrap break-words text-[11px] leading-5 text-content-secondary">{shortSummary}</p>
+        {summaryBoundary >= 0 && <details className="mt-1 text-[10px] text-content-muted">
+          <summary className="cursor-pointer">Agent output</summary>
+          <p className="mt-2 whitespace-pre-wrap break-words leading-5">{recovery.summary.slice(summaryBoundary)}</p>
+        </details>}
         {active && availabilityNote && <p className="mt-1 text-[10px] leading-4 text-content-muted">{availabilityNote}</p>}
         {active && <p className="mt-1 text-[9px] text-content-muted">Recovery {recovery.episodeNumber}{recoveryUsage ? ` · ${recoveryUsage}` : ''}</p>}
         {explanation && <div role="status" className="mt-3 rounded-lg border border-divider bg-selected p-3 text-[11px] leading-5 text-selected-content">{explanation}</div>}

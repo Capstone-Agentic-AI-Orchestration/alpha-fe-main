@@ -309,10 +309,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     setQuickAddTitle('');
   };
 
-  // The cards in this view's Building column, so the count matches what the board shows.
+  // Personal filters must not hide active work elsewhere in this project.
   const runningAgentsCount = useMemo(
-    () => filteredIssues.filter(issue => ['executing', 'validating', 'publishing'].includes(issueBuilds[issue.id]?.status ?? '')).length,
-    [filteredIssues, issueBuilds]
+    () => issues.filter(issue => (selectedProject === 'all' || issue.projectId === selectedProject)
+      && ['executing', 'validating', 'publishing'].includes(issueBuilds[issue.id]?.status ?? '')).length,
+    [issues, selectedProject, issueBuilds]
   );
 
   const clearDragState = () => {
