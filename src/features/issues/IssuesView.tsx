@@ -127,6 +127,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const [pendingDoneIssueId, setPendingDoneIssueId] = useState<string | null>(null);
   const [pendingBuildIssueId, setPendingBuildIssueId] = useState<string | null>(null);
   const [buildInstructions, setBuildInstructions] = useState('');
+  const [buildSubmitting, setBuildSubmitting] = useState(false);
   useEffect(() => { setBuildInstructions(''); }, [pendingBuildIssueId]);
 
   /**
@@ -416,12 +417,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   };
 
   const pendingBuildIssue = pendingBuildIssueId ? issues.find(issue => issue.id === pendingBuildIssueId) : undefined;
-  const confirmIssueBuild = () => {
-    if (!pendingBuildIssue) return;
-    setPendingBuildIssueId(null);
-    void startIssueBuild(pendingBuildIssue.id, buildInstructions).then(() => {
+  const confirmIssueBuild = async () => {
+    if (!pendingBuildIssue || buildSubmitting) return;
+    setBuildSubmitting(true);
+    try {
+      if (await startIssueBuild(pendingBuildIssue.id, buildInstructions)) setPendingBuildIssueId(null);
       refreshIssueBuilds();
-    });
+    } finally { setBuildSubmitting(false); }
   };
   const chatAvailable = visibleTabs.includes('chat');
 
@@ -1014,7 +1016,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
       {pendingBuildIssue && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPendingBuildIssueId(null)} />
+          <button type="button" aria-label="Close plan request" disabled={buildSubmitting} className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPendingBuildIssueId(null)} />
           <div role="dialog" aria-modal="true" aria-labelledby="confirm-build-title" className="relative w-full max-w-md rounded-2xl border border-divider bg-surface-raised p-6 shadow-2xl">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-selected text-selected-content">
@@ -1022,7 +1024,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               </div>
               <div className="space-y-1.5">
                 <h2 id="confirm-build-title" className="text-base font-semibold text-content">
-                  Start build for {pendingBuildIssue.identifier}
+                  Plan build for {pendingBuildIssue.identifier}
                 </h2>
                 <p className="text-sm leading-relaxed text-content-secondary">
                   Alpha plans this task against its acceptance checklist. Review and approve the plan in the Build tab before code changes begin.
@@ -1034,11 +1036,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               placeholder="Add technical context, implementation guidance, or constraints for this task."
               className="mt-2 w-full resize-y rounded-md border border-control bg-well px-3 py-2 text-sm text-content placeholder-content-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" />
             <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={() => setPendingBuildIssueId(null)} className="rounded-lg border border-divider px-3.5 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content">
+              <button type="button" disabled={buildSubmitting} onClick={() => setPendingBuildIssueId(null)} className="rounded-lg border border-divider px-3.5 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content">
                 Cancel
               </button>
-              <button type="button" onClick={confirmIssueBuild} className="rounded-lg bg-action px-3.5 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover">
-                Plan the build
+              <button type="button" disabled={buildSubmitting} onClick={() => void confirmIssueBuild()} className="rounded-lg bg-action px-3.5 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover">
+                {buildSubmitting ? 'Requesting plan…' : 'Plan build'}
               </button>
             </div>
           </div>

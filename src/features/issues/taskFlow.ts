@@ -29,6 +29,12 @@ export const statusLabel = (status: IssueStatus) =>
 export const priorityLabel = (priority: IssuePriority) =>
   TASK_PRIORITIES.find(item => item.id === priority)?.label ?? priority;
 
+function withoutTrailingPunctuation(value: string, punctuation: string): string {
+  let end = value.length;
+  while (end > 0 && punctuation.includes(value[end - 1])) end--;
+  return value.slice(0, end);
+}
+
 /** Build states in which the build, not the person, is what the task waits on. */
 export const BUILD_DECISION_STATUSES = new Set(['awaiting_plan_approval', 'awaiting_approval', 'blocked', 'recovery_required']);
 
@@ -53,7 +59,7 @@ export function suggestSubtasks(description: string, limit = 6): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const raw of pieces) {
-    const cleaned = raw.trim().replace(/[.;:!?]+$/, '');
+    const cleaned = withoutTrailingPunctuation(raw.trim(), '.;:!?');
     if (cleaned.split(/\s+/).length < 3) continue;
     const sentence = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
     const key = sentence.toLowerCase();
@@ -67,7 +73,7 @@ export function suggestSubtasks(description: string, limit = 6): string[] {
 
 /** The message a developer's chat opens with when they pick a task up from the board. */
 export function taskHandoffMessage(issue: Pick<Issue, 'identifier' | 'title'>): string {
-  return `Please work on ${issue.identifier}: ${issue.title.trim().replace(/[.!?]+$/, '')}.`;
+  return `Please work on ${issue.identifier}: ${withoutTrailingPunctuation(issue.title.trim(), '.!?')}.`;
 }
 
 /**

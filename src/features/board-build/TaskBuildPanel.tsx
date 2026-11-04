@@ -139,6 +139,8 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
       : STATUS_COPY[status] ?? status.replace(/_/g, ' ');
   const publications = run.publications?.length ? run.publications : run.publication ? [run.publication] : [];
   const stoppable = open && !['publishing', 'cancelling'].includes(status);
+  const historyMessages = conversation.messages.filter(entry => ['build', 'build_milestone'].includes(entry.messageType ?? ''));
+  const questionMessages = conversation.messages.filter(entry => !['build', 'build_milestone'].includes(entry.messageType ?? ''));
 
   return (
     <div className="space-y-5">
@@ -345,16 +347,17 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
           ? <p className="text-[12.5px] text-content-muted">This build's conversation is private to the person who started it.</p>
           : (
             <>
-              {conversation.messages.length > 0 && (
+              {questionMessages.length > 0 && (
                 <ol className="max-h-64 space-y-2 overflow-y-auto">
-                  {conversation.messages.slice(-8).map(entry => (
+                  {questionMessages.slice(-8).map(entry => (
                     <li key={entry.id} className={`rounded-md px-3 py-2 text-[12.5px] ${entry.messageType === 'build_milestone' ? 'border border-divider bg-surface' : entry.senderType === 'user' ? 'bg-surface-high' : 'bg-surface'}`}>
-                      <span className="font-medium text-content">{entry.senderType === 'user' ? 'You' : entry.senderName}</span>
+                      <span className="font-medium text-content">{entry.senderType === 'user' ? 'You' : 'Alpha'}</span>
                       <p className="mt-0.5 whitespace-pre-wrap text-content-secondary">{entry.content.length > 600 ? `${entry.content.slice(0, 597)}...` : entry.content}</p>
                     </li>
                   ))}
                 </ol>
               )}
+              {historyMessages.length > 0 && <details className="text-[12px] text-content-muted"><summary>Previous build activity</summary><ol className="max-h-56 space-y-2 overflow-auto pt-2">{historyMessages.slice(-8).map(entry => <li key={entry.id}><time>{new Date(entry.timestamp).toLocaleString()}</time><p className="whitespace-pre-wrap">{entry.content.slice(0, 1200)}</p></li>)}</ol></details>}
               {can('manage_chat') && (
                 <form
                   className="flex items-end gap-2"

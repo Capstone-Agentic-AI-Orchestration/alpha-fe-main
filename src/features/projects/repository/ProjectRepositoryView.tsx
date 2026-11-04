@@ -92,7 +92,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
   };
 
   const tabs = (
-        <div role="tablist" aria-label="Project sections" className="flex min-w-0 max-w-full overflow-x-auto" onKeyDown={onTabKeyDown}>
+        <div role="tablist" tabIndex={0} aria-label="Project sections" className="flex min-w-0 max-w-full overflow-x-auto" onKeyDown={onTabKeyDown}>
           {visibleTabs.map(({ id, label }) => {
             const Icon = TAB_ICONS[id];
             const selected = id === tab;

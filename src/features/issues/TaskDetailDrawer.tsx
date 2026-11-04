@@ -84,6 +84,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   const specState: SpecState = !spec.record ? 'none' : spec.record.status === 'approved' ? (spec.record.stale ? 'stale' : 'approved') : 'draft';
   // A task with a build under way sits in Building on the board; the track says the same.
   const shownStatus = buildActive && issue.status !== 'done' ? 'agent_running' : issue.status;
+  const shownBranch = buildActive ? build?.branchName : issue.branchName;
   const statusIndex = TASK_STATUSES.findIndex(item => item.id === shownStatus);
   const done = issue.subtasks.filter(subtask => subtask.completed).length;
   const step = nextStepFor({
@@ -280,12 +281,12 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
             <dt className="border-b border-divider py-2 text-content-muted">Labels</dt>
             <dd className="border-b border-divider py-2 text-content-secondary">{issue.labels.join(', ')}</dd>
           </>}
-          {issue.branchName && <>
+          {shownBranch && <>
             <dt className="border-b border-divider py-2 text-content-muted">Branch</dt>
             <dd className="flex min-w-0 items-center gap-1.5 border-b border-divider py-1.5 text-content-secondary">
               <GitBranch aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-content-muted" />
-              <span className="truncate font-mono text-[11.5px]">{issue.branchName}</span>
-              <CopyButton value={issue.branchName} label={`branch ${issue.branchName}`} />
+              <span className="truncate font-mono text-[11.5px]">{shownBranch}</span>
+              <CopyButton value={shownBranch} label={`branch ${shownBranch}`} />
             </dd>
           </>}
           {issue.prUrl && <>

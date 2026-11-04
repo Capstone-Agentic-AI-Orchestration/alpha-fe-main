@@ -2977,6 +2977,11 @@ ${e.detail}`;
       setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
       return;
     }
+    const task = issues.find(issue => issue.id === notif.entityId);
+    if (task?.labels.includes('alpha:task-orchestration') || task?.labels.includes('alpha:chat-build')) {
+      showToast('Review the task build', 'Open the task’s Build tab to review the current build and its allowed actions.', 'info');
+      return;
+    }
 
     const run = prototypeRuns.find(item =>
       item.issueId === notif.entityId && item.status === 'awaiting_approval'
@@ -2984,8 +2989,11 @@ ${e.detail}`;
 
     // Preserve approval behavior for older seeded notifications that are not tied to a run.
     if (!run) {
+      if (action === 'approved') {
+        try { applySavedIssue(await apiService.completeIssue(notif.entityId)); }
+        catch (error) { showToast('Review not saved', error instanceof Error ? error.message : 'The task could not be completed.', 'error'); return; }
+      }
       setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
-      if (action === 'approved') updateIssueStatus(notif.entityId, 'done');
       showToast(action === 'approved' ? 'Work approved' : 'Changes requested', undefined, action === 'approved' ? 'success' : 'info');
       return;
     }

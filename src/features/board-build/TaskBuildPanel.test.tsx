@@ -84,6 +84,13 @@ describe('task build panel', () => {
     expect(render()).toContain('0 of 2 with evidence');
     expect(render()).not.toContain('Retry run');
   });
+  it('does not present a stopped build’s accepted work as current validation', () => {
+    orchestration = build('cancelled');
+    orchestration.tasks.push({ ...orchestration.tasks[0], id: 'validation', kind: 'validation', title: 'Check current work' });
+    orchestration.attempts.push({ ...orchestration.attempts[0], id: 'validation-result', taskId: 'validation' });
+    expect(render()).toContain('0 of 2 with evidence');
+    expect(render()).toContain('Previous build stopped');
+  });
 
   it('hands a stopped build to the recovery choices', () => {
     orchestration = build('recovery_required');

@@ -188,7 +188,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
     return (
       <div className="flex items-center gap-2">
-        <svg className="w-4 h-4 -rotate-90" viewBox="0 0 16 16">
+        <svg aria-hidden="true" className="w-4 h-4 -rotate-90" viewBox="0 0 16 16">
           <circle
             cx="8"
             cy="8"
@@ -470,8 +470,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 <div className="w-24">
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Key</label>
+                  <label htmlFor="edit-project-key" className="block text-[11px] font-medium text-content-secondary mb-1">Key</label>
                   <input
+                    id="edit-project-key"
                     type="text"
                     maxLength={5}
                     value={editingProject.key}

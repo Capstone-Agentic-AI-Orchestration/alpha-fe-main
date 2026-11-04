@@ -225,9 +225,12 @@ export function scaffoldedRepositories(response: ScaffoldResponse) {
  */
 export function parseApiError(err: unknown): { status: number | null; message: string } {
   const text = err instanceof Error ? err.message : String(err);
-  const match = text.match(/^API Error \[(\d+)\]:\s*([\s\S]*)$/);
-  if (!match) return { status: null, message: text };
-  return { status: Number(match[1]), message: match[2].trim() || `Request failed (${match[1]})` };
+  const prefix = 'API Error [';
+  const end = text.indexOf(']:', prefix.length);
+  if (!text.startsWith(prefix) || end < 0) return { status: null, message: text };
+  const code = text.slice(prefix.length, end);
+  if (!/^[0-9]{3}$/.test(code)) return { status: null, message: text };
+  return { status: Number(code), message: text.slice(end + 2).trim() || `Request failed (${code})` };
 }
 
 /** Structured metadata for ticket operation reconciliation; message format stays compatible with existing callers. */
@@ -330,6 +333,7 @@ function ticketApiError(res: Response, detail: string): ApiRequestError {
 
 /** Latest Orchestrator build for one issue, as the board shows it. */
 export interface IssueBuildStatus {
+  branchName?: string;
   issueId: string;
   projectId: string;
   runId: string;
@@ -978,7 +982,7 @@ export const apiService = {
     const res = await fetch(`${API_BASE}/chat/threads/${encodeURIComponent(threadId)}/attachments`, {
       method: 'POST', body: file, credentials: 'include', headers,
     });
-    if (!res.ok) throw await ticketApiError(res, await res.text().catch(() => res.statusText));
+    if (!res.ok) throw ticketApiError(res, await res.text().catch(() => res.statusText));
     return res.json() as Promise<{ attachment: ChatAttachmentReference }>;
   },
   deleteChatAttachment: (threadId: string, attachmentId: string) =>

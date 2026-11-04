@@ -74,7 +74,7 @@ export function useTaskBuild(issue: Pick<Issue, 'projectId'>, build: IssueBuildS
 /** Evidence an accepted specialist report gave for each requirement. */
 export function requirementEvidence(orchestration: ProjectBuildOrchestration | null): Map<string, string> {
   const evidence = new Map<string, string>();
-  if (!orchestration) return evidence;
+  if (!orchestration || ['cancelled', 'failed'].includes(orchestration.run.status)) return evidence;
   for (const requirement of orchestration.requirements) {
     const tasks = orchestration.tasks.filter(task => task.required && task.status !== 'superseded' && task.requirementIds.includes(requirement.id));
     if (!tasks.some(task => task.kind === 'validation')) continue;
