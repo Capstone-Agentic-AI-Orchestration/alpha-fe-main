@@ -230,7 +230,7 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
               {proposal.epics.map((epic, index) => (
                 <li key={epic.title + index}>
                   <label className="flex gap-2.5 rounded-md border border-divider p-2">
-                    <input type="checkbox" checked={kept.has(index)} onChange={() => setKept(current => {
+                    <input aria-label={`Include ${epic.title}`} type="checkbox" checked={kept.has(index)} onChange={() => setKept(current => {
                       const next = new Set(current);
                       if (next.has(index)) next.delete(index); else next.add(index);
                       return next;

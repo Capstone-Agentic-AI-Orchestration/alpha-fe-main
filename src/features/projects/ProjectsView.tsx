@@ -495,10 +495,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               )}
 
               <div>
-                <label className="block text-[11px] font-medium text-content-secondary mb-1">
+                <label htmlFor="edit-project-goal" className="block text-[11px] font-medium text-content-secondary mb-1">
                   Goal & Ground Rules (Agent Context)
                 </label>
                 <textarea
+                    id="edit-project-goal"
                   rows={3}
                   maxLength={8000}
                   value={editingProject.description ?? ''}
@@ -510,8 +511,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Status</label>
+                  <label htmlFor="edit-project-status" className="block text-[11px] font-medium text-content-secondary mb-1">Status</label>
                   <select
+                    id="edit-project-status"
                     value={editingProject.status}
                     onChange={(e) => setEditingProject({ ...editingProject, status: e.target.value as ProjectStatus })}
                     className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content focus:outline-none focus:border-control"
@@ -525,8 +527,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Priority</label>
+                  <label htmlFor="edit-project-priority" className="block text-[11px] font-medium text-content-secondary mb-1">Priority</label>
                   <select
+                    id="edit-project-priority"
                     value={editingProject.priority || 'none'}
                     onChange={(e) => setEditingProject({ ...editingProject, priority: e.target.value as ProjectPriority })}
                     className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content focus:outline-none focus:border-control"
@@ -544,8 +547,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Start Date</label>
+                  <label htmlFor="edit-project-start-date" className="block text-[11px] font-medium text-content-secondary mb-1">Start Date</label>
                   <input
+                    id="edit-project-start-date"
                     type="date"
                     value={editingProject.startDate || ''}
                     onChange={(e) => setEditingProject({ ...editingProject, startDate: e.target.value })}
@@ -554,8 +558,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-content-secondary mb-1">Target Date</label>
+                  <label htmlFor="edit-project-target-date" className="block text-[11px] font-medium text-content-secondary mb-1">Target Date</label>
                   <input
+                    id="edit-project-target-date"
                     type="date"
                     value={editingProject.targetDate || ''}
                     onChange={(e) => setEditingProject({ ...editingProject, targetDate: e.target.value })}
