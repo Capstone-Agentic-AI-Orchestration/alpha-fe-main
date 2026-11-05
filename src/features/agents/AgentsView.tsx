@@ -1162,7 +1162,7 @@ export const AgentsView: React.FC = () => {
                   </button>
                 )}
 
-                {selectedAgent.isArchived ? (
+                {selectedAgent.isArchived && (
                   <button
                     onClick={() => {
                       restoreAgent(selectedAgent.id);
@@ -1173,9 +1173,12 @@ export const AgentsView: React.FC = () => {
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Restore Agent</span>
                   </button>
-                ) : selectedAgent.templateKey ? (
+                )}
+                {/* Official agents run the orchestration and are never archived. */}
+                {!selectedAgent.isArchived && selectedAgent.templateKey && (
                   <span className="text-content-muted">Official agents stay active</span>
-                ) : (
+                )}
+                {!selectedAgent.isArchived && !selectedAgent.templateKey && (
                   <button
                     onClick={() => {
                       archiveAgent(selectedAgent.id);
