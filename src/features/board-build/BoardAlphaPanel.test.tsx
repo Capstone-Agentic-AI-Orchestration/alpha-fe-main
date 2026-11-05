@@ -7,7 +7,7 @@ vi.mock('@/app/AppContext', () => ({ useApp: () => ({ createIssue: vi.fn() }) })
 vi.mock('@/features/chat/ChatSidePanel', () => ({ ChatSidePanel: ({ children }: { children: React.ReactNode }) => <aside>{children}</aside> }));
 vi.mock('@/features/chat/MessageMarkdown', () => ({ MessageMarkdown: ({ content }: { content: string }) => <p>{content}</p> }));
 
-import { BoardAlphaPanel, scopeLines, visibleText, SCOPE_MARKER } from './BoardAlphaPanel';
+import { BoardAlphaPanel, askRequest, scopeLines, visibleText, SCOPE_MARKER } from './BoardAlphaPanel';
 
 const issues = Array.from({ length: 21 }, (_, i) => ({ id: `i${i}`, identifier: `CAP-${i}`, title: `Task ${i}`, projectId: 'project', status: 'todo',
   subtasks: [{ id: 'open', title: 'Show an error.', completed: false }, { id: 'done', title: 'Already reviewed.', completed: true }]
@@ -39,5 +39,15 @@ describe('board prompting scope', () => {
     const text = scopeLines([{ ...issues[0], description: 'x'.repeat(2_000) }], () => 'Todo');
     expect(text).toContain('[description shortened]');
     expect(text).not.toContain('x'.repeat(1_601));
+  });
+
+  it('sends the selected task ids so the Orchestrator can read their builds', () => {
+    const scope = scopeLines(issues.slice(0, 2), () => 'Todo');
+    expect(askRequest('task-ask-1', 'project', 'What is the update?', issues.slice(0, 2), scope)).toEqual({
+      threadId: 'task-ask-1', projectId: 'project', intent: 'ask',
+      content: 'What is the update?' + SCOPE_MARKER + scope,
+      scopeIssueIds: ['i0', 'i1']
+    });
+    expect(askRequest('task-ask-1', 'project', 'How is the board?', [], '')).toMatchObject({ content: 'How is the board?', scopeIssueIds: [] });
   });
 });
