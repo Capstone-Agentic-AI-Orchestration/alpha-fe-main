@@ -70,6 +70,11 @@ export interface Issue {
   /** Legacy single-agent owner; the board no longer sets or shows it. */
   assignedAgentId?: string;
   assignedHuman?: string;
+  /** Planned task schedule for the project Gantt view (calendar dates, YYYY-MM-DD). */
+  plannedStartDate?: string;
+  plannedEndDate?: string;
+  /** Issue ids that must be completed before this task can begin. */
+  dependsOnIssueIds?: string[];
   labels: string[];
   subtasks: Subtask[];
   comments: IssueComment[];

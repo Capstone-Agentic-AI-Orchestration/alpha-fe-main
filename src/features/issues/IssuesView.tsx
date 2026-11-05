@@ -30,6 +30,7 @@ import {
   RefreshCw,
   Play
 } from 'lucide-react';
+import { GanttView } from './GanttView';
 
 /** "just now", "3m", "2h" — a timestamp is noise in a toolbar. */
 function syncAgo(iso: string): string {
@@ -91,7 +92,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const canRunBuilds = can('run_builds');
 
   // PMs review product work on the kanban board; everyone else starts on the list.
-  const [viewMode, setViewMode] = useTabSessionState<'board' | 'list'>(`${sessionPrefix}.viewMode`, role === 'pm' ? 'board' : 'list');
+  const [viewMode, setViewMode] = useTabSessionState<'board' | 'list' | 'gantt'>(`${sessionPrefix}.viewMode`, role === 'pm' ? 'board' : 'list');
   /**
    * `mine` is issues you created, which is what My Issues always claimed to be.
    *
@@ -586,7 +587,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <span>Display</span>
             </button>
 
-            {/* View Mode Toggle: Board vs List */}
+            {/* Project planning has a timeline view over the same task records. */}
             <div className="flex items-center text-xs">
               <button
                 onClick={() => setViewMode('list')}
@@ -608,6 +609,17 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 <Kanban className="w-3.5 h-3.5" />
                 <span>Board</span>
               </button>
+              {lockedProjectId && (
+                <button
+                  onClick={() => setViewMode('gantt')}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md font-medium transition-colors ${
+                    viewMode === 'gantt' ? 'bg-surface-raised text-content' : 'text-content-muted hover:text-content'
+                  }`}
+                  title="Gantt View"
+                >
+                  <span>Gantt</span>
+                </button>
+              )}
             </div>
 
             {/*
@@ -859,6 +871,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               );
             })}
           </div>
+        ) : viewMode === 'gantt' && lockedProjectId ? (
+          <GanttView
+            project={projects.find(project => project.id === lockedProjectId)}
+            issues={filteredIssues}
+            canManageIssues={canManageIssues}
+            onOpenIssue={setSelectedIssueId}
+          />
         ) : (
           /* Jira-like Grouped Status List View (Matching Exact Screenshot) */
           <div className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:px-5 sm:py-4">

@@ -71,7 +71,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   onBuildChanged,
   onOpenTask,
 }) => {
-  const { updateIssue, addIssueComment, can, identity, currentUser, projects } = useApp();
+  const { updateIssue, addIssueComment, can, identity, currentUser, projects, issues } = useApp();
   const ids = useId();
   const canManageIssues = can('manage_issues');
   const [tab, setTab] = useTabSessionState<DrawerTab>(`${sessionPrefix}.drawerTab`, 'overview');
@@ -80,6 +80,10 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   const project = projects.find(item => item.id === issue.projectId);
+  const projectTasks = issues
+    .filter(item => item.projectId === issue.projectId && item.id !== issue.id)
+    .sort((left, right) => left.identifier.localeCompare(right.identifier));
+  const dependencies = issue.dependsOnIssueIds ?? [];
   const spec = useFeatureSpec(issue, isDesktop);
   const specState: SpecState = !spec.record ? 'none' : spec.record.status === 'approved' ? (spec.record.stale ? 'stale' : 'approved') : 'draft';
   // A task with a build under way sits in Building on the board; the track says the same.
@@ -314,6 +318,66 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
         <div id={`${ids}-panel`} role="tabpanel" aria-labelledby={`${ids}-tab-${tab}`}>
           {tab === 'overview' && (
             <div className="space-y-5">
+              <section aria-labelledby={`${ids}-schedule`} className="border-b border-divider pb-4">
+                <div className="mb-2 flex items-baseline justify-between gap-3">
+                  <h3 id={`${ids}-schedule`} className="text-[13px] font-semibold text-content-secondary">Schedule</h3>
+                  <span className="text-[11px] text-content-muted">Planning dates only</span>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="space-y-1 text-[11.5px] text-content-muted">
+                    <span className="block">Start date</span>
+                    <input
+                      type="date"
+                      value={issue.plannedStartDate ?? ''}
+                      disabled={!canManageIssues}
+                      onChange={event => updateIssue(issue.id, { plannedStartDate: event.target.value })}
+                      className="h-8 w-full rounded-md border border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                  <label className="space-y-1 text-[11.5px] text-content-muted">
+                    <span className="block">End date</span>
+                    <input
+                      type="date"
+                      value={issue.plannedEndDate ?? ''}
+                      disabled={!canManageIssues}
+                      onChange={event => updateIssue(issue.id, { plannedEndDate: event.target.value })}
+                      className="h-8 w-full rounded-md border border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                </div>
+                <fieldset className="mt-3">
+                  <legend className="text-[11.5px] font-medium text-content-secondary">Depends on</legend>
+                  <p className="mb-1.5 text-[11px] text-content-muted">Select tasks that need to finish before this task starts.</p>
+                  {projectTasks.length === 0 ? (
+                    <p className="rounded-md border border-dashed border-divider px-2.5 py-2 text-[11px] text-content-muted">No other tasks in this project yet.</p>
+                  ) : (
+                    <div className="max-h-36 overflow-y-auto rounded-md border border-divider bg-well p-1">
+                      {projectTasks.map(task => {
+                        const checked = dependencies.includes(task.id);
+                        return (
+                          <label key={task.id} className={`flex min-h-7 items-center gap-2 rounded px-2 text-[11.5px] ${canManageIssues ? 'cursor-pointer hover:bg-surface-high' : 'cursor-default opacity-60'}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={!canManageIssues}
+                              onChange={() => {
+                                const next = checked
+                                  ? dependencies.filter(id => id !== task.id)
+                                  : [...dependencies, task.id];
+                                updateIssue(issue.id, { dependsOnIssueIds: next });
+                              }}
+                              className="h-3.5 w-3.5 accent-brand-500"
+                            />
+                            <span className="shrink-0 font-mono text-[10px] text-content-muted">{task.identifier}</span>
+                            <span className="truncate text-content-secondary">{task.title}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </fieldset>
+              </section>
+
               <div>
                 <label htmlFor={`${ids}-description`} className="sr-only">Description</label>
                 <textarea
