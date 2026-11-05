@@ -27,6 +27,18 @@ export function scopeLines(tasks: Issue[], columnTitle: (issue: Issue) => string
 /** The part of a sent message the person wrote, without the attached scope. */
 export const visibleText = (content: string) => content.split(SCOPE_MARKER)[0];
 
+/**
+ * An Ask Alpha question. The ids let the Orchestrator read each selected
+ * task's build records; the scope text carries descriptions and checklists.
+ */
+export const askRequest = (threadId: string, projectId: string, text: string, tasks: Issue[], scopeText: string) => ({
+  threadId,
+  projectId,
+  content: scopeText ? text + SCOPE_MARKER + scopeText : text,
+  intent: 'ask' as const,
+  scopeIssueIds: tasks.map(issue => issue.id)
+});
+
 interface BoardAlphaPanelProps {
   projectId: string;
   projectKey?: string;
@@ -108,14 +120,14 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
     if (!text || busy) return;
     setBusy('ask'); setError('');
     try {
-      const content = scopeText ? text + SCOPE_MARKER + scopeText : text;
-      if (content.length > MAX_ASK_CHARS) throw new Error('The selected task context is too large. Select fewer tasks or shorten your message.');
+      if ((scopeText ? text + SCOPE_MARKER + scopeText : text).length > MAX_ASK_CHARS) throw new Error('The selected task context is too large. Select fewer tasks or shorten your message.');
       const id = threadId ?? (await apiService.getBoardThread(projectId)).id;
       if (!isBoardThreadId(id)) throw new Error('Alpha could not open this conversation.');
       setThreadId(id);
-      setMessages(current => [...current, { id: 'pending-' + Date.now(), senderType: 'user', senderName: 'You', content, timestamp: new Date().toISOString() }]);
+      const request = askRequest(id, projectId, text, inScope, scopeText);
+      setMessages(current => [...current, { id: 'pending-' + Date.now(), senderType: 'user', senderName: 'You', content: request.content, timestamp: new Date().toISOString() }]);
       setInput('');
-      await apiService.sendChatMessage({ threadId: id, content, projectId, intent: 'ask', clientMessageId: 'msg-' + Date.now() + '-' + crypto.randomUUID() });
+      await apiService.sendChatMessage({ ...request, clientMessageId: 'msg-' + Date.now() + '-' + crypto.randomUUID() });
       const history = await apiService.getChatMessages(id);
       setMessages(history.filter(message => message.senderType !== 'system'));
     } catch (failure) {
@@ -212,16 +224,19 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
 
       <div aria-live="polite" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {messages.length === 0 && !proposal && !busy && (
-          <p className="text-[12.5px] leading-relaxed text-content-muted">Ask about the tasks you picked, or describe new work and choose Suggest tasks. Alpha never changes code from here; start a build from a task.</p>
+          <p className="text-[12.5px] leading-relaxed text-content-muted">Ask about the tasks you picked and the Orchestrator answers from their builds, or describe new work and choose Suggest tasks. Alpha never changes code from here; start a build from a task.</p>
         )}
         {messages.map(message => message.senderType === 'user' ? (
           <div key={message.id} className="flex justify-end">
             <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-surface-raised px-3 py-2 text-[13px] text-content">{visibleText(message.content)}</p>
           </div>
         ) : (
-          <div key={message.id} className="text-[13px] text-content"><MessageMarkdown content={message.content} /></div>
+          <div key={message.id} className="text-[13px] text-content">
+            {message.senderName && <p className="mb-1 text-[11.5px] font-semibold text-content-secondary">{message.senderName}</p>}
+            <MessageMarkdown content={message.content} />
+          </div>
         ))}
-        {busy === 'ask' && <p role="status" className="text-[12.5px] text-content-muted">Alpha is answering.</p>}
+        {busy === 'ask' && <p role="status" className="text-[12.5px] text-content-muted">The Orchestrator is answering.</p>}
         {busy === 'draft' && <p role="status" className="text-[12.5px] text-content-muted">Drafting task suggestions. Review them before adding them to Backlog.</p>}
         {proposal && (
           <div className="space-y-2 rounded-lg border border-divider p-2.5">

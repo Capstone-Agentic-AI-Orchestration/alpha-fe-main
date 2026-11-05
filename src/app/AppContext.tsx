@@ -2698,6 +2698,8 @@ ${e.detail}`;
    */
   const setAgentArchived = (id: string, isArchived: boolean) => {
     if (!requireCapability('manage_agents')) return;
+    // Alpha's official agents run the orchestration and are never archived.
+    if (isArchived && agents.find(a => a.id === id)?.templateKey) return;
     setAgents(prev =>
       prev.map(a =>
         a.id === id

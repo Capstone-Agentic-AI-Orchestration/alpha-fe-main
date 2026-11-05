@@ -1173,6 +1173,8 @@ export const AgentsView: React.FC = () => {
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>Restore Agent</span>
                   </button>
+                ) : selectedAgent.templateKey ? (
+                  <span className="text-content-muted">Official agents stay active</span>
                 ) : (
                   <button
                     onClick={() => {
@@ -1230,7 +1232,8 @@ export const AgentsView: React.FC = () => {
 
           <button
             onClick={() => {
-              bulkArchiveAgents(selectedAgentIds);
+              // Official agents in the selection stay active.
+              bulkArchiveAgents(selectedAgentIds.filter(id => !agents.find(agent => agent.id === id)?.templateKey));
               setSelectedAgentIds([]);
             }}
             className="px-3 py-1.5 rounded-lg bg-status-danger-subtle hover:bg-status-danger-subtle text-status-danger font-medium transition-colors"
