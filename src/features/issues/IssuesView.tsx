@@ -299,7 +299,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const canQuickAdd = selectedProject !== 'all' && canManageIssues;
   const openCreateIssue = () => {
     const contextProjectId = lockedProjectId ?? (selectedProject !== 'all' ? selectedProject : projects[0]?.id);
-    if (contextProjectId) setTabSessionState('issueModal.project', contextProjectId);
+    if (contextProjectId) setTabSessionState(activeTabId, 'issueModal.project', contextProjectId);
     onOpenNewIssue();
   };
 
