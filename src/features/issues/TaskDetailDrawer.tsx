@@ -83,6 +83,10 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   const projectTasks = issues
     .filter(item => item.projectId === issue.projectId && item.id !== issue.id)
     .sort((left, right) => left.identifier.localeCompare(right.identifier));
+  const parentTask = issue.parentIssueId ? projectTasks.find(item => item.id === issue.parentIssueId) : undefined;
+  const childTasks = issues
+    .filter(item => item.parentIssueId === issue.id)
+    .sort((left, right) => left.identifier.localeCompare(right.identifier));
   const dependencies = issue.dependsOnIssueIds ?? [];
   const spec = useFeatureSpec(issue, isDesktop);
   const specState: SpecState = !spec.record ? 'none' : spec.record.status === 'approved' ? (spec.record.stale ? 'stale' : 'approved') : 'draft';
@@ -318,14 +322,62 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
         <div id={`${ids}-panel`} role="tabpanel" aria-labelledby={`${ids}-tab-${tab}`}>
           {tab === 'overview' && (
             <div className="space-y-5">
+              {(parentTask || childTasks.length > 0) && (
+                <section aria-label="Related tasks" className="space-y-2 border-b border-divider pb-4">
+                  {parentTask && (
+                    <div>
+                      <p className="mb-1 text-[11px] font-medium text-content-muted">Part of</p>
+                      <button
+                        type="button"
+                        disabled={!onOpenTask}
+                        onClick={() => onOpenTask?.(parentTask.id, parentTask.projectId)}
+                        className="max-w-full truncate text-left text-[12.5px] font-medium text-link hover:underline disabled:cursor-default disabled:text-content-secondary disabled:no-underline"
+                      >
+                        {parentTask.identifier} · {parentTask.title}
+                      </button>
+                    </div>
+                  )}
+                  {childTasks.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-[11px] font-medium text-content-muted">Work packages</p>
+                      <ul className="space-y-1">
+                        {childTasks.map(task => (
+                          <li key={task.id}>
+                            <button
+                              type="button"
+                              disabled={!onOpenTask}
+                              onClick={() => onOpenTask?.(task.id, task.projectId)}
+                              className="max-w-full truncate text-left text-[12.5px] text-link hover:underline disabled:cursor-default disabled:text-content-secondary disabled:no-underline"
+                            >
+                              {task.identifier} · {task.title}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </section>
+              )}
               <section aria-labelledby={`${ids}-schedule`} className="border-b border-divider pb-4">
                 <div className="mb-2 flex items-baseline justify-between gap-3">
-                  <h3 id={`${ids}-schedule`} className="text-[13px] font-semibold text-content-secondary">Schedule</h3>
-                  <span className="text-[11px] text-content-muted">Planning dates only</span>
+                  <h3 id={`${ids}-schedule`} className="text-[13px] font-semibold text-content-secondary">Dates</h3>
+                  <span className="text-[11px] text-content-muted">Due dates and plan dates are separate</span>
                 </div>
+                <label htmlFor={`${ids}-due-date`} className="mb-3 block max-w-xs space-y-1 text-[11.5px] text-content-muted">
+                  <span className="block font-medium text-content-secondary">Due date</span>
+                  <input
+                    id={`${ids}-due-date`}
+                    type="date"
+                    value={issue.dueDate ?? ''}
+                    disabled={!canManageIssues}
+                    onChange={event => updateIssue(issue.id, { dueDate: event.target.value })}
+                    className="h-8 w-full rounded-md border border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <span className="block text-[10.5px]">Expected finish for this task.</span>
+                </label>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="space-y-1 text-[11.5px] text-content-muted">
-                    <span className="block">Start date</span>
+                    <span className="block">Planned start</span>
                     <input
                       type="date"
                       value={issue.plannedStartDate ?? ''}
@@ -335,7 +387,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     />
                   </label>
                   <label className="space-y-1 text-[11.5px] text-content-muted">
-                    <span className="block">End date</span>
+                    <span className="block">Planned finish</span>
                     <input
                       type="date"
                       value={issue.plannedEndDate ?? ''}
