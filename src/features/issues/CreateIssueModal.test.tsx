@@ -14,7 +14,10 @@ vi.mock('@/app/AppContext', () => ({
   }),
   useTabSessionState: <T,>(_key: string, initial: T) => [initial, () => undefined]
 }));
-vi.mock('@/shared/desktop', () => ({ isDesktop: true }));
+vi.mock('@/shared/desktop', async () => ({
+  ...(await vi.importActual<typeof import('@/shared/desktop')>('@/shared/desktop')),
+  isDesktop: true
+}));
 
 import { CreateIssueModal } from './CreateIssueModal';
 
