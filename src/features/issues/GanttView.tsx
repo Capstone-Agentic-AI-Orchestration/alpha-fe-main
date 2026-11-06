@@ -1,5 +1,21 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Circle, Diamond, GitBranch, Link2 } from 'lucide-react';
+import {
+  CalendarDays,
+  ChevronDown,
+  Circle,
+  Diamond,
+  GitBranch,
+  Link2,
+  List,
+  Kanban,
+  Minus,
+  MoreHorizontal,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Sparkles,
+  Users
+} from 'lucide-react';
 import type { Issue, Project } from '@/shared/types';
 
 interface GanttViewProps {
@@ -7,12 +23,16 @@ interface GanttViewProps {
   issues: Issue[];
   canManageIssues: boolean;
   onOpenIssue: (issueId: string) => void;
+  onChangeView?: (view: 'list' | 'board' | 'gantt') => void;
+  onOpenNewIssue?: () => void;
+  onToggleFilters?: () => void;
+  filtersActive?: boolean;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const DAY_WIDTH = 36;
 const WEEK_WIDTH = 16;
-const TASK_COLUMN_WIDTH = 210;
+const TASK_COLUMN_WIDTH = 330;
 const ROW_HEIGHT = 56;
 
 function dayNumber(value?: string | null): number | undefined {
@@ -51,6 +71,17 @@ function priorityLabel(priority: Issue['priority']): string {
   return priority === 'none' ? 'No priority' : priority.replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
+function scheduleLabel(issue: Issue): string {
+  const start = dayNumber(issue.plannedStartDate);
+  const end = dayNumber(issue.plannedEndDate);
+  const due = dayNumber(issue.dueDate);
+  if (start !== undefined && end !== undefined) {
+    return `${dateLabel(start, { month: 'short', day: 'numeric' })} – ${dateLabel(end, { month: 'short', day: 'numeric' })}`;
+  }
+  if (due !== undefined) return `Due ${dateLabel(due, { month: 'short', day: 'numeric' })}`;
+  return 'Unscheduled';
+}
+
 const STATUS_DOT: Record<Issue['status'], string> = {
   backlog: 'bg-content-muted',
   todo: 'bg-link',
@@ -86,7 +117,16 @@ function monthSegments(startDay: number, endDay: number): MonthSegment[] {
   return segments;
 }
 
-export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManageIssues, onOpenIssue }) => {
+export const GanttView: React.FC<GanttViewProps> = ({
+  project,
+  issues,
+  canManageIssues,
+  onOpenIssue,
+  onChangeView,
+  onOpenNewIssue,
+  onToggleFilters,
+  filtersActive = false
+}) => {
   const [scale, setScale] = useState<'days' | 'weeks'>('weeks');
   const timelineRef = useRef<HTMLDivElement>(null);
   const model = useMemo(() => {
@@ -181,6 +221,16 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
     });
   };
 
+  const fitTimeline = () => {
+    const viewport = timelineRef.current;
+    if (!viewport || focusOffset === undefined) return;
+    const visibleTimelineWidth = Math.max(0, viewport.clientWidth - TASK_COLUMN_WIDTH);
+    viewport.scrollTo({
+      left: Math.max(0, focusOffset - visibleTimelineWidth / 2),
+      behavior: 'smooth'
+    });
+  };
+
   useEffect(() => {
     const viewport = timelineRef.current;
     if (!viewport || focusOffset === undefined) return;
@@ -189,85 +239,142 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
   }, [focusOffset, scale]);
 
   return (
-    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-surface px-5 py-5">
-      <header className="mb-4 flex flex-col justify-between gap-4 lg:flex-row lg:items-end">
-        <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2 text-[12px] font-medium text-content-muted">
-            <CalendarDays aria-hidden="true" className="h-3.5 w-3.5" />
-            Project planning
+    <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-shell">
+      <div className="border-b border-divider bg-surface px-5 pt-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2">
+            <h1 className="truncate text-[20px] font-semibold leading-tight tracking-[-0.02em] text-content">
+              {project?.name || 'Project planning'}
+            </h1>
+            <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-content-muted" />
           </div>
-          <h1 className="text-[20px] font-semibold leading-tight text-content">Gantt chart</h1>
-          <p className="mt-1 text-[12px] text-content-secondary">
-            {project?.name ? `${project.name} · ` : ''}
-            {issues.length} {issues.length === 1 ? 'task' : 'tasks'}
-            {(project?.milestones?.length ?? 0) > 0 && ` · ${project?.milestones?.length} milestones`}
-            {' · '}Plan dates, due dates and dependencies
-          </p>
+          <div className="flex items-center gap-3 text-[11px] text-content-muted">
+            <span className="hidden items-center gap-1.5 sm:inline-flex">
+              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-status-info" />
+              {issues.length} {issues.length === 1 ? 'task' : 'tasks'}
+            </span>
+            {(project?.milestones?.length ?? 0) > 0 && (
+              <span className="hidden sm:inline">{project?.milestones?.length} milestones</span>
+            )}
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <div role="group" aria-label="Timeline scale" className="inline-flex rounded-md border border-divider bg-surface-raised p-0.5">
-            <button
-              type="button"
-              aria-pressed={scale === 'days'}
-              onClick={() => setScale('days')}
-              className={`rounded px-2.5 py-1.5 text-[11px] font-medium transition-colors ${scale === 'days' ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}
-            >
-              Days
-            </button>
-            <button
-              type="button"
-              aria-pressed={scale === 'weeks'}
-              onClick={() => setScale('weeks')}
-              className={`rounded px-2.5 py-1.5 text-[11px] font-medium transition-colors ${scale === 'weeks' ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}
-            >
-              Weeks
-            </button>
-          </div>
+        <nav className="mt-3 flex items-center gap-5 overflow-x-auto text-[12px]" aria-label="Project views">
           <button
             type="button"
-            onClick={scrollToToday}
-            disabled={todayOffset === undefined}
-            className="inline-flex items-center gap-1.5 rounded-md border border-divider bg-surface-raised px-2.5 py-1.5 text-[11px] font-medium text-content-secondary hover:bg-surface-high hover:text-content disabled:cursor-not-allowed disabled:opacity-40"
-            title={todayOffset === undefined ? 'Today is outside this schedule range' : 'Scroll to today'}
+            onClick={() => onChangeView?.('list')}
+            className="flex shrink-0 items-center gap-1.5 border-b-2 border-transparent pb-2.5 font-medium text-content-muted transition-colors hover:text-content"
+          >
+            <List aria-hidden="true" className="h-3.5 w-3.5" />
+            Main table
+          </button>
+          <button
+            type="button"
+            onClick={() => onChangeView?.('board')}
+            className="flex shrink-0 items-center gap-1.5 border-b-2 border-transparent pb-2.5 font-medium text-content-muted transition-colors hover:text-content"
+          >
+            <Kanban aria-hidden="true" className="h-3.5 w-3.5" />
+            Board
+          </button>
+          <button
+            type="button"
+            aria-current="page"
+            className="flex shrink-0 items-center gap-1.5 border-b-2 border-link pb-2.5 font-semibold text-content"
           >
             <CalendarDays aria-hidden="true" className="h-3.5 w-3.5" />
-            Today
+            Gantt
           </button>
-        </div>
-      </header>
-
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-[11px] text-content-muted">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5" aria-label="Timeline legend">
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="h-2.5 w-3.5 rounded-[3px] bg-link" />
-            Task duration
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="h-2.5 w-2.5 rotate-45 border border-status-warning bg-status-warning-subtle" />
-            Milestone
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full border-2 border-status-danger bg-status-danger-subtle" />
-            Task deadline
-          </span>
-          {project?.targetDate && (
-            <span className="inline-flex items-center gap-1.5">
-              <span aria-hidden="true" className="h-3.5 border-l border-dashed border-status-warning" />
-              Project target
-            </span>
-          )}
-          <span className="inline-flex items-center gap-1.5">
-            <Link2 aria-hidden="true" className="h-3.5 w-3.5" />
-            Dependency
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden="true" className="h-3.5 border-l-2 border-link" />
-            Today{model.todayDay !== undefined && ` · ${dateLabel(model.todayDay, { month: 'short', day: 'numeric' })}`}
-          </span>
-        </div>
-        <p>Planning dates do not automatically reschedule work.</p>
+          <span aria-hidden="true" className="pb-2.5 text-content-muted">···</span>
+        </nav>
       </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider bg-surface px-5 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenNewIssue && (
+            <button
+              type="button"
+              onClick={onOpenNewIssue}
+              className="inline-flex items-center gap-1.5 rounded-md bg-action px-3 py-1.5 text-[12px] font-semibold text-on-action shadow-sm transition-colors hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-focus"
+            >
+              <Plus aria-hidden="true" className="h-3.5 w-3.5" />
+              New task
+              <ChevronDown aria-hidden="true" className="ml-0.5 h-3 w-3 opacity-80" />
+            </button>
+          )}
+          {onToggleFilters && (
+            <button
+              type="button"
+              onClick={onToggleFilters}
+              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${filtersActive ? 'border-link bg-selected text-selected-content' : 'border-divider text-content-secondary hover:bg-surface-high hover:text-content'}`}
+            >
+              <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
+              Filter
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onToggleFilters}
+            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content"
+            title="Open task search and filters"
+          >
+            <Search aria-hidden="true" className="h-3.5 w-3.5" />
+            Search
+          </button>
+          <span className="hidden h-5 w-px bg-divider sm:block" aria-hidden="true" />
+          <span className="hidden items-center gap-1.5 text-[11px] text-content-muted sm:inline-flex">
+            <Users aria-hidden="true" className="h-3.5 w-3.5" />
+            Project schedule
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-[11px] text-content-muted">
+          <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-status-warning" />
+          <span>Planning view</span>
+        </div>
+      </div>
+
+      <main className="px-5 py-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h2 className="text-[16px] font-semibold text-content">Gantt</h2>
+              <button type="button" onClick={onToggleFilters} className="rounded p-1 text-content-muted transition-colors hover:bg-surface-high hover:text-content" title="Filter timeline">
+                <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <p className="mt-0.5 text-[11px] text-content-muted">Plan delivery dates, dependencies, milestones, and deadlines.</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button type="button" disabled className="hidden items-center gap-1.5 rounded-md border border-divider px-2.5 py-1.5 text-[11px] font-medium text-content-muted opacity-60 sm:inline-flex" title="Baselines are not configured for this project">
+              <span aria-hidden="true" className="h-3.5 w-3.5 rounded-sm border border-current" />
+              Baseline
+            </button>
+            <button type="button" onClick={fitTimeline} className="inline-flex items-center gap-1.5 rounded-md border border-divider bg-surface-raised px-2.5 py-1.5 text-[11px] font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content">
+              Auto fit
+            </button>
+            <div role="group" aria-label="Timeline scale" className="inline-flex items-center rounded-md border border-divider bg-surface-raised p-0.5">
+              <button type="button" aria-label="Zoom out" onClick={() => setScale('weeks')} className="rounded p-1.5 text-content-muted transition-colors hover:bg-surface-high hover:text-content"><Minus aria-hidden="true" className="h-3.5 w-3.5" /></button>
+              <button type="button" aria-pressed={scale === 'weeks'} onClick={() => setScale('weeks')} className={`min-w-[54px] rounded px-2 py-1 text-[11px] font-medium transition-colors ${scale === 'weeks' ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>Weeks</button>
+              <button type="button" aria-pressed={scale === 'days'} onClick={() => setScale('days')} className={`min-w-[46px] rounded px-2 py-1 text-[11px] font-medium transition-colors ${scale === 'days' ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>Days</button>
+              <button type="button" aria-label="Zoom in" onClick={() => setScale('days')} className="rounded p-1.5 text-content-muted transition-colors hover:bg-surface-high hover:text-content"><Plus aria-hidden="true" className="h-3.5 w-3.5" /></button>
+            </div>
+            <button type="button" onClick={scrollToToday} disabled={todayOffset === undefined} className="inline-flex items-center gap-1.5 rounded-md border border-divider bg-surface-raised px-2.5 py-1.5 text-[11px] font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content disabled:cursor-not-allowed disabled:opacity-40" title={todayOffset === undefined ? 'Today is outside this schedule range' : 'Scroll to today'}>
+              Today
+            </button>
+            <button type="button" className="rounded-md border border-divider p-1.5 text-content-muted transition-colors hover:bg-surface-high hover:text-content" title="More timeline options">
+              <MoreHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-content-muted" aria-label="Timeline legend">
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-3.5 rounded-[3px] bg-link" />Task duration</span>
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rotate-45 border border-status-warning bg-status-warning-subtle" />Milestone</span>
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-2.5 w-2.5 rounded-full border-2 border-status-danger bg-status-danger-subtle" />Task deadline</span>
+          {project?.targetDate && <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-3.5 border-l border-dashed border-status-warning" />Project target</span>}
+          <span className="inline-flex items-center gap-1.5"><Link2 aria-hidden="true" className="h-3.5 w-3.5" />Dependency</span>
+        </div>
 
       {model.startDay !== undefined && model.endDay !== undefined && model.dayCount > 0 ? (
         <div ref={timelineRef} className="overflow-x-auto rounded-lg border border-divider bg-surface-raised">
@@ -275,9 +382,9 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
             className="grid min-w-max"
             style={{ gridTemplateColumns: `minmax(200px, ${TASK_COLUMN_WIDTH}px) ${timelineWidth}px` }}
           >
-            <div className="sticky left-0 z-30 row-span-2 flex h-[72px] flex-col justify-center border-b border-r border-divider bg-surface-raised px-3">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-content-secondary">Task</span>
-              <span className="mt-1 text-[11px] text-content-muted">Issue · owner · status</span>
+            <div className="sticky left-0 z-30 row-span-2 flex h-[72px] flex-col justify-center border-b border-r border-divider bg-surface-raised px-4">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-content-secondary">Task</span>
+              <span className="mt-1 text-[11px] text-content-muted">Schedule · owner · status</span>
             </div>
 
             <div className="relative h-8 border-b border-divider bg-surface-high/50" style={{ width: timelineWidth }}>
@@ -335,14 +442,15 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
                       key={row.issue.id}
                       type="button"
                       onClick={() => onOpenIssue(row.issue.id)}
-                      className="flex h-14 w-full flex-col justify-center border-b border-r border-divider bg-surface text-left hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
-                      style={{ paddingLeft: parent ? 24 : 12, paddingRight: 12 }}
+                      className="flex h-14 w-full flex-col justify-center border-b border-r border-divider bg-surface px-4 text-left transition-colors hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+                      style={{ paddingLeft: parent ? 28 : 16, paddingRight: 16 }}
                       aria-label={`Open ${row.issue.identifier}: ${row.issue.title}${parent ? `, part of ${parent.identifier}` : ''}`}
                       title={`${row.issue.identifier} · ${row.issue.title}${parent ? ` · Part of ${parent.identifier}` : ''}\n${row.issue.assignedHuman || 'Unassigned'} · ${statusLabel(row.issue.status)} · ${priorityLabel(row.issue.priority)}${row.issue.dueDate ? ` · Due ${row.issue.dueDate}` : ''}`}
                     >
-                      <span className="flex min-w-0 items-center gap-1.5">
+                      <span className="flex min-w-0 items-center gap-2">
                         {parent && <GitBranch aria-hidden="true" className="h-3 w-3 shrink-0 text-content-muted" />}
-                        <span className="truncate text-[12px] font-semibold text-content">{row.issue.title}</span>
+                        <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-content">{row.issue.title}</span>
+                        <span className="shrink-0 pl-2 text-[11px] font-medium tabular-nums text-content-secondary">{scheduleLabel(row.issue)}</span>
                       </span>
                       <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-content-muted">
                         <span className="shrink-0 font-mono">{row.issue.identifier}</span>
@@ -530,6 +638,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
           </ul>
         )}
       </section>
+      </main>
     </div>
   );
 };
