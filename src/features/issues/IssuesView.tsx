@@ -20,7 +20,6 @@ import {
   ChevronDown,
   ChevronRight,
   Filter,
-  SlidersHorizontal,
   Layers,
   FolderKanban,
   Minus,
@@ -485,10 +484,49 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
   // Developers own implementation hand-offs; PMs review the resulting work.
   const canHandOff = chatAvailable && can('manage_chat') && (role === 'dev' || role === 'admin');
+  const renderFilterToolbar = () => (
+    <div className="flex flex-wrap items-center gap-3 pt-2 text-xs">
+      <div className="relative min-w-[200px] flex-1">
+        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-content-secondary" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search tasks, identifiers, labels..."
+          className="w-full rounded-lg border border-control bg-surface-raised py-1.5 pl-8 pr-3 text-xs text-content placeholder-content-muted focus:border-control focus:outline-none"
+        />
+      </div>
+
+      {!lockedProjectId && (
+        <select
+          value={selectedProject}
+          onChange={(e) => setSelectedProject(e.target.value)}
+          className="rounded-lg border border-control bg-surface-raised px-2.5 py-1.5 text-xs text-content-secondary focus:border-control focus:outline-none"
+        >
+          <option value="all">All Projects</option>
+          {projects.map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      )}
+
+      <select
+        value={selectedPriority}
+        onChange={(e) => setSelectedPriority(e.target.value)}
+        className="rounded-lg border border-control bg-surface-raised px-2.5 py-1.5 text-xs text-content-secondary focus:border-control focus:outline-none"
+      >
+        <option value="all">All Priorities</option>
+        <option value="urgent">Urgent</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+    </div>
+  );
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-shell text-sm text-content">
-      {/* Header & Jira-like Control Bar */}
+      {/* Shared task controls stay in one place for list, Kanban, and Gantt views. */}
       <div className="space-y-2 border-b border-divider bg-shell px-5 py-3">
         {/* Top Row: Title, Filters & Controls */}
         <div className={`flex flex-col justify-between gap-4 ${embedded ? 'xl:flex-row xl:flex-wrap xl:items-center' : 'sm:flex-row sm:items-center'}`}>
@@ -600,15 +638,6 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <span>Filter</span>
             </button>
 
-            {/* Display Button */}
-            <button
-              onClick={() => setShowFilterBar(!showFilterBar)}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-content-secondary hover:text-content hover:bg-surface-high transition-colors"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>Display</span>
-            </button>
-
             {/* Project planning has a timeline view over the same task records. */}
             <div className="flex items-center text-xs">
               <button
@@ -687,51 +716,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
         </div>
 
         {/* Collapsible Filter Toolbar */}
-        {showFilterBar && (
-          <div className="flex flex-wrap items-center gap-3 pt-2 text-xs">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-3.5 h-3.5 text-content-secondary absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search tasks, identifiers, labels..."
-                className="w-full bg-surface-raised border border-control rounded-lg pl-8 pr-3 py-1.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control"
-              />
-            </div>
-
-            {/*
-              Hidden when the page has already chosen. Offering "All Projects"
-              inside one project's page is an invitation to navigate somewhere
-              the surrounding chrome still claims you are not.
-            */}
-            {!lockedProjectId && (
-              <select
-                value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-                className="bg-surface-raised border border-control rounded-lg px-2.5 py-1.5 text-xs text-content-secondary focus:outline-none focus:border-control"
-              >
-                <option value="all">All Projects</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            )}
-
-            <select
-              value={selectedPriority}
-              onChange={(e) => setSelectedPriority(e.target.value)}
-              className="bg-surface-raised border border-control rounded-lg px-2.5 py-1.5 text-xs text-content-secondary focus:outline-none focus:border-control"
-            >
-              <option value="all">All Priorities</option>
-              <option value="urgent">Urgent</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-
-          </div>
-        )}
+        {showFilterBar && renderFilterToolbar()}
       </div>
 
       {/* Main Issue Canvas */}
@@ -911,10 +896,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             issues={filteredIssues}
             canManageIssues={canManageIssues}
             onOpenIssue={setSelectedIssueId}
-            onChangeView={setViewMode}
-            onOpenNewIssue={openCreateIssue}
-            onToggleFilters={() => setShowFilterBar(value => !value)}
-            filtersActive={showFilterBar || selectedProject !== 'all' || selectedPriority !== 'all'}
+            showProjectIdentity={false}
           />
         ) : (
           /* Jira-like Grouped Status List View (Matching Exact Screenshot) */

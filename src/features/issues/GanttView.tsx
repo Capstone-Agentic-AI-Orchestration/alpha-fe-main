@@ -6,15 +6,9 @@ import {
   Diamond,
   GitBranch,
   Link2,
-  List,
-  Kanban,
   Minus,
   MoreHorizontal,
-  Plus,
-  Search,
-  SlidersHorizontal,
-  Sparkles,
-  Users
+  Plus
 } from 'lucide-react';
 import type { Issue, Project } from '@/shared/types';
 
@@ -23,10 +17,8 @@ interface GanttViewProps {
   issues: Issue[];
   canManageIssues: boolean;
   onOpenIssue: (issueId: string) => void;
-  onChangeView?: (view: 'list' | 'board' | 'gantt') => void;
-  onOpenNewIssue?: () => void;
-  onToggleFilters?: () => void;
-  filtersActive?: boolean;
+  /** The project page already owns the project identity row above the planner. */
+  showProjectIdentity?: boolean;
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -122,10 +114,7 @@ export const GanttView: React.FC<GanttViewProps> = ({
   issues,
   canManageIssues,
   onOpenIssue,
-  onChangeView,
-  onOpenNewIssue,
-  onToggleFilters,
-  filtersActive = false
+  showProjectIdentity = true
 }) => {
   const [scale, setScale] = useState<'days' | 'weeks'>('weeks');
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -240,108 +229,32 @@ export const GanttView: React.FC<GanttViewProps> = ({
 
   return (
     <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-shell">
-      <div className="border-b border-divider bg-surface px-5 pt-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex min-w-0 items-center gap-2">
-            <h1 className="truncate text-[20px] font-semibold leading-tight tracking-[-0.02em] text-content">
-              {project?.name || 'Project planning'}
-            </h1>
-            <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-content-muted" />
+      {showProjectIdentity && (
+        <div className="border-b border-divider bg-surface px-5 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-2">
+              <h1 className="truncate text-[20px] font-semibold leading-tight tracking-[-0.02em] text-content">
+                {project?.name || 'Project planning'}
+              </h1>
+              <ChevronDown aria-hidden="true" className="h-4 w-4 shrink-0 text-content-muted" />
+            </div>
+            <div className="flex items-center gap-3 text-[11px] text-content-muted">
+              <span className="hidden items-center gap-1.5 sm:inline-flex">
+                <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-status-info" />
+                {issues.length} {issues.length === 1 ? 'task' : 'tasks'}
+              </span>
+              {(project?.milestones?.length ?? 0) > 0 && (
+                <span className="hidden sm:inline">{project?.milestones?.length} milestones</span>
+              )}
+            </div>
           </div>
-          <div className="flex items-center gap-3 text-[11px] text-content-muted">
-            <span className="hidden items-center gap-1.5 sm:inline-flex">
-              <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-status-info" />
-              {issues.length} {issues.length === 1 ? 'task' : 'tasks'}
-            </span>
-            {(project?.milestones?.length ?? 0) > 0 && (
-              <span className="hidden sm:inline">{project?.milestones?.length} milestones</span>
-            )}
-          </div>
         </div>
-
-        <nav className="mt-3 flex items-center gap-5 overflow-x-auto text-[12px]" aria-label="Project views">
-          <button
-            type="button"
-            onClick={() => onChangeView?.('list')}
-            className="flex shrink-0 items-center gap-1.5 border-b-2 border-transparent pb-2.5 font-medium text-content-muted transition-colors hover:text-content"
-          >
-            <List aria-hidden="true" className="h-3.5 w-3.5" />
-            Main table
-          </button>
-          <button
-            type="button"
-            onClick={() => onChangeView?.('board')}
-            className="flex shrink-0 items-center gap-1.5 border-b-2 border-transparent pb-2.5 font-medium text-content-muted transition-colors hover:text-content"
-          >
-            <Kanban aria-hidden="true" className="h-3.5 w-3.5" />
-            Board
-          </button>
-          <button
-            type="button"
-            aria-current="page"
-            className="flex shrink-0 items-center gap-1.5 border-b-2 border-link pb-2.5 font-semibold text-content"
-          >
-            <CalendarDays aria-hidden="true" className="h-3.5 w-3.5" />
-            Gantt
-          </button>
-          <span aria-hidden="true" className="pb-2.5 text-content-muted">···</span>
-        </nav>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider bg-surface px-5 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          {onOpenNewIssue && (
-            <button
-              type="button"
-              onClick={onOpenNewIssue}
-              className="inline-flex items-center gap-1.5 rounded-md bg-action px-3 py-1.5 text-[12px] font-semibold text-on-action shadow-sm transition-colors hover:bg-action-hover focus-visible:ring-2 focus-visible:ring-focus"
-            >
-              <Plus aria-hidden="true" className="h-3.5 w-3.5" />
-              New task
-              <ChevronDown aria-hidden="true" className="ml-0.5 h-3 w-3 opacity-80" />
-            </button>
-          )}
-          {onToggleFilters && (
-            <button
-              type="button"
-              onClick={onToggleFilters}
-              className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[12px] font-medium transition-colors ${filtersActive ? 'border-link bg-selected text-selected-content' : 'border-divider text-content-secondary hover:bg-surface-high hover:text-content'}`}
-            >
-              <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
-              Filter
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={onToggleFilters}
-            className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content"
-            title="Open task search and filters"
-          >
-            <Search aria-hidden="true" className="h-3.5 w-3.5" />
-            Search
-          </button>
-          <span className="hidden h-5 w-px bg-divider sm:block" aria-hidden="true" />
-          <span className="hidden items-center gap-1.5 text-[11px] text-content-muted sm:inline-flex">
-            <Users aria-hidden="true" className="h-3.5 w-3.5" />
-            Project schedule
-          </span>
-        </div>
-
-        <div className="flex items-center gap-1.5 text-[11px] text-content-muted">
-          <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-status-warning" />
-          <span>Planning view</span>
-        </div>
-      </div>
+      )}
 
       <main className="px-5 py-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <h2 className="text-[16px] font-semibold text-content">Gantt</h2>
-              <button type="button" onClick={onToggleFilters} className="rounded p-1 text-content-muted transition-colors hover:bg-surface-high hover:text-content" title="Filter timeline">
-                <SlidersHorizontal aria-hidden="true" className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <h2 className="text-[16px] font-semibold text-content">Gantt</h2>
             <p className="mt-0.5 text-[11px] text-content-muted">Plan delivery dates, dependencies, milestones, and deadlines.</p>
           </div>
 
