@@ -14,6 +14,7 @@ vi.mock('@/app/AppContext', () => ({
   }),
   useTabSessionState: <T,>(_key: string, initial: T) => [initial, () => undefined]
 }));
+vi.mock('@/shared/desktop', () => ({ isDesktop: true }));
 
 import { CreateIssueModal } from './CreateIssueModal';
 
@@ -22,26 +23,25 @@ const render = () => renderToStaticMarkup(<CreateIssueModal isOpen onClose={() =
 describe('New task dialog', () => {
   it('is one form, with no agent mode and no create-another toggle', () => {
     const html = render();
-    for (const shown of ['New task', 'Task title', 'What needs to happen?', 'Description', 'Status', 'Priority', 'Assignee', 'Labels', 'Suggest from description', 'Create task']) {
+    for (const shown of ['New task', 'Task title', 'What needs to happen?', 'Description', 'Due date', 'More options', 'Status', 'Priority', 'Assignee', 'Labels', 'Suggest steps with Alpha', 'Create task']) {
       expect(html).toContain(shown);
     }
-    for (const gone of ['Create another', 'Switch to', 'Create with agent', 'Deconstruct user prompt']) {
+    for (const gone of ['Create another', 'Switch to', 'Create with agent', 'Deconstruct user prompt', 'Suggest from description', 'Plan a build when it’s created']) {
       expect(html).not.toContain(gone);
     }
   });
 
-  it('offers to plan a build only to roles that can run one', () => {
+  it('offers Alpha step suggestions only to roles that can run builds', () => {
     canRunBuilds = true;
-    expect(render()).toContain('Plan a build when it’s created');
+    expect(render()).toContain('Suggest steps with Alpha');
     canRunBuilds = false;
-    expect(render()).not.toContain('Plan a build when it’s created');
-    expect(render()).toContain('Build planning is available to developers and admins');
+    expect(render()).not.toContain('Suggest steps with Alpha');
     canRunBuilds = true;
   });
 
   it('explains why creation is disabled until the required title is present', () => {
     const html = render();
-    expect(html).toContain('Enter a task title first.');
+    expect(html).toContain('Enter a task name first.');
     expect(html).toContain('disabled:cursor-default');
   });
 });

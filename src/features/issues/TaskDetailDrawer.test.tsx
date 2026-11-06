@@ -14,7 +14,8 @@ vi.mock('@/app/AppContext', () => ({
     role: currentRole,
     identity: { login: 'maya-reyes', name: 'Maya Reyes' },
     currentUser: { name: 'Maya Reyes' },
-    projects: [{ id: 'p1', name: 'Website refresh', key: 'WEB' }]
+    projects: [{ id: 'p1', name: 'Website refresh', key: 'WEB' }],
+    issues: []
   }),
   useTabSessionState: <T,>(_key: string, initial: T) => [initial, () => undefined]
 }));
