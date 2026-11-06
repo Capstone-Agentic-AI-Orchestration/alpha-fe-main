@@ -911,6 +911,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             issues={filteredIssues}
             canManageIssues={canManageIssues}
             onOpenIssue={setSelectedIssueId}
+            onChangeView={setViewMode}
+            onOpenNewIssue={openCreateIssue}
+            onToggleFilters={() => setShowFilterBar(value => !value)}
+            filtersActive={showFilterBar || selectedProject !== 'all' || selectedPriority !== 'all'}
           />
         ) : (
           /* Jira-like Grouped Status List View (Matching Exact Screenshot) */
