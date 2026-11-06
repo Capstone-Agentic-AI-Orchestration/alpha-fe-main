@@ -28,7 +28,9 @@ import {
   Flame,
   CheckSquare,
   RefreshCw,
-  Play
+  Play,
+  CalendarDays,
+  GitBranch
 } from 'lucide-react';
 import { GanttView } from './GanttView';
 
@@ -38,6 +40,20 @@ function syncAgo(iso: string): string {
   if (seconds < 45) return 'Just now';
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
   return `${Math.round(seconds / 3600)}h ago`;
+}
+
+function dueDateLabel(value: string): string {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(date)
+    : value;
+}
+
+function isOverdue(issue: Issue): boolean {
+  if (!issue.dueDate || issue.status === 'done') return false;
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return issue.dueDate < today;
 }
 
 interface IssuesViewProps {
@@ -90,6 +106,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
   const canManageIssues = can('manage_issues');
   const canRunBuilds = can('run_builds');
+  const issueById = useMemo(() => new Map(issues.map(issue => [issue.id, issue])), [issues]);
 
   // PMs review product work on the kanban board; everyone else starts on the list.
   const [viewMode, setViewMode] = useTabSessionState<'board' | 'list' | 'gantt'>(`${sessionPrefix}.viewMode`, role === 'pm' ? 'board' : 'list');
@@ -280,6 +297,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
   /** Only when one project is named, because a create needs one. */
   const canQuickAdd = selectedProject !== 'all' && canManageIssues;
+  const openCreateIssue = () => {
+    const contextProjectId = lockedProjectId ?? (selectedProject !== 'all' ? selectedProject : projects[0]?.id);
+    if (contextProjectId) setTabSessionState('issueModal.project', contextProjectId);
+    onOpenNewIssue();
+  };
 
   /**
    * A title and a column is a whole issue.
@@ -655,7 +677,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
             {/* New Task Button */}
             <button
-              onClick={onOpenNewIssue}
+              onClick={openCreateIssue}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-action hover:bg-action-hover text-on-action font-medium text-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -767,7 +789,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                         onClick={() =>
                           canQuickAdd
                             ? (setQuickAddStatus(column.id), setQuickAddTitle(''))
-                            : onOpenNewIssue()
+                            : openCreateIssue()
                         }
                         className="text-content-muted hover:text-content p-1 rounded hover:bg-surface-high"
                         title={canQuickAdd ? 'Add a task to this column' : 'New task'}
@@ -814,6 +836,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     {colIssues.map(issue => {
                       const completedSubtasks = issue.subtasks.filter(s => s.completed).length;
                       const quickBuild = canQuickBuild(issue);
+                      const parentIssue = issue.parentIssueId ? issueById.get(issue.parentIssueId) : undefined;
 
                       return (
                         <div key={issue.id}>
@@ -840,6 +863,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                             <PriorityBadge priority={issue.priority} showLabel={false} />
                           </span>
                           <span className="mb-2.5 mt-1.5 block text-[13px] font-medium leading-snug text-content line-clamp-2">{issue.title}</span>
+                          {parentIssue && (
+                            <span className="mb-1.5 inline-flex max-w-full items-center gap-1 truncate text-[10.5px] text-content-muted" title={`Part of ${parentIssue.identifier}: ${parentIssue.title}`}>
+                              <GitBranch aria-hidden="true" className="h-3 w-3 shrink-0" />
+                              <span className="truncate">Part of {parentIssue.identifier}</span>
+                            </span>
+                          )}
                           <span className="flex min-h-5 items-center gap-2.5 text-[11.25px] text-content-muted">
                             {issue.subtasks.length > 0 && (
                               <span className="inline-flex items-center gap-1.5 tabular-nums" title={`${completedSubtasks} of ${issue.subtasks.length} subtasks done`}>
@@ -847,6 +876,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                                   <span className="absolute inset-y-0 left-0 rounded-full bg-status-success" style={{ width: `${Math.round((completedSubtasks / issue.subtasks.length) * 100)}%` }} />
                                 </span>
                                 {completedSubtasks}/{issue.subtasks.length}
+                              </span>
+                            )}
+                            {issue.dueDate && (
+                              <span className={`inline-flex shrink-0 items-center gap-1 ${isOverdue(issue) ? 'text-status-danger' : 'text-content-muted'}`} title={`Due date: ${dueDateLabel(issue.dueDate)}`}>
+                                <CalendarDays aria-hidden="true" className="h-3 w-3" />{dueDateLabel(issue.dueDate)}
                               </span>
                             )}
                             <BuildChip build={issueBuilds[issue.id]} />
@@ -929,6 +963,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       ) : (
                         groupIssues.map(issue => {
                           const project = projects.find(p => p.id === issue.projectId);
+                          const parentIssue = issue.parentIssueId ? issueById.get(issue.parentIssueId) : undefined;
                           const totalSubtasks = issue.subtasks.length;
                           const completedSubtasks = issue.subtasks.filter(s => s.completed).length;
 
@@ -955,6 +990,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                                 <span className="text-xs sm:text-sm font-medium text-content truncate max-w-2xl group-hover:text-link-hover transition-colors">
                                   {issue.title}
                                 </span>
+                                {parentIssue && (
+                                  <span className="inline-flex shrink-0 items-center gap-1 text-[10.5px] text-content-muted" title={`Part of ${parentIssue.identifier}: ${parentIssue.title}`}>
+                                    <GitBranch aria-hidden="true" className="h-3 w-3" />{parentIssue.identifier}
+                                  </span>
+                                )}
 
                                 {/* Subtasks fraction ring if subtasks exist */}
                                 {totalSubtasks > 0 && (
@@ -976,6 +1016,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
                               {/* Right: Project folder tag & Assignee visual */}
                               <div className="flex items-center gap-4 flex-shrink-0">
+                                {issue.dueDate && (
+                                  <span className={`inline-flex items-center gap-1.5 text-xs ${isOverdue(issue) ? 'text-status-danger' : 'text-content-secondary'}`} title={`Due date: ${dueDateLabel(issue.dueDate)}`}>
+                                    <CalendarDays aria-hidden="true" className="h-3.5 w-3.5 text-content-muted" />
+                                    Due {dueDateLabel(issue.dueDate)}
+                                  </span>
+                                )}
                                 {project && (
                                   <div className="flex items-center gap-1.5 text-xs text-content-secondary font-mono">
                                     <FolderKanban className="w-3.5 h-3.5 text-content-muted" />

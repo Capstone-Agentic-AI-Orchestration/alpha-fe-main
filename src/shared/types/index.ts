@@ -73,6 +73,10 @@ export interface Issue {
   /** Planned task schedule for the project Gantt view (calendar dates, YYYY-MM-DD). */
   plannedStartDate?: string;
   plannedEndDate?: string;
+  /** Expected finish date for this task, separate from its planned schedule. */
+  dueDate?: string;
+  /** The parent task when this is a planned work package. */
+  parentIssueId?: string;
   /** Issue ids that must be completed before this task can begin. */
   dependsOnIssueIds?: string[];
   labels: string[];

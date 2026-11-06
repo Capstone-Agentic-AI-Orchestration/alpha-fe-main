@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarDays, Circle, Diamond, Link2 } from 'lucide-react';
+import { CalendarDays, Circle, Diamond, GitBranch, Link2 } from 'lucide-react';
 import type { Issue, Project } from '@/shared/types';
 
 interface GanttViewProps {
@@ -31,6 +31,13 @@ function dateLabel(day: number, options: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat(undefined, { ...options, timeZone: 'UTC' }).format(new Date(day * DAY_MS));
 }
 
+function isOverdue(issue: Issue): boolean {
+  if (!issue.dueDate || issue.status === 'done') return false;
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return issue.dueDate < today;
+}
+
 function mondayOf(day: number): number {
   const weekday = new Date(day * DAY_MS).getUTCDay();
   return day - ((weekday + 6) % 7);
@@ -54,7 +61,7 @@ const STATUS_DOT: Record<Issue['status'], string> = {
 };
 
 type ChartRow =
-  | { kind: 'task'; issue: Issue; start: number; end: number }
+  | { kind: 'task'; issue: Issue; start?: number; end?: number; dueDay?: number }
   | { kind: 'milestone'; id: string; title: string; day: number; completed: boolean };
 
 interface MonthSegment {
@@ -90,12 +97,15 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
     for (const issue of issues) {
       const start = dayNumber(issue.plannedStartDate);
       const end = dayNumber(issue.plannedEndDate);
+      const dueDay = dayNumber(issue.dueDate);
       if (start !== undefined && end !== undefined && end >= start) {
-        tasks.push({ kind: 'task', issue, start, end });
+        tasks.push({ kind: 'task', issue, start, end, dueDay });
         days.push(start, end);
       } else {
         unscheduled.push(issue);
+        if (dueDay !== undefined) tasks.push({ kind: 'task', issue, dueDay });
       }
+      if (dueDay !== undefined) days.push(dueDay);
     }
 
     const milestones: ChartRow[] = (project?.milestones ?? []).flatMap(milestone => {
@@ -111,13 +121,13 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
     if (projectEnd !== undefined) days.push(projectEnd);
 
     const rows = [...tasks, ...milestones].sort((left, right) => {
-      const leftDay = left.kind === 'task' ? left.start : left.day;
-      const rightDay = right.kind === 'task' ? right.start : right.day;
+      const leftDay = left.kind === 'task' ? left.start ?? left.dueDay ?? 0 : left.day;
+      const rightDay = right.kind === 'task' ? right.start ?? right.dueDay ?? 0 : right.day;
       return leftDay - rightDay || (left.kind === right.kind ? 0 : left.kind === 'milestone' ? -1 : 1);
     });
 
     if (!days.length) {
-      return { rows, unscheduled, startDay: undefined, endDay: undefined, dayCount: 0, todayDay: undefined };
+      return { rows, unscheduled, startDay: undefined, endDay: undefined, dayCount: 0, todayDay: undefined, projectTargetDay: undefined };
     }
 
     const startDay = mondayOf(Math.min(...days) - 7);
@@ -132,7 +142,8 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
       startDay,
       endDay,
       dayCount,
-      todayDay: today >= startDay && today <= endDay ? today : undefined
+      todayDay: today >= startDay && today <= endDay ? today : undefined,
+      projectTargetDay: projectEnd
     };
   }, [issues, project]);
 
@@ -148,7 +159,11 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
   const todayOffset = model.todayDay !== undefined && model.startDay !== undefined
     ? (model.todayDay - model.startDay) * dayWidth + dayWidth / 2
     : undefined;
-  const focusDay = (model.rows[0]?.kind === 'task' ? model.rows[0].start : model.rows[0]?.day) ?? (model.startDay !== undefined ? model.startDay + 7 : undefined);
+  const projectTargetOffset = model.projectTargetDay !== undefined && model.startDay !== undefined
+    ? (model.projectTargetDay - model.startDay) * dayWidth + dayWidth / 2
+    : undefined;
+  const firstRow = model.rows[0];
+  const focusDay = (firstRow?.kind === 'task' ? firstRow.start ?? firstRow.dueDay : firstRow?.day) ?? (model.startDay !== undefined ? model.startDay + 7 : undefined);
   const focusOffset = focusDay !== undefined && model.startDay !== undefined
     ? (focusDay - model.startDay) * dayWidth + dayWidth / 2
     : undefined;
@@ -186,7 +201,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
             {project?.name ? `${project.name} · ` : ''}
             {issues.length} {issues.length === 1 ? 'task' : 'tasks'}
             {(project?.milestones?.length ?? 0) > 0 && ` · ${project?.milestones?.length} milestones`}
-            {' · '}Plan dates and dependencies
+            {' · '}Plan dates, due dates and dependencies
           </p>
         </div>
 
@@ -232,6 +247,16 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
             <span aria-hidden="true" className="h-2.5 w-2.5 rotate-45 border border-status-warning bg-status-warning-subtle" />
             Milestone
           </span>
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden="true" className="h-2.5 w-2.5 rounded-full border-2 border-status-danger bg-status-danger-subtle" />
+            Task deadline
+          </span>
+          {project?.targetDate && (
+            <span className="inline-flex items-center gap-1.5">
+              <span aria-hidden="true" className="h-3.5 border-l border-dashed border-status-warning" />
+              Project target
+            </span>
+          )}
           <span className="inline-flex items-center gap-1.5">
             <Link2 aria-hidden="true" className="h-3.5 w-3.5" />
             Dependency
@@ -300,35 +325,44 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
             <div className="sticky left-0 z-20">
               {model.rows.length === 0 ? (
                 <div className="flex h-14 items-center border-b border-r border-divider bg-surface px-3 text-[11px] text-content-muted">
-                  No dated tasks or milestones yet. Open an unscheduled task to add dates.
+                  No dated tasks or milestones yet. Add a task due date or schedule dates to see the timeline.
                 </div>
               ) : model.rows.map(row => row.kind === 'task' ? (
-                <button
-                  key={row.issue.id}
-                  type="button"
-                  onClick={() => onOpenIssue(row.issue.id)}
-                  className="flex h-14 w-full flex-col justify-center border-b border-r border-divider bg-surface px-3 text-left hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
-                  aria-label={`Open ${row.issue.identifier}: ${row.issue.title}`}
-                  title={`${row.issue.identifier} · ${row.issue.title}\n${row.issue.assignedHuman || 'Unassigned'} · ${statusLabel(row.issue.status)} · ${priorityLabel(row.issue.priority)}`}
-                >
-                  <span className="truncate text-[12px] font-semibold text-content">{row.issue.title}</span>
-                  <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-content-muted">
-                    <span className="shrink-0 font-mono">{row.issue.identifier}</span>
-                    <span aria-hidden="true">·</span>
-                    <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[row.issue.status]}`} />
-                    <span className="shrink-0 text-content-secondary">{statusLabel(row.issue.status)}</span>
-                    <span aria-hidden="true">·</span>
-                    <span className="truncate">{row.issue.assignedHuman || 'Unassigned'}</span>
-                    {(row.issue.dependsOnIssueIds?.length ?? 0) > 0 && (
-                      <span
-                        className="ml-auto inline-flex shrink-0 items-center gap-0.5"
-                        title={`Depends on: ${(row.issue.dependsOnIssueIds ?? []).map(id => issueById.get(id)?.identifier ?? id).join(', ')}`}
-                      >
-                        <Link2 aria-hidden="true" className="h-3 w-3" />{row.issue.dependsOnIssueIds?.length}
+                (() => {
+                  const parent = row.issue.parentIssueId ? issueById.get(row.issue.parentIssueId) : undefined;
+                  return (
+                    <button
+                      key={row.issue.id}
+                      type="button"
+                      onClick={() => onOpenIssue(row.issue.id)}
+                      className="flex h-14 w-full flex-col justify-center border-b border-r border-divider bg-surface text-left hover:bg-surface-high focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus"
+                      style={{ paddingLeft: parent ? 24 : 12, paddingRight: 12 }}
+                      aria-label={`Open ${row.issue.identifier}: ${row.issue.title}${parent ? `, part of ${parent.identifier}` : ''}`}
+                      title={`${row.issue.identifier} · ${row.issue.title}${parent ? ` · Part of ${parent.identifier}` : ''}\n${row.issue.assignedHuman || 'Unassigned'} · ${statusLabel(row.issue.status)} · ${priorityLabel(row.issue.priority)}${row.issue.dueDate ? ` · Due ${row.issue.dueDate}` : ''}`}
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        {parent && <GitBranch aria-hidden="true" className="h-3 w-3 shrink-0 text-content-muted" />}
+                        <span className="truncate text-[12px] font-semibold text-content">{row.issue.title}</span>
                       </span>
-                    )}
-                  </span>
-                </button>
+                      <span className="mt-1 flex min-w-0 items-center gap-1.5 text-[11px] text-content-muted">
+                        <span className="shrink-0 font-mono">{row.issue.identifier}</span>
+                        <span aria-hidden="true">·</span>
+                        <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[row.issue.status]}`} />
+                        <span className="shrink-0 text-content-secondary">{statusLabel(row.issue.status)}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="truncate">{row.issue.assignedHuman || 'Unassigned'}</span>
+                        {(row.issue.dependsOnIssueIds?.length ?? 0) > 0 && (
+                          <span
+                            className="ml-auto inline-flex shrink-0 items-center gap-0.5"
+                            title={`Depends on: ${(row.issue.dependsOnIssueIds ?? []).map(id => issueById.get(id)?.identifier ?? id).join(', ')}`}
+                          >
+                            <Link2 aria-hidden="true" className="h-3 w-3" />{row.issue.dependsOnIssueIds?.length}
+                          </span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })()
               ) : (
                 <div key={row.id} className="flex h-14 items-center gap-2 border-b border-r border-divider bg-surface px-3" title={row.title}>
                   <Diamond aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 ${row.completed ? 'fill-status-success text-status-success' : 'fill-status-warning text-status-warning'}`} />
@@ -359,6 +393,9 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
               {todayOffset !== undefined && (
                 <div aria-hidden="true" className="absolute inset-y-0 z-[7] border-l-2 border-link" style={{ left: todayOffset }} />
               )}
+              {projectTargetOffset !== undefined && (
+                <div aria-hidden="true" className="absolute inset-y-0 z-[5] border-l border-dashed border-status-warning" style={{ left: projectTargetOffset }} title={`Project target · ${dateLabel(model.projectTargetDay!, { month: 'short', day: 'numeric', year: 'numeric' })}`} />
+              )}
 
               <svg aria-hidden="true" className="pointer-events-none absolute inset-0 z-[6] h-full w-full overflow-visible" width={timelineWidth} height={plotHeight}>
                 <defs>
@@ -371,7 +408,7 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
                   return (row.issue.dependsOnIssueIds ?? []).map(dependencyId => {
                     const dependencyRow = rowIndexByIssueId.get(dependencyId);
                     const dependency = issueById.get(dependencyId);
-                    if (dependencyRow === undefined || !dependency?.plannedEndDate) return null;
+                    if (dependencyRow === undefined || !dependency?.plannedEndDate || !row.issue.plannedStartDate) return null;
                     const dependencyEnd = dayNumber(dependency.plannedEndDate);
                     const dependentStart = dayNumber(row.issue.plannedStartDate);
                     if (dependencyEnd === undefined || dependentStart === undefined) return null;
@@ -411,24 +448,37 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
                   );
                 }
 
-                const left = (row.start - model.startDay!) * dayWidth + 2;
-                const width = Math.max(dayWidth - 4, (row.end - row.start + 1) * dayWidth - 4);
+                const hasSchedule = row.start !== undefined && row.end !== undefined;
+                const left = hasSchedule ? (row.start! - model.startDay!) * dayWidth + 2 : 0;
+                const width = hasSchedule ? Math.max(dayWidth - 4, (row.end! - row.start! + 1) * dayWidth - 4) : 0;
                 return (
-                  <button
-                    key={row.issue.id}
-                    type="button"
-                    onClick={() => onOpenIssue(row.issue.id)}
-                    className="absolute z-10 flex h-6 items-center overflow-hidden rounded-[4px] border-l-[3px] border-link-hover bg-link px-2 text-[11px] font-semibold text-on-action hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                    style={{ left, width, top: index * ROW_HEIGHT + 16 }}
-                    title={`${row.issue.identifier} · ${row.issue.title}\n${dateLabel(row.start, { month: 'short', day: 'numeric', year: 'numeric' })} – ${dateLabel(row.end, { month: 'short', day: 'numeric', year: 'numeric' })} · ${row.end - row.start + 1} ${row.end === row.start ? 'day' : 'days'}`}
-                    aria-label={`${row.issue.identifier}, ${row.issue.title}, ${dateKey(row.start)} to ${dateKey(row.end)}`}
-                  >
-                    {width >= 72 ? (
-                      <span className="truncate">{row.issue.identifier} · {row.issue.title}</span>
-                    ) : width >= 32 ? (
-                      <span className="truncate">{row.issue.identifier.split('-').slice(-1)[0]}</span>
-                    ) : null}
-                  </button>
+                  <React.Fragment key={row.issue.id}>
+                    {hasSchedule && (
+                      <button
+                        type="button"
+                        onClick={() => onOpenIssue(row.issue.id)}
+                        className="absolute z-10 flex h-6 items-center overflow-hidden rounded-[4px] border-l-[3px] border-link-hover bg-link px-2 text-[11px] font-semibold text-on-action hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                        style={{ left, width, top: index * ROW_HEIGHT + 16 }}
+                        title={`${row.issue.identifier} · ${row.issue.title}\n${dateLabel(row.start!, { month: 'short', day: 'numeric', year: 'numeric' })} – ${dateLabel(row.end!, { month: 'short', day: 'numeric', year: 'numeric' })} · ${row.end! - row.start! + 1} ${row.end === row.start ? 'day' : 'days'}`}
+                        aria-label={`${row.issue.identifier}, ${row.issue.title}, ${dateKey(row.start!)} to ${dateKey(row.end!)}`}
+                      >
+                        {width >= 72 ? (
+                          <span className="truncate">{row.issue.identifier} · {row.issue.title}</span>
+                        ) : width >= 32 ? (
+                          <span className="truncate">{row.issue.identifier.split('-').slice(-1)[0]}</span>
+                        ) : null}
+                      </button>
+                    )}
+                    {row.dueDay !== undefined && (
+                      <span
+                        role="img"
+                        aria-label={`${row.issue.identifier} due ${dateKey(row.dueDay)}`}
+                        title={`${row.issue.identifier} · Due ${dateLabel(row.dueDay, { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                        className={`absolute z-20 h-3.5 w-3.5 rounded-full border-2 border-surface-raised ${row.issue.status === 'done' ? 'bg-status-success' : isOverdue(row.issue) ? 'bg-status-danger' : 'bg-status-warning'}`}
+                        style={{ left: (row.dueDay - model.startDay!) * dayWidth + dayWidth / 2 - 7, top: index * ROW_HEIGHT + 21 }}
+                      />
+                    )}
+                  </React.Fragment>
                 );
               })}
             </div>
@@ -460,19 +510,23 @@ export const GanttView: React.FC<GanttViewProps> = ({ project, issues, canManage
           <p className="px-3 py-3 text-[12px] text-content-muted">Every task in this project has a start and end date.</p>
         ) : (
           <ul className="divide-y divide-divider">
-            {model.unscheduled.map(issue => (
-              <li key={issue.id}>
-                <button type="button" onClick={() => onOpenIssue(issue.id)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-surface-high">
-                  <Circle aria-hidden="true" className="h-3 w-3 shrink-0 text-content-muted" />
-                  <span className="shrink-0 font-mono text-[11px] text-content-muted">{issue.identifier}</span>
-                  <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-content">{issue.title}</span>
-                  <span className="hidden text-[11px] text-content-muted sm:inline">{issue.assignedHuman || 'Unassigned'}</span>
-                  <span className="rounded-full bg-surface-high px-2 py-0.5 text-[11px] text-content-secondary">{statusLabel(issue.status)}</span>
-                  <span className="hidden text-[11px] text-content-muted md:inline">{priorityLabel(issue.priority)}</span>
-                  {canManageIssues && <span className="text-[11px] font-medium text-link">Set dates</span>}
-                </button>
-              </li>
-            ))}
+            {model.unscheduled.map(issue => {
+              const parent = issue.parentIssueId ? issueById.get(issue.parentIssueId) : undefined;
+              return (
+                <li key={issue.id}>
+                  <button type="button" onClick={() => onOpenIssue(issue.id)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-surface-high">
+                    <Circle aria-hidden="true" className="h-3 w-3 shrink-0 text-content-muted" />
+                    <span className="shrink-0 font-mono text-[11px] text-content-muted">{issue.identifier}</span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-content">{issue.title}</span>
+                    {parent && <span className="hidden shrink-0 text-[10.5px] text-content-muted md:inline">Part of {parent.identifier}</span>}
+                    <span className="hidden text-[11px] text-content-muted sm:inline">{issue.assignedHuman || 'Unassigned'}</span>
+                    <span className="rounded-full bg-surface-high px-2 py-0.5 text-[11px] text-content-secondary">{statusLabel(issue.status)}</span>
+                    <span className="hidden text-[11px] text-content-muted md:inline">{priorityLabel(issue.priority)}</span>
+                    {canManageIssues && <span className="text-[11px] font-medium text-link">Set dates</span>}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>
