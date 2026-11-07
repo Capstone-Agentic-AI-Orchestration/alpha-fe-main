@@ -50,9 +50,29 @@ export function needsSecurityAuditPlan(build: ProjectLiveBuild | null): boolean 
 }
 
 const EVENTS = [
-  'stage_update', 'log_chunk', 'run_activity', 'run_started', 'run_completed', 'run_failed', 'run_cancelled',
+  'stage_update', 'run_activity', 'run_started', 'run_completed', 'run_failed', 'run_cancelled',
+  'squad_member_started', 'squad_run_completed', 'squad_run_failed', 'squad_run_cancelled',
   'agent_call.activity', 'orchestration_event'
 ];
+const EVENT_REFRESH_MIN_INTERVAL_MS = 5_000;
+
+function buildSnapshotEventIds(snapshot: ProjectBuildSnapshot): Set<string> {
+  return new Set([
+    snapshot.orchestration?.run.id,
+    snapshot.activeRun?.id,
+    ...(snapshot.activeRun?.memberRuns ?? []).map(run => run.id),
+    ...snapshot.buildRuns.map(run => run.id),
+    ...(snapshot.orchestration?.attempts ?? []).map(attempt => attempt.prototypeRunId),
+    ...snapshot.agentCards.flatMap(card => [card.runId, card.agentCallId])
+  ].filter((id): id is string => typeof id === 'string' && id.length > 0));
+}
+
+function eventRunIds(payload: unknown): string[] {
+  if (!payload || typeof payload !== 'object') return [];
+  const event = payload as Record<string, any>;
+  return [event.runId, event.id, event.orchestrationRunId, event.callId, event.agentCallId, event.run?.id]
+    .filter((id): id is string => typeof id === 'string' && id.length > 0);
+}
 
 function stateFor(statuses: string[]): BuildAgentState {
   if (statuses.some(status => status === 'running')) return 'running';
@@ -151,13 +171,19 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
   // A thread switch hides the previous response synchronously, before effects run.
   const snapshot = loaded?.key === scopeKey ? loaded.snapshot : null;
   const requestRef = useRef(0);
+  const trackedEventIdsRef = useRef<Set<string>>(new Set());
+  const lastSnapshotRefreshAtRef = useRef(0);
 
   const refresh = useCallback(async () => {
-    if (!projectId || !enabled) return;
+    if (!projectId || !enabled || document.visibilityState === 'hidden') return;
     const request = ++requestRef.current;
+    lastSnapshotRefreshAtRef.current = Date.now();
     try {
       const next = await apiService.getProjectBuildSnapshot(projectId, undefined, threadId ?? undefined);
-      if (request === requestRef.current) setLoaded({ key: scopeKey, snapshot: next, fresh: true });
+      if (request === requestRef.current) {
+        trackedEventIdsRef.current = buildSnapshotEventIds(next);
+        setLoaded({ key: scopeKey, snapshot: next, fresh: true });
+      }
     } catch {
       if (request === requestRef.current) setLoaded(previous => previous?.key === scopeKey ? { ...previous, fresh: false } : previous);
       // Preserve history while failing closed on live execution styling.
@@ -165,19 +191,42 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
   }, [enabled, projectId, scopeKey, threadId]);
 
   useEffect(() => {
+    trackedEventIdsRef.current = new Set();
     setLoaded(null);
     if (!projectId || !enabled) return undefined;
     void refresh();
     let debounce: number | undefined;
-    const schedule = () => {
-      if (debounce !== undefined) window.clearTimeout(debounce);
-      debounce = window.setTimeout(() => void refresh(), 350);
+    const runScheduledRefresh = () => {
+      debounce = undefined;
+      if (document.visibilityState !== 'visible') return;
+      const wait = EVENT_REFRESH_MIN_INTERVAL_MS - (Date.now() - lastSnapshotRefreshAtRef.current);
+      if (wait > 0) {
+        debounce = window.setTimeout(runScheduledRefresh, wait);
+        return;
+      }
+      void refresh();
+    };
+    const schedule = (payload: unknown) => {
+      if (document.visibilityState === 'hidden' || !eventRunIds(payload).some(id => trackedEventIdsRef.current.has(id))) return;
+      if (debounce !== undefined) return;
+      const sinceRefresh = Date.now() - lastSnapshotRefreshAtRef.current;
+      const delay = Math.max(500, EVENT_REFRESH_MIN_INTERVAL_MS - sinceRefresh);
+      debounce = window.setTimeout(runScheduledRefresh, delay);
     };
     const unsubs = EVENTS.map(event => runnerSocket.on(event, schedule));
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (debounce !== undefined) window.clearTimeout(debounce);
+        debounce = undefined;
+        void refresh();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       requestRef.current += 1;
       if (debounce !== undefined) window.clearTimeout(debounce);
       unsubs.forEach(unsub => unsub());
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
   }, [enabled, projectId, refresh, scopeKey]);
 
@@ -186,8 +235,8 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
   const running = Boolean(loaded?.fresh && status && RUNNING_BUILD_STATUSES.includes(status));
 
   useEffect(() => {
-    if (!projectId || !enabled) return undefined;
-    const timer = window.setTimeout(() => void refresh(), running ? 2_500 : open ? 8_000 : 30_000);
+    if (!projectId || !enabled || document.visibilityState === 'hidden') return undefined;
+    const timer = window.setTimeout(() => void refresh(), running ? 30_000 : open ? 45_000 : 60_000);
     return () => window.clearTimeout(timer);
   }, [enabled, open, projectId, refresh, running, snapshot]);
 
@@ -219,7 +268,7 @@ export function useProjectLiveBuild(projectId: string | undefined, enabled: bool
     };
   }, [running, snapshot, threadId]);
 
-  return { build: open ? latestBuild : null, latestBuild, refresh };
+  return { build: open ? latestBuild : null, latestBuild, snapshot, refresh };
 }
 
 const STATUS_LABEL: Partial<Record<LiveBuildOrchestrationStatus, string>> = {

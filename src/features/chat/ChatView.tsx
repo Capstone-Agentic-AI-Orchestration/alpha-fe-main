@@ -3,7 +3,7 @@ import { ChatPanelHandle } from './ChatPanelHandle';
 import { LocalPreviewTab, WebPreviewCard, useLocalPreviews } from './LocalPreview';
 import { reconcileCallSnapshot } from './chatCallSnapshot';
 import { WorkUsageRow, useChatUsage, entriesAtMessage } from './ChatUsage';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { OrchestrationPlanPreview, PlanDocumentTab, PlanPanelContext, planFileName, type PlanPanelRequest } from '../project-build-review/OrchestrationPlanPreview';
 import {
   AlertTriangle,
@@ -218,6 +218,7 @@ function OrchestratorBuildActivityRow({
   projectId,
   runId,
   threadId,
+  liveSnapshot,
   onOpenReview,
   onViewChanges,
   onWithdraw,
@@ -226,6 +227,7 @@ function OrchestratorBuildActivityRow({
   projectId: string;
   runId: string;
   threadId: string;
+  liveSnapshot?: ProjectBuildSnapshot | null;
   onOpenReview: () => void;
   /** Open this build's code changes in the side panel. */
   onViewChanges: () => void;
@@ -234,8 +236,8 @@ function OrchestratorBuildActivityRow({
   withdrawing?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
-  const [autoExpanded, setAutoExpanded] = useState(false);
-  const [snapshot, setSnapshot] = useState<ProjectBuildSnapshot | null>(null);
+  const autoExpandedRef = useRef(false);
+  const [snapshot, setSnapshot] = useState<ProjectBuildSnapshot | null>(liveSnapshot ?? null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [retryBusy, setRetryBusy] = useState(false);
@@ -243,11 +245,31 @@ function OrchestratorBuildActivityRow({
   const [retryNotice, setRetryNotice] = useState('');
   const [retryNoticeTaskId, setRetryNoticeTaskId] = useState('');
 
+  const autoExpandForStatus = useCallback((status?: string) => {
+    const shouldSurface = Boolean(status && [
+      'planning', 'executing', 'validating', 'publishing', 'cancelling',
+      'awaiting_plan_approval', 'awaiting_approval', 'paused', 'blocked', 'recovery_required', 'failed'
+    ].includes(status));
+    if (shouldSurface && !autoExpandedRef.current) {
+      autoExpandedRef.current = true;
+      setExpanded(true);
+    }
+  }, []);
+
   useEffect(() => {
+    if (liveSnapshot?.orchestration?.run.id === runId) {
+      setSnapshot(liveSnapshot);
+      setError('');
+      setLoading(false);
+      autoExpandForStatus(liveSnapshot.orchestration.run.status);
+      return undefined;
+    }
+
     let cancelled = false;
     let timer: number | undefined;
     setLoading(true);
     const sync = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const next = await apiService.getProjectBuildSnapshot(projectId, runId);
         if (cancelled) return;
@@ -258,32 +280,30 @@ function OrchestratorBuildActivityRow({
         }
         setError('');
         const status = next.orchestration?.run.status;
-        const shouldSurface = Boolean(status && [
-          'planning', 'executing', 'validating', 'publishing', 'cancelling',
-          'awaiting_plan_approval', 'awaiting_approval', 'paused', 'blocked', 'recovery_required', 'failed'
-        ].includes(status));
-        if (shouldSurface && !autoExpanded) {
-          setAutoExpanded(true);
-          setExpanded(true);
-        }
+        autoExpandForStatus(status);
         if (status && !['completed', 'failed', 'cancelled'].includes(status)) {
           const active = ['planning', 'executing', 'validating', 'publishing', 'cancelling'].includes(status);
-          timer = window.setTimeout(() => void sync(), active ? 2_500 : expanded ? 6_000 : 15_000);
+          timer = window.setTimeout(() => void sync(), active ? 30_000 : 60_000);
         }
       } catch (syncError: any) {
         if (cancelled) return;
         setError(syncError?.message ?? 'Run details could not be loaded.');
-        timer = window.setTimeout(() => void sync(), expanded ? 5_000 : 15_000);
+        timer = window.setTimeout(() => void sync(), 60_000);
       } finally {
         if (!cancelled) setLoading(false);
       }
     };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') void sync();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
     void sync();
     return () => {
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [autoExpanded, expanded, projectId, runId]);
+  }, [autoExpandForStatus, liveSnapshot, projectId, runId]);
 
   const orchestration = snapshot?.orchestration;
   const tasks = orchestration?.tasks ?? [];
@@ -689,7 +709,7 @@ export const ChatView: React.FC = () => {
   const openPreview = () => openSideTab({ id: 'preview', kind: 'preview' });
   const previews = useLocalPreviews(activeThreadId ?? undefined, `${activeWorkspace?.id}:${currentUser?.id}:${activeThreadId}`, Boolean(project && !isClient && isActiveTab), openPreview);
   // Only a build originating in this conversation can appear or be controlled here.
-  const { build: liveBuild, latestBuild, refresh: refreshLiveBuild } = useProjectLiveBuild(
+  const { build: liveBuild, latestBuild, snapshot: liveBuildSnapshot, refresh: refreshLiveBuild } = useProjectLiveBuild(
     project?.id,
     !isClient && Boolean(project) && Boolean(activeThreadId) && isActiveTab,
     activeThreadId
@@ -1811,7 +1831,7 @@ export const ChatView: React.FC = () => {
     return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
   }
   return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div></div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}</div></div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{!isUser && renderBuildInstead(message)}{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} liveSnapshot={liveBuildSnapshot?.orchestration?.run.id === message.orchestrationRunId ? liveBuildSnapshot : null} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div></div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-4 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-8 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-3xl space-y-2">
