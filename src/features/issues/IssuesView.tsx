@@ -6,6 +6,7 @@ import { PriorityBadge } from '@/shared/components/Badge';
 import { apiService, type IssueBuildStatus } from '@/shared/services/apiService';
 import { isDesktop } from '@/shared/desktop';
 import { ACTIVE_BUILD_STATUSES, BuildChip } from './BuildChip';
+import { BoardAttentionBanner, boardAttention } from './BoardAttentionBanner';
 import { isEpic } from '@/features/board-build/epic';
 import { BoardAlphaPanel } from '@/features/board-build/BoardAlphaPanel';
 import { TaskDetailDrawer } from './TaskDetailDrawer';
@@ -342,6 +343,14 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     setDraggedIssueId(null);
     setDragOverColumn(null);
   };
+
+  // Only from builds this desktop already polls; no extra requests.
+  const attention = useMemo(
+    () => buildStatusFresh
+      ? boardAttention(issues.filter(issue => selectedProject === 'all' || issue.projectId === selectedProject), issueBuilds)
+      : [],
+    [issues, selectedProject, issueBuilds, buildStatusFresh]
+  );
 
   const handleIssueDragStart = (event: React.DragEvent<HTMLElement>, issueId: string) => {
     event.dataTransfer.effectAllowed = 'move';
@@ -717,6 +726,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
         {/* Collapsible Filter Toolbar */}
         {showFilterBar && renderFilterToolbar()}
+
+        <BoardAttentionBanner
+          items={attention}
+          canManageIssues={canManageIssues}
+          onOpenIssue={setSelectedIssueId}
+          onMoveToTodo={issueId => updateIssueStatus(issueId, 'todo')}
+        />
       </div>
 
       {/* Main Issue Canvas */}
