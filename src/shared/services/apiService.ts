@@ -724,6 +724,13 @@ export const apiService = {
     }),
   deleteIssue: (id: string) =>
     fetchJson<{ success: boolean }>(`/issues/${id}`, { method: 'DELETE' }),
+  /** Take a task off the board, keeping its comments and history. */
+  archiveIssue: (id: string) =>
+    fetchJson<Issue>(`/issues/${encodeURIComponent(id)}/archive`, { method: 'POST' }),
+  restoreIssue: (id: string) =>
+    fetchJson<Issue>(`/issues/${encodeURIComponent(id)}/restore`, { method: 'POST' }),
+  /** Archived tasks, loaded only when someone opens Archived. */
+  getArchivedIssues: () => fetchJson<Issue[]>('/issues?archived=only'),
   addIssueComment: (issueId: string, comment: Partial<IssueComment>) =>
     fetchJson<IssueComment>(`/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify(comment) }),
 

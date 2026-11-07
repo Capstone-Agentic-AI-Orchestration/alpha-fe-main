@@ -75,6 +75,9 @@ export interface Issue {
   plannedEndDate?: string;
   /** Expected finish date for this task, separate from its planned schedule. */
   dueDate?: string;
+  /** When the task was archived and by whom; archived tasks are off the board but can be restored. */
+  archivedAt?: string;
+  archivedBy?: string;
   /** The parent task when this is a planned work package. */
   parentIssueId?: string;
   /** Issue ids that must be completed before this task can begin. */

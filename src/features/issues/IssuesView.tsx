@@ -7,6 +7,7 @@ import { apiService, type IssueBuildStatus } from '@/shared/services/apiService'
 import { isDesktop } from '@/shared/desktop';
 import { ACTIVE_BUILD_STATUSES, BuildChip } from './BuildChip';
 import { BoardAttentionBanner, boardAttention } from './BoardAttentionBanner';
+import { ArchivedCardsPanel } from './ArchivedCardsPanel';
 import { isEpic } from '@/features/board-build/epic';
 import { BoardAlphaPanel } from '@/features/board-build/BoardAlphaPanel';
 import { TaskDetailDrawer } from './TaskDetailDrawer';
@@ -30,7 +31,8 @@ import {
   RefreshCw,
   Play,
   CalendarDays,
-  GitBranch
+  GitBranch,
+  Archive
 } from 'lucide-react';
 import { GanttView } from './GanttView';
 
@@ -82,7 +84,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const {
     issues,
     updateIssueStatus,
-    deleteIssue,
+    archiveIssue,
+    restoreIssue,
     projects,
     startIssueBuild,
     identity,
@@ -138,6 +141,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   /** The column an inline add is open in, or null. */
   const [quickAddStatus, setQuickAddStatus] = useState<IssueStatus | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useTabSessionState<string>(`${sessionPrefix}.quickAddTitle`, '');
+  const [showArchived, setShowArchived] = useState(false);
   const [selectedPriority, setSelectedPriority] = useTabSessionState<string>(`${sessionPrefix}.priority`, 'all');
   const [showFilterBar, setShowFilterBar] = useState(false);
   const [draggedIssueId, setDraggedIssueId] = useState<string | null>(null);
@@ -487,7 +491,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   };
 
   const removeTask = (issue: Issue) => {
-    deleteIssue(issue.id);
+    archiveIssue(issue.id);
     setSelectedIssueId(null);
   };
 
@@ -715,6 +719,16 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
             {/* New Task Button */}
             <button
+              type="button"
+              onClick={() => setShowArchived(open => !open)}
+              aria-pressed={showArchived}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-divider text-content-secondary hover:text-content hover:bg-surface-high font-medium text-xs transition-colors"
+            >
+              <Archive className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Archived</span>
+            </button>
+
+            <button
               onClick={openCreateIssue}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-action hover:bg-action-hover text-on-action font-medium text-xs transition-colors"
             >
@@ -737,6 +751,14 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
       {/* Main Issue Canvas */}
       <div className="flex-1 flex overflow-hidden relative bg-surface">
+        {showArchived && (
+          <ArchivedCardsPanel
+            projectId={selectedProject}
+            canManageIssues={canManageIssues}
+            onRestore={restoreIssue}
+            onClose={() => setShowArchived(false)}
+          />
+        )}
         {viewMode === 'board' ? (
           /* Kanban Board Mode */
           <div className="flex flex-1 overflow-x-auto">

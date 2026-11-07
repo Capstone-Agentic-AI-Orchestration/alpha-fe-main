@@ -145,6 +145,10 @@ interface AppContextType {
   applySavedIssue: (issue: Issue) => void;
   addIssueComment: (issueId: string, comment: IssueComment) => void;
   deleteIssue: (id: string) => void;
+  /** Take a task off the board, keeping its history. */
+  archiveIssue: (id: string) => void;
+  /** Put an archived task back on the board. */
+  restoreIssue: (issue: Issue) => Promise<boolean>;
   runAgentOnIssue: (issueId: string, agentId?: string) => void;
   prototypeRuns: PrototypeRun[];
   runSetupIssueId: string | null;
@@ -1954,6 +1958,36 @@ ${e.detail}`;
         showToast('Task not deleted', msg, 'error');
       }
     );
+  };
+
+  const archiveIssue = (id: string) => {
+    if (!requireCapability('manage_issues')) return;
+    const before = issues.find(iss => iss.id === id);
+    if (!before) return;
+    // Off the board at once; the saved card comes back with who archived it.
+    setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, archivedAt: new Date().toISOString() } : iss));
+    persist(
+      () => apiService.archiveIssue(id),
+      saved => setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...saved } : iss)),
+      msg => {
+        setIssues(prev => prev.map(iss => iss.id === id ? before : iss));
+        showToast('Task not archived', msg, 'error');
+      }
+    );
+  };
+
+  const restoreIssue = async (issue: Issue): Promise<boolean> => {
+    if (!requireCapability('manage_issues')) return false;
+    try {
+      const saved = await apiService.restoreIssue(issue.id);
+      setIssues(prev => prev.some(iss => iss.id === issue.id)
+        ? prev.map(iss => iss.id === issue.id ? { ...iss, ...saved, archivedAt: undefined, archivedBy: undefined } : iss)
+        : [{ ...issue, ...saved, archivedAt: undefined, archivedBy: undefined }, ...prev]);
+      return true;
+    } catch (err) {
+      showToast('Task not restored', describeWriteError(err), 'error');
+      return false;
+    }
   };
 
   // Prototype agent-run setup and lifecycle
@@ -3812,9 +3846,11 @@ ${e.detail}`;
 
   /** Clients never see internal issues; developers see issues in assigned projects. */
   const scopedIssues = useMemo(() => {
-    if (role === 'admin') return issues;
+    // Archived tasks are off every board; Archived loads them on request.
+    const onBoard = issues.filter(issue => !issue.archivedAt);
+    if (role === 'admin') return onBoard;
     if (role === 'client') return [];
-    return issues.filter(issue => assignedProjectIds.has(issue.projectId));
+    return onBoard.filter(issue => assignedProjectIds.has(issue.projectId));
   }, [issues, assignedProjectIds, role]);
 
   /** Specifications: a client sees only their own; staff see their projects'. */
@@ -3911,6 +3947,8 @@ ${e.detail}`;
       updateIssue,
       applySavedIssue,
       deleteIssue,
+      archiveIssue,
+      restoreIssue,
       runAgentOnIssue,
       prototypeRuns,
       runSetupIssueId,
