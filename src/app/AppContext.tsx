@@ -1471,6 +1471,19 @@ ${e.detail}`;
     window.setTimeout(() => dismissToast(id), 4200);
   };
 
+  /**
+   * A card the server saved here but could not fully share -- the team board
+   * has not confirmed it, or GitHub refused it -- says so instead of looking
+   * finished. Otherwise the next refresh shows the old card with no reason.
+   */
+  const announceSyncWarning = async <T extends object>(pending: Promise<T>): Promise<T> => {
+    const saved = await pending as T & { syncWarning?: unknown };
+    if (typeof saved?.syncWarning !== 'string' || !saved.syncWarning) return saved;
+    showToast('Saved, with a warning', saved.syncWarning, 'info');
+    const { syncWarning: _shown, ...card } = saved;
+    return card as T;
+  };
+
   const workspaceStorageKey = (key: string) =>
     activeWorkspaceId ? `${key}:${activeWorkspaceId}` : key;
 
@@ -1874,7 +1887,7 @@ ${e.detail}`;
     setInbox(prev => [newNotification, ...prev]);
 
     persist(
-      () => apiService.createIssue(newIssue),
+      () => announceSyncWarning(apiService.createIssue(newIssue)),
       saved => {
         if (saved.id !== newIssue.id) savedIssueIds.set(newIssue.id, saved.id);
         setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i)));
@@ -1892,9 +1905,9 @@ ${e.detail}`;
     const previousIssue = issues.find(iss => iss.id === id);
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, status, updatedAt: new Date().toISOString() } : iss));
     persist(
-      () => status === 'done'
+      () => announceSyncWarning(status === 'done'
         ? apiService.completeIssue(id)
-        : apiService.updateIssue(id, { status }),
+        : apiService.updateIssue(id, { status })),
       saved => setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...saved } : iss)),
       msg => {
         if (previousIssue) {
@@ -1914,7 +1927,7 @@ ${e.detail}`;
     const before = issues.find(issue => issue.id === id);
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...updates, updatedAt: new Date().toISOString() } : iss));
     persist(
-      () => apiService.updateIssue(id, updates),
+      () => announceSyncWarning(apiService.updateIssue(id, updates)),
       saved => setIssues(prev => prev.map(issue => issue.id === id ? saved : issue)),
       msg => {
         if (before) setIssues(prev => prev.map(issue => issue.id === id ? before : issue));
@@ -1983,7 +1996,7 @@ ${e.detail}`;
     // Off the board at once; the saved card comes back with who archived it.
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, archivedAt: new Date().toISOString() } : iss));
     persist(
-      () => apiService.archiveIssue(id),
+      () => announceSyncWarning(apiService.archiveIssue(id)),
       saved => setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...saved } : iss)),
       msg => {
         setIssues(prev => prev.map(iss => iss.id === id ? before : iss));
@@ -1995,7 +2008,7 @@ ${e.detail}`;
   const restoreIssue = async (issue: Issue): Promise<boolean> => {
     if (!requireCapability('manage_issues')) return false;
     try {
-      const saved = await apiService.restoreIssue(issue.id);
+      const saved = await announceSyncWarning(apiService.restoreIssue(issue.id));
       setIssues(prev => prev.some(iss => iss.id === issue.id)
         ? prev.map(iss => iss.id === issue.id ? { ...iss, ...saved, archivedAt: undefined, archivedBy: undefined } : iss)
         : [{ ...issue, ...saved, archivedAt: undefined, archivedBy: undefined }, ...prev]);
