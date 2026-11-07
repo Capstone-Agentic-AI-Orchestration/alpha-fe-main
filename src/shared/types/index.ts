@@ -75,6 +75,9 @@ export interface Issue {
   plannedEndDate?: string;
   /** Expected finish date for this task, separate from its planned schedule. */
   dueDate?: string;
+  /** When the task was archived and by whom; archived tasks are off the board but can be restored. */
+  archivedAt?: string;
+  archivedBy?: string;
   /** The parent task when this is a planned work package. */
   parentIssueId?: string;
   /** Issue ids that must be completed before this task can begin. */
@@ -1444,6 +1447,53 @@ export interface RuntimeEngine {
   updateCheckedAt?: string;
   updateError?: string;
   updateSource?: RuntimeUpdateSource;
+  /** Whether agents on this runtime run without the developer's personal setup. */
+  isolation?: {
+    isolated: boolean;
+    detail: string;
+    action?: 'codex_sign_in';
+  };
+}
+
+/** Codex sign-in for Alpha's own Codex home (desktop only). */
+export interface CodexAlphaSignInState {
+  status: 'signed_out' | 'waiting' | 'signed_in' | 'failed' | 'expired';
+  verificationUrl?: string;
+  userCode?: string;
+  expiresAt?: string;
+  error?: string;
+}
+
+/** A board change an agent made, or asked a developer to confirm, on that developer's behalf. */
+export interface BoardAgentChange {
+  id: string;
+  projectId: string;
+  issueId?: string;
+  runId: string;
+  agentId?: string;
+  agentName: string;
+  actorUserId: string;
+  actorLogin: string;
+  action: 'create' | 'update' | 'move' | 'comment' | 'archive' | 'restore';
+  status: 'applied' | 'held' | 'rejected' | 'expired' | 'undone' | 'failed';
+  summary: string;
+  input: Record<string, unknown>;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  reason?: string;
+  createdAt: string;
+  expiresAt?: string;
+  decidedAt?: string;
+  decidedBy?: string;
+}
+
+export interface BoardAssistantSettings {
+  projectId: string;
+  enabled: boolean;
+  /** Agents are for developers only. */
+  canUse: boolean;
+  /** Admins and project managers can switch the assistant off. */
+  canChange: boolean;
 }
 
 export type SkillCategory = 

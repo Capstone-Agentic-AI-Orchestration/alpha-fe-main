@@ -46,7 +46,7 @@ const render = (status: Issue['status'], handOff: boolean, canStartBuild = true)
 describe('Task details', () => {
   it('shows the status track, properties and tabs', () => {
     const html = render('todo', false);
-    for (const shown of ['WEB-19', 'Backlog', 'In review', 'Priority', 'Assignee', 'Overview', 'Activity', 'Build', 'Remove task WEB-19', '1 of 2', 'Leave a comment']) {
+    for (const shown of ['WEB-19', 'Backlog', 'In review', 'Priority', 'Assignee', 'Overview', 'Activity', 'Build', 'Archive task WEB-19', '1 of 2', 'Leave a comment']) {
       expect(html).toContain(shown);
     }
     expect(html).not.toContain('Live Build Room');

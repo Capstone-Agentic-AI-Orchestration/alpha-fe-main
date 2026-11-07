@@ -16,6 +16,7 @@ import {
   Layers
 } from 'lucide-react';
 import { RuntimeEngine, RuntimeStatus } from '@/shared/types';
+import { RuntimeIsolationPanel } from './RuntimeIsolationPanel';
 
 /** Prefer the current daemon field, while still reading older cached rows. */
 const runtimeModels = (runtime: RuntimeEngine): string[] =>
@@ -327,6 +328,9 @@ export const RuntimesView: React.FC = () => {
                   {rt.account && rt.endpoint && (
                     <div className="text-[10px] text-content-muted font-mono truncate">{rt.endpoint}</div>
                   )}
+                  {rt.isolation && !rt.isolation.isolated && (
+                    <div className="text-[10px] text-status-warning truncate">Shares your personal setup</div>
+                  )}
                 </div>
 
                 {/* 2. Type Badge */}
@@ -456,6 +460,14 @@ export const RuntimesView: React.FC = () => {
                 {selectedRuntime.endpoint || 'Local CLI process'}
               </div>
             </div>
+
+            {selectedRuntime.isolation && (
+              <RuntimeIsolationPanel
+                runtime={selectedRuntime}
+                allowSignIn={canManageRuntimes}
+                onSignedIn={() => { void scanLocalRuntimes(); }}
+              />
+            )}
 
             {selectedRuntime.account && (
               <div className="p-3.5 rounded-xl bg-surface border border-divider space-y-3">

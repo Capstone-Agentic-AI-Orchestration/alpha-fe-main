@@ -1,7 +1,8 @@
 import React, { useId, useState } from 'react';
-import { ArrowUpRight, Bot, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, Trash2, X } from 'lucide-react';
+import { Archive, ArrowUpRight, Bot, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
-import type { Issue, IssuePriority, IssueStatus } from '@/shared/types';
+import type { BoardAgentChange, Issue, IssuePriority, IssueStatus } from '@/shared/types';
+import { AgentChangesList } from '@/features/board-agent/AgentChangesList';
 import type { IssueBuildStatus } from '@/shared/services/apiService';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { Modal } from '@/shared/components/Modal';
@@ -32,6 +33,10 @@ interface TaskDetailDrawerProps {
   onHandOff?: (issue: Issue) => void;
   /** A build decision was made on this task; the board re-reads build statuses. */
   onBuildChanged?: () => void;
+  /** Changes agents made or proposed on this card, with before and after values. */
+  agentChanges?: BoardAgentChange[];
+  agentDecidingId?: string | null;
+  onAgentDecide?: (id: string, action: 'approve' | 'reject' | 'undo') => void;
 }
 
 type DrawerTab = 'overview' | 'activity' | 'build';
@@ -70,6 +75,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   onHandOff,
   onBuildChanged,
   onOpenTask,
+  agentChanges = [],
+  agentDecidingId,
+  onAgentDecide,
 }) => {
   const { updateIssue, addIssueComment, can, identity, currentUser, projects, issues } = useApp();
   const ids = useId();
@@ -183,11 +191,11 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
           <button
             type="button"
             onClick={() => setRemoveDialogOpen(true)}
-            aria-label={`Remove task ${issue.identifier}`}
-            title="Remove task"
-            className="rounded-md p-1.5 text-content-muted transition-colors hover:bg-status-danger-subtle hover:text-status-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            aria-label={`Archive task ${issue.identifier}`}
+            title="Archive task"
+            className="rounded-md p-1.5 text-content-muted transition-colors hover:bg-surface-high hover:text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
           >
-            <Trash2 aria-hidden="true" className="h-4 w-4" />
+            <Archive aria-hidden="true" className="h-4 w-4" />
           </button>
         )}
         <button type="button" onClick={onClose} aria-label="Close task details" className="ml-auto rounded-md p-1.5 text-content-muted hover:bg-surface-high hover:text-content">
@@ -477,7 +485,14 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
           )}
 
           {tab === 'activity' && (
-            issue.comments.length === 0
+            <>
+            {agentChanges.length > 0 && (
+              <section aria-label="Agent changes" className="mb-4 rounded-lg border border-divider">
+                <p className="px-3 pt-2 text-[11.5px] font-semibold text-content-secondary">Agent changes</p>
+                <AgentChangesList changes={agentChanges} login={identity?.login} busyId={agentDecidingId} onDecide={onAgentDecide} showDetails />
+              </section>
+            )}
+            {issue.comments.length === 0
               ? <p className="text-[13px] text-content-muted">No activity yet. Comments and agent updates appear here.</p>
               : (
                 <ol className="space-y-4">
@@ -496,7 +511,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     </li>
                   ))}
                 </ol>
-              )
+              )}
+            </>
           )}
 
           {tab === 'build' && (
@@ -545,7 +561,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
       <Modal
         isOpen={removeDialogOpen}
         onClose={() => setRemoveDialogOpen(false)}
-        title="Remove task?"
+        title="Archive task?"
         subtitle={`${issue.identifier} · ${issue.title}`}
         maxWidth="max-w-md"
         footer={(
@@ -565,22 +581,22 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                 setRemoveDialogOpen(false);
                 onRemove(issue);
               }}
-              className="inline-flex items-center gap-1.5 rounded-md bg-status-danger px-3.5 py-2 text-sm font-semibold text-on-accent transition-colors hover:brightness-110 focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-md bg-action px-3.5 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <Trash2 aria-hidden="true" className="h-3.5 w-3.5" />
-              Remove task
+              <Archive aria-hidden="true" className="h-3.5 w-3.5" />
+              Archive task
             </button>
           </div>
         )}
       >
         <div className="space-y-3 text-sm leading-relaxed text-content-secondary">
-          <p>This permanently removes the task, its subtasks, comments, and task history from the workspace.</p>
+          <p>Archiving takes the task off the board. Its subtasks, comments and history are kept, and you can restore it from Archived.</p>
           {buildActive ? (
             <p role="alert" className="rounded-md border border-status-warning-border bg-status-warning-subtle px-3 py-2 text-status-warning">
-              This task has an active build. Wait for the build to stop before removing it.
+              This task has an active build. Wait for the build to stop before archiving it.
             </p>
           ) : (
-            <p>This cannot be undone.</p>
+            <p>A linked GitHub issue is left as it is.</p>
           )}
         </div>
       </Modal>

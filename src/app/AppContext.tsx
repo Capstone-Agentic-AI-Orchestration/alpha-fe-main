@@ -145,6 +145,10 @@ interface AppContextType {
   applySavedIssue: (issue: Issue) => void;
   addIssueComment: (issueId: string, comment: IssueComment) => void;
   deleteIssue: (id: string) => void;
+  /** Take a task off the board, keeping its history. */
+  archiveIssue: (id: string) => void;
+  /** Put an archived task back on the board. */
+  restoreIssue: (issue: Issue) => Promise<boolean>;
   runAgentOnIssue: (issueId: string, agentId?: string) => void;
   prototypeRuns: PrototypeRun[];
   runSetupIssueId: string | null;
@@ -278,6 +282,8 @@ interface AppContextType {
   refreshIdentity: () => Promise<void>;
   /** Pull the board from GitHub now. */
   syncBoard: () => Promise<void>;
+  /** Fetch only the board changes since the last read (after an agent turn), without a GitHub sync. */
+  refreshBoardState: () => Promise<void>;
   /** When the last successful sync finished, or null if none has. */
   lastSyncedAt: string | null;
   syncing: boolean;
@@ -680,6 +686,20 @@ ${e.detail}`;
     }
   }, [activeWorkspaceId, catchUpWorkspaceBoard, localMode, role]);
   syncBoardRef.current = syncBoard;
+
+  const refreshBoardState = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+    const workspaceId = activeWorkspaceId;
+    try {
+      const result = await catchUpWorkspaceBoard(workspaceId);
+      if (workspaceId !== activeWorkspaceId) return;
+      setProjects(result.state.projects);
+      setAgents(result.state.agents);
+      setIssues(result.state.issues);
+    } catch {
+      // The regular board catch-up will try again.
+    }
+  }, [activeWorkspaceId, catchUpWorkspaceBoard]);
 
   /**
    * The board, as it moves.
@@ -1451,6 +1471,19 @@ ${e.detail}`;
     window.setTimeout(() => dismissToast(id), 4200);
   };
 
+  /**
+   * A card the server saved here but could not fully share -- the team board
+   * has not confirmed it, or GitHub refused it -- says so instead of looking
+   * finished. Otherwise the next refresh shows the old card with no reason.
+   */
+  const announceSyncWarning = async <T extends object>(pending: Promise<T>): Promise<T> => {
+    const saved = await pending as T & { syncWarning?: unknown };
+    if (typeof saved?.syncWarning !== 'string' || !saved.syncWarning) return saved;
+    showToast('Saved, with a warning', saved.syncWarning, 'info');
+    const { syncWarning: _shown, ...card } = saved;
+    return card as T;
+  };
+
   const workspaceStorageKey = (key: string) =>
     activeWorkspaceId ? `${key}:${activeWorkspaceId}` : key;
 
@@ -1854,7 +1887,7 @@ ${e.detail}`;
     setInbox(prev => [newNotification, ...prev]);
 
     persist(
-      () => apiService.createIssue(newIssue),
+      () => announceSyncWarning(apiService.createIssue(newIssue)),
       saved => {
         if (saved.id !== newIssue.id) savedIssueIds.set(newIssue.id, saved.id);
         setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i)));
@@ -1872,9 +1905,9 @@ ${e.detail}`;
     const previousIssue = issues.find(iss => iss.id === id);
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, status, updatedAt: new Date().toISOString() } : iss));
     persist(
-      () => status === 'done'
+      () => announceSyncWarning(status === 'done'
         ? apiService.completeIssue(id)
-        : apiService.updateIssue(id, { status }),
+        : apiService.updateIssue(id, { status })),
       saved => setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...saved } : iss)),
       msg => {
         if (previousIssue) {
@@ -1894,7 +1927,7 @@ ${e.detail}`;
     const before = issues.find(issue => issue.id === id);
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...updates, updatedAt: new Date().toISOString() } : iss));
     persist(
-      () => apiService.updateIssue(id, updates),
+      () => announceSyncWarning(apiService.updateIssue(id, updates)),
       saved => setIssues(prev => prev.map(issue => issue.id === id ? saved : issue)),
       msg => {
         if (before) setIssues(prev => prev.map(issue => issue.id === id ? before : issue));
@@ -1954,6 +1987,36 @@ ${e.detail}`;
         showToast('Task not deleted', msg, 'error');
       }
     );
+  };
+
+  const archiveIssue = (id: string) => {
+    if (!requireCapability('manage_issues')) return;
+    const before = issues.find(iss => iss.id === id);
+    if (!before) return;
+    // Off the board at once; the saved card comes back with who archived it.
+    setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, archivedAt: new Date().toISOString() } : iss));
+    persist(
+      () => announceSyncWarning(apiService.archiveIssue(id)),
+      saved => setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...saved } : iss)),
+      msg => {
+        setIssues(prev => prev.map(iss => iss.id === id ? before : iss));
+        showToast('Task not archived', msg, 'error');
+      }
+    );
+  };
+
+  const restoreIssue = async (issue: Issue): Promise<boolean> => {
+    if (!requireCapability('manage_issues')) return false;
+    try {
+      const saved = await announceSyncWarning(apiService.restoreIssue(issue.id));
+      setIssues(prev => prev.some(iss => iss.id === issue.id)
+        ? prev.map(iss => iss.id === issue.id ? { ...iss, ...saved, archivedAt: undefined, archivedBy: undefined } : iss)
+        : [{ ...issue, ...saved, archivedAt: undefined, archivedBy: undefined }, ...prev]);
+      return true;
+    } catch (err) {
+      showToast('Task not restored', describeWriteError(err), 'error');
+      return false;
+    }
   };
 
   // Prototype agent-run setup and lifecycle
@@ -3812,9 +3875,11 @@ ${e.detail}`;
 
   /** Clients never see internal issues; developers see issues in assigned projects. */
   const scopedIssues = useMemo(() => {
-    if (role === 'admin') return issues;
+    // Archived tasks are off every board; Archived loads them on request.
+    const onBoard = issues.filter(issue => !issue.archivedAt);
+    if (role === 'admin') return onBoard;
     if (role === 'client') return [];
-    return issues.filter(issue => assignedProjectIds.has(issue.projectId));
+    return onBoard.filter(issue => assignedProjectIds.has(issue.projectId));
   }, [issues, assignedProjectIds, role]);
 
   /** Specifications: a client sees only their own; staff see their projects'. */
@@ -3911,6 +3976,8 @@ ${e.detail}`;
       updateIssue,
       applySavedIssue,
       deleteIssue,
+      archiveIssue,
+      restoreIssue,
       runAgentOnIssue,
       prototypeRuns,
       runSetupIssueId,
@@ -3948,6 +4015,7 @@ ${e.detail}`;
       lastSyncedAt,
       syncing,
       syncBoard,
+      refreshBoardState,
       refreshIdentity: async () => {
         // A retry from the unreachable screen shows progress; a refresh after
         // a team change must not blank a workspace that is already showing.

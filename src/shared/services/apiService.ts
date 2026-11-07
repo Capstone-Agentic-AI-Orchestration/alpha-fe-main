@@ -17,6 +17,9 @@ import {
   IssueComment,
   Skill,
   RuntimeEngine,
+  CodexAlphaSignInState,
+  BoardAgentChange,
+  BoardAssistantSettings,
   PrototypeRun,
   SquadRun,
   ChatThread,
@@ -723,6 +726,24 @@ export const apiService = {
     }),
   deleteIssue: (id: string) =>
     fetchJson<{ success: boolean }>(`/issues/${id}`, { method: 'DELETE' }),
+  /** Take a task off the board, keeping its comments and history. */
+  archiveIssue: (id: string) =>
+    fetchJson<Issue>(`/issues/${encodeURIComponent(id)}/archive`, { method: 'POST' }),
+  restoreIssue: (id: string) =>
+    fetchJson<Issue>(`/issues/${encodeURIComponent(id)}/restore`, { method: 'POST' }),
+  /** Archived tasks, loaded only when someone opens Archived. */
+  getArchivedIssues: () => fetchJson<Issue[]>('/issues?archived=only'),
+
+  // What agents did on the board (desktop only: read from this machine's daemon).
+  getBoardAgentChanges: (projectId: string, status?: BoardAgentChange['status']) =>
+    fetchJson<BoardAgentChange[]>(`/board/agent-changes?projectId=${encodeURIComponent(projectId)}${status ? '&status=' + status : ''}&limit=50`),
+  approveBoardAgentChange: (id: string) => fetchJson<BoardAgentChange>(`/board/agent-changes/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
+  rejectBoardAgentChange: (id: string) => fetchJson<BoardAgentChange>(`/board/agent-changes/${encodeURIComponent(id)}/reject`, { method: 'POST' }),
+  undoBoardAgentChange: (id: string) => fetchJson<BoardAgentChange>(`/board/agent-changes/${encodeURIComponent(id)}/undo`, { method: 'POST' }),
+  getBoardAssistantSettings: (projectId: string) =>
+    fetchJson<BoardAssistantSettings>(`/board/assistant-settings?projectId=${encodeURIComponent(projectId)}`),
+  setBoardAssistantEnabled: (projectId: string, enabled: boolean) =>
+    fetchJson<{ projectId: string; enabled: boolean }>('/board/assistant-settings', { method: 'PUT', body: JSON.stringify({ projectId, enabled }) }),
   addIssueComment: (issueId: string, comment: Partial<IssueComment>) =>
     fetchJson<IssueComment>(`/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify(comment) }),
 
@@ -890,6 +911,11 @@ export const apiService = {
   // Runtimes
   getRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes'),
   scanRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes/scan', { method: 'POST' }),
+  /** Codex sign-in for Alpha's own Codex home, so Codex agents leave the developer's setup alone. */
+  getCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-in'),
+  startCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-in', { method: 'POST' }),
+  cancelCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-in', { method: 'DELETE' }),
+  signOutCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-out', { method: 'POST' }),
 
   // Runs
   /** 'summary' omits stage logs and activity; open one run with getRun for those. */
