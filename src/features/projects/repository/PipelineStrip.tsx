@@ -27,7 +27,7 @@ interface PipelineStripProps {
   branchNames: string[];
   selectedBranch: string | null;
   onSelectBranch: (branch: string) => void;
-  /** Project managers and admins may open promotion pull requests. */
+  /** Whether the current role may open the applicable promotion pull request. */
   canPromote: boolean;
   canPromoteUat?: boolean;
   /** A promotion opened a pull request; the pull request list should reload. */

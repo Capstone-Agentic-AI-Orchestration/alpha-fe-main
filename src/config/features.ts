@@ -5,14 +5,14 @@ import type { NavigationTab, UserRole } from '@/shared/types';
  * runtimes and integrations, and repository setup when creating
  * a project, and attaching folders or repositories to a project.
  *
- * Project managers do not use AI for now, so it is hidden for them. Hidden, not
- * removed: the views, components and backend APIs all stay. Set `pm` back to
- * true to bring every one of these surfaces back for project managers.
+ * Project managers can inspect agents, ask/review agent work, and inspect
+ * cached runtime/skill catalogs. Capability checks keep execution, runtime
+ * scans, and configuration read-only for them.
  */
 export const AI_FEATURES_BY_ROLE: Record<UserRole, boolean> = {
   client: true,
   dev: true,
-  pm: false,
+  pm: true,
   admin: true
 };
 
@@ -20,3 +20,16 @@ export const AI_FEATURES_BY_ROLE: Record<UserRole, boolean> = {
 export const AI_NAV_TABS: readonly NavigationTab[] = ['chat', 'agents', 'runtimes', 'skills'];
 
 export const aiFeaturesEnabled = (role: UserRole): boolean => AI_FEATURES_BY_ROLE[role];
+
+/**
+ * Whether the standalone Chat tab is in the navigation.
+ *
+ * Off while project work happens on the board: each task builds through its own
+ * private conversation, and the board shows the decisions that need a person.
+ * Turning this back on restores the tab exactly as it was; board builds stay
+ * out of the Chat list, and "Open in chat" on a card opens that task's thread.
+ */
+export const CHAT_TAB_ENABLED = true;
+
+/** Whether the Orchestrator bar and its visualization show above a chat conversation. */
+export const CHAT_ORCHESTRATOR_BAR_ENABLED = false;

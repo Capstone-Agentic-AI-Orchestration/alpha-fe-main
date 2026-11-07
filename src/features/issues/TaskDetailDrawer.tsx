@@ -1,14 +1,20 @@
-import React, { useId } from 'react';
-import { ArrowUpRight, Bot, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react';
+import React, { useId, useState } from 'react';
+import { Archive, ArrowUpRight, Bot, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
-import type { Issue, IssuePriority, IssueStatus } from '@/shared/types';
+import type { BoardAgentChange, Issue, IssuePriority, IssueStatus } from '@/shared/types';
+import { AgentChangesList } from '@/features/board-agent/AgentChangesList';
 import type { IssueBuildStatus } from '@/shared/services/apiService';
 import { CopyButton } from '@/shared/components/CopyButton';
-import { AgentRunProgress } from '@/features/runs/AgentRunProgress';
-import { BuildChip } from './BuildChip';
+import { Modal } from '@/shared/components/Modal';
+import { isEpic } from '@/features/board-build/epic';
+import { FeatureSpecPanel } from '@/features/board-build/FeatureSpecPanel';
+import { TaskBuildPanel, type SpecState } from '@/features/board-build/TaskBuildPanel';
+import { useFeatureSpec } from '@/features/board-build/useTaskBuild';
+import { isDesktop } from '@/shared/desktop';
 import { TASK_PRIORITIES, TASK_STATUSES, nextStepFor, type NextStepAction } from './taskFlow';
 
 interface TaskDetailDrawerProps {
+  onOpenTask?: (id: string, projectId: string) => void;
   issue: Issue;
   /** Tab-session key prefix of the board this drawer belongs to. */
   sessionPrefix: string;
@@ -16,6 +22,8 @@ interface TaskDetailDrawerProps {
   buildActive: boolean;
   canStartBuild: boolean;
   onClose: () => void;
+  /** Remove the task after the user confirms the destructive action. */
+  onRemove: (issue: Issue) => void;
   /** Status changes go through the board so Building and Done keep their confirmations. */
   onRequestStatus: (issue: Issue, status: IssueStatus) => void;
   onPlanBuild: (issue: Issue) => void;
@@ -23,6 +31,12 @@ interface TaskDetailDrawerProps {
   onOpenBuildChat?: (issue: Issue) => void;
   /** Open project chat with a hand-off message; absent for roles without chat. */
   onHandOff?: (issue: Issue) => void;
+  /** A build decision was made on this task; the board re-reads build statuses. */
+  onBuildChanged?: () => void;
+  /** Changes agents made or proposed on this card, with before and after values. */
+  agentChanges?: BoardAgentChange[];
+  agentDecidingId?: string | null;
+  onAgentDecide?: (id: string, action: 'approve' | 'reject' | 'undo') => void;
 }
 
 type DrawerTab = 'overview' | 'activity' | 'build';
@@ -54,24 +68,47 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   buildActive,
   canStartBuild,
   onClose,
+  onRemove,
   onRequestStatus,
   onPlanBuild,
   onOpenBuildChat,
-  onHandOff
+  onHandOff,
+  onBuildChanged,
+  onOpenTask,
+  agentChanges = [],
+  agentDecidingId,
+  onAgentDecide,
 }) => {
-  const { updateIssue, addIssueComment, can, identity, currentUser, projects } = useApp();
+  const { updateIssue, addIssueComment, can, identity, currentUser, projects, issues } = useApp();
   const ids = useId();
   const canManageIssues = can('manage_issues');
   const [tab, setTab] = useTabSessionState<DrawerTab>(`${sessionPrefix}.drawerTab`, 'overview');
   const [newSubtask, setNewSubtask] = useTabSessionState<string>(`${sessionPrefix}.newSubtaskTitle`, '');
   const [comment, setComment] = useTabSessionState<string>(`${sessionPrefix}.newComment`, '');
+  const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
 
   const project = projects.find(item => item.id === issue.projectId);
-  const statusIndex = TASK_STATUSES.findIndex(item => item.id === issue.status);
+  const projectTasks = issues
+    .filter(item => item.projectId === issue.projectId && item.id !== issue.id)
+    .sort((left, right) => left.identifier.localeCompare(right.identifier));
+  const parentTask = issue.parentIssueId ? projectTasks.find(item => item.id === issue.parentIssueId) : undefined;
+  const childTasks = issues
+    .filter(item => item.parentIssueId === issue.id)
+    .sort((left, right) => left.identifier.localeCompare(right.identifier));
+  const dependencies = issue.dependsOnIssueIds ?? [];
+  const spec = useFeatureSpec(issue, isDesktop);
+  const specState: SpecState = !spec.record ? 'none' : spec.record.status === 'approved' ? (spec.record.stale ? 'stale' : 'approved') : 'draft';
+  // A task with a build under way sits in Building on the board; the track says the same.
+  const shownStatus = buildActive && issue.status !== 'done' ? 'agent_running' : issue.status;
+  const shownBranch = buildActive ? build?.branchName : issue.branchName;
+  const statusIndex = TASK_STATUSES.findIndex(item => item.id === shownStatus);
   const done = issue.subtasks.filter(subtask => subtask.completed).length;
   const step = nextStepFor({
     status: issue.status,
     buildStatus: build?.status,
+    blocker: build?.blocker,
+    fresh: build?.fresh,
+    requestStatus: build?.request?.status,
     buildActive,
     canManageIssues,
     canStartBuild,
@@ -95,6 +132,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
   const run = (action: NextStepAction) => {
     switch (action) {
+      case 'open_build': setTab('build'); break;
       case 'open_chat': onOpenBuildChat?.(issue); break;
       case 'handoff_chat': onHandOff?.(issue); break;
       case 'plan_build': onPlanBuild(issue); break;
@@ -146,8 +184,20 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
     >
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-divider pl-5 pr-2 text-[12.5px] text-content-muted">
         <span className="font-mono text-xs text-content-secondary">{issue.identifier}</span>
+        {isEpic(issue.labels) && <span className="rounded bg-selected px-1.5 text-[10.5px] font-semibold text-selected-content">Epic</span>}
         <CopyButton value={issue.identifier} label={`task ID ${issue.identifier}`} />
         {project && <span className="truncate">in {project.name}</span>}
+        {canManageIssues && (
+          <button
+            type="button"
+            onClick={() => setRemoveDialogOpen(true)}
+            aria-label={`Archive task ${issue.identifier}`}
+            title="Archive task"
+            className="rounded-md p-1.5 text-content-muted transition-colors hover:bg-surface-high hover:text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          >
+            <Archive aria-hidden="true" className="h-4 w-4" />
+          </button>
+        )}
         <button type="button" onClick={onClose} aria-label="Close task details" className="ml-auto rounded-md p-1.5 text-content-muted hover:bg-surface-high hover:text-content">
           <X className="h-4 w-4" />
         </button>
@@ -247,12 +297,12 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
             <dt className="border-b border-divider py-2 text-content-muted">Labels</dt>
             <dd className="border-b border-divider py-2 text-content-secondary">{issue.labels.join(', ')}</dd>
           </>}
-          {issue.branchName && <>
+          {shownBranch && <>
             <dt className="border-b border-divider py-2 text-content-muted">Branch</dt>
             <dd className="flex min-w-0 items-center gap-1.5 border-b border-divider py-1.5 text-content-secondary">
               <GitBranch aria-hidden="true" className="h-3.5 w-3.5 shrink-0 text-content-muted" />
-              <span className="truncate font-mono text-[11.5px]">{issue.branchName}</span>
-              <CopyButton value={issue.branchName} label={`branch ${issue.branchName}`} />
+              <span className="truncate font-mono text-[11.5px]">{shownBranch}</span>
+              <CopyButton value={shownBranch} label={`branch ${shownBranch}`} />
             </dd>
           </>}
           {issue.prUrl && <>
@@ -280,6 +330,114 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
         <div id={`${ids}-panel`} role="tabpanel" aria-labelledby={`${ids}-tab-${tab}`}>
           {tab === 'overview' && (
             <div className="space-y-5">
+              {(parentTask || childTasks.length > 0) && (
+                <section aria-label="Related tasks" className="space-y-2 border-b border-divider pb-4">
+                  {parentTask && (
+                    <div>
+                      <p className="mb-1 text-[11px] font-medium text-content-muted">Part of</p>
+                      <button
+                        type="button"
+                        disabled={!onOpenTask}
+                        onClick={() => onOpenTask?.(parentTask.id, parentTask.projectId)}
+                        className="max-w-full truncate text-left text-[12.5px] font-medium text-link hover:underline disabled:cursor-default disabled:text-content-secondary disabled:no-underline"
+                      >
+                        {parentTask.identifier} · {parentTask.title}
+                      </button>
+                    </div>
+                  )}
+                  {childTasks.length > 0 && (
+                    <div>
+                      <p className="mb-1 text-[11px] font-medium text-content-muted">Work packages</p>
+                      <ul className="space-y-1">
+                        {childTasks.map(task => (
+                          <li key={task.id}>
+                            <button
+                              type="button"
+                              disabled={!onOpenTask}
+                              onClick={() => onOpenTask?.(task.id, task.projectId)}
+                              className="max-w-full truncate text-left text-[12.5px] text-link hover:underline disabled:cursor-default disabled:text-content-secondary disabled:no-underline"
+                            >
+                              {task.identifier} · {task.title}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </section>
+              )}
+              <section aria-labelledby={`${ids}-schedule`} className="border-b border-divider pb-4">
+                <div className="mb-2 flex items-baseline justify-between gap-3">
+                  <h3 id={`${ids}-schedule`} className="text-[13px] font-semibold text-content-secondary">Dates</h3>
+                  <span className="text-[11px] text-content-muted">Due dates and plan dates are separate</span>
+                </div>
+                <label htmlFor={`${ids}-due-date`} className="mb-3 block max-w-xs space-y-1 text-[11.5px] text-content-muted">
+                  <span className="block font-medium text-content-secondary">Due date</span>
+                  <input
+                    id={`${ids}-due-date`}
+                    type="date"
+                    value={issue.dueDate ?? ''}
+                    disabled={!canManageIssues}
+                    onChange={event => updateIssue(issue.id, { dueDate: event.target.value })}
+                    className="h-8 w-full rounded-md border border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <span className="block text-[10.5px]">Expected finish for this task.</span>
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="space-y-1 text-[11.5px] text-content-muted">
+                    <span className="block">Planned start</span>
+                    <input
+                      type="date"
+                      value={issue.plannedStartDate ?? ''}
+                      disabled={!canManageIssues}
+                      onChange={event => updateIssue(issue.id, { plannedStartDate: event.target.value })}
+                      className="h-8 w-full rounded-md border border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                  <label className="space-y-1 text-[11.5px] text-content-muted">
+                    <span className="block">Planned finish</span>
+                    <input
+                      type="date"
+                      value={issue.plannedEndDate ?? ''}
+                      disabled={!canManageIssues}
+                      onChange={event => updateIssue(issue.id, { plannedEndDate: event.target.value })}
+                      className="h-8 w-full rounded-md border border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                    />
+                  </label>
+                </div>
+                <fieldset className="mt-3">
+                  <legend className="text-[11.5px] font-medium text-content-secondary">Depends on</legend>
+                  <p className="mb-1.5 text-[11px] text-content-muted">Select tasks that need to finish before this task starts.</p>
+                  {projectTasks.length === 0 ? (
+                    <p className="rounded-md border border-dashed border-divider px-2.5 py-2 text-[11px] text-content-muted">No other tasks in this project yet.</p>
+                  ) : (
+                    <div className="max-h-36 overflow-y-auto rounded-md border border-divider bg-well p-1">
+                      {projectTasks.map(task => {
+                        const checked = dependencies.includes(task.id);
+                        return (
+                          <label key={task.id} className={`flex min-h-7 items-center gap-2 rounded px-2 text-[11.5px] ${canManageIssues ? 'cursor-pointer hover:bg-surface-high' : 'cursor-default opacity-60'}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              disabled={!canManageIssues}
+                              onChange={() => {
+                                const next = checked
+                                  ? dependencies.filter(id => id !== task.id)
+                                  : [...dependencies, task.id];
+                                updateIssue(issue.id, { dependsOnIssueIds: next });
+                              }}
+                              className="h-3.5 w-3.5 accent-brand-500"
+                            />
+                            <span className="shrink-0 font-mono text-[10px] text-content-muted">{task.identifier}</span>
+                            <span className="truncate text-content-secondary">{task.title}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </fieldset>
+              </section>
+
               <div>
                 <label htmlFor={`${ids}-description`} className="sr-only">Description</label>
                 <textarea
@@ -293,9 +451,12 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                 />
               </div>
 
+              {/* Writing a spec is an agent step, so only developers start one; anyone sees a spec that exists. */}
+              {isDesktop && (spec.record || (can('run_builds') && can('manage_chat'))) && <FeatureSpecPanel issue={issue} spec={spec} />}
+
               <section aria-labelledby={`${ids}-subtasks`}>
                 <div className="mb-2 flex items-center gap-2.5">
-                  <h3 id={`${ids}-subtasks`} className="text-[13px] font-semibold text-content-secondary">Subtasks</h3>
+                  <h3 id={`${ids}-subtasks`} className="text-[13px] font-semibold text-content-secondary" title="The build must meet each open item">Checklist</h3>
                   {issue.subtasks.length > 0 && <>
                     <span className="text-xs tabular-nums text-content-muted">{done} of {issue.subtasks.length}</span>
                     <span aria-hidden="true" className="relative h-1 w-16 overflow-hidden rounded-full bg-surface-high">
@@ -314,8 +475,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                 {canManageIssues && (
                   <form onSubmit={addSubtask} className="mt-1.5 flex h-8 items-center gap-2 rounded-md border border-dashed border-divider px-2.5">
                     <Plus aria-hidden="true" className="h-3.5 w-3.5 text-content-muted" />
-                    <label htmlFor={`${ids}-new-subtask`} className="sr-only">New subtask</label>
-                    <input id={`${ids}-new-subtask`} value={newSubtask} onChange={event => setNewSubtask(event.target.value)} placeholder="Add a subtask" className="min-w-0 flex-1 bg-transparent text-[13px] text-content placeholder-content-muted focus:outline-none" />
+                    <label htmlFor={`${ids}-new-subtask`} className="sr-only">New checklist item</label>
+                    <input id={`${ids}-new-subtask`} value={newSubtask} onChange={event => setNewSubtask(event.target.value)} placeholder="Add a checklist item" className="min-w-0 flex-1 bg-transparent text-[13px] text-content placeholder-content-muted focus:outline-none" />
                     <button type="submit" disabled={!newSubtask.trim()} className="text-xs font-semibold text-link disabled:opacity-40">Add</button>
                   </form>
                 )}
@@ -324,7 +485,14 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
           )}
 
           {tab === 'activity' && (
-            issue.comments.length === 0
+            <>
+            {agentChanges.length > 0 && (
+              <section aria-label="Agent changes" className="mb-4 rounded-lg border border-divider">
+                <p className="px-3 pt-2 text-[11.5px] font-semibold text-content-secondary">Agent changes</p>
+                <AgentChangesList changes={agentChanges} login={identity?.login} busyId={agentDecidingId} onDecide={onAgentDecide} showDetails />
+              </section>
+            )}
+            {issue.comments.length === 0
               ? <p className="text-[13px] text-content-muted">No activity yet. Comments and agent updates appear here.</p>
               : (
                 <ol className="space-y-4">
@@ -343,30 +511,19 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     </li>
                   ))}
                 </ol>
-              )
+              )}
+            </>
           )}
 
           {tab === 'build' && (
             <div className="space-y-4">
-              {build
-                ? (
-                  <div className="flex flex-wrap items-center gap-3 text-[12.5px] text-content-muted">
-                    <BuildChip build={build} />
-                    <span className="tabular-nums">Updated {formatTime(build.updatedAt)}</span>
-                    {onOpenBuildChat && (
-                      <button type="button" onClick={() => onOpenBuildChat(issue)} className="inline-flex items-center gap-1 font-medium text-link hover:text-link-hover">
-                        Open in chat <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
-                      </button>
-                    )}
-                  </div>
-                )
-                : <p className="text-[13px] text-content-muted">No build yet. {canStartBuild ? 'Plan one to have the Orchestrator do this task.' : ''}</p>}
-              {!build && canStartBuild && (
-                <button type="button" onClick={() => onPlanBuild(issue)} className="inline-flex h-8 items-center gap-2 rounded-md border border-divider px-3 text-[12.5px] font-medium text-content-secondary hover:bg-surface-high hover:text-content">
-                  <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-link" /> Plan a build
+              <TaskBuildPanel issue={issue} build={build} canStartBuild={canStartBuild} specState={specState} onPlanBuild={onPlanBuild} onBuildChanged={onBuildChanged} onOpenTask={onOpenTask} />
+              {/* A build started from chat before the board took over still opens in its chat while the Chat tab is on. */}
+              {build && onOpenBuildChat && (
+                <button type="button" onClick={() => onOpenBuildChat(issue)} className="inline-flex items-center gap-1 text-[12.5px] font-medium text-link hover:text-link-hover">
+                  Open in chat <ArrowUpRight aria-hidden="true" className="h-3.5 w-3.5" />
                 </button>
               )}
-              <AgentRunProgress issueId={issue.id} />
             </div>
           )}
         </div>
@@ -395,11 +552,54 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
           <div className="flex items-center gap-2 px-3 pb-2 text-[11.25px] text-content-muted">
             <span>Ctrl ↵ to send</span>
             <button type="submit" disabled={!comment.trim()} className="ml-auto inline-flex h-7 items-center gap-1.5 rounded-md bg-action px-2.5 text-xs font-semibold text-on-action hover:bg-action-hover disabled:opacity-40">
-              <Send aria-hidden="true" className="h-3.5 w-3.5" /> Send
+              <Send aria-hidden="true" className="h-3.5 w-3.5" /> Post comment
             </button>
           </div>
         </div>
       </form>
+
+      <Modal
+        isOpen={removeDialogOpen}
+        onClose={() => setRemoveDialogOpen(false)}
+        title="Archive task?"
+        subtitle={`${issue.identifier} · ${issue.title}`}
+        maxWidth="max-w-md"
+        footer={(
+          <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setRemoveDialogOpen(false)}
+              className="rounded-md border border-divider px-3.5 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+            >
+              Keep task
+            </button>
+            <button
+              type="button"
+              disabled={buildActive}
+              onClick={() => {
+                if (buildActive) return;
+                setRemoveDialogOpen(false);
+                onRemove(issue);
+              }}
+              className="inline-flex items-center gap-1.5 rounded-md bg-action px-3.5 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Archive aria-hidden="true" className="h-3.5 w-3.5" />
+              Archive task
+            </button>
+          </div>
+        )}
+      >
+        <div className="space-y-3 text-sm leading-relaxed text-content-secondary">
+          <p>Archiving takes the task off the board. Its subtasks, comments and history are kept, and you can restore it from Archived.</p>
+          {buildActive ? (
+            <p role="alert" className="rounded-md border border-status-warning-border bg-status-warning-subtle px-3 py-2 text-status-warning">
+              This task has an active build. Wait for the build to stop before archiving it.
+            </p>
+          ) : (
+            <p>A linked GitHub issue is left as it is.</p>
+          )}
+        </div>
+      </Modal>
     </aside>
   );
 };

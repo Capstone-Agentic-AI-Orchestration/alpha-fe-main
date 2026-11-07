@@ -383,11 +383,12 @@ export const SkillsView: React.FC = () => {
                   </div>
 
                   <button
+                    disabled={!canManageSkills}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleSkill(skill.id);
                     }}
-                    className="p-1 text-content-secondary hover:text-content transition-colors"
+                    className="p-1 text-content-secondary hover:text-content transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {skill.enabled ? (
                       <ToggleRight className="w-6 h-6 text-link" />
@@ -445,7 +446,7 @@ export const SkillsView: React.FC = () => {
               </div>
 
               <div className="flex items-center gap-2">
-                <button
+                {canManageSkills && <button
                   onClick={() => toggleSkill(selectedSkill.id)}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
                     selectedSkill.enabled
@@ -454,7 +455,7 @@ export const SkillsView: React.FC = () => {
                   }`}
                 >
                   {selectedSkill.enabled ? 'Disable Tool' : 'Enable Tool'}
-                </button>
+                </button>}
                 <button
                   onClick={() => setSelectedSkillId(null)}
                   className="p-1.5 rounded-lg hover:bg-surface-high text-content-secondary hover:text-content transition-colors"

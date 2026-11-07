@@ -29,6 +29,12 @@ export const statusLabel = (status: IssueStatus) =>
 export const priorityLabel = (priority: IssuePriority) =>
   TASK_PRIORITIES.find(item => item.id === priority)?.label ?? priority;
 
+function withoutTrailingPunctuation(value: string, punctuation: string): string {
+  let end = value.length;
+  while (end > 0 && punctuation.includes(value[end - 1])) end--;
+  return value.slice(0, end);
+}
+
 /** Build states in which the build, not the person, is what the task waits on. */
 export const BUILD_DECISION_STATUSES = new Set(['awaiting_plan_approval', 'awaiting_approval', 'blocked', 'recovery_required']);
 
@@ -53,7 +59,7 @@ export function suggestSubtasks(description: string, limit = 6): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
   for (const raw of pieces) {
-    const cleaned = raw.trim().replace(/[.;:!?]+$/, '');
+    const cleaned = withoutTrailingPunctuation(raw.trim(), '.;:!?');
     if (cleaned.split(/\s+/).length < 3) continue;
     const sentence = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
     const key = sentence.toLowerCase();
@@ -67,7 +73,7 @@ export function suggestSubtasks(description: string, limit = 6): string[] {
 
 /** The message a developer's chat opens with when they pick a task up from the board. */
 export function taskHandoffMessage(issue: Pick<Issue, 'identifier' | 'title'>): string {
-  return `Please work on ${issue.identifier}: ${issue.title.trim().replace(/[.!?]+$/, '')}.`;
+  return `Please work on ${issue.identifier}: ${withoutTrailingPunctuation(issue.title.trim(), '.!?')}.`;
 }
 
 /**
@@ -86,6 +92,7 @@ export function taskHandoffContext(issue: Pick<Issue, 'identifier' | 'title' | '
 }
 
 export type NextStepAction =
+  | 'open_build'
   | 'open_chat'
   | 'handoff_chat'
   | 'plan_build'
@@ -103,6 +110,9 @@ export interface NextStep {
 }
 
 export interface NextStepInput {
+  blocker?: { identifier?: string; status: string };
+  fresh?: boolean;
+  requestStatus?: string;
   status: IssueStatus;
   /** Latest Orchestrator build status for the task, if any. */
   buildStatus?: string;
@@ -123,25 +133,29 @@ export interface NextStepInput {
  * build, and the reader's role, and says why.
  */
 export function nextStepFor(input: NextStepInput): NextStep {
+  if (input.fresh === false) return { title: 'Build status unavailable', text: 'Reconnect or refresh before changing the build.' };
+  if (input.blocker && !input.buildActive) return { title: `Waiting for ${input.blocker.identifier ?? 'another build'}`, text: 'A selected repository is reserved. Open Build for details or explicitly queue planning.', primary: { label: 'Open task build', action: 'open_build' } };
+  if (['waiting', 'planning'].includes(input.requestStatus ?? '') && !input.buildActive) return { title: input.requestStatus === 'waiting' ? 'Plan queued' : 'Preparing plan', text: 'Code changes still require plan approval.', primary: { label: 'Open task build', action: 'open_build' } };
+  // Decisions happen on the task. The task's chat thread is a secondary way in while the Chat tab is on.
   const chat = input.hasBuildChat ? { label: 'Open in chat', action: 'open_chat' as const } : undefined;
   if (input.buildActive) {
     switch (input.buildStatus) {
       case 'awaiting_plan_approval':
-        return { title: 'Plan ready to approve', text: 'The Orchestrator drafted a plan. Review it in the project chat; nothing in the code changes until it is approved.', primary: chat };
+        return { title: 'Plan ready to approve', text: 'The Orchestrator drafted a plan. Review it in the Build tab; nothing in the code changes until it is approved.', primary: { label: 'Review the plan', action: 'open_build' }, secondary: chat };
       case 'awaiting_approval':
-        return { title: 'Ready for your review', text: 'The build finished. Review the changes in the project chat, then approve them or ask for changes.', primary: chat };
+        return { title: 'Ready for your review', text: 'The build finished. Review the changes in the Build tab, then approve them or send them back.', primary: { label: 'Review the changes', action: 'open_build' }, secondary: chat };
       case 'blocked':
       case 'recovery_required':
-        return { title: 'The build needs you', text: 'The build stopped and is waiting for direction. Answer it in the project chat to continue.', primary: chat };
+        return { title: 'Recovery needs review', text: 'Open Build to inspect the failed step, saved work and available recovery actions.', primary: { label: 'Review recovery', action: 'open_build' }, secondary: chat };
       case 'paused':
-        return { title: 'Build paused', text: 'Resume it from the project chat when you are ready.', primary: chat };
+        return { title: 'Build paused', text: 'Resume it from the Build tab when you are ready.', primary: { label: 'Open the build', action: 'open_build' }, secondary: chat };
       default:
-        return { title: 'Building now', text: 'The Orchestrator is working on this task. Follow each step in the project chat.', primary: chat };
+        return { title: 'Building now', text: 'The Orchestrator is working on this task. Follow its progress in the Build tab.', primary: { label: 'Follow the build', action: 'open_build' }, secondary: chat };
     }
   }
 
   const handoff = input.canHandOffToChat ? { label: 'Work on this in chat', action: 'handoff_chat' as const } : undefined;
-  const plan = input.canStartBuild ? { label: 'Plan a build', action: 'plan_build' as const } : undefined;
+  const plan = input.canStartBuild ? { label: 'Plan build', action: 'plan_build' as const } : undefined;
 
   switch (input.status) {
     case 'done':
@@ -158,7 +172,7 @@ export function nextStepFor(input: NextStepInput): NextStep {
         title: 'Ready for review',
         text: 'Check the work, then mark it done or send it back with a comment.',
         primary: input.canManageIssues ? { label: 'Mark done', action: 'mark_done' } : undefined,
-        secondary: input.canManageIssues ? { label: 'Request changes', action: 'request_changes' } : undefined
+        secondary: input.canManageIssues ? { label: 'Request revisions', action: 'request_changes' } : undefined
       };
     case 'backlog':
       return {
@@ -189,8 +203,10 @@ export function nextStepFor(input: NextStepInput): NextStep {
             secondary: plan
           }
         : {
-            title: 'Ready to build',
-            text: 'The Orchestrator drafts a plan and picks an agent for each step. Nothing in the code changes until the plan is approved.',
+            title: plan ? 'No build planned' : 'Ready for a developer',
+            text: plan
+              ? 'The Orchestrator drafts a plan and picks an agent for each step. Nothing in the code changes until the plan is approved.'
+              : 'A developer will plan and run this task. You can review the resulting work here.',
             primary: plan
           };
   }

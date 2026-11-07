@@ -9,10 +9,11 @@ describe('delivery approval controls', () => {
       expect(deliveryActionFor(delivery(stage), false, true)).toBeNull();
     }
   });
-  it('offers automatic UAT delivery to a developer without PM permission', () => {
-    expect(deliveryActionFor(delivery('dev_approval'), true, false)?.action).toBe('enable_uat');
-    expect(deliveryActionFor(delivery('uat_prepare'), true, false)?.action).toBe('enable_uat');
-    expect(deliveryActionFor(delivery('uat_approval'), true, false)?.action).toBe('enable_uat');
+  it('requires the server-provided UAT capability as well as build control', () => {
+    expect(deliveryActionFor(delivery('dev_approval'), true, false)).toBeNull();
+    expect(deliveryActionFor(delivery('dev_approval'), true, true)?.action).toBe('enable_uat');
+    expect(deliveryActionFor(delivery('uat_prepare'), true, true)?.action).toBe('enable_uat');
+    expect(deliveryActionFor(delivery('uat_approval'), true, true)?.action).toBe('enable_uat');
   });
   it('offers no action when blocked, superseded or already ready', () => {
     for (const stage of ['uat_ready', 'blocked', 'superseded']) {
@@ -20,11 +21,11 @@ describe('delivery approval controls', () => {
     }
   });
   it('lets enabled delivery proceed without another approval and exposes resume when paused', () => {
-    expect(deliveryActionFor(delivery('uat_approval', { authorization: { paused: false } }), true, false)).toBeNull();
-    expect(deliveryActionFor(delivery('uat_approval', { authorization: { paused: true } }), true, false)?.action).toBe('resume_delivery');
+    expect(deliveryActionFor(delivery('uat_approval', { authorization: { paused: false } }), true, true)).toBeNull();
+    expect(deliveryActionFor(delivery('uat_approval', { authorization: { paused: true } }), true, true)?.action).toBe('resume_delivery');
   });
   it('prevents repeated or unbounded repair proposals', () => {
-    expect(deliveryActionFor(delivery('repair_required'), true, false)?.action).toBe('prepare_repair');
+    expect(deliveryActionFor(delivery('repair_required'), true, true)?.action).toBe('prepare_repair');
     expect(deliveryActionFor(delivery('repair_required', { repairAttempts: 2 }), true, true)).toBeNull();
     expect(deliveryActionFor(delivery('repair_required', { repairRunId: 'repair' }), true, true)).toBeNull();
   });

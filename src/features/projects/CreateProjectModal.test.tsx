@@ -17,14 +17,14 @@ const render = (role: UserRole) => {
   return renderToStaticMarkup(<CreateProjectModal isOpen onClose={() => undefined} />);
 };
 
-describe('New project for roles without AI features', () => {
-  it('shows a project manager only the project name and goal', () => {
+describe('New project access by role', () => {
+  it('shows a project manager the reviewable Orchestrator setup', () => {
     const html = render('pm');
     expect(html).toContain('Project name');
     expect(html).toContain('Goal &amp; ground rules');
-    for (const hidden of ['Build lead: Orchestrator', 'Shared with agents', 'Priority', 'Target date',
+    for (const shown of ['Build lead: Orchestrator', 'Shared with agents', 'Priority', 'Target date',
       'Set up repositories next', 'Repository URL', 'Attach a local folder', 'You can refine the project after creating it.']) {
-      expect(html).not.toContain(hidden);
+      expect(html).toContain(shown);
     }
   });
 

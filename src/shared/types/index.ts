@@ -34,6 +34,10 @@ export interface Subtask {
   title: string;
   completed: boolean;
   assignedAgentId?: string;
+  /** 'spec' for an item written from an approved feature spec; absent for items a person added. */
+  source?: 'spec';
+  /** The approved requirement this item checks, when it came from a feature spec. */
+  requirementId?: string;
 }
 
 export interface IssueComment {
@@ -66,6 +70,18 @@ export interface Issue {
   /** Legacy single-agent owner; the board no longer sets or shows it. */
   assignedAgentId?: string;
   assignedHuman?: string;
+  /** Planned task schedule for the project Gantt view (calendar dates, YYYY-MM-DD). */
+  plannedStartDate?: string;
+  plannedEndDate?: string;
+  /** Expected finish date for this task, separate from its planned schedule. */
+  dueDate?: string;
+  /** When the task was archived and by whom; archived tasks are off the board but can be restored. */
+  archivedAt?: string;
+  archivedBy?: string;
+  /** The parent task when this is a planned work package. */
+  parentIssueId?: string;
+  /** Issue ids that must be completed before this task can begin. */
+  dependsOnIssueIds?: string[];
   labels: string[];
   subtasks: Subtask[];
   comments: IssueComment[];
@@ -149,6 +165,9 @@ export interface RunActivity {
 }
 
 export interface PrototypeRun {
+  orchestrationRunId?: string;
+  orchestrationTaskId?: string;
+  orchestrationAttemptId?: string;
   id: string;
   issueId: string;
   projectId: string;
@@ -1428,6 +1447,53 @@ export interface RuntimeEngine {
   updateCheckedAt?: string;
   updateError?: string;
   updateSource?: RuntimeUpdateSource;
+  /** Whether agents on this runtime run without the developer's personal setup. */
+  isolation?: {
+    isolated: boolean;
+    detail: string;
+    action?: 'codex_sign_in';
+  };
+}
+
+/** Codex sign-in for Alpha's own Codex home (desktop only). */
+export interface CodexAlphaSignInState {
+  status: 'signed_out' | 'waiting' | 'signed_in' | 'failed' | 'expired';
+  verificationUrl?: string;
+  userCode?: string;
+  expiresAt?: string;
+  error?: string;
+}
+
+/** A board change an agent made, or asked a developer to confirm, on that developer's behalf. */
+export interface BoardAgentChange {
+  id: string;
+  projectId: string;
+  issueId?: string;
+  runId: string;
+  agentId?: string;
+  agentName: string;
+  actorUserId: string;
+  actorLogin: string;
+  action: 'create' | 'update' | 'move' | 'comment' | 'archive' | 'restore';
+  status: 'applied' | 'held' | 'rejected' | 'expired' | 'undone' | 'failed';
+  summary: string;
+  input: Record<string, unknown>;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  reason?: string;
+  createdAt: string;
+  expiresAt?: string;
+  decidedAt?: string;
+  decidedBy?: string;
+}
+
+export interface BoardAssistantSettings {
+  projectId: string;
+  enabled: boolean;
+  /** Agents are for developers only. */
+  canUse: boolean;
+  /** Admins and project managers can switch the assistant off. */
+  canChange: boolean;
 }
 
 export type SkillCategory = 
@@ -2006,3 +2072,32 @@ export interface AgentPerformance {
   accepted: string[];
 }
 
+/** Who a change is for, how they use it, and the checklist that says when it is done. */
+export interface FeatureSpec {
+  schemaVersion: 1;
+  epicTitle: string;
+  summary: string;
+  personas: Array<{ id: string; name: string; goal: string }>;
+  journeys: Array<{ id: string; personaId: string; title: string; steps: string[] }>;
+  requirements: Array<{ id: string; behavior: string; acceptanceCriteria: string[]; journeyIds: string[] }>;
+  exclusions: string[];
+  openQuestions: string[];
+}
+
+export interface FeatureSpecRecord {
+  issueId: string;
+  version: number;
+  status: 'draft' | 'approved';
+  spec: FeatureSpec;
+  /** The task changed after approval; approve again before building. */
+  stale: boolean;
+  updatedBy: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  updatedAt: string;
+}
+
+export interface SystemProposal {
+  schemaVersion: 1;
+  epics: Array<{ title: string; outcome: string; personas: string[] }>;
+}

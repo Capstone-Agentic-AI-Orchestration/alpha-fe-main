@@ -24,6 +24,8 @@ import { AppearancePanel } from './AppearancePanel';
 export const SettingsView: React.FC = () => {
   const { settings, updateSettings, role, can } = useApp();
   const canManageSettings = can('manage_settings');
+  const canManageRuntimeSettings = can('manage_runtimes');
+  const canManageAutonomySettings = can('manage_agents');
   const canManageMcp = can('manage_mcp');
   const [requestedTab, setActiveTab] = useTabSessionState<'general' | 'appearance' | 'members' | 'project_access' | 'integrations' | 'keys' | 'runtimes' | 'autonomy'>('settings.section', 'general');
   const [savedSuccess, setSavedSuccess] = useState(false);
@@ -115,6 +117,11 @@ export const SettingsView: React.FC = () => {
     ? requestedTab
     : (tabs[0]?.id as typeof requestedTab);
   const isAccessTab = activeTab === 'members' || activeTab === 'project_access';
+  const canEditActiveSettings = activeTab === 'runtimes'
+    ? canManageRuntimeSettings
+    : activeTab === 'autonomy'
+      ? canManageAutonomySettings
+      : canManageSettings;
 
   return (
     <div className="h-full flex flex-col md:flex-row overflow-hidden bg-background">
@@ -314,7 +321,7 @@ export const SettingsView: React.FC = () => {
                 <input
                   type="text"
                   value={formData.localRuntimeUrl}
-                  disabled={!canManageSettings}
+                  disabled={!canManageRuntimeSettings}
                   onChange={(e) => setFormData({ ...formData, localRuntimeUrl: e.target.value })}
                   placeholder="http://localhost:11434"
                   className="w-full bg-surface-raised border border-control rounded-lg px-3.5 py-2 text-xs font-mono text-content focus:outline-none focus:border-focus"
@@ -328,6 +335,7 @@ export const SettingsView: React.FC = () => {
                 <p className="text-[11px] text-content-secondary">
                   When enabled, Alpha polls `http://localhost:11434/api/tags` and `http://localhost:1234/v1/models` every 30s to discover newly downloaded models.
                 </p>
+                {!canManageRuntimeSettings && <p className="text-[11px] text-content-muted">Runtime settings are read-only for PMs. A developer or admin manages host detection.</p>}
               </div>
             </div>
           )}
@@ -339,7 +347,7 @@ export const SettingsView: React.FC = () => {
                 <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1.5">Default Agent Autonomy Tier</label>
                 <select
                   value={formData.defaultAutonomy}
-                  disabled={!canManageSettings}
+                  disabled={!canManageAutonomySettings}
                   onChange={(e) => setFormData({ ...formData, defaultAutonomy: e.target.value as AgentAutonomyLevel })}
                   className="w-full bg-surface-raised border border-control rounded-lg px-3 py-2 text-xs text-content focus:outline-none focus:border-focus"
                 >
@@ -354,7 +362,7 @@ export const SettingsView: React.FC = () => {
                   <input
                     type="checkbox"
                     checked={formData.enableAutoTriage}
-                    disabled={!canManageSettings}
+                    disabled={!canManageAutonomySettings}
                     onChange={(e) => setFormData({ ...formData, enableAutoTriage: e.target.checked })}
                     className="accent-brand-500 rounded"
                   />
@@ -367,7 +375,7 @@ export const SettingsView: React.FC = () => {
                   <input
                     type="checkbox"
                     checked={formData.telemetryEnabled}
-                    disabled={!canManageSettings}
+                    disabled={!canManageAutonomySettings}
                     onChange={(e) => setFormData({ ...formData, telemetryEnabled: e.target.checked })}
                     className="accent-brand-500 rounded"
                   />
@@ -383,7 +391,7 @@ export const SettingsView: React.FC = () => {
           <div className="flex justify-end pt-2">
             <button
               type="submit"
-              disabled={!canManageSettings}
+              disabled={!canEditActiveSettings}
               className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-action hover:bg-action-hover text-on-action font-medium text-xs shadow-glow-brand transition-all"
             >
               <Save className="w-4 h-4" />

@@ -1,6 +1,7 @@
 /** The sections of a project's workspace, one per tab, in the order they are shown. */
 export const REPO_TABS = [
-  { id: 'overview', label: 'Overview' },
+  { id: 'overview', label: 'Board' },
+  { id: 'details', label: 'Details' },
   { id: 'code', label: 'Code' },
   { id: 'pulls', label: 'Pull requests' },
   { id: 'runs', label: 'Pipeline runs' },

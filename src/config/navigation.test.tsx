@@ -1,27 +1,30 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import type { NavigationTab, UserRole } from '@/shared/types';
 import { ARCHIVED_NAV_ITEMS, landingTab, NAV_ITEMS, ROLE_NAV, sectionsFor } from './navigation';
-import { AI_FEATURES_BY_ROLE, AI_NAV_TABS } from './features';
+import { AI_FEATURES_BY_ROLE, AI_NAV_TABS, CHAT_TAB_ENABLED } from './features';
+
+/** While the Chat tab is off, every role's navigation is the existing one without it. */
+const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB_ENABLED || tab !== 'chat');
 
 /**
  * Navigation destinations retained after archiving standalone specifications.
- * Project managers do not see the AI destinations while their AI features are off (config/features.ts).
+ * Project managers see the AI destinations in review-only mode (config/features.ts).
  */
 const existing: Record<UserRole, NavigationTab[]> = {
-  client: ['portal', 'intake', 'chat', 'settings'],
+  client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'chat', 'settings'],
-  pm: ['issues', 'projects', 'analytics', 'settings'],
-  admin: ['issues', 'projects', 'chat', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
+  pm: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
+  admin: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
  * Existing sidebar ordering differs from ROLE_NAV; preserve it independently.
- * Internal roles find Chat first, under Build, since it is where work is planned and built.
+ * Developer chat is the build workspace; PMs and admins review and publish from Projects.
  */
 const existingVisible: Record<UserRole, NavigationTab[]> = {
-  client: ['portal', 'intake', 'chat', 'settings'],
+  client: ['portal', 'intake', 'settings'],
   dev: ['chat', 'issues', 'projects', 'agents', 'runtimes', 'skills', 'settings'],
-  pm: ['projects', 'issues', 'analytics', 'settings'],
-  admin: ['chat', 'projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
+  pm: ['projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
+  admin: ['projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
 };
 describe('existing navigation compatibility', () => {
   it('shows Tasks while preserving the existing issues route identifier', () => {
@@ -37,17 +40,38 @@ describe('existing navigation compatibility', () => {
     for (const role of ['client', 'dev', 'pm'] as const) expect(ROLE_NAV[role]).not.toContain('operations');
   });
   it.each(Object.keys(existing) as UserRole[])('preserves every existing %s destination and landing page', role => {
-    expect(ROLE_NAV[role].filter(tab => tab !== 'tickets')).toEqual(existing[role]);
-    expect(landingTab(role)).toBe(existing[role][0]);
+    expect(ROLE_NAV[role].filter(tab => tab !== 'tickets')).toEqual(withoutHiddenChat(existing[role]));
+    expect(landingTab(role)).toBe(withoutHiddenChat(existing[role])[0]);
     const visible = sectionsFor(role).flatMap(group => group.items.map(item => item.id));
-    expect(visible.filter(tab => tab !== 'tickets')).toEqual(existingVisible[role]);
+    expect(visible.filter(tab => tab !== 'tickets')).toEqual(withoutHiddenChat(existingVisible[role]));
     expect(visible.every(tab => ROLE_NAV[role].includes(tab))).toBe(true);
     expect(visible.length).toBe(new Set(visible).size);
   });
-  it('adds Tickets only to PM navigation without replacing Tasks or Chat', () => {
+  it('adds Tickets only to PM navigation without replacing Tasks', () => {
     expect(ROLE_NAV.pm).toContain('tickets');
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('tickets');
     for (const role of ['client', 'dev', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('tickets');
+  });
+  it('shows the Chat tab to developers only', () => {
+    expect(CHAT_TAB_ENABLED).toBe(true);
+    expect(ROLE_NAV.dev).toContain('chat');
+    for (const role of ['client', 'pm', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('chat');
+    expect(NAV_ITEMS.some(item => item.id === 'chat')).toBe(true);
+  });
+
+  it('restores build chat for developers only, exactly as before, when the flag is turned back on', async () => {
+    vi.resetModules();
+    vi.doMock('./features', async importOriginal => ({ ...(await importOriginal<typeof import('./features')>()), CHAT_TAB_ENABLED: true }));
+    try {
+      const restored = await import('./navigation');
+      expect(restored.ROLE_NAV.dev).toEqual(existing.dev);
+      expect(restored.sectionsFor('dev').flatMap(group => group.items.map(item => item.id))).toEqual(existingVisible.dev);
+      expect(restored.landingTab('dev')).toBe('issues');
+      for (const role of ['client', 'pm', 'admin'] as const) expect(restored.ROLE_NAV[role]).not.toContain('chat');
+    } finally {
+      vi.doUnmock('./features');
+      vi.resetModules();
+    }
   });
   it('places the Operations Center in Administration for workspace admins only', () => {
     expect(NAV_ITEMS.find(item => item.id === 'operations')).toMatchObject({ title: 'Operations Center', section: 'administration' });
@@ -57,17 +81,20 @@ describe('existing navigation compatibility', () => {
   it('has no squads page; the Orchestrator assigns agents per task', () => {
     expect(NAV_ITEMS.some(item => (item.id as string) === 'squads')).toBe(false);
   });
-  it('hides active AI destinations for roles whose AI features are off', () => {
-    expect(AI_FEATURES_BY_ROLE.pm).toBe(false);
+  it('shows PM AI destinations while keeping their actions capability-gated', () => {
+    expect(AI_FEATURES_BY_ROLE.pm).toBe(true);
     for (const tab of AI_NAV_TABS) {
-      expect(ROLE_NAV.pm).not.toContain(tab);
+      if (tab === 'chat') {
+        expect(ROLE_NAV.pm).not.toContain(tab);
+        continue;
+      }
+      expect(ROLE_NAV.pm).toContain(tab);
       if (NAV_ITEMS.some(item => item.id === tab)) {
         expect(ROLE_NAV.dev).toContain(tab);
         expect(ROLE_NAV.admin).toContain(tab);
       }
     }
-    expect(sectionsFor('pm').map(group => group.section.id)).not.toEqual(expect.arrayContaining(['automation']));
-    expect(sectionsFor('pm').map(group => group.section.id)).not.toContain('operations');
+    expect(sectionsFor('pm').map(group => group.section.id)).not.toContain('automation');
   });
   it('archives specifications for every role and all shared menus', () => {
     for (const tab of ['documents'] as const) {
@@ -81,11 +108,10 @@ describe('existing navigation compatibility', () => {
     expect(NAV_ITEMS.some(item => (item.id as string) === 'live_build_room')).toBe(false);
     for (const role of Object.keys(existing) as UserRole[]) expect(ROLE_NAV[role]).not.toContain('live_build_room');
   });
-  it('places the agent directory under Resources without enabling PM AI access', () => {
-    for (const role of ['dev', 'admin'] as const) {
+  it('places the agent directory under Resources for every internal AI-enabled role', () => {
+    for (const role of ['dev', 'pm', 'admin'] as const) {
       expect(sectionsFor(role).find(group => group.section.id === 'resources')?.items.map(item => item.id)).toContain('agents');
       expect(sectionsFor(role).find(group => group.section.id === 'automation')?.items.map(item => item.id) ?? []).not.toContain('agents');
     }
-    expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).not.toContain('agents');
   });
 });

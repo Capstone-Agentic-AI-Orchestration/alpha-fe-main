@@ -1,13 +1,20 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useApp, useTabSessionState } from '@/app/AppContext';
+import { currentIssueId, useApp, useTabSessionState } from '@/app/AppContext';
 import { IssueStatus, IssuePriority, Issue
 } from '@/shared/types';
 import { PriorityBadge } from '@/shared/components/Badge';
 import { apiService, type IssueBuildStatus } from '@/shared/services/apiService';
 import { isDesktop } from '@/shared/desktop';
 import { ACTIVE_BUILD_STATUSES, BuildChip } from './BuildChip';
+import { BoardAttentionBanner, boardAttention } from './BoardAttentionBanner';
+import { ArchivedCardsPanel } from './ArchivedCardsPanel';
+import { useBoardAgentChanges } from '@/features/board-agent/useBoardAgentChanges';
+import { AgentActivityRail } from '@/features/board-agent/AgentActivityRail';
+import { cardMarks, ghostCards } from '@/features/board-agent/agentChanges';
+import { isEpic } from '@/features/board-build/epic';
+import { BoardAlphaPanel } from '@/features/board-build/BoardAlphaPanel';
 import { TaskDetailDrawer } from './TaskDetailDrawer';
-import { BUILD_DECISION_STATUSES, initialsOf, taskHandoffMessage } from './taskFlow';
+import { initialsOf, taskHandoffMessage } from './taskFlow';
 import {
   Kanban,
   List,
@@ -18,15 +25,20 @@ import {
   ChevronDown,
   ChevronRight,
   Filter,
-  SlidersHorizontal,
   Layers,
   FolderKanban,
   Minus,
   BarChart2,
   Flame,
   CheckSquare,
-  RefreshCw
+  RefreshCw,
+  Play,
+  CalendarDays,
+  GitBranch,
+  Archive,
+  Bot
 } from 'lucide-react';
+import { GanttView } from './GanttView';
 
 /** "just now", "3m", "2h" — a timestamp is noise in a toolbar. */
 function syncAgo(iso: string): string {
@@ -34,6 +46,20 @@ function syncAgo(iso: string): string {
   if (seconds < 45) return 'Just now';
   if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
   return `${Math.round(seconds / 3600)}h ago`;
+}
+
+function dueDateLabel(value: string): string {
+  const date = new Date(`${value.slice(0, 10)}T00:00:00.000Z`);
+  return Number.isFinite(date.getTime())
+    ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }).format(date)
+    : value;
+}
+
+function isOverdue(issue: Issue): boolean {
+  if (!issue.dueDate || issue.status === 'done') return false;
+  const now = new Date();
+  const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  return issue.dueDate < today;
 }
 
 interface IssuesViewProps {
@@ -62,12 +88,15 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const {
     issues,
     updateIssueStatus,
+    archiveIssue,
+    restoreIssue,
     projects,
     startIssueBuild,
     identity,
     localMode,
     createIssue,
     syncBoard,
+    refreshBoardState,
     syncing,
     lastSyncedAt,
     can,
@@ -85,9 +114,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
   const canManageIssues = can('manage_issues');
   const canRunBuilds = can('run_builds');
+  const issueById = useMemo(() => new Map(issues.map(issue => [issue.id, issue])), [issues]);
 
-  // Project managers plan on the kanban board, so it is where they land; everyone else starts on the list.
-  const [viewMode, setViewMode] = useTabSessionState<'board' | 'list'>(`${sessionPrefix}.viewMode`, role === 'pm' ? 'board' : 'list');
+  // PMs review product work on the kanban board; everyone else starts on the list.
+  const [viewMode, setViewMode] = useTabSessionState<'board' | 'list' | 'gantt'>(`${sessionPrefix}.viewMode`, role === 'pm' ? 'board' : 'list');
   /**
    * `mine` is issues you created, which is what My Issues always claimed to be.
    *
@@ -116,12 +146,26 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   /** The column an inline add is open in, or null. */
   const [quickAddStatus, setQuickAddStatus] = useState<IssueStatus | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useTabSessionState<string>(`${sessionPrefix}.quickAddTitle`, '');
+  const [showArchived, setShowArchived] = useState(false);
+  const [showAgentActivity, setShowAgentActivity] = useState(false);
+  // True while the Manager Agent is answering in the board panel: read its changes every 2 seconds.
+  const [agentWorking, setAgentWorking] = useState(false);
+  const agentBoard = useBoardAgentChanges(isDesktop && selectedProject !== 'all' ? selectedProject : null, {
+    fast: agentWorking,
+    onBoardChanged: () => { void refreshBoardState(); }
+  });
+  const agentMarks = useMemo(() => cardMarks(agentBoard.changes), [agentBoard.changes]);
+  const agentGhosts = useMemo(() => ghostCards(agentBoard.changes), [agentBoard.changes]);
+  const waitingCount = agentBoard.changes.filter(change => change.status === 'held').length;
   const [selectedPriority, setSelectedPriority] = useTabSessionState<string>(`${sessionPrefix}.priority`, 'all');
   const [showFilterBar, setShowFilterBar] = useState(false);
   const [draggedIssueId, setDraggedIssueId] = useState<string | null>(null);
   const [dragOverColumn, setDragOverColumn] = useState<IssueStatus | null>(null);
   const [pendingDoneIssueId, setPendingDoneIssueId] = useState<string | null>(null);
   const [pendingBuildIssueId, setPendingBuildIssueId] = useState<string | null>(null);
+  const [buildInstructions, setBuildInstructions] = useState('');
+  const [buildSubmitting, setBuildSubmitting] = useState(false);
+  useEffect(() => { setBuildInstructions(''); }, [pendingBuildIssueId]);
 
   /**
    * The latest Orchestrator build for each issue. Builds do not change an
@@ -129,13 +173,21 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
    * and to label each card. Desktop only: the cloud does not run builds.
    */
   const [issueBuilds, setIssueBuilds] = useState<Record<string, IssueBuildStatus>>({});
+  const [buildStatusFresh, setBuildStatusFresh] = useState(false);
+  /** Re-read build statuses now, so a decision made on a card moves it without waiting for the poll. */
+  const refreshIssueBuilds = () => {
+    if (!isDesktop) return;
+    apiService.getIssueBuildStatuses()
+      .then(rows => { setIssueBuilds(Object.fromEntries(rows.map(row => [row.issueId, row]))); setBuildStatusFresh(true); })
+      .catch(() => setBuildStatusFresh(false));
+  };
   useEffect(() => {
     let cancelled = false;
     const load = () => {
       apiService.getIssueBuildStatuses()
-        .then(rows => { if (!cancelled) setIssueBuilds(Object.fromEntries(rows.map(row => [row.issueId, row]))); })
+        .then(rows => { if (!cancelled) { setIssueBuilds(Object.fromEntries(rows.map(row => [row.issueId, row]))); setBuildStatusFresh(true); } })
         // An older daemon has no build-status route; cards simply show no chip.
-        .catch(() => undefined);
+        .catch(() => { if (!cancelled) setBuildStatusFresh(false); });
     };
     const timer = isDesktop ? window.setInterval(load, 10_000) : undefined;
     if (isDesktop) load();
@@ -146,9 +198,22 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   }, []);
   const hasActiveBuild = (issue: Issue) => ACTIVE_BUILD_STATUSES.has(issueBuilds[issue.id]?.status ?? '');
   const canStartBuild = (issue: Issue) =>
-    canRunBuilds && issue.status !== 'done' && issue.status !== 'agent_running' && !hasActiveBuild(issue);
+    canRunBuilds && buildStatusFresh && issue.status !== 'done' && !hasActiveBuild(issue) &&
+    !issueBuilds[issue.id]?.blocker && !['waiting', 'planning'].includes(issueBuilds[issue.id]?.request?.status ?? '');
   const boardColumnFor = (issue: Issue): IssueStatus =>
-    issue.status !== 'done' && issue.status !== 'review' && hasActiveBuild(issue) ? 'agent_running' : issue.status;
+    issue.status !== 'done' && hasActiveBuild(issue) ? 'agent_running' : issue.status;
+
+  /** Assigned to the person looking at the board. */
+  const isMine = (issue: Issue) => Boolean(identity && issue.assignedHuman && (
+    issue.assignedHuman === identity.login || issue.assignedHuman === identity.name
+  ));
+  /** A developer's own ready task gets a one-click build; the confirmation still applies. */
+  const canQuickBuild = (issue: Issue) => isDesktop && issue.status === 'todo' && isMine(issue) && canStartBuild(issue);
+
+  /** The developer's Alpha panel. Only people who run agents get it; PMs plan with New task. */
+  // Agents are for developers only; others see what agents did in Agent activity.
+  const canUseAlpha = isDesktop && role === 'dev' && canRunBuilds && can('manage_chat') && selectedProject !== 'all';
+  const [alphaOpen, setAlphaOpen] = useTabSessionState<boolean>(`${sessionPrefix}.alphaPanel`, false);
 
   // Collapsed status sections state (Jira style)
   const [collapsedSections, setCollapsedSections] = useTabSessionState<Record<string, boolean>>(`${sessionPrefix}.collapsedSections`, {});
@@ -252,6 +317,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
   /** Only when one project is named, because a create needs one. */
   const canQuickAdd = selectedProject !== 'all' && canManageIssues;
+  const openCreateIssue = () => {
+    const contextProjectId = lockedProjectId ?? (selectedProject !== 'all' ? selectedProject : projects[0]?.id);
+    if (contextProjectId) setTabSessionState(activeTabId, 'issueModal.project', contextProjectId);
+    onOpenNewIssue();
+  };
 
   /**
    * A title and a column is a whole issue.
@@ -282,14 +352,25 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     setQuickAddTitle('');
   };
 
-  const runningAgentsCount = useMemo(() => {
-    return issues.filter(i => i.status === 'agent_running' || hasActiveBuild(i)).length;
-  }, [issues]);
+  // Personal filters must not hide active work elsewhere in this project.
+  const runningAgentsCount = useMemo(
+    () => issues.filter(issue => (selectedProject === 'all' || issue.projectId === selectedProject)
+      && ['executing', 'validating', 'publishing'].includes(issueBuilds[issue.id]?.status ?? '')).length,
+    [issues, selectedProject, issueBuilds]
+  );
 
   const clearDragState = () => {
     setDraggedIssueId(null);
     setDragOverColumn(null);
   };
+
+  // Only from builds this desktop already polls; no extra requests.
+  const attention = useMemo(
+    () => buildStatusFresh
+      ? boardAttention(issues.filter(issue => selectedProject === 'all' || issue.projectId === selectedProject), issueBuilds)
+      : [],
+    [issues, selectedProject, issueBuilds, buildStatusFresh]
+  );
 
   const handleIssueDragStart = (event: React.DragEvent<HTMLElement>, issueId: string) => {
     event.dataTransfer.effectAllowed = 'move';
@@ -338,7 +419,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     setPendingDoneIssueId(null);
   };
 
-  const selectedIssue = issues.find(i => i.id === selectedIssueId);
+  // A just-created task changes id when it is saved; the open drawer follows it.
+  const selectedIssue = issues.find(i => i.id === selectedIssueId)
+    ?? (selectedIssueId ? issues.find(i => i.id === currentIssueId(selectedIssueId)) : undefined);
+  useEffect(() => {
+    if (selectedIssue && selectedIssueId && selectedIssue.id !== selectedIssueId) setSelectedIssueId(selectedIssue.id);
+  }, [selectedIssue?.id, selectedIssueId]);
 
   const getPriorityIcon = (priority: IssuePriority) => {
     switch (priority) {
@@ -383,10 +469,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   };
 
   const pendingBuildIssue = pendingBuildIssueId ? issues.find(issue => issue.id === pendingBuildIssueId) : undefined;
-  const confirmIssueBuild = () => {
-    if (!pendingBuildIssue) return;
-    setPendingBuildIssueId(null);
-    void startIssueBuild(pendingBuildIssue.id);
+  const confirmIssueBuild = async () => {
+    if (!pendingBuildIssue || buildSubmitting) return;
+    setBuildSubmitting(true);
+    try {
+      if (await startIssueBuild(pendingBuildIssue.id, buildInstructions)) setPendingBuildIssueId(null);
+      refreshIssueBuilds();
+    } finally { setBuildSubmitting(false); }
   };
   const chatAvailable = visibleTabs.includes('chat');
 
@@ -416,28 +505,57 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     setSelectedIssueId(null);
     setActiveTab('chat');
   };
-  // Project managers plan and approve; developers do the work, so they get the hand-off.
-  const canHandOff = chatAvailable && can('manage_chat') && (role === 'dev' || role === 'admin');
 
-  /** Tasks waiting on a person: a plan or finished build to approve, a stuck build, or work to review. */
-  const needsYou = useMemo(() => filteredIssues.filter(issue => {
-    const build = issueBuilds[issue.id];
-    if (build && BUILD_DECISION_STATUSES.has(build.status)) return can('run_builds');
-    return issue.status === 'review' && !hasActiveBuild(issue) && canManageIssues;
-  }), [filteredIssues, issueBuilds, canManageIssues]);
-  const needsYouLabel = (issue: Issue) => {
-    switch (issueBuilds[issue.id]?.status) {
-      case 'awaiting_plan_approval': return 'Plan ready to approve';
-      case 'awaiting_approval': return 'Build ready for review';
-      case 'blocked':
-      case 'recovery_required': return 'Build needs direction';
-      default: return 'Ready for review';
-    }
+  const removeTask = (issue: Issue) => {
+    archiveIssue(issue.id);
+    setSelectedIssueId(null);
   };
+
+  // Developers own implementation hand-offs; PMs review the resulting work.
+  const canHandOff = chatAvailable && can('manage_chat') && (role === 'dev' || role === 'admin');
+  const renderFilterToolbar = () => (
+    <div className="flex flex-wrap items-center gap-3 pt-2 text-xs">
+      <div className="relative min-w-[200px] flex-1">
+        <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-content-secondary" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search tasks, identifiers, labels..."
+          className="w-full rounded-lg border border-control bg-surface-raised py-1.5 pl-8 pr-3 text-xs text-content placeholder-content-muted focus:border-control focus:outline-none"
+        />
+      </div>
+
+      {!lockedProjectId && (
+        <select
+          value={selectedProject}
+          onChange={(e) => setSelectedProject(e.target.value)}
+          className="rounded-lg border border-control bg-surface-raised px-2.5 py-1.5 text-xs text-content-secondary focus:border-control focus:outline-none"
+        >
+          <option value="all">All Projects</option>
+          {projects.map(p => (
+            <option key={p.id} value={p.id}>{p.name}</option>
+          ))}
+        </select>
+      )}
+
+      <select
+        value={selectedPriority}
+        onChange={(e) => setSelectedPriority(e.target.value)}
+        className="rounded-lg border border-control bg-surface-raised px-2.5 py-1.5 text-xs text-content-secondary focus:border-control focus:outline-none"
+      >
+        <option value="all">All Priorities</option>
+        <option value="urgent">Urgent</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+    </div>
+  );
 
   return (
     <div className="h-full flex flex-col overflow-hidden bg-shell text-sm text-content">
-      {/* Header & Jira-like Control Bar */}
+      {/* Shared task controls stay in one place for list, Kanban, and Gantt views. */}
       <div className="space-y-2 border-b border-divider bg-shell px-5 py-3">
         {/* Top Row: Title, Filters & Controls */}
         <div className={`flex flex-col justify-between gap-4 ${embedded ? 'xl:flex-row xl:flex-wrap xl:items-center' : 'sm:flex-row sm:items-center'}`}>
@@ -470,7 +588,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     : 'border-transparent text-content-muted hover:text-content'
                 }`}
               >
-                {role === 'dev' ? 'Assigned project tasks' : 'All'}
+                {role === 'dev' ? 'Project tasks' : 'All'}
               </button>
               <button
                 onClick={() => setFilterCategory('mine')}
@@ -509,15 +627,30 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
           {/* Right: Actions, Status telemetry & View switches */}
           <div className="flex flex-wrap items-center gap-2.5">
+            {canUseAlpha && (
+              <button
+                type="button"
+                onClick={() => setAlphaOpen(!alphaOpen)}
+                aria-pressed={alphaOpen}
+                aria-controls="chat-side-panel"
+                title="Ask Alpha about tasks, get task suggestions, and start builds"
+                className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                  alphaOpen ? 'border-divider bg-selected text-selected-content' : 'border-divider text-content-secondary hover:bg-surface-high hover:text-content'
+                }`}
+              >
+                <Sparkles className="h-3.5 w-3.5" />
+                <span>Alpha</span>
+              </button>
+            )}
             {/* Active work remains visible as plain status text. */}
             <div className="flex items-center gap-1.5 px-1 py-1.5 text-xs text-content-muted">
               {runningAgentsCount > 0 ? (
                 <>
                   <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-                  <span className="text-status-info font-medium">{runningAgentsCount} building</span>
+                  <span className="text-status-info font-medium">{runningAgentsCount} builds running</span>
                 </>
               ) : (
-                <span>Nothing building</span>
+                <span>{buildStatusFresh ? 'No agents running' : 'Build status unavailable'}</span>
               )}
             </div>
 
@@ -534,16 +667,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <span>Filter</span>
             </button>
 
-            {/* Display Button */}
-            <button
-              onClick={() => setShowFilterBar(!showFilterBar)}
-              className="flex items-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium text-content-secondary hover:text-content hover:bg-surface-high transition-colors"
-            >
-              <SlidersHorizontal className="w-3.5 h-3.5" />
-              <span>Display</span>
-            </button>
-
-            {/* View Mode Toggle: Board vs List */}
+            {/* Project planning has a timeline view over the same task records. */}
             <div className="flex items-center text-xs">
               <button
                 onClick={() => setViewMode('list')}
@@ -565,6 +689,17 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 <Kanban className="w-3.5 h-3.5" />
                 <span>Board</span>
               </button>
+              {lockedProjectId && (
+                <button
+                  onClick={() => setViewMode('gantt')}
+                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md font-medium transition-colors ${
+                    viewMode === 'gantt' ? 'bg-surface-raised text-content' : 'text-content-muted hover:text-content'
+                  }`}
+                  title="Gantt View"
+                >
+                  <span>Gantt</span>
+                </button>
+              )}
             </div>
 
             {/*
@@ -599,8 +734,33 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             )}
 
             {/* New Task Button */}
+            {isDesktop && selectedProject !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setShowAgentActivity(open => !open)}
+                aria-pressed={showAgentActivity}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-divider text-content-secondary hover:text-content hover:bg-surface-high font-medium text-xs transition-colors"
+              >
+                <Bot className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Agent activity</span>
+                {waitingCount > 0 && (
+                  <span className="rounded-full bg-status-warning-subtle px-1.5 text-[10px] font-semibold text-status-warning" aria-label={`${waitingCount} waiting for confirmation`}>{waitingCount}</span>
+                )}
+              </button>
+            )}
+
             <button
-              onClick={onOpenNewIssue}
+              type="button"
+              onClick={() => setShowArchived(open => !open)}
+              aria-pressed={showArchived}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-divider text-content-secondary hover:text-content hover:bg-surface-high font-medium text-xs transition-colors"
+            >
+              <Archive className="w-3.5 h-3.5" aria-hidden="true" />
+              <span className="hidden sm:inline">Archived</span>
+            </button>
+
+            <button
+              onClick={openCreateIssue}
               className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-md bg-action hover:bg-action-hover text-on-action font-medium text-xs transition-colors"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -610,92 +770,69 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
         </div>
 
         {/* Collapsible Filter Toolbar */}
-        {showFilterBar && (
-          <div className="flex flex-wrap items-center gap-3 pt-2 text-xs">
-            <div className="relative flex-1 min-w-[200px]">
-              <Search className="w-3.5 h-3.5 text-content-secondary absolute left-3 top-2.5" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search tasks, identifiers, labels..."
-                className="w-full bg-surface-raised border border-control rounded-lg pl-8 pr-3 py-1.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control"
-              />
-            </div>
+        {showFilterBar && renderFilterToolbar()}
 
-            {/*
-              Hidden when the page has already chosen. Offering "All Projects"
-              inside one project's page is an invitation to navigate somewhere
-              the surrounding chrome still claims you are not.
-            */}
-            {!lockedProjectId && (
-              <select
-                value={selectedProject}
-                onChange={(e) => setSelectedProject(e.target.value)}
-                className="bg-surface-raised border border-control rounded-lg px-2.5 py-1.5 text-xs text-content-secondary focus:outline-none focus:border-control"
-              >
-                <option value="all">All Projects</option>
-                {projects.map(p => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            )}
-
-            <select
-              value={selectedPriority}
-              onChange={(e) => setSelectedPriority(e.target.value)}
-              className="bg-surface-raised border border-control rounded-lg px-2.5 py-1.5 text-xs text-content-secondary focus:outline-none focus:border-control"
-            >
-              <option value="all">All Priorities</option>
-              <option value="urgent">Urgent</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-
-          </div>
-        )}
+        <BoardAttentionBanner
+          items={attention}
+          canManageIssues={canManageIssues}
+          onOpenIssue={setSelectedIssueId}
+          onMoveToTodo={issueId => updateIssueStatus(issueId, 'todo')}
+        />
       </div>
-
-      {needsYou.length > 0 && (
-        <div role="status" className="flex flex-wrap items-center gap-x-5 gap-y-1.5 border-b border-divider bg-status-warning-subtle px-5 py-2 text-[12.5px]">
-          <span className="inline-flex items-center gap-2 font-semibold text-status-warning">
-            <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-status-warning" />
-            {needsYou.length === 1 ? '1 task needs you' : `${needsYou.length} tasks need you`}
-          </span>
-          {needsYou.slice(0, 4).map(issue => (
-            <button key={issue.id} type="button" onClick={() => setSelectedIssueId(issue.id)} className="inline-flex items-center gap-2 text-content-secondary hover:text-content">
-              <span className="font-mono text-[11px] text-content-muted">{issue.identifier}</span>
-              {needsYouLabel(issue)}
-            </button>
-          ))}
-          {needsYou.length > 4 && <span className="text-content-muted">and {needsYou.length - 4} more</span>}
-        </div>
-      )}
 
       {/* Main Issue Canvas */}
       <div className="flex-1 flex overflow-hidden relative bg-surface">
+        {showArchived && (
+          <ArchivedCardsPanel
+            projectId={selectedProject}
+            canManageIssues={canManageIssues}
+            onRestore={restoreIssue}
+            onClose={() => setShowArchived(false)}
+          />
+        )}
+        {showAgentActivity && selectedProject !== 'all' && (
+          <AgentActivityRail
+            projectId={selectedProject}
+            changes={agentBoard.changes}
+            login={identity?.login}
+            busyId={agentBoard.busyId}
+            error={agentBoard.error}
+            onDecide={(id, action) => void agentBoard.decide(id, action)}
+            onOpenIssue={setSelectedIssueId}
+            onClose={() => setShowAgentActivity(false)}
+          />
+        )}
         {viewMode === 'board' ? (
           /* Kanban Board Mode */
           <div className="flex flex-1 overflow-x-auto">
             {columns.map(column => {
               const colIssues = filteredIssues.filter(i => boardColumnFor(i) === column.id);
+              const readOnlyBuildColumn = column.id === 'agent_running' && !canRunBuilds;
 
               return (
                 <div
                   key={column.id}
                   onDragOver={event => {
+                    if (readOnlyBuildColumn) {
+                      event.dataTransfer.dropEffect = 'none';
+                      return;
+                    }
                     event.preventDefault();
                     event.dataTransfer.dropEffect = 'move';
                     setDragOverColumn(column.id);
                   }}
-                  onDrop={event => handleIssueDrop(event, column.id)}
+                  onDrop={event => {
+                    if (!readOnlyBuildColumn) handleIssueDrop(event, column.id);
+                  }}
                   className={`flex w-[272px] flex-shrink-0 flex-col border-r border-divider transition-colors ${
+                    readOnlyBuildColumn ? 'cursor-not-allowed' : ''
+                  } ${
                     dragOverColumn === column.id ? 'bg-selected' : ''
                   }`}
+                  aria-disabled={readOnlyBuildColumn || undefined}
                   aria-label={
                     column.id === 'agent_running'
-                      ? 'Drop tasks here to start an Orchestrator build'
+                      ? canRunBuilds ? 'Drop tasks here to start an Orchestrator build' : 'Tasks currently being built by developers'
                       : column.id === 'done'
                         ? 'Drop tasks here to request confirmation before marking done'
                         : `Drop tasks here to move them to ${column.title}`
@@ -713,12 +850,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       always supplies it; on the global board it appears the
                       moment you filter to a single project.
                     */}
-                    {canManageIssues && (
+                    {canManageIssues && column.id !== 'agent_running' && (
                       <button
                         onClick={() =>
                           canQuickAdd
                             ? (setQuickAddStatus(column.id), setQuickAddTitle(''))
-                            : onOpenNewIssue()
+                            : openCreateIssue()
                         }
                         className="text-content-muted hover:text-content p-1 rounded hover:bg-surface-high"
                         title={canQuickAdd ? 'Add a task to this column' : 'New task'}
@@ -764,29 +901,50 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                     )}
                     {colIssues.map(issue => {
                       const completedSubtasks = issue.subtasks.filter(s => s.completed).length;
+                      const quickBuild = canQuickBuild(issue);
+                      const parentIssue = issue.parentIssueId ? issueById.get(issue.parentIssueId) : undefined;
+                      const agentMark = agentMarks.get(issue.id);
 
                       return (
+                        <div key={issue.id}>
                         <button
                           type="button"
-                          key={issue.id}
                           onClick={() => setSelectedIssueId(issue.id)}
                           draggable
                           onDragStart={event => handleIssueDragStart(event, issue.id)}
                           onDragEnd={clearDragState}
                           aria-pressed={selectedIssueId === issue.id}
-                          className={`block w-full cursor-grab rounded-lg border bg-surface-raised px-3 pb-2.5 pt-3 text-left transition-colors active:cursor-grabbing ${
+                          className={`block w-full cursor-grab border bg-surface-raised px-3 pb-2.5 pt-3 text-left transition-colors active:cursor-grabbing ${quickBuild ? 'rounded-t-lg' : 'rounded-lg'} ${
                             draggedIssueId === issue.id ? 'opacity-50' : ''
                           } ${
                             selectedIssueId === issue.id
                               ? 'border-link ring-1 ring-selected'
-                              : 'border-divider hover:border-control hover:bg-surface-high'
+                              : agentMark?.kind === 'held'
+                                ? 'border-status-warning-border ring-1 ring-status-warning-border'
+                                : agentMark?.kind === 'recent'
+                                  ? 'border-selected-content motion-safe:animate-[pulse_2s_ease-in-out_2] hover:bg-surface-high'
+                                  : 'border-divider hover:border-control hover:bg-surface-high'
                           }`}
                         >
+                          {agentMark && (
+                            <span className={`mb-1.5 flex items-center gap-1 text-[10.5px] font-medium ${agentMark.kind === 'held' ? 'text-status-warning' : 'text-selected-content'}`}>
+                              <Bot aria-hidden="true" className="h-3 w-3" />{agentMark.label}
+                            </span>
+                          )}
                           <span className="flex items-center justify-between gap-2">
-                            <span className="font-mono text-[11px] text-content-muted">{issue.identifier}</span>
+                            <span className="flex items-center gap-1.5">
+                              <span className="font-mono text-[11px] text-content-muted">{issue.identifier}</span>
+                              {isEpic(issue.labels) && <span className="rounded bg-selected px-1.5 text-[10.5px] font-semibold text-selected-content">Epic</span>}
+                            </span>
                             <PriorityBadge priority={issue.priority} showLabel={false} />
                           </span>
                           <span className="mb-2.5 mt-1.5 block text-[13px] font-medium leading-snug text-content line-clamp-2">{issue.title}</span>
+                          {parentIssue && (
+                            <span className="mb-1.5 inline-flex max-w-full items-center gap-1 truncate text-[10.5px] text-content-muted" title={`Part of ${parentIssue.identifier}: ${parentIssue.title}`}>
+                              <GitBranch aria-hidden="true" className="h-3 w-3 shrink-0" />
+                              <span className="truncate">Part of {parentIssue.identifier}</span>
+                            </span>
+                          )}
                           <span className="flex min-h-5 items-center gap-2.5 text-[11.25px] text-content-muted">
                             {issue.subtasks.length > 0 && (
                               <span className="inline-flex items-center gap-1.5 tabular-nums" title={`${completedSubtasks} of ${issue.subtasks.length} subtasks done`}>
@@ -796,18 +954,49 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                                 {completedSubtasks}/{issue.subtasks.length}
                               </span>
                             )}
+                            {issue.dueDate && (
+                              <span className={`inline-flex shrink-0 items-center gap-1 ${isOverdue(issue) ? 'text-status-danger' : 'text-content-muted'}`} title={`Due date: ${dueDateLabel(issue.dueDate)}`}>
+                                <CalendarDays aria-hidden="true" className="h-3 w-3" />{dueDateLabel(issue.dueDate)}
+                              </span>
+                            )}
                             <BuildChip build={issueBuilds[issue.id]} />
-                            {!issueBuilds[issue.id] && issue.labels[0] && <span className="truncate">{issue.labels[0]}</span>}
+                            {!issueBuilds[issue.id] && issue.labels.find(label => !isEpic([label])) && <span className="truncate">{issue.labels.find(label => !isEpic([label]))}</span>}
                             <span className="ml-auto">{getAssigneeVisual(issue)}</span>
                           </span>
                         </button>
+                        {quickBuild && (
+                          <button
+                            type="button"
+                            onClick={() => setPendingBuildIssueId(issue.id)}
+                            className="flex w-full items-center justify-center gap-1.5 rounded-b-lg border border-t-0 border-divider bg-surface-raised py-1.5 text-[11.5px] font-semibold text-link hover:bg-surface-high"
+                          >
+                            <Play aria-hidden="true" className="h-3 w-3" /> Start build
+                          </button>
+                        )}
+                        </div>
                       );
                     })}
+                    {agentGhosts.filter(ghost => ghost.column === column.id).map(ghost => (
+                      <div key={ghost.changeId} className="rounded-lg border border-dashed border-status-warning-border bg-surface px-3 py-2.5 text-xs opacity-80">
+                        <span className="block font-medium text-content line-clamp-2">{ghost.title}</span>
+                        <span className="mt-1 flex items-center gap-1 text-[10.5px] text-status-warning">
+                          <Bot aria-hidden="true" className="h-3 w-3" />{ghost.label}, waiting for confirmation
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
             })}
           </div>
+        ) : viewMode === 'gantt' && lockedProjectId ? (
+          <GanttView
+            project={projects.find(project => project.id === lockedProjectId)}
+            issues={filteredIssues}
+            canManageIssues={canManageIssues}
+            onOpenIssue={setSelectedIssueId}
+            showProjectIdentity={false}
+          />
         ) : (
           /* Jira-like Grouped Status List View (Matching Exact Screenshot) */
           <div className="flex-1 space-y-2.5 overflow-y-auto p-4 sm:px-5 sm:py-4">
@@ -859,6 +1048,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       ) : (
                         groupIssues.map(issue => {
                           const project = projects.find(p => p.id === issue.projectId);
+                          const parentIssue = issue.parentIssueId ? issueById.get(issue.parentIssueId) : undefined;
                           const totalSubtasks = issue.subtasks.length;
                           const completedSubtasks = issue.subtasks.filter(s => s.completed).length;
 
@@ -885,6 +1075,11 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                                 <span className="text-xs sm:text-sm font-medium text-content truncate max-w-2xl group-hover:text-link-hover transition-colors">
                                   {issue.title}
                                 </span>
+                                {parentIssue && (
+                                  <span className="inline-flex shrink-0 items-center gap-1 text-[10.5px] text-content-muted" title={`Part of ${parentIssue.identifier}: ${parentIssue.title}`}>
+                                    <GitBranch aria-hidden="true" className="h-3 w-3" />{parentIssue.identifier}
+                                  </span>
+                                )}
 
                                 {/* Subtasks fraction ring if subtasks exist */}
                                 {totalSubtasks > 0 && (
@@ -906,6 +1101,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 
                               {/* Right: Project folder tag & Assignee visual */}
                               <div className="flex items-center gap-4 flex-shrink-0">
+                                {issue.dueDate && (
+                                  <span className={`inline-flex items-center gap-1.5 text-xs ${isOverdue(issue) ? 'text-status-danger' : 'text-content-secondary'}`} title={`Due date: ${dueDateLabel(issue.dueDate)}`}>
+                                    <CalendarDays aria-hidden="true" className="h-3.5 w-3.5 text-content-muted" />
+                                    Due {dueDateLabel(issue.dueDate)}
+                                  </span>
+                                )}
                                 {project && (
                                   <div className="flex items-center gap-1.5 text-xs text-content-secondary font-mono">
                                     <FolderKanban className="w-3.5 h-3.5 text-content-muted" />
@@ -930,25 +1131,55 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
           </div>
         )}
 
+        {canUseAlpha && alphaOpen && (
+          <BoardAlphaPanel
+            key={selectedProject}
+            projectId={selectedProject}
+            projectKey={projects.find(project => project.id === selectedProject)?.key}
+            issues={issues.filter(issue => issue.projectId === selectedProject)}
+            columns={columns}
+            columnFor={boardColumnFor}
+            canStartBuild={canQuickBuild}
+            onStartBuild={issue => setPendingBuildIssueId(issue.id)}
+            onOpenIssue={setSelectedIssueId}
+            onClose={() => setAlphaOpen(false)}
+            onWorkingChange={working => {
+              setAgentWorking(working);
+              // The turn ended: read what it changed now rather than at the next poll.
+              if (!working) { void agentBoard.reload(); void refreshBoardState(); }
+            }}
+            waiting={agentBoard.changes.filter(change => change.status === 'held')}
+            login={identity?.login}
+            decidingId={agentBoard.busyId}
+            onDecide={(id, action) => void agentBoard.decide(id, action)}
+          />
+        )}
+
         {selectedIssue && (
           <TaskDetailDrawer
             issue={selectedIssue}
             sessionPrefix={sessionPrefix}
-            build={issueBuilds[selectedIssue.id]}
+            build={{ ...(issueBuilds[selectedIssue.id] ?? { issueId: selectedIssue.id, projectId: selectedIssue.projectId, runId: '', status: 'none', updatedAt: '' }), fresh: buildStatusFresh }}
             buildActive={hasActiveBuild(selectedIssue)}
             canStartBuild={canStartBuild(selectedIssue)}
             onClose={() => setSelectedIssueId(null)}
+            onRemove={removeTask}
             onRequestStatus={requestIssueStatusChange}
             onPlanBuild={issue => setPendingBuildIssueId(issue.id)}
             onOpenBuildChat={chatAvailable && buildChatFor(selectedIssue) ? openBuildChat : undefined}
             onHandOff={canHandOff ? handOffToChat : undefined}
+            onBuildChanged={refreshIssueBuilds}
+            onOpenTask={(id, projectId) => { setSelectedProject(projectId); setSelectedIssueId(id); }}
+            agentChanges={agentBoard.changes.filter(change => change.issueId === selectedIssue.id)}
+            agentDecidingId={agentBoard.busyId}
+            onAgentDecide={(id, action) => void agentBoard.decide(id, action)}
           />
         )}
       </div>
 
       {pendingBuildIssue && (
         <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPendingBuildIssueId(null)} />
+          <button type="button" aria-label="Close plan request" disabled={buildSubmitting} className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setPendingBuildIssueId(null)} />
           <div role="dialog" aria-modal="true" aria-labelledby="confirm-build-title" className="relative w-full max-w-md rounded-2xl border border-divider bg-surface-raised p-6 shadow-2xl">
             <div className="flex items-start gap-3">
               <div className="mt-0.5 flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-selected text-selected-content">
@@ -956,19 +1187,23 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               </div>
               <div className="space-y-1.5">
                 <h2 id="confirm-build-title" className="text-base font-semibold text-content">
-                  Build task {pendingBuildIssue.identifier} with the Orchestrator?
+                  Plan build for {pendingBuildIssue.identifier}
                 </h2>
                 <p className="text-sm leading-relaxed text-content-secondary">
-                  Alpha opens a project chat for this task and plans the work, choosing an agent for each task by role. Nothing changes in the code until you review the plan and choose <span className="font-semibold text-content">Start planned work</span>.
+                  Alpha plans this task against its acceptance checklist. Review and approve the plan in the Build tab before code changes begin.
                 </p>
               </div>
             </div>
+            <label htmlFor="build-instructions" className="mt-4 block text-sm font-medium text-content-secondary">Developer instructions <span className="font-normal text-content-muted">(optional)</span></label>
+            <textarea id="build-instructions" rows={3} maxLength={1500} value={buildInstructions} onChange={event => setBuildInstructions(event.target.value)}
+              placeholder="Add technical context, implementation guidance, or constraints for this task."
+              className="mt-2 w-full resize-y rounded-md border border-control bg-well px-3 py-2 text-sm text-content placeholder-content-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" />
             <div className="mt-6 flex justify-end gap-2">
-              <button type="button" onClick={() => setPendingBuildIssueId(null)} className="rounded-lg border border-divider px-3.5 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content">
+              <button type="button" disabled={buildSubmitting} onClick={() => setPendingBuildIssueId(null)} className="rounded-lg border border-divider px-3.5 py-2 text-sm font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content">
                 Cancel
               </button>
-              <button type="button" onClick={confirmIssueBuild} className="rounded-lg bg-action px-3.5 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover">
-                Plan the build
+              <button type="button" disabled={buildSubmitting} onClick={() => void confirmIssueBuild()} className="rounded-lg bg-action px-3.5 py-2 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover">
+                {buildSubmitting ? 'Requesting plan…' : 'Plan build'}
               </button>
             </div>
           </div>

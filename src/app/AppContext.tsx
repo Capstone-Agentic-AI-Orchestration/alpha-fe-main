@@ -1,3 +1,4 @@
+import { CHAT_TAB_ENABLED } from '@/config/features';
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { ROLE_NAV } from '@/config/navigation';
 import {
@@ -111,6 +112,8 @@ export interface RunPlanDraft {
   updatedAt: string;
 }
 
+export type ChatThreadsLoadState = 'idle' | 'loading' | 'ready' | 'stale' | 'error';
+
 interface AppContextType {
   /** Reachability of the local Alpha daemon. Agents cannot run while 'offline'. */
   serverStatus: ServerStatus;
@@ -138,8 +141,14 @@ interface AppContextType {
   createIssue: (issue: Omit<Issue, 'id' | 'identifier' | 'createdAt' | 'updatedAt' | 'comments' | 'subtasks'> & { subtasks?: string[] }, options?: CreateIssueOptions) => Issue | null;
   updateIssueStatus: (id: string, status: IssueStatus) => void;
   updateIssue: (id: string, updates: Partial<Issue>) => void;
+  /** Show a task the server already saved (for example after approving its spec) without writing it again. */
+  applySavedIssue: (issue: Issue) => void;
   addIssueComment: (issueId: string, comment: IssueComment) => void;
   deleteIssue: (id: string) => void;
+  /** Take a task off the board, keeping its history. */
+  archiveIssue: (id: string) => void;
+  /** Put an archived task back on the board. */
+  restoreIssue: (issue: Issue) => Promise<boolean>;
   runAgentOnIssue: (issueId: string, agentId?: string) => void;
   prototypeRuns: PrototypeRun[];
   runSetupIssueId: string | null;
@@ -187,7 +196,8 @@ interface AppContextType {
    * Start an Orchestrator build for a board issue. Opens a project chat thread
    * for it and returns that thread's id, or null when the build cannot start.
    */
-  startIssueBuild: (issueId: string) => Promise<string | null>;
+  /** Plan a board task's build in the task's private thread; planChanges asks for a different plan. */
+  startIssueBuild: (issueId: string, planChanges?: string) => Promise<string | null>;
   
   // Runtimes
   runtimes: RuntimeEngine[];
@@ -222,6 +232,10 @@ interface AppContextType {
   
   // Chat
   chatThreads: ChatThread[];
+  /** Whether the project conversation list is authoritative, stale, or unavailable. */
+  chatThreadsLoadState: ChatThreadsLoadState;
+  chatThreadsError: string | null;
+  retryChatThreads: () => Promise<void>;
   activeThreadId: string | null;
   setActiveThreadId: (id: string | null) => void;
   createNewThread: (title?: string, projectId?: string) => string;
@@ -268,6 +282,8 @@ interface AppContextType {
   refreshIdentity: () => Promise<void>;
   /** Pull the board from GitHub now. */
   syncBoard: () => Promise<void>;
+  /** Fetch only the board changes since the last read (after an agent turn), without a GitHub sync. */
+  refreshBoardState: () => Promise<void>;
   /** When the last successful sync finished, or null if none has. */
   lastSyncedAt: string | null;
   syncing: boolean;
@@ -320,6 +336,10 @@ export type Capability =
   | 'manage_runtimes'
   | 'view_runs'
   | 'approve_runs'
+  /** Approve a reviewed Orchestrator build and open its code pull request(s). */
+  | 'publish_build'
+  /** Enable, pause, and resume the reviewed delivery pipeline to UAT. */
+  | 'control_uat_delivery'
   | 'manage_chat'
   | 'view_integrations'
   | 'manage_integrations'
@@ -345,7 +365,7 @@ export type Capability =
 const KNOWN_ROLES: UserRole[] = ['client', 'dev', 'pm', 'admin'];
 
 const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
-  client: ['view_identity', 'view_projects', 'manage_chat', 'approve_scope', 'submit_intake'],
+  client: ['view_identity', 'view_projects', 'approve_scope', 'submit_intake'],
   dev: [
     'view_identity',
     'view_projects',
@@ -363,6 +383,8 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'view_runtimes',
     'manage_runtimes',
     'view_runs',
+    'publish_build',
+    'control_uat_delivery',
     'manage_chat',
     'view_integrations',
     'sync_board',
@@ -379,27 +401,20 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'provision_repositories',
     'view_issues',
     'manage_issues',
+    // PMs can inspect the agent roster and build evidence, but execution and
+    // runtime configuration belong to developers and admins.
     'view_agents',
-    // Project managers staff the agents used by their PM-owned projects.
-    'manage_agents',
-    'run_builds',
     'view_skills',
-    'manage_skills',
     'view_runtimes',
-    'manage_runtimes',
     'view_runs',
-    'approve_runs',
-    'manage_chat',
+    'publish_build',
+    'control_uat_delivery',
     'manage_documents',
     'view_integrations',
     'manage_integrations',
-    'manage_deployments',
-    'manage_preview_env',
-    'manage_mcp',
     'sync_board',
     'manage_settings',
     'create_project',
-    'approve_production',
     'contact_client',
     'bind_workspace',
     'view_members',
@@ -424,7 +439,8 @@ const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = {
     'manage_runtimes',
     'view_runs',
     'approve_runs',
-    'manage_chat',
+    'publish_build',
+    'control_uat_delivery',
     'manage_documents',
     'approve_scope',
     'view_integrations',
@@ -462,6 +478,8 @@ export interface CreateIssueOptions {
    * needs both, so this waits for the save rather than building the placeholder.
    */
   planBuild?: boolean;
+  /** Called with the saved task, which has its real id and identifier. */
+  onSaved?: (issue: Issue) => void;
 }
 
 export interface ChatSendOptions {
@@ -475,6 +493,15 @@ export interface ChatSendOptions {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+/**
+ * A new task's temporary id, mapped to the id the daemon saved it under.
+ *
+ * A task published to GitHub is saved under GitHub's id, so anything still
+ * holding the temporary one, such as an open drawer, follows it here.
+ */
+const savedIssueIds = new Map<string, string>();
+export const currentIssueId = (id: string): string => savedIssueIds.get(id) ?? id;
 export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
@@ -659,6 +686,20 @@ ${e.detail}`;
     }
   }, [activeWorkspaceId, catchUpWorkspaceBoard, localMode, role]);
   syncBoardRef.current = syncBoard;
+
+  const refreshBoardState = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+    const workspaceId = activeWorkspaceId;
+    try {
+      const result = await catchUpWorkspaceBoard(workspaceId);
+      if (workspaceId !== activeWorkspaceId) return;
+      setProjects(result.state.projects);
+      setAgents(result.state.agents);
+      setIssues(result.state.issues);
+    } catch {
+      // The regular board catch-up will try again.
+    }
+  }, [activeWorkspaceId, catchUpWorkspaceBoard]);
 
   /**
    * The board, as it moves.
@@ -910,7 +951,19 @@ ${e.detail}`;
   const [settings, setSettings] = useState<WorkspaceSettings>(() =>
     normalizeSettings(loadFromStorage('settings', defaultSettings))
   );
-  const [chatThreads, setChatThreads] = useState<ChatThread[]>(() => loadFromStorage<ChatThread[]>('chat_threads', []));
+  /** Do not persist a fallback empty list over a workspace cache before the daemon answers. */
+  const chatCacheWriteEnabledRef = useRef(false);
+  const chatLoadGenerationRef = useRef(0);
+  const [chatThreads, setChatThreadsState] = useState<ChatThread[]>(() =>
+    loadFromStorage<ChatThread[]>(initialWorkspaceCacheKey('chat_threads'), [])
+  );
+  const chatThreadsRef = useRef(chatThreads);
+  chatThreadsRef.current = chatThreads;
+  /** Local mutations are still persisted, even after a temporary read failure. */
+  const setChatThreads = useCallback((next: React.SetStateAction<ChatThread[]>) => {
+    chatCacheWriteEnabledRef.current = true;
+    setChatThreadsState(next);
+  }, []);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   /**
    * Threads whose messages have been fetched this session.
@@ -920,7 +973,9 @@ ${e.detail}`;
    * would re-fetch on every switch.
    */
   const loadedThreadsRef = useRef<Set<string>>(new Set());
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage<ChatMessage[]>('chat_messages', []));
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() =>
+    loadFromStorage<ChatMessage[]>(initialWorkspaceCacheKey('chat_messages'), [])
+  );
   const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() =>
     normalizeLegacyPrototypeRuns(loadFromStorage<PrototypeRun[]>(initialWorkspaceCacheKey('prototype_runs'), []))
   );
@@ -979,6 +1034,11 @@ ${e.detail}`;
   const [chatTypingByThread, setChatTypingByThread] = useState<Record<string, boolean>>({});
   const isAgentTyping = activeThreadId ? Boolean(chatTypingByThread[activeThreadId]) : false;
   const [activeChatAgentId, setActiveChatAgentId] = useState<string | null>(null);
+  const [chatThreadsLoadState, setChatThreadsLoadState] = useState<ChatThreadsLoadState>(
+    activeWorkspaceId ? 'loading' : 'idle'
+  );
+  const [chatThreadsError, setChatThreadsError] = useState<string | null>(null);
+  const chatRetryIdentityRef = useRef<string | null>(null);
 
   /* ---------------------------------------------------------------------------
    * Daemon hydration
@@ -992,6 +1052,37 @@ ${e.detail}`;
    * whenever the daemon is reachable.
    * ------------------------------------------------------------------------ */
   const [serverStatus, setServerStatus] = useState<ServerStatus>('connecting');
+
+  const describeChatLoadError = (error: unknown): string => {
+    const message = error instanceof Error ? error.message : String(error);
+    const compact = message.replace(/\s+/g, ' ').trim();
+    return compact.length > 240 ? `${compact.slice(0, 240)}…` : compact || 'The conversation service did not return a reason.';
+  };
+
+  const applyChatThreadsSnapshot = useCallback((threads: ChatThread[]) => {
+    chatCacheWriteEnabledRef.current = true;
+    setChatThreadsState(previous => mergeThreadsWithCachedMessages(threads, previous));
+    setChatThreadsLoadState('ready');
+    setChatThreadsError(null);
+  }, []);
+
+  const retryChatThreads = useCallback(async () => {
+    const workspaceId = activeWorkspaceRef.current;
+    if (!workspaceId || localMode || !ROLE_CAPABILITIES[role].includes('manage_chat')) return;
+
+    const generation = ++chatLoadGenerationRef.current;
+    setChatThreadsLoadState('loading');
+    setChatThreadsError(null);
+    try {
+      const threads = await apiService.getChatThreads();
+      if (generation !== chatLoadGenerationRef.current || activeWorkspaceRef.current !== workspaceId) return;
+      applyChatThreadsSnapshot(threads);
+    } catch (error) {
+      if (generation !== chatLoadGenerationRef.current || activeWorkspaceRef.current !== workspaceId) return;
+      setChatThreadsError(describeChatLoadError(error));
+      setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
+    }
+  }, [applyChatThreadsSnapshot, localMode, role]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1024,18 +1115,27 @@ ${e.detail}`;
       if (!selectedWorkspaceId) {
         if (!cancelled) {
           setServerStatus('offline');
+          setChatThreadsLoadState('idle');
+          setChatThreadsError(null);
           setWorkspaceLoading(false);
         }
         return;
       }
 
+      chatCacheWriteEnabledRef.current = false;
+      const hydrationGeneration = ++chatLoadGenerationRef.current;
+      setChatThreadsLoadState('loading');
+      setChatThreadsError(null);
+
       let result;
       try {
-        result = await fetchServerSnapshot(selectedWorkspaceId);
+        result = await fetchServerSnapshot(selectedWorkspaceId, { includeChat: ROLE_CAPABILITIES[role].includes('manage_chat') });
       } catch (error) {
         console.warn('[sync] workspace hydration failed:', error instanceof Error ? error.message : error);
         if (!cancelled) {
           setServerStatus('offline');
+          setChatThreadsError(describeChatLoadError(error));
+          setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
           setWorkspaceLoading(false);
         }
         return;
@@ -1065,10 +1165,14 @@ ${e.detail}`;
        * ask for it back. Merging keeps what is in hand; `loadThreadMessages`
        * fetches the rest when a thread is opened.
        */
-      if (snapshot.chatThreads) {
-        setChatThreads(prev => {
-          return mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev);
-        });
+      if (!ROLE_CAPABILITIES[role].includes('manage_chat')) {
+        setChatThreadsLoadState('idle');
+        setChatThreadsError(null);
+      } else if (hydrationGeneration === chatLoadGenerationRef.current && snapshot.chatThreads) {
+        applyChatThreadsSnapshot(snapshot.chatThreads as ChatThread[]);
+      } else if (hydrationGeneration === chatLoadGenerationRef.current && result.failures.chatThreads) {
+        setChatThreadsError(result.failures.chatThreads);
+        setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
       }
       if (snapshot.runs) hydratePrototypeRuns(snapshot.runs);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
@@ -1134,6 +1238,23 @@ ${e.detail}`;
 
     return () => { cancelled = true; };
   }, []);
+
+  /** A session can finish resuming after the first collection hydration. Retry chats once for that identity. */
+  useEffect(() => {
+    if (
+      localMode ||
+      identityStatus !== 'ready' ||
+      !identity?.login ||
+      !activeWorkspaceId ||
+      !ROLE_CAPABILITIES[role].includes('manage_chat') ||
+      !['error', 'stale', 'idle'].includes(chatThreadsLoadState)
+    ) return;
+
+    const retryKey = `${activeWorkspaceId}:${identity.login}:${role}`;
+    if (chatRetryIdentityRef.current === retryKey) return;
+    chatRetryIdentityRef.current = retryKey;
+    void retryChatThreads();
+  }, [activeWorkspaceId, chatThreadsLoadState, identity?.login, identityStatus, localMode, retryChatThreads, role]);
 
   /**
    * Keep detected runtimes fresh.
@@ -1300,7 +1421,10 @@ ${e.detail}`;
   }, [role, activeWorkspaceId, localMode]);
   useEffect(() => { saveToStorage(workspaceStorageKey('analytics_v2'), analytics); }, [analytics, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('settings'), settings); }, [settings, activeWorkspaceId]);
-  useEffect(() => { saveToStorage(workspaceStorageKey('chat_threads'), chatThreads); }, [chatThreads, activeWorkspaceId]);
+  useEffect(() => {
+    if (!activeWorkspaceId || !chatCacheWriteEnabledRef.current) return;
+    saveToStorage(workspaceStorageKey('chat_threads'), chatThreads);
+  }, [chatThreads, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('chat_messages'), chatMessages); }, [chatMessages, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('prototype_runs'), prototypeRuns); }, [prototypeRuns, activeWorkspaceId]);
   useEffect(() => { saveToStorage(workspaceStorageKey('squad_runs'), squadRuns); }, [squadRuns, activeWorkspaceId]);
@@ -1347,6 +1471,19 @@ ${e.detail}`;
     window.setTimeout(() => dismissToast(id), 4200);
   };
 
+  /**
+   * A card the server saved here but could not fully share -- the team board
+   * has not confirmed it, or GitHub refused it -- says so instead of looking
+   * finished. Otherwise the next refresh shows the old card with no reason.
+   */
+  const announceSyncWarning = async <T extends object>(pending: Promise<T>): Promise<T> => {
+    const saved = await pending as T & { syncWarning?: unknown };
+    if (typeof saved?.syncWarning !== 'string' || !saved.syncWarning) return saved;
+    showToast('Saved, with a warning', saved.syncWarning, 'info');
+    const { syncWarning: _shown, ...card } = saved;
+    return card as T;
+  };
+
   const workspaceStorageKey = (key: string) =>
     activeWorkspaceId ? `${key}:${activeWorkspaceId}` : key;
 
@@ -1372,6 +1509,10 @@ ${e.detail}`;
     activeWorkspaceRef.current = workspaceId;
     setActiveWorkspaceIdState(workspaceId);
     setActiveWorkspaceId(workspaceId);
+    chatCacheWriteEnabledRef.current = false;
+    const hydrationGeneration = ++chatLoadGenerationRef.current;
+    setChatThreadsLoadState('loading');
+    setChatThreadsError(null);
     const superseded = () => activeWorkspaceRef.current !== workspaceId;
     setActiveThreadId(null);
     // The next workspace may have thread IDs loaded earlier in this session.
@@ -1384,7 +1525,7 @@ ${e.detail}`;
     setProjects(cachedBoard.projects);
     setIssues(normalizeLegacyIssues(cachedBoard.issues));
     setAgents(normalizeLegacyAgents(cachedBoard.agents));
-    setChatThreads(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
+    setChatThreadsState(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
     setChatMessages(loadFromStorage<ChatMessage[]>(`chat_messages:${workspaceId}`, []));
     hydratePrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, []));
     setSquadRuns(loadFromStorage<SquadRun[]>(`squad_runs:${workspaceId}`, []));
@@ -1393,7 +1534,7 @@ ${e.detail}`;
     setAnalytics(normalizeAnalytics(loadFromStorage<AnalyticsData>(`analytics_v2:${workspaceId}`, emptyAnalytics)));
 
     try {
-      const result = await fetchServerSnapshot(workspaceId);
+      const result = await fetchServerSnapshot(workspaceId, { includeChat: ROLE_CAPABILITIES[target.role].includes('manage_chat') });
       // Another switch started while this one loaded; its result wins.
       if (superseded()) return;
       setProjects(result.board.state.projects);
@@ -1402,8 +1543,14 @@ ${e.detail}`;
       const snapshot = result.snapshot;
       if (snapshot.skills) setSkills(snapshot.skills as Skill[]);
       if (snapshot.runtimes) setRuntimes(snapshot.runtimes as RuntimeEngine[]);
-      if (snapshot.chatThreads) {
-        setChatThreads(prev => mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev));
+      if (!ROLE_CAPABILITIES[target.role].includes('manage_chat')) {
+        setChatThreadsLoadState('idle');
+        setChatThreadsError(null);
+      } else if (hydrationGeneration === chatLoadGenerationRef.current && snapshot.chatThreads) {
+        applyChatThreadsSnapshot(snapshot.chatThreads as ChatThread[]);
+      } else if (hydrationGeneration === chatLoadGenerationRef.current && result.failures.chatThreads) {
+        setChatThreadsError(result.failures.chatThreads);
+        setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
       }
       if (snapshot.runs) hydratePrototypeRuns(snapshot.runs);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
@@ -1417,7 +1564,11 @@ ${e.detail}`;
       setActiveTabId(nextTabId);
       showToast('Workspace switched', `Now viewing ${target.name}.`, 'success');
     } catch (error) {
-      if (!superseded()) showToast('Workspace switch failed', error instanceof Error ? error.message : String(error), 'error');
+      if (!superseded()) {
+        setChatThreadsError(describeChatLoadError(error));
+        setChatThreadsLoadState(chatThreadsRef.current.length ? 'stale' : 'error');
+        showToast('Workspace switch failed', error instanceof Error ? error.message : String(error), 'error');
+      }
     } finally {
       if (!superseded()) setWorkspaceSwitching(false);
     }
@@ -1572,6 +1723,7 @@ ${e.detail}`;
     const unsubComplete = runnerSocket.on('run_completed', (finalRun) => {
       setPrototypeRuns(prev => prev.map(r => r.id === finalRun.id ? finalRun : r));
 
+      if (finalRun.orchestrationRunId) return;
       if (finalRun.squadRunId) {
         // Only the last member opens a pull request. Record the link the moment
         // it exists, but leave the card where it is until the squad is done.
@@ -1596,13 +1748,14 @@ ${e.detail}`;
       setPrototypeRuns(prev => prev.map(r => r.id === failedRun.id ? failedRun : r));
       // A failed member stops its squad, and `squad_run_failed` says so with the
       // reason and the position it stopped at. Reporting both is reporting twice.
-      if (failedRun.squadRunId) return;
+      if (failedRun.squadRunId || failedRun.orchestrationRunId) return;
       setIssues(prev => prev.map(i => i.id === failedRun.issueId ? { ...i, status: 'in_progress', updatedAt: new Date().toISOString() } : i));
       showToast('Run failed', failedRun.testSummary || 'Agent encountered an error.', 'error');
     });
 
     const unsubCancelled = runnerSocket.on('run_cancelled', (cancelledRun) => {
       setPrototypeRuns(prev => prev.map(r => r.id === cancelledRun.id ? cancelledRun : r));
+      if (cancelledRun.orchestrationRunId || cancelledRun.squadRunId) return;
       setIssues(prev => prev.map(issue => issue.id === cancelledRun.issueId
         ? { ...issue, status: 'in_progress', updatedAt: new Date().toISOString() }
         : issue
@@ -1625,8 +1778,9 @@ ${e.detail}`;
       setSquadRuns(prev => prev.map(sr => sr.id === squadRunId
         ? { ...sr, currentMemberIndex: memberIndex, status: 'running' as const, updatedAt: new Date().toISOString() }
         : sr));
-      // Handoffs only, for builds started before squads were removed.
-      if (memberIndex > 0) {
+      // Handoffs only, for builds started before squads were removed. The board keeps
+      // agent handoffs out of view while the Chat tab is off.
+      if (memberIndex > 0 && CHAT_TAB_ENABLED) {
         showToast('Build handoff', `${agentName} picked up step ${memberIndex + 1} of ${memberCount}.`, 'info');
       }
     });
@@ -1733,10 +1887,12 @@ ${e.detail}`;
     setInbox(prev => [newNotification, ...prev]);
 
     persist(
-      () => apiService.createIssue(newIssue),
+      () => announceSyncWarning(apiService.createIssue(newIssue)),
       saved => {
+        if (saved.id !== newIssue.id) savedIssueIds.set(newIssue.id, saved.id);
         setIssues(prev => prev.map(i => (i.id === newIssue.id ? saved : i)));
         if (options.planBuild) setIssuesAwaitingBuild(prev => [...prev, saved.id]);
+        options.onSaved?.(saved);
       },
       msg => showToast('Task not saved', msg, 'error')
     );
@@ -1749,9 +1905,9 @@ ${e.detail}`;
     const previousIssue = issues.find(iss => iss.id === id);
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, status, updatedAt: new Date().toISOString() } : iss));
     persist(
-      () => status === 'done'
+      () => announceSyncWarning(status === 'done'
         ? apiService.completeIssue(id)
-        : apiService.updateIssue(id, { status }),
+        : apiService.updateIssue(id, { status })),
       saved => setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...saved } : iss)),
       msg => {
         if (previousIssue) {
@@ -1762,12 +1918,16 @@ ${e.detail}`;
     );
   };
 
+  const applySavedIssue = (saved: Issue) => {
+    setIssues(prev => prev.map(issue => issue.id === saved.id ? { ...issue, ...saved } : issue));
+  };
+
   const updateIssue = (id: string, updates: Partial<Issue>) => {
     if (!requireCapability('manage_issues')) return;
     const before = issues.find(issue => issue.id === id);
     setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...updates, updatedAt: new Date().toISOString() } : iss));
     persist(
-      () => apiService.updateIssue(id, updates),
+      () => announceSyncWarning(apiService.updateIssue(id, updates)),
       saved => setIssues(prev => prev.map(issue => issue.id === id ? saved : issue)),
       msg => {
         if (before) setIssues(prev => prev.map(issue => issue.id === id ? before : issue));
@@ -1827,6 +1987,36 @@ ${e.detail}`;
         showToast('Task not deleted', msg, 'error');
       }
     );
+  };
+
+  const archiveIssue = (id: string) => {
+    if (!requireCapability('manage_issues')) return;
+    const before = issues.find(iss => iss.id === id);
+    if (!before) return;
+    // Off the board at once; the saved card comes back with who archived it.
+    setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, archivedAt: new Date().toISOString() } : iss));
+    persist(
+      () => announceSyncWarning(apiService.archiveIssue(id)),
+      saved => setIssues(prev => prev.map(iss => iss.id === id ? { ...iss, ...saved } : iss)),
+      msg => {
+        setIssues(prev => prev.map(iss => iss.id === id ? before : iss));
+        showToast('Task not archived', msg, 'error');
+      }
+    );
+  };
+
+  const restoreIssue = async (issue: Issue): Promise<boolean> => {
+    if (!requireCapability('manage_issues')) return false;
+    try {
+      const saved = await announceSyncWarning(apiService.restoreIssue(issue.id));
+      setIssues(prev => prev.some(iss => iss.id === issue.id)
+        ? prev.map(iss => iss.id === issue.id ? { ...iss, ...saved, archivedAt: undefined, archivedBy: undefined } : iss)
+        : [{ ...issue, ...saved, archivedAt: undefined, archivedBy: undefined }, ...prev]);
+      return true;
+    } catch (err) {
+      showToast('Task not restored', describeWriteError(err), 'error');
+      return false;
+    }
   };
 
   // Prototype agent-run setup and lifecycle
@@ -2171,6 +2361,7 @@ ${e.detail}`;
   // Materialize review and failure events into the existing issue and inbox views.
   useEffect(() => {
     prototypeRuns.forEach(run => {
+      if (run.orchestrationRunId) return;
       if (!['awaiting_approval', 'failed'].includes(run.status)) return;
       const eventKey = `${run.id}:${run.status}`;
       if (handledRunEventsRef.current.has(eventKey)) return;
@@ -2570,6 +2761,8 @@ ${e.detail}`;
    */
   const setAgentArchived = (id: string, isArchived: boolean) => {
     if (!requireCapability('manage_agents')) return;
+    // Alpha's official agents run the orchestration and are never archived.
+    if (isArchived && agents.find(a => a.id === id)?.templateKey) return;
     setAgents(prev =>
       prev.map(a =>
         a.id === id
@@ -2637,23 +2830,41 @@ ${e.detail}`;
    * issue id goes with the message, so the Orchestrator builds this issue
    * instead of filing a second one.
    */
-  const startIssueBuild = async (issueId: string): Promise<string | null> => {
+  const pendingIssueBuilds = useRef(new Map<string, Promise<string | null>>());
+  const issueBuildRequestKeys = useRef(new Map<string, string>());
+  const startIssueBuild = (issueId: string, planChanges?: string): Promise<string | null> => {
+    const pending = pendingIssueBuilds.current.get(issueId);
+    if (pending) return pending;
+    const work = submitIssueBuild(issueId, planChanges);
+    pendingIssueBuilds.current.set(issueId, work);
+    void work.finally(() => pendingIssueBuilds.current.delete(issueId));
+    return work;
+  };
+  const submitIssueBuild = async (issueId: string, planChanges?: string): Promise<string | null> => {
     if (!requireCapability('run_builds')) return null;
+    // Board builds run in the person's private task thread, so they need chat access, as before.
+    if (!requireCapability('manage_chat')) return null;
     const issue = issues.find(item => item.id === issueId);
     if (!issue?.projectId) {
       showToast('Build not started', 'Choose a project for this task before building it.', 'error');
       return null;
     }
-    const threadId = createNewThread(`Build ${issue.identifier}`, issue.projectId);
-    if (!threadId) return null;
-    const details = issue.description?.trim() ? `
-
-${issue.description.trim().slice(0, 3_500)}` : '';
-    void sendChatMessage(`/build ${issue.identifier}: ${issue.title}${details}`, threadId, undefined, 'build', [], {
-      issueId: issue.id,
-      projectId: issue.projectId
-    });
-    return threadId;
+    try {
+      const key = JSON.stringify([issueId, planChanges ?? '']);
+      const requestId = issueBuildRequestKeys.current.get(key) ?? crypto.randomUUID();
+      issueBuildRequestKeys.current.set(key, requestId);
+      const result = await apiService.requestIssueBuild(issue.projectId, issue.id, { requestId, instructions: planChanges });
+      issueBuildRequestKeys.current.delete(key);
+      if (['failed', 'needs_review', 'cancelled'].includes(result.status)) {
+        issueBuildRequestKeys.current.delete(key);
+        throw new Error(result.reason ?? 'Review the task before submitting another request.');
+      }
+      showToast('Plan request accepted', 'Follow planning and review the plan on this task. Code changes require your approval.', 'info');
+      return result.threadId;
+    } catch (error) {
+      showToast('Plan request not accepted', error instanceof Error ? error.message : 'The planning request could not be accepted.', 'error');
+      return null;
+    }
   };
 
   /**
@@ -2668,9 +2879,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
     if (!ready.length) return;
     setIssuesAwaitingBuild(prev => prev.filter(id => !ready.includes(id)));
     for (const id of ready) {
-      void startIssueBuild(id).then(threadId => {
-        if (threadId) showToast('Planning a build', 'The plan will appear in the project chat for you to approve. Nothing in the code changes before that.', 'info');
-      });
+      void startIssueBuild(id);
     }
   }, [issuesAwaitingBuild, issues]);
 
@@ -2833,6 +3042,11 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
       return;
     }
+    const task = issues.find(issue => issue.id === notif.entityId);
+    if (task?.labels.includes('alpha:task-orchestration') || task?.labels.includes('alpha:chat-build')) {
+      showToast('Review the task build', 'Open the task’s Build tab to review the current build and its allowed actions.', 'info');
+      return;
+    }
 
     const run = prototypeRuns.find(item =>
       item.issueId === notif.entityId && item.status === 'awaiting_approval'
@@ -2840,8 +3054,11 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
 
     // Preserve approval behavior for older seeded notifications that are not tied to a run.
     if (!run) {
+      if (action === 'approved') {
+        try { applySavedIssue(await apiService.completeIssue(notif.entityId)); }
+        catch (error) { showToast('Review not saved', error instanceof Error ? error.message : 'The task could not be completed.', 'error'); return; }
+      }
       setInbox(prev => prev.map(n => n.id === notificationId ? { ...n, approvalStatus: action, read: true } : n));
-      if (action === 'approved') updateIssueStatus(notif.entityId, 'done');
       showToast(action === 'approved' ? 'Work approved' : 'Changes requested', undefined, action === 'approved' ? 'success' : 'info');
       return;
     }
@@ -3658,9 +3875,11 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
 
   /** Clients never see internal issues; developers see issues in assigned projects. */
   const scopedIssues = useMemo(() => {
-    if (role === 'admin') return issues;
+    // Archived tasks are off every board; Archived loads them on request.
+    const onBoard = issues.filter(issue => !issue.archivedAt);
+    if (role === 'admin') return onBoard;
     if (role === 'client') return [];
-    return issues.filter(issue => assignedProjectIds.has(issue.projectId));
+    return onBoard.filter(issue => assignedProjectIds.has(issue.projectId));
   }, [issues, assignedProjectIds, role]);
 
   /** Specifications: a client sees only their own; staff see their projects'. */
@@ -3755,7 +3974,10 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       createIssue,
       updateIssueStatus,
       updateIssue,
+      applySavedIssue,
       deleteIssue,
+      archiveIssue,
+      restoreIssue,
       runAgentOnIssue,
       prototypeRuns,
       runSetupIssueId,
@@ -3793,6 +4015,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       lastSyncedAt,
       syncing,
       syncBoard,
+      refreshBoardState,
       refreshIdentity: async () => {
         // A retry from the unreachable screen shows progress; a refresh after
         // a team change must not blank a workspace that is already showing.
@@ -3802,7 +4025,10 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
           const next = await apiService.getIdentity(true);
           setIdentity(next);
           setIdentityStatus('ready');
-          if (next.github === 'ok') setLocalMode(false);
+          if (next.github === 'ok') {
+            setLocalMode(false);
+            void retryChatThreads();
+          }
         } catch {
           // An unreachable daemon leaves the last answer standing.
           setIdentityStatus(prev => (prev === 'ready' ? prev : 'unreachable'));
@@ -3826,6 +4052,9 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
       handleApproval,
       analytics: scopedAnalytics,
       chatThreads: scopedChatThreads,
+      chatThreadsLoadState,
+      chatThreadsError,
+      retryChatThreads,
       activeThreadId,
       setActiveThreadId,
       createNewThread,
@@ -3942,14 +4171,8 @@ export const useApp = () => {
       if (!threadId) threadId = createScopedThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
       if (threadId) await context.sendChatMessage(content, threadId, repositories, intent, attachments, options);
     },
-    startIssueBuild: async (issueId: string) => {
-      const threadId = await context.startIssueBuild(issueId);
-      if (threadId) {
-        setSessionValue('activeThreadId', threadId);
-        context.setTabView(tab.id, 'chat');
-      }
-      return threadId;
-    },
+    // Board builds are followed on the task card, so starting one no longer switches tabs.
+    startIssueBuild: (issueId: string, planChanges?: string) => context.startIssueBuild(issueId, planChanges),
     clearChat: () => context.clearChat(activeThreadId),
     chatMessages: activeThreadId
       ? context.chatThreads.find(thread => thread.id === activeThreadId)?.messages ?? []
@@ -3978,12 +4201,24 @@ export function useTabSessionState<T>(
     ? (isArrayState && !Array.isArray(storedValue) ? fallback : storedValue as T)
     : fallback;
 
+  // The latest default, for updates to a value this tab has never saved.
+  const fallbackRef = useRef(fallback);
+  fallbackRef.current = fallback;
+
   const setValue = useCallback<React.Dispatch<React.SetStateAction<T>>>(next => {
-    app.setTabSessionState(tabId, key, (current: unknown) =>
-      typeof next === 'function'
-        ? (next as (previous: T) => T)(isArrayState && !Array.isArray(current) ? [] as T : current as T)
-        : next
-    );
+    app.setTabSessionState(tabId, key, (current: unknown) => {
+      if (typeof next !== 'function') return next;
+      /*
+       * An update function gets what the component is showing. A key this tab
+       * never saved reads as the default above, so the update starts from that
+       * default too. Passing undefined instead crashed object updates such as
+       * { ...prev, [section]: !prev[section] } the first time they ran.
+       */
+      const previous = current === undefined
+        ? fallbackRef.current
+        : isArrayState && !Array.isArray(current) ? [] as T : current as T;
+      return (next as (previous: T) => T)(previous);
+    });
   }, [app.setTabSessionState, isArrayState, key, tabId]);
 
   return [value, setValue];
