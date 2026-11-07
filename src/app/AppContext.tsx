@@ -282,6 +282,8 @@ interface AppContextType {
   refreshIdentity: () => Promise<void>;
   /** Pull the board from GitHub now. */
   syncBoard: () => Promise<void>;
+  /** Fetch only the board changes since the last read (after an agent turn), without a GitHub sync. */
+  refreshBoardState: () => Promise<void>;
   /** When the last successful sync finished, or null if none has. */
   lastSyncedAt: string | null;
   syncing: boolean;
@@ -684,6 +686,20 @@ ${e.detail}`;
     }
   }, [activeWorkspaceId, catchUpWorkspaceBoard, localMode, role]);
   syncBoardRef.current = syncBoard;
+
+  const refreshBoardState = useCallback(async () => {
+    if (!activeWorkspaceId) return;
+    const workspaceId = activeWorkspaceId;
+    try {
+      const result = await catchUpWorkspaceBoard(workspaceId);
+      if (workspaceId !== activeWorkspaceId) return;
+      setProjects(result.state.projects);
+      setAgents(result.state.agents);
+      setIssues(result.state.issues);
+    } catch {
+      // The regular board catch-up will try again.
+    }
+  }, [activeWorkspaceId, catchUpWorkspaceBoard]);
 
   /**
    * The board, as it moves.
@@ -3986,6 +4002,7 @@ ${e.detail}`;
       lastSyncedAt,
       syncing,
       syncBoard,
+      refreshBoardState,
       refreshIdentity: async () => {
         // A retry from the unreachable screen shows progress; a refresh after
         // a team change must not blank a workspace that is already showing.

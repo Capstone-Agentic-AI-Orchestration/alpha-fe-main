@@ -18,6 +18,8 @@ import {
   Skill,
   RuntimeEngine,
   CodexAlphaSignInState,
+  BoardAgentChange,
+  BoardAssistantSettings,
   PrototypeRun,
   SquadRun,
   ChatThread,
@@ -731,6 +733,17 @@ export const apiService = {
     fetchJson<Issue>(`/issues/${encodeURIComponent(id)}/restore`, { method: 'POST' }),
   /** Archived tasks, loaded only when someone opens Archived. */
   getArchivedIssues: () => fetchJson<Issue[]>('/issues?archived=only'),
+
+  // What agents did on the board (desktop only: read from this machine's daemon).
+  getBoardAgentChanges: (projectId: string, status?: BoardAgentChange['status']) =>
+    fetchJson<BoardAgentChange[]>(`/board/agent-changes?projectId=${encodeURIComponent(projectId)}${status ? '&status=' + status : ''}&limit=50`),
+  approveBoardAgentChange: (id: string) => fetchJson<BoardAgentChange>(`/board/agent-changes/${encodeURIComponent(id)}/approve`, { method: 'POST' }),
+  rejectBoardAgentChange: (id: string) => fetchJson<BoardAgentChange>(`/board/agent-changes/${encodeURIComponent(id)}/reject`, { method: 'POST' }),
+  undoBoardAgentChange: (id: string) => fetchJson<BoardAgentChange>(`/board/agent-changes/${encodeURIComponent(id)}/undo`, { method: 'POST' }),
+  getBoardAssistantSettings: (projectId: string) =>
+    fetchJson<BoardAssistantSettings>(`/board/assistant-settings?projectId=${encodeURIComponent(projectId)}`),
+  setBoardAssistantEnabled: (projectId: string, enabled: boolean) =>
+    fetchJson<{ projectId: string; enabled: boolean }>('/board/assistant-settings', { method: 'PUT', body: JSON.stringify({ projectId, enabled }) }),
   addIssueComment: (issueId: string, comment: Partial<IssueComment>) =>
     fetchJson<IssueComment>(`/issues/${issueId}/comments`, { method: 'POST', body: JSON.stringify(comment) }),
 

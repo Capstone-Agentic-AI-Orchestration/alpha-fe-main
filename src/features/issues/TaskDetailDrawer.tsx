@@ -1,7 +1,8 @@
 import React, { useId, useState } from 'react';
 import { Archive, ArrowUpRight, Bot, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
-import type { Issue, IssuePriority, IssueStatus } from '@/shared/types';
+import type { BoardAgentChange, Issue, IssuePriority, IssueStatus } from '@/shared/types';
+import { AgentChangesList } from '@/features/board-agent/AgentChangesList';
 import type { IssueBuildStatus } from '@/shared/services/apiService';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { Modal } from '@/shared/components/Modal';
@@ -32,6 +33,10 @@ interface TaskDetailDrawerProps {
   onHandOff?: (issue: Issue) => void;
   /** A build decision was made on this task; the board re-reads build statuses. */
   onBuildChanged?: () => void;
+  /** Changes agents made or proposed on this card, with before and after values. */
+  agentChanges?: BoardAgentChange[];
+  agentDecidingId?: string | null;
+  onAgentDecide?: (id: string, action: 'approve' | 'reject' | 'undo') => void;
 }
 
 type DrawerTab = 'overview' | 'activity' | 'build';
@@ -70,6 +75,9 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   onHandOff,
   onBuildChanged,
   onOpenTask,
+  agentChanges = [],
+  agentDecidingId,
+  onAgentDecide,
 }) => {
   const { updateIssue, addIssueComment, can, identity, currentUser, projects, issues } = useApp();
   const ids = useId();
@@ -477,7 +485,14 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
           )}
 
           {tab === 'activity' && (
-            issue.comments.length === 0
+            <>
+            {agentChanges.length > 0 && (
+              <section aria-label="Agent changes" className="mb-4 rounded-lg border border-divider">
+                <p className="px-3 pt-2 text-[11.5px] font-semibold text-content-secondary">Agent changes</p>
+                <AgentChangesList changes={agentChanges} login={identity?.login} busyId={agentDecidingId} onDecide={onAgentDecide} showDetails />
+              </section>
+            )}
+            {issue.comments.length === 0
               ? <p className="text-[13px] text-content-muted">No activity yet. Comments and agent updates appear here.</p>
               : (
                 <ol className="space-y-4">
@@ -496,7 +511,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     </li>
                   ))}
                 </ol>
-              )
+              )}
+            </>
           )}
 
           {tab === 'build' && (

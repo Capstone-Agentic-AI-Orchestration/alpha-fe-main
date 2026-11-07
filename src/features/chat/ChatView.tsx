@@ -48,6 +48,7 @@ import {
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { statusLabel as taskStatusLabel, taskHandoffContext } from '@/features/issues';
 import { isDesktop } from '@/shared/desktop';
+import { BoardChangesWaiting } from '@/features/board-agent/BoardChangesWaiting';
 import { Modal } from '@/shared/components/Modal';
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
@@ -1857,6 +1858,10 @@ export const ChatView: React.FC = () => {
                 </div>
                 <p className="mt-1.5 px-1 text-[11px] text-content-muted">Task attached. Its description and open subtasks are sent with your message.</p>
               </div>}
+              {/* Agents are for developers: what the Manager Agent is waiting for them to confirm. */}
+              {isDesktop && role === 'dev' && activeThread?.projectId && (
+                <BoardChangesWaiting projectId={activeThread.projectId} working={Boolean(activeTurnMessageId)} />
+              )}
               <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-1.5 rounded-[1.75rem] border border-divider bg-surface-raised/95 p-1.5 shadow-2xl shadow-black/50 transition-colors focus-within:border-control ${isDraggingFiles ? 'ring-2 ring-selected-content/70' : ''}`}>
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
                 <div ref={repositoryMenuRef} className="relative shrink-0">

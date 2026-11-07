@@ -8,6 +8,9 @@ import { isDesktop } from '@/shared/desktop';
 import { ACTIVE_BUILD_STATUSES, BuildChip } from './BuildChip';
 import { BoardAttentionBanner, boardAttention } from './BoardAttentionBanner';
 import { ArchivedCardsPanel } from './ArchivedCardsPanel';
+import { useBoardAgentChanges } from '@/features/board-agent/useBoardAgentChanges';
+import { AgentActivityRail } from '@/features/board-agent/AgentActivityRail';
+import { cardMarks, ghostCards } from '@/features/board-agent/agentChanges';
 import { isEpic } from '@/features/board-build/epic';
 import { BoardAlphaPanel } from '@/features/board-build/BoardAlphaPanel';
 import { TaskDetailDrawer } from './TaskDetailDrawer';
@@ -32,7 +35,8 @@ import {
   Play,
   CalendarDays,
   GitBranch,
-  Archive
+  Archive,
+  Bot
 } from 'lucide-react';
 import { GanttView } from './GanttView';
 
@@ -92,6 +96,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     localMode,
     createIssue,
     syncBoard,
+    refreshBoardState,
     syncing,
     lastSyncedAt,
     can,
@@ -142,6 +147,16 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const [quickAddStatus, setQuickAddStatus] = useState<IssueStatus | null>(null);
   const [quickAddTitle, setQuickAddTitle] = useTabSessionState<string>(`${sessionPrefix}.quickAddTitle`, '');
   const [showArchived, setShowArchived] = useState(false);
+  const [showAgentActivity, setShowAgentActivity] = useState(false);
+  // True while the Manager Agent is answering in the board panel: read its changes every 2 seconds.
+  const [agentWorking, setAgentWorking] = useState(false);
+  const agentBoard = useBoardAgentChanges(isDesktop && selectedProject !== 'all' ? selectedProject : null, {
+    fast: agentWorking,
+    onBoardChanged: () => { void refreshBoardState(); }
+  });
+  const agentMarks = useMemo(() => cardMarks(agentBoard.changes), [agentBoard.changes]);
+  const agentGhosts = useMemo(() => ghostCards(agentBoard.changes), [agentBoard.changes]);
+  const waitingCount = agentBoard.changes.filter(change => change.status === 'held').length;
   const [selectedPriority, setSelectedPriority] = useTabSessionState<string>(`${sessionPrefix}.priority`, 'all');
   const [showFilterBar, setShowFilterBar] = useState(false);
   const [draggedIssueId, setDraggedIssueId] = useState<string | null>(null);
@@ -196,7 +211,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const canQuickBuild = (issue: Issue) => isDesktop && issue.status === 'todo' && isMine(issue) && canStartBuild(issue);
 
   /** The developer's Alpha panel. Only people who run agents get it; PMs plan with New task. */
-  const canUseAlpha = isDesktop && canRunBuilds && can('manage_chat') && selectedProject !== 'all';
+  // Agents are for developers only; others see what agents did in Agent activity.
+  const canUseAlpha = isDesktop && role === 'dev' && canRunBuilds && can('manage_chat') && selectedProject !== 'all';
   const [alphaOpen, setAlphaOpen] = useTabSessionState<boolean>(`${sessionPrefix}.alphaPanel`, false);
 
   // Collapsed status sections state (Jira style)
@@ -718,6 +734,21 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             )}
 
             {/* New Task Button */}
+            {isDesktop && selectedProject !== 'all' && (
+              <button
+                type="button"
+                onClick={() => setShowAgentActivity(open => !open)}
+                aria-pressed={showAgentActivity}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-divider text-content-secondary hover:text-content hover:bg-surface-high font-medium text-xs transition-colors"
+              >
+                <Bot className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Agent activity</span>
+                {waitingCount > 0 && (
+                  <span className="rounded-full bg-status-warning-subtle px-1.5 text-[10px] font-semibold text-status-warning" aria-label={`${waitingCount} waiting for confirmation`}>{waitingCount}</span>
+                )}
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setShowArchived(open => !open)}
@@ -757,6 +788,18 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             canManageIssues={canManageIssues}
             onRestore={restoreIssue}
             onClose={() => setShowArchived(false)}
+          />
+        )}
+        {showAgentActivity && selectedProject !== 'all' && (
+          <AgentActivityRail
+            projectId={selectedProject}
+            changes={agentBoard.changes}
+            login={identity?.login}
+            busyId={agentBoard.busyId}
+            error={agentBoard.error}
+            onDecide={(id, action) => void agentBoard.decide(id, action)}
+            onOpenIssue={setSelectedIssueId}
+            onClose={() => setShowAgentActivity(false)}
           />
         )}
         {viewMode === 'board' ? (
@@ -860,6 +903,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                       const completedSubtasks = issue.subtasks.filter(s => s.completed).length;
                       const quickBuild = canQuickBuild(issue);
                       const parentIssue = issue.parentIssueId ? issueById.get(issue.parentIssueId) : undefined;
+                      const agentMark = agentMarks.get(issue.id);
 
                       return (
                         <div key={issue.id}>
@@ -875,9 +919,18 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                           } ${
                             selectedIssueId === issue.id
                               ? 'border-link ring-1 ring-selected'
-                              : 'border-divider hover:border-control hover:bg-surface-high'
+                              : agentMark?.kind === 'held'
+                                ? 'border-status-warning-border ring-1 ring-status-warning-border'
+                                : agentMark?.kind === 'recent'
+                                  ? 'border-selected-content motion-safe:animate-[pulse_2s_ease-in-out_2] hover:bg-surface-high'
+                                  : 'border-divider hover:border-control hover:bg-surface-high'
                           }`}
                         >
+                          {agentMark && (
+                            <span className={`mb-1.5 flex items-center gap-1 text-[10.5px] font-medium ${agentMark.kind === 'held' ? 'text-status-warning' : 'text-selected-content'}`}>
+                              <Bot aria-hidden="true" className="h-3 w-3" />{agentMark.label}
+                            </span>
+                          )}
                           <span className="flex items-center justify-between gap-2">
                             <span className="flex items-center gap-1.5">
                               <span className="font-mono text-[11px] text-content-muted">{issue.identifier}</span>
@@ -923,6 +976,14 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                         </div>
                       );
                     })}
+                    {agentGhosts.filter(ghost => ghost.column === column.id).map(ghost => (
+                      <div key={ghost.changeId} className="rounded-lg border border-dashed border-status-warning-border bg-surface px-3 py-2.5 text-xs opacity-80">
+                        <span className="block font-medium text-content line-clamp-2">{ghost.title}</span>
+                        <span className="mt-1 flex items-center gap-1 text-[10.5px] text-status-warning">
+                          <Bot aria-hidden="true" className="h-3 w-3" />{ghost.label}, waiting for confirmation
+                        </span>
+                      </div>
+                    ))}
                   </div>
                 </div>
               );
@@ -1082,6 +1143,15 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             onStartBuild={issue => setPendingBuildIssueId(issue.id)}
             onOpenIssue={setSelectedIssueId}
             onClose={() => setAlphaOpen(false)}
+            onWorkingChange={working => {
+              setAgentWorking(working);
+              // The turn ended: read what it changed now rather than at the next poll.
+              if (!working) { void agentBoard.reload(); void refreshBoardState(); }
+            }}
+            waiting={agentBoard.changes.filter(change => change.status === 'held')}
+            login={identity?.login}
+            decidingId={agentBoard.busyId}
+            onDecide={(id, action) => void agentBoard.decide(id, action)}
           />
         )}
 
@@ -1100,6 +1170,9 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             onHandOff={canHandOff ? handOffToChat : undefined}
             onBuildChanged={refreshIssueBuilds}
             onOpenTask={(id, projectId) => { setSelectedProject(projectId); setSelectedIssueId(id); }}
+            agentChanges={agentBoard.changes.filter(change => change.issueId === selectedIssue.id)}
+            agentDecidingId={agentBoard.busyId}
+            onAgentDecide={(id, action) => void agentBoard.decide(id, action)}
           />
         )}
       </div>

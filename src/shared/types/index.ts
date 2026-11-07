@@ -1464,6 +1464,38 @@ export interface CodexAlphaSignInState {
   error?: string;
 }
 
+/** A board change an agent made, or asked a developer to confirm, on that developer's behalf. */
+export interface BoardAgentChange {
+  id: string;
+  projectId: string;
+  issueId?: string;
+  runId: string;
+  agentId?: string;
+  agentName: string;
+  actorUserId: string;
+  actorLogin: string;
+  action: 'create' | 'update' | 'move' | 'comment' | 'archive' | 'restore';
+  status: 'applied' | 'held' | 'rejected' | 'expired' | 'undone' | 'failed';
+  summary: string;
+  input: Record<string, unknown>;
+  before?: Record<string, unknown>;
+  after?: Record<string, unknown>;
+  reason?: string;
+  createdAt: string;
+  expiresAt?: string;
+  decidedAt?: string;
+  decidedBy?: string;
+}
+
+export interface BoardAssistantSettings {
+  projectId: string;
+  enabled: boolean;
+  /** Agents are for developers only. */
+  canUse: boolean;
+  /** Admins and project managers can switch the assistant off. */
+  canChange: boolean;
+}
+
 export type SkillCategory = 
   | 'File Operations' 
   | 'Browser & Web' 

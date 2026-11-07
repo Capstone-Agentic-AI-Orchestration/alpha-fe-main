@@ -4,8 +4,9 @@ import { useApp } from '@/app/AppContext';
 import { ChatSidePanel } from '@/features/chat/ChatSidePanel';
 import { MessageMarkdown } from '@/features/chat/MessageMarkdown';
 import { apiService } from '@/shared/services/apiService';
-import type { ChatMessage, Issue, IssueStatus, SystemProposal } from '@/shared/types';
+import type { BoardAgentChange, ChatMessage, Issue, IssueStatus, SystemProposal } from '@/shared/types';
 import { isBoardThreadId } from './useTaskBuild';
+import { AgentChangesList } from '@/features/board-agent/AgentChangesList';
 
 /** Separates what the person typed from the board context sent with it. */
 export const SCOPE_MARKER = '\n\n[Board scope]\n';
@@ -51,6 +52,13 @@ interface BoardAlphaPanelProps {
   onStartBuild: (issue: Issue) => void;
   onOpenIssue: (issueId: string) => void;
   onClose: () => void;
+  /** Told when the Manager Agent starts and stops working, so the board reads its changes sooner. */
+  onWorkingChange?: (working: boolean) => void;
+  /** Agent changes waiting for this developer to confirm. */
+  waiting?: BoardAgentChange[];
+  login?: string;
+  decidingId?: string | null;
+  onDecide?: (id: string, action: 'approve' | 'reject' | 'undo') => void;
 }
 
 const button = 'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium disabled:opacity-40';
@@ -61,13 +69,15 @@ const secondary = button + ' border border-divider text-content-secondary hover:
  * A developer's Alpha panel beside the board.
  *
  * The person picks the columns, and the tasks in them, that Alpha should look
- * at. Ask answers questions about them and never starts a build. Suggest tasks
- * asks the Manager Agent for new tasks; nothing is added until the person
- * keeps them. Builds start one task at a time through the board's own
- * confirmation, so the orchestration is unchanged.
+ * at. The Manager Agent answers about them and changes cards when asked, as
+ * this developer; archiving and large changes wait here for confirmation. It
+ * never starts a build. Suggest tasks drafts new tasks; nothing is added until
+ * the person keeps them. Builds start one task at a time through the board's
+ * own confirmation, so the orchestration is unchanged.
  */
 export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
-  projectId, projectKey, issues, columns, columnFor, canStartBuild, onStartBuild, onOpenIssue, onClose
+  projectId, projectKey, issues, columns, columnFor, canStartBuild, onStartBuild, onOpenIssue, onClose,
+  onWorkingChange, waiting = [], login, decidingId, onDecide
 }) => {
   const { createIssue } = useApp();
   const [scopeColumns, setScopeColumns] = useState<Set<IssueStatus>>(() => new Set<IssueStatus>(['todo']));
@@ -119,6 +129,7 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
     const text = input.trim();
     if (!text || busy) return;
     setBusy('ask'); setError('');
+    onWorkingChange?.(true);
     try {
       if ((scopeText ? text + SCOPE_MARKER + scopeText : text).length > MAX_ASK_CHARS) throw new Error('The selected task context is too large. Select fewer tasks or shorten your message.');
       const id = threadId ?? (await apiService.getBoardThread(projectId)).id;
@@ -134,6 +145,7 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
       setError(failure instanceof Error ? failure.message : 'Your question was not sent.');
     } finally {
       setBusy(null);
+      onWorkingChange?.(false);
     }
   };
 
@@ -224,7 +236,7 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
 
       <div aria-live="polite" className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
         {messages.length === 0 && !proposal && !busy && (
-          <p className="text-[12.5px] leading-relaxed text-content-muted">Ask about the tasks you picked and the Orchestrator answers from their builds, or describe new work and choose Suggest tasks. Alpha never changes code from here; start a build from a task.</p>
+          <p className="text-[12.5px] leading-relaxed text-content-muted">Ask about the tasks you picked, or ask the Manager Agent to create, edit, move or archive cards. It acts as you; archiving and changes to many cards wait for you to confirm. Alpha never changes code from here; start a build from a task.</p>
         )}
         {messages.map(message => message.senderType === 'user' ? (
           <div key={message.id} className="flex justify-end">
@@ -236,7 +248,13 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
             <MessageMarkdown content={message.content} />
           </div>
         ))}
-        {busy === 'ask' && <p role="status" className="text-[12.5px] text-content-muted">The Orchestrator is answering.</p>}
+        {busy === 'ask' && <p role="status" className="text-[12.5px] text-content-muted">The Manager Agent is working on your board.</p>}
+        {waiting.length > 0 && (
+          <section aria-label="Waiting for you" className="rounded-lg border border-status-warning-border">
+            <p className="px-3 pt-2 text-[12px] font-semibold text-status-warning">Waiting for you to confirm</p>
+            <AgentChangesList changes={waiting} login={login} busyId={decidingId} onDecide={onDecide} onOpenIssue={onOpenIssue} />
+          </section>
+        )}
         {busy === 'draft' && <p role="status" className="text-[12.5px] text-content-muted">Drafting task suggestions. Review them before adding them to Backlog.</p>}
         {proposal && (
           <div className="space-y-2 rounded-lg border border-divider p-2.5">
