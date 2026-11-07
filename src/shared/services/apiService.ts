@@ -17,6 +17,7 @@ import {
   IssueComment,
   Skill,
   RuntimeEngine,
+  CodexAlphaSignInState,
   PrototypeRun,
   SquadRun,
   ChatThread,
@@ -890,6 +891,11 @@ export const apiService = {
   // Runtimes
   getRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes'),
   scanRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes/scan', { method: 'POST' }),
+  /** Codex sign-in for Alpha's own Codex home, so Codex agents leave the developer's setup alone. */
+  getCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-in'),
+  startCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-in', { method: 'POST' }),
+  cancelCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-in', { method: 'DELETE' }),
+  signOutCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-out', { method: 'POST' }),
 
   // Runs
   /** 'summary' omits stage logs and activity; open one run with getRun for those. */

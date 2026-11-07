@@ -1444,6 +1444,21 @@ export interface RuntimeEngine {
   updateCheckedAt?: string;
   updateError?: string;
   updateSource?: RuntimeUpdateSource;
+  /** Whether agents on this runtime run without the developer's personal setup. */
+  isolation?: {
+    isolated: boolean;
+    detail: string;
+    action?: 'codex_sign_in';
+  };
+}
+
+/** Codex sign-in for Alpha's own Codex home (desktop only). */
+export interface CodexAlphaSignInState {
+  status: 'signed_out' | 'waiting' | 'signed_in' | 'failed' | 'expired';
+  verificationUrl?: string;
+  userCode?: string;
+  expiresAt?: string;
+  error?: string;
 }
 
 export type SkillCategory = 
