@@ -29,4 +29,7 @@ export const aiFeaturesEnabled = (role: UserRole): boolean => AI_FEATURES_BY_ROL
  * Turning this back on restores the tab exactly as it was; board builds stay
  * out of the Chat list, and "Open in chat" on a card opens that task's thread.
  */
-export const CHAT_TAB_ENABLED = false;
+export const CHAT_TAB_ENABLED = true;
+
+/** Whether the Orchestrator bar and its visualization show above a chat conversation. */
+export const CHAT_ORCHESTRATOR_BAR_ENABLED = false;

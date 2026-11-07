@@ -52,9 +52,10 @@ describe('existing navigation compatibility', () => {
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('tickets');
     for (const role of ['client', 'dev', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('tickets');
   });
-  it('hides the Chat tab from every role while builds happen on the board, and keeps the view', () => {
-    expect(CHAT_TAB_ENABLED).toBe(false);
-    for (const role of Object.keys(existing) as UserRole[]) expect(ROLE_NAV[role]).not.toContain('chat');
+  it('shows the Chat tab to developers only', () => {
+    expect(CHAT_TAB_ENABLED).toBe(true);
+    expect(ROLE_NAV.dev).toContain('chat');
+    for (const role of ['client', 'pm', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('chat');
     expect(NAV_ITEMS.some(item => item.id === 'chat')).toBe(true);
   });
 

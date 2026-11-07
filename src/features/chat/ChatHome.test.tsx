@@ -19,7 +19,7 @@ describe('fresh chat home', () => {
     }
     const developer = sectionsFor('dev').find(group => group.items.some(item => item.id === 'chat'));
     expect(developer?.section.id).toBe('build');
-    const client = sectionsFor('client').find(group => group.items.some(item => item.id === 'chat'));
-    expect(client?.section.id).toBe('communication');
+    // Agent chat is for developers; a client keeps its own Messages elsewhere.
+    expect(sectionsFor('client').some(group => group.items.some(item => item.id === 'chat'))).toBe(false);
   });
 });
