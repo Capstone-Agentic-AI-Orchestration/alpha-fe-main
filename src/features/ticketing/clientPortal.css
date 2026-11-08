@@ -741,7 +741,7 @@
 .client-portal-shell .pqa-panel-rail button { width: 32px; min-height: 32px; padding: 0; }
 .client-portal-shell .pqa-panel-rail span { color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); letter-spacing: .04em; white-space: nowrap; writing-mode: vertical-rl; }
 .client-portal-shell .pqa-client:is([data-panel=collapsed], [data-panel=peek]) .pqa-workspace { grid-template-columns: minmax(0, 1fr) 44px; }
-.client-portal-shell .pqa-client:is([data-panel=collapsed], [data-panel=peek]) .pqa-review { position: absolute; z-index: 5; top: 0; right: 44px; bottom: 0; width: min(390px, calc(100% - 64px)); grid-area: auto; border: 1px solid rgb(var(--ui-divider)); box-shadow: -18px 0 40px rgb(0 0 0 / .38); transition: opacity .16s ease, transform .16s ease, visibility .16s; }
+.client-portal-shell .pqa-client:is([data-panel=collapsed], [data-panel=peek]) .pqa-review { position: absolute; z-index: 5; top: 0; right: 44px; bottom: 0; width: min(390px, calc(100% - 64px)); grid-area: auto; border: 1px solid rgb(var(--ui-divider)); box-shadow: -16px 0 48px rgb(var(--ui-overlay) / .32); transition: opacity .16s ease, transform .16s ease, visibility .16s; }
 .client-portal-shell .pqa-client[data-panel=collapsed] .pqa-review { visibility: hidden; opacity: 0; pointer-events: none; transform: translateX(12px); }
 .client-portal-shell .pqa-client[data-panel=peek] .pqa-review { visibility: visible; opacity: 1; transform: none; }
 @media (prefers-reduced-motion: reduce) {
