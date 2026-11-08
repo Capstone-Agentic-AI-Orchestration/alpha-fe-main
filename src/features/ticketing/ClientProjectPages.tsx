@@ -257,20 +257,14 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   }
 
   if (selectedProject) return <section className="client-page client-project-detail" aria-labelledby={`${idPrefix}-project-title`}>
-    <header className="client-project-detail-heading">
-      <div className="client-project-heading-copy">
-        <button type="button" className="client-back-link" onClick={() => { onSelectedProjectKeyChange(null); setTab('overview'); }}>
-          <ArrowLeft size={15} /> Projects
-        </button>
-        <p className="client-eyebrow">PROJECT</p><h1 id={`${idPrefix}-project-title`}>{selectedProject.name}</h1>
-        <p className="client-page-description">Project space shared with your account · updated {time(selectedProject.updatedAt)}</p>
+    <h1 id={`${idPrefix}-project-title`} className="sr-only">{selectedProject.name}</h1>
+    <div className="client-project-bar">
+      <button type="button" className="client-project-back" aria-label="Back to projects" title="Back to projects"
+        onClick={() => { onSelectedProjectKeyChange(null); setTab('overview'); }}><ArrowLeft size={16} /></button>
+      <div className="client-project-tabs" role="tablist" aria-label="Project sections">
+        {(['overview', 'preview', 'requests'] as const).map(value => <button key={value} type="button" role="tab"
+          aria-selected={tab === value} onClick={() => setTab(value)}>{value === 'preview' ? 'Project Review' : value[0].toUpperCase() + value.slice(1)}</button>)}
       </div>
-      {newRequestEnabled && <button type="button" className="client-primary-action" disabled={newRequestLoading} onClick={() => onNewRequest(selectedProject)}>
-        {newRequestLoading ? 'Checking access…' : 'New request'}</button>}
-    </header>
-    <div className="client-project-tabs" role="tablist" aria-label="Project sections">
-      {(['overview', 'preview', 'requests'] as const).map(value => <button key={value} type="button" role="tab"
-        aria-selected={tab === value} onClick={() => setTab(value)}>{value === 'preview' ? 'Project Review' : value[0].toUpperCase() + value.slice(1)}</button>)}
     </div>
     {tab === 'overview' && <div className="client-project-overview">
       <div><p className="client-eyebrow">SHARED WITH YOU</p><h2>{selectedProject.name}</h2>
@@ -314,8 +308,12 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     {tab === 'requests' && <section className="client-project-requests" aria-labelledby={`${idPrefix}-project-requests-title`}>
       <div className="client-section-heading"><div><h2 id={`${idPrefix}-project-requests-title`}>Requests in this project</h2>
         <p>Only requests returned for this shared project are shown here.</p></div>
-        <button type="button" className="client-icon-action" aria-label="Refresh project requests" disabled={requestLoading}
-          onClick={() => setRequestRefresh(value => value + 1)}><RefreshCw size={15} /></button></div>
+        <div className="client-section-actions">
+          <button type="button" className="client-icon-action" aria-label="Refresh project requests" disabled={requestLoading}
+            onClick={() => setRequestRefresh(value => value + 1)}><RefreshCw size={15} /></button>
+          {newRequestEnabled && <button type="button" className="client-primary-action" disabled={newRequestLoading} onClick={() => onNewRequest(selectedProject)}>
+            <Plus size={15} />{newRequestLoading ? 'Checking access…' : 'New request'}</button>}
+        </div></div>
       <label className="client-search"><span className="sr-only">Search project requests</span>
         <input value={requestSearchInput} onChange={event => setRequestSearchInput(event.target.value)} placeholder="Search project requests" /></label>
       {requestError && <p role="alert" className="client-project-error">{requestError} <button type="button" onClick={() => setRequestRefresh(value => value + 1)}>Try again</button></p>}

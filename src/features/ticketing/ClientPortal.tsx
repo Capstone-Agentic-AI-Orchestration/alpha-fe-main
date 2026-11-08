@@ -660,7 +660,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
         </>}>
           <WorkspaceTabStrip label="Client portal pages">
-            {tabs.map(tab => <WorkspaceTab key={tab.id} title={tab.navigation.page === 'overview' ? 'Overview' : tab.navigation.page === 'projects' ? 'Projects' : 'Requests'}
+            {tabs.map(tab => <WorkspaceTab key={tab.id} title={tab.navigation.page === 'overview' ? 'Overview'
+              : tab.navigation.page === 'projects' ? projects?.find(project => clientProjectKey(project) === tab.navigation.selectedProjectKey)?.name ?? 'Projects' : 'Requests'}
               icon={tab.navigation.page === 'overview' ? <House size={14} /> : tab.navigation.page === 'projects' ? <FolderKanban size={14} /> : <ListChecks size={14} />}
               active={activeTabId === tab.id} onActivate={() => { if (activeTabId !== tab.id) changeWorkspaceTab(() => activateTab(tab.id)); }}
               onClose={() => {

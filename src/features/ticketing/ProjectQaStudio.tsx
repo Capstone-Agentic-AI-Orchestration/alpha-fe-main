@@ -59,7 +59,7 @@ export function ReadOnlyChecks({round,extra}:{round:QaRound;extra?:(item:QaRound
 }
 
 /** Panels stay mounted so switching to feedback/history never discards an unsaved result. */
-export function StudioPanels({checklist,feedback,history,ariaLabel='Project review panels'}:{checklist:ReactNode;feedback:ReactNode;history:ReactNode;ariaLabel?:string}) {
+export function StudioPanels({checklist,feedback,history,ariaLabel='Project review panels',actions}:{checklist:ReactNode;feedback:ReactNode;history:ReactNode;ariaLabel?:string;actions?:ReactNode}) {
   const [active,setActive]=useState<'checklist'|'feedback'|'history'>('checklist');
   const base=useId(),tabs=['checklist','feedback','history'] as const;
   const refs=useRef<Partial<Record<typeof active,HTMLButtonElement|null>>>({});
@@ -68,7 +68,7 @@ export function StudioPanels({checklist,feedback,history,ariaLabel='Project revi
     ref={element=>{refs.current[value]=element;}} onClick={()=>setActive(value)} onKeyDown={event=>{
       const next=event.key==='Home'?tabs[0]:event.key==='End'?tabs[2]:event.key==='ArrowRight'?tabs[(index+1)%3]:event.key==='ArrowLeft'?tabs[(index+2)%3]:null;
       if(next){event.preventDefault();setActive(next);refs.current[next]?.focus();}
-    }}>{label(value)}</button>)}</div>
+    }}>{label(value)}</button>)}{actions}</div>
     {tabs.map(value=><div key={value} role="tabpanel" hidden={active!==value} id={`${base}-panel-${value}`} aria-labelledby={`${base}-tab-${value}`}>
       {value==='checklist'?checklist:value==='feedback'?feedback:history}
     </div>)}
