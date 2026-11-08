@@ -13,8 +13,6 @@ import {
   LogOut,
   Check,
   Search,
-  Pin,
-  PinOff,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -80,8 +78,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const groups = sectionsFor(role)
     .map(group => ({ ...group, items: group.items.filter(item => visibleTabSet.has(item.id)) }))
     .filter(group => group.items.length > 0);
-
-  const sidebarModeLabel = collapsed ? 'Keep sidebar open' : 'Use hover to open sidebar';
 
   /**
    * The workspace switcher is a transient surface. Close it when focus moves
@@ -157,7 +153,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ariaLabel="Application sidebar"
       onBeforeCollapse={() => closeWorkspaceMenu()}
     >
-      {({ compact, togglePinned }) => <>
+      {({ compact }) => <>
       {/* Workspace and primary actions */}
       <div className={`space-y-3 pb-3 pt-3 ${compact ? 'px-2' : 'px-3'}`}>
         <div ref={workspaceMenuRef} className="relative">
@@ -187,16 +183,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 </span>
               </span>
               {!compact && <ChevronDown className="h-4 w-4 flex-shrink-0 text-content-muted" />}
-            </button>
-
-            <button
-              onClick={togglePinned}
-              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-surface-high hover:text-content"
-              title={sidebarModeLabel}
-              aria-label={sidebarModeLabel}
-              aria-pressed={!collapsed}
-            >
-              {collapsed ? <Pin className="h-4 w-4" /> : <PinOff className="h-4 w-4" />}
             </button>
           </div>
 

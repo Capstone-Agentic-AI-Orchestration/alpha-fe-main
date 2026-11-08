@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Activity, ExternalLink, Eye, Loader2, Maximize2, Minimize2, MonitorPlay, ScrollText } from 'lucide-react';
+import { Activity, ExternalLink, Eye, Loader2, MonitorPlay, ScrollText } from 'lucide-react';
 
 import { apiService } from '@/shared/services/apiService';
-import type { BranchPreview, HealthResult, HostingPreviews } from '@/shared/types';
+import type { BranchPreview, HealthResult, HostingPreviews, PipelineBranch } from '@/shared/types';
 import { PIPELINE_BRANCHES } from '@/shared/types';
 import { CopyButton } from '@/shared/components/CopyButton';
 import { canFramePreview, previewFrameSandbox, previewUnavailableReason } from './previewRules';
@@ -11,14 +11,10 @@ import { RefreshButton, RepoSection, SectionEmpty, SectionError, SectionLoading 
 import { useRepoResource } from './useRepoResource';
 import { RepoLogs } from './deploymentLogs/RepoLogs';
 
-/** The width a thumbnail is laid out at before it is scaled into its card. */
-const THUMB_LAYOUT_WIDTH = 1280;
-const THUMB_LAYOUT_HEIGHT = 800;
-
 /**
- * Live previews of a repository's hosted branches: each frontend branch's
- * site, inline when its host allows being framed, or a backend branch's
- * health on request.
+ * The live preview of one of a repository's hosted branches, picked from a
+ * dropdown: a frontend branch's site, inline when its host allows being
+ * framed, or a backend branch's health on request.
  *
  * The same component in the browser and the desktop app. On the desktop the
  * renderer's origin is `file://`, which no hosted preview shares, so the
@@ -35,10 +31,12 @@ export const RepoPreviews: React.FC<{
     `${projectId}|${repo}|previews`
   );
   const autoRefreshCount = useRef(0);
+  const [selectedBranch, setSelectedBranch] = useState<PipelineBranch | null>(null);
   const data = previews.data;
   const sorted = data
     ? [...data.previews].sort((a, b) => PIPELINE_BRANCHES.indexOf(a.branch) - PIPELINE_BRANCHES.indexOf(b.branch))
     : [];
+  const selected = sorted.find(preview => preview.branch === selectedBranch) ?? sorted[0];
   const devPreview = data?.previews.find(preview => preview.branch === 'dev');
   const trackedPreview = devPreview ?? data?.previews[0];
   const terminalDeploy = /fail|error|cancel/i.test(trackedPreview?.deployStatus ?? '');
@@ -116,13 +114,21 @@ export const RepoPreviews: React.FC<{
                 The first preview is taking longer than expected. Use Refresh previews to check again.
               </p>
             )}
-            <div className="grid gap-3 p-3 md:grid-cols-2">
-              {sorted.map(preview =>
-                preview.surface === 'health' ? (
-                  <HealthCard key={preview.branch} projectId={projectId} repo={repo} preview={preview} />
-                ) : (
-                  <PageCard key={preview.branch} preview={preview} />
-                )
+            <div className="p-3">
+              {selected.surface === 'health' ? (
+                <HealthCard
+                  key={selected.branch}
+                  projectId={projectId}
+                  repo={repo}
+                  preview={selected}
+                  picker={<BranchPicker repo={repo} previews={sorted} selected={selected} onSelect={setSelectedBranch} />}
+                />
+              ) : (
+                <PageCard
+                  key={selected.branch}
+                  preview={selected}
+                  picker={<BranchPicker repo={repo} previews={sorted} selected={selected} onSelect={setSelectedBranch} />}
+                />
               )}
             </div>
           </div>
@@ -172,12 +178,49 @@ export const RepoLogsTab: React.FC<{ projectId: string; repo: string; active: bo
   );
 };
 
-const CardHeader: React.FC<{ preview: BranchPreview }> = ({ preview }) => (
+const statusLabel = (preview: BranchPreview): string =>
+  preview.ready ? 'Live' : preview.deployStatus ? humanize(preview.deployStatus) : 'Not deployed';
+
+/** Which hosted branch the preview shows; a plain label when there is only one. */
+const BranchPicker: React.FC<{
+  repo: string;
+  previews: BranchPreview[];
+  selected: BranchPreview;
+  onSelect: (branch: PipelineBranch) => void;
+}> = ({ repo, previews, selected, onSelect }) => {
+  if (previews.length < 2) {
+    return (
+      <span className="rounded bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-content-secondary">{selected.branch}</span>
+    );
+  }
+  return (
+    <>
+      <label className="sr-only" htmlFor={`preview-branch-${repo}`}>
+        Environment to preview
+      </label>
+      <select
+        id={`preview-branch-${repo}`}
+        value={selected.branch}
+        onChange={e => onSelect(e.target.value as PipelineBranch)}
+        className="rounded-md border border-divider bg-well px-2 py-1 font-mono text-[11px] text-content focus:border-control focus:outline-none"
+      >
+        {previews.map(preview => (
+          <option key={preview.branch} value={preview.branch}>
+            {preview.branch}
+            {preview.branch === 'main' ? ' (production)' : ''} · {statusLabel(preview)}
+          </option>
+        ))}
+      </select>
+    </>
+  );
+};
+
+const CardHeader: React.FC<{ preview: BranchPreview; picker: React.ReactNode }> = ({ preview, picker }) => (
   <div className="flex items-center justify-between gap-2 px-3 py-2">
-    <span className="rounded bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-content-secondary">{preview.branch}</span>
+    {picker}
     <span className={`flex items-center gap-1.5 text-[11px] ${preview.ready ? 'text-status-success' : 'text-content-muted'}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${preview.ready ? 'bg-emerald-400' : 'bg-gray-600'}`} aria-hidden />
-      {preview.ready ? 'Live' : preview.deployStatus ? humanize(preview.deployStatus) : 'Not deployed'}
+      {statusLabel(preview)}
     </span>
   </div>
 );
@@ -200,85 +243,30 @@ const CardLinks: React.FC<{ preview: BranchPreview }> = ({ preview }) =>
     </div>
   ) : null;
 
-/** Scale factor that fits the fixed-width layout into the card, kept current as the card resizes. */
-function useFitScale(ref: React.RefObject<HTMLDivElement>): number {
-  const [scale, setScale] = useState(0.3);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el || typeof ResizeObserver === 'undefined') return;
-    const observer = new ResizeObserver(([entry]) => {
-      const width = entry.contentRect.width;
-      if (width > 0) setScale(width / THUMB_LAYOUT_WIDTH);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [ref]);
-  return scale;
-}
-
-const PageCard: React.FC<{ preview: BranchPreview }> = ({ preview }) => {
-  const [expanded, setExpanded] = useState(false);
+const PageCard: React.FC<{ preview: BranchPreview; picker: React.ReactNode }> = ({ preview, picker }) => {
   const [loaded, setLoaded] = useState(false);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const scale = useFitScale(boxRef);
   const framable = canFramePreview(preview);
   const sandbox = preview.url ? previewFrameSandbox(preview.url, window.location.origin) : '';
 
   return (
     <article className="min-w-0 overflow-hidden rounded-lg border border-divider bg-well">
-      <CardHeader preview={preview} />
+      <CardHeader preview={preview} picker={picker} />
       {framable && preview.url ? (
-        expanded ? (
-          <div className="relative border-y border-divider">
-            <iframe
-              title={`${preview.branch} preview`}
-              src={preview.url}
-              sandbox={sandbox}
-              referrerPolicy="no-referrer"
-              className="h-[70vh] w-full bg-white"
-            />
-            <button
-              type="button"
-              onClick={() => setExpanded(false)}
-              className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-md bg-well px-2 py-1 text-[11px] text-content hover:bg-well"
-            >
-              <Minimize2 className="h-3 w-3" aria-hidden /> Shrink
-            </button>
-          </div>
-        ) : (
-          <div
-            ref={boxRef}
-            className="relative overflow-hidden border-y border-divider bg-surface-raised"
-            style={{ height: THUMB_LAYOUT_HEIGHT * scale }}
-          >
-            {!loaded && (
-              <p className="absolute inset-0 flex items-center justify-center gap-1.5 text-[11px] text-content-muted">
-                <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden /> Loading preview…
-              </p>
-            )}
-            {/* A thumbnail, not the site: not focusable or clickable. `inert` is
-                set through the ref because React 18 does not pass it through. */}
-            <iframe
-              ref={el => el?.setAttribute('inert', '')}
-              title={`${preview.branch} preview thumbnail`}
-              src={preview.url}
-              sandbox={sandbox}
-              referrerPolicy="no-referrer"
-              loading="lazy"
-              tabIndex={-1}
-              onLoad={() => setLoaded(true)}
-              className="pointer-events-none absolute left-0 top-0 origin-top-left bg-white"
-              style={{ width: THUMB_LAYOUT_WIDTH, height: THUMB_LAYOUT_HEIGHT, transform: `scale(${scale})` }}
-            />
-            <button
-              type="button"
-              onClick={() => setExpanded(true)}
-              className="absolute bottom-2 right-2 inline-flex items-center gap-1 rounded-md bg-well px-2 py-1 text-[11px] text-content hover:bg-well"
-            >
-              <Maximize2 className="h-3 w-3" aria-hidden /> Open here
-            </button>
-          </div>
-        )
+        <div className="relative border-y border-divider bg-surface-raised">
+          <iframe
+            title={`${preview.branch} preview`}
+            src={preview.url}
+            sandbox={sandbox}
+            referrerPolicy="no-referrer"
+            onLoad={() => setLoaded(true)}
+            className="block h-[70vh] min-h-[420px] w-full bg-white"
+          />
+          {!loaded && (
+            <p className="absolute inset-0 flex items-center justify-center gap-1.5 bg-surface-raised text-[11px] text-content-muted">
+              <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden /> Loading preview…
+            </p>
+          )}
+        </div>
       ) : (
         <p className="flex items-start gap-1.5 border-y border-divider bg-surface-raised px-3 py-6 text-[11px] leading-relaxed text-content-secondary">
           <Eye className="mt-0.5 h-3 w-3 flex-shrink-0 text-content-muted" aria-hidden />
@@ -290,10 +278,11 @@ const PageCard: React.FC<{ preview: BranchPreview }> = ({ preview }) => {
   );
 };
 
-const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPreview }> = ({
+const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPreview; picker: React.ReactNode }> = ({
   projectId,
   repo,
-  preview
+  preview,
+  picker
 }) => {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState<HealthResult | null>(null);
@@ -313,7 +302,7 @@ const HealthCard: React.FC<{ projectId: string; repo: string; preview: BranchPre
 
   return (
     <article className="min-w-0 overflow-hidden rounded-lg border border-divider bg-well">
-      <CardHeader preview={preview} />
+      <CardHeader preview={preview} picker={picker} />
       <div className="space-y-2 border-y border-divider bg-surface-raised px-3 py-3">
         <p className="text-[11px] leading-relaxed text-content-secondary">
           A backend has no page to show. Check that it answers on{' '}
