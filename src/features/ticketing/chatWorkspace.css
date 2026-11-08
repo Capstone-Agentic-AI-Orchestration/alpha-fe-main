@@ -397,8 +397,7 @@
 
 /* Use the same heading and section rhythm on Overview and Projects. */
 .client-portal-shell .client-page-heading,
-.client-portal-shell .client-projects-heading,
-.client-portal-shell .client-project-detail-heading {
+.client-portal-shell .client-projects-heading {
   min-height: 60px;
   align-items: center;
   gap: var(--client-space-4);
@@ -408,13 +407,11 @@
   border-bottom: 1px solid rgb(var(--ui-divider));
 }
 .client-portal-shell .client-page-heading > div:first-child,
-.client-portal-shell .client-projects-heading > div:first-child,
-.client-portal-shell .client-project-heading-copy {
+.client-portal-shell .client-projects-heading > div:first-child {
   min-width: 0;
 }
 .client-portal-shell .client-page-heading h1,
-.client-portal-shell .client-projects-heading h1,
-.client-portal-shell .client-project-detail-heading h1 {
+.client-portal-shell .client-projects-heading h1 {
   font-size: var(--client-type-page);
   letter-spacing: -.025em;
 }
@@ -619,12 +616,6 @@
   line-height: var(--client-line-heading);
   letter-spacing: -.03em;
 }
-.client-portal-shell .client-project-detail-heading h1 {
-  font-size: var(--client-type-title);
-  font-weight: var(--client-weight-bold);
-  line-height: var(--client-line-heading);
-  letter-spacing: -.03em;
-}
 .client-portal-shell .client-section-heading h2,
 .client-portal-shell .client-project-overview h2,
 .client-portal-shell .client-preview-destination h2 {
@@ -632,7 +623,6 @@
   font-weight: var(--client-weight-bold);
   line-height: var(--client-line-heading);
 }
-.client-portal-shell .client-project-heading-copy .client-eyebrow,
 .client-portal-shell .client-project-overview .client-eyebrow {
   margin: 0 0 6px;
   color: rgb(var(--ui-link));
@@ -654,7 +644,6 @@
   .client-portal-shell .client-portal-page-heading h1,
   .client-portal-shell .client-page-heading h1,
   .client-portal-shell .client-projects-heading h1 { font-size: var(--client-type-page); }
-  .client-portal-shell .client-project-detail-heading h1 { font-size: var(--client-type-page); }
 }
 
 /* Keep request filtering compact with one accessible dropdown. */
@@ -1091,15 +1080,13 @@
 
 /* Use the same purple title cue across the client portal's main pages. */
 .client-portal-shell .client-portal-page-heading h1,
-.client-portal-shell .client-projects-heading h1,
-.client-portal-shell .client-project-detail-heading h1 {
+.client-portal-shell .client-projects-heading h1 {
   display: flex;
   align-items: center;
   gap: 10px;
 }
 .client-portal-shell .client-portal-page-heading h1::before,
-.client-portal-shell .client-projects-heading h1::before,
-.client-portal-shell .client-project-detail-heading h1::before {
+.client-portal-shell .client-projects-heading h1::before {
   width: 3px;
   height: 24px;
   flex: 0 0 3px;
@@ -1123,8 +1110,7 @@
 
 @media (max-width: 767px) {
   .client-portal-shell .client-portal-page-heading h1::before,
-  .client-portal-shell .client-projects-heading h1::before,
-  .client-portal-shell .client-project-detail-heading h1::before {
+  .client-portal-shell .client-projects-heading h1::before {
     height: 21px;
   }
   .client-portal-shell .client-detail-title::before { height: 18px; }

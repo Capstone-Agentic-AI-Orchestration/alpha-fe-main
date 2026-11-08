@@ -458,7 +458,7 @@
 .client-portal-main--workspace { width: 100%; max-width: none; min-width: 0; overflow-x: hidden; overflow-y: auto; padding: var(--client-space-7) clamp(var(--client-space-6), 4vw, 56px) var(--client-space-8); }
 .client-page, .client-requests-page { width: min(1440px, 100%); max-width: 100%; min-width: 0; margin-inline: auto; }
 .client-page-heading { display: flex; min-height: 74px; align-items: center; justify-content: space-between; gap: var(--client-space-5); margin-bottom: 21px; }
-.client-page-heading h1, .client-project-detail-heading h1 { margin: 0; color: var(--cp-ink); font-size: clamp(24px, 2.2vw, 32px); font-weight: var(--client-weight-bold); letter-spacing: -.04em; line-height: var(--client-line-heading); }
+.client-page-heading h1 { margin: 0; color: var(--cp-ink); font-size: clamp(24px, 2.2vw, 32px); font-weight: var(--client-weight-bold); letter-spacing: -.04em; line-height: var(--client-line-heading); }
 .client-page-description { margin-top: 7px; color: var(--cp-muted); font-size: var(--client-type-compact); line-height: var(--client-line-body); }
 .client-section-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--client-space-4); }
 .client-section-heading h2, .client-project-overview h2, .client-preview-destination h2 { margin: 0; color: var(--cp-ink); font-size: var(--client-type-body); font-weight: var(--client-weight-semibold); }
@@ -578,9 +578,13 @@
 .client-proposal-form button:focus-visible, .client-projects-heading button:focus-visible, .client-proposals button:focus-visible,
 .client-proposal-form input:focus-visible, .client-proposal-form textarea:focus-visible { outline: var(--client-focus-width) solid rgb(var(--ui-focus)); outline-offset: var(--client-focus-offset); }
 .client-project-detail { display: grid; align-content: start; gap: 0; }
-.client-project-detail-heading { display: flex; align-items: end; justify-content: space-between; gap: var(--client-space-4); padding-bottom: 18px; }
-.client-project-heading-copy { min-width: 0; }
-.client-project-heading-copy .client-eyebrow { margin-top: var(--client-space-4); }
+.client-project-bar { display: flex; align-items: center; gap: var(--client-space-2); border-bottom: 1px solid var(--cp-line); }
+.client-project-bar .client-project-tabs { min-width: 0; flex: 1; border-bottom: 0; }
+.client-project-back { display: grid; width: 32px; height: 32px; flex: 0 0 32px; place-items: center; border: 1px solid var(--cp-line); border-radius: var(--client-radius-control); background: transparent; color: var(--cp-muted); cursor: pointer; }
+.client-project-back:hover { background: rgb(var(--ui-raised)); color: var(--cp-ink); }
+.client-project-back:focus-visible { outline: var(--client-focus-width) solid rgb(var(--ui-focus)); outline-offset: var(--client-focus-offset); }
+.client-section-actions { display: flex; flex: 0 0 auto; align-items: center; gap: var(--client-space-2); }
+.client-portal-main--workspace:has(.client-project-detail) { padding-top: var(--client-space-4); }
 .client-back-link { display: inline-flex; min-height: var(--client-control-compact); align-items: center; gap: var(--client-space-2); border: 0; background: transparent; color: var(--cp-muted); font-size: var(--client-type-caption); cursor: pointer; }
 .client-back-link:hover { color: var(--cp-ink); }
 .client-primary-action { display: inline-flex; min-height: var(--client-control); align-items: center; justify-content: center; gap: var(--client-space-2); padding: 0 var(--client-space-4); border: 1px solid transparent; border-radius: var(--client-radius-control); background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); font-size: var(--client-type-caption); font-weight: var(--client-weight-semibold); cursor: pointer; }
@@ -658,17 +662,15 @@
   .client-portal-mobile-brand img { width: 28px; height: 28px; flex-basis: 28px; }
   .client-portal-main--workspace { padding: var(--client-space-5) var(--client-portal-gutter) var(--client-space-7); }
   .client-page-heading { min-height: 58px; margin-bottom: 13px; }
-  .client-page-heading h1, .client-project-detail-heading h1 { font-size: var(--client-type-page); }
+  .client-page-heading h1 { font-size: var(--client-type-page); }
   .client-activity-row { grid-template-columns: minmax(0,1fr) auto 14px; gap: var(--client-space-2); }
   .client-activity-row time { display: none; }
   .client-activity-status { max-width: 125px; overflow: hidden; text-overflow: ellipsis; }
-  .client-project-detail-heading { align-items: start; }
   .client-projects-heading { align-items: start; }
   .client-projects-heading > button { min-height: var(--client-control); padding-inline: var(--client-space-2); white-space: nowrap; }
   .client-proposal-row { grid-template-columns: minmax(0,1fr); gap: 7px; }
   .client-proposal-status { white-space: normal; }
-  .client-project-detail-heading > .client-primary-action { min-height: var(--client-control); padding-inline: var(--client-space-2); white-space: nowrap; }
-  .client-project-heading-copy .client-eyebrow { margin-top: var(--client-space-2); }
+  .client-section-actions .client-primary-action { min-height: var(--client-control); padding-inline: var(--client-space-2); white-space: nowrap; }
   .client-feedback { min-height: 330px; }
   .client-feedback-messages { max-height: 46vh; }
   .client-project-preview-page, .client-project-requests { gap: 14px; padding-top: 15px; }
@@ -720,7 +722,7 @@
 
 @media (min-width: 1000px) {
   .client-portal-shell .client-project-detail:has(.pqa-client) { display: flex; min-height: 0; flex: 1 0 auto; flex-direction: column; }
-  .client-portal-shell .client-project-detail:has(.pqa-client) > :is(.client-project-detail-heading, .client-project-tabs) { flex-shrink: 0; }
+  .client-portal-shell .client-project-detail:has(.pqa-client) > .client-project-bar { flex-shrink: 0; }
   .client-portal-shell .pqa-client { display: grid; flex: 1; height: auto; min-height: 560px; grid-template-columns: minmax(0, 1fr) minmax(320px, 390px); grid-template-rows: auto minmax(360px, 1fr); gap: 0; padding-top: var(--client-space-4); }
   .client-portal-shell .pqa-client-controls { grid-column: 1; grid-row: 1; padding: 0 var(--client-space-4) var(--client-space-4) 0; }
   .client-portal-shell .pqa-client > [role=status] { grid-column: 1 / -1; }
@@ -728,4 +730,28 @@
   .client-portal-shell .pqa-client .pqa-preview { grid-column: 1; grid-row: 2; border-top: 1px solid rgb(var(--ui-divider)); }
   .client-portal-shell .pqa-client .pqa-review { grid-column: 2; grid-row: 1 / span 2; }
   .client-portal-shell .pqa-client .pqa-panel-tabs { padding-top: 0; }
+  .client-portal-shell .pqa-client:is([data-panel=collapsed], [data-panel=peek]) { grid-template-columns: minmax(0, 1fr) 44px; }
+  .client-portal-shell .pqa-client .pqa-panel-rail { grid-column: 2; grid-row: 1 / span 2; }
+}
+
+/* Project Review: the review panel can be hidden to a rail, then opened over the preview on hover. */
+.client-portal-shell .pqa-client, .client-portal-shell .pqa-client .pqa-workspace { position: relative; }
+.client-portal-shell .pqa-panel-tabs .pqa-panel-toggle { flex: 0 0 34px; width: 34px; padding: 0; border: 0; border-radius: var(--client-radius-control); }
+.client-portal-shell .pqa-panel-rail { display: flex; min-width: 0; min-height: 0; flex-direction: column; align-items: center; gap: var(--client-space-3); padding: var(--client-space-2) 0; border-left: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-canvas)); }
+.client-portal-shell .pqa-panel-rail button { width: 32px; min-height: 32px; padding: 0; }
+.client-portal-shell .pqa-panel-rail span { color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); letter-spacing: .04em; white-space: nowrap; writing-mode: vertical-rl; }
+.client-portal-shell .pqa-client:is([data-panel=collapsed], [data-panel=peek]) .pqa-workspace { grid-template-columns: minmax(0, 1fr) 44px; }
+.client-portal-shell .pqa-client:is([data-panel=collapsed], [data-panel=peek]) .pqa-review { position: absolute; z-index: 5; top: 0; right: 44px; bottom: 0; width: min(390px, calc(100% - 64px)); grid-area: auto; border: 1px solid rgb(var(--ui-divider)); box-shadow: -16px 0 48px rgb(var(--ui-overlay) / .32); transition: opacity .16s ease, transform .16s ease, visibility .16s; }
+.client-portal-shell .pqa-client[data-panel=collapsed] .pqa-review { visibility: hidden; opacity: 0; pointer-events: none; transform: translateX(12px); }
+.client-portal-shell .pqa-client[data-panel=peek] .pqa-review { visibility: visible; opacity: 1; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .client-portal-shell .pqa-client .pqa-review { transition: none; }
+}
+@media (min-width: 1000px) {
+  /* Open over the preview only, so the review-round picker above stays usable. */
+  .client-portal-shell .pqa-client:is([data-panel=collapsed], [data-panel=peek]) .pqa-review { grid-column: 1 / -1; grid-row: 2; }
+}
+@media (max-width: 700px) {
+  .client-portal-shell .pqa-panel-rail, .client-portal-shell .pqa-panel-tabs .pqa-panel-toggle { display: none; }
+  .client-portal-shell .pqa-client:is([data-panel=collapsed], [data-panel=peek]) .pqa-review { position: static; width: auto; visibility: visible; opacity: 1; pointer-events: auto; transform: none; border: 0; border-top: 1px solid rgb(var(--ui-divider)); box-shadow: none; }
 }
