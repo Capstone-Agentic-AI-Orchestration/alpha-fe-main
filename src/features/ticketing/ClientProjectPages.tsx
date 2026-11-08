@@ -36,6 +36,7 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
   const firstName = clientName?.trim().split(/\s+/)[0] ?? '';
   const recentProjects = [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 5);
   return <section className="client-page client-overview-page" aria-labelledby="client-overview-title">
+    <div className="client-overview-top">
     <header className="client-overview-heading">
       <h1 id="client-overview-title">{firstName ? `Welcome back, ${firstName}` : 'Welcome back'}</h1>
       <p className="client-page-description">Here’s what’s happening with your requests and projects.</p>
@@ -54,9 +55,10 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
         <span><strong>{summaryValue(completed)}</strong><small>Completed</small></span>
       </div>
     </section>
+    </div>
     <div className="client-overview-layout">
       <div className="client-overview-main">
-        <section className="client-overview-panel" aria-labelledby="client-attention-title">
+        <section className="client-overview-panel is-highlight" aria-labelledby="client-attention-title">
           <div className="client-section-heading"><div><h2 id="client-attention-title">Needs your attention</h2>
             <p>Requests waiting for your reply.</p></div>
             <button type="button" className="client-text-action" onClick={onGoToRequests}>View all requests <ArrowRight size={15} /></button></div>
