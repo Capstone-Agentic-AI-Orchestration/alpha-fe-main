@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Pin, PanelRightClose, PanelRightOpen } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { clientProjectQaApi } from './clientProjectQaApi';
 import { qaError, uncertainQaOperation, type QaResult, type QaRound, type QaRoundPage } from './projectQaApi';
 import { History, Notice, QaPreview, QaEvidence, RoundPicker, StudioPanels, label } from './ProjectQaStudio';
@@ -31,6 +31,7 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
     peekTimer.current=window.setTimeout(()=>{if(!review.current?.contains(document.activeElement))setPeek(false);},250);}
   useEffect(()=>()=>window.clearTimeout(peekTimer.current),[]);
   const panelState=!panelCollapsed?'docked':peek?'peek':'collapsed';
+  const roundPicker=<RoundPicker hideLabel disabled={busy||hasUnsaved} page={page} selected={selected} onChange={value=>{setSelected(value);submission.current=null;}} onOlder={()=>void older()}/>;
   useEffect(()=>{let active=true;setLoading(true);setError('');setRound(null);
     if(inspectionOnly){setPage({items:[],nextBefore:null});setLoading(false);return;}
     void clientProjectQaApi.list(workspaceId,projectId).then(value=>{if(active){setPage(value);setSelected(current=>value.items.some(item=>item.id===current)?current:value.items.find(item=>item.status==='published')?.id??value.items[0]?.id??'');}})
@@ -51,14 +52,14 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
   const incomplete=round?.items.some(item=>item.required&&item.result.status==='not_tested');
   return <section className="project-qa-studio pqa-client" data-panel={panelState} aria-label={`${projectName} Project Review`}>
     <div className="pqa-client-controls">
-    <header className="pqa-heading"><div><h2>Project Review</h2><span>Test the UAT build reviewed and shared by your project manager.</span></div></header>
     <Notice error={error} onRetry={()=>setRefresh(value=>value+1)}/>
-    <RoundPicker disabled={busy||hasUnsaved} page={page} selected={selected} onChange={value=>{setSelected(value);submission.current=null;}} onOlder={()=>void older()}/>
+    {/* Phones switch between preview and review, so the picker also lives here where it stays reachable. */}
+    <div className="pqa-mobile-round">{roundPicker}</div>
     </div>
     {loading?<p role="status">Loading your project review…</p>:<>
       <div className="pqa-mobile-switch" role="group" aria-label="Review view"><button type="button" aria-pressed={mobile==='preview'} onClick={()=>setMobile('preview')}>Preview</button>
         <button type="button" aria-pressed={mobile==='review'} onClick={()=>setMobile('review')}>Review</button></div>
-      <div className="pqa-workspace" data-mobile={mobile}><QaPreview preview={round?.preview??null} version={round?`Review ${round.number}`:undefined} audience="client"/>
+      <div className="pqa-workspace" data-mobile={mobile}><QaPreview preview={round?.preview??null} audience="client" toolbarEnd={roundPicker}/>
         {panelCollapsed&&<div className="pqa-panel-rail" onMouseEnter={openPeek} onMouseLeave={()=>{holdPeek.current=false;closePeekSoon();}}>
           <button type="button" aria-label="Show review panel" title="Show review panel" onClick={()=>setPanelCollapsed(false)}><PanelRightOpen size={16}/></button>
           <span aria-hidden="true">Review{round?` · ${completed}/${round.items.length}`:''}</span>
@@ -66,8 +67,7 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
         <aside ref={review} className="pqa-review" aria-label="Your project review" onMouseEnter={openPeek} onMouseLeave={()=>{if(panelCollapsed)closePeekSoon();}}
           onBlur={event=>{if(panelCollapsed&&!event.currentTarget.contains(event.relatedTarget as Node|null))closePeekSoon();}}
           onKeyDown={event=>{if(event.key==='Escape'&&panelState==='peek'){setPeek(false);(document.activeElement as HTMLElement|null)?.blur();}}}>
-          <StudioPanels ariaLabel="Project review panels" actions={panelCollapsed
-            ?<button type="button" className="pqa-panel-toggle" aria-label="Keep review panel open" title="Keep review panel open" onClick={()=>setPanelCollapsed(false)}><Pin size={15}/></button>
+          <StudioPanels ariaLabel="Project review panels" actions={panelCollapsed?undefined
             :<button type="button" className="pqa-panel-toggle" aria-label="Hide review panel" title="Hide review panel" onClick={()=>setPanelCollapsed(true)}><PanelRightClose size={15}/></button>}
             feedback={feedback} history={round?<History round={round}/>:<p>No review history yet.</p>} checklist={round?<>
             <div className="pqa-review-heading"><h3>{round.title}</h3><span>{completed}/{round.items.length} tested</span></div>
