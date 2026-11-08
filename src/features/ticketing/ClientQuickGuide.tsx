@@ -1,11 +1,11 @@
-import { ArrowRight, FolderKanban, LayoutDashboard, ListChecks, MessageSquareText } from 'lucide-react';
+import { ArrowRight, FolderKanban, House, ListChecks, MessageSquareText } from 'lucide-react';
 import { Modal } from '@/shared/components/Modal';
 
 type ClientPage = 'overview' | 'projects' | 'requests';
 
 const guideSections = [
   {
-    icon: LayoutDashboard,
+    icon: House,
     title: 'Overview',
     description: 'See recent project updates and requests that need your attention.',
     page: 'overview' as const,

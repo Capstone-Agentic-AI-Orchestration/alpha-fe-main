@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, CheckCircle2, CircleDot, FolderKanban, MessageSquare, RefreshCw, Send, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, CircleDot, FolderKanban, MessageSquare, RefreshCw, Send, Plus } from 'lucide-react';
 import { Modal } from '@/shared/components/Modal';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectProposal, ClientProjectProposalInput,
@@ -13,8 +13,9 @@ export function clientProjectKey(project: Pick<ClientProject, 'workspaceId' | 'p
   return JSON.stringify([project.workspaceId, project.projectId]);
 }
 
-export function ClientOverviewPage({ requests, projects, requestsLoading, requestsError, projectsLoading, projectsError,
-  onOpenRequest, onGoToProjects, onGoToRequests }: {
+export function ClientOverviewPage({ clientName, requests, projects, requestsLoading, requestsError, projectsLoading, projectsError,
+  onOpenRequest, onOpenProject, onGoToProjects, onGoToRequests }: {
+  clientName?: string;
   requests: ClientProjectRequestQueue | null;
   projects: ClientProject[];
   requestsLoading: boolean;
@@ -22,6 +23,7 @@ export function ClientOverviewPage({ requests, projects, requestsLoading, reques
   projectsLoading: boolean;
   projectsError: string;
   onOpenRequest: (request: ClientProjectRequestItem) => void;
+  onOpenProject: (project: ClientProject) => void;
   onGoToProjects: () => void;
   onGoToRequests: () => void;
 }) {
@@ -31,11 +33,12 @@ export function ClientOverviewPage({ requests, projects, requestsLoading, reques
   const inProgress = requests?.items.filter(item => item.status === 'in_progress').length ?? 0;
   const completed = requests?.items.filter(item => item.status === 'closed').length ?? 0;
   const summaryValue = (value: number) => requests ? String(value) : '—';
+  const firstName = clientName?.trim().split(/\s+/)[0] ?? '';
+  const recentProjects = [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 5);
   return <section className="client-page client-overview-page" aria-labelledby="client-overview-title">
-    <header className="client-page-heading client-overview-heading">
-      <div><h1 id="client-overview-title">Overview</h1>
-        <h2 className="client-overview-welcome">Welcome back</h2>
-        <p className="client-page-description">Here’s what’s happening with your requests and projects.</p></div>
+    <header className="client-overview-heading">
+      <h1 id="client-overview-title">{firstName ? `Welcome back, ${firstName}` : 'Welcome back'}</h1>
+      <p className="client-page-description">Here’s what’s happening with your requests and projects.</p>
     </header>
     <section className="client-overview-summary" aria-label="Request summary">
       <div className="client-overview-summary-item">
@@ -51,35 +54,44 @@ export function ClientOverviewPage({ requests, projects, requestsLoading, reques
         <span><strong>{summaryValue(completed)}</strong><small>Completed</small></span>
       </div>
     </section>
-    <section className="client-overview-section is-primary" aria-labelledby="client-attention-title">
-      <div className="client-section-heading"><div><h2 id="client-attention-title">Needs your attention</h2>
-        <p>A few things are waiting for your reply.</p></div>
-        <button type="button" className="client-text-action" onClick={onGoToRequests}>View all requests <ArrowRight size={15} /></button></div>
-      {requestsError && <p role="alert" className="client-project-error">{requestsError}</p>}
-      {!requests && requestsLoading ? <p role="status" className="client-section-state">Loading requests…</p>
-        : !requests ? null
-        : attention.length ? <div className="client-activity-list">{attention.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}</div>
-          : <p className="client-section-state">You’re all caught up. There are no requests waiting for your reply.</p>}
-    </section>
-    <section className="client-overview-section is-supporting" aria-labelledby="client-recent-title">
-      <div className="client-section-heading"><div><h2 id="client-recent-title">Recent request updates</h2>
-        <p>The latest updates from your project manager.</p></div></div>
-      {!requests && requestsLoading ? <p role="status" className="client-section-state">Loading updates…</p>
-        : !requests ? null
-        : recent.length ? <div className="client-activity-list">{recent.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}</div>
-          : <p className="client-section-state">No request updates yet. Your project manager will share requests here.</p>}
-      {requests?.nextCursor && <button type="button" className="client-text-action" onClick={onGoToRequests}>See all requests <ArrowRight size={15} /></button>}
-    </section>
-    <section className="client-overview-section is-supporting" aria-labelledby="client-projects-title">
-      <div className="client-section-heading"><div><h2 id="client-projects-title">Your projects</h2>
-        <p>Projects shared with you.</p></div>
-        <button type="button" className="client-text-action" onClick={onGoToProjects}>View all projects <ArrowRight size={15} /></button></div>
-      {projectsError && <p role="alert" className="client-project-error">{projectsError}</p>}
-      {projectsLoading && !projects.length ? <p role="status" className="client-section-state">Loading projects…</p>
-        : projects.length ? <div className="client-project-preview-list">{projects.slice(0, 3).map(project => <div key={clientProjectKey(project)}>
-        <FolderKanban size={17} aria-hidden /><span>{project.name}</span><small>Updated {time(project.updatedAt)}</small>
-      </div>)}</div> : <p className="client-section-state">No projects have been shared with your account yet.</p>}
-    </section>
+    <div className="client-overview-layout">
+      <div className="client-overview-main">
+        <section className="client-overview-panel" aria-labelledby="client-attention-title">
+          <div className="client-section-heading"><div><h2 id="client-attention-title">Needs your attention</h2>
+            <p>Requests waiting for your reply.</p></div>
+            <button type="button" className="client-text-action" onClick={onGoToRequests}>View all requests <ArrowRight size={15} /></button></div>
+          {requestsError && <p role="alert" className="client-project-error">{requestsError}</p>}
+          {!requests && requestsLoading ? <p role="status" className="client-section-state">Loading requests…</p>
+            : !requests ? null
+            : attention.length ? <div className="client-activity-list">{attention.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}</div>
+              : <p className="client-section-state is-clear"><CheckCircle2 size={16} aria-hidden />You’re all caught up. There are no requests waiting for your reply.</p>}
+        </section>
+        <section className="client-overview-panel" aria-labelledby="client-recent-title">
+          <div className="client-section-heading"><div><h2 id="client-recent-title">Recent request updates</h2>
+            <p>The latest updates from your project manager.</p></div>
+            {requests?.nextCursor && <button type="button" className="client-text-action" onClick={onGoToRequests}>See all <ArrowRight size={15} /></button>}</div>
+          {!requests && requestsLoading ? <p role="status" className="client-section-state">Loading updates…</p>
+            : !requests ? null
+            : recent.length ? <div className="client-activity-list">{recent.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}</div>
+              : <p className="client-section-state">No request updates yet. Your project manager will share requests here.</p>}
+        </section>
+      </div>
+      <aside className="client-overview-rail">
+        <section className="client-overview-panel" aria-labelledby="client-projects-title">
+          <div className="client-section-heading"><div><h2 id="client-projects-title">Your projects</h2>
+            <p>Projects shared with you.</p></div>
+            <button type="button" className="client-text-action" onClick={onGoToProjects}>View all <ArrowRight size={15} /></button></div>
+          {projectsError && <p role="alert" className="client-project-error">{projectsError}</p>}
+          {projectsLoading && !projects.length ? <p role="status" className="client-section-state">Loading projects…</p>
+            : recentProjects.length ? <div className="client-overview-projects">{recentProjects.map(project => <button type="button"
+              key={clientProjectKey(project)} onClick={() => onOpenProject(project)} aria-label={`Open ${project.name}`}>
+              <span className="client-overview-project-icon"><FolderKanban size={16} aria-hidden /></span>
+              <span className="client-overview-project-copy"><strong>{project.name}</strong><small>Updated {time(project.updatedAt)}</small></span>
+              <ChevronRight size={15} aria-hidden />
+            </button>)}</div> : <p className="client-section-state">No projects have been shared with your account yet.</p>}
+        </section>
+      </aside>
+    </div>
   </section>;
 }
 

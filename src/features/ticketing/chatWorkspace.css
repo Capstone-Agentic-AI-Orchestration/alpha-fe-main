@@ -420,9 +420,7 @@
 }
 .client-portal-shell .client-page-heading .client-eyebrow,
 .client-portal-shell .client-projects-heading .client-eyebrow { display: none; }
-.client-portal-shell .client-overview-page,
 .client-portal-shell .client-projects-page { gap: var(--client-space-5); }
-.client-portal-shell .client-overview-section { gap: var(--client-space-2); }
 .client-portal-shell .client-section-heading { gap: var(--client-space-3); }
 .client-portal-shell .client-section-heading h2,
 .client-portal-shell .client-project-overview h2,
@@ -430,17 +428,6 @@
 .client-portal-shell .client-section-heading p,
 .client-portal-shell .client-project-overview > div > p,
 .client-portal-shell .client-preview-destination p { font-size: var(--client-type-meta); }
-.client-portal-shell .client-overview-page .client-activity-row {
-  min-height: 64px;
-  gap: var(--client-space-3);
-  padding: var(--client-space-3) 0;
-}
-.client-portal-shell .client-overview-page .client-activity-copy strong { font-size: var(--client-type-compact); }
-.client-portal-shell .client-overview-page .client-activity-copy small,
-.client-portal-shell .client-overview-page .client-activity-row time,
-.client-portal-shell .client-overview-page .client-activity-status { font-size: var(--client-type-meta); }
-.client-portal-shell .client-project-preview-list { gap: var(--client-space-3); }
-.client-portal-shell .client-project-preview-list > div { padding: var(--client-space-3) 0; }
 .client-portal-shell .client-proposals { gap: var(--client-space-2); margin-top: 0; }
 .client-portal-shell .client-proposals .client-section-heading { padding-bottom: var(--client-space-2); }
 .client-portal-shell .client-project-list > button {
@@ -654,7 +641,6 @@
   letter-spacing: .14em;
 }
 .client-portal-shell .client-project-tabs button[aria-selected="true"] { font-weight: var(--client-weight-semibold); }
-.client-portal-shell .client-project-preview-list span,
 .client-portal-shell .client-project-list strong,
 .client-portal-shell .client-proposal-row strong { font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
 .client-portal-shell .client-project-overview-meta strong { color: rgb(var(--ui-text-primary)); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); }
@@ -669,112 +655,6 @@
   .client-portal-shell .client-page-heading h1,
   .client-portal-shell .client-projects-heading h1 { font-size: var(--client-type-page); }
   .client-portal-shell .client-project-detail-heading h1 { font-size: var(--client-type-page); }
-}
-
-/* Overview: friendly hierarchy with a light purple accent, kept flat and scannable. */
-.client-portal-shell .client-overview-page { gap: var(--client-space-5); }
-.client-portal-shell .client-overview-heading {
-  min-height: 0;
-  padding: 2px 0 0;
-  border-bottom: 0;
-}
-.client-portal-shell .client-overview-heading h1 {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: var(--client-type-page);
-  font-weight: var(--client-weight-bold);
-}
-.client-portal-shell .client-overview-heading h1::before {
-  display: block;
-  width: 3px;
-  height: 24px;
-  flex: 0 0 3px;
-  border-radius: var(--client-radius-pill);
-  background: rgb(var(--ui-accent));
-  content: '';
-}
-.client-portal-shell .client-overview-welcome {
-  margin: 18px 0 0;
-  color: rgb(var(--ui-text-primary));
-  font-size: var(--client-type-title);
-  font-weight: var(--client-weight-bold);
-  letter-spacing: -.03em;
-  line-height: var(--client-line-heading);
-}
-.client-portal-shell .client-overview-heading .client-page-description {
-  max-width: 650px;
-  margin-top: 5px;
-  font-size: var(--client-type-compact);
-}
-.client-portal-shell .client-overview-summary {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  border-bottom: 1px solid rgb(var(--ui-divider));
-}
-.client-portal-shell .client-overview-summary-item {
-  display: flex;
-  min-height: 72px;
-  align-items: center;
-  gap: var(--client-space-3);
-  padding: var(--client-space-3) 18px var(--client-space-4) 0;
-  border-right: 1px solid rgb(var(--ui-divider));
-}
-.client-portal-shell .client-overview-summary-item + .client-overview-summary-item { padding-left: 22px; }
-.client-portal-shell .client-overview-summary-item:last-child { border-right: 0; }
-.client-portal-shell .client-overview-summary-icon {
-  display: grid;
-  width: 36px;
-  height: 36px;
-  flex: 0 0 36px;
-  place-items: center;
-  border: 1px solid rgb(var(--ui-divider));
-  border-radius: var(--client-radius-surface);
-  background: rgb(var(--ui-selected));
-  color: rgb(var(--ui-accent));
-}
-.client-portal-shell .client-overview-summary-item.is-progress .client-overview-summary-icon {
-  background: rgb(var(--ui-status-info-subtle));
-  color: rgb(var(--ui-status-info));
-}
-.client-portal-shell .client-overview-summary-item.is-complete .client-overview-summary-icon {
-  background: rgb(var(--ui-status-success-subtle));
-  color: rgb(var(--ui-status-success));
-}
-.client-portal-shell .client-overview-summary-item strong {
-  display: block;
-  color: rgb(var(--ui-text-primary));
-  font-size: var(--client-type-page);
-  font-weight: var(--client-weight-bold);
-  line-height: 1;
-}
-.client-portal-shell .client-overview-summary-item small {
-  display: block;
-  margin-top: 5px;
-  color: rgb(var(--ui-text-secondary));
-  font-size: var(--client-type-meta);
-}
-.client-portal-shell .client-overview-page .client-section-heading h2 {
-  font-size: var(--client-type-body);
-  font-weight: var(--client-weight-bold);
-}
-.client-portal-shell .client-overview-page .client-section-heading p { font-size: var(--client-type-meta); }
-
-@media (max-width: 767px) {
-  .client-portal-shell .client-overview-welcome {
-    margin-top: 14px;
-    font-size: var(--client-type-page);
-  }
-  .client-portal-shell .client-overview-heading .client-page-description { font-size: var(--client-type-meta); }
-  .client-portal-shell .client-overview-summary { grid-template-columns: 1fr; }
-  .client-portal-shell .client-overview-summary-item,
-  .client-portal-shell .client-overview-summary-item + .client-overview-summary-item {
-    min-height: 54px;
-    padding: 10px 0;
-    border-right: 0;
-    border-bottom: 1px solid rgb(var(--ui-divider));
-  }
-  .client-portal-shell .client-overview-summary-item:last-child { border-bottom: 0; }
 }
 
 /* Keep request filtering compact with one accessible dropdown. */
@@ -857,56 +737,6 @@
   }
 }
 
-/* Give the overview a clear reading order: action first, updates and projects second. */
-.client-portal-shell .client-overview-page .client-overview-section .client-section-heading h2 {
-  color: rgb(var(--ui-text-primary));
-  font-size: var(--client-type-body);
-  font-weight: var(--client-weight-semibold);
-  letter-spacing: -.015em;
-  line-height: var(--client-line-heading);
-}
-.client-portal-shell .client-overview-page .client-overview-section.is-primary {
-  padding-top: 2px;
-}
-.client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading h2 {
-  display: flex;
-  align-items: center;
-  gap: var(--client-space-2);
-  font-size: var(--client-type-subheading);
-  font-weight: var(--client-weight-bold);
-  letter-spacing: -.025em;
-}
-.client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading h2::before {
-  width: 4px;
-  height: 18px;
-  flex: 0 0 4px;
-  border-radius: var(--client-radius-pill);
-  background: rgb(var(--ui-accent));
-  content: '';
-}
-.client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading p {
-  font-size: var(--client-type-meta);
-}
-.client-portal-shell .client-overview-page .client-overview-section:not(.is-primary) {
-  padding-top: var(--client-space-1);
-}
-.client-portal-shell .client-overview-page .client-overview-section:not(.is-primary) .client-section-heading h2 {
-  color: rgb(var(--ui-text-primary));
-}
-.client-portal-shell .client-overview-page .client-overview-section.is-supporting .client-section-heading h2 {
-  display: flex;
-  align-items: center;
-  gap: var(--client-space-2);
-}
-.client-portal-shell .client-overview-page .client-overview-section.is-supporting .client-section-heading h2::before {
-  width: 3px;
-  height: 14px;
-  flex: 0 0 3px;
-  border-radius: var(--client-radius-pill);
-  background: rgb(var(--ui-accent));
-  content: '';
-}
-
 /* Shared projects lead the projects page; proposals stay available below them. */
 .client-portal-shell .client-existing-projects {
   display: grid;
@@ -925,19 +755,6 @@
   font-weight: var(--client-weight-semibold);
 }
 
-@media (max-width: 767px) {
-  .client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading h2 { font-size: var(--client-type-body); }
-  .client-portal-shell .client-overview-page .client-overview-section.is-primary .client-section-heading h2::before {
-    width: 3px;
-    height: 16px;
-    flex-basis: 3px;
-  }
-  .client-portal-shell .client-overview-page .client-overview-section.is-supporting .client-section-heading h2::before {
-    width: 3px;
-    height: 13px;
-    flex-basis: 3px;
-  }
-}
 .pm-tickets__context-panel .ticket-documents-panel button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
 .pm-ticket-preview > div > main { padding-top: 65px; }
