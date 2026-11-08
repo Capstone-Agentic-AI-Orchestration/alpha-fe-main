@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  AlertCircle, ArrowRight, Check, ChevronDown, ChevronLeft, FileText, FolderKanban, LayoutDashboard,
+  AlertCircle, ArrowRight, Check, ChevronDown, ChevronLeft, FileText, FolderKanban, House,
   CircleHelp, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket,
 } from 'lucide-react';
 
@@ -578,8 +578,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       openRequest(update.target.item);
       return;
     }
+    openProject(update.target.item);
+  }
+
+  function openProject(project: ClientProject) {
     setPage('projects'); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
-    setSelectedProjectKey(clientProjectKey(update.target.item));
+    setSelectedProjectKey(clientProjectKey(project));
     setNotificationProjectFocus(value => value + 1);
   }
 
@@ -605,7 +609,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       <div className="client-sidebar-brand"><img src={alphaMarkUrl} alt="" /><div><strong>Alphaexplora</strong><small>Client portal</small></div></div>
       <nav className="client-sidebar-nav">
         <button type="button" aria-current={currentNav === 'overview' ? 'page' : undefined} onClick={() => navigate('overview')}>
-          <LayoutDashboard size={18} /><span>Overview</span>
+          <House size={18} /><span>Overview</span>
         </button>
         <button type="button" aria-current={currentNav === 'projects' ? 'page' : undefined} onClick={() => navigate('projects')}>
           <FolderKanban size={18} /><span>Projects</span>
@@ -657,7 +661,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         </>}>
           <WorkspaceTabStrip label="Client portal pages">
             {tabs.map(tab => <WorkspaceTab key={tab.id} title={tab.navigation.page === 'overview' ? 'Overview' : tab.navigation.page === 'projects' ? 'Projects' : 'Requests'}
-              icon={tab.navigation.page === 'overview' ? <LayoutDashboard size={14} /> : tab.navigation.page === 'projects' ? <FolderKanban size={14} /> : <ListChecks size={14} />}
+              icon={tab.navigation.page === 'overview' ? <House size={14} /> : tab.navigation.page === 'projects' ? <FolderKanban size={14} /> : <ListChecks size={14} />}
               active={activeTabId === tab.id} onActivate={() => { if (activeTabId !== tab.id) changeWorkspaceTab(() => activateTab(tab.id)); }}
               onClose={() => {
                 if (writing || pending || view === 'create') return;
@@ -667,7 +671,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </WorkspaceTabStrip>
           <WorkspaceNewTabMenu boundaryRef={workspaceFrameRef} portalRootRef={portalRootRef} disabled={writing || Boolean(pending) || view === 'create'}
             items={[
-              { id: 'overview', title: 'Overview', subtitle: 'Your shared projects and request updates', icon: <LayoutDashboard size={18} /> },
+              { id: 'overview', title: 'Overview', subtitle: 'Your shared projects and request updates', icon: <House size={18} /> },
               { id: 'projects', title: 'Projects', subtitle: 'Projects shared by your project manager', icon: <FolderKanban size={18} /> },
               { id: 'requests', title: 'Requests', subtitle: 'Follow requests and message your project manager', icon: <ListChecks size={18} /> },
             ]} onSelect={id => changeWorkspaceTab(() => openTab(id as Page))} />
@@ -678,9 +682,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
         {refreshError && <div role="status" className="client-portal-error">{refreshError}</div>}
 
-        {page === 'overview' && <ClientOverviewPage requests={queue} projects={projects ?? []}
+        {page === 'overview' && <ClientOverviewPage clientName={session?.fullName ?? ''} requests={queue} projects={projects ?? []}
           requestsLoading={queueLoading} requestsError={queueError} projectsLoading={projectsLoading} projectsError={projectsError}
-          onOpenRequest={item => openRequest(item)} onGoToProjects={() => navigate('projects')}
+          onOpenRequest={item => openRequest(item)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
           onGoToRequests={() => navigate('requests')} />}
 
         {page === 'projects' && view === 'create' && createContext && createProject && <div className="client-create-view client-create-view--project">
