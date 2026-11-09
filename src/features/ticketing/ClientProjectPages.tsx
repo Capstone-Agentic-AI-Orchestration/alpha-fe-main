@@ -9,10 +9,9 @@ import { clientTicketApi, ClientTicketApiError } from './clientApi';
 import { clientTicketProgress } from './clientTicketProgress';
 import { time } from './ticketUi';
 import { ClientProjectQaStudio } from './ClientProjectQaStudio';
+import { clientProjectKey, projectLoadError, ProjectOverviewTab, ProjectRequestsTab, type ProjectRequestFilter } from './ClientProjectSections';
 
-export function clientProjectKey(project: Pick<ClientProject, 'workspaceId' | 'projectId'>): string {
-  return JSON.stringify([project.workspaceId, project.projectId]);
-}
+export { clientProjectKey } from './ClientProjectSections';
 
 export function ClientOverviewPage({ clientName, requests, projects, requestsLoading, requestsError, projectsLoading, projectsError,
   onOpenRequest, onOpenProject, onGoToProjects, onGoToRequests }: {
@@ -132,14 +131,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   const [proposalSuccess, setProposalSuccess] = useState('');
   const pendingProposal = useRef<ClientProjectProposalInput | null>(null);
   const [tab, setTab] = useState<'overview' | 'preview' | 'requests'>('overview');
-  useEffect(() => { setTab('overview'); }, [selectedProjectKey, projectFocusVersion]);
-  const [requestResult, setRequestResult] = useState<{ key: string; page: ClientProjectRequestQueue } | null>(null);
-  const [requestLoading, setRequestLoading] = useState(false);
-  const [requestError, setRequestError] = useState('');
-  const [requestSearchInput, setRequestSearchInput] = useState('');
-  const [requestSearch, setRequestSearch] = useState('');
-  const [requestRefresh, setRequestRefresh] = useState(0);
-  const [requestMoreLoading, setRequestMoreLoading] = useState(false);
+  const [requestFilter, setRequestFilter] = useState<ProjectRequestFilter>('all');
+  useEffect(() => { setTab('overview'); setRequestFilter('all'); }, [selectedProjectKey, projectFocusVersion]);
   const [feedbackResult, setFeedbackResult] = useState<{ key: string; items: ClientProjectFeedbackMessage[] } | null>(null);
   const [feedbackCursor, setFeedbackCursor] = useState<string | null>(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
@@ -148,8 +141,6 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   const [feedbackRefresh, setFeedbackRefresh] = useState(0);
   const [projectDrafts, setProjectDrafts] = useState<Record<string,string>>({});
   const projectKey=selectedProject?clientProjectKey(selectedProject):'';
-  const requestScope = JSON.stringify([projectKey, requestSearch]);
-  const requestPage = requestResult?.key === requestScope ? requestResult.page : null;
   const feedbackReady = feedbackResult?.key === projectKey;
   const feedback = feedbackReady ? feedbackResult.items : [];
   const activeProject=useRef(projectKey);activeProject.current=projectKey;
@@ -194,24 +185,6 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   }
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setRequestSearch(requestSearchInput.trim()), 250);
-    return () => window.clearTimeout(timer);
-  }, [requestSearchInput]);
-
-  useEffect(() => {
-    if (!selectedProject || tab !== 'requests') return;
-    let active = true;
-    setRequestLoading(true); setRequestError('');
-    void api.listProjectRequests(selectedProject.workspaceId, selectedProject.projectId,
-      { limit: 50, search: requestSearch, filter: 'all' }).then(page => {
-      if (active) setRequestResult({ key: requestScope, page });
-    }).catch(error => {
-      if (active) setRequestError(projectLoadError(error, 'requests'));
-    }).finally(() => { if (active) setRequestLoading(false); });
-    return () => { active = false; };
-  }, [api, selectedProject?.workspaceId, selectedProject?.projectId, requestSearch, requestRefresh, tab]);
-
-  useEffect(() => {
     if (!selectedProject || tab !== 'preview') return;
     let active = true;
     setFeedbackLoading(true); setFeedbackError('');
@@ -222,19 +195,6 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     }).finally(() => { if (active) setFeedbackLoading(false); });
     return () => { active = false; };
   }, [api, selectedProject?.workspaceId, selectedProject?.projectId, feedbackRefresh, tab]);
-
-  async function loadMoreRequests() {
-    if (!selectedProject || !requestPage?.nextCursor || requestMoreLoading) return;
-    setRequestMoreLoading(true); setRequestError('');
-    try {
-      const page = await api.listProjectRequests(selectedProject.workspaceId, selectedProject.projectId,
-        { limit: 50, after: requestPage.nextCursor, search: requestSearch, filter: 'all' });
-      if(activeProject.current!==projectKey)return;
-      const seen = new Set(requestPage.items.map(requestKey));
-      setRequestResult(current => current?.key === requestScope ? { key: requestScope, page: { ...page, items: [...requestPage.items, ...page.items.filter(item => !seen.has(requestKey(item)))] } } : current);
-    } catch (error) { setRequestError(projectLoadError(error, 'requests')); }
-    finally { setRequestMoreLoading(false); }
-  }
 
   async function loadMoreFeedback() {
     if (!selectedProject || !feedbackReady || !feedbackCursor || feedbackMoreLoading) return;
@@ -261,6 +221,9 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     finally { setSending(false); }
   }
 
+  const newRequestButton = selectedProject && newRequestEnabled ? <button type="button" className="client-primary-action" disabled={newRequestLoading}
+    onClick={() => onNewRequest(selectedProject)}><Plus size={15} />{newRequestLoading ? 'Checking access…' : 'New request'}</button> : null;
+
   if (selectedProject) return <section className="client-page client-project-detail" aria-labelledby={`${idPrefix}-project-title`}>
     <h1 id={`${idPrefix}-project-title`} className="sr-only">{selectedProject.name}</h1>
     <div className="client-project-bar">
@@ -271,16 +234,9 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
           aria-selected={tab === value} onClick={() => setTab(value)}>{value === 'preview' ? 'Project Review' : value[0].toUpperCase() + value.slice(1)}</button>)}
       </div>
     </div>
-    {tab === 'overview' && <div className="client-project-overview">
-      <div><p className="client-eyebrow">SHARED WITH YOU</p><h2>{selectedProject.name}</h2>
-        <p>Requests linked by your project manager appear in this project. New requests are reviewed before they are linked or work begins.</p>
-      </div>
-      <div className="client-project-overview-meta">
-        <span>Last updated <strong>{time(selectedProject.updatedAt)}</strong></span>
-        <span>Preview <strong>{selectedProject.preview ? 'UAT · reviewed by your project manager' : 'Not shared yet'}</strong></span>
-      </div>
-      <button type="button" className="client-text-action" onClick={() => setTab('requests')}>View project requests <ArrowRight size={15} /></button>
-    </div>}
+    {tab === 'overview' && <ProjectOverviewTab api={api} project={selectedProject} inspectionOnly={inspectionOnly} refreshToken={refreshToken}
+      onOpenRequest={item => onOpenRequest(item)} onShowReview={() => setTab('preview')}
+      onShowRequests={filter => { setRequestFilter(filter); setTab('requests'); }} />}
     {tab === 'preview' && <ClientProjectQaStudio key={clientProjectKey(selectedProject)} workspaceId={selectedProject.workspaceId}
       projectId={selectedProject.projectId} projectName={selectedProject.name} inspectionOnly={inspectionOnly} refreshToken={refreshToken} feedback={
       <section className="client-feedback" aria-labelledby={`${idPrefix}-feedback-title`}>
@@ -310,40 +266,19 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         </form>
       </section>
     }/>}
-    {tab === 'requests' && <section className="client-project-requests" aria-labelledby={`${idPrefix}-project-requests-title`}>
-      <div className="client-section-heading"><div><h2 id={`${idPrefix}-project-requests-title`}>Requests in this project</h2>
-        <p>Only requests returned for this shared project are shown here.</p></div>
-        <div className="client-section-actions">
-          <button type="button" className="client-icon-action" aria-label="Refresh project requests" disabled={requestLoading}
-            onClick={() => setRequestRefresh(value => value + 1)}><RefreshCw size={15} /></button>
-          {newRequestEnabled && <button type="button" className="client-primary-action" disabled={newRequestLoading} onClick={() => onNewRequest(selectedProject)}>
-            <Plus size={15} />{newRequestLoading ? 'Checking access…' : 'New request'}</button>}
-        </div></div>
-      <label className="client-search"><span className="sr-only">Search project requests</span>
-        <input value={requestSearchInput} onChange={event => setRequestSearchInput(event.target.value)} placeholder="Search project requests" /></label>
-      {requestError && <p role="alert" className="client-project-error">{requestError} <button type="button" onClick={() => setRequestRefresh(value => value + 1)}>Try again</button></p>}
-      <div className="client-activity-list">
-        {!requestPage && !requestError ? <LoadingRows label="Loading project requests" layout="table" />
-          : requestPage?.items.length ? requestPage.items.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)
-            : !requestError && <p className="client-section-state">No requests are linked to this project yet.</p>}
-      </div>
-      {requestPage?.nextCursor && <button type="button" className="client-text-action" disabled={requestMoreLoading} onClick={() => void loadMoreRequests()}>
-        {requestMoreLoading ? 'Loading…' : 'Load more requests'} <ArrowRight size={15} />
-      </button>}
-    </section>}
+    {tab === 'requests' && <ProjectRequestsTab api={api} project={selectedProject} refreshToken={refreshToken} filter={requestFilter}
+      onFilterChange={setRequestFilter} onOpenRequest={onOpenRequest} newRequest={newRequestButton} idPrefix={idPrefix} />}
   </section>;
 
   return <section className="client-page client-projects-page" aria-labelledby={`${idPrefix}-projects-page-title`}>
-    <header className="client-projects-heading"><div><p className="client-eyebrow">CLIENT PORTAL</p><h1 id={`${idPrefix}-projects-page-title`}>Projects</h1>
-      <p className="client-page-description">Projects your project manager has shared with you.</p></div>
-      {!inspectionOnly && <button type="button" className="client-primary-action" aria-haspopup="dialog" aria-expanded={proposalFormOpen} onClick={() => { setProposalFormOpen(true); setProposalSuccess(''); }}>
-        <Plus size={15} />Propose a project
-      </button>}
-    </header>
+    <h1 id={`${idPrefix}-projects-page-title`} className="sr-only">Projects</h1>
     {error && <p role="alert" className="client-project-error">{error}</p>}
     <section className="client-existing-projects" aria-labelledby="client-existing-projects-title">
       <div className="client-section-heading"><div><h2 id="client-existing-projects-title">Your projects</h2>
-        <p>Project spaces already shared with your account.</p></div></div>
+        <p>Project spaces already shared with your account.</p></div>
+        {!inspectionOnly && <button type="button" className="client-primary-action" aria-haspopup="dialog" aria-expanded={proposalFormOpen} onClick={() => { setProposalFormOpen(true); setProposalSuccess(''); }}>
+          <Plus size={15} />Propose a project
+        </button>}</div>
       {loading ? <LoadingRows label="Loading your projects" />
         : projects.length ? <div className="client-project-list">{[...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(project => <button
           key={clientProjectKey(project)} type="button" onClick={() => { onSelectedProjectKeyChange(clientProjectKey(project)); setTab('overview'); }}>
@@ -412,14 +347,3 @@ function FeedbackBubble({ message }: { message: ClientProjectFeedbackMessage }) 
 }
 
 function requestKey(item: ClientProjectRequestItem): string { return `${item.workspaceId}\u0000${item.id}`; }
-
-function projectLoadError(error: unknown, area: 'requests' | 'feedback' | 'send'): string {
-  if (error instanceof ClientTicketApiError) {
-    if (error.status === 401) return 'Your sign-in has expired. Sign in again to continue.';
-    if (error.status === 403 || error.status === 404) return area === 'send'
-      ? 'Project access could not be verified. Refresh and try again.' : 'This shared project is no longer available to your account.';
-    if (error.reconciliationRequired) return 'We could not confirm whether your message was sent. Refresh the conversation before trying again.';
-  }
-  return area === 'send' ? 'Your message could not be sent. Try again.'
-    : area === 'feedback' ? 'Could not load the project conversation.' : 'Could not load requests for this project.';
-}
