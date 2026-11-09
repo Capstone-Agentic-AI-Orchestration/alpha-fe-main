@@ -1,4 +1,4 @@
-/** The sections of a repository's page, one per tab, in the order they are shown. */
+/** The sections of a project's workspace, one per tab, in the order they are shown. */
 export const REPO_TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'code', label: 'Code' },
@@ -35,25 +35,5 @@ export function tabForKey(current: RepoTab, key: string): RepoTab | null {
       return IDS[IDS.length - 1];
     default:
       return null;
-  }
-}
-
-/** The last tab this viewer had open, kept on this device only. */
-const STORAGE_KEY = 'alpha.repository.tab';
-
-export function readStoredTab(): RepoTab {
-  try {
-    const stored = window.localStorage.getItem(STORAGE_KEY);
-    return isRepoTab(stored) ? stored : 'overview';
-  } catch {
-    return 'overview';
-  }
-}
-
-export function storeTab(tab: RepoTab): void {
-  try {
-    window.localStorage.setItem(STORAGE_KEY, tab);
-  } catch {
-    /* storage blocked: the tab is simply not remembered */
   }
 }

@@ -1,5 +1,5 @@
 import { ExecutionOwnerSelect } from '@/shared/components/ExecutionOwnerSelect';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { 
   Plus, 
@@ -16,11 +16,7 @@ import {
   Flame, 
   Minus,
   Bot,
-  Kanban as KanbanIcon,
-  List as ListIcon,
   ChevronLeft,
-  ShieldCheck,
-  Workflow,
 } from 'lucide-react';
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
@@ -46,8 +42,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
     agents,
     squads,
-    can,
-    role
+    can
   } = useApp();
 
   const canManageProjects = can('manage_projects');
@@ -67,13 +62,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
   // Search & Filters on main list
   const [searchQuery, setSearchQuery] = useTabSessionState<string>('projects.search', '');
-  /**
-   * Mine, or the whole workspace.
-   *
-   * The API returns only projects created by active PMs. This switch separates
-   * assigned work from the wider PM-owned workspace catalogue.
-   */
-  const [scope, setScope] = useTabSessionState<'mine' | 'all'>('projects.scope', 'mine');
   const [statusFilter, setStatusFilter] = useTabSessionState<string>('projects.statusFilter', 'all');
   const [priorityFilter, setPriorityFilter] = useTabSessionState<string>('projects.priorityFilter', 'all');
   const [filterDropdownOpen, setFilterDropdownOpen] = useState<boolean>(false);
@@ -81,9 +69,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
   const [sortBy, setSortBy] = useTabSessionState<'createdAt' | 'name' | 'progress' | 'targetDate'>('projects.sortBy', 'createdAt');
 
-  // Workspace board view state
-  const [boardViewMode, setBoardViewMode] = useTabSessionState<'kanban' | 'list' | 'repository'>('projects.boardView', 'kanban');
-  const [boardSearchQuery, setBoardSearchQuery] = useTabSessionState<string>('projects.boardSearch', '');
 
   // Selected project memo
   const selectedProject = useMemo(() => {
@@ -95,9 +80,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const attachedRepos = (selectedProject?.resources ?? [])
     .filter(r => r.type === 'github_repo')
     .map(r => r.pathOrUrl);
-  const { repos: projectRepos } = useProjectRepos(selectedProject?.id ?? null, attachedRepos);
-  /** The repository view replaces the board, and only exists while there is a repository to show. */
-  const showRepository = boardViewMode === 'repository' && projectRepos.length > 0;
+  const { repos: projectRepos, loading: repositoriesLoading } = useProjectRepos(selectedProject?.id ?? null, attachedRepos);
 
   // `key` is UNIQUE in the daemon's schema and a duplicate makes the write fail
   // with nothing on screen to explain it. Flag it while the dialog is still open.
@@ -111,7 +94,6 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   // Filter and Sort Main Projects List
   const filteredProjects = useMemo(() => {
     let list = projects.filter(p => {
-      if (scope === 'mine' && p.assigned === false) return false;
       if (statusFilter !== 'all' && p.status !== statusFilter) return false;
       if (priorityFilter !== 'all' && (p.priority || 'none') !== priorityFilter) return false;
       if (searchQuery.trim()) {
@@ -141,36 +123,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     });
 
     return list;
-  }, [projects, issues, scope, statusFilter, priorityFilter, searchQuery, sortBy, sortOrder]);
+  }, [projects, issues, statusFilter, priorityFilter, searchQuery, sortBy, sortOrder]);
 
-  /**
-   * How many are the caller's own. A project with no `assigned` field at all
-   * is from a daemon that predates the distinction, and counts as theirs.
-   */
-  const mineCount = useMemo(() => projects.filter(p => p.assigned !== false).length, [projects]);
-
-  // Nothing assigned yet is the common case for a new developer, and an empty
-  // "My projects" with a populated workspace behind it looks like a bug.
-  useEffect(() => {
-    if (mineCount === 0 && projects.length > 0) setScope('all');
-  }, [mineCount, projects.length]);
-
-  // Issues belonging to currently selected project
-  const projectIssues = useMemo(() => {
-    if (!selectedProject) return [];
-    return issues.filter(i => {
-      if (i.projectId !== selectedProject.id) return false;
-      if (boardSearchQuery.trim()) {
-        const q = boardSearchQuery.toLowerCase();
-        return (
-          i.title.toLowerCase().includes(q) ||
-          (i.identifier && i.identifier.toLowerCase().includes(q)) ||
-          i.description.toLowerCase().includes(q)
-        );
-      }
-      return true;
-    });
-  }, [selectedProject, issues, boardSearchQuery]);
+  const projectIssues = useMemo(() => issues.filter(issue => issue.projectId === selectedProject?.id),
+    [issues, selectedProject?.id]);
 
   // Bound Agents in this project
   const boundAgents = useMemo(() => {
@@ -227,7 +183,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   };
 
   // =========================================================================
-  // VIEW 1: DEDICATED PROJECT WORKSPACE (KANBAN BOARD + RIGHT PROPERTIES)
+  // VIEW 1: PROJECT WORKSPACE
   // =========================================================================
   if (selectedProject) {
     const totalCount = issues.filter(i => i.projectId === selectedProject.id).length;
@@ -238,7 +194,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       <div className="h-full flex flex-col overflow-hidden bg-shell text-gray-300 select-none font-sans">
         
         {/* ================= WORKSPACE TOP BREADCRUMB & ACTION BAR ================= */}
-        <div className="flex flex-shrink-0 items-center justify-between gap-4 border-b border-white/[0.06] bg-shell px-5 py-3">
+        <div className="flex flex-shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/[0.06] bg-shell px-4 py-3 sm:px-5">
           
           {/* Left: Breadcrumbs navigation */}
           <div className="flex items-center gap-3 min-w-0">
@@ -261,62 +217,10 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
             </div>
           </div>
 
-          {/* Right: Board Search, View Toggle, Edit & New Task Actions */}
-          <div className="flex items-center gap-2">
-            
-            {/* Search Input — issues only, so it goes with the board. */}
-            {!showRepository && (
-            <div className="relative w-48">
-              <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={boardSearchQuery}
-                onChange={(e) => setBoardSearchQuery(e.target.value)}
-                placeholder="Search issues..."
-                className="w-full bg-surface-raised border border-white/5 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-gray-500 focus:outline-none focus:border-white/20 transition-colors"
-              />
-            </div>
-            )}
-
-            {/* View Mode Toggle (Kanban vs List) */}
-            <div className="flex items-center bg-surface-raised border border-white/5 rounded-xl p-0.5 text-xs">
-              <button
-                onClick={() => setBoardViewMode('kanban')}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  boardViewMode === 'kanban' || (boardViewMode === 'repository' && !showRepository) ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
-                }`}
-                title="Kanban Board"
-                aria-label="Kanban board"
-                aria-pressed={boardViewMode === 'kanban' || (boardViewMode === 'repository' && !showRepository)}
-              >
-                <KanbanIcon className="w-3.5 h-3.5" />
-              </button>
-              <button
-                onClick={() => setBoardViewMode('list')}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  boardViewMode === 'list' ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
-                }`}
-                title="List View"
-                aria-label="List view"
-                aria-pressed={boardViewMode === 'list'}
-              >
-                <ListIcon className="w-3.5 h-3.5" />
-              </button>
-              {projectRepos.length > 0 && (
-                <button
-                  onClick={() => setBoardViewMode('repository')}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    showRepository ? 'bg-white/10 text-white font-semibold' : 'text-gray-400 hover:text-white'
-                  }`}
-                  title="Repository & pipeline"
-                  aria-label="Repository and pipeline"
-                  aria-pressed={showRepository}
-                >
-                  <Workflow className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-
+          <div className="flex shrink-0 items-center gap-3">
+            <span className="text-xs tabular-nums text-emerald-400" aria-label="Project progress">
+              {doneCount}/{totalCount} done ({progressPercent}%)
+            </span>
             {/* Edit Project */}
             {canEditProjects && (
               <button
@@ -328,201 +232,94 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               </button>
             )}
 
-            {/* New Issue Button */}
-            {canManageIssues && (
-              <button
-                onClick={() => onOpenNewIssue?.()}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 text-on-accent text-xs font-semibold shadow-glow-brand transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Add issue</span>
-              </button>
-            )}
           </div>
         </div>
 
-        {/* ================= MAIN WORKSPACE SPLIT (KANBAN + RIGHT PROPERTIES) ================= */}
-        <div className="flex-1 flex overflow-hidden">
-          
-          {/*
-            The board, rather than a second one that looked like it.
-
-            This was ~185 lines of its own kanban: four columns to the real
-            board's five, folding backlog into Todo, with cards that carried
-            hover styling and a cursor-pointer and no onClick — so an issue
-            could not be opened, commented on, assigned a squad, or approved
-            from the page dedicated to its project.
-
-            IssuesView locked to this project is the same board everywhere, so
-            the two cannot drift apart again.
-          */}
-          {showRepository ? (
-            // The repository needs the room a file viewer needs; the rail is
-            // 320px, so the entry point lives there and the view lives here.
-            <div className="flex-1 min-w-0 overflow-y-auto p-5 select-text">
-              <ProjectRepositoryView projectId={selectedProject.id} repositories={projectRepos} />
-            </div>
-          ) : (
-            <div className="flex-1 overflow-hidden">
-              <IssuesView
-                embedded
-                lockedProjectId={selectedProject.id}
-                onOpenNewIssue={canManageIssues ? () => onOpenNewIssue?.() : () => {}}
-              />
+        <ProjectRepositoryView
+          key={selectedProject.id}
+          projectId={selectedProject.id}
+          repositories={projectRepos}
+          repositoriesLoading={repositoriesLoading}
+          onManageRepositories={canEditProjects ? () => setResourcesModalOpen(true) : undefined}
+          overview={(
+            <div className="flex h-full min-h-0 flex-col">
+              <details className="group shrink-0 border-b border-white/[0.06] text-xs">
+                <summary className="cursor-pointer px-5 py-3 text-gray-400 transition-colors hover:text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-400">
+                  <span className="ml-1 font-medium">Project details</span>
+                  <span className="ml-3 capitalize text-gray-500">{selectedProject.status.replace('_', ' ')}</span>
+                  <span className="ml-3 text-gray-500">{projectRepos.length} repositories</span>
+                </summary>
+                <div className="grid max-h-[45vh] gap-5 overflow-y-auto px-5 pb-5 md:grid-cols-2 xl:grid-cols-3">
+                  <section className="space-y-3">
+                    <h2 className="font-medium text-gray-300">Properties</h2>
+                    <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-5 gap-y-3">
+                      <dt className="text-gray-500">Status</dt>
+                      <dd className="capitalize">{selectedProject.status.replace('_', ' ')}</dd>
+                      <dt className="text-gray-500">Priority</dt>
+                      <dd className="capitalize">{selectedProject.priority || 'Medium'}</dd>
+                      <dt className="text-gray-500">Execution owner</dt>
+                      <dd className="flex min-w-0 items-center gap-1.5">
+                        <Bot className="h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
+                        <span className="truncate">{selectedProject.leadSquadId ? squads.find(squad => squad.id === selectedProject.leadSquadId)?.name || selectedProject.leadName || 'Squad' : agents.find(agent => agent.id === selectedProject.leadAgentId)?.name || selectedProject.leadName || 'Unassigned'}</span>
+                      </dd>
+                      <dt className="text-gray-500">Target date</dt>
+                      <dd>{selectedProject.targetDate || 'No deadline'}</dd>
+                    </dl>
+                    {boundAgents.length > 0 && (
+                      <div className="space-y-2 pt-2">
+                        <h3 className="text-gray-400">Active agents ({boundAgents.length})</h3>
+                        <div className="flex flex-wrap gap-2">
+                          {boundAgents.map(agent => (
+                            <div key={agent.id} className="flex min-w-0 items-center gap-2 rounded-lg border border-white/5 px-2 py-1.5" title={agent.role}>
+                              <img src={agent.avatar} alt="" className="h-5 w-5 rounded-full object-cover" />
+                              <span className="truncate">{agent.name}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </section>
+                  <section className="space-y-2">
+                    <h2 className="flex items-center gap-1.5 font-medium text-gray-300">
+                      <Sparkles className="h-3.5 w-3.5 text-brand-400" aria-hidden />Ground Rules &amp; Context
+                    </h2>
+                    <p className="select-text whitespace-pre-wrap break-words rounded-xl border border-white/5 bg-well p-3 font-mono text-[11px] leading-relaxed">
+                      {selectedProject.description || 'No specific ground rules configured.'}
+                    </p>
+                  </section>
+                  <section className="space-y-2 md:col-span-2 xl:col-span-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h2 className="flex items-center gap-1.5 font-medium text-gray-300">
+                        <GitBranch className="h-3.5 w-3.5 text-cyan-400" aria-hidden />Connected Repositories
+                      </h2>
+                      {canEditProjects && (
+                        <button type="button" onClick={() => setResourcesModalOpen(true)} className="inline-flex items-center gap-1 text-gray-400 hover:text-white">
+                          <Plus className="h-3 w-3" aria-hidden />
+                          {canProvisionRepositories ? 'Add repository' : 'Attach existing'}
+                        </button>
+                      )}
+                    </div>
+                    <ProjectResourcesPanel
+                      variant="inline"
+                      projectId={selectedProject.id}
+                      resources={selectedProject.resources || []}
+                      onChange={next => updateProject(selectedProject.id, { resources: next })}
+                      readOnly={!canEditProjects}
+                      canCreateRepository={canProvisionRepositories}
+                    />
+                  </section>
+                </div>
+              </details>
+              <div className="min-h-0 flex-1">
+                <IssuesView
+                  embedded
+                  lockedProjectId={selectedProject.id}
+                  onOpenNewIssue={canManageIssues ? () => onOpenNewIssue?.() : () => {}}
+                />
+              </div>
             </div>
           )}
-
-          {/* ================= RIGHT SIDE PANEL: PROPERTIES, STATUS, RESOURCES ================= */}
-          <div className="w-80 border-l border-white/5 bg-shell p-5 overflow-y-auto flex-shrink-0 space-y-6 text-xs font-sans">
-            
-            {/* 1. Progress. The bar duplicated the per-column counts sitting a
-                few inches to the left, so only the number survives. */}
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-medium text-gray-400">Progress</span>
-              <span className="text-emerald-400 tabular-nums">{doneCount}/{totalCount} done ({progressPercent}%)</span>
-            </div>
-
-            {/* 2. Metadata / Properties List */}
-            <div className="space-y-3 pt-2 border-t border-white/5">
-              <span className="text-[11px] font-medium text-gray-400 block">Properties</span>
-              
-              {/* Status */}
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500">Status</span>
-                <div className="flex items-center gap-1.5 font-mono text-gray-300 capitalize">
-                  <span className={`w-1.5 h-1.5 rounded-full ${
-                    selectedProject.status === 'in_progress' ? 'bg-cyan-400' :
-                    selectedProject.status === 'completed' ? 'bg-emerald-400' :
-                    selectedProject.status === 'paused' ? 'bg-amber-400' : 'bg-gray-500'
-                  }`} />
-                  <span>{selectedProject.status.replace('_', ' ')}</span>
-                </div>
-              </div>
-
-              {/* Priority */}
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500">Priority</span>
-                <span className="font-mono text-gray-300 capitalize">{selectedProject.priority || 'Medium'}</span>
-              </div>
-
-              {/* Project Lead */}
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500">Execution owner</span>
-                <div className="flex items-center gap-1.5 text-gray-300">
-                  <Bot className="w-3.5 h-3.5 text-gray-400" />
-                  <span className="truncate max-w-[120px]">{selectedProject.leadSquadId ? squads.find(squad => squad.id === selectedProject.leadSquadId)?.name || selectedProject.leadName || 'Squad' : agents.find(agent => agent.id === selectedProject.leadAgentId)?.name || selectedProject.leadName || 'Unassigned'}</span>
-                </div>
-              </div>
-
-              {/* Target Date */}
-              <div className="flex items-center justify-between">
-                <span className="text-gray-500">Target Date</span>
-                <span className="font-mono text-gray-300">{selectedProject.targetDate || 'No deadline'}</span>
-              </div>
-            </div>
-
-            {/* 3. Ground Rules & Agent Directive */}
-            <div className="space-y-2 pt-2 border-t border-white/5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-gray-400 flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-brand-400" />
-                  <span>Ground Rules & Context</span>
-                </span>
-              </div>
-              <p className="p-3 rounded-xl bg-well border border-white/5 text-gray-300 leading-relaxed font-mono text-[11px]">
-                {selectedProject.description || 'No specific ground rules configured.'}
-              </p>
-            </div>
-
-            {/* 4. Connected Code Resources. The rail lists what is attached and
-                nothing more — both attach forms carry eight controls between
-                them, which never fit a 320px column, so they live in a dialog. */}
-            <div className="space-y-2 pt-2 border-t border-white/5">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-medium text-gray-400 flex items-center gap-1.5">
-                  <GitBranch className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>Connected Repositories</span>
-                </span>
-                {canEditProjects && (
-                  <button
-                    onClick={() => setResourcesModalOpen(true)}
-                    className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-white transition-colors"
-                    title={canProvisionRepositories
-                      ? 'Create or attach a repository'
-                      : 'Attach an existing repository or local folder'}
-                  >
-                    <Plus className="w-3 h-3" />
-                    <span>{canProvisionRepositories ? 'Add repository' : 'Attach existing'}</span>
-                  </button>
-                )}
-              </div>
-
-              <ProjectResourcesPanel
-                variant="inline"
-                projectId={selectedProject.id}
-                resources={selectedProject.resources || []}
-                onChange={(next) => updateProject(selectedProject.id, { resources: next })}
-                readOnly={!canEditProjects}
-                canCreateRepository={canProvisionRepositories}
-              />
-            </div>
-
-            {/* Repository & pipeline. Only for a project the API can read a
-                GitHub repository for; opens the full view in the main pane. */}
-            {projectRepos.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-white/5">
-                <span className="text-[11px] font-medium text-gray-400 flex items-center gap-1.5">
-                  <Workflow className="w-3.5 h-3.5 text-brand-400" />
-                  <span>Repository &amp; pipeline</span>
-                </span>
-                <p className="text-[11px] leading-relaxed text-gray-500">
-                  Branches, files, CI runs and dev → uat → main promotion for{' '}
-                  {projectRepos.length === 1 ? (
-                    <span className="font-mono text-gray-400">{projectRepos[0]}</span>
-                  ) : (
-                    `${projectRepos.length} repositories`
-                  )}
-                  .
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setBoardViewMode(showRepository ? 'kanban' : 'repository')}
-                  aria-pressed={showRepository}
-                  className="w-full rounded-xl border border-white/10 px-3 py-1.5 text-[11px] font-medium text-gray-200 transition-colors hover:bg-white/5 hover:text-white"
-                >
-                  {showRepository ? 'Back to the board' : 'Open repository & pipeline'}
-                </button>
-              </div>
-            )}
-
-            {/* 5. Active Agents. Dropped entirely when there are none — a
-                header plus an italic "no agents" line is pure noise. */}
-            {boundAgents.length > 0 && (
-              <div className="space-y-2 pt-2 border-t border-white/5">
-                <span className="text-[11px] font-medium text-gray-400 block">
-                  Active Agents ({boundAgents.length})
-                </span>
-
-                <div className="space-y-1.5">
-                  {boundAgents.map(agent => (
-                    <div key={agent.id} className="p-2 rounded-xl bg-well border border-white/5 flex items-center gap-2.5">
-                      <img src={agent.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs font-medium text-white truncate">{agent.name}</div>
-                        <div className="text-[10px] text-gray-500 font-mono truncate">{agent.role}</div>
-                      </div>
-                      <span className={`w-1.5 h-1.5 rounded-full ${
-                        agent.workStatus === 'working' || agent.status === 'executing' ? 'bg-emerald-400' : 'bg-gray-600'
-                      }`} />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-          </div>
-
-        </div>
+        />
 
         {/* ================= RESOURCES MODAL =================
             Repo creation and attachment both changed the project the moment you
@@ -767,40 +564,9 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
         )}
       </div>
 
-      <div className="flex items-start gap-3 rounded-xl border border-brand-400/15 bg-brand-500/[0.06] px-4 py-3 text-xs">
-        <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-300" aria-hidden="true" />
-        <div className="min-w-0">
-          <p className="font-medium text-brand-100">
-            {role === 'pm' ? 'PM-owned project workspace' : 'PM-owned projects'}
-          </p>
-          <p className="mt-0.5 leading-relaxed text-gray-400">
-            Projects and repositories shown here are created by active project managers in this workspace.
-            {role !== 'pm' && ' Project creation and repository provisioning are reserved for PMs.'}
-          </p>
-        </div>
-      </div>
-
       {/* ================= SEARCH & ACTION ROW ================= */}
       {projects.length > 0 && (
       <div className="flex items-center justify-between gap-4">
-        {/* Mine / the workspace's */}
-        <div className="flex items-center rounded-md border border-white/[0.07] bg-surface p-0.5 text-xs">
-          {([
-            ['mine', 'My projects', mineCount],
-            ['all', 'Workspace projects', projects.length]
-          ] as const).map(([value, label, count]) => (
-            <button
-              key={value}
-              onClick={() => setScope(value)}
-              className={`rounded px-2.5 py-1 transition-colors ${
-                scope === value ? 'bg-white/10 font-semibold text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              {label} <span className="tabular-nums text-gray-500">{count}</span>
-            </button>
-          ))}
-        </div>
-
         {/* Left: Search input */}
         <div className="relative flex-1 max-w-xs">
           <Search className="w-3.5 h-3.5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" />

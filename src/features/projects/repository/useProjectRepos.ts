@@ -68,5 +68,6 @@ export function useProjectRepos(projectId: string | null, attached: string[] = [
     };
   }, [projectId, expectedKey]);
 
-  return { repos, loading };
+  const currentProject = lastProject.current === projectId;
+  return { repos: currentProject ? repos : [], loading: loading || Boolean(projectId && !currentProject) };
 }

@@ -101,7 +101,7 @@ export const RepoLogsTab: React.FC<{ projectId: string; repo: string; active: bo
         <SectionEmpty>
           {previews.data?.state === 'unavailable'
             ? (previews.data.error ?? 'Hosting is not available here.')
-            : 'Nothing is hosted yet, so there are no logs. Set up hosting from the Overview tab.'}
+            : 'Nothing is hosted yet, so there are no logs. Set up hosting from the Previews tab.'}
         </SectionEmpty>
       )}
     </RepoSection>
