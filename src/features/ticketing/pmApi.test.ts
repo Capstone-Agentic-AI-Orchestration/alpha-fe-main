@@ -136,18 +136,6 @@ describe('PM ticket transport', () => {
     });
   });
 
-  it('changes client request permission through the PM ticket API', async () => {
-    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({
-      ticketId: 'ticket-1', acceptsNewRequests: true,
-    } as never);
-
-    await pmTicketApi.setClientRequestsEnabled('ticket-1', true);
-
-    expect(request).toHaveBeenCalledWith('/tickets/ticket-1/client-requests', {
-      method: 'PUT', body: JSON.stringify({ acceptsNewRequests: true }),
-    });
-  });
-
   it('loads and updates the selected project client preview through the workspace-scoped PM API', async () => {
     const preview = { repository: 'org/repo', branch: 'uat' as const, url: 'https://preview.example.test' };
     const request = vi.spyOn(apiService, 'ticketRequest')

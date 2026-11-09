@@ -15,7 +15,7 @@ import { ClientTicketApiError, clientTicketApi } from './clientApi';
 import { ClientCreateTicketForm } from './ClientCreateTicketForm';
 import { ClientTicketDetail } from './ClientTicketDetail';
 import { ClientQuickGuide } from './ClientQuickGuide';
-import { ClientNotificationBell, type ClientPortalUpdate } from './ClientNotificationBell';
+import { ClientNotificationBell, projectProposalPortalUpdate, type ClientPortalUpdate } from './ClientNotificationBell';
 import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientPasswordSignIn } from './ClientPasswordSignIn';
 import { clientTicketProgress } from './clientTicketProgress';
@@ -40,7 +40,6 @@ interface PendingOperation {
   /** Skip the broad portal reload when the active conversation is updated in place. */
   refresh?: boolean;
 }
-interface PendingProjectReview { ticketId: string; project: ClientProject }
 interface ClientToast { title: string; description?: string; tone: ToastTone }
 
 const filters: Array<{ id: NonNullable<Filter>; label: string }> = [
@@ -116,7 +115,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [selectedWorkspaceId, setSelectedWorkspaceId] = tabState('selectedWorkspaceId');
   const [selectedItemFallback, setSelectedItemFallback] = tabState('selectedItemFallback');
   const [returnToProjects, setReturnToProjects] = tabState('returnToProjects');
-  const [pendingProjectReview, setPendingProjectReview] = useState<PendingProjectReview | null>(null);
   const [navigationCollapsed, setNavigationCollapsed] = tabState('navigationCollapsed');
   const [quickGuideOpen, setQuickGuideOpen] = useState(false);
   const [, setNotificationProjectFocus] = tabState('notificationProjectFocus');
@@ -181,10 +179,14 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       timestamp: item.updatedAt,
       target: { kind: 'project', item },
     }));
-    return [...requests, ...projectUpdates]
+    const proposalUpdates = (projectProposals ?? []).flatMap(item => {
+      const update = projectProposalPortalUpdate(item);
+      return update ? [update] : [];
+    });
+    return [...requests, ...projectUpdates, ...proposalUpdates]
       .sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp))
       .slice(0, 30);
-  }, [notificationRequests, projects]);
+  }, [notificationRequests, projects, projectProposals]);
 
   useEffect(() => {
     let current = true;
@@ -255,17 +257,30 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   useEffect(() => {
     if (portalState !== 'ready') return;
     let current = true;
-    setProjectProposalsLoading(true); setProjectProposalsError('');
-    void api.listProjectProposals().then(result => { if (current) setProjectProposals(result.items); })
-      .catch(error => {
+    let busy = false;
+    let loaded = false;
+    const refreshProjectProposals = async () => {
+      if (!current || busy) return;
+      busy = true;
+      if (!loaded) { setProjectProposalsLoading(true); setProjectProposalsError(''); }
+      try {
+        const result = await api.listProjectProposals();
+        if (current) { setProjectProposals(result.items); setProjectProposalsError(''); }
+      } catch (error) {
         if (!current || isExpiredClientSession(error)) return;
         setProjectProposals(null);
         setProjectProposalsError(error instanceof ClientTicketApiError && (error.status === 404 || error.status === 503)
           ? 'Project proposals are temporarily unavailable. Please try again later.'
           : 'We could not load your project proposals. Refresh and try again.');
-      }).finally(() => { if (current) setProjectProposalsLoading(false); });
-    return () => { current = false; };
-  }, [api, portalState, refreshVersion]);
+      } finally {
+        busy = false;
+        if (current && !loaded) { loaded = true; setProjectProposalsLoading(false); }
+      }
+    };
+    void refreshProjectProposals();
+    const stop = inspectionOnly ? () => undefined : startClientAutoRefresh(refreshProjectProposals);
+    return () => { current = false; stop(); };
+  }, [api, portalState, refreshVersion, inspectionOnly]);
 
   useEffect(() => {
     if (portalState !== 'ready') return;
@@ -299,8 +314,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       if (!current || generation !== queueGeneration.current) return;
       setQueue(result);
       setSelectedId(existing => existing && (result.items.some(item => item.id === existing)
-        || (selectedItemFallback?.id === existing && selectedItemFallback.workspaceId === selectedWorkspaceId)
-        || pendingProjectReview?.ticketId === existing) ? existing : null);
+        || (selectedItemFallback?.id === existing && selectedItemFallback.workspaceId === selectedWorkspaceId)) ? existing : null);
       setSelectedItemFallback(existing => existing && result.items.some(item => item.id === existing.id && item.workspaceId === existing.workspaceId)
         ? null : existing);
     }).catch(error => {
@@ -309,16 +323,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       setQueue(null); setSelectedId(null); setQueueError(friendlyError(error, 'queue'));
     }).finally(() => { if (current && generation === queueGeneration.current) setQueueLoading(false); });
     return () => { current = false; };
-  }, [activeTabId, portalState, filter, search, refreshVersion, api, pendingProjectReview?.ticketId,
+  }, [activeTabId, portalState, filter, search, refreshVersion, api,
     selectedItemFallback?.id, selectedItemFallback?.workspaceId, selectedWorkspaceId]);
-
-  useEffect(() => {
-    if (pendingProjectReview && queue?.items.some(item => item.id === pendingProjectReview.ticketId
-      && item.workspaceId === pendingProjectReview.project.workspaceId
-      && (item.projectId !== null || item.status === 'declined' || item.status === 'cancelled'))) {
-      setPendingProjectReview(null);
-    }
-  }, [pendingProjectReview, queue]);
 
   useEffect(() => {
     const activeWorkspaceId = selectedQueueItem?.workspaceId ?? selectedWorkspaceId;
@@ -470,7 +476,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       const context = await api.getIntakeContext(project.workspaceId);
       if (!context.canCreate) {
         setCreateContext(null); setCreateProject(null);
-        setCreateError('New requests are not enabled for your account in this workspace. Contact your project manager.');
+        setCreateError('New requests are unavailable in this workspace right now. Contact your project manager.');
         return;
       }
       if (!context.sharedProjects.some(option => option.optionId === project.intakeOptionId)) {
@@ -498,8 +504,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     void performWrite({
       operationId: value.operationId, label: 'ticket submission', run: () => api.createTicket(value),
       onSuccess: receipt => {
-        setPendingProjectReview({ ticketId: receipt.ticketId, project: target });
-        setQueueNotice(`Request sent for PM review. It will appear under ${target.name} after your project manager confirms the link.`);
+        setQueueNotice(`Request sent for PM review and linked under ${target.name}.`);
         setClientToast({ title: 'Request submitted', description: `Your request is waiting for ${target.name} to review it.`, tone: 'success' });
         setPage('requests'); setView('portal'); setFilter('all'); setSearchInput(''); setSearch('');
         setSelectedId(receipt.ticketId); setSelectedWorkspaceId(target.workspaceId); setSelectedItemFallback(null);
@@ -580,6 +585,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       openRequest(update.target.item);
       return;
     }
+    if (update.target.kind === 'proposal') {
+      setPage('projects'); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
+      setSelectedProjectKey(null);
+      setRefreshVersion(value => value + 1);
+      return;
+    }
     openProject(update.target.item);
   }
 
@@ -597,10 +608,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     unavailable={portalState === 'unavailable'} error={pageError} onRetry={() => setSessionCheckVersion(value => value + 1)} />;
 
   const activeRequest = selectedQueueItem;
-  const currentPendingProject = pendingProjectReview && activeRequest?.id === pendingProjectReview.ticketId
-    && activeRequest.workspaceId === pendingProjectReview.project.workspaceId && activeRequest.projectId === null
-    && activeRequest.status !== 'declined' && activeRequest.status !== 'cancelled' ? pendingProjectReview : null;
-  const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review' || Boolean(currentPendingProject);
+  const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review';
   const currentNav = page;
   const clientEmail = session?.email?.trim() ?? '';
   const clientName = session?.fullName?.trim() || 'Client';
@@ -781,10 +789,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             </aside>
             <section className={`client-request-detail-pane ${selectedId && !requestListShown ? '' : 'client-mobile-hidden'}`} aria-label="Selected request">
               {!selectedId ? <EmptyState title="Choose a request" body="Select a request to see its status, messages, and any action your project manager needs from you." />
-                : !activeRequest && pendingProjectReview?.ticketId === selectedId ? <div className="client-request-pending-state" role="status">
-                  <RefreshCw size={18} /><h2>Your request was submitted</h2><p>Waiting for the request list to update. It will appear under {pendingProjectReview.project.name} only after your project manager confirms the link.</p>
-                </div>
-                  : !activeRequest ? <EmptyState title="Request not available" body="Refresh the list and try again. If it is still missing, contact your project manager." />
+                : !activeRequest ? <EmptyState title="Request not available" body="Refresh the list and try again. If it is still missing, contact your project manager." />
                     : (detailLoading || (!detail && !detailError)) ? <LoadingRows label="Loading request" layout="detail" className="p-5" />
                       : detailError ? <div role="alert" className="m-4 rounded-lg border border-status-danger-border bg-status-danger-subtle p-4 text-xs text-status-danger">{detailError}</div>
                         : detail && <>

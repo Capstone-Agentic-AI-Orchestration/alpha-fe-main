@@ -1,4 +1,4 @@
-import { ArrowUpRight, MoreHorizontal } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 
 import type { PmTicketQueueItem } from './pmApi';
 import { groupPmTickets } from './pmTicketGrouping';
@@ -32,13 +32,11 @@ function actionSummary(item: PmTicketQueueItem): string {
   return `${owner} · ${nextAction}`;
 }
 
-export function PmTicketQueueList({ items, selectedId, disabled, requestAccessSaving, onSelect, onToggleRequests }: {
+export function PmTicketQueueList({ items, selectedId, disabled, onSelect }: {
   items: readonly PmTicketQueueItem[];
   selectedId: string | null;
   disabled: boolean;
-  requestAccessSaving: string | null;
   onSelect: (ticketId: string) => void;
-  onToggleRequests: (ticketId: string, acceptsNewRequests: boolean) => void;
 }) {
   const clients = groupPmTickets(items);
   const clientByTicket = new Map(clients.flatMap(client => client.projects.flatMap(project =>
@@ -66,16 +64,6 @@ export function PmTicketQueueList({ items, selectedId, disabled, requestAccessSa
             <time dateTime={item.updatedAt} title={time(item.updatedAt)}>{new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>
             <ArrowUpRight size={16} className="pm-ticket-queue__open" aria-hidden="true" />
           </button>
-          {client.accessActive && <details className="pm-ticket-queue__client-options">
-            <summary aria-label={`Client options for ${client.name}`}><MoreHorizontal size={16} /></summary>
-            <button type="button" disabled={disabled || requestAccessSaving !== null}
-              onClick={event => { onToggleRequests(item.id, !client.acceptsNewRequests); event.currentTarget.closest('details')?.removeAttribute('open'); }}
-              aria-label={`${client.acceptsNewRequests ? 'Pause' : 'Allow'} new requests for ${client.name}`}
-              className="pm-ticket-queue__request-toggle">
-              {requestAccessSaving && items.some(candidate => candidate.id === requestAccessSaving && candidate.internal.clientGroup?.key === client.key)
-                ? 'Saving…' : client.acceptsNewRequests ? 'Pause new requests' : 'Allow new requests'}
-            </button>
-          </details>}
         </div>;
       })}
     </div>

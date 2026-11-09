@@ -1,7 +1,7 @@
 import { ApiRequestError, apiService } from '@/shared/services/apiService';
 import { parseClientDeliveryFile, parseClientDeliveryManifest, readPmDeliveryFile, type ClientDeliveryFile } from './clientDelivery';
 import { parsePmDeliveryCandidates } from './pmDeliveryCandidates';
-import { parseTicketDocument, parseTicketDocumentList, type TicketDocumentsApi } from './ticketDocuments';
+import { parseTicketDocumentList, type TicketDocumentsReadApi } from './ticketDocuments';
 
 export type TicketStatus = 'received' | 'under_review' | 'awaiting_client' | 'in_progress'
   | 'ready_for_review' | 'on_hold' | 'closed' | 'declined' | 'cancelled';
@@ -28,7 +28,7 @@ export interface PmTicketQueueItem {
     projectId: string | null;
     projectName?: string | null;
     clientAccessActive: boolean;
-    clientGroup?: { key: string; displayName: string; acceptsNewRequests: boolean; accessActive: boolean };
+    clientGroup?: { key: string; displayName: string };
     clientReplyUnread?: boolean;
     clientInvitation: {
       status: 'pending' | 'expired' | 'revoked' | 'consumed';
@@ -182,11 +182,12 @@ export interface PmTicketProjectLinkReceipt extends PmTicketReceipt {
   clientVisible: boolean;
   projectPreview: { repository: string; branch: 'main' | 'uat'; url: string } | null;
 }
-export interface PmClientRequestAccessReceipt { ticketId: string; acceptsNewRequests: boolean }
 export interface PmPublicInquiryCode { code: string; submissionEnabled: boolean }
+export interface PmCentralIntakeMessage { id: string; author: 'pm' | 'client'; body: string; createdAt: string }
 export interface PmCentralIntakeItem {
   kind: 'public_inquiry' | 'project_proposal';
-  status?: 'pending' | 'accepted' | 'declined';
+  status?: 'pending' | 'awaiting_client' | 'accepted' | 'declined';
+  clarificationMessages?: PmCentralIntakeMessage[];
   handledAt?: string | null;
   outcomeEmailStatus?: 'pending' | 'retry' | 'leased' | 'delivered' | 'dead' | null;
   id: string; publicReference?: string; fullName: string; email: string; company: string | null; title: string;
@@ -195,6 +196,7 @@ export interface PmCentralIntakeItem {
 export interface PmCentralIntakePage { items: PmCentralIntakeItem[]; nextCursor: string | null }
 export interface PmCentralIntakeAcceptance { ticketId: string; workspaceId: string; reference: string; operationId: string }
 export interface PmCentralIntakeDecline { intakeId: string; operationId: string; status: 'declined' }
+export interface PmCentralIntakeClarify { intakeId: string; operationId: string; status: 'awaiting_client' }
 export type PmTicketInvitationEmailReceipt = PmTicketInvitationReceipt;
 
 function encodeId(value: string): string { return encodeURIComponent(value); }
@@ -244,7 +246,7 @@ export const pmTicketApi = {
       if (row.kind !== undefined && row.kind !== 'public_inquiry' && row.kind !== 'project_proposal') {
         throw new Error('Shared intake item kind is invalid.');
       }
-      if ((row.status !== undefined && !['pending', 'accepted', 'declined'].includes(String(row.status)))
+      if ((row.status !== undefined && !['pending', 'awaiting_client', 'accepted', 'declined'].includes(String(row.status)))
         || (row.handledAt != null && (typeof row.handledAt !== 'string' || !Number.isFinite(Date.parse(row.handledAt))))
         || (row.outcomeEmailStatus != null && !['pending', 'retry', 'leased', 'delivered', 'dead'].includes(String(row.outcomeEmailStatus)))) {
         throw new Error('Shared inquiry status is invalid.');
@@ -258,10 +260,23 @@ export const pmTicketApi = {
         || typeof row.submittedAt !== 'string' || !Number.isFinite(Date.parse(row.submittedAt))) {
         throw new Error('Shared inquiry response is invalid.');
       }
+      const clarificationRows = row.clarificationMessages ?? [];
+      if (!Array.isArray(clarificationRows) || clarificationRows.length > 100) throw new Error('Shared inquiry messages are invalid.');
+      const clarificationMessages = clarificationRows.map((rawMessage): PmCentralIntakeMessage => {
+        if (!rawMessage || typeof rawMessage !== 'object' || Array.isArray(rawMessage)) throw new Error('Shared inquiry messages are invalid.');
+        const message = rawMessage as Record<string, unknown>;
+        if (typeof message.id !== 'string' || !message.id.trim() || (message.author !== 'pm' && message.author !== 'client')
+          || typeof message.body !== 'string' || !message.body.trim() || message.body.length > 4000
+          || typeof message.createdAt !== 'string' || !Number.isFinite(Date.parse(message.createdAt))) {
+          throw new Error('Shared inquiry messages are invalid.');
+        }
+        return { id: message.id, author: message.author, body: message.body, createdAt: message.createdAt };
+      });
       return { kind: row.kind === 'project_proposal' ? 'project_proposal' : 'public_inquiry',
         id: row.id, ...(typeof row.publicReference === 'string' ? { publicReference: row.publicReference } : {}), fullName: row.fullName, email: row.email, company: row.company as string | null,
         title: row.title, description: row.description, requestedDeadline: row.requestedDeadline as string | null,
         submittedAt: row.submittedAt,
+        clarificationMessages,
         ...(row.status !== undefined ? { status: row.status as PmCentralIntakeItem['status'] } : {}),
         ...(row.handledAt !== undefined ? { handledAt: row.handledAt as string | null } : {}),
         ...(row.outcomeEmailStatus !== undefined ? { outcomeEmailStatus: row.outcomeEmailStatus as PmCentralIntakeItem['outcomeEmailStatus'] } : {}) };
@@ -287,6 +302,17 @@ export const pmTicketApi = {
     const row = value as Record<string, unknown>;
     if (row.intakeId !== intakeId || row.operationId !== operationId || row.status !== 'declined') throw new Error('Inquiry decline response is invalid.');
     return { intakeId, operationId, status: 'declined' };
+  },
+  async clarifyCentralIntake(intakeId: string, operationId: string, body: string): Promise<PmCentralIntakeClarify> {
+    const value = await apiService.ticketRequest<unknown>(`/tickets/intakes/${encodeId(intakeId)}/clarify`, {
+      method: 'POST', body: JSON.stringify({ schemaVersion: 1, operationId, body }),
+    });
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Clarification response is invalid.');
+    const row = value as Record<string, unknown>;
+    if (row.intakeId !== intakeId || row.operationId !== operationId || row.status !== 'awaiting_client') {
+      throw new Error('Clarification response is invalid.');
+    }
+    return { intakeId, operationId, status: 'awaiting_client' };
   },
   async getPublicInquiryCode(): Promise<PmPublicInquiryCode> {
     const value = await apiService.ticketRequest<unknown>('/tickets/inquiry-code');
@@ -351,12 +377,6 @@ export const pmTicketApi = {
   async getDocuments(ticketId: string) {
     return parseTicketDocumentList(await apiService.ticketRequest<unknown>(`/tickets/${encodeId(ticketId)}/documents`));
   },
-  async uploadDocument(ticketId: string, file: File, replacesDocumentId: string | null, operationId: string) {
-    return parseTicketDocument(await apiService.ticketUploadDocument<unknown>(
-      `/tickets/${encodeId(ticketId)}/documents`, file,
-      { operationId, filename: file.name, contentType: file.type, replacesDocumentId },
-    ));
-  },
   downloadDocument(ticketId: string, documentId: string) {
     return apiService.ticketDownloadDocument(
       `/tickets/${encodeId(ticketId)}/documents/${encodeId(documentId)}/content`,
@@ -403,13 +423,6 @@ export const pmTicketApi = {
   linkProject(ticketId: string, input: PmTicketProjectLinkInput) {
     return apiService.ticketRequest<PmTicketProjectLinkReceipt>(
       `/tickets/${encodeId(ticketId)}/project`, { method: 'PUT', body: JSON.stringify(input) },
-    );
-  },
-  setClientRequestsEnabled(ticketId: string, acceptsNewRequests: boolean) {
-    return apiService.ticketRequest<PmClientRequestAccessReceipt>(
-      `/tickets/${encodeId(ticketId)}/client-requests`, {
-        method: 'PUT', body: JSON.stringify({ acceptsNewRequests }),
-      },
     );
   },
   async getProjectClientPreview(projectId: string) {
@@ -459,9 +472,7 @@ export const pmTicketApi = {
   },
 };
 
-export const pmTicketDocumentsApi: TicketDocumentsApi = {
+export const pmTicketDocumentsApi: TicketDocumentsReadApi = {
   list: (_workspaceId, ticketId) => pmTicketApi.getDocuments(ticketId),
-  upload: (_workspaceId, ticketId, file, replacesDocumentId, operationId) =>
-    pmTicketApi.uploadDocument(ticketId, file, replacesDocumentId, operationId),
   download: (_workspaceId, ticketId, documentId) => pmTicketApi.downloadDocument(ticketId, documentId),
 };

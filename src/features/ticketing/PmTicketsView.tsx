@@ -26,7 +26,7 @@ import { PmDeliveryReview } from './PmDeliveryReview';
 import { PmDeliveryAssessment } from './PmDeliveryAssessment';
 import { input, primary, secondary, time } from './ticketUi';
 import { TicketDocumentsPanel } from './TicketDocumentsPanel';
-import type { TicketDocumentsApi } from './ticketDocuments';
+import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { TicketChat } from './TicketChat';
 import { Button } from '@/shared/components/ui/button';
 import './pmTickets.css';
@@ -189,7 +189,7 @@ export function PmContactVerification({ verification }: { verification: unknown 
 
 export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false, refreshToken }: {
   api?: typeof pmTicketApi;
-  documentsApi?: TicketDocumentsApi;
+  documentsApi?: TicketDocumentsReadApi;
   intakeEnabled?: boolean;
   /** Limit actions to the implemented production phase. */
   workflowActions?: WorkflowActions;
@@ -225,8 +225,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   const [actionMenuOpen, setActionMenuOpen] = useState(false);
   const [projectLinkSaving, setProjectLinkSaving] = useState(false);
   const [projectLinkError, setProjectLinkError] = useState('');
-  const [requestAccessSaving, setRequestAccessSaving] = useState<string | null>(null);
-  const [requestAccessError, setRequestAccessError] = useState('');
   const [declineReason, setDeclineReason] = useState('');
   const [declineOpen, setDeclineOpen] = useState(false);
   const [reviewAction, setReviewAction] = useState<'correction' | 'close' | null>(null);
@@ -276,7 +274,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     setDrafts({ conversation: '', notes: '' }); setMessageAction('reply'); setWriteError(''); setPanel('conversation');
     setDeclineOpen(false); setDeclineReason('');
     setInvitationEmailError('');
-    setProjectLinkOpen(false); setProjectLinkError(''); setRequestAccessError('');
+    setProjectLinkOpen(false); setProjectLinkError('');
     setTicketSection('conversation'); setComposerOpen(false);
     setDeliveryAssessmentOpen(false); setDeliveryReviewOpen(false);
     setActionMenuOpen(false);
@@ -449,24 +447,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       writeLock.current = false; setProjectLinkSaving(false);
     }
   }
-
-  async function setClientRequestAccess(ticketId: string, enabled: boolean) {
-    if (!intakeEnabled || writing || requestAccessSaving || pending || writeLock.current) return;
-    writeLock.current = true; setRequestAccessSaving(ticketId); setRequestAccessError('');
-    try {
-      const result = await api.setClientRequestsEnabled(ticketId, enabled);
-      if (result.ticketId !== ticketId || result.acceptsNewRequests !== enabled) {
-        throw new Error('The request setting could not be confirmed. Refresh the queue.');
-      }
-      refreshAll();
-    } catch (error) {
-      setRequestAccessError(safeError(error, 'write'));
-      if (error instanceof ApiRequestError && error.reconciliationRequired) refreshAll();
-    } finally {
-      writeLock.current = false; setRequestAccessSaving(null);
-    }
-  }
-
 
   async function performWrite(operation: PendingOperation, clearDraft = false): Promise<boolean> {
     if (!intakeEnabled || writeLock.current) return false;
@@ -987,13 +967,11 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
           <span>Open a ticket to continue</span>
         </div>
         <div className="pm-tickets__queue-scroll">
-          {requestAccessError && <p role="alert" className="pm-tickets__error">{requestAccessError}</p>}
           {!intakeEnabled ? <EmptyPanel title="Live tickets are not connected yet" detail="No ticket data is loaded while ticketing is disabled." />
             : queuePending ? <LoadingRows label="Loading tickets" layout="table" rows={5} className="px-4" />
             : queue && visibleQueueItems.length > 0 ? <PmTicketQueueList items={visibleQueueItems} selectedId={selectedId}
-              disabled={Boolean(pending)} requestAccessSaving={requestAccessSaving}
-              onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }}
-              onToggleRequests={(ticketId, enabled) => void setClientRequestAccess(ticketId, enabled)} />
+              disabled={Boolean(pending)}
+              onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }} />
               : queue && <div className="pm-tickets__empty-state"><EmptyPanel title="No tickets in this view" detail={filter === 'all' && !search && dateRange === 'all' ? 'Accepted inquiries will appear here. New inquiries are reviewed in the separate intake inbox.' : 'Try another view or clear your filters.'} />
                 {(search || filter !== 'all' || dateRange !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); setDateRange('all'); setSortOrder('updated_desc'); activeFilter('all'); }}>Show all tickets</button>}</div>}
         </div>
@@ -1129,7 +1107,9 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
 
                 {ticketSection === 'documents' && communicationEnabled && <section aria-label="Ticket documents" className="pm-tickets__documents-view">
                   <TicketDocumentsPanel api={documentsApi} ticketId={detail.id} heading="Shared files"
-                    canUpload={detail.writesAvailable && !['closed', 'declined', 'cancelled'].includes(detail.status)} />
+                    canUpload={false} showRefresh={false} refreshToken={`${refreshVersion}:${refreshToken ?? ''}`}
+                    emptyMessage="No client files have been uploaded to this request yet."
+                    readOnlyMessage="Only the client can upload files. You can download the files they share here." />
                 </section>}
                   {ticketSection === 'notes' && renderConversation('notes')}
                   <div hidden={ticketSection !== 'conversation'}>

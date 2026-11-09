@@ -40,7 +40,7 @@ export function ClientCreateTicketForm({
     <button onClick={onCancel} className="mb-6 inline-flex items-center gap-2 text-xs text-content-secondary hover:text-content"><ArrowLeft size={14} />My Tickets</button>
     <div className="rounded-xl border border-divider bg-surface p-6">
       <h1 className="text-lg font-semibold text-content">New request unavailable</h1>
-      <p className="mt-2 text-sm text-content-secondary">Your current client access does not allow a new request in this workspace. Contact your project manager if you think this is a mistake.</p>
+      <p className="mt-2 text-sm text-content-secondary">You cannot submit a new request in this workspace right now. Contact your project manager if you think this is a mistake.</p>
     </div>
   </section>;
 
@@ -83,12 +83,12 @@ export function ClientCreateTicketForm({
         </> : <>
           <label className="flex items-center gap-2 text-xs text-content-secondary"><input type="radio" name="project-preference" checked={projectPreference === 'not_sure'} disabled={busy} onChange={() => { edited(); setProjectPreference('not_sure'); }} />I’m not sure yet</label>
           <label className="flex items-center gap-2 text-xs text-content-secondary"><input type="radio" name="project-preference" checked={projectPreference === 'new_project'} disabled={busy} onChange={() => { edited(); setProjectPreference('new_project'); }} />This may need a new project</label>
-          {context.sharedProjects.length > 0 && <label className="flex items-center gap-2 text-xs text-content-secondary"><input type="radio" name="project-preference" checked={projectPreference === 'shared_project'} disabled={busy} onChange={() => { edited(); setProjectPreference('shared_project'); setProjectOptionId(current => current || context.sharedProjects[0].optionId); }} />I think this is related to a project my PM shared</label>}
+          {context.sharedProjects.length > 0 && <label className="flex items-center gap-2 text-xs text-content-secondary"><input type="radio" name="project-preference" checked={projectPreference === 'shared_project'} disabled={busy} onChange={() => { edited(); setProjectPreference('shared_project'); setProjectOptionId(current => current || context.sharedProjects[0].optionId); }} />This request is for a project my PM shared</label>}
           {projectPreference === 'shared_project' && context.sharedProjects.length > 0 && <select className={input} value={projectOptionId} disabled={busy} onChange={event => { edited(); setProjectOptionId(event.target.value); }}>
             {context.sharedProjects.map(project => <option key={project.optionId} value={project.optionId}>{project.displayName}</option>)}
           </select>}
         </>}
-        <p className="text-xs text-content-muted">This is a request preference, not a project link or access grant. Your PM must review and link the request.</p>
+        <p className="text-xs text-content-muted">Choosing a shared project links this request to it. “Not sure” and “new project” requests stay unlinked for PM review.</p>
       </fieldset>
       <label className="block max-w-xs space-y-2"><span className="text-xs font-medium text-content-secondary">Requested date <span className="text-content-muted">(optional, not guaranteed)</span></span>
         <input className={input} type="date" value={deadline} disabled={busy} onChange={event => { edited(); setDeadline(event.target.value); }} /></label>

@@ -15,11 +15,16 @@ export interface TicketDocument {
   createdAt: string;
   availableAt: string | null;
 }
-export interface TicketDocumentsApi {
+export interface TicketDocumentsReadApi {
   list(scope: string | undefined, ticketId: string): Promise<TicketDocument[]>;
-  upload(scope: string | undefined, ticketId: string, file: File, replacesDocumentId: string | null, operationId: string): Promise<TicketDocument>;
   download(scope: string | undefined, ticketId: string, documentId: string): Promise<Blob>;
 }
+
+export interface TicketDocumentsApi extends TicketDocumentsReadApi {
+  upload(scope: string | undefined, ticketId: string, file: File, replacesDocumentId: string | null, operationId: string): Promise<TicketDocument>;
+}
+
+export type TicketDocumentsPanelApi = TicketDocumentsReadApi & Partial<Pick<TicketDocumentsApi, 'upload'>>;
 
 const OPAQUE = /^[A-Za-z0-9_-]{1,200}$/;
 const CONTENT_TYPES = new Set<TicketDocument['contentType']>([

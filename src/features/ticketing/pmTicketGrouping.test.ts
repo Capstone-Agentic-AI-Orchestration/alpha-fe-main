@@ -15,7 +15,6 @@ function item(id: string, input: {
       clientAccessActive: true, clientInvitation: null,
       ...(input.clientKey ? { clientGroup: {
         key: input.clientKey, displayName: input.clientName ?? 'Verified client',
-        acceptsNewRequests: true, accessActive: true,
       } } : {}),
     },
   };

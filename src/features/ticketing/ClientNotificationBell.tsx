@@ -1,8 +1,8 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Bell, CheckCheck, ChevronRight, FileText, FolderKanban, X } from 'lucide-react';
-import type { ClientProject, ClientProjectRequestItem } from './clientApi';
+import { Bell, CheckCheck, ChevronRight, FileText, FolderKanban, MessageSquare, X } from 'lucide-react';
+import type { ClientProject, ClientProjectProposal, ClientProjectRequestItem } from './clientApi';
 import { time } from './ticketUi';
 
 export type ClientPortalUpdate = {
@@ -10,8 +10,23 @@ export type ClientPortalUpdate = {
   title: string;
   message: string;
   timestamp: string;
-  target: { kind: 'request'; item: ClientProjectRequestItem } | { kind: 'project'; item: ClientProject };
+  target: { kind: 'request'; item: ClientProjectRequestItem }
+    | { kind: 'project'; item: ClientProject }
+    | { kind: 'proposal'; item: ClientProjectProposal };
 };
+
+export function projectProposalPortalUpdate(item: ClientProjectProposal): ClientPortalUpdate | null {
+  if (item.status !== 'awaiting_client') return null;
+  const latestQuestion = [...(item.clarificationMessages ?? [])].reverse().find(message => message.author === 'pm');
+  const timestamp = latestQuestion?.createdAt ?? item.submittedAt;
+  return {
+    id: `proposal:${item.id}:${latestQuestion?.id ?? timestamp}`,
+    title: 'Project proposal needs your reply',
+    message: item.title,
+    timestamp,
+    target: { kind: 'proposal', item },
+  };
+}
 
 interface PopoverPosition { top: number; left: number; width: number; maxHeight: number }
 
@@ -126,16 +141,17 @@ export function ClientNotificationBell({ email, updates, ready, loading, error, 
         {loading && !ready && !updates.length ? <LoadingRows label="Loading your updates" rows={2} className="px-3" />
           : updates.length ? updates.map(update => {
             const isUnread = !readIds.has(update.id);
-            const Icon = update.target.kind === 'request' ? FileText : FolderKanban;
+            const Icon = update.target.kind === 'request' ? FileText
+              : update.target.kind === 'proposal' ? MessageSquare : FolderKanban;
             return <button type="button" key={update.id} className={`client-notification-item ${isUnread ? 'is-unread' : ''}`}
               onClick={() => { markRead(update.id); setOpen(false); onOpen(update); }}>
               <span className="client-notification-icon"><Icon size={16} aria-hidden="true" /></span>
               <span className="client-notification-copy"><strong>{update.title}</strong><span>{update.message}</span><time dateTime={update.timestamp}>{time(update.timestamp)}</time></span>
               {isUnread ? <span className="client-notification-unread-dot" aria-label="Unread" /> : <ChevronRight size={15} className="client-notification-chevron" aria-hidden="true" />}
             </button>;
-          }) : <div className="client-notification-empty"><Bell size={20} /><strong>No updates yet</strong><span>Project and request updates will appear here.</span></div>}
+          }) : <div className="client-notification-empty"><Bell size={20} /><strong>No updates yet</strong><span>Project, proposal, and request updates will appear here.</span></div>}
       </div>
-      {ready && !loading && !error && <footer className="client-notification-footer">Updates from your shared projects and requests</footer>}
+      {ready && !loading && !error && <footer className="client-notification-footer">Updates from your requests, project proposals, and shared projects</footer>}
     </section>, triggerRef.current?.closest('.client-portal-shell') ?? document.body)}
   </>;
 }
