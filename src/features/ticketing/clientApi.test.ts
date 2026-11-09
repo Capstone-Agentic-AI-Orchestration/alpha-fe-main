@@ -193,13 +193,14 @@ describe('client browser transport', () => {
   it('loads only client-safe project proposal fields and rejects unknown proposal status', async () => {
     browser();
     const item = { id: 'proposal-1', title: 'New portal', description: 'A new client portal', requestedDeadline: null,
-      submittedAt: '2026-10-29T08:00:00Z', status: 'pending', declineReason: 'private PM note' };
+      submittedAt: '2026-10-29T08:00:00Z', status: 'pending', declineReason: 'private PM note',
+      clarificationMessages: [{ id: 'question-1', author: 'pm', body: 'Which customers should be first?', createdAt: '2026-10-30T08:00:00Z' }] };
     const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, { items: [item] }));
     vi.stubGlobal('fetch', fetchMock);
 
     await expect(clientTicketApi.listProjectProposals()).resolves.toEqual({ items: [{
       id: item.id, title: item.title, description: item.description, requestedDeadline: null,
-      submittedAt: item.submittedAt, status: 'pending',
+      submittedAt: item.submittedAt, status: 'pending', clarificationMessages: item.clarificationMessages,
     }] });
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/client/project-proposals');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'same-origin', cache: 'no-store' });
@@ -225,6 +226,27 @@ describe('client browser transport', () => {
     expect(headers.get('Authorization')).toBeNull();
     expect(options.body).not.toContain('email');
     expect(options.body).not.toContain('workspaceId');
+  });
+
+  it('posts a client clarification reply with CSRF protection and validates the receipt', async () => {
+    browser();
+    const input = { schemaVersion: 1 as const, operationId: '20000000-0000-4000-8000-000000000001',
+      body: 'Existing customers will be first.' };
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse(200, {
+      id: 'proposal-1', operationId: input.operationId, status: 'pending',
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(clientTicketApi.replyToProjectProposal('proposal-1', input)).resolves.toEqual({
+      id: 'proposal-1', operationId: input.operationId, status: 'pending',
+    });
+    expect(fetchMock).toHaveBeenCalledWith('/api/client/project-proposals/proposal-1/reply', expect.objectContaining({
+      method: 'POST', credentials: 'same-origin', mode: 'same-origin', body: JSON.stringify(input),
+    }));
+    const options = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const headers = new Headers(options.headers);
+    expect(headers.get('X-CSRF-Token')).toBe(csrf);
+    expect(headers.get('Authorization')).toBeNull();
   });
 
   it('uses global and exact workspace/project request endpoints for the client project portal', async () => {

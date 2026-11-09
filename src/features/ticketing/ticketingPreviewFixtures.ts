@@ -1,5 +1,5 @@
 import { createTicketPreview, type PreviewSeedTicket } from './previewModel';
-import type { TicketDocumentsApi } from './ticketDocuments';
+import type { TicketDocumentsReadApi } from './ticketDocuments';
 import {
   pmTicketApi,
   type PmTicketDetail,
@@ -128,7 +128,6 @@ function toQueueItem(ticket: DemoTicket): PmTicketQueueItem {
       clientGroup: {
         key: ticket.clientAccessActive ? 'preview-northstar' : `ticket:${ticket.id}`,
         displayName: ticket.contact?.fullName ?? ticket.companyLabel,
-        accessActive: ticket.clientAccessActive, acceptsNewRequests: false,
       },
       clientAccessActive: ticket.clientAccessActive, clientInvitation: null,
     },
@@ -237,9 +236,8 @@ export const pmPreviewApi = new Proxy(pmTicketApi, {
 });
 
 /** Keep document inspection local too; a preview must never query real client files. */
-export const pmPreviewDocumentsApi: TicketDocumentsApi = {
+export const pmPreviewDocumentsApi: TicketDocumentsReadApi = {
   list: async () => [],
-  upload: async () => { throw new Error('Uploads are disabled in the local UI preview.'); },
   download: async () => { throw new Error('Downloads are disabled in the local UI preview.'); },
 };
 

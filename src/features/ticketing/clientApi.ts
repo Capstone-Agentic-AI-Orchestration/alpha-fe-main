@@ -37,8 +37,10 @@ export interface ClientProjectProposal {
   description: string;
   requestedDeadline: string | null;
   submittedAt: string;
-  status: 'pending' | 'declined';
+  status: 'pending' | 'awaiting_client' | 'declined';
+  clarificationMessages?: ClientProjectProposalMessage[];
 }
+export interface ClientProjectProposalMessage { id: string; author: 'pm' | 'client'; body: string; createdAt: string }
 export interface ClientProjectProposalInput {
   schemaVersion: 1;
   operationId: string;
@@ -47,6 +49,8 @@ export interface ClientProjectProposalInput {
   requestedDeadline: string | null;
 }
 export interface ClientProjectProposalReceipt { id: string }
+export interface ClientProjectProposalReplyInput { schemaVersion: 1; operationId: string; body: string }
+export interface ClientProjectProposalReplyReceipt { id: string; operationId: string; status: 'pending' }
 export interface ClientTicketIntakeContext {
   intakeContextId: string;
   canCreate: boolean;
@@ -320,12 +324,28 @@ export const clientTicketApi = {
         || (row.requestedDeadline !== null && (typeof row.requestedDeadline !== 'string'
           || !/^\d{4}-\d{2}-\d{2}$/.test(row.requestedDeadline)))
         || typeof row.submittedAt !== 'string' || !Number.isFinite(Date.parse(row.submittedAt))
-        || (row.status !== 'pending' && row.status !== 'declined')) {
+        || (row.status !== 'pending' && row.status !== 'awaiting_client' && row.status !== 'declined')) {
         throw new ClientTicketApiError(null, 'Your project proposals could not be read. Reload the portal and try again.');
       }
+      const rawMessages = row.clarificationMessages ?? [];
+      if (!Array.isArray(rawMessages) || rawMessages.length > 100) {
+        throw new ClientTicketApiError(null, 'Your project proposals could not be read. Reload the portal and try again.');
+      }
+      const clarificationMessages = rawMessages.map((rawMessage): ClientProjectProposalMessage => {
+        if (!rawMessage || typeof rawMessage !== 'object' || Array.isArray(rawMessage)) {
+          throw new ClientTicketApiError(null, 'Your project proposals could not be read. Reload the portal and try again.');
+        }
+        const message = rawMessage as Record<string, unknown>;
+        if (typeof message.id !== 'string' || !message.id.trim() || (message.author !== 'pm' && message.author !== 'client')
+          || typeof message.body !== 'string' || !message.body.trim() || message.body.length > 4000
+          || typeof message.createdAt !== 'string' || !Number.isFinite(Date.parse(message.createdAt))) {
+          throw new ClientTicketApiError(null, 'Your project proposals could not be read. Reload the portal and try again.');
+        }
+        return { id: message.id, author: message.author, body: message.body, createdAt: message.createdAt };
+      });
       return { id: row.id, title: row.title, description: row.description,
         requestedDeadline: row.requestedDeadline as string | null, submittedAt: row.submittedAt,
-        status: row.status };
+        status: row.status, clarificationMessages };
     });
     return { items };
   },
@@ -337,6 +357,19 @@ export const clientTicketApi = {
       throw new ClientTicketApiError(null, 'The proposal response could not be read. Refresh your proposals before retrying.');
     }
     return { id: proposalId };
+  },
+  async replyToProjectProposal(proposalId: string, input: ClientProjectProposalReplyInput): Promise<ClientProjectProposalReplyReceipt> {
+    const value = await requestJson<unknown>(`/project-proposals/${pathId(proposalId)}/reply`, {
+      method: 'POST', body: JSON.stringify(input),
+    });
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new ClientTicketApiError(null, 'The reply result could not be read. Retry the same reply.');
+    }
+    const row = value as Record<string, unknown>;
+    if (row.id !== proposalId || row.operationId !== input.operationId || row.status !== 'pending') {
+      throw new ClientTicketApiError(null, 'The reply result could not be read. Refresh the proposal before retrying.');
+    }
+    return { id: proposalId, operationId: input.operationId, status: 'pending' };
   },
   listRequests(options: ClientTicketQueueOptions = {}) {
     return requestJson<ClientProjectRequestQueue>(`/requests${pageQuery(options)}`);

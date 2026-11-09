@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
-import type { ClientTicketMessage } from './clientApi';
+import type { ClientProjectProposal, ClientTicketMessage } from './clientApi';
+import { projectProposalPortalUpdate } from './ClientNotificationBell';
 
 let visibility: EventTarget & { visibilityState: string };
 beforeEach(() => {
@@ -50,6 +51,22 @@ describe('client update refresh', () => {
     const stop = startClientAutoRefresh(refresh);
     await vi.advanceTimersByTimeAsync(60_000);
     expect(refresh).toHaveBeenCalledTimes(2); stop();
+  });
+  it('creates a stable update for the latest PM proposal question only while awaiting a client reply', () => {
+    const proposal: ClientProjectProposal = {
+      id: 'proposal-1', title: 'Client portal', description: 'Build a portal', requestedDeadline: null,
+      submittedAt: '2026-10-29T08:00:00Z', status: 'awaiting_client', clarificationMessages: [
+        { id: 'question-old', author: 'pm', body: 'Earlier question', createdAt: '2026-10-29T09:00:00Z' },
+        { id: 'reply-old', author: 'client', body: 'Earlier response', createdAt: '2026-10-29T10:00:00Z' },
+        { id: 'question-current', author: 'pm', body: 'Which customers first?', createdAt: '2026-10-30T08:00:00Z' },
+      ],
+    };
+    const update = projectProposalPortalUpdate(proposal);
+    expect(update).toMatchObject({
+      id: 'proposal:proposal-1:question-current', title: 'Project proposal needs your reply',
+      message: 'Client portal', timestamp: '2026-10-30T08:00:00Z', target: { kind: 'proposal', item: proposal },
+    });
+    expect(projectProposalPortalUpdate({ ...proposal, status: 'pending' })).toBeNull();
   });
   it('keeps older loaded messages and orders new messages without duplicates', () => {
     const old = { id: 'old', author: 'pm', body: 'Earlier', createdAt: '2026-10-24T01:00:00Z' } as ClientTicketMessage;

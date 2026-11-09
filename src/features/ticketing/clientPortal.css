@@ -562,6 +562,22 @@
 .client-proposal-status.is-pending { color: rgb(var(--ui-link)); }
 .client-proposal-status.is-declined { color: var(--cp-muted); }
 .client-proposal-next { display: block; margin-top: 5px; color: var(--cp-muted) !important; }
+.client-proposal-content { min-width: 0; display: grid; align-content: start; gap: 4px; }
+.client-proposal-conversation { display: grid; gap: 8px; margin-top: 12px; padding-left: 12px; border-left: 2px solid rgb(var(--ui-divider)); }
+.client-proposal-message { padding: 10px 12px; border: 1px solid rgb(var(--ui-control)); border-radius: var(--client-radius-control); background: rgb(var(--ui-well)); }
+.client-proposal-message.is-client { background: rgb(var(--ui-raised)); }
+.client-proposal-message > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.client-proposal-message > div strong { color: var(--cp-ink); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); }
+.client-proposal-message time { color: var(--cp-faint); font-size: var(--client-type-meta); }
+.client-proposal-message p { margin: 6px 0 0; color: var(--cp-ink); font-size: var(--client-type-compact); line-height: var(--client-line-body); white-space: pre-wrap; overflow-wrap: anywhere; }
+.client-proposal-reply { display: grid; gap: 8px; margin-top: 10px; padding-top: 12px; border-top: 1px solid var(--cp-line); }
+.client-proposal-reply > label { color: var(--cp-ink); font-size: var(--client-type-caption); font-weight: var(--client-weight-semibold); }
+.client-proposal-reply textarea { width: 100%; min-height: 84px; resize: vertical; padding: var(--client-space-2) var(--client-space-3); border: 1px solid rgb(var(--ui-control)); border-radius: var(--client-radius-control); background: rgb(var(--ui-well)); color: var(--cp-ink); font: inherit; font-size: var(--client-type-compact); line-height: var(--client-line-body); }
+.client-proposal-reply textarea:focus-visible { outline: var(--client-focus-width) solid rgb(var(--ui-focus)); outline-offset: var(--client-focus-offset); }
+.client-proposal-reply > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.client-proposal-reply > div small { color: var(--cp-muted); font-size: var(--client-type-meta); }
+.client-proposal-reply button { min-height: 40px; }
+.client-proposal-reply .client-project-error { margin: 0; }
 .client-proposal-form { display: grid; max-width: 780px; gap: var(--client-space-3); padding: var(--client-space-4) 0; border-top: 1px solid var(--cp-line); border-bottom: 1px solid var(--cp-line); }
 .client-proposal-form > div:first-child h2 { margin: 0; color: var(--cp-ink); font-size: var(--client-type-body); }
 .client-proposal-form > div:first-child p { margin: 5px 0 0; color: var(--cp-muted); font-size: var(--client-type-meta); line-height: var(--client-line-body); }
@@ -656,6 +672,8 @@
   .client-proposal-row { grid-template-columns: minmax(0,1fr); gap: 7px; }
   .client-proposal-status { white-space: normal; }
   .client-section-actions .client-primary-action { min-height: var(--client-control); padding-inline: var(--client-space-2); white-space: nowrap; }
+  .client-proposal-reply > div { align-items: stretch; flex-direction: column; }
+  .client-proposal-reply > div button { width: 100%; justify-content: center; }
   .client-feedback { min-height: 330px; }
   .client-feedback-messages { max-height: 46vh; }
   .client-request-list, .client-request-detail-pane { width: 100%; min-height: 0; }

@@ -117,12 +117,20 @@ describe('real ticketing interfaces in the Alpha app', () => {
       inspectionOnly={false} newRequestEnabled={false} newRequestLoading={false} projectFocusVersion={0} refreshToken={0}
       proposals={[
         { id: 'proposal-pending', title: 'Client portal refresh', description: 'A simpler project space', requestedDeadline: null, submittedAt: '2026-10-29T10:00:00.000Z', status: 'pending' },
+        { id: 'proposal-needs-reply', title: 'Customer dashboard', description: 'A dashboard for account owners', requestedDeadline: null,
+          submittedAt: '2026-10-27T10:00:00.000Z', status: 'awaiting_client', clarificationMessages: [
+            { id: 'question-1', author: 'pm', body: 'Which customer group should we support first?', createdAt: '2026-10-29T11:00:00.000Z' },
+          ] },
         { id: 'proposal-declined', title: 'Archived data export', description: 'An older reporting request', requestedDeadline: '2026-12-01', submittedAt: '2026-10-28T10:00:00.000Z', status: 'declined' },
       ]}
       proposalsLoading={false} proposalsError="" onRefreshProposals={() => undefined} onProposalSubmitted={() => undefined}
     />);
     expect(html).toContain('Propose a project');
     expect(html).toContain('Waiting for PM review');
+    expect(html).toContain('Your project manager needs a little more information to review this proposal.');
+    expect(html).toContain('Which customer group should we support first?');
+    expect(html).toContain('Your reply');
+    expect(html).toContain('Send reply');
     expect(html).toContain('Not moving forward');
     expect(html).toContain('Your project manager decided not to move forward. No project was created.');
     expect(html.indexOf('No projects shared yet')).toBeLessThan(html.indexOf('Project proposals'));

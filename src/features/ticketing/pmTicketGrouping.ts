@@ -10,8 +10,6 @@ export interface PmTicketProjectGroup {
 export interface PmTicketClientGroup {
   key: string;
   name: string;
-  accessActive: boolean;
-  acceptsNewRequests: boolean;
   tickets: number;
   projects: PmTicketProjectGroup[];
 }
@@ -29,8 +27,6 @@ export function groupPmTickets(items: readonly PmTicketQueueItem[]): PmTicketCli
       client = {
         key: clientKey,
         name: source?.displayName ?? 'Separate inquiry',
-        accessActive: source?.accessActive ?? false,
-        acceptsNewRequests: source?.acceptsNewRequests ?? false,
         tickets: 0,
         projects: [],
       };

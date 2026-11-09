@@ -16,8 +16,7 @@ const item: PmTicketQueueItem = {
 describe('PM ticket queue list', () => {
   it('shows the precise next step and exposes selected tickets to assistive technology', () => {
     const html = renderToStaticMarkup(<PmTicketQueueList
-      items={[item]} selectedId="ticket-1" disabled={false} requestAccessSaving={null}
-      onSelect={() => undefined} onToggleRequests={() => undefined}
+      items={[item]} selectedId="ticket-1" disabled={false} onSelect={() => undefined}
     />);
     expect(html).toContain('PM action · Review request');
     expect(html).toContain('aria-pressed="true"');

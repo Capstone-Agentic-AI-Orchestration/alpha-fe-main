@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Download, FileText, RefreshCw, Upload, X } from 'lucide-react';
 
-import type { TicketDocument, TicketDocumentsApi } from './ticketDocuments';
+import type { TicketDocument, TicketDocumentsPanelApi } from './ticketDocuments';
 import { downloadTicketDocument, ticketDocumentOperationId } from './ticketDocuments';
 
 const MAX_BYTES = 10 * 1024 * 1024;
@@ -15,13 +15,19 @@ const primary = 'inline-flex items-center gap-1.5 rounded-lg bg-action px-3 py-2
 interface PendingUpload { file: File; replacesDocumentId: string | null; operationId: string }
 
 export function TicketDocumentsPanel({
-  api, scope, ticketId, canUpload, heading = 'Ticket documents',
+  api, scope, ticketId, canUpload, heading = 'Ticket documents', showRefresh = true,
+  refreshToken, emptyMessage = 'No documents have been added to this ticket.',
+  readOnlyMessage = 'This ticket is closed or document changes are unavailable.',
 }: {
-  api: TicketDocumentsApi;
+  api: TicketDocumentsPanelApi;
   scope?: string;
   ticketId: string;
   canUpload: boolean;
   heading?: string;
+  showRefresh?: boolean;
+  refreshToken?: string | number;
+  emptyMessage?: string;
+  readOnlyMessage?: string;
 }) {
   const [documents, setDocuments] = useState<TicketDocument[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +50,7 @@ export function TicketDocumentsPanel({
     }
   }, [api, scope, ticketId]);
 
-  useEffect(() => { void refresh(); }, [refresh]);
+  useEffect(() => { void refresh(); }, [refresh, refreshToken]);
 
   const groups = useMemo(() => {
     const grouped = new Map<string, TicketDocument[]>();
@@ -66,7 +72,8 @@ export function TicketDocumentsPanel({
 
   async function upload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!file || !canUpload || busy || file.size < 1 || file.size > MAX_BYTES) return;
+    const uploadFile = api.upload;
+    if (!file || !canUpload || !uploadFile || busy || file.size < 1 || file.size > MAX_BYTES) return;
     setBusy(true);
     setError('');
     let operation = pending && pending.file === file
@@ -77,7 +84,7 @@ export function TicketDocumentsPanel({
         operationId: await ticketDocumentOperationId(ticketId, file, replacementId),
       };
       setPending(operation);
-      await api.upload(scope, ticketId, file, replacementId, operation.operationId);
+      await uploadFile(scope, ticketId, file, replacementId, operation.operationId);
       setPending(null);
       setFile(null);
       setReplacementId(null);
@@ -113,12 +120,12 @@ export function TicketDocumentsPanel({
   return <section className="ticket-documents-panel mt-4 min-w-0 max-w-full rounded-xl border border-divider bg-surface" aria-label={heading}>
     <header className="flex items-center justify-between gap-3 border-b border-divider px-4 py-3">
       <div className="flex items-center gap-2"><FileText size={15} className="text-link" /><h3 className="text-sm font-medium text-content">{heading}</h3></div>
-      <button type="button" onClick={() => void refresh()} disabled={loading || busy} className={secondary} aria-label="Refresh ticket documents"><RefreshCw size={12} />Refresh</button>
+      {showRefresh && <button type="button" onClick={() => void refresh()} disabled={loading || busy} className={secondary} aria-label="Refresh ticket documents"><RefreshCw size={12} />Refresh</button>}
     </header>
 
     {error && <p role="alert" className="mx-4 mt-3 rounded-md border border-status-danger-border bg-status-danger-subtle p-2.5 text-[11px] text-status-danger">{error}</p>}
     {loading ? <LoadingRows label="Loading documents" rows={2} className="px-5" />
-      : groups.length === 0 ? <p className="p-5 text-center text-[11px] text-content-muted">No documents have been added to this ticket.</p>
+      : groups.length === 0 ? <p className="p-5 text-center text-[11px] text-content-muted">{emptyMessage}</p>
         : <div className="divide-y divide-divider">
           {groups.map(group => <div key={group.groupId} className="space-y-2 p-3">
             {group.versions.map((document, index) => <article key={document.id} className="ticket-document-item flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-divider bg-surface-raised p-3">
@@ -137,7 +144,7 @@ export function TicketDocumentsPanel({
           </div>)}
         </div>}
 
-    {canUpload && <form onSubmit={upload} className="space-y-2 border-t border-divider p-3">
+    {canUpload && api.upload && <form onSubmit={upload} className="space-y-2 border-t border-divider p-3">
       <div className="flex items-center justify-between gap-2"><label htmlFor={`ticket-document-${ticketId}`} className="text-[11px] text-content-secondary">{replacementId ? 'Choose the proposed replacement' : 'Add a document'}</label>
         {replacementId && <button type="button" onClick={() => { setReplacementId(null); setFile(null); setPending(null); if (fileInput.current) fileInput.current.value = ''; }} className="inline-flex items-center gap-1 text-[10px] text-content-muted hover:text-content-secondary"><X size={11} />Cancel replacement</button>}</div>
       <input ref={fileInput} id={`ticket-document-${ticketId}`} type="file" accept={ACCEPT} disabled={busy} onChange={event => selectFile(event.currentTarget.files?.[0] ?? null)} className={`${input} ticket-document-input`} />
@@ -145,6 +152,6 @@ export function TicketDocumentsPanel({
       {file && <p className="ticket-document-selected-file break-all text-[10px] text-content-secondary">Selected: {file.name} · {(file.size / 1024).toFixed(1)} KB</p>}
       <div className="flex justify-end"><button type="submit" disabled={!file || busy || file.size < 1 || file.size > MAX_BYTES} className={primary}><Upload size={12} />{busy ? 'Working…' : pending ? 'Retry same upload' : replacementId ? 'Propose replacement' : 'Upload document'}</button></div>
     </form>}
-    {!canUpload && <p className="border-t border-divider px-4 py-3 text-center text-[10px] text-content-muted">This ticket is closed or document changes are unavailable.</p>}
+    {(!canUpload || !api.upload) && <p className="border-t border-divider px-4 py-3 text-center text-[10px] text-content-muted">{readOnlyMessage}</p>}
   </section>;
 }
