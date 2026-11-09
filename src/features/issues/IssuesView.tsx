@@ -1,4 +1,5 @@
 import { LoadingRows, Skeleton } from '@/shared/components/ui/skeleton';
+import { Button } from '@/shared/components/ui/button';
 import React, { useState, useMemo, useEffect } from 'react';
 import { currentIssueId, useApp, useTabSessionState } from '@/app/AppContext';
 import { IssueStatus, IssuePriority, Issue
@@ -15,6 +16,7 @@ import { cardMarks, ghostCards } from '@/features/board-agent/agentChanges';
 import { isEpic } from '@/features/board-build/epic';
 import { BoardAlphaPanel } from '@/features/board-build/BoardAlphaPanel';
 import { TaskDetailDrawer } from './TaskDetailDrawer';
+import { CalendarView } from './CalendarView';
 import { initialsOf, taskHandoffMessage } from './taskFlow';
 import {
   Kanban,
@@ -119,7 +121,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const issueById = useMemo(() => new Map(issues.map(issue => [issue.id, issue])), [issues]);
 
   // PMs review product work on the kanban board; everyone else starts on the list.
-  const [viewMode, setViewMode] = useTabSessionState<'board' | 'list' | 'gantt'>(`${sessionPrefix}.viewMode`, role === 'pm' ? 'board' : 'list');
+  const [viewMode, setViewMode] = useTabSessionState<'board' | 'list' | 'calendar' | 'gantt'>(`${sessionPrefix}.viewMode`, role === 'pm' ? 'board' : 'list');
   /**
    * `mine` is issues you created, which is what My Issues always claimed to be.
    *
@@ -669,38 +671,52 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               <span>Filter</span>
             </button>
 
-            {/* Project planning has a timeline view over the same task records. */}
-            <div className="flex items-center text-xs">
-              <button
+            {/* Alternate layouts for the same filtered task set. */}
+            <div role="group" aria-label="Task view" className="inline-flex items-center gap-0.5 rounded-lg border border-divider bg-surface p-0.5 text-xs">
+              <Button
+                type="button"
                 onClick={() => setViewMode('list')}
-                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md font-medium transition-colors ${
-                  viewMode === 'list' ? 'bg-surface-raised text-content' : 'text-content-muted hover:text-content'
-                }`}
-                title="List View"
+                variant="ghost"
+                size="sm"
+                aria-pressed={viewMode === 'list'}
+                className={viewMode === 'list' ? 'bg-surface-raised text-content' : 'text-content-muted'}
               >
                 <List className="w-3.5 h-3.5" />
                 <span>List</span>
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
                 onClick={() => setViewMode('board')}
-                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md font-medium transition-colors ${
-                  viewMode === 'board' ? 'bg-surface-raised text-content' : 'text-content-muted hover:text-content'
-                }`}
-                title="Board View"
+                variant="ghost"
+                size="sm"
+                aria-pressed={viewMode === 'board'}
+                className={viewMode === 'board' ? 'bg-surface-raised text-content' : 'text-content-muted'}
               >
                 <Kanban className="w-3.5 h-3.5" />
                 <span>Board</span>
-              </button>
+              </Button>
+              <Button
+                type="button"
+                onClick={() => setViewMode('calendar')}
+                variant="ghost"
+                size="sm"
+                aria-pressed={viewMode === 'calendar'}
+                className={viewMode === 'calendar' ? 'bg-surface-raised text-content' : 'text-content-muted'}
+              >
+                <CalendarDays className="w-3.5 h-3.5" />
+                <span>Calendar</span>
+              </Button>
               {lockedProjectId && (
-                <button
+                <Button
+                  type="button"
                   onClick={() => setViewMode('gantt')}
-                  className={`flex items-center gap-1.5 px-2 py-1.5 rounded-md font-medium transition-colors ${
-                    viewMode === 'gantt' ? 'bg-surface-raised text-content' : 'text-content-muted hover:text-content'
-                  }`}
-                  title="Gantt View"
+                  variant="ghost"
+                  size="sm"
+                  aria-pressed={viewMode === 'gantt'}
+                  className={viewMode === 'gantt' ? 'bg-surface-raised text-content' : 'text-content-muted'}
                 >
                   <span>Gantt</span>
-                </button>
+                </Button>
               )}
             </div>
 
@@ -818,7 +834,15 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
                 <div className="flex items-center px-3"><Skeleton className={['ml-0 h-3 w-1/3', 'ml-[18%] h-3 w-1/4', 'ml-[36%] h-3 w-2/5'][index % 3]} /></div>
               </div>)}
             </div>
-          </div> : <LoadingRows label="Loading tasks" layout="table" rows={5} className="px-4" />
+          </div> : viewMode === 'calendar' ? (
+            <CalendarView
+              issues={[]}
+              sessionPrefix={sessionPrefix}
+              onOpenIssue={setSelectedIssueId}
+              isOverdue={isOverdue}
+              loading
+            />
+          ) : <LoadingRows label="Loading tasks" layout="table" rows={5} className="px-4" />
         ) : viewMode === 'board' ? (
           /* Kanban Board Mode */
           <div className="flex flex-1 overflow-x-auto">
@@ -1006,6 +1030,13 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               );
             })}
           </div>
+        ) : viewMode === 'calendar' ? (
+          <CalendarView
+            issues={filteredIssues}
+            sessionPrefix={sessionPrefix}
+            onOpenIssue={setSelectedIssueId}
+            isOverdue={isOverdue}
+          />
         ) : viewMode === 'gantt' && lockedProjectId ? (
           <GanttView
             project={projects.find(project => project.id === lockedProjectId)}
