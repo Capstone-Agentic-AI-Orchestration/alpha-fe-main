@@ -17,6 +17,7 @@ import { AgentAutonomyLevel } from '@/shared/types';
 import { desktop, isDesktop, type UpdateCheck } from '@/shared/desktop';
 import { GitHubConnectionPanel } from './GitHubConnectionPanel';
 import { McpServersPanel } from './McpServersPanel';
+import { CodeFolderSetting } from './CodeFolderSetting';
 import { WorkspaceAccessPanel } from './WorkspaceAccessPanel';
 
 export const SettingsView: React.FC = () => {
@@ -238,6 +239,12 @@ export const SettingsView: React.FC = () => {
                         )}
                       </div>
                     </div>
+                  </div>
+                )}
+
+                {isDesktop && role !== 'client' && (
+                  <div className="pt-4 border-t border-white/10">
+                    <CodeFolderSetting canChange={can('bind_workspace')} />
                   </div>
                 )}
               </div>

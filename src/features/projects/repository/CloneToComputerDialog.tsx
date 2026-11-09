@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, Download, FolderOpen, Loader2, XCircle } from 'lucide-react';
 
 import { Modal } from '@/shared/components/Modal';
-import { apiService, type FolderCloneResult } from '@/shared/services/apiService';
+import { apiService, type FolderCloneResult, type ProjectFolderReport } from '@/shared/services/apiService';
 
 const shortName = (repo: string) => repo.split('/').pop() ?? repo;
 
@@ -17,31 +17,54 @@ const desktopBridge = (): DesktopBridge | undefined => {
 /** Cloning needs a disk and a folder picker, which only the desktop app has. */
 export const canCloneToComputer = (): boolean => Boolean(desktopBridge()?.selectFolder);
 
+/** Ask for a folder with the desktop app's picker; null when cancelled or unavailable. */
+export const pickFolder = async (): Promise<string | null> => (await desktopBridge()?.selectFolder?.()) ?? null;
+
+/** Repositories not on this computer yet; all of them when every one already is. */
+const notHereYet = (repositories: string[], report: ProjectFolderReport | null | undefined): string[] => {
+  const missing = repositories.filter(repo => {
+    const location = report?.repositories.find(item => item.repo.toLowerCase() === repo.toLowerCase());
+    return !location || location.state === 'missing' || location.state === 'moved';
+  });
+  return missing.length ? missing : repositories;
+};
+
 /**
  * Clone a project's repositories into a folder the developer chooses, one
- * subfolder per repository, and optionally let Alpha's builds use those copies.
+ * subfolder per repository -- the project's folder unless another is chosen --
+ * and let Alpha's builds use those copies (on by default).
  */
 export const CloneToComputerDialog: React.FC<{
   isOpen: boolean;
   onClose: () => void;
   projectId: string;
   repositories: string[];
-}> = ({ isOpen, onClose, projectId, repositories }) => {
+  /** The project's folder and what is already here, when known. */
+  report?: ProjectFolderReport | null;
+  onCloned?: () => void;
+}> = ({ isOpen, onClose, projectId, repositories, report, onCloned }) => {
   const [selected, setSelected] = useState<string[]>(repositories);
   const [folder, setFolder] = useState('');
-  const [bind, setBind] = useState(false);
+  const [bind, setBind] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<FolderCloneResult[] | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
-    setSelected(repositories); setBind(false); setBusy(false); setError(null); setResults(null);
+    setSelected(notHereYet(repositories, report)); setFolder(report?.folder ?? ''); setBind(true);
+    setBusy(false); setError(null); setResults(null);
+    // Only when it opens: a report arriving later must not undo what was chosen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, repositories]);
+  useEffect(() => {
+    if (isOpen && report && !folder) { setFolder(report.folder); setSelected(notHereYet(repositories, report)); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report]);
 
   const browse = async () => {
     try {
-      const picked = await desktopBridge()?.selectFolder?.();
+      const picked = await pickFolder();
       if (picked) { setFolder(picked); setError(null); }
     } catch {
       setError('Could not open the folder picker. Please try again.');
@@ -53,6 +76,7 @@ export const CloneToComputerDialog: React.FC<{
     setBusy(true); setError(null);
     try {
       setResults((await apiService.cloneProjectTo(projectId, { repos: selected, intoDir: folder, bind })).results);
+      onCloned?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'The repositories could not be cloned.');
     } finally {
@@ -104,7 +128,7 @@ export const CloneToComputerDialog: React.FC<{
       </div>
       <label className="flex items-start gap-2.5 text-xs text-gray-300">
         <input type="checkbox" checked={bind} onChange={event => setBind(event.target.checked)} className="mt-0.5 accent-brand-500" />
-        <span>Use these copies for Alpha’s builds on this computer<span className="mt-0.5 block text-[11px] text-gray-500">Builds then branch from these folders instead of Alpha’s own copies. Leave off to keep them only for yourself.</span></span>
+        <span>Use these copies for Alpha’s builds on this computer<span className="mt-0.5 block text-[11px] text-gray-500">Builds branch from these folders and keep their own branches in each repository’s git history. Your files and uncommitted changes are not touched. Turn off to keep them only for yourself.</span></span>
       </label>
       {error && <p role="alert" className="text-xs text-rose-300">{error}</p>}
     </div>}

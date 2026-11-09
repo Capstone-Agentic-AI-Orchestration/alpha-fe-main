@@ -325,6 +325,35 @@ export interface FolderCloneResult {
   error?: string;
 }
 
+/**
+ * Where one of the project's repositories is on this computer.
+ * registered: Alpha uses this copy. found: a checkout of it sits in the project
+ * folder but is not registered yet. moved: the registered folder is gone.
+ * missing: not on this computer.
+ */
+export interface RepositoryLocation {
+  repo: string;
+  name: string;
+  state: 'registered' | 'found' | 'moved' | 'missing';
+  dir: string | null;
+  /** <project folder>\<repository name>: where a clone goes. */
+  expectedDir: string;
+  managed: boolean;
+}
+
+/** The project's folder on this computer and each repository's place in it. */
+export interface ProjectFolderReport {
+  codeFolder: string;
+  folder: string;
+  isDefault: boolean;
+  repositories: RepositoryLocation[];
+}
+
+export interface CodeFolderSetting {
+  codeFolder: string;
+  defaultCodeFolder: string;
+}
+
 export const apiService = {
   /** Internal ticket API path; preserves the existing session, workspace and desktop relay transport. */
   ticketRequest: async <T>(path: string, options?: RequestInit): Promise<T> => {
@@ -498,11 +527,30 @@ export const apiService = {
       body: JSON.stringify(repo ? { repo } : {})
     }),
   /** Clone the chosen repositories into a folder on this computer, optionally as Alpha's working copies. */
-  cloneProjectTo: (projectId: string, payload: { repos: string[]; intoDir: string; bind: boolean }) =>
+  cloneProjectTo: (projectId: string, payload: { repos: string[]; intoDir?: string; bind: boolean }) =>
     fetchJson<{ results: FolderCloneResult[] }>(`/projects/${encodeURIComponent(projectId)}/clone-to`, {
       method: 'POST',
       body: JSON.stringify(payload)
     }),
+  /** The project's folder on this computer, and whether each repository is registered, found there, moved or missing. */
+  getProjectFolder: (projectId: string) =>
+    fetchJson<ProjectFolderReport>(`/projects/${encodeURIComponent(projectId)}/folder`),
+  /** Choose the project's folder on this computer; null goes back to the default. */
+  setProjectFolder: (projectId: string, dir: string | null) =>
+    fetchJson<ProjectFolderReport>(`/projects/${encodeURIComponent(projectId)}/folder`, {
+      method: 'PUT',
+      body: JSON.stringify({ dir })
+    }),
+  /** Register the copy found in the project folder, so builds use it too. */
+  useFoundRepositoryCopy: (projectId: string, repo: string) =>
+    fetchJson<ProjectFolderReport>(`/projects/${encodeURIComponent(projectId)}/folder/use`, {
+      method: 'POST',
+      body: JSON.stringify({ repo })
+    }),
+  /** This computer's code folder, where project folders go by default. */
+  getCodeFolder: () => fetchJson<CodeFolderSetting>('/machine/code-folder'),
+  setCodeFolder: (dir: string | null) =>
+    fetchJson<CodeFolderSetting>('/machine/code-folder', { method: 'PUT', body: JSON.stringify({ dir }) }),
   /** Each of the project's repositories and this machine's checkout of it, if any. */
   getRepositoryCheckouts: (projectId: string) =>
     fetchJson<{ checkouts: RepositoryCheckout[] }>(`/projects/${encodeURIComponent(projectId)}/checkouts`),

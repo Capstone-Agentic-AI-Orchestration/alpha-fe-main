@@ -43,6 +43,8 @@ interface OrchestratorFlowProps {
   runtimes?: RuntimeEngine[];
   canEditAgents?: boolean;
   onUpdateAgent?: (id: string, updates: Partial<Agent>) => void;
+  /** Where the project's code is on this computer, e.g. "2 of 2 repositories on this computer". */
+  localCode?: string | null;
 }
 
 interface WaveAgent {
@@ -342,7 +344,7 @@ function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: number):
   return positions;
 }
 
-export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, isWorking, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent, roster = [], runtimes = [], canEditAgents = false, onUpdateAgent }) => {
+export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agents, isWorking, title, selectedCallId = null, onSelectCall, build = null, selectedBuildAgentId = null, onSelectBuildAgent, roster = [], runtimes = [], canEditAgents = false, onUpdateAgent, localCode = null }) => {
   const [expanded, setExpanded] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -634,7 +636,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
         <div className="absolute inset-x-0 top-0 flex h-14 items-center gap-3 bg-gradient-to-b from-shell to-transparent px-5">
           <span className="min-w-0 flex-1">
             <span className="block truncate text-xs font-semibold text-white">{title}</span>
-            <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}</span>
+            <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}{localCode ? ' · ' + localCode : ''}</span>
           </span>
           <button type="button" onClick={() => setResetToken(value => value + 1)} aria-label="Reset the 3D view" title="Reset view" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><RotateCcw className="h-4 w-4" aria-hidden="true" /></button>
           <button type="button" onClick={() => setMaximized(false)} aria-label="Restore the 3D view" title="Restore (Esc)" className="rounded-lg p-1.5 text-gray-400 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-300/60"><Minimize2 className="h-4 w-4" aria-hidden="true" /></button>
@@ -680,7 +682,7 @@ export const OrchestratorFlow: React.FC<OrchestratorFlowProps> = ({ calls, agent
           </span>
           <span className="min-w-0">
             <span className="block truncate text-xs font-semibold tracking-wide text-white">{title}</span>
-            <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}</span>
+            <span className={'block truncate text-[11px] ' + (working ? 'text-violet-300' : 'text-gray-500')}>Orchestrator · {statusText}{localCode ? ' · ' + localCode : ''}</span>
           </span>
         </button>
         {(failedNodes > 0 || (!expanded && nodeCount > 0)) && <span className={'shrink-0 rounded-full border bg-black/40 px-2.5 py-1 text-[10px] ' + (failedNodes > 0 ? 'border-rose-300/30 text-rose-200' : 'border-violet-300/20 text-violet-200')}>{failedNodes > 0 ? 'Needs attention' : nodeCount + (nodeCount === 1 ? ' agent' : ' agents')}</span>}

@@ -10,6 +10,7 @@ import { RepoBranch, RepoPullRequest } from '@/shared/types';
 import { BranchSwitcher } from './BranchSwitcher';
 import { CloneToComputerDialog, canCloneToComputer } from './CloneToComputerDialog';
 import { PipelineStrip } from './PipelineStrip';
+import { ProjectFolderStrip, useProjectFolder } from './ProjectFolderStrip';
 import { RepoFileBrowser } from './RepoFileBrowser';
 import { RepoHostingPanel } from './RepoHostingPanel';
 import { RepoLogsTab, RepoPreviews } from './RepoPreviews';
@@ -62,6 +63,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
   const [cloneOpen, setCloneOpen] = useState(false);
   // Clients never get code; everyone else may clone onto their own computer in the desktop app.
   const canClone = role !== 'client' && repositories.length > 0 && canCloneToComputer();
+  const folder = useProjectFolder(projectId, canClone, repositories.join('|'));
   useEffect(() => {
     if (tab !== 'overview') setRepositoryOpened(true);
   }, [tab]);
@@ -125,7 +127,8 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
           </button>}
           </div>
         )}
-      <CloneToComputerDialog isOpen={cloneOpen} onClose={() => setCloneOpen(false)} projectId={projectId} repositories={repositories} />
+      <CloneToComputerDialog isOpen={cloneOpen} onClose={() => setCloneOpen(false)} projectId={projectId} repositories={repositories}
+        report={folder.report} onCloned={() => void folder.reload()} />
       </div>
 
       <div id={panelId('overview')} role="tabpanel" aria-labelledby={tabId('overview')}
@@ -159,6 +162,9 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
             <ExternalLink className="h-3 w-3 shrink-0" aria-hidden />
             <span className="sr-only">(opens GitHub)</span>
           </a>
+          {tab === 'code' && canClone && (
+            <div className="mb-4"><ProjectFolderStrip projectId={projectId} folder={folder} onClone={() => setCloneOpen(true)} /></div>
+          )}
           <RepoPanel
             key={`${projectId}|${repo}`} projectId={projectId} repo={repo}
             tab={tab === 'overview' ? null : tab} idBase={idBase}
