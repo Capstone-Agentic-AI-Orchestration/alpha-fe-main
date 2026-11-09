@@ -46,7 +46,10 @@ export const AgentChangesList: React.FC<{
                 <div className="text-[11px] text-content-muted">
                   {byWhom(change)} · {timeAgo(change.createdAt, now)} · <span className={held ? 'text-status-warning' : ''}>{STATUS_TEXT[change.status]}</span>
                 </div>
-                {change.reason && change.status !== 'applied' && <div className="text-[11px] text-content-secondary">{change.reason}</div>}
+                {change.reason && (change.status === 'applied'
+                  // A done change's reason is a sync warning: saved in Alpha, not yet on GitHub or the team board.
+                  ? <div className="text-[11px] text-status-warning">Not synced: {change.reason}</div>
+                  : <div className="text-[11px] text-content-secondary">{change.reason}</div>)}
                 {showDetails && changeDetails(change).map(row => (
                   <div key={row.field} className="text-[11px] text-content-secondary">
                     <span className="font-mono">{row.field}</span>: {row.before} → {row.after}
