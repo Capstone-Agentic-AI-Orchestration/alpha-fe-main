@@ -72,7 +72,7 @@ function Jobs({ projectId, run, attempt, active, logs }: { projectId: string; ru
   const job = list.find(j => j.id === chosen) || list[0];
   return <div className="space-y-3">
     {jobs.error && <SectionError message={jobs.error} onRetry={jobs.reload} />}
-    {!jobs.data && jobs.loading && <SectionLoading label="Loading jobs…" />}
+    {!jobs.data && jobs.loading && <SectionLoading label="Loading jobs" layout="list" />}
     {jobs.data && list.length === 0 && <SectionEmpty>No jobs have been created for this attempt yet.</SectionEmpty>}
     {!!list.length && <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(160px,0.7fr)_minmax(0,1.3fr)]">
       <div className="min-w-0 space-y-1" aria-label="Workflow jobs">
@@ -105,7 +105,7 @@ function JobLog({ projectId, run, job, active }: { projectId: string; run: Actio
     </div>
     {notice && <p role="status" className="text-xs text-content-secondary">{notice}</p>}
     {log.error && <SectionError message={log.error} onRetry={log.reload} />}
-    {log.loading && !log.data && <SectionLoading label="Loading job logs…" />}
+    {log.loading && !log.data && <SectionLoading label="Loading job logs" layout="code" rows={8} />}
     {log.data?.state === 'not_ready' && <p role="status" className="text-xs text-content-secondary">GitHub has not made these logs available yet. Status refreshes while this page is visible.</p>}
     {log.data?.state === 'unavailable' && <p className="text-xs text-status-warning">{text}</p>}
     {log.data?.state === 'available' && <>

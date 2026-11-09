@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useEffect, useRef, useState } from 'react';
 import { Activity, ExternalLink, Eye, Loader2, MonitorPlay, ScrollText } from 'lucide-react';
 
@@ -72,7 +73,7 @@ export const RepoPreviews: React.FC<{
     >
       <div aria-busy={previews.loading}>
         {previews.loading && !data ? (
-          <SectionLoading label="Loading previews…" />
+          <SectionLoading label="Loading previews" layout="list" />
         ) : previews.error ? (
           <SectionError message={previews.error} onRetry={previews.reload} />
         ) : !data || sorted.length === 0 ? (
@@ -164,7 +165,7 @@ export const RepoLogsTab: React.FC<{ projectId: string; repo: string; active: bo
       actions={<RefreshButton onClick={previews.reload} loading={previews.loading} label="Refresh logs" />}
     >
       {previews.loading && !previews.data ? (
-        <SectionLoading label="Loading logs…" />
+        <SectionLoading label="Loading logs" layout="code" rows={8} />
       ) : previews.error ? (
         <SectionError message={previews.error} onRetry={previews.reload} />
       ) : (
@@ -262,9 +263,7 @@ const PageCard: React.FC<{ preview: BranchPreview; picker: React.ReactNode }> = 
             className="block h-[70vh] min-h-[420px] w-full bg-white"
           />
           {!loaded && (
-            <p className="absolute inset-0 flex items-center justify-center gap-1.5 bg-surface-raised text-[11px] text-content-muted">
-              <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden /> Loading preview…
-            </p>
+            <LoadingRows label="Loading preview" layout="detail" className="pointer-events-none absolute inset-0 bg-surface-raised px-5" />
           )}
         </div>
       ) : (

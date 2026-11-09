@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState } from 'react';
 import { Download, RefreshCw } from 'lucide-react';
 
@@ -64,7 +65,7 @@ export function ClientDeliveryFiles({ workspaceId, ticketId, deliveryId, scopeVe
   }
 
   return <section aria-label="Protected delivery files" className="mt-3 space-y-2 border-t border-divider pt-3">
-    {loading && <p role="status" className="text-[11px] text-content-secondary">Checking protected result files…</p>}
+    {loading && <LoadingRows label="Checking protected result files" rows={1} />}
     {error && <div role="alert" className="space-y-2 text-[11px] text-status-warning"><p>{error}</p>
       <button onClick={() => setRetry(value => value + 1)} disabled={loading || downloading !== null} className={secondary}><RefreshCw size={12} />Refresh files</button></div>}
     {manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-divider p-2">

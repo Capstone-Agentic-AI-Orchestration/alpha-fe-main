@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowLeft, Check, ChevronDown, CircleDot, FileText, Info,
@@ -201,6 +202,9 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   const [filter, setFilter] = useState<Filter>('all');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  const queueScope = JSON.stringify([filter, search]);
+  const [resolvedQueueScope, setResolvedQueueScope] = useState('');
+  const lastQueueScope = useRef('');
   const [dateRange, setDateRange] = useState<DateRange>('all');
   const [sortOrder, setSortOrder] = useState<SortOrder>('updated_desc');
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -295,17 +299,18 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     try {
       const result = await api.list({ limit: 50, filter, search });
       if (generation !== queueGeneration.current) return;
-      setQueue(result);
+      setQueue(result); lastQueueScope.current = queueScope; setResolvedQueueScope(queueScope);
       setSelectedId(current => current && result.items.some(item => item.id === current) ? current : null);
     } catch (error) {
       if (generation !== queueGeneration.current) return;
-      setQueue(null);
-      setSelectedId(null);
+      const forbidden = error instanceof ApiRequestError && (error.status === 401 || error.status === 403 || error.status === 404);
+      if (lastQueueScope.current !== queueScope || forbidden) { setQueue(null); setSelectedId(null); }
+      lastQueueScope.current = queueScope; setResolvedQueueScope(queueScope);
       setQueueError(safeError(error, 'queue'));
     } finally {
       if (generation === queueGeneration.current) setQueueLoading(false);
     }
-  }, [api, filter, search, intakeEnabled]);
+  }, [api, filter, search, queueScope, intakeEnabled]);
 
   useEffect(() => { void loadQueue(); }, [loadQueue, refreshVersion, refreshToken]);
 
@@ -318,6 +323,8 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshIfVisible); };
   }, [loadQueue, pending]);
 
+  const queuePending = intakeEnabled && (resolvedQueueScope !== queueScope || (queueLoading && !queue));
+  const visibleQueue = resolvedQueueScope === queueScope ? queue : null;
   const selectedQueueItem = useMemo(
     () => queue?.items.find(item => item.id === selectedId) ?? null,
     [queue, selectedId],
@@ -343,10 +350,15 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     return owner ? `${owner} is up next.` : 'No action is pending.';
   }, [selectedQueueItem]);
 
+  const detailScope = useRef<string | null>(null);
   useEffect(() => {
-    setScopeComposerOpen(false);
-    setHandoffOpen(false);
-    setReviewAction(null);
+    const sameTicket = detailScope.current === selectedId;
+    detailScope.current = selectedId;
+    if (!sameTicket) {
+      setScopeComposerOpen(false);
+      setHandoffOpen(false);
+      setReviewAction(null);
+    }
     if (!selectedId || !selectedQueueItem) {
       setDetail(null); setMessages([]); setNotes([]); setMessageCursor(null); setNoteCursor(null); setDetailError('');
       setDetailLoading(false);
@@ -354,13 +366,18 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     }
     let current = true;
     const historyVersion = ++historyGeneration.current;
-    setDetailLoading(true); setDetailError(''); setHistoryError(''); setDetail(null); setMessages([]); setNotes([]);
-    setMessageCursor(null); setNoteCursor(null);
+    setDetailLoading(true); setDetailError(''); setHistoryError('');
+    if (!sameTicket) {
+      setDetail(null); setMessages([]); setNotes([]); setMessageCursor(null); setNoteCursor(null);
+    }
     api.get(selectedId).then(ticket => {
       if (!current) return;
       setDetail(ticket);
     }).catch(error => {
-      if (current) setDetailError(safeError(error, 'ticket'));
+      if (current) {
+        if (error instanceof ApiRequestError && (error.status === 401 || error.status === 403 || error.status === 404)) setDetail(null);
+        setDetailError(safeError(error, 'ticket'));
+      }
     }).finally(() => {
       if (current) setDetailLoading(false);
     });
@@ -910,17 +927,18 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       </label>
       {selectedId && <nav className="pm-tickets__chat-list" aria-label="Ticket conversations">
         <p>Conversations</p>
-        {queue?.items.map(item => <button key={item.id} type="button" aria-current={selectedId === item.id ? 'page' : undefined}
+        {queuePending && <LoadingRows label="Loading ticket conversations" rows={3} />}
+        {visibleQueue?.items.map(item => <button key={item.id} type="button" aria-current={selectedId === item.id ? 'page' : undefined}
           disabled={writing || Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setPanel('conversation'); setTicketSection('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }}>
           <MessageSquare size={15} aria-hidden="true" /><span><strong>{item.title}</strong><small>{statusLabel(item.status)}</small></span>
         </button>)}
-        {queue?.nextCursor && <button type="button" disabled={queueMoreLoading || queueLoading} onClick={() => void loadMoreQueue()}>{queueMoreLoading ? 'Loading…' : 'Load more tickets'}</button>}
+        {visibleQueue?.nextCursor && <button type="button" disabled={queueMoreLoading || queueLoading} onClick={() => void loadMoreQueue()}>{queueMoreLoading ? 'Loading…' : 'Load more tickets'}</button>}
       </nav>}
     </aside>}
     <div className="pm-tickets__main">
     {!selectedId && <header className="pm-tickets__header">
       <div className="pm-tickets__view-heading">
-        <h2>{filters.find(option => option.id === filter)?.label}</h2><span className="pm-tickets__view-count">{queue ? visibleQueueItems.length : '…'}</span>
+        <h2>{filters.find(option => option.id === filter)?.label}</h2><span className="pm-tickets__view-count">{visibleQueue ? visibleQueueItems.length : '…'}</span>
       </div>
       <div className="pm-tickets__header-actions">
         {!selectedId && <label className="pm-tickets__search"><Search size={15} aria-hidden="true" />
@@ -971,7 +989,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
         <div className="pm-tickets__queue-scroll">
           {requestAccessError && <p role="alert" className="pm-tickets__error">{requestAccessError}</p>}
           {!intakeEnabled ? <EmptyPanel title="Live tickets are not connected yet" detail="No ticket data is loaded while ticketing is disabled." />
-            : queueLoading && !queue ? <div className="p-6 text-center text-xs text-content-muted">Loading tickets…</div>
+            : queuePending ? <LoadingRows label="Loading tickets" layout="table" rows={5} className="px-4" />
             : queue && visibleQueueItems.length > 0 ? <PmTicketQueueList items={visibleQueueItems} selectedId={selectedId}
               disabled={Boolean(pending)} requestAccessSaving={requestAccessSaving}
               onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }}
@@ -979,7 +997,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
               : queue && <div className="pm-tickets__empty-state"><EmptyPanel title="No tickets in this view" detail={filter === 'all' && !search && dateRange === 'all' ? 'Accepted inquiries will appear here. New inquiries are reviewed in the separate intake inbox.' : 'Try another view or clear your filters.'} />
                 {(search || filter !== 'all' || dateRange !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); setDateRange('all'); setSortOrder('updated_desc'); activeFilter('all'); }}>Show all tickets</button>}</div>}
         </div>
-        {queue && <div className="pm-tickets__queue-footer">
+        {queue && resolvedQueueScope === queueScope && <div className="pm-tickets__queue-footer">
           <span>Showing {visibleQueueItems.length} ticket{visibleQueueItems.length === 1 ? '' : 's'}</span>
           {queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading} className="text-link hover:text-link-hover disabled:opacity-50">{queueMoreLoading ? 'Loading…' : 'Load more'}</button>}
         </div>}
@@ -988,9 +1006,10 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       <div role="region" aria-label="Ticket detail panel" className={`pm-tickets__detail${selectedId ? ' pm-tickets__detail--selected' : ''}`}>
         {!intakeEnabled ? <EmptyPanel title="Ticketing is coming soon" detail="Ticket details and conversations will be available when ticketing is connected." />
           : !selectedId || !selectedQueueItem ? <EmptyPanel title={queueError ? 'Ticket queue unavailable' : 'Select a ticket'} detail={queueError ? 'No ticket data is shown when the service cannot be reached.' : 'Choose a request from the queue to review its details and conversation.'} />
-          : detailLoading ? <div role="status" className="p-8 text-center text-xs text-content-muted">Loading ticket…</div>
-            : detailError ? <div role="alert" className="m-4 rounded-lg border border-status-danger-border bg-status-danger-subtle p-4 text-xs text-status-danger">{detailError}</div>
+          : (detail?.id !== selectedId && (detailLoading || !detailError)) ? <LoadingRows label="Loading ticket" layout="detail" className="p-5" />
+            : detailError && detail?.id !== selectedId ? <div role="alert" className="m-4 rounded-lg border border-status-danger-border bg-status-danger-subtle p-4 text-xs text-status-danger">{detailError}</div>
               : detail && selectedQueueItem && <div className="pm-tickets__detail-shell">
+                {detailError && <div role="alert" className="pm-tickets__error">{detailError}</div>}
                 <header className="pm-tickets__detail-header">
                   <div className="pm-tickets__detail-heading">
                     <button type="button" onClick={backToQueue} disabled={writing || Boolean(pending)} className="pm-tickets__detail-back" aria-label="Back to tickets" title="Back to tickets">

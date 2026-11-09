@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useEffect, useState } from 'react';
 import { Archive, RotateCcw, Trash2, X } from 'lucide-react';
 import { apiService } from '@/shared/services/apiService';
@@ -103,7 +104,7 @@ export const ArchivedCardsPanel: React.FC<{
       <div className="flex-1 overflow-y-auto">
         {error && <p className="px-4 py-2 text-xs text-status-danger">{error}</p>}
         {issues === null && !error
-          ? <p className="px-4 py-6 text-xs text-content-muted">Loading archived tasks…</p>
+          ? <LoadingRows label="Loading archived tasks" layout="table" className="px-4" />
           : issues && (
             <ArchivedCardsList
               issues={issues}

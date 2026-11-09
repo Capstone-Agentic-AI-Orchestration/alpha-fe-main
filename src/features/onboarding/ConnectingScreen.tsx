@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { CloudOff, Loader2, RotateCw } from 'lucide-react';
+import { CloudOff, RotateCw } from 'lucide-react';
+
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 
 /**
  * What the web build shows before it knows who you are.
@@ -43,14 +45,11 @@ export const ConnectingScreen: React.FC<Props> = ({ status, onRetry }) => {
     <main className="flex min-h-screen items-center justify-center bg-canvas p-6 text-sm text-gray-300">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-8">
         {status === 'loading' ? (
-          <div role="status" aria-live="polite" className="space-y-3">
+          <div className="space-y-3">
             <div className="flex items-center gap-3">
-              <Loader2
-                className="h-4 w-4 shrink-0 animate-spin text-gray-400 motion-reduce:animate-none"
-                aria-hidden="true"
-              />
               <h1 className="text-base font-semibold text-gray-100">Connecting to Alpha</h1>
             </div>
+            <LoadingRows label="Connecting to Alpha" layout="detail" rows={2} />
             {slow && (
               <p className="text-xs leading-relaxed text-gray-400">
                 The server sleeps when nobody has used it for a while, and can take up to a

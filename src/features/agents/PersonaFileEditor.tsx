@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
@@ -125,10 +126,7 @@ export function PersonaFileEditor({ agentId, refreshKey, readOnly = false }: Pro
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 text-content-muted text-xs py-8 justify-center">
-        <Loader2 size={14} className="animate-spin" />
-        Loading persona file...
-      </div>
+      <LoadingRows label="Loading persona file" layout="detail" />
     );
   }
 

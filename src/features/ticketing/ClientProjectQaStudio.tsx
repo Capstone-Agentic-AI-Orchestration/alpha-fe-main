@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { clientProjectQaApi } from './clientProjectQaApi';
@@ -10,7 +11,7 @@ function readPanelPreference(): boolean {
 }
 
 export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspectionOnly,feedback,refreshToken}:{workspaceId:string;projectId:string;projectName:string;inspectionOnly:boolean;feedback:ReactNode;refreshToken:number}) {
-  const [page,setPage]=useState<QaRoundPage|null>(null);const [round,setRound]=useState<QaRound|null>(null);
+  const [page,setPage]=useState<QaRoundPage|null>(null);const [loadedRound,setRound]=useState<QaRound|null>(null);
   const [selected,setSelected]=useState('');const [error,setError]=useState('');const [loading,setLoading]=useState(true);const [busy,setBusy]=useState(false);
   const [refresh,setRefresh]=useState(0);const [confirm,setConfirm]=useState(false);
   const [dirtyItems,setDirtyItems]=useState<Record<string,boolean>>({});
@@ -31,15 +32,18 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
     peekTimer.current=window.setTimeout(()=>{if(!review.current?.contains(document.activeElement))setPeek(false);},250);}
   useEffect(()=>()=>window.clearTimeout(peekTimer.current),[]);
   const panelState=!panelCollapsed?'docked':peek?'peek':'collapsed';
-  const roundPicker=<RoundPicker hideLabel disabled={busy||hasUnsaved} page={page} selected={selected} onChange={value=>{setSelected(value);submission.current=null;}} onOlder={()=>void older()}/>;
-  useEffect(()=>{let active=true;setLoading(true);setError('');setRound(null);
+  const round=loadedRound?.id===selected?loadedRound:null;
+  const roundPending=!error&&((loading&&!page)||Boolean(selected&&!round));
+  const roundPicker=<RoundPicker hideLabel disabled={busy||hasUnsaved||!page} page={page} selected={selected} onChange={value=>{setSelected(value);submission.current=null;}} onOlder={()=>void older()}/>;
+  useEffect(()=>{let active=true;setLoading(true);setError('');
     if(inspectionOnly){setPage({items:[],nextBefore:null});setLoading(false);return;}
     void clientProjectQaApi.list(workspaceId,projectId).then(value=>{if(active){setPage(value);setSelected(current=>value.items.some(item=>item.id===current)?current:value.items.find(item=>item.status==='published')?.id??value.items[0]?.id??'');}})
       .catch(cause=>{if(active)setError(qaError(cause));}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};
   },[workspaceId,projectId,refresh,refreshToken,inspectionOnly]);
-  useEffect(()=>{let active=true;setRound(null);setConfirm(false);setDirtyItems({});if(!selected||inspectionOnly)return;
+  useEffect(()=>{let active=true;if(!selected||inspectionOnly)return;
     void clientProjectQaApi.get(workspaceId,projectId,selected).then(value=>{if(active)setRound(value);}).catch(cause=>{if(active)setError(qaError(cause));});return()=>{active=false;};
   },[workspaceId,projectId,selected,refresh,refreshToken,inspectionOnly]);
+  useEffect(()=>{setConfirm(false);setDirtyItems({});},[selected]);
   async function reload(){if(selected)setRound(await clientProjectQaApi.get(workspaceId,projectId,selected));}
   async function older(){if(!page?.nextBefore)return;try{const next=await clientProjectQaApi.list(workspaceId,projectId,page.nextBefore);setPage({items:[...page.items,...next.items],nextBefore:next.nextBefore});}catch(cause){setError(qaError(cause));}}
   const submission=useRef<{roundId:string;input:{operationId:string;expectedVersion:number}}|null>(null);
@@ -56,10 +60,10 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
     {/* Phones switch between preview and review, so the picker also lives here where it stays reachable. */}
     <div className="pqa-mobile-round">{roundPicker}</div>
     </div>
-    {loading?<p role="status">Loading your project review…</p>:<>
+    <>
       <div className="pqa-mobile-switch" role="group" aria-label="Review view"><button type="button" aria-pressed={mobile==='preview'} onClick={()=>setMobile('preview')}>Preview</button>
         <button type="button" aria-pressed={mobile==='review'} onClick={()=>setMobile('review')}>Review</button></div>
-      <div className="pqa-workspace" data-mobile={mobile}><QaPreview preview={round?.preview??null} audience="client" toolbarEnd={roundPicker}/>
+      <div className="pqa-workspace" data-mobile={mobile}><QaPreview preview={round?.preview??null} audience="client" toolbarEnd={roundPicker} pending={roundPending}/>
         {panelCollapsed&&<div className="pqa-panel-rail" onMouseEnter={openPeek} onMouseLeave={()=>{holdPeek.current=false;closePeekSoon();}}>
           <button type="button" aria-label="Show review panel" title="Show review panel" onClick={()=>setPanelCollapsed(false)}><PanelRightOpen size={16}/></button>
           <span aria-hidden="true">Review{round?` · ${completed}/${round.items.length}`:''}</span>
@@ -69,7 +73,7 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
           onKeyDown={event=>{if(event.key==='Escape'&&panelState==='peek'){setPeek(false);(document.activeElement as HTMLElement|null)?.blur();}}}>
           <StudioPanels ariaLabel="Project review panels" actions={panelCollapsed?undefined
             :<button type="button" className="pqa-panel-toggle" aria-label="Hide review panel" title="Hide review panel" onClick={()=>setPanelCollapsed(true)}><PanelRightClose size={15}/></button>}
-            feedback={feedback} history={round?<History round={round}/>:<p>No review history yet.</p>} checklist={round?<>
+            feedback={feedback} history={round?<History round={round}/>:roundPending?<LoadingRows label="Loading review history" layout="detail" />:<p>No review history yet.</p>} checklist={round?<>
             <div className="pqa-review-heading"><h3>{round.title}</h3><span>{completed}/{round.items.length} tested</span></div>
             <progress max={round.items.length} value={completed} aria-label="Checks tested"/>
             <p className="pqa-hint">{round.status==='published'?'Save each result, then submit your review.':`This review is ${label(round.status).toLowerCase()}${round.outcome?` · ${label(round.outcome)}`:''}. Results are preserved.`}</p>
@@ -86,10 +90,10 @@ export function ClientProjectQaStudio({workspaceId,projectId,projectName,inspect
               {hasUnsaved&&<span>Save or discard your changes before submitting or switching rounds.</span>}
               {incomplete&&<span>Test every required check before submitting.</span>}
             </div>}
-          </>:<div className="pqa-empty"><h3>No review shared yet</h3><p>Your project manager will share a review here when it is ready. You can send a message in Feedback.</p></div>}/>
+          </>:roundPending?<LoadingRows label="Loading review checklist" layout="detail" />:!error&&<div className="pqa-empty"><h3>No review shared yet</h3><p>Your project manager will share a review here when it is ready. You can send a message in Feedback.</p></div>}/>
         </aside>
       </div>
-    </>}
+    </>
   </section>;
 }
 

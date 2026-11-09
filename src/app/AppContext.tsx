@@ -237,6 +237,8 @@ interface AppContextType {
   chatThreadsError: string | null;
   retryChatThreads: () => Promise<void>;
   activeThreadId: string | null;
+  transcriptState: (threadId: string) => 'loading' | 'ready' | 'error';
+  loadTranscript: (threadId: string) => void;
   setActiveThreadId: (id: string | null) => void;
   createNewThread: (title?: string, projectId?: string) => string;
   setThreadProject: (threadId: string, projectId: string | null) => Promise<ChatThread & {
@@ -1352,22 +1354,25 @@ ${e.detail}`;
   * cleanup cancels the only response handler. The conversation then stays
   * falsely empty for the rest of that session.
    */
+  const [failedTranscripts, setFailedTranscripts] = useState<Record<string, boolean>>({});
   const loadingThreadsRef = useRef<Map<string, Promise<ChatMessage[]>>>(new Map());
 
-  useEffect(() => {
-    const threadId = activeThreadId;
-    if (!threadId || loadedThreadsRef.current.has(threadId)) return;
+  const loadTranscript = useCallback((threadId: string) => {
+    if (loadedThreadsRef.current.has(threadId)) return;
 
     // A StrictMode effect replay (or a rapid tab switch) shares the same
     // request. Do not cancel its callback on effect cleanup: loading a thread
     // into the provider cache remains useful after the user changes tabs.
     if (loadingThreadsRef.current.has(threadId)) return;
 
+    const workspaceId = activeWorkspaceRef.current;
     const request = apiService.getChatMessages(threadId);
     loadingThreadsRef.current.set(threadId, request);
+    setFailedTranscripts(previous => previous[threadId] ? { ...previous, [threadId]: false } : previous);
 
     void request
       .then(messages => {
+        if (activeWorkspaceRef.current !== workspaceId || loadingThreadsRef.current.get(threadId) !== request) return;
         if (!Array.isArray(messages)) throw new Error('Chat messages response was invalid');
         loadedThreadsRef.current.add(threadId);
         setChatThreads(prev =>
@@ -1377,14 +1382,18 @@ ${e.detail}`;
       .catch(() => {
         // Allow a retry on the next open rather than leaving the thread
         // permanently marked as loaded against a daemon that was briefly down.
-        loadedThreadsRef.current.delete(threadId);
+        if (activeWorkspaceRef.current === workspaceId && loadingThreadsRef.current.get(threadId) === request) {
+          setFailedTranscripts(previous => ({ ...previous, [threadId]: true }));
+        }
       })
       .finally(() => {
         if (loadingThreadsRef.current.get(threadId) === request) {
           loadingThreadsRef.current.delete(threadId);
         }
       });
-  }, [activeThreadId]);
+  }, []);
+
+  useEffect(() => { if (activeThreadId) loadTranscript(activeThreadId); }, [activeThreadId, loadTranscript]);
 
   // Sync to local storage
   useEffect(() => { saveToStorage('active_workspace_id', activeWorkspaceId); }, [activeWorkspaceId]);
@@ -1519,6 +1528,8 @@ ${e.detail}`;
     // Clear this cache so opening one always rehydrates its transcript from
     // that workspace's authoritative store.
     loadedThreadsRef.current.clear();
+    loadingThreadsRef.current.clear();
+    setFailedTranscripts({});
     setRunSetupIssueId(null);
     setRunSetupAgentId(null);
     const cachedBoard = loadCachedBoard(workspaceId).state;
@@ -4056,6 +4067,8 @@ ${e.detail}`;
       chatThreadsError,
       retryChatThreads,
       activeThreadId,
+      transcriptState: threadId => loadedThreadsRef.current.has(threadId) ? 'ready' : failedTranscripts[threadId] ? 'error' : 'loading',
+      loadTranscript,
       setActiveThreadId,
       createNewThread,
       setThreadProject,

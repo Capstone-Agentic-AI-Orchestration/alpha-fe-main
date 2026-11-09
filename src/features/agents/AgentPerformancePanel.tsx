@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useCallback, useEffect, useState } from 'react';
 import { BookOpenCheck, Check, LoaderCircle, Lightbulb, RefreshCw, X } from 'lucide-react';
 
@@ -43,7 +44,7 @@ export function AgentPerformancePanel({ agentId, canManage }: { agentId: string;
     }
   };
 
-  if (!data && !error) return <div role="status" className="flex items-center gap-2 text-content-muted"><LoaderCircle className="h-3.5 w-3.5 animate-spin" />Loading build history…</div>;
+  if (!data && !error) return <LoadingRows label="Loading build history" layout="table" />;
 
   const card = data?.scorecard;
   const accepted = card ? card.acceptedFirstTry + card.acceptedAfterRetry : 0;

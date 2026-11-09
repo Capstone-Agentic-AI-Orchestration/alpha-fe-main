@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import {
@@ -54,6 +55,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
     role,
     can,
     activeWorkspaceId,
+    workspaceLoading,
   } = useApp();
 
   const canManageProjects = can('manage_projects');
@@ -770,7 +772,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
       )}
 
       {/* ================= MINIMALIST PROJECTS TABLE ================= */}
-      {filteredProjects.length === 0 ? (
+      {workspaceLoading && !projects.length ? <LoadingRows label="Loading projects" layout="table" rows={5} /> : filteredProjects.length === 0 ? (
         <div className="flex min-h-[280px] flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-divider bg-surface/30 px-6 py-12 text-center">
           <span className="mb-4 flex h-10 w-10 items-center justify-center rounded-xl bg-selected text-selected-content ring-1 ring-inset ring-selected-content/20">
             <Folder className="h-5 w-5" />

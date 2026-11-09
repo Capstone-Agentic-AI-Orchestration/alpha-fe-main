@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 
@@ -91,7 +92,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
       </div>
       <button type="button" className={secondary} disabled={disabled || loading} onClick={() => setRefresh(value => value + 1)} aria-label="Refresh workspace projects"><RefreshCw size={13} /></button>
     </div>
-    {loading && <p role="status" className="text-xs text-content-muted">Loading projects from this workspace…</p>}
+    {loading && <LoadingRows label="Loading projects from this workspace" rows={2} />}
     {failed && <p role="alert" className="rounded-md border border-status-danger-border bg-status-danger-subtle p-2.5 text-xs text-status-danger">Could not load workspace projects. Refresh to try again.</p>}
     {currentMissing && <p role="status" className="rounded-md border border-status-warning-border bg-status-warning-subtle p-2.5 text-xs text-status-warning">The linked project is not in the current project list. Refresh or choose another project if this request has no authorized work.</p>}
     <label className="block space-y-1.5">
@@ -116,7 +117,7 @@ export function PmProjectLinkForm({ initialProjectId, initialClientVisible, init
         <option value="">Do not share a hosted preview</option>
         {previews.map(preview => <option key={`${preview.repository}|${preview.branch}`} value={`${preview.repository}|${preview.branch}`}>{preview.repository} · {preview.branch}</option>)}
       </select>
-      {previewLoading && <span role="status" className="block text-[10px] text-content-muted">Checking ready hosted frontend previews…</span>}
+      {previewLoading && <LoadingRows label="Checking ready hosted frontend previews" layout="detail" rows={1} />}
       {previewError && <span role="alert" className="block text-[10px] text-status-warning">Hosted previews could not be checked. You can still save the project link without sharing one.</span>}
       {!previewLoading && !previewError && projectId && previews.length === 0 && <span className="block text-[10px] text-content-muted">No ready UAT frontend preview was found.</span>}
       <span className="block text-[10px] text-content-muted">Preview configuration stays internal. Review the UAT build and hand it off from this project’s Review tab before the client can see it.</span>

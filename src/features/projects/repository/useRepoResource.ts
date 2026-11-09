@@ -10,6 +10,15 @@ export interface RepoResource<T> {
   reload: () => void;
 }
 
+type RepoResult<T> = { key: string; data: T | null; error: string | null };
+
+/** Resolve scope during render, before the next request's effect can run. */
+export function repoResourceState<T>(result: RepoResult<T> | null, key: string, enabled: boolean, refreshing: boolean) {
+  if (!enabled) return { data: null, error: null, loading: false };
+  if (result?.key !== key) return { data: null, error: null, loading: true };
+  return { data: result.data, error: refreshing ? null : result.error, loading: refreshing };
+}
+
 /**
  * Load one repository read and keep only the answer to the latest request.
  *
@@ -19,8 +28,7 @@ export interface RepoResource<T> {
  * yet" (no branch chosen), which clears the section rather than erroring.
  */
 export function useRepoResource<T>(fetcher: (() => Promise<T>) | null, key: string): RepoResource<T> {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<RepoResult<T> | null>(null);
   const [loading, setLoading] = useState(false);
   const [nonce, setNonce] = useState(0);
   const sequence = useRef(0);
@@ -28,33 +36,26 @@ export function useRepoResource<T>(fetcher: (() => Promise<T>) | null, key: stri
   const fetcherRef = useRef(fetcher);
   fetcherRef.current = fetcher;
   const enabled = fetcher !== null;
-  const lastKey = useRef<string | null>(null);
 
   useEffect(() => {
     const current = ++sequence.current;
     const run = fetcherRef.current;
     // A refresh keeps the current answer on screen while it reloads; a new key
     // (another branch, another repository) must not show the old one.
-    const keyChanged = lastKey.current !== key;
-    lastKey.current = key;
     if (!run) {
-      setData(null);
-      setError(null);
+      setResult(null);
       setLoading(false);
       return;
     }
-    if (keyChanged) setData(null);
     setLoading(true);
-    setError(null);
     run()
-      .then(result => {
+      .then(data => {
         if (current !== sequence.current) return;
-        setData(result);
+        setResult({ key, data, error: null });
       })
       .catch(err => {
         if (current !== sequence.current) return;
-        setData(null);
-        setError(describeRepoError(err));
+        setResult({ key, data: null, error: describeRepoError(err) });
       })
       .finally(() => {
         if (current === sequence.current) setLoading(false);
@@ -67,5 +68,5 @@ export function useRepoResource<T>(fetcher: (() => Promise<T>) | null, key: stri
   }, []);
 
   const reload = useCallback(() => setNonce(n => n + 1), []);
-  return { data, error, loading, reload };
+  return { ...repoResourceState(result, key, enabled, loading), reload };
 }

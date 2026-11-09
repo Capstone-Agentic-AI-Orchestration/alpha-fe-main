@@ -1,3 +1,4 @@
+import { LoadingRows, Skeleton } from '@/shared/components/ui/skeleton';
 import React, { useState, useMemo, useEffect } from 'react';
 import { currentIssueId, useApp, useTabSessionState } from '@/app/AppContext';
 import { IssueStatus, IssuePriority, Issue
@@ -87,6 +88,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
 }) => {
   const {
     issues,
+    workspaceLoading,
     updateIssueStatus,
     archiveIssue,
     restoreIssue,
@@ -802,7 +804,22 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             onClose={() => setShowAgentActivity(false)}
           />
         )}
-        {viewMode === 'board' ? (
+        {workspaceLoading && !issues.some(issue => !lockedProjectId || issue.projectId === lockedProjectId) ? (
+          viewMode === 'board' ? <div className="flex min-w-0 flex-1 overflow-x-auto">
+            {columns.map(column => <section key={column.id} className="min-w-48 flex-1 border-r border-divider px-3 py-4">
+              <h3 className="text-xs font-medium text-content-secondary">{column.title}</h3>
+              <LoadingRows label={`Loading ${column.title} tasks`} layout="detail" rows={2} />
+            </section>)}
+          </div> : viewMode === 'gantt' ? <div role="status" className="mx-4 overflow-hidden rounded-lg border border-divider">
+            <span className="sr-only">Loading task timeline</span>
+            <div aria-hidden="true">
+              {Array.from({ length: 6 }, (_, index) => <div key={index} className="grid min-h-10 grid-cols-[minmax(7rem,1fr)_3fr] border-b border-divider">
+                <div className="flex items-center border-r border-divider px-3"><Skeleton className="h-3 w-3/4" /></div>
+                <div className="flex items-center px-3"><Skeleton className={['ml-0 h-3 w-1/3', 'ml-[18%] h-3 w-1/4', 'ml-[36%] h-3 w-2/5'][index % 3]} /></div>
+              </div>)}
+            </div>
+          </div> : <LoadingRows label="Loading tasks" layout="table" rows={5} className="px-4" />
+        ) : viewMode === 'board' ? (
           /* Kanban Board Mode */
           <div className="flex flex-1 overflow-x-auto">
             {columns.map(column => {

@@ -1,3 +1,4 @@
+import { Skeleton } from '@/shared/components/ui/skeleton';
 import React, { useState } from 'react';
 import { ArrowRight, ExternalLink, GitMerge, Info, Loader2 } from 'lucide-react';
 
@@ -170,9 +171,7 @@ const StepLink: React.FC<{
     summary = <span className="text-content-muted">No {missing} branch to compare</span>;
   } else if (compare.loading && !compare.data) {
     summary = (
-      <span className="inline-flex items-center gap-1.5 text-content-muted">
-        <Loader2 className="h-3 w-3 motion-safe:animate-spin" aria-hidden /> Comparing…
-      </span>
+      <div role="status"><span className="sr-only">Comparing branches</span><Skeleton className="h-3 w-20" /></div>
     );
   } else if (compare.error) {
     summary = <span className="text-status-warning">{compare.error}</span>;
@@ -193,13 +192,13 @@ const StepLink: React.FC<{
   return (
     <div className="flex h-full flex-col justify-center gap-1.5 rounded-lg border border-dashed border-divider px-3 py-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex min-w-0 items-center gap-1.5 text-[11px]">
+        <div className="flex min-w-0 items-center gap-1.5 text-[11px]">
           <ArrowRight className="h-3 w-3 flex-shrink-0 text-content-muted max-md:rotate-90" aria-hidden />
           {summary}
           {compare.data && behind > 0 && (
             <span className="text-content-muted">· {behind} behind</span>
           )}
-        </p>
+        </div>
         {canPromote && !missing && (
           <button
             type="button"

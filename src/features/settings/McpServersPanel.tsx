@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useCallback, useEffect, useState } from 'react';
 import {
   Database, Plus, Trash2, Loader2, AlertTriangle, Lock, X, Save
@@ -211,11 +212,8 @@ export function McpServersPanel() {
         </div>
       </div>
 
-      {loading ? (
-        <div className="flex items-center gap-2 text-[11px] text-content-muted py-6">
-          <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          Reading catalog...
-        </div>
+      {loading && !servers.length ? (
+        <LoadingRows label="Loading MCP servers" layout="list" />
       ) : (
         <div className="space-y-2">
           {servers.map(server => {

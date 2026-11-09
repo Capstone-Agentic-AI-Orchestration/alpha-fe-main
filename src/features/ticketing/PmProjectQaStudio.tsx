@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Plus, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
 import { pmTicketApi } from './pmApi';
@@ -10,8 +11,13 @@ export function PmProjectQaStudio({projectId,projectName,feedback,issues=[]}:{pr
   const [targets,setTargets]=useState<Array<{repository:string}>>([]);
   const [clients,setClients]=useState<Array<{clientId:string;displayName:string}>>([]);
   const [repository,setRepository]=useState('');const [clientId,setClientId]=useState('');
-  const [build,setBuild]=useState<QaBuild|null>(null);const [page,setPage]=useState<QaRoundPage|null>(null);
-  const [selected,setSelected]=useState('');const [round,setRound]=useState<QaRound|null>(null);
+  const [loadedBuild,setBuild]=useState<QaBuild|null>(null);const [loadedPage,setPage]=useState<QaRoundPage|null>(null);
+  const [buildFor,setBuildFor]=useState('');const [pageFor,setPageFor]=useState('');
+  const build=buildFor===repository?loadedBuild:null;
+  const page=pageFor===clientId?loadedPage:null;
+  const [selected,setSelected]=useState('');const [loadedRound,setRound]=useState<QaRound|null>(null);
+  const [failedRound,setFailedRound]=useState('');
+  const round=page&&loadedRound?.id===selected?loadedRound:null;
   const [checks,setChecks]=useState<QaCheck[]>([newCheck()]);const [title,setTitle]=useState('UAT review');
   const [editing,setEditing]=useState(false);
   const [uncertain,setUncertain]=useState(false);
@@ -26,17 +32,19 @@ export function PmProjectQaStudio({projectId,projectName,feedback,issues=[]}:{pr
       setClientId(current=>clients.items.some(item=>item.clientId===current)?current:clients.items.length===1?clients.items[0].clientId:'');
     }).catch(cause=>{if(active)setError(qaError(cause));}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};
   },[projectId,refresh]);
-  useEffect(()=>{let active=true;setBuild(null);setAck(false);if(!repository)return;
-    void pmProjectQaApi.preview(projectId,repository).then(result=>{if(active)setBuild(result.build);})
-      .catch(cause=>{if(active)setError(qaError(cause));});return()=>{active=false;};
+  useEffect(()=>{let active=true;setAck(false);if(!repository)return;
+    void pmProjectQaApi.preview(projectId,repository).then(result=>{if(active){setBuild(result.build);setBuildFor(repository);}})
+      .catch(cause=>{if(active){if(buildFor!==repository){setBuild(null);setBuildFor(repository);}setError(qaError(cause));}});return()=>{active=false;};
   },[projectId,repository,refresh]);
-  useEffect(()=>{let active=true;setPage(null);setRound(null);setSelected('');setAck(false);if(!clientId)return;
-    void pmProjectQaApi.list(projectId,clientId).then(value=>{if(active){setPage(value);setSelected(value.items[0]?.id??'');}})
-      .catch(cause=>{if(active)setError(qaError(cause));});return()=>{active=false;};
+  useEffect(()=>{let active=true;setAck(false);if(!clientId)return;
+    void pmProjectQaApi.list(projectId,clientId).then(value=>{if(active){
+      setPage(value);setPageFor(clientId);setSelected(current=>value.items.some(item=>item.id===current)?current:value.items[0]?.id??'');
+    }})
+      .catch(cause=>{if(active){if(pageFor!==clientId){setPage(null);setPageFor(clientId);}setError(qaError(cause));}});return()=>{active=false;};
   },[projectId,clientId,refresh]);
-  useEffect(()=>{let active=true;setRound(null);setAck(false);setEditing(false);if(!selected)return;
-    void pmProjectQaApi.get(projectId,selected).then(value=>{if(active)setRound(value);}).catch(cause=>{if(active)setError(qaError(cause));});return()=>{active=false;};
-  },[projectId,selected]);
+  useEffect(()=>{let active=true;if(!selected)return;
+    void pmProjectQaApi.get(projectId,selected).then(value=>{if(active)setRound(value);}).catch(cause=>{if(active){setFailedRound(selected);setError(qaError(cause));}});return()=>{active=false;};
+  },[projectId,selected,refresh]);
   async function reloadRound(id=selected){if(id)setRound(await pmProjectQaApi.get(projectId,id));if(clientId)setPage(await pmProjectQaApi.list(projectId,clientId));}
   async function run(key:string,action:()=>Promise<unknown>) {
     if(busy)return;setBusy(true);setError('');pending.current??={key,run:action};
@@ -55,26 +63,28 @@ export function PmProjectQaStudio({projectId,projectName,feedback,issues=[]}:{pr
   }
   async function older(){if(!page?.nextBefore)return;try{const next=await pmProjectQaApi.list(projectId,clientId,page.nextBefore);setPage({items:[...page.items,...next.items],nextBefore:next.nextBefore});}catch(cause){setError(qaError(cause));}}
   function retest(){if(round){setChecks(round.items.map(({title,steps,expectedResult,required})=>({title,steps,expectedResult,required})));setTitle(`${round.title.replace(/ · retest$/,'')} · retest`);setSelected('');setRound(null);setAck(false);}}
+  const roundPending=Boolean(clientId&&pageFor!==clientId)||Boolean(selected&&!round&&failedRound!==selected);
+  const previewPending=Boolean(selected&&roundPending)||Boolean(repository&&buildFor!==repository);
   const preview=round?.preview??(build?{branch:'uat' as const,url:build.frontend.url,embeddable:build.embeddable,reason:build.reason}:null);
   return <section className="project-qa-studio" aria-label={`${projectName} Project Review`}>
     <header className="pqa-heading"><div><p>PROJECT REVIEW</p><h2>{projectName}</h2><span>Review UAT first, then hand the reviewed build to your client.</span></div>
-      <button type="button" disabled={busy||uncertain} onClick={()=>{pending.current=null;setRefresh(value=>value+1);}}><RefreshCw size={14}/> Refresh</button></header>
+      <button type="button" disabled={busy||uncertain} onClick={()=>{pending.current=null;setFailedRound('');setRefresh(value=>value+1);}}><RefreshCw size={14}/> Refresh</button></header>
     <Notice error={error}/>
     {uncertain&&<p className="pqa-error">The last action needs reconciliation. Retry that same action before starting another.
       <button type="button" disabled={busy} onClick={()=>void run('retry',()=>Promise.resolve())}>Retry pending action</button></p>}
-    {loading?<p role="status">Loading this project’s review…</p>:<>
-      <div className="pqa-setup"><label>UAT frontend<select value={repository} disabled={busy||uncertain} onChange={event=>{setRepository(event.target.value);setSelected('');setRound(null);setError('');}}>
+    {loading&&!targets.length&&!clients.length?<LoadingRows label="Loading this project’s review" layout="detail" />:<>
+      <div className="pqa-setup"><label>UAT frontend<select value={repository} disabled={busy||uncertain} onChange={event=>{setRepository(event.target.value);setSelected('');setRound(null);setEditing(false);setFailedRound('');setError('');}}>
         <option value="">Choose this project’s frontend</option>{targets.map(item=><option key={item.repository}>{item.repository}</option>)}</select></label>
-        <label>Client<select value={clientId} disabled={busy||uncertain} onChange={event=>setClientId(event.target.value)}><option value="">Choose a client</option>
+        <label>Client<select value={clientId} disabled={busy||uncertain} onChange={event=>{setClientId(event.target.value);setSelected('');setRound(null);setFailedRound('');setEditing(false);setError('');}}><option value="">Choose a client</option>
           {clients.map(client=><option key={client.clientId} value={client.clientId}>{client.displayName}</option>)}</select></label>
-        <RoundPicker page={page} selected={selected} disabled={busy||uncertain} onChange={setSelected} onOlder={()=>void older()}/>
+        <RoundPicker page={page} selected={selected} disabled={busy||uncertain||!page} onChange={id=>{setSelected(id);setFailedRound('');setAck(false);setEditing(false);}} onOlder={()=>void older()}/>
       </div>
-      {!targets.length&&<p className="pqa-hint">Attach a hosted frontend repository to this project to preview its UAT build.</p>}
-      {!clients.length&&<p className="pqa-hint">Share a linked project request with a client before publishing a QA review.</p>}
-      <div className="pqa-workspace"><QaPreview preview={preview} version={round?`Review ${round.number}`:'Internal PM preview'}/>
+      {!loading&&!error&&!targets.length&&<p className="pqa-hint">Attach a hosted frontend repository to this project to preview its UAT build.</p>}
+      {!loading&&!error&&!clients.length&&<p className="pqa-hint">Share a linked project request with a client before publishing a QA review.</p>}
+      <div className="pqa-workspace"><QaPreview preview={preview} version={round?`Review ${round.number}`:'Internal PM preview'} pending={previewPending}/>
         <aside className="pqa-review" aria-label="Project review controls">
-          <StudioPanels feedback={feedback(clientId)} history={round?<History round={round}/>:<p>No review selected.</p>} checklist={<>
-            {round&&!editing?<><div className="pqa-review-heading"><h3>{round.title}</h3><span className="pqa-status">{label(round.status)}{round.outcome?` · ${label(round.outcome)}`:''}</span></div>
+          <StudioPanels feedback={feedback(clientId)} history={roundPending?<LoadingRows label="Loading review history" layout="detail" />:round?<History round={round}/>:!selected&&<p>No review selected.</p>} checklist={<>
+            {roundPending?<LoadingRows label="Loading review checklist" layout="detail" />:selected&&!round?null:round&&!editing?<><div className="pqa-review-heading"><h3>{round.title}</h3><span className="pqa-status">{label(round.status)}{round.outcome?` · ${label(round.outcome)}`:''}</span></div>
               <p className="pqa-hint">{round.items.filter(item=>item.result.status==='passed').length}/{round.items.length} checks passed</p>
               <ReadOnlyChecks round={round} extra={item=><>
                 <QaEvidence items={(round.evidence??[]).filter(evidence=>evidence.itemId===item.id)} load={id=>pmProjectQaApi.evidence(projectId,round.id,id)}/>

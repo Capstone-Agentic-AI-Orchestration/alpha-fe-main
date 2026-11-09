@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useState, useMemo } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import {
@@ -49,6 +50,7 @@ import {
 export const AgentsView: React.FC = () => {
   const {
     agents,
+    workspaceLoading,
     runtimes,
     skills,
     updateAgent,
@@ -488,6 +490,7 @@ export const AgentsView: React.FC = () => {
 
         {/* Table Rows (No Pills / Clean Typography) */}
         <div className="divide-y divide-divider">
+          {workspaceLoading && !agents.length && <LoadingRows label="Loading agents" layout="table" rows={4} className="px-4" />}
           {filteredAgents.map((agent) => {
             const isSelected = selectedAgentIds.includes(agent.id);
             const detectedModels = modelsForProvider(runtimes, agent.modelProvider);

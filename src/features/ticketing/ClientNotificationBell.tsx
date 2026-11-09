@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Bell, CheckCheck, ChevronRight, FileText, FolderKanban, X } from 'lucide-react';
@@ -122,7 +123,7 @@ export function ClientNotificationBell({ email, updates, ready, loading, error, 
       </header>
       {error && <div role="alert" className="client-notification-error"><span>{error}</span><button type="button" onClick={onRefresh}>Try again</button></div>}
       <div className="client-notification-list" aria-live="polite">
-        {loading && !updates.length ? <p role="status" className="client-notification-empty">Loading your updates…</p>
+        {loading && !ready && !updates.length ? <LoadingRows label="Loading your updates" rows={2} className="px-3" />
           : updates.length ? updates.map(update => {
             const isUnread = !readIds.has(update.id);
             const Icon = update.target.kind === 'request' ? FileText : FolderKanban;

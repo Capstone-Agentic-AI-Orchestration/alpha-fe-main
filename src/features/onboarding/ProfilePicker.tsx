@@ -1,3 +1,4 @@
+import { Skeleton } from '@/shared/components/ui/skeleton';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -355,10 +356,11 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
                 </button>
               </div>
 
-              {profilesLoading ? (
-                <div className="grid gap-3 sm:grid-cols-2">
+              {profilesLoading && !profiles.length ? (
+                <div role="status" className="grid gap-3 sm:grid-cols-2">
+                  <span className="sr-only">Loading remembered profiles</span>
                   {[0, 1].map(index => (
-                    <div key={index} className="h-[6.25rem] animate-pulse rounded-xl border border-white/[0.08] bg-white/[0.035] motion-reduce:animate-none" />
+                    <Skeleton key={index} className="h-[6.25rem] rounded-xl" />
                   ))}
                 </div>
               ) : (
