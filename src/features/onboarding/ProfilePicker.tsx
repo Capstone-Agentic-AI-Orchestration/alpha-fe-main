@@ -1,4 +1,7 @@
 import { Skeleton } from '@/shared/components/ui/skeleton';
+import { Button } from '@/shared/components/ui/button';
+import { Badge } from '@/shared/components/ui/badge';
+import { Card } from '@/shared/components/ui/card';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
@@ -297,15 +300,11 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
       <div
         className={`profile-picker-backdrop pointer-events-none fixed inset-0 overflow-hidden ${isGate ? 'z-0' : 'z-[100]'}`}
         aria-hidden="true"
-      >
-        <div className="absolute inset-0 bg-canvas" />
-        <div className="absolute left-1/2 top-[-18rem] h-[34rem] w-[48rem] -translate-x-1/2 rounded-full bg-brand-500/[0.07] blur-3xl" />
-        <div className="absolute bottom-[-22rem] right-[-10rem] h-[34rem] w-[34rem] rounded-full bg-sky-400/[0.035] blur-3xl" />
-      </div>
+      />
 
       <div className={`profile-picker-canvas text-gray-100 ${isGate ? 'z-10' : 'profile-picker-canvas--overlay'}`}>
-        <main className="profile-picker-content relative z-10 min-h-[100dvh] w-full max-w-3xl">
-          <header className="mb-7 flex items-center justify-between">
+        <main className="profile-picker-content relative z-10 min-h-[100dvh] w-full max-w-[78rem]">
+          <header className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.045] shadow-[0_12px_34px_-20px_rgba(139,92,246,0.7)]">
                 <img src={alphaMarkUrl} alt="Alpha" className="h-8 w-7 object-contain" />
@@ -316,178 +315,80 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
               </div>
             </div>
             {onClose && (
-              <button
+              <Button
                 type="button"
+                variant="outline"
+                size="sm"
                 onClick={closePicker}
                 disabled={busy || waiting}
-                className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-400 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white disabled:cursor-wait disabled:opacity-50"
+                className="border-white/10 bg-white/[0.025] text-gray-400 hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
               >
                 <X className="h-3.5 w-3.5" />
                 Back to Alpha
-              </button>
+              </Button>
             )}
           </header>
 
-          <section className="rounded-[1.35rem] border border-white/[0.10] bg-surface/90 p-5 shadow-[0_32px_90px_-48px_rgba(0,0,0,0.95)] backdrop-blur-xl sm:p-8">
-            <div className="max-w-xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-brand-400/20 bg-brand-400/[0.08] px-2.5 py-1 text-[11px] font-medium text-brand-200">
-                <ShieldCheck className="h-3.5 w-3.5" />
-                Secure GitHub sign-in
-              </div>
-              <h1 className="text-2xl font-semibold tracking-[-0.03em] text-white sm:text-[2rem]">
-                {onClose ? 'Switch Alpha profile' : 'Choose your Alpha profile'}
-              </h1>
-              <p className="mt-2 max-w-[58ch] text-sm leading-6 text-gray-400">
-                {statusCopy} {currentAccount && onClose ? `You are currently using @${currentAccount}. ` : ''}Select a remembered account or add another one. Remembered accounts switch instantly; one unused for a week is confirmed on GitHub again.
-              </p>
-            </div>
-
-            <div className="mt-8">
-              <div className="mb-3 flex items-center justify-between gap-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Profiles on this device</p>
-                <button
-                  type="button"
-                  onClick={() => void refreshProfiles()}
-                  className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-gray-500 transition hover:bg-white/[0.05] hover:text-gray-200"
-                  title="Refresh remembered profiles"
-                >
-                  <RefreshCw className={`h-3.5 w-3.5 ${profilesLoading ? 'animate-spin motion-reduce:animate-none' : ''}`} />
-                  Refresh
-                </button>
-              </div>
-
-              {profilesLoading && !profiles.length ? (
-                <div role="status" className="grid gap-3 sm:grid-cols-2">
-                  <span className="sr-only">Loading remembered profiles</span>
-                  {[0, 1].map(index => (
-                    <Skeleton key={index} className="h-[6.25rem] rounded-xl" />
-                  ))}
+          <section className="rounded-[1.25rem] border border-white/[0.10] bg-surface/90 p-4 shadow-[0_24px_70px_-48px_rgba(0,0,0,0.9)] backdrop-blur-xl sm:p-6 lg:p-7">
+            <div className="grid items-start gap-x-8 gap-y-7 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+              <div className="min-w-0">
+                <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-brand-400/20 bg-brand-400/[0.08] px-2.5 py-1 text-[11px] font-medium text-brand-200">
+                  <ShieldCheck className="h-3.5 w-3.5" />
+                  Secure GitHub sign-in
                 </div>
-              ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {profiles.map(profile => {
-                    const selected = selectedProfileId === profile.id;
-                    return (
-                      <div
-                        key={profile.id}
-                        className={`group relative min-w-0 rounded-xl border transition duration-200 motion-reduce:transform-none ${selected
-                          ? 'border-brand-300/45 bg-brand-400/[0.07] ring-1 ring-brand-300/15'
-                          : 'border-white/[0.09] bg-white/[0.035] hover:-translate-y-0.5 hover:border-brand-300/40 hover:bg-white/[0.06]'}`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => setSelectedProfileId(profile.id)}
-                          disabled={busy || waiting || removing === profile.id}
-                          aria-pressed={selected}
-                          aria-label={`Select GitHub account @${profile.login}`}
-                          className="flex min-h-[6.25rem] w-full min-w-0 items-center gap-3 p-3.5 pr-3 text-left disabled:cursor-wait disabled:opacity-60"
-                        >
-                          {profile.avatarUrl ? (
-                            <img src={profile.avatarUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl border border-white/10 object-cover" />
-                          ) : (
-                            <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-brand-500/15 text-sm font-semibold text-brand-200">
-                              {initials(profile)}
-                            </span>
-                          )}
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold text-white">{profile.name || profile.login}</span>
-                            <span className="mt-0.5 block truncate font-mono text-xs text-gray-500">@{profile.login}</span>
-                            <span className="mt-1 block text-[11px] text-gray-500">{profile.remembered === false ? 'Confirm on GitHub to use' : selected ? 'Signed in on this device' : profile.active ? 'Current account' : 'Select this account'}</span>
-                          </span>
-                          {selected ? (
-                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-brand-500/15 px-2.5 py-1 text-[11px] font-medium text-brand-200">
-                              Selected <Check className="h-3 w-3" />
-                            </span>
-                          ) : profile.active ? (
-                            <span className="shrink-0 rounded-full bg-white/[0.05] px-2 py-1 text-[10px] text-gray-500">Current</span>
-                          ) : null}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void remove(profile)}
-                          disabled={busy || waiting || removing === profile.id}
-                          className="absolute right-1.5 top-1.5 rounded-md p-1.5 text-gray-600 opacity-0 transition hover:bg-red-400/10 hover:text-red-300 focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-wait disabled:opacity-40"
-                          aria-label={`Remove @${profile.login} from this device`}
-                          title="Remove profile from this device"
-                        >
-                          {removing === profile.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                        </button>
-                      </div>
-                    );
-                  })}
+                <h1 className="text-2xl font-semibold tracking-[-0.03em] text-white sm:text-[1.8rem]">
+                  {onClose ? 'Switch Alpha profile' : 'Choose your Alpha profile'}
+                </h1>
+                <p className="mt-2 max-w-[48ch] text-sm leading-6 text-gray-400">
+                  {statusCopy} {currentAccount && onClose ? `You are currently using @${currentAccount}. ` : ''}Choose a remembered account or add another. Accounts unused for a week may need GitHub confirmation.
+                </p>
 
-                  <button
+                <Card className="mt-5 grid grid-cols-[auto_minmax(0,1fr)] items-center gap-3 border-white/[0.10] bg-well/50 p-3.5 sm:p-4">
+                  <Github className="h-7 w-7 text-white" aria-hidden="true" />
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-white">
+                      {instant && selectedProfile
+                        ? `Switch to @${selectedProfile.login}`
+                        : authorizationLogin
+                        ? `Authorize @${authorizationLogin} on GitHub`
+                        : addingAccount
+                          ? phase.kind === 'waiting' && phase.flow === 'device' ? 'Finish signing in on GitHub' : 'Sign in with another GitHub account'
+                          : 'Choose a profile to continue'}
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-gray-400">
+                      {instant && selectedProfile
+                        ? `Saved on this device. Alpha switches without asking GitHub again while @${selectedProfile.login} is used at least once a week.`
+                        : authorizationLogin
+                        ? `GitHub will confirm @${authorizationLogin} before Alpha switches accounts.`
+                        : addingAccount
+                          ? 'Alpha will refresh the signed-in account after GitHub confirms it.'
+                          : 'Select a remembered profile or add another GitHub account.'}
+                    </p>
+                  </div>
+                </Card>
+
+                <div className="mt-4 space-y-2">
+                  <Button
                     type="button"
+                    onClick={() => selectedProfile && void continueWith(selectedProfile)}
+                    disabled={!selectedProfile || busy || waiting || profilesLoading}
+                    className="min-h-11 w-full bg-action px-4 text-sm font-semibold text-on-action hover:bg-action-hover"
+                  >
+                    <span>{selectedProfile ? `Continue with @${selectedProfile.login}` : 'Choose a profile to continue'}</span>
+                    <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
                     onClick={() => void startLogin()}
                     disabled={busy || waiting}
-                    className="flex min-h-[6.25rem] items-center gap-3 rounded-xl border border-dashed border-white/[0.16] bg-transparent p-3.5 text-left transition duration-200 hover:-translate-y-0.5 hover:border-brand-300/50 hover:bg-brand-400/[0.05] motion-reduce:transform-none disabled:cursor-wait disabled:opacity-60"
+                    className="min-h-10 w-full border-white/[0.12] bg-white/[0.025] text-gray-300 hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
                   >
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-gray-400">
-                      <Plus className="h-5 w-5" />
-                    </span>
-                    <span>
-                      <span className="block text-sm font-semibold text-gray-200">Add another account</span>
-                      <span className="mt-1 block text-xs leading-5 text-gray-500">Use a different GitHub identity</span>
-                    </span>
-                  </button>
+                    Use another account
+                  </Button>
                 </div>
-              )}
-            </div>
 
-            {profiles.length === 0 && !profilesLoading && (
-              <div className="mt-5 flex items-start gap-3 rounded-xl border border-white/[0.08] bg-well/70 p-3.5 text-xs leading-5 text-gray-500">
-                <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-gray-600" />
-                <p>No profiles are remembered yet. Choose “Add another account” to open GitHub authentication.</p>
-              </div>
-            )}
-
-            <div className="mt-5 grid grid-cols-[auto_1px_auto_minmax(0,1fr)] items-center gap-3 rounded-xl border border-white/[0.10] bg-well/50 p-3.5 sm:gap-4 sm:p-4">
-              <Github className="h-8 w-8 text-white" aria-hidden="true" />
-              <span className="h-10 w-px bg-white/[0.08]" aria-hidden="true" />
-              <LockKeyhole className="h-6 w-6 text-brand-400" aria-hidden="true" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-semibold text-white">
-                  {instant && selectedProfile
-                    ? `Switch to @${selectedProfile.login}`
-                    : authorizationLogin
-                    ? `Authorize @${authorizationLogin} on GitHub`
-                    : addingAccount
-                      ? phase.kind === 'waiting' && phase.flow === 'device' ? 'Finish signing in on GitHub' : 'Sign in with another GitHub account'
-                      : 'Choose a profile to continue'}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-gray-400">
-                  {instant && selectedProfile
-                    ? `Saved on this device. Alpha switches without asking GitHub again while @${selectedProfile.login} is used at least once a week.`
-                    : authorizationLogin
-                    ? `GitHub will confirm @${authorizationLogin} before Alpha switches accounts.`
-                    : addingAccount
-                      ? 'Alpha will refresh the signed-in account after GitHub confirms it.'
-                      : 'Select a remembered profile or add another GitHub account.'}
-                </p>
-              </div>
-            </div>
-
-            <div className="mt-5 space-y-2.5">
-              <button
-                type="button"
-                onClick={() => selectedProfile && void continueWith(selectedProfile)}
-                disabled={!selectedProfile || busy || waiting || profilesLoading}
-                className="flex min-h-12 w-full items-center justify-center gap-3 rounded-lg border border-brand-400/50 bg-gradient-to-r from-brand-600 to-violet-600 px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_34px_-20px_rgba(139,92,246,0.9)] transition hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300/80 disabled:cursor-not-allowed disabled:opacity-45"
-              >
-                <span>{selectedProfile ? `Continue with @${selectedProfile.login}` : 'Choose a profile to continue'}</span>
-                <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                onClick={() => void startLogin()}
-                disabled={busy || waiting}
-                className="flex min-h-11 w-full items-center justify-center rounded-lg border border-white/[0.12] bg-white/[0.025] px-4 py-2.5 text-sm font-medium text-gray-300 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-300/70 disabled:cursor-wait disabled:opacity-50"
-              >
-                Use another account
-              </button>
-            </div>
-
-            <div className="mt-3 min-h-[3.5rem]" aria-live="polite">
+                <div className="mt-3 space-y-2" aria-live="polite">
               {waiting && phase.kind === 'waiting' && (
                 <div className="mt-5 rounded-xl border border-brand-300/25 bg-brand-400/[0.07] p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-4">
@@ -505,18 +406,18 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
                           : 'A browser window opened. Enter this one-time code to confirm the account.'}
                       </p>
                     </div>
-                    <button type="button" onClick={cancel} className="rounded-md p-1.5 text-gray-500 transition hover:bg-white/[0.06] hover:text-gray-200" aria-label="Cancel GitHub sign-in">
+                    <Button type="button" variant="ghost" size="icon" onClick={cancel} className="h-8 w-8 shrink-0 text-gray-400" aria-label="Cancel GitHub sign-in">
                       <X className="h-4 w-4" />
-                    </button>
+                    </Button>
                   </div>
                   <div className="mt-4 flex flex-wrap items-center gap-3">
                     {phase.flow === 'device' && phase.code && (
                       <>
                         <code className="rounded-lg border border-white/10 bg-black/25 px-4 py-2.5 font-mono text-xl font-semibold tracking-[0.18em] text-white">{phase.code}</code>
-                        <button type="button" onClick={() => void copyCode()} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-3 py-2 text-xs font-medium text-gray-300 transition hover:bg-white/[0.06] hover:text-white">
+                        <Button type="button" size="sm" variant="outline" onClick={() => void copyCode()} className="border-white/10 text-gray-300 hover:bg-white/[0.06] hover:text-white">
                           {copied ? <Check className="h-3.5 w-3.5 text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}
                           {copied ? 'Copied' : 'Copy code'}
-                        </button>
+                        </Button>
                       </>
                     )}
                     <a href={phase.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg px-2 py-2 text-xs font-medium text-brand-200 transition hover:text-brand-100">
@@ -560,7 +461,111 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
               )}
             </div>
 
-            <div className="mt-7 flex items-center justify-between gap-4 border-t border-white/[0.07] pt-4 text-[11px] leading-5 text-gray-600">
+            </div>
+
+            <section aria-label="Profiles on this device" className="min-w-0 lg:border-l lg:border-white/[0.07] lg:pl-7">
+              <div className="mb-3 flex items-center justify-between gap-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Profiles on this device</p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void refreshProfiles()}
+                  className="h-8 gap-1.5 px-2 text-xs text-gray-400 hover:text-gray-200"
+                  title="Refresh remembered profiles"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${profilesLoading ? 'animate-spin motion-reduce:animate-none' : ''}`} />
+                  Refresh
+                </Button>
+              </div>
+
+              {profilesLoading && !profiles.length ? (
+                <div role="status" className="grid gap-3 sm:grid-cols-2">
+                  <span className="sr-only">Loading remembered profiles</span>
+                  {[0, 1].map(index => <Skeleton key={index} className="h-[5.8rem] rounded-xl" />)}
+                </div>
+              ) : (
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {profiles.map(profile => {
+                    const selected = selectedProfileId === profile.id;
+                    return (
+                      <Card
+                        key={profile.id}
+                        className={`group relative min-w-0 p-0 transition-colors ${selected
+                          ? 'border-brand-300/45 bg-brand-400/[0.07] ring-1 ring-brand-300/15'
+                          : 'border-white/[0.09] bg-white/[0.035] hover:border-brand-300/40 hover:bg-white/[0.06]'}`}
+                      >
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          onClick={() => setSelectedProfileId(profile.id)}
+                          disabled={busy || waiting || removing === profile.id}
+                          aria-pressed={selected}
+                          aria-label={`Select GitHub account @${profile.login}`}
+                          className="min-h-[5.8rem] h-auto w-full justify-start gap-3 rounded-xl px-3.5 py-3 pr-9 text-left hover:bg-transparent disabled:cursor-wait disabled:opacity-60"
+                        >
+                          {profile.avatarUrl ? (
+                            <img src={profile.avatarUrl} alt="" className="h-10 w-10 shrink-0 rounded-lg border border-white/10 object-cover" />
+                          ) : (
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-brand-500/15 text-sm font-semibold text-brand-200">
+                              {initials(profile)}
+                            </span>
+                          )}
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-semibold text-white">{profile.name || profile.login}</span>
+                            <span className="mt-0.5 block truncate font-mono text-xs text-gray-400">@{profile.login}</span>
+                            <span className="mt-1 block text-[11px] text-gray-500">{profile.remembered === false ? 'Confirm on GitHub to use' : selected ? 'Signed in on this device' : profile.active ? 'Current account' : 'Select this account'}</span>
+                          </span>
+                          {selected ? (
+                            <Badge aria-label="Selected profile" title="Selected profile" className="h-6 w-6 shrink-0 justify-center p-0"><Check className="h-3 w-3" /></Badge>
+                          ) : profile.active ? (
+                            <Badge variant="secondary" className="shrink-0 px-2 py-0.5 text-[10px]">Current</Badge>
+                          ) : null}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => void remove(profile)}
+                          disabled={busy || waiting || removing === profile.id}
+                          className="absolute right-1.5 top-1.5 z-10 h-7 w-7 text-gray-500 opacity-0 hover:bg-red-400/10 hover:text-red-300 focus-visible:opacity-100 group-hover:opacity-100 disabled:cursor-wait disabled:opacity-40"
+                          aria-label={`Remove @${profile.login} from this device`}
+                          title="Remove profile from this device"
+                        >
+                          {removing === profile.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                        </Button>
+                      </Card>
+                    );
+                  })}
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void startLogin()}
+                    disabled={busy || waiting}
+                    className="min-h-[5.8rem] h-auto justify-start gap-3 border-dashed border-white/[0.16] bg-transparent px-3.5 py-3 text-left hover:border-brand-300/50 hover:bg-brand-400/[0.05] disabled:cursor-wait disabled:opacity-60"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-gray-400">
+                      <Plus className="h-5 w-5" />
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-gray-200">Add another account</span>
+                      <span className="mt-1 block text-xs leading-5 text-gray-500">Use a different GitHub identity</span>
+                    </span>
+                  </Button>
+                </div>
+              )}
+
+              {profiles.length === 0 && !profilesLoading && (
+                <Card className="mt-4 flex items-start gap-3 border-white/[0.08] bg-well/70 p-3.5 text-xs leading-5 text-gray-400">
+                  <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-gray-500" />
+                  <p>No profiles are remembered yet. Choose “Add another account” to open GitHub authentication.</p>
+                </Card>
+              )}
+            </section>
+            </div>
+
+            <div className="mt-5 flex items-center justify-between gap-4 border-t border-white/[0.07] pt-3 text-[11px] leading-5 text-gray-500">
               <span>Alpha never asks for your GitHub password. Authentication happens on GitHub.</span>
               <span className="hidden shrink-0 items-center gap-1.5 sm:inline-flex"><Github className="h-3.5 w-3.5" /> {waiting && phase.kind === 'waiting' && phase.flow === 'oauth' ? 'GitHub OAuth' : 'GitHub device flow'}</span>
             </div>
@@ -587,30 +592,34 @@ export const ProfilePicker: React.FC<Props> = ({ identity, identityStatus, onRet
               </div>
             </div>
             <div className="mt-5 flex flex-wrap justify-end gap-2">
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => setConfirm(null)}
-                className="rounded-lg px-3 py-2 text-sm text-gray-400 transition hover:bg-white/[0.05] hover:text-white"
+                className="text-gray-400 hover:text-white"
               >
                 Cancel
-              </button>
+              </Button>
               {confirm.reason === 'unverified' && (
-                <button
+                <Button
                   type="button"
+                  variant="outline"
+                  size="sm"
                   onClick={() => { const profile = confirm.profile; setConfirm(null); void continueWith(profile); }}
-                  className="rounded-lg border border-white/[0.12] px-3 py-2 text-sm font-medium text-gray-200 transition hover:bg-white/[0.06]"
+                  className="border-white/[0.12] text-gray-200 hover:bg-white/[0.06]"
                 >
                   Try again
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
                 autoFocus
                 onClick={() => { const profile = confirm.profile; setConfirm(null); void startLogin(profile); }}
-                className="inline-flex items-center gap-2 rounded-lg border border-brand-400/50 bg-gradient-to-r from-brand-600 to-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:brightness-110"
+                className="bg-action text-on-action hover:bg-action-hover"
               >
                 <Github className="h-4 w-4" aria-hidden="true" /> Authorize on GitHub
-              </button>
+              </Button>
             </div>
           </div>
         </div>
