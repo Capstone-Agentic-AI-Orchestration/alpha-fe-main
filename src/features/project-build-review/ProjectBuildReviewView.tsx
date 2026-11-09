@@ -1,5 +1,6 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { LoaderCircle, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 import { useApp } from '@/app/AppContext';
 import { apiService } from '@/shared/services/apiService';
@@ -76,7 +77,7 @@ export const ProjectBuildReviewView: React.FC<{ projectId: string }> = ({ projec
   };
 
   if (loading && !snapshot) {
-    return <div role="status" className="flex items-center gap-2 p-6 text-xs text-content-secondary"><LoaderCircle className="h-4 w-4 animate-spin" />Loading the latest project build…</div>;
+    return <LoadingRows label="Loading the latest project build" layout="detail" className="p-6" />;
   }
 
   if (error && !workflow) {

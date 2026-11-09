@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import {
@@ -23,7 +24,7 @@ import {
 import { SkillCategory } from '@/shared/types';
 
 export const SkillsView: React.FC = () => {
-  const { skills, toggleSkill, agents, scanInstalledSkills, isScanningSkills, can } = useApp();
+  const { skills, workspaceLoading, toggleSkill, agents, scanInstalledSkills, isScanningSkills, can } = useApp();
   const canManageSkills = can('manage_skills');
 
   // Selected skill for centered popup modal
@@ -297,6 +298,7 @@ export const SkillsView: React.FC = () => {
 
         {/* Table Rows (No Pills / Clean Typography) */}
         <div className="divide-y divide-divider">
+          {workspaceLoading && !skills.length && <LoadingRows label="Loading skills and integrations" layout="table" className="px-4" />}
           {filteredSkills.map((skill) => {
             const isSelected = selectedSkillId === skill.id;
             const isCopied = copiedSkillId === skill.id;

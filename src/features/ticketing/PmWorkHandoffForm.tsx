@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useState } from 'react';
 import { ChevronDown, RefreshCw } from 'lucide-react';
 import {
@@ -53,7 +54,7 @@ export function PmWorkHandoffForm({ disabled, linkedProjectId = null, linkedProj
       </div>
       <button type="button" className={secondary} disabled={disabled || loading} onClick={() => setRefresh(value => value + 1)} aria-label="Refresh project and task choices"><RefreshCw size={13} /></button>
     </div>
-    {loading && <p role="status" className="text-xs text-content-muted">Loading workspace projects and tasks…</p>}
+    {loading && <LoadingRows label="Loading workspace projects and tasks" rows={2} />}
     {failed && <p role="alert" className="rounded-md border border-status-danger-border bg-status-danger-subtle p-2.5 text-xs text-status-danger">Could not load project and task choices. Refresh to try again.</p>}
     {options && <fieldset disabled={disabled} className="min-w-0 space-y-3">
       <legend className="sr-only">Project and task selection</legend>

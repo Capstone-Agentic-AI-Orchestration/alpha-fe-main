@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 import { ApiRequestError } from '@/shared/services/apiService';
@@ -133,7 +134,7 @@ export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onA
     </form>}
     <h3 className="text-sm font-medium text-content">Review a prepared result</h3>
     <p className="mt-2 text-[11px] leading-relaxed text-content-muted">These protected candidates are not approved or visible to the client. Inspect the files and client-facing summary against the agreed work.</p>
-    {loading && <p role="status" className="mt-3 text-xs text-content-muted">Checking prepared results…</p>}
+    {loading && <LoadingRows label="Checking prepared results" layout="detail" rows={2} />}
     {!loading && !error && candidates.length === 0 && <p className="mt-3 text-xs text-content-muted">No verified delivery is prepared yet. Completing tasks alone does not create a client delivery.</p>}
     {error && <p role="alert" className="mt-3 text-xs text-status-warning">{error}</p>}
     {candidates.length > 0 && <label className="mt-3 block text-xs text-content-secondary">Prepared result<select aria-label="Prepared result" className={`${input} mt-2`} value={selectedId} disabled={disabled || downloading !== null} onChange={event => { setManifest(null); setRead([]); setAcknowledged(false); setSelectedId(event.target.value); setError(''); }}>
@@ -141,7 +142,7 @@ export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onA
     </select></label>}
     {cursor && <button className={`${secondary} mt-2`} disabled={disabled || loadingMore} onClick={() => void more()}>{loadingMore ? 'Loading…' : 'More prepared results'}</button>}
     {selected && <p className="mt-3 whitespace-pre-wrap break-words rounded-lg border border-divider p-3 text-xs leading-relaxed text-content-secondary">{selected.summary}</p>}
-    {manifestLoading && <p role="status" className="mt-3 text-xs text-content-muted">Checking protected files…</p>}
+    {manifestLoading && <LoadingRows label="Checking protected files" rows={1} />}
     <div className="mt-3 space-y-2">{manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-divider p-2">
       <span className="min-w-0 break-words text-xs text-content-secondary">{file.filename}{read.includes(file.id) ? ' · inspected' : ''}</span>
       <button className={`${secondary} shrink-0`} disabled={disabled || downloading !== null} aria-label={`Inspect candidate ${file.filename}`} onClick={() => void download(file)}><Download size={12} />{downloading === file.id ? 'Checking…' : 'Inspect file'}</button>

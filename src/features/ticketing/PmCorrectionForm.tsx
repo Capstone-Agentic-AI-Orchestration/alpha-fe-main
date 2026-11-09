@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useState } from 'react';
 import type { PmTicketDetail } from './pmApi';
 import type { PmHandoffIssue } from './pmWorkHandoff';
@@ -31,7 +32,7 @@ export function PmCorrectionForm({ ticket, mode, disabled, onCancel, onSubmit }:
       <h3 className="text-sm font-medium text-content">Return affected tasks</h3>
       <p className="mt-1 text-[11px] leading-relaxed text-content-muted">{mode === 'client_feedback' ? 'Review the client’s feedback in the conversation, then describe the agreed correction for the developer.' : 'Select only the reviewed work that needs fixing and explain what the developer should correct.'} Extra scope needs a linked ticket, not a project restart.</p>
     </div>
-    {!issues && !failed && <p role="status" className="text-xs text-content-muted">Loading this ticket’s tasks…</p>}
+    {!issues && !failed && <LoadingRows label="Loading this ticket’s tasks" rows={2} />}
     {(failed || incomplete) && <p role="alert" className="text-xs text-status-danger">{failed ? 'Could not load the ticket’s tasks.' : 'Some linked tasks are no longer available. Refresh and review the ticket before returning work.'}</p>}
     <fieldset disabled={disabled} className="min-w-0 space-y-3">
       <legend className="sr-only">Correction details</legend>

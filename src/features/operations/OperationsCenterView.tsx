@@ -1,7 +1,8 @@
+import { LoadingRows, Skeleton } from '@/shared/components/ui/skeleton';
 import React, { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Activity, AlertTriangle, ArrowUpRight, CalendarClock, CheckCircle2, Clock3, DollarSign,
-  ExternalLink, Globe2, Loader2, RefreshCw, Rocket, Save, Server, ShieldCheck, Target,
+  ExternalLink, Globe2, RefreshCw, Rocket, Save, Server, ShieldCheck, Target,
   Trash2, XCircle
 } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
@@ -311,7 +312,7 @@ export const OperationsCenterView: React.FC = () => {
 
       <main className="space-y-5 p-5 lg:p-7">
         {error && <div role="alert" className="flex items-start gap-3 rounded-lg border border-status-danger-border bg-status-danger-subtle p-3.5 text-xs text-status-danger"><AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0" /><div className="min-w-0"><div className="font-semibold">Operations data could not be loaded</div><div className="mt-1 break-words">{error}</div></div><button type="button" onClick={() => void load()} className="ml-auto flex-shrink-0 rounded px-2 py-1 hover:bg-status-danger/10">Retry</button></div>}
-        {loading && !snapshot ? <div className="flex min-h-72 items-center justify-center gap-2 text-xs text-content-muted"><Loader2 className="h-4 w-4 animate-spin" />Loading workspace operations…</div> : null}
+        {loading && !snapshot ? <div className="min-h-72"><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-hidden="true">{Array.from({ length: 4 }, (_, index) => <Skeleton key={index} className="h-20 w-full" />)}</div><LoadingRows label="Loading workspace operations" layout="table" rows={4} className="mt-4" /></div> : null}
         {!loading && !snapshot && !error ? <div className={`${surface} p-8 text-center text-xs text-content-muted`}>No operations snapshot is available for this workspace.</div> : null}
 
         {snapshot && panel === 'overview' && <>

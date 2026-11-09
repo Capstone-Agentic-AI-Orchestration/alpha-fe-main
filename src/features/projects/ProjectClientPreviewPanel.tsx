@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { ExternalLink, RefreshCw, Send } from 'lucide-react';
 
@@ -148,7 +149,7 @@ export function ProjectClientPreviewPanel({ projectId, canManage, conversationOn
     <div className="project-client-preview-grid">
       {!conversationOnly&&<form className="project-client-preview-settings" onSubmit={event => void savePreview(event)}>
         <h3>Hosted preview</h3>
-        {settingsLoading ? <p role="status">Loading the saved preview…</p> : <>
+        {settingsLoading ? <LoadingRows label="Loading the saved preview" layout="detail" rows={2} /> : <>
           {preview && <p className="project-client-current-preview">Currently shared: <a href={preview.url} target="_blank" rel="noreferrer">{preview.repository} · {preview.branch} <ExternalLink size={13} /></a></p>}
           <label>Repository
             <input className={input} value={repository} onChange={event => { setRepository(event.target.value); setSettingsSaved(false); }}
@@ -178,7 +179,7 @@ export function ProjectClientPreviewPanel({ projectId, canManage, conversationOn
           {selectedClient && <button type="button" className="client-icon-action" aria-label="Refresh selected client conversation" disabled={messagesLoading}
             onClick={() => setMessagesRefresh(value => value + 1)}><RefreshCw size={14} /></button>}
         </div>
-        {clientLoading ? <p role="status" className="project-client-thread-state">Loading clients with project access…</p>
+        {clientLoading ? <LoadingRows label="Loading clients with project access" rows={2} />
           : clientError ? <p role="alert" className="project-client-preview-error">{clientError}</p>
             : !clients.length ? <p className="project-client-thread-state">No clients with active access to this project yet.</p>
               : requestedClientId!==undefined ? <p className="project-client-selected-name">{selectedClient?.displayName??'Choose a client above to open their feedback.'}</p>
@@ -191,7 +192,7 @@ export function ProjectClientPreviewPanel({ projectId, canManage, conversationOn
         {selectedClient && <>
           {messagesError && <p role="alert" className="project-client-preview-error">{messagesError} <button type="button" onClick={() => setMessagesRefresh(value => value + 1)}>Try again</button></p>}
           <div className="project-client-messages" aria-live="polite">
-            {messagesLoading ? <p role="status" className="project-client-thread-state">Loading this client’s messages…</p>
+            {messagesLoading ? <LoadingRows label="Loading this client’s messages" layout="conversation" />
               : messages.length ? <>
                 {cursor && <button type="button" className="client-text-action" disabled={moreLoading} onClick={() => void loadEarlierMessages()}>
                   {moreLoading ? 'Loading…' : 'Load earlier messages'}</button>}

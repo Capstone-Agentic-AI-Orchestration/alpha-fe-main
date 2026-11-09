@@ -1,8 +1,9 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { createContext, useContext, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Download, FileText, LoaderCircle, X } from 'lucide-react';
+import { Download, FileText, X } from 'lucide-react';
 import { apiService } from '../../shared/services/apiService';
 
 type PlanDocument = Awaited<ReturnType<typeof apiService.getOrchestrationPlans>>['documents'][number];
@@ -65,7 +66,7 @@ export function PlanDocumentTab({ projectId, runId, planVersion }: { projectId: 
     return () => { cancelled = true; };
   }, [projectId, runId, retry]);
   if (error) return <p role="alert" className="p-5 text-xs text-status-danger">{error} <button type="button" onClick={() => setRetry(value => value + 1)} className="underline">Retry</button></p>;
-  if (!documents) return <p role="status" className="flex items-center gap-2 p-5 text-xs text-content-secondary"><LoaderCircle className="h-3.5 w-3.5 animate-spin" />Loading the plan…</p>;
+  if (!documents) return <LoadingRows label="Loading the plan" layout="detail" className="px-5" />;
   return <div className="flex min-h-0 flex-1 flex-col text-content"><PlanDocumentBody documents={documents} planVersion={planVersion} /></div>;
 }
 

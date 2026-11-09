@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ExternalLink, Monitor, RefreshCw, Smartphone, Tablet } from 'lucide-react';
 import { qaError, type QaRound, type QaRoundPage } from './projectQaApi';
@@ -17,7 +18,7 @@ export function previewViewport(device:'desktop'|'tablet'|'phone',stage:{width:n
   return {width:target.width,height:Math.max(1,Math.min(target.height,(stage.height-inset)/scale)),scale};
 }
 
-export function QaPreview({preview,version,audience='pm',toolbarEnd}:{preview:Preview|null;version?:string;audience?:'pm'|'client';toolbarEnd?:ReactNode}) {
+export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=false}:{preview:Preview|null;version?:string;audience?:'pm'|'client';toolbarEnd?:ReactNode;pending?:boolean}) {
   const client=audience==='client';
   const previewLabel=client?'Project preview':'UAT preview';
   const [device,setDevice]=useState<'desktop'|'tablet'|'phone'>('desktop');
@@ -28,9 +29,12 @@ export function QaPreview({preview,version,audience='pm',toolbarEnd}:{preview:Pr
   });observer.observe(stage.current);return()=>observer.disconnect();},[]);
   const viewport=previewViewport(device,size),scale=viewport.scale;
   const safe=preview&&safePreview(preview.url)?preview:null;
-  const screen=safe?.embeddable?<div className="pqa-screen" style={{width:viewport.width*scale,height:viewport.height*scale}}><iframe key={`${safe.url}:${reload}`} src={safe.url} title={client?'Project application':'Project UAT application'}
+  const [loadedFrame, setLoadedFrame] = useState('');
+  const frameKey = safe ? `${safe.url}:${reload}:${device === 'desktop' ? 'desktop' : 'device'}` : '';
+  const frameLoading = loadedFrame !== frameKey;
+  const screen=safe?.embeddable?<div className="pqa-screen" style={{width:viewport.width*scale,height:viewport.height*scale}}><iframe key={frameKey} onLoad={() => setLoadedFrame(frameKey)} src={safe.url} title={client?'Project application':'Project UAT application'}
     style={{width:viewport.width,height:viewport.height,minHeight:0,transform:`scale(${scale})`,transformOrigin:'top left'}}
-    sandbox="allow-scripts allow-forms allow-same-origin allow-popups" referrerPolicy="no-referrer"/></div>:null;
+    sandbox="allow-scripts allow-forms allow-same-origin allow-popups" referrerPolicy="no-referrer"/>{frameLoading && <LoadingRows label="Loading embedded preview" layout="detail" className="pointer-events-none absolute inset-0 bg-canvas px-5" />}</div>:null;
   return <section className="pqa-preview" aria-label={client?'Project application preview':'UAT application preview'}>
     <div className="pqa-toolbar">{!client&&<><span className="pqa-env">{previewLabel}</span>{version&&<span>{version}</span>}</>}
       <div className="pqa-devices" role="group" aria-label="Preview device">
@@ -43,7 +47,7 @@ export function QaPreview({preview,version,audience='pm',toolbarEnd}:{preview:Pr
       {toolbarEnd&&<div className="pqa-toolbar-end">{toolbarEnd}</div>}
     </div>
     <div ref={stage} className="pqa-stage" data-device={device}>
-      {screen?(device==='desktop'?screen:<div className="pqa-device">{screen}</div>)
+      {pending?<LoadingRows label="Loading project preview" layout="detail" className="w-full px-5" />:screen?(device==='desktop'?screen:<div className="pqa-device">{screen}</div>)
         :<div className="pqa-empty"><Monitor size={30}/><h3>{safe?`Open the ${client?'project':'UAT'} preview in a new tab`:client?'No preview shared yet':'No UAT preview shared yet'}</h3>
           <p>{safe?(safe.reason||'This site does not allow an embedded preview. Keep the checklist open while testing in another tab.'):client?'Your preview will appear here when it is shared.':'Your project manager reviews the UAT build before sharing it here.'}</p>
           {safe&&<a href={safe.url} target="_blank" rel="noopener noreferrer">Open {client?'project':'UAT'} preview <ExternalLink size={14}/></a>}</div>}

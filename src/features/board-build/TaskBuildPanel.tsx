@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useState } from 'react';
 import { Check, ChevronDown, Circle, ExternalLink, MessageSquare, Pause, Play, Send, Sparkles, Square } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
@@ -118,7 +119,7 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
   if (!orchestration) {
     return loadError
       ? <div role="alert" className="space-y-2 text-[13px] text-status-danger"><p>{loadError}</p><button type="button" onClick={() => void refresh()} className={secondary}>Retry loading build</button></div>
-      : <p role="status" className="text-[13px] text-content-muted">Loading the build…</p>;
+      : <LoadingRows label="Loading the build" layout="conversation" />;
   }
 
   const run = orchestration.run;

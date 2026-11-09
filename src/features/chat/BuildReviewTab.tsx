@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useEffect, useState } from 'react';
 import { OrchestrationPlanPreview } from '../project-build-review/OrchestrationPlanPreview';
 import { PlanBody, ReviewBody } from './ChatBuildBodies';
@@ -34,7 +35,7 @@ export const SavedBuildReviewTab: React.FC<{ projectId: string; runId: string; t
     return () => { cancelled = true; };
   }, [projectId, runId, threadId, retry]);
   if (error) return <div className="space-y-2 p-4"><p role="alert" className="text-xs text-status-danger">{error}</p><button type="button" onClick={() => setRetry(value => value + 1)} className="text-xs text-link underline">Retry</button></div>;
-  if (!build) return <p role="status" className="p-4 text-xs text-content-secondary">Loading saved review…</p>;
+  if (!build) return <LoadingRows label="Loading saved review" layout="detail" className="px-4" />;
   return <BuildReviewTab key={runId + ':' + build.revision} projectId={projectId} build={build} canStart={false} canApprove={false} busy={false} error={null} />;
 };
 

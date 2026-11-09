@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDown, RotateCcw, ScrollText } from 'lucide-react';
 
@@ -233,7 +234,7 @@ const LogLineList: React.FC<{ vm: DeploymentLogsViewModel }> = ({ vm }) => {
             </button>
           </div>
         )}
-        {vm.status === 'loading' && lines.length === 0 && <p className="px-3.5 py-2 text-content-muted">Loading logs…</p>}
+        {vm.status === 'loading' && lines.length === 0 && <LoadingRows label="Loading logs" layout="code" rows={8} className="px-3.5" />}
         {vm.status === 'ready' && lines.length === 0 && vm.source !== 'unavailable' && (
           <p className="px-3.5 py-2 text-content-muted">No log lines in this range yet.</p>
         )}

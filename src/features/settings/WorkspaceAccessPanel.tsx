@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, LockKeyhole, Shield, Users, UserRound, FolderKanban, UserPlus } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
@@ -56,6 +57,9 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
   const [assignments, setAssignments] = useState<WorkspaceProjectAssignment[]>([]);
   const [loading, setLoading] = useState(true);
   const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentScope, setAssignmentScope] = useState('');
+  const projectScope = JSON.stringify([activeWorkspaceId, selectedProjectId]);
+  const assignmentsPending = Boolean(selectedProjectId && assignmentScope !== projectScope);
   const [candidates, setCandidates] = useState<Array<{ login: string; avatarUrl: string | null }>>([]);
   const [candidateError, setCandidateError] = useState<string | null>(null);
   const [invitee, setInvitee] = useState('');
@@ -143,10 +147,10 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
     setAssignmentLoading(true);
     void apiService.getProjectAssignments(activeWorkspaceId, selectedProjectId)
       .then(rows => {
-        if (!cancelled) setAssignments(rows);
+        if (!cancelled) { setAssignments(rows); setAssignmentScope(projectScope); }
       })
       .catch(error => {
-        if (!cancelled) showToast('Project access unavailable', error instanceof Error ? error.message : String(error), 'error');
+        if (!cancelled) { setAssignments([]); setAssignmentScope(projectScope); showToast('Project access unavailable', error instanceof Error ? error.message : String(error), 'error'); }
       })
       .finally(() => {
         if (!cancelled) setAssignmentLoading(false);
@@ -313,7 +317,7 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
                   Everyone in the organisation’s teams, and whether they are in this workspace yet.
                 </p>
                 {teamsLoading ? (
-                  <div className="mt-3 text-[11px] text-content-muted">Loading teams…</div>
+                  <LoadingRows label="Loading teams" rows={2} className="mt-3" />
                 ) : teamsError ? (
                   <p className="mt-3 text-[11px] text-status-warning">Could not read the GitHub teams ({teamsError}).</p>
                 ) : teams.length === 0 ? (
@@ -376,8 +380,8 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
               </div>
             </div>
           )}
-          {loading ? (
-            <div className="px-5 py-10 text-center text-xs text-content-muted">Loading workspace members…</div>
+          {activeWorkspaceId && loading ? (
+            <LoadingRows label="Loading workspace members" layout="table" className="px-5" />
           ) : members.length === 0 ? (
             <div className="px-5 py-10 text-center text-xs text-content-muted">No active members found.</div>
           ) : (
@@ -424,6 +428,8 @@ export const WorkspaceAccessPanel: React.FC<WorkspaceAccessPanelProps> = ({ mode
           </div>
           {!selectedProject ? (
             <div className="px-5 py-10 text-center text-xs text-content-muted">No workspace projects available.</div>
+          ) : loading || assignmentsPending ? (
+            <LoadingRows label="Loading project access" layout="table" className="px-5" />
           ) : developers.length === 0 ? (
             <div className="px-5 py-10 text-center text-xs text-content-muted">No active developers are available to assign.</div>
           ) : (

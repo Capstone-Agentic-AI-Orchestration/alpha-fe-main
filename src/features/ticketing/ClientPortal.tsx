@@ -1,3 +1,4 @@
+import { EntrySkeleton, LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowRight, Check, ChevronDown, ChevronLeft, FileText, FolderKanban, House,
@@ -587,7 +588,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     setNotificationProjectFocus(value => value + 1);
   }
 
-  if (portalState === 'checking') return <FullPageState title="Checking your sign-in…" />;
+  if (portalState === 'checking') return <EntrySkeleton label="Checking your sign-in" />;
   if (!inspectionOnly && (portalState === 'signed_out' || portalState === 'unavailable')) return <ClientPasswordSignIn
     unavailable={portalState === 'unavailable'} error={pageError}
     onRetry={() => setSessionCheckVersion(value => value + 1)} onSignedIn={() => setSessionCheckVersion(value => value + 1)} />;
@@ -684,7 +685,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {refreshError && <div role="status" className="client-portal-error">{refreshError}</div>}
 
         {page === 'overview' && <ClientOverviewPage clientName={session?.fullName ?? ''} requests={queue} projects={projects ?? []}
-          requestsLoading={queueLoading} requestsError={queueError} projectsLoading={projectsLoading} projectsError={projectsError}
+          requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
           onOpenRequest={item => openRequest(item)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
           onGoToRequests={() => navigate('requests')} />}
 
@@ -698,12 +699,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         </div>}
         {tabs.filter(tab => tab.navigation.page === 'projects').map(tab => <div key={tab.id} hidden={tab.id !== activeTabId || view === 'create'} className="client-project-tab-pane">
           {tab.id === activeTabId && createError && <p role="alert" className="client-project-error">{createError}</p>}
-          <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} loading={projectsLoading} error={projectsError}
+          <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} loading={!projects && !projectsError} error={projectsError}
             selectedProjectKey={tab.navigation.selectedProjectKey} onSelectedProjectKeyChange={key => selectProject(tab.id, key)}
             onOpenRequest={item => openRequest(item, true)} onNewRequest={project => void openCreateForm(project)}
             inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading}
             projectFocusVersion={tab.navigation.notificationProjectFocus} refreshToken={refreshVersion}
-            proposals={projectProposals ?? []} proposalsLoading={projectProposalsLoading} proposalsError={projectProposalsError}
+            proposals={projectProposals ?? []} proposalsLoading={projectProposalsLoading || (!projectProposals && !projectProposalsError)} proposalsError={projectProposalsError}
             onRefreshProposals={() => setRefreshVersion(value => value + 1)}
             onProposalSubmitted={() => setRefreshVersion(value => value + 1)} />
         </div>)}
@@ -757,7 +758,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                 </>}
               </div>
               <div className="client-request-items">
-                {queueLoading && !queue ? <p role="status" className="client-list-loading">Loading your requests…</p>
+                {!queue && !queueError ? <LoadingRows label="Loading your requests" rows={4} className="px-3" />
                   : queue?.items.length ? queue.items.map(item => {
                     const pendingLink = item.projectLinkStatus === 'pending_review';
                     return <button key={rowKey(item)} aria-pressed={selectedId === item.id && selectedWorkspaceId === item.workspaceId} disabled={Boolean(pending)}
@@ -783,7 +784,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                   <RefreshCw size={18} /><h2>Your request was submitted</h2><p>Waiting for the request list to update. It will appear under {pendingProjectReview.project.name} only after your project manager confirms the link.</p>
                 </div>
                   : !activeRequest ? <EmptyState title="Request not available" body="Refresh the list and try again. If it is still missing, contact your project manager." />
-                    : detailLoading ? <p role="status" className="p-8 text-center text-sm text-content-secondary">Loading request…</p>
+                    : (detailLoading || (!detail && !detailError)) ? <LoadingRows label="Loading request" layout="detail" className="p-5" />
                       : detailError ? <div role="alert" className="m-4 rounded-lg border border-status-danger-border bg-status-danger-subtle p-4 text-xs text-status-danger">{detailError}</div>
                         : detail && <>
                           {returnToProjects && <button type="button" className="client-back-link client-ticket-project-back" onClick={() => {
@@ -820,10 +821,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       </div>
     </div>
   </main>;
-}
-
-function FullPageState({ title }: { title: string }) {
-  return <main className="flex min-h-dvh items-center justify-center bg-canvas p-6 text-sm text-content-secondary" role="status"><RefreshCw size={15} className="mr-2 animate-spin" />{title}</main>;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {

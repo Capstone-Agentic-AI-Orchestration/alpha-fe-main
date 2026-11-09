@@ -51,7 +51,10 @@ export const RepoFileBrowser: React.FC<RepoFileBrowserProps> = ({ projectId, rep
       actions={<RefreshButton onClick={tree.reload} loading={tree.loading} label="Reload the file tree" />}
     >
       {tree.loading && !tree.data ? (
-        <SectionLoading label={`Loading ${branch}…`} />
+        <div className="grid md:grid-cols-[minmax(12rem,17rem)_minmax(0,1fr)]">
+          <div className="md:border-r md:border-divider"><SectionLoading label={`Loading files on ${branch}`} layout="code" rows={7} /></div>
+          <div aria-hidden="true" className="hidden md:block"><SectionLoading label="" layout="code" rows={9} /></div>
+        </div>
       ) : tree.error ? (
         <SectionError message={tree.error} onRetry={tree.reload} />
       ) : nodes.length === 0 ? (
@@ -209,7 +212,7 @@ const FileViewer: React.FC<{ projectId: string; repo: string; branch: string; pa
       </div>
 
       {file.loading && !file.data ? (
-        <SectionLoading label="Opening file…" />
+        <SectionLoading label="Opening file" layout="code" rows={9} />
       ) : file.error ? (
         <SectionError message={file.error} onRetry={file.reload} />
       ) : !file.data ? null : lines === null ? (

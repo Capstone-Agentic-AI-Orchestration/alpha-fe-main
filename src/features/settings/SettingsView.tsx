@@ -22,7 +22,7 @@ import { ProjectFoldersPanel } from './ProjectFoldersPanel';
 import { AppearancePanel } from './AppearancePanel';
 
 export const SettingsView: React.FC = () => {
-  const { settings, updateSettings, role, can } = useApp();
+  const { settings, updateSettings, role, can, activeWorkspaceId } = useApp();
   const canManageSettings = can('manage_settings');
   const canManageRuntimeSettings = can('manage_runtimes');
   const canManageAutonomySettings = can('manage_agents');
@@ -167,7 +167,7 @@ export const SettingsView: React.FC = () => {
         </div>
 
         {activeTab === 'appearance' ? <AppearancePanel /> : isAccessTab ? (
-          <WorkspaceAccessPanel mode={activeTab === 'members' ? 'members' : 'project_access'} />
+          <WorkspaceAccessPanel key={activeWorkspaceId ?? 'none'} mode={activeTab === 'members' ? 'members' : 'project_access'} />
         ) : (
         <form onSubmit={handleSave} className="space-y-5">
           {/* General Tab */}

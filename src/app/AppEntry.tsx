@@ -1,3 +1,4 @@
+import { EntrySkeleton } from '@/shared/components/ui/skeleton';
 import { lazy, Suspense, useEffect } from 'react';
 import type { AppEntry as Entry } from '@/features/ticketing/entry';
 import ClientActivationUnavailable from '@/features/ticketing/ClientActivationUnavailable';
@@ -33,8 +34,8 @@ export default function AppEntry({ entry }: { entry: Entry }) {
   );
   // Public pages sit under the Cosmo loading screen until LoaderDone mounts; the staff app keeps its own text.
   const fallback = entry === 'internal'
-    ? <div className="min-h-dvh flex items-center justify-center text-content-secondary" role="status">Loading Alpha…</div>
-    : <div className="min-h-dvh" />;
+    ? <EntrySkeleton label="Loading Alpha" />
+    : <EntrySkeleton label="Loading page" />;
   return <Suspense fallback={fallback}>
     {entry === 'internal' ? <InternalApp /> : entry === 'landing' ? <ClientLandingPage />
       : entry === 'client-recovery' ? <ClientPasswordRecovery />

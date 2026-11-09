@@ -1,5 +1,6 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React from 'react';
-import { AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, RefreshCw } from 'lucide-react';
 
 /**
  * The frame every repository section shares: a heading, optional actions,
@@ -25,11 +26,8 @@ export const RepoSection: React.FC<{
   </section>
 );
 
-export const SectionLoading: React.FC<{ label: string }> = ({ label }) => (
-  <p role="status" className="flex items-center gap-2 px-3.5 py-4 text-[11px] text-content-muted">
-    <Loader2 className="h-3.5 w-3.5 motion-safe:animate-spin" aria-hidden />
-    {label}
-  </p>
+export const SectionLoading: React.FC<{ label: string; layout?: 'list' | 'table' | 'detail' | 'code'; rows?: number }> = ({ label, layout = 'table', rows }) => (
+  <LoadingRows label={label} layout={layout} rows={rows} className="px-3.5 py-1" />
 );
 
 export const SectionError: React.FC<{ message: string; onRetry?: () => void }> = ({ message, onRetry }) => (

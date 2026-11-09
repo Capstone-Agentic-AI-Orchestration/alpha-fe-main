@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Eye, EyeOff } from 'lucide-react';
 import { ClientAuthShell } from './ClientAuthShell';
@@ -39,6 +40,7 @@ export function ClientAccountSetupPage({ readLink, cleanUrl, failureMessage = de
   const existing = setup?.action === 'sign_in';
   return <ClientAuthShell><h2>{complete ? 'Your portal is ready.' : checking ? 'Verifying your email…' : existing ? 'Accept your invitation.' : setup?.action === 'reset_password' ? 'Choose your password.' : 'Finish your account setup.'}</h2>
     <p className="ca-description">{complete ? 'Your shared requests are together in your client portal.' : existing ? 'This email already has a password. Sign in to finish, keeping your existing account.' : 'This secure link confirms your email address. Choose a password so you can sign in next time.'}</p>
+    {checking && <LoadingRows label="Verifying your email" layout="detail" rows={2} />}
     {setup && !complete && <form onSubmit={event => {
       event.preventDefault(); if (busy) return;
       if (!existing && password !== confirm) { setError('The passwords do not match.'); return; }

@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Download, FileText, RefreshCw, Upload, X } from 'lucide-react';
@@ -116,7 +117,7 @@ export function TicketDocumentsPanel({
     </header>
 
     {error && <p role="alert" className="mx-4 mt-3 rounded-md border border-status-danger-border bg-status-danger-subtle p-2.5 text-[11px] text-status-danger">{error}</p>}
-    {loading ? <p role="status" className="p-5 text-center text-[11px] text-content-muted">Loading documents…</p>
+    {loading ? <LoadingRows label="Loading documents" rows={2} className="px-5" />
       : groups.length === 0 ? <p className="p-5 text-center text-[11px] text-content-muted">No documents have been added to this ticket.</p>
         : <div className="divide-y divide-divider">
           {groups.map(group => <div key={group.groupId} className="space-y-2 p-3">

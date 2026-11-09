@@ -62,12 +62,13 @@ function RepoHistory({ projectId, repo, filters, filterKey, active, refresh, sel
   return <RepoSection id={`actions-${repo.replace(/[^a-z0-9]/gi, '-')}`} title={repo} icon={<GitBranch className="h-3.5 w-3.5" />}>
     <div className="space-y-3 p-3">
       <label className="block text-[11px] text-content-secondary">Workflow
-        <select aria-label={`Workflow in ${repo}`} className={`${actionsInput} mt-1 block w-full`} value={workflow?.id || ''} onChange={e => setWorkflow(workflows.find(w => String(w.id) === e.target.value) || null)}>
+        <select aria-label={`Workflow in ${repo}`} className={`${actionsInput} mt-1 block w-full`} value={workflow?.id || ''} disabled={inventory.loading && !inventory.data} onChange={e => setWorkflow(workflows.find(w => String(w.id) === e.target.value) || null)}>
           <option value="">All workflows</option>
           {workflow && !workflows.some(w => w.id === workflow.id) && <option value={workflow.id}>{workflow.name}</option>}
           {workflows.map(w => <option value={w.id} key={w.id}>{w.name}{w.state !== 'active' ? ` (${w.state})` : ''}</option>)}
         </select>
       </label>
+      {inventory.loading && !inventory.data && <SectionLoading label="Loading workflows" layout="detail" rows={1} />}
       {inventory.error && <SectionError message={inventory.error} onRetry={inventory.reload} />}
       <PageControls page={workflowPage} nextPage={inventory.data?.nextPage} loading={inventory.loading} onPage={setWorkflowPage} />
     </div>

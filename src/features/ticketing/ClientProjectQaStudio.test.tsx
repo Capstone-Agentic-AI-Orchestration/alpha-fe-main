@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { ClientOverviewPage } from './ClientProjectPages';
 import { QaPreview, previewViewport } from './ProjectQaStudio';
+
+describe('client overview loading', () => {
+  it('shows loaded projects while requests are pending, then distinguishes a confirmed empty queue', () => {
+    const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
+    const loaded = { items: [], nextCursor: null, counters: { kind: 'client' as const, open: 0, needsClient: 0 } };
+    const loading = renderToStaticMarkup(<ClientOverviewPage requests={null} requestsLoading requestsError=""
+      projects={[]} projectsLoading={false} projectsError="" {...callbacks} />);
+    expect(loading).toContain('Loading recent request updates');
+    expect(loading).toContain('No projects have been shared');
+    expect(loading).not.toContain('all caught up');
+    const ready = renderToStaticMarkup(<ClientOverviewPage requests={loaded} requestsLoading requestsError=""
+      projects={[]} projectsLoading projectsError="" {...callbacks} />);
+    expect(ready).toContain('all caught up');
+    expect(ready).toContain('Loading shared projects');
+    expect(ready).not.toContain('Loading recent request updates');
+  });
+});
 
 describe('client project review presentation', () => {
   it('uses plain client preview wording while keeping the PM default', () => {

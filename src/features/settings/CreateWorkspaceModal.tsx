@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, Users } from 'lucide-react';
@@ -137,7 +138,7 @@ export const CreateWorkspaceModal: React.FC<CreateWorkspaceModalProps> = ({ isOp
 
           <div className="mt-2 max-h-72 space-y-3 overflow-y-auto pr-1">
             {teamsLoading ? (
-              <div className="py-4 text-[11px] text-content-muted">Loading GitHub teams…</div>
+              <LoadingRows label="Loading GitHub teams" rows={2} />
             ) : teamsError ? (
               <p className="py-2 text-[11px] text-status-warning">
                 Could not read the GitHub teams ({teamsError}). Create the workspace and add people from Settings.

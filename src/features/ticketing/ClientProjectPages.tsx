@@ -1,3 +1,4 @@
+import { LoadingRows, Skeleton } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, CircleDot, FolderKanban, MessageSquare, RefreshCw, Send, Plus } from 'lucide-react';
 import { Modal } from '@/shared/components/Modal';
@@ -41,18 +42,18 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
       <h1 id="client-overview-title">{firstName ? `Welcome back, ${firstName}` : 'Welcome back'}</h1>
       <p className="client-page-description">Here’s what’s happening with your requests and projects.</p>
     </header>
-    <section className="client-overview-summary" aria-label="Request summary">
+    <section className="client-overview-summary" aria-label="Request summary" aria-busy={requestsLoading && !requests}>
       <div className="client-overview-summary-item">
         <span className="client-overview-summary-icon"><MessageSquare size={17} aria-hidden /></span>
-        <span><strong>{summaryValue(attention.length)}</strong><small>Needs your reply</small></span>
+        <div>{requestsLoading && !requests ? <Skeleton className="h-6 w-7" /> : <strong>{summaryValue(attention.length)}</strong>}<small>Needs your reply</small></div>
       </div>
       <div className="client-overview-summary-item is-progress">
         <span className="client-overview-summary-icon"><CircleDot size={17} aria-hidden /></span>
-        <span><strong>{summaryValue(inProgress)}</strong><small>In progress</small></span>
+        <div>{requestsLoading && !requests ? <Skeleton className="h-6 w-7" /> : <strong>{summaryValue(inProgress)}</strong>}<small>In progress</small></div>
       </div>
       <div className="client-overview-summary-item is-complete">
         <span className="client-overview-summary-icon"><CheckCircle2 size={17} aria-hidden /></span>
-        <span><strong>{summaryValue(completed)}</strong><small>Completed</small></span>
+        <div>{requestsLoading && !requests ? <Skeleton className="h-6 w-7" /> : <strong>{summaryValue(completed)}</strong>}<small>Completed</small></div>
       </div>
     </section>
     </div>
@@ -63,7 +64,7 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
             <p>Requests waiting for your reply.</p></div>
             <button type="button" className="client-text-action" onClick={onGoToRequests}>View all requests <ArrowRight size={15} /></button></div>
           {requestsError && <p role="alert" className="client-project-error">{requestsError}</p>}
-          {!requests && requestsLoading ? <p role="status" className="client-section-state">Loading requests…</p>
+          {!requests && requestsLoading ? <LoadingRows label="Loading requests needing attention" layout="detail" rows={1} className="px-5" />
             : !requests ? null
             : attention.length ? <div className="client-activity-list">{attention.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}</div>
               : <p className="client-section-state is-clear"><CheckCircle2 size={16} aria-hidden />You’re all caught up. There are no requests waiting for your reply.</p>}
@@ -72,7 +73,7 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
           <div className="client-section-heading"><div><h2 id="client-recent-title">Recent request updates</h2>
             <p>The latest updates from your project manager.</p></div>
             {requests?.nextCursor && <button type="button" className="client-text-action" onClick={onGoToRequests}>See all <ArrowRight size={15} /></button>}</div>
-          {!requests && requestsLoading ? <p role="status" className="client-section-state">Loading updates…</p>
+          {!requests && requestsLoading ? <LoadingRows label="Loading recent request updates" layout="table" rows={4} className="client-overview-update-skeleton" />
             : !requests ? null
             : recent.length ? <div className="client-activity-list">{recent.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}</div>
               : <p className="client-section-state">No request updates yet. Your project manager will share requests here.</p>}
@@ -84,13 +85,13 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
             <p>Projects shared with you.</p></div>
             <button type="button" className="client-text-action" onClick={onGoToProjects}>View all <ArrowRight size={15} /></button></div>
           {projectsError && <p role="alert" className="client-project-error">{projectsError}</p>}
-          {projectsLoading && !projects.length ? <p role="status" className="client-section-state">Loading projects…</p>
+          {projectsLoading && !projects.length ? <LoadingRows label="Loading shared projects" rows={2} />
             : recentProjects.length ? <div className="client-overview-projects">{recentProjects.map(project => <button type="button"
               key={clientProjectKey(project)} onClick={() => onOpenProject(project)} aria-label={`Open ${project.name}`}>
               <span className="client-overview-project-icon"><FolderKanban size={16} aria-hidden /></span>
               <span className="client-overview-project-copy"><strong>{project.name}</strong><small>Updated {time(project.updatedAt)}</small></span>
               <ChevronRight size={15} aria-hidden />
-            </button>)}</div> : <p className="client-section-state">No projects have been shared with your account yet.</p>}
+            </button>)}</div> : !projectsError && <p className="client-section-state">No projects have been shared with your account yet.</p>}
         </section>
       </aside>
     </div>
@@ -132,14 +133,14 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   const pendingProposal = useRef<ClientProjectProposalInput | null>(null);
   const [tab, setTab] = useState<'overview' | 'preview' | 'requests'>('overview');
   useEffect(() => { setTab('overview'); }, [selectedProjectKey, projectFocusVersion]);
-  const [requestPage, setRequestPage] = useState<ClientProjectRequestQueue | null>(null);
+  const [requestResult, setRequestResult] = useState<{ key: string; page: ClientProjectRequestQueue } | null>(null);
   const [requestLoading, setRequestLoading] = useState(false);
   const [requestError, setRequestError] = useState('');
   const [requestSearchInput, setRequestSearchInput] = useState('');
   const [requestSearch, setRequestSearch] = useState('');
   const [requestRefresh, setRequestRefresh] = useState(0);
   const [requestMoreLoading, setRequestMoreLoading] = useState(false);
-  const [feedback, setFeedback] = useState<ClientProjectFeedbackMessage[]>([]);
+  const [feedbackResult, setFeedbackResult] = useState<{ key: string; items: ClientProjectFeedbackMessage[] } | null>(null);
   const [feedbackCursor, setFeedbackCursor] = useState<string | null>(null);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
   const [feedbackError, setFeedbackError] = useState('');
@@ -147,6 +148,10 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   const [feedbackRefresh, setFeedbackRefresh] = useState(0);
   const [projectDrafts, setProjectDrafts] = useState<Record<string,string>>({});
   const projectKey=selectedProject?clientProjectKey(selectedProject):'';
+  const requestScope = JSON.stringify([projectKey, requestSearch]);
+  const requestPage = requestResult?.key === requestScope ? requestResult.page : null;
+  const feedbackReady = feedbackResult?.key === projectKey;
+  const feedback = feedbackReady ? feedbackResult.items : [];
   const activeProject=useRef(projectKey);activeProject.current=projectKey;
   const draft=projectDrafts[projectKey]??'';
   const setDraft=(value:string)=>{if(projectKey)setProjectDrafts(current=>({...current,[projectKey]:value}));};
@@ -196,10 +201,10 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   useEffect(() => {
     if (!selectedProject || tab !== 'requests') return;
     let active = true;
-    setRequestLoading(true); setRequestError(''); setRequestPage(null);
+    setRequestLoading(true); setRequestError('');
     void api.listProjectRequests(selectedProject.workspaceId, selectedProject.projectId,
       { limit: 50, search: requestSearch, filter: 'all' }).then(page => {
-      if (active) setRequestPage(page);
+      if (active) setRequestResult({ key: requestScope, page });
     }).catch(error => {
       if (active) setRequestError(projectLoadError(error, 'requests'));
     }).finally(() => { if (active) setRequestLoading(false); });
@@ -209,9 +214,9 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   useEffect(() => {
     if (!selectedProject || tab !== 'preview') return;
     let active = true;
-    setFeedbackLoading(true); setFeedbackError(''); setFeedback([]); setFeedbackCursor(null);
+    setFeedbackLoading(true); setFeedbackError('');
     void api.getProjectFeedbackMessages(selectedProject.workspaceId, selectedProject.projectId, { limit: 50 }).then(page => {
-      if (active) { setFeedback(page.items); setFeedbackCursor(page.nextCursor); }
+      if (active) { setFeedbackResult({ key: projectKey, items: page.items }); setFeedbackCursor(page.nextCursor); }
     }).catch(error => {
       if (active) setFeedbackError(projectLoadError(error, 'feedback'));
     }).finally(() => { if (active) setFeedbackLoading(false); });
@@ -226,19 +231,19 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         { limit: 50, after: requestPage.nextCursor, search: requestSearch, filter: 'all' });
       if(activeProject.current!==projectKey)return;
       const seen = new Set(requestPage.items.map(requestKey));
-      setRequestPage({ ...page, items: [...requestPage.items, ...page.items.filter(item => !seen.has(requestKey(item)))] });
+      setRequestResult(current => current?.key === requestScope ? { key: requestScope, page: { ...page, items: [...requestPage.items, ...page.items.filter(item => !seen.has(requestKey(item)))] } } : current);
     } catch (error) { setRequestError(projectLoadError(error, 'requests')); }
     finally { setRequestMoreLoading(false); }
   }
 
   async function loadMoreFeedback() {
-    if (!selectedProject || !feedbackCursor || feedbackMoreLoading) return;
+    if (!selectedProject || !feedbackReady || !feedbackCursor || feedbackMoreLoading) return;
     setFeedbackMoreLoading(true); setFeedbackError('');
     try {
       const page = await api.getProjectFeedbackMessages(selectedProject.workspaceId, selectedProject.projectId,
         { limit: 50, before: feedbackCursor });
       if(activeProject.current!==projectKey)return;
-      setFeedback(current => [...page.items, ...current]); setFeedbackCursor(page.nextCursor);
+      setFeedbackResult(current => current?.key === projectKey ? { key: projectKey, items: [...page.items, ...current.items] } : current); setFeedbackCursor(page.nextCursor);
     } catch (error) { setFeedbackError(projectLoadError(error, 'feedback')); }
     finally { setFeedbackMoreLoading(false); }
   }
@@ -285,7 +290,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
             onClick={() => setFeedbackRefresh(value => value + 1)}><RefreshCw size={15} /></button></div>
         {feedbackError && <p role="alert" className="client-project-error">{feedbackError} <button type="button" onClick={() => setFeedbackRefresh(value => value + 1)}>Try again</button></p>}
         <div className="client-feedback-messages" aria-live="polite">
-          {feedbackLoading ? <p role="status" className="client-section-state">Loading project conversation…</p>
+          {!feedbackReady && !feedbackError ? <LoadingRows label="Loading project conversation" layout="conversation" />
             : feedback.length ? <>
               {feedbackCursor && <button type="button" className="client-text-action" disabled={feedbackMoreLoading} onClick={() => void loadMoreFeedback()}>
                 {feedbackMoreLoading ? 'Loading…' : 'Load earlier messages'}
@@ -318,7 +323,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         <input value={requestSearchInput} onChange={event => setRequestSearchInput(event.target.value)} placeholder="Search project requests" /></label>
       {requestError && <p role="alert" className="client-project-error">{requestError} <button type="button" onClick={() => setRequestRefresh(value => value + 1)}>Try again</button></p>}
       <div className="client-activity-list">
-        {requestLoading ? <p role="status" className="client-section-state">Loading project requests…</p>
+        {!requestPage && !requestError ? <LoadingRows label="Loading project requests" layout="table" />
           : requestPage?.items.length ? requestPage.items.map(item => <RequestSummary key={requestKey(item)} item={item} onOpen={onOpenRequest} />)
             : !requestError && <p className="client-section-state">No requests are linked to this project yet.</p>}
       </div>
@@ -339,7 +344,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     <section className="client-existing-projects" aria-labelledby="client-existing-projects-title">
       <div className="client-section-heading"><div><h2 id="client-existing-projects-title">Your projects</h2>
         <p>Project spaces already shared with your account.</p></div></div>
-      {loading ? <p role="status" className="client-section-state">Loading your projects…</p>
+      {loading ? <LoadingRows label="Loading your projects" />
         : projects.length ? <div className="client-project-list">{[...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(project => <button
           key={clientProjectKey(project)} type="button" onClick={() => { onSelectedProjectKeyChange(clientProjectKey(project)); setTab('overview'); }}>
           <span className="client-project-list-icon"><FolderKanban size={18} /></span>
@@ -373,7 +378,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         <button type="button" className="client-icon-action" aria-label="Refresh project proposals" disabled={proposalsLoading} onClick={onRefreshProposals}><RefreshCw size={15} /></button>
       </div>
       {proposalsError && <p role="alert" className="client-project-error">{proposalsError} <button type="button" onClick={onRefreshProposals}>Try again</button></p>}
-      {proposalsLoading ? <p role="status" className="client-section-state">Loading project proposals…</p>
+      {proposalsLoading && !proposals.length ? <LoadingRows label="Loading project proposals" rows={2} />
         : proposals.length ? <div className="client-proposal-list">{proposals.map(proposal => <article key={proposal.id} className="client-proposal-row">
           <div><strong>{proposal.title}</strong><p>{proposal.description}</p><small>Sent {time(proposal.submittedAt)}{proposal.requestedDeadline ? ` · Target ${proposal.requestedDeadline}` : ''}</small>
             <small className="client-proposal-next">{proposal.status === 'pending'

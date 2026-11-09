@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState } from 'react';
 import { Download } from 'lucide-react';
 
@@ -55,7 +56,7 @@ export function PmDeliveryReview({ ticket, clientAccessActive, disabled, onShare
   return <section aria-label="PM result inspection" className="border-b border-divider p-4 md:p-5">
     <h3 className="text-sm font-medium text-content">{delivery.shared ? 'Shared result' : 'Assessed result · not shared yet'}</h3>
     <p className="mt-2 whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{delivery.summary}</p>
-    {loading && <p role="status" className="mt-3 text-[11px] text-content-muted">Checking protected delivery…</p>}
+    {loading && <LoadingRows label="Checking protected delivery" rows={2} />}
     {error && <p role="alert" className="mt-3 text-[11px] text-status-warning">{error}</p>}
     <div className="mt-3 space-y-2">{manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-divider p-2">
       <span className="min-w-0 break-words text-xs text-content-secondary">{file.filename}</span><button className={`${secondary} shrink-0`} disabled={disabled || downloading !== null} onClick={() => void download(file)} aria-label={`Inspect ${file.filename}`}>

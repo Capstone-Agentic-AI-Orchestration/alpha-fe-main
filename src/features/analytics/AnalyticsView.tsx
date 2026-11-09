@@ -1,3 +1,4 @@
+import { LoadingRows, Skeleton } from '@/shared/components/ui/skeleton';
 import React from 'react';
 import { useApp } from '@/app/AppContext';
 import {
@@ -13,7 +14,7 @@ import {
 const metricCard = 'rounded-2xl border border-divider bg-surface p-4';
 
 export const AnalyticsView: React.FC = () => {
-  const { analytics } = useApp();
+  const { analytics, workspaceLoading, localMode } = useApp();
   const maxRuns = Math.max(...analytics.runTimeline.map(item => item.runs), 1);
 
   return (
@@ -30,22 +31,22 @@ export const AnalyticsView: React.FC = () => {
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className={metricCard}>
           <div className="flex items-center justify-between text-xs text-content-secondary"><span>Runs in the last 24h</span><Activity className="h-3.5 w-3.5 text-content-muted" /></div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-content">{analytics.totalRuns24h}</div>
+          <div className="mt-2 text-2xl font-bold tracking-tight text-content">{workspaceLoading && !localMode && !analytics.totalAgentRuns ? <Skeleton className="h-8 w-16" /> : `${analytics.totalRuns24h}`}</div>
           <p className="mt-1 text-[11px] text-content-muted">Accepted and completed agent work</p>
         </div>
         <div className={metricCard}>
           <div className="flex items-center justify-between text-xs text-content-secondary"><span>Success rate</span><CheckCircle2 className="h-3.5 w-3.5 text-status-success" /></div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-content">{analytics.successRate}%</div>
+          <div className="mt-2 text-2xl font-bold tracking-tight text-content">{workspaceLoading && !localMode && !analytics.totalAgentRuns ? <Skeleton className="h-8 w-16" /> : `${analytics.successRate}%`}</div>
           <p className="mt-1 text-[11px] text-status-success">Runs completed without failure</p>
         </div>
         <div className={metricCard}>
           <div className="flex items-center justify-between text-xs text-content-secondary"><span>Average run latency</span><Clock3 className="h-3.5 w-3.5 text-content-muted" /></div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-content">{analytics.avgLatencyMs}ms</div>
+          <div className="mt-2 text-2xl font-bold tracking-tight text-content">{workspaceLoading && !localMode && !analytics.totalAgentRuns ? <Skeleton className="h-8 w-16" /> : `${analytics.avgLatencyMs}ms`}</div>
           <p className="mt-1 text-[11px] text-content-muted">Mean duration of persisted runs</p>
         </div>
         <div className={metricCard}>
           <div className="flex items-center justify-between text-xs text-content-secondary"><span>Runs tracked</span><Bot className="h-3.5 w-3.5 text-link" /></div>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-content">{analytics.totalAgentRuns}</div>
+          <div className="mt-2 text-2xl font-bold tracking-tight text-content">{workspaceLoading && !localMode && !analytics.totalAgentRuns ? <Skeleton className="h-8 w-16" /> : `${analytics.totalAgentRuns}`}</div>
           <p className="mt-1 text-[11px] text-content-muted">Across the active workspace</p>
         </div>
       </div>
@@ -56,7 +57,7 @@ export const AnalyticsView: React.FC = () => {
           <div className="flex items-center gap-3 text-[11px] text-content-secondary"><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-action" />Completed</span><span className="flex items-center gap-1.5"><span className="h-2 w-2 rounded-sm bg-rose-400" />Failed</span></div>
         </div>
         <div className="mt-6 grid h-44 grid-cols-8 items-end gap-2 border-b border-divider sm:gap-5">
-          {analytics.runTimeline.length === 0 ? <div className="col-span-8 flex h-full items-center justify-center text-xs text-content-muted">No run telemetry has been recorded yet.</div> : analytics.runTimeline.map(item => (
+          {workspaceLoading && !localMode && analytics.runTimeline.length === 0 ? <div className="col-span-8"><LoadingRows label="Loading run activity" layout="table" rows={2} /></div> : analytics.runTimeline.length === 0 ? <div className="col-span-8 flex h-full items-center justify-center text-xs text-content-muted">No run telemetry has been recorded yet.</div> : analytics.runTimeline.map(item => (
             <div key={item.hour} className="group flex h-full flex-col items-center justify-end gap-2">
               <div className="text-[10px] text-content-muted opacity-0 transition-opacity group-hover:opacity-100">{item.runs} runs</div>
               <div className="flex w-full max-w-9 flex-col justify-end gap-0.5 overflow-hidden rounded-t">

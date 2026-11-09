@@ -1,3 +1,4 @@
+import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import {
@@ -35,7 +36,7 @@ const billingLabel = (billing: RuntimeBilling) => {
 };
 
 export const RuntimesView: React.FC = () => {
-  const { runtimes, scanLocalRuntimes, isScanningRuntimes, setDefaultRuntime, can } = useApp();
+  const { runtimes, workspaceLoading, scanLocalRuntimes, isScanningRuntimes, setDefaultRuntime, can } = useApp();
   const canManageRuntimes = can('manage_runtimes');
 
   // States
@@ -395,7 +396,8 @@ export const RuntimesView: React.FC = () => {
             );
           })}
         </div>
-        {filteredRuntimes.length === 0 && <div role="status" className="py-16 text-center">
+        {workspaceLoading && !runtimes.length && <LoadingRows label="Loading runtimes" layout="table" className="px-4" />}
+        {!(workspaceLoading && !runtimes.length) && filteredRuntimes.length === 0 && <div role="status" className="py-16 text-center">
           <p className="text-sm font-medium text-content-secondary">{runtimes.length ? 'No runtimes match your filters' : canManageRuntimes ? 'No runtimes detected yet' : 'No cached runtimes available'}</p>
           <p className="mx-auto mt-2 max-w-sm text-xs leading-relaxed text-content-muted">{runtimes.length ? 'Try another search or clear the filters to see your detected engines.' : canManageRuntimes ? 'Start an installed engine, then scan this host to discover its available models.' : 'A developer or admin must scan the host before a runtime can be reviewed here.'}</p>
         </div>}
