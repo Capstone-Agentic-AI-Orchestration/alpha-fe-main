@@ -13,9 +13,9 @@ const WIDTH_KEY = 'alpha.chatSidePanelWidth';
 const MIN_WIDTH = 340;
 const DEFAULT_WIDTH = 480;
 
-function storedWidth(): number {
-  const value = Number(window.localStorage.getItem(WIDTH_KEY));
-  return Number.isFinite(value) && value >= MIN_WIDTH ? value : DEFAULT_WIDTH;
+function storedWidth(key: string, fallback: number): number {
+  const value = Number(window.localStorage.getItem(key));
+  return Number.isFinite(value) && value >= MIN_WIDTH ? value : fallback;
 }
 
 /**
@@ -29,9 +29,12 @@ export const ChatSidePanel: React.FC<{
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onCloseAll: () => void;
+  /** Panels can use a separate remembered width and a narrower initial size. */
+  widthStorageKey?: string;
+  defaultWidth?: number;
   children: React.ReactNode;
-}> = ({ tabs, activeId, onSelect, onClose, onCloseAll, children }) => {
-  const [width, setWidth] = useState(storedWidth);
+}> = ({ tabs, activeId, onSelect, onClose, onCloseAll, widthStorageKey = WIDTH_KEY, defaultWidth = DEFAULT_WIDTH, children }) => {
+  const [width, setWidth] = useState(() => storedWidth(widthStorageKey, defaultWidth));
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
 
   const onPointerMove = useCallback((event: PointerEvent) => {
@@ -49,7 +52,7 @@ export const ChatSidePanel: React.FC<{
     window.addEventListener('pointerup', onPointerUp);
     return () => { window.removeEventListener('pointermove', onPointerMove); window.removeEventListener('pointerup', onPointerUp); };
   }, [onPointerMove, onPointerUp]);
-  useEffect(() => { window.localStorage.setItem(WIDTH_KEY, String(Math.round(width))); }, [width]);
+  useEffect(() => { window.localStorage.setItem(widthStorageKey, String(Math.round(width))); }, [width, widthStorageKey]);
 
   const onTabKeyDown = (event: React.KeyboardEvent, index: number) => {
     if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;

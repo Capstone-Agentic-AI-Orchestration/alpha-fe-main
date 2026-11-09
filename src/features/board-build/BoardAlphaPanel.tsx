@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ListPlus, Play, Send, Sparkles } from 'lucide-react';
+import { Bot, ListPlus, Play, Send, Sparkles } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
 import { ChatSidePanel } from '@/features/chat/ChatSidePanel';
 import { MessageMarkdown } from '@/features/chat/MessageMarkdown';
@@ -7,6 +7,10 @@ import { apiService } from '@/shared/services/apiService';
 import type { BoardAgentChange, ChatMessage, Issue, IssueStatus, SystemProposal } from '@/shared/types';
 import { isBoardThreadId } from './useTaskBuild';
 import { AgentChangesList } from '@/features/board-agent/AgentChangesList';
+import { Button } from '@/shared/components/ui/button';
+import { Badge } from '@/shared/components/ui/badge';
+import { Card } from '@/shared/components/ui/card';
+import { Textarea } from '@/shared/components/ui/textarea';
 
 /** Separates what the person typed from the board context sent with it. */
 export const SCOPE_MARKER = '\n\n[Board scope]\n';
@@ -60,10 +64,6 @@ interface BoardAlphaPanelProps {
   decidingId?: string | null;
   onDecide?: (id: string, action: 'approve' | 'reject' | 'undo') => void;
 }
-
-const button = 'inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[12.5px] font-medium disabled:opacity-40';
-const primary = button + ' bg-action font-semibold text-on-action hover:bg-action-hover';
-const secondary = button + ' border border-divider text-content-secondary hover:bg-surface-high hover:text-content';
 
 /**
  * A developer's Alpha panel beside the board.
@@ -192,38 +192,41 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
       onSelect={() => undefined}
       onClose={close}
       onCloseAll={close}
+      widthStorageKey="alpha.boardAlphaPanelWidth.v2"
+      defaultWidth={560}
     >
       <section aria-label="What Alpha looks at" className="shrink-0 space-y-2 border-b border-divider p-3">
         <div className="flex items-center justify-between">
           <h2 className="text-[12px] font-semibold text-content-secondary">Work on</h2>
           <span className="text-[11.5px] text-content-muted">{inScope.length} {inScope.length === 1 ? 'task' : 'tasks'}</span>
         </div>
-        <div role="group" aria-label="Columns" className="flex flex-wrap gap-1.5">
+        <div role="group" aria-label="Columns" className="flex gap-1.5 overflow-x-auto pb-0.5 [scrollbar-width:thin]">
           {columns.map(column => {
             const on = scopeColumns.has(column.id);
             return (
-              <button key={column.id} type="button" aria-pressed={on} onClick={() => toggleColumn(column.id)}
-                className={'h-7 rounded-md border px-2 text-[11.5px] font-medium ' + (on ? 'border-divider bg-selected text-selected-content' : 'border-divider text-content-secondary hover:bg-surface-high hover:text-content')}>
+              <Button key={column.id} type="button" size="sm" variant={on ? 'default' : 'outline'} aria-pressed={on} onClick={() => toggleColumn(column.id)}
+                className="h-7 shrink-0 px-2.5 text-[11.5px]">
                 {column.title}
-              </button>
+              </Button>
             );
           })}
         </div>
         {columnTasks.length > 0 ? (
-          <ul className="max-h-44 space-y-0.5 overflow-y-auto">
+          <ul className="max-h-40 space-y-0.5 overflow-y-auto">
             {columnTasks.map(issue => (
-              <li key={issue.id} className="flex min-h-8 items-center gap-2 rounded-md px-1.5 hover:bg-surface-high">
+              <li key={issue.id} className="flex min-h-9 items-center gap-2 rounded-md px-1.5 hover:bg-surface-high">
                 <input type="checkbox" aria-label={'Include ' + issue.identifier} checked={inScope.some(item => item.id === issue.id)}
                   disabled={!inScope.some(item => item.id === issue.id) && inScope.length >= MAX_SCOPE_TASKS}
-                  onChange={() => toggleTask(issue.id)} className="h-3.5 w-3.5 shrink-0 accent-brand-500 disabled:opacity-40" />
-                <button type="button" onClick={() => onOpenIssue(issue.id)} className="min-w-0 flex-1 truncate text-left text-[12.5px] text-content hover:underline">
-                  <span className="font-mono text-[11px] text-content-muted">{issue.identifier}</span> {issue.title}
-                </button>
+                  onChange={() => toggleTask(issue.id)} className="h-4 w-4 shrink-0 accent-brand-500 disabled:opacity-40" />
+                <Button type="button" variant="ghost" size="sm" onClick={() => onOpenIssue(issue.id)} className="h-auto min-w-0 flex-1 justify-start gap-2 px-0 py-1 text-left text-[12.5px]">
+                  <Badge variant="outline" className="shrink-0 border-brand-400/25 bg-brand-400/10 px-1.5 py-0 font-mono text-[10px] leading-5 text-brand-200">{issue.identifier}</Badge>
+                  <span className="truncate">{issue.title}</span>
+                </Button>
                 {canStartBuild(issue) && (
-                  <button type="button" onClick={() => onStartBuild(issue)} title={'Start a build for ' + issue.identifier}
-                    className="inline-flex h-6 shrink-0 items-center gap-1 rounded-md bg-action px-2 text-[11px] font-semibold text-on-action hover:bg-action-hover">
+                  <Button type="button" size="sm" onClick={() => onStartBuild(issue)} title={'Start a build for ' + issue.identifier}
+                    className="h-6 shrink-0 gap-1 px-2 text-[11px]">
                     <Play aria-hidden="true" className="h-3 w-3" /> Build
-                  </button>
+                  </Button>
                 )}
               </li>
             ))}
@@ -243,9 +246,16 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
             <p className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl bg-surface-raised px-3 py-2 text-[13px] text-content">{visibleText(message.content)}</p>
           </div>
         ) : (
-          <div key={message.id} className="text-[13px] text-content">
-            {message.senderName && <p className="mb-1 text-[11.5px] font-semibold text-content-secondary">{message.senderName}</p>}
-            <MessageMarkdown content={message.content} />
+          <div key={message.id} className="flex min-w-0 items-start gap-2.5">
+            <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-brand-400/20 bg-brand-400/10 text-brand-200" aria-hidden="true">
+              <Bot className="h-4 w-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              {message.senderName && <p className="mb-1 text-[11.5px] font-semibold text-content-secondary">{message.senderName}</p>}
+              <Card className="break-words border-divider bg-surface/50 p-3 text-[13px]">
+                <MessageMarkdown content={message.content} />
+              </Card>
+            </div>
           </div>
         ))}
         {busy === 'ask' && <p role="status" className="text-[12.5px] text-content-muted">The Manager Agent is working on your board.</p>}
@@ -277,8 +287,8 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
               ))}
             </ul>
             <div className="flex justify-end gap-2">
-              <button type="button" onClick={() => setProposal(null)} className={secondary}>Discard</button>
-              <button type="button" disabled={!kept.size} onClick={addKept} className={primary}>Add {kept.size} to Backlog</button>
+              <Button type="button" size="sm" variant="outline" onClick={() => setProposal(null)}>Discard</Button>
+              <Button type="button" size="sm" disabled={!kept.size} onClick={addKept}>Add {kept.size} to Backlog</Button>
             </div>
           </div>
         )}
@@ -289,17 +299,17 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
       <form className="shrink-0 space-y-2 border-t border-divider p-3" onSubmit={event => { event.preventDefault(); void ask(); }}>
         {error && <p role="alert" className="text-[12.5px] text-status-danger">{error}</p>}
         <label htmlFor="board-alpha-input" className="sr-only">Message Alpha</label>
-        <textarea id="board-alpha-input" rows={3} value={input} maxLength={3_000} onChange={event => setInput(event.target.value)}
+        <Textarea id="board-alpha-input" rows={3} value={input} maxLength={3_000} onChange={event => setInput(event.target.value)}
           onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void ask(); } }}
           placeholder="Ask about these tasks, or describe work to split into tasks"
-          className="w-full resize-none rounded-md border border-control bg-well px-3 py-2 text-[13px] text-content placeholder-content-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-focus" />
+          className="min-h-[4.5rem] max-h-40 resize-none text-[13px] leading-5" />
         <div className="flex justify-end gap-2">
-          <button type="button" disabled={!input.trim() || Boolean(busy)} onClick={() => void suggest()} className={secondary}>
+          <Button type="button" size="sm" variant="outline" disabled={!input.trim() || Boolean(busy)} onClick={() => void suggest()}>
             <ListPlus aria-hidden="true" className="h-3.5 w-3.5" /> Suggest tasks
-          </button>
-          <button type="submit" disabled={!input.trim() || Boolean(busy)} className={primary}>
+          </Button>
+          <Button type="submit" size="sm" disabled={!input.trim() || Boolean(busy)}>
             <Send aria-hidden="true" className="h-3.5 w-3.5" /> Ask
-          </button>
+          </Button>
         </div>
       </form>
     </ChatSidePanel>
