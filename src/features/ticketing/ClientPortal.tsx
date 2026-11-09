@@ -22,6 +22,7 @@ import { clientTicketProgress } from './clientTicketProgress';
 import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink';
 import { secondary, time } from './ticketUi';
 import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './ClientProjectPages';
+import { StatusPill } from './ClientProjectSections';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
 import { WorkspaceToolbar, WorkspaceTabStrip, WorkspaceTab, WorkspaceNewTabMenu } from '@/shared/layout/WorkspaceToolbar';
 import { useClientWorkspaceTabs, type ClientPage as Page } from './clientWorkspaceTabs';
@@ -825,12 +826,4 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
 function EmptyState({ title, body }: { title: string; body: string }) {
   return <div className="client-empty-state"><Ticket aria-hidden="true" size={22} /><p>{title}</p><p>{body}</p></div>;
-}
-
-function StatusPill({ status }: { status: ClientProjectRequestItem['status'] }) {
-  const tone = status === 'closed' ? 'is-complete'
-    : status === 'ready_for_review' || status === 'awaiting_client' ? 'is-waiting'
-      : status === 'in_progress' ? 'is-active'
-        : status === 'declined' || status === 'cancelled' ? 'is-ended' : 'is-neutral';
-  return <span className={`client-status ${tone}`}>{clientTicketProgress(status, null).statusLabel}</span>;
 }
