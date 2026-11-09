@@ -52,6 +52,12 @@ describe('agent change helpers', () => {
 describe('AgentChangesList', () => {
   const held = change({ id: 'h', status: 'held', summary: 'Archive CAP-2', action: 'archive', reason: 'Archiving waits for lloyd to confirm.' });
 
+  it('shows when a done change did not reach GitHub or the team board', () => {
+    const html = renderToStaticMarkup(<AgentChangesList changes={[change({ reason: 'GitHub refused the new issue (403).' }), change({ id: 'clean' })]} login="lloyd" now={NOW} />);
+    expect(html).toContain('Not synced: GitHub refused the new issue (403).');
+    expect(html.match(/Not synced/g)).toHaveLength(1);
+  });
+
   it('lets the developer it acted for confirm, reject or undo', () => {
     const html = renderToStaticMarkup(<AgentChangesList changes={[held, change()]} login="lloyd" now={NOW} onDecide={vi.fn()} />);
     expect(html).toContain('Archive CAP-2');
