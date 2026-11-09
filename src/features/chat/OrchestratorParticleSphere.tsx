@@ -24,6 +24,9 @@ const SPHERE_RADIUS = 0.62;
 const ARM_GRAINS = 8200;
 const DUST_GRAINS = 1500;
 const CORE_GRAINS = 480;
+// Keep the resting shell airy; the remaining grains appear as it unfurls.
+const SPHERE_STRIDE = 5;
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 const HAIRLINES = 18;
 const RINGS = 8;
 /** Seconds to unfurl into the galaxy, or fold back into the sphere. */
@@ -59,6 +62,7 @@ const STATUS_MOTION: Record<LiveBuildOrchestrationStatus, { color: keyof ScenePa
 
 const VERTEX = `
 attribute vec3 aSphere;
+attribute float aSphereVisible;
 attribute float aDelay;
 attribute float aSize;
 attribute float aBright;
@@ -100,10 +104,16 @@ void main() {
   vec4 mv = modelViewMatrix * vec4(p, 1.0);
   gl_Position = projectionMatrix * mv;
   float twinkle = 0.82 + 0.18 * sin(uTime * 1.1 + aPhase);
-  float sphereBright = 0.2 + 0.12 * sin(aPhase * 3.0);
+  // A dim far side and a clear near side preserve the shell's depth without
+  // stacking thousands of translucent grains into a fuzzy surface.
+  vec3 sphereNormal = normalize(normalMatrix * normalize(aSphere));
+  float sphereBright = (0.14 + 0.5 * max(0.0, sphereNormal.z)) * aSphereVisible;
   vAlpha = mix(sphereBright, aBright, e) * twinkle * uOpacity * (1.0 + near * 1.3 + wave * 1.5);
   vColor = mix(mix(uWhite, mix(uLilac, uTint, 0.3), 0.55), mix(uWhite, mix(uLilac, uTint, 0.45), aHue), e);
-  gl_PointSize = mix(0.022, aSize, e) * uPixel * uScale / -mv.z * (1.0 + near * 0.6);
+  // Keep dots legible in CSS pixels at either display density and at different
+  // zoom levels, then rasterize at the canvas's actual device pixel ratio.
+  float diameter = mix(0.018, aSize, e) * uScale / -mv.z * (1.0 + near * 0.6);
+  gl_PointSize = clamp(diameter, mix(1.2, 0.85, e), mix(2.2, 3.0, e)) * uPixel;
 }
 `;
 
@@ -113,7 +123,11 @@ varying float vAlpha;
 void main() {
   float d = length(gl_PointCoord - 0.5);
   if (d > 0.5) discard;
-  gl_FragColor = vec4(vColor, vAlpha * smoothstep(0.5, 0.06, d));
+  // A solid center with only a half-pixel antialiased rim, rather than a glow
+  // fading across the entire dot. Derivatives keep that rim stable on zoom.
+  float edge = max(fwidth(d) * 0.5, 0.015);
+  float coverage = 1.0 - smoothstep(0.5 - edge, 0.5, d);
+  gl_FragColor = vec4(vColor, vAlpha * coverage);
   #include <colorspace_fragment>
 }
 `;
@@ -129,16 +143,21 @@ function soft(rnd: () => number): number {
 
 function buildGalaxy() {
   const rnd = seeded(23);
-  const position: number[] = [], sphere: number[] = [], delay: number[] = [];
+  const position: number[] = [], sphere: number[] = [], sphereVisible: number[] = [], delay: number[] = [];
   const size: number[] = [], bright: number[] = [], hue: number[] = [], phase: number[] = [];
+  const shellCount = Math.ceil((ARM_GRAINS + DUST_GRAINS + CORE_GRAINS) / SPHERE_STRIDE);
   const add = (x: number, y: number, z: number, s: number, b: number, h: number) => {
     position.push(x * RADIUS, y * RADIUS, z * RADIUS);
-    // Its place on the sphere keeps the same heading, so grains travel outwards
-    // rather than across the shape while it changes.
-    const heading = Math.atan2(y, x) + (rnd() - 0.5) * 0.3;
-    const polar = Math.acos(1 - 2 * rnd());
-    const shell = SPHERE_RADIUS * (0.97 + rnd() * 0.06);
-    sphere.push(Math.cos(heading) * Math.sin(polar) * shell, Math.sin(heading) * Math.sin(polar) * shell, Math.cos(polar) * shell);
+    // Interleaved golden-angle shells distribute the visible dots evenly,
+    // avoiding random clusters. Hidden grains have distinct homes too, ready
+    // to fade in along their existing sphere-to-galaxy morph.
+    const index = size.length;
+    const layer = index % SPHERE_STRIDE;
+    const slot = Math.floor(index / SPHERE_STRIDE);
+    const heading = slot * GOLDEN_ANGLE + layer * Math.PI * 2 / SPHERE_STRIDE;
+    const polar = Math.acos(1 - 2 * (slot + 0.5) / shellCount);
+    sphere.push(Math.cos(heading) * Math.sin(polar) * SPHERE_RADIUS, Math.sin(heading) * Math.sin(polar) * SPHERE_RADIUS, Math.cos(polar) * SPHERE_RADIUS);
+    sphereVisible.push(layer === 0 ? 1 : 0);
     delay.push(Math.min(1, Math.hypot(x, y)));
     size.push(s); bright.push(b); hue.push(h); phase.push(rnd() * 6.2832);
   };
@@ -175,6 +194,7 @@ function buildGalaxy() {
   const grains = new THREE.BufferGeometry();
   grains.setAttribute('position', new THREE.Float32BufferAttribute(position, 3));
   grains.setAttribute('aSphere', new THREE.Float32BufferAttribute(sphere, 3));
+  grains.setAttribute('aSphereVisible', new THREE.Float32BufferAttribute(sphereVisible, 1));
   grains.setAttribute('aDelay', new THREE.Float32BufferAttribute(delay, 1));
   grains.setAttribute('aSize', new THREE.Float32BufferAttribute(size, 1));
   grains.setAttribute('aBright', new THREE.Float32BufferAttribute(bright, 1));
@@ -294,8 +314,8 @@ export function OrchestratorParticleSphere({ palette, glow, status, working, cos
       animating = true;
     }
     material.uniforms.uOpacity.value = 0.8 + (selected ? 0.15 : 0) + (working ? 0.05 : 0);
-    if (core.current) core.current.opacity = (working ? 0.7 : 0.5) * (0.55 + 0.45 * shape) + (selected ? 0.2 : 0) + m.hover * 0.12 + material.uniforms.uPulseAmt.value * 0.3;
-    if (halo.current) halo.current.opacity = 0.16 * (1 - shape) + (working ? 0.12 : 0.07) * shape + (selected ? 0.06 : 0);
+    if (core.current) core.current.opacity = ((working ? 0.7 : 0.5) + (selected ? 0.2 : 0) + m.hover * 0.12 + material.uniforms.uPulseAmt.value * 0.3) * shape;
+    if (halo.current) halo.current.opacity = ((working ? 0.12 : 0.07) + (selected ? 0.06 : 0)) * shape;
     if (hairlineMaterial.current) hairlineMaterial.current.opacity = (0.055 + m.hover * 0.05 + (selected ? 0.04 : 0)) * Math.max(0, shape * 1.4 - 0.4);
     if (reduceMotion && animating) invalidate();
   });

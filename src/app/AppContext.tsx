@@ -464,6 +464,7 @@ export interface CreateIssueOptions {
 }
 
 export interface ChatSendOptions {
+  buildDecision?: import('@/features/chat/chatBuildDecision').ChatBuildDecision;
   /** Board issue the build is for; the Orchestrator builds it instead of filing a new one. */
   issueId?: string;
   /** Project of a thread created in the same tick, before it reaches `chatThreads`. */
@@ -903,7 +904,9 @@ ${e.detail}`;
    */
   const loadedThreadsRef = useRef<Set<string>>(new Set());
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>(() => loadFromStorage<ChatMessage[]>('chat_messages', []));
-  const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() => loadFromStorage('prototype_runs', []));
+  const [prototypeRuns, setPrototypeRuns] = useState<PrototypeRun[]>(() =>
+    normalizeLegacyPrototypeRuns(loadFromStorage<PrototypeRun[]>(initialWorkspaceCacheKey('prototype_runs'), []))
+  );
   const [squadRuns, setSquadRuns] = useState<SquadRun[]>(() => loadFromStorage('squad_runs', []));
 
   const [runSetupIssueId, setRunSetupIssueId] = useState<string | null>(null);
@@ -912,7 +915,20 @@ ${e.detail}`;
     loadFromStorage<Record<string, RunPlanDraft>>('run_plan_drafts_v1', {})
   );
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const handledRunEventsRef = useRef<Set<string>>(new Set());
+  const handledRunEventsRef = useRef<Set<string>>(new Set(
+    prototypeRuns
+      .filter(run => run.status === 'awaiting_approval' || run.status === 'failed')
+      .map(run => `${run.id}:${run.status}`)
+  ));
+  const hydratePrototypeRuns = (runs: unknown[]) => {
+    const normalized = normalizeLegacyPrototypeRuns(runs);
+    for (const run of normalized) {
+      if (run.status === 'awaiting_approval' || run.status === 'failed') {
+        handledRunEventsRef.current.add(`${run.id}:${run.status}`);
+      }
+    }
+    setPrototypeRuns(normalized);
+  };
   /**
    * Backend run IDs do not exist until POST /runs/start returns. Keeping this
    * small pending map lets a user cancel during that window without sending a
@@ -1019,7 +1035,7 @@ ${e.detail}`;
           return mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev);
         });
       }
-      if (snapshot.runs) setPrototypeRuns(normalizeLegacyPrototypeRuns(snapshot.runs));
+      if (snapshot.runs) hydratePrototypeRuns(snapshot.runs);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
       if (snapshot.analytics && typeof snapshot.analytics === 'object') {
         setAnalytics(normalizeAnalytics(snapshot.analytics));
@@ -1296,7 +1312,7 @@ ${e.detail}`;
     setAgents(normalizeLegacyAgents(loadFromStorage<Agent[]>(`agents:${workspaceId}`, [])));
     setChatThreads(loadFromStorage<ChatThread[]>(`chat_threads:${workspaceId}`, []));
     setChatMessages(loadFromStorage<ChatMessage[]>(`chat_messages:${workspaceId}`, []));
-    setPrototypeRuns(normalizeLegacyPrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, [])));
+    hydratePrototypeRuns(loadFromStorage<PrototypeRun[]>(`prototype_runs:${workspaceId}`, []));
     setSquadRuns(loadFromStorage<SquadRun[]>(`squad_runs:${workspaceId}`, []));
     setInbox(normalizeInboxNotifications(loadFromStorage<InboxNotification[]>(`inbox:${workspaceId}`, [])));
     setRequirementDocs(normalizeRequirementDocs(loadFromStorage<RequirementDoc[]>(`requirement_docs:${workspaceId}`, [])));
@@ -1319,7 +1335,7 @@ ${e.detail}`;
       if (snapshot.chatThreads) {
         setChatThreads(prev => mergeThreadsWithCachedMessages(snapshot.chatThreads as ChatThread[], prev));
       }
-      if (snapshot.runs) setPrototypeRuns(normalizeLegacyPrototypeRuns(snapshot.runs));
+      if (snapshot.runs) hydratePrototypeRuns(snapshot.runs);
       if (snapshot.squadRuns) setSquadRuns(snapshot.squadRuns as SquadRun[]);
       if (snapshot.analytics && typeof snapshot.analytics === 'object') {
         setAnalytics(normalizeAnalytics(snapshot.analytics));
@@ -3059,6 +3075,7 @@ ${issue.description.trim().slice(0, 3_500)}` : '';
         intent,
         issueId: options.issueId,
         approvalMode: options.approvalMode,
+        buildDecision: options.buildDecision,
         clientMessageId: userMsg.id,
         attachmentIds: attachments.map(attachment => attachment.id)
       });
