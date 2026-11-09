@@ -189,7 +189,9 @@ interface AppContextType {
   // Runtimes
   runtimes: RuntimeEngine[];
   isScanningRuntimes: boolean;
+  refreshingRuntimeId: string | null;
   scanLocalRuntimes: () => Promise<void>;
+  refreshRuntime: (id: string) => Promise<void>;
   setDefaultRuntime: (id: string) => void;
   
   // Skills
@@ -888,6 +890,7 @@ ${e.detail}`;
     normalizeRequirementDocs(loadFromStorage<RequirementDoc[]>('requirement_docs', []))
   );
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
+  const [refreshingRuntimeId, setRefreshingRuntimeId] = useState<string | null>(null);
   const [isScanningSkills, setIsScanningSkills] = useState(false);
   const [chatTypingByThread, setChatTypingByThread] = useState<Record<string, boolean>>({});
   const isAgentTyping = activeThreadId ? Boolean(chatTypingByThread[activeThreadId]) : false;
@@ -2639,6 +2642,31 @@ ${e.detail}`;
     }
   };
 
+  const refreshRuntime = async (id: string) => {
+    if (!requireCapability('manage_runtimes')) return;
+    setRefreshingRuntimeId(id);
+    try {
+      const refreshed = await apiService.refreshRuntime(id);
+      setRuntimes(prev => prev.map(runtime => runtime.id === id ? refreshed : runtime));
+      const account = refreshed.account?.email
+        ? `Signed in as ${refreshed.account.email}.`
+        : refreshed.account?.billing === 'subscription'
+          ? 'Claude subscription login is active.'
+          : refreshed.status === 'online'
+            ? 'Runtime is online.'
+            : 'Runtime status was updated.';
+      showToast('Claude Code status refreshed', account, refreshed.status === 'online' ? 'success' : 'info');
+    } catch (err) {
+      showToast(
+        'Could not refresh Claude Code',
+        err instanceof Error ? err.message : 'The local daemon could not read Claude Code status.',
+        'error'
+      );
+    } finally {
+      setRefreshingRuntimeId(null);
+    }
+  };
+
   const setDefaultRuntime = (id: string) => {
     if (!requireCapability('manage_runtimes')) return;
     setRuntimes(prev => prev.map(rt => ({
@@ -3787,7 +3815,9 @@ ${e.detail}`;
       triggerSquadRun,
       runtimes,
       isScanningRuntimes,
+      refreshingRuntimeId,
       scanLocalRuntimes,
+      refreshRuntime,
       setDefaultRuntime,
       skills,
       toggleSkill,

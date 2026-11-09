@@ -712,6 +712,8 @@ export const apiService = {
   // Runtimes
   getRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes'),
   scanRuntimes: () => fetchJson<RuntimeEngine[]>('/runtimes/scan', { method: 'POST' }),
+  refreshRuntime: (id: string) =>
+    fetchJson<RuntimeEngine>(`/runtimes/${encodeURIComponent(id)}/refresh`, { method: 'POST' }),
 
   // Runs
   getRuns: () => fetchJson<PrototypeRun[]>('/runs'),

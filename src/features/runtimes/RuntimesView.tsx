@@ -13,7 +13,8 @@ import {
   Check, 
   X, 
   Copy, 
-  Layers
+  Layers,
+  Terminal
 } from 'lucide-react';
 import { RuntimeEngine, RuntimeStatus } from '@/shared/types';
 
@@ -34,7 +35,7 @@ const billingLabel = (billing: RuntimeBilling) => {
 };
 
 export const RuntimesView: React.FC = () => {
-  const { runtimes, scanLocalRuntimes, isScanningRuntimes, setDefaultRuntime, can } = useApp();
+  const { runtimes, scanLocalRuntimes, isScanningRuntimes, refreshingRuntimeId, refreshRuntime, setDefaultRuntime, can } = useApp();
   const canManageRuntimes = can('manage_runtimes');
   
   // States
@@ -49,6 +50,7 @@ export const RuntimesView: React.FC = () => {
   const [sortDropdownOpen, setSortDropdownOpen] = useState<boolean>(false);
   const [sortBy, setSortBy] = useTabSessionState<'latency' | 'name' | 'models'>('runtimes.sortBy', 'latency');
   const [copiedEndpointId, setCopiedEndpointId] = useState<string | null>(null);
+  const [showClaudeSignInHelp, setShowClaudeSignInHelp] = useState(false);
 
   // Selected Runtime Memo
   const selectedRuntime = useMemo(() => {
@@ -453,39 +455,74 @@ export const RuntimesView: React.FC = () => {
               </div>
             </div>
 
-            {selectedRuntime.account && (
+            {(selectedRuntime.account || selectedRuntime.id === 'claude') && (
               <div className="p-3.5 rounded-xl bg-surface border border-white/5 space-y-3">
-                <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
-                  Account &amp; billing
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-[11px] font-medium text-gray-400 uppercase tracking-wider">
+                    {selectedRuntime.id === 'claude' ? 'Claude Code account' : 'Account & billing'}
+                  </div>
+                  {selectedRuntime.id === 'claude' && canManageRuntimes && (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void refreshRuntime(selectedRuntime.id)}
+                        disabled={refreshingRuntimeId === selectedRuntime.id}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-gray-300 hover:bg-white/5 hover:text-white disabled:cursor-wait disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-3 w-3 ${refreshingRuntimeId === selectedRuntime.id ? 'animate-spin' : ''}`} />
+                        {refreshingRuntimeId === selectedRuntime.id ? 'Refreshing…' : 'Refresh status'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowClaudeSignInHelp(value => !value)}
+                        className="rounded-lg border border-white/10 px-2.5 py-1.5 text-[11px] text-gray-300 hover:bg-white/5 hover:text-white"
+                      >
+                        {showClaudeSignInHelp ? 'Hide sign-in help' : 'Sign-in help'}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="p-2.5 rounded-lg bg-black/20 border border-white/5 space-y-1">
                     <div className="text-[10px] text-gray-500 font-mono">Authentication</div>
                     <div className="text-white font-medium truncate">
-                      {selectedRuntime.account.authMethod || selectedRuntime.account.email || 'Not reported'}
+                      {selectedRuntime.account?.authMethod || selectedRuntime.account?.email || 'Not reported'}
                     </div>
                   </div>
                   <div className="p-2.5 rounded-lg bg-black/20 border border-white/5 space-y-1">
                     <div className="text-[10px] text-gray-500 font-mono">Billing route</div>
                     <div className="text-teal-300 font-medium">
-                      {billingLabel(selectedRuntime.account.billing) || 'Not reported'}
+                      {billingLabel(selectedRuntime.account?.billing) || 'Not reported'}
                     </div>
                   </div>
                 </div>
-                {(selectedRuntime.account.plan || selectedRuntime.account.org || selectedRuntime.account.email || selectedRuntime.account.note) && (
+                {(selectedRuntime.account?.plan || selectedRuntime.account?.org || selectedRuntime.account?.email || selectedRuntime.account?.note) && (
                   <div className="rounded-lg bg-black/20 border border-white/5 p-2.5 space-y-1">
-                    {selectedRuntime.account.plan && (
+                    {selectedRuntime.account?.plan && (
                       <div><span className="text-gray-500">Plan:</span> {selectedRuntime.account.plan}</div>
                     )}
-                    {selectedRuntime.account.org && (
+                    {selectedRuntime.account?.org && (
                       <div><span className="text-gray-500">Organization:</span> {selectedRuntime.account.org}</div>
                     )}
-                    {selectedRuntime.account.email && (
+                    {selectedRuntime.account?.email && (
                       <div><span className="text-gray-500">Account:</span> {selectedRuntime.account.email}</div>
                     )}
-                    {selectedRuntime.account.note && (
+                    {selectedRuntime.account?.note && (
                       <p className="text-gray-400 leading-relaxed">{selectedRuntime.account.note}</p>
                     )}
+                  </div>
+                )}
+                {selectedRuntime.id === 'claude' && showClaudeSignInHelp && (
+                  <div className="rounded-lg border border-indigo-400/20 bg-indigo-400/5 p-3 text-gray-300 space-y-2">
+                    <div className="flex items-center gap-2 font-medium text-white">
+                      <Terminal className="h-3.5 w-3.5 text-indigo-300" />
+                      Reconnect the local Claude Code login
+                    </div>
+                    <p className="leading-relaxed">
+                      Alpha uses the account currently signed in to Claude Code on this computer. Open PowerShell or a terminal and run <code className="rounded bg-black/30 px-1.5 py-0.5 font-mono text-indigo-200">claude</code>.
+                      If the wrong account is active, use <code className="rounded bg-black/30 px-1.5 py-0.5 font-mono text-indigo-200">/logout</code> inside Claude Code, then start it again and sign in with the intended account.
+                    </p>
+                    <p className="text-gray-400">When sign-in is complete, return here and select <strong className="text-gray-200">Refresh status</strong>.</p>
                   </div>
                 )}
               </div>
