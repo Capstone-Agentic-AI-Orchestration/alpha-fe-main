@@ -349,6 +349,7 @@
 .pm-tickets__chat-layout .pm-tickets__conversation-area { min-width: 0; min-height: 0; margin-top: 0; }
 .pm-tickets__chat-layout .pm-tickets__conversation-area--chat { height: 100%; min-height: 0; margin-top: 0; }
 .pm-tickets__chat-layout .pm-tickets__conversation-history { min-width: 0; }
+.pm-tickets__chat-layout.role-chat-layout > .ticket-chat--conversation .ticket-chat__group { width: 100%; max-width: none; margin-inline: 0; }
 .pm-tickets__context-panel { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: 0; overflow-y: auto; border: 1px solid rgb(var(--ui-divider)); border-radius: 14px; background: rgb(var(--ui-well)); padding: 20px; }
 .pm-tickets__context-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding-bottom: 17px; border-bottom: 1px solid rgb(var(--ui-divider)); }
 .pm-tickets__context-heading .pm-tickets__eyebrow { margin-bottom: 4px; font-size: 12px; }
