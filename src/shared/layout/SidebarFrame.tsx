@@ -15,7 +15,7 @@ export function SidebarFrame({
   asideClassName = '',
   onBeforeCollapse,
   children,
-}: {
+}: Readonly<{
   collapsed: boolean;
   setCollapsed: (collapsed: boolean) => void;
   ariaLabel: string;
@@ -23,7 +23,7 @@ export function SidebarFrame({
   asideClassName?: string;
   onBeforeCollapse?: () => void;
   children: (state: SidebarFrameState) => React.ReactNode;
-}) {
+}>) {
   const [isPointerInside, setIsPointerInside] = useState(false);
   const [isFocusWithin, setIsFocusWithin] = useState(false);
   const hoverTimer = useRef<number | undefined>(undefined);
@@ -50,7 +50,6 @@ export function SidebarFrame({
   return <div className={`relative z-40 h-full w-[56px] flex-shrink-0 select-none overflow-visible ${className}`}>
     <aside
       aria-label={ariaLabel}
-      aria-expanded={expanded}
       onPointerEnter={() => setPointerInsideAfter(true, 90)}
       onPointerLeave={() => setPointerInsideAfter(false, 140)}
       onFocusCapture={() => setIsFocusWithin(true)}
