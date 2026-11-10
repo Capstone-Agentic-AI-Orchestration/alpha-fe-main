@@ -47,7 +47,7 @@ export function SidebarFrame({
     setCollapsed(nextCollapsed);
   };
 
-  return <div className={`relative z-40 h-full w-[4.5rem] flex-shrink-0 select-none overflow-visible ${className}`}>
+  return <div className={`relative z-40 h-full w-[56px] flex-shrink-0 select-none overflow-visible ${className}`}>
     <aside
       aria-label={ariaLabel}
       aria-expanded={expanded}
@@ -59,7 +59,7 @@ export function SidebarFrame({
         if (!nextTarget || !event.currentTarget.contains(nextTarget)) setIsFocusWithin(false);
       }}
       className={`sidebar-flyout app-no-drag absolute inset-y-0 left-0 flex h-full flex-col border-r border-divider bg-shell font-sans text-sm text-content-secondary ${
-        expanded ? 'w-64 shadow-[14px_0_36px_-28px_rgb(var(--ui-overlay)/0.9)]' : 'w-[4.5rem] shadow-none'
+        expanded ? 'w-[232px] shadow-[14px_0_36px_-28px_rgb(var(--ui-overlay)/0.9)]' : 'w-full shadow-none'
       } ${asideClassName}`}
     >
       {children({ compact, expanded, togglePinned })}

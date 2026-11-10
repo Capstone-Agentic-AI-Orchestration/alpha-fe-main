@@ -8,7 +8,6 @@ import { SidebarFrame } from './SidebarFrame';
 import {
   ChevronDown,
   Edit3,
-  HelpCircle,
   Plus,
   LogOut,
   Check,
@@ -155,19 +154,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       {({ compact }) => <>
       {/* Workspace and primary actions */}
-      <div className={`space-y-3 pb-3 pt-3 ${compact ? 'px-2' : 'px-3'}`}>
+      <div className="space-y-3 px-2 pb-3 pt-3">
         <div ref={workspaceMenuRef} className="relative">
-          <div className={`flex items-center ${compact ? 'flex-col gap-1' : 'gap-1'}`}>
+          <div className={`flex items-center ${compact ? 'justify-center' : ''}`}>
             <button
               onClick={() => setWorkspaceMenuOpen(open => !open)}
               className={`flex min-w-0 items-center rounded-lg py-1.5 text-left transition-colors hover:bg-surface-high ${
-                compact ? 'w-9 justify-center px-0' : 'flex-1 justify-between px-2'
+                compact ? 'w-9 justify-center px-0' : 'flex-1 justify-between gap-2 px-2'
               }`}
               title={compact ? `${workspaceName} workspace` : undefined}
-              aria-label={compact ? `${workspaceName} workspace menu` : 'Open workspace menu'}
+              aria-label={`Open workspace menu for ${workspaceName}`}
               aria-expanded={workspaceMenuOpen}
             >
-              <span className="flex min-w-0 items-center gap-2.5">
+              <span className={`flex min-w-0 items-center ${compact ? '' : 'gap-2'}`}>
                 <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-action dark:bg-surface-raised ring-1 ring-inset ring-content/[0.08]">
                   <img
                     src={alphaMarkUrl}
@@ -311,14 +310,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         the developer download page, so everyone already inside a workspace --
         every project manager, admin and client -- had no way to leave it.
       */}
-      <div className={`border-t border-divider py-2.5 ${compact ? 'px-1.5' : 'px-2.5'}`}>
-        {/* One group either way: collapsed, the avatar and sign-out stack in
-            the same centred column as the navigation icons above them. */}
-        <div
-          className={`flex w-full items-center ${
-            compact ? 'flex-col gap-1' : 'gap-2.5 px-2.5 py-2'
-          }`}
-        >
+      <div className="border-t border-divider px-2 py-2.5">
+        <div className={`flex items-center ${compact ? 'justify-center' : 'gap-2'}`}>
           {onSwitchProfile ? (
             <button
               type="button"
@@ -341,7 +334,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible min-w-0 flex-1'}`}
               >
                 <span className="block truncate text-xs text-content">{userName}</span>
-                <span className="block text-[11px] text-content-muted">{ROLE_LABEL[role]} · Switch profile</span>
+                <span className="block truncate text-[11px] text-content-muted">{ROLE_LABEL[role]} · Switch profile</span>
               </span>
             </button>
           ) : (
@@ -368,41 +361,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </span>
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => void onSignOut()}
-            disabled={signingOut}
-            aria-busy={signingOut}
-            className={`flex flex-shrink-0 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-surface-high hover:text-content focus-visible:ring-2 focus-visible:ring-focus ${
-              compact ? 'h-9 w-9' : 'p-1.5'
-            }`}
-            title={signingOut ? 'Signing out…' : 'Sign out'}
-            aria-label={signingOut ? 'Signing out' : 'Sign out'}
-          >
-            <LogOut className="h-4 w-4" />
-          </button>
-        </div>
-      </div>
-
-      <div className={`border-t border-divider py-2.5 text-xs text-content-secondary ${compact ? 'px-1.5' : 'px-4'}`}>
-        <div className={`flex items-center ${compact ? 'flex-col gap-2' : 'justify-between'}`}>
-          <button
-            onClick={() => window.dispatchEvent(new Event('alpha:open-prototype-guide'))}
-            className={`flex items-center rounded-lg font-medium transition-colors hover:bg-surface-high hover:text-content ${
-              compact ? 'h-9 w-9 justify-center' : 'gap-2'
-            }`}
-            title={compact ? 'Prototype guide' : undefined}
-            aria-label="Open prototype guide"
-          >
-            <HelpCircle className="h-4 w-4 text-content-muted" />
-            <span
-              className={`sidebar-label ${compact ? 'sidebar-label--hidden' : 'sidebar-label--visible'}`}
+          {!compact && (
+            <button
+              type="button"
+              onClick={() => void onSignOut()}
+              disabled={signingOut}
+              aria-busy={signingOut}
+              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg text-content-muted transition-colors hover:bg-surface-high hover:text-content focus-visible:ring-2 focus-visible:ring-focus"
+              title={signingOut ? 'Signing out…' : 'Sign out'}
+              aria-label={signingOut ? 'Signing out' : 'Sign out'}
             >
-              Prototype guide
-            </span>
-          </button>
-          <span className="font-mono text-[10px] font-medium text-link">{compact ? '2.0' : 'v2.0.0'}</span>
+              <LogOut className="h-4 w-4" />
+            </button>
+          )}
         </div>
+        {!compact && <div className="mt-1 px-1.5 text-right font-mono text-[10px] text-content-muted">v2.0.0</div>}
       </div>
       <CreateWorkspaceModal
         isOpen={createOpen}
