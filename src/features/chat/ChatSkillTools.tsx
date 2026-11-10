@@ -6,8 +6,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Card } from '@/shared/components/ui/card';
 import { Textarea } from '@/shared/components/ui/textarea';
 import type { Skill } from '@/shared/types';
-
-const MAX_SELECTED_SKILLS = 5;
+import { MAX_SELECTED_SKILLS } from './ChatSkillCommand';
 
 export interface ChatSkillToolsProps {
   skills: Skill[];
@@ -20,11 +19,13 @@ export interface ChatSkillToolsProps {
   onScan?: () => Promise<void>;
   scanning?: boolean;
   disabled?: boolean;
+  /** Render as a section inside the composer’s + menu instead of above the input. */
+  inline?: boolean;
 }
 
 /** Optional, message-scoped skill guidance and a review-before-apply prompt suggestion. */
 export function ChatSkillTools({
-  skills, selectedSkillIds, onSkillIdsChange, draft, onDraftChange, onImprove, onError, onScan, scanning = false, disabled = false
+  skills, selectedSkillIds, onSkillIdsChange, draft, onDraftChange, onImprove, onError, onScan, scanning = false, disabled = false, inline = false
 }: ChatSkillToolsProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -76,13 +77,13 @@ export function ChatSkillTools({
 
   return <div className="space-y-2">
     <div className="flex flex-wrap items-center gap-1.5">
-      <div ref={rootRef} className="relative">
+      <div ref={rootRef} className={inline ? 'w-full' : 'relative'}>
         <Button type="button" variant="ghost" size="sm" disabled={disabled} aria-expanded={open} aria-haspopup="listbox"
-          onClick={() => { setOpen(value => !value); setQuery(''); }} className="h-8 rounded-full px-2.5 text-[11px]">
-          <Sparkles className="h-3.5 w-3.5" /> Skills <span className="text-content-muted">optional</span>
+          onClick={() => { setOpen(value => !value); setQuery(''); }} className={inline ? 'h-9 w-full justify-start rounded-xl px-3 text-left text-xs' : 'h-8 rounded-full px-2.5 text-[11px]'}>
+          <Sparkles className="h-3.5 w-3.5" /> <span className={inline ? 'flex-1 text-left' : ''}>Skills <span className="text-content-muted">optional</span></span>
           {selectedSkillIds.length > 0 && <Badge className="ml-0.5 px-1.5 py-0 text-[10px]">{selectedSkillIds.length}</Badge>}
         </Button>
-        {open && <Card className="absolute bottom-full left-0 z-50 mb-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden border-control bg-surface-high p-2 shadow-2xl shadow-black/60">
+        {open && <Card className={inline ? 'mt-1 w-full overflow-hidden border-control bg-surface-high p-2 shadow-inner' : 'absolute bottom-full left-0 z-50 mb-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden border-control bg-surface-high p-2 shadow-2xl shadow-black/60'}>
           <label className="flex items-center gap-2 rounded-lg border border-control bg-well px-2.5">
             <Search className="h-3.5 w-3.5 shrink-0 text-content-muted" aria-hidden="true" />
             <input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="Search installed skills"
@@ -110,7 +111,7 @@ export function ChatSkillTools({
               </Button>}
             </div>}
           </div>
-          <p className="border-t border-divider px-2.5 pt-2 text-[10px] text-content-muted">Selected skills apply only to this message. Up to {MAX_SELECTED_SKILLS}.</p>
+          <p className="border-t border-divider px-2.5 pt-2 text-[10px] text-content-muted">Type / in the composer to open this catalog quickly. Skills apply only to this message; up to {MAX_SELECTED_SKILLS}.</p>
         </Card>}
       </div>
 

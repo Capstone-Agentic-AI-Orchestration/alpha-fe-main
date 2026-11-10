@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, ChevronDown, FolderOpen, MessageSquare } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, Check, ChevronDown, FolderOpen, MessageSquare, Plus } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import type { Skill } from '@/shared/types';
 import { ChatSkillTools } from './ChatSkillTools';
+import { ChatSkillCommandSuggestions, getChatSkillCommandAtCursor, matchChatSkills, MAX_SELECTED_SKILLS, type ChatSkillCommandQuery } from './ChatSkillCommand';
 
 export interface ChatHomeRecent {
   id: string;
@@ -113,18 +114,82 @@ export function ChatHome({
   onSend, canSend, blockedReason, recent, onOpenRecent
 }: ChatHomeProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const [toolsMenuOpen, setToolsMenuOpen] = useState(false);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
+  const [skillCommandQuery, setSkillCommandQuery] = useState<ChatSkillCommandQuery | null>(null);
+  const [activeSkillCommandIndex, setActiveSkillCommandIndex] = useState(0);
   useEffect(() => { inputRef.current?.focus(); }, []);
+  useEffect(() => {
+    if (!toolsMenuOpen) return undefined;
+    const onPointerDown = (event: PointerEvent) => { if (!toolsMenuRef.current?.contains(event.target as Node)) setToolsMenuOpen(false); };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setToolsMenuOpen(false); };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => { document.removeEventListener('pointerdown', onPointerDown); document.removeEventListener('keydown', onKeyDown); };
+  }, [toolsMenuOpen]);
   useEffect(() => {
     const field = inputRef.current;
     if (!field) return;
     field.style.height = 'auto';
     field.style.height = Math.min(field.scrollHeight, 220) + 'px';
   }, [message]);
+  const skillCommandSuggestions = useMemo(() => skillCommandQuery ? matchChatSkills(skills, skillCommandQuery.query) : [], [skillCommandQuery, skills]);
   const name = greetingName(userName);
   const ready = canSend && Boolean(message.trim());
   const submit = (event?: React.FormEvent) => {
     event?.preventDefault();
-    if (ready) onSend();
+    if (ready) { setSkillCommandQuery(null); onSend(); }
+  };
+  const updateHomeMessage = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const next = event.target.value;
+    onMessageChange(next);
+    const query = getChatSkillCommandAtCursor(next, event.target.selectionStart ?? next.length);
+    setSkillCommandQuery(query);
+    if (query) setActiveSkillCommandIndex(0);
+  };
+  const insertSkillCommand = (skill: Skill) => {
+    if (!skillCommandQuery || (!selectedSkillIds.includes(skill.id) && selectedSkillIds.length >= MAX_SELECTED_SKILLS)) return;
+    onSkillIdsChange(selectedSkillIds.includes(skill.id) ? selectedSkillIds : [...selectedSkillIds, skill.id]);
+    const before = message.slice(0, skillCommandQuery.start);
+    let after = message.slice(skillCommandQuery.end);
+    if (!before || before.endsWith(' ')) after = after.replace(/^\s+/, '');
+    const next = before + after;
+    onMessageChange(next);
+    setSkillCommandQuery(null);
+    setActiveSkillCommandIndex(0);
+    const cursor = before.length;
+    window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+      inputRef.current?.setSelectionRange(cursor, cursor);
+    });
+  };
+  const handleHomeInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (skillCommandQuery && skillCommandSuggestions.length) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setActiveSkillCommandIndex(index => (index + 1) % skillCommandSuggestions.length);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setActiveSkillCommandIndex(index => (index - 1 + skillCommandSuggestions.length) % skillCommandSuggestions.length);
+        return;
+      }
+      if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
+        event.preventDefault();
+        insertSkillCommand(skillCommandSuggestions[activeSkillCommandIndex] ?? skillCommandSuggestions[0]);
+        return;
+      }
+    }
+    if (event.key === 'Escape' && skillCommandQuery) {
+      event.preventDefault();
+      setSkillCommandQuery(null);
+      return;
+    }
+    if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+      event.preventDefault();
+      submit();
+    }
   };
 
   return <div className="flex h-full min-h-0 flex-col overflow-y-auto">
@@ -134,22 +199,34 @@ export function ChatHome({
         <h1 className="text-3xl font-semibold tracking-tight text-content">{name ? 'Ready to code, ' + name + '?' : 'Ready to code?'}</h1>
       </div>
 
-      <form onSubmit={submit} className="rounded-2xl border border-divider bg-surface-raised/95 p-3 shadow-2xl shadow-black/40 transition-colors focus-within:border-control">
+      <form onSubmit={submit} className="relative rounded-2xl border border-divider bg-surface-raised/95 p-3 shadow-2xl shadow-black/40 transition-colors focus-within:border-control">
+        <ChatSkillCommandSuggestions id="chat-home-skill-command-suggestions" query={skillCommandQuery} skills={skills} selectedSkillIds={selectedSkillIds} activeIndex={activeSkillCommandIndex} onActiveIndexChange={setActiveSkillCommandIndex} onSelect={insertSkillCommand} onScan={onScanSkills} scanning={scanningSkills} className="left-0" />
         <label htmlFor="chat-home-message" className="sr-only">Message Alpha</label>
         <textarea
           id="chat-home-message"
           ref={inputRef}
           value={message}
-          onChange={event => onMessageChange(event.target.value)}
-          onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); submit(); } }}
+          onChange={updateHomeMessage}
+          onKeyDown={handleHomeInputKeyDown}
+          aria-autocomplete="list"
+          aria-expanded={Boolean(skillCommandQuery)}
+          aria-controls={skillCommandQuery ? 'chat-home-skill-command-suggestions' : undefined}
           rows={2}
-          placeholder="Ask Alpha anything or describe what to build…"
+          placeholder="Ask Alpha anything · type / to call a skill…"
           className="max-h-56 min-h-14 w-full resize-none bg-transparent px-1.5 py-1 text-sm text-content placeholder-content-muted outline-none"
         />
-        <ChatSkillTools skills={skills} selectedSkillIds={selectedSkillIds} onSkillIdsChange={onSkillIdsChange}
-          draft={message} onDraftChange={onMessageChange} onImprove={onImprovePrompt} onError={onPromptError}
-          onScan={onScanSkills} scanning={scanningSkills} />
         <div className="mt-2 flex items-center gap-2">
+          <div ref={toolsMenuRef} className="relative shrink-0">
+            <button type="button" aria-label={`Open message tools${selectedSkillIds.length ? `; ${selectedSkillIds.length} skills selected` : ''}`} aria-haspopup="menu" aria-expanded={toolsMenuOpen} onClick={() => setToolsMenuOpen(value => !value)} className={`relative flex h-9 w-9 items-center justify-center rounded-full transition-colors ${toolsMenuOpen ? 'bg-surface-high text-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>
+              <Plus className={`h-4 w-4 transition-transform ${toolsMenuOpen ? 'rotate-45' : ''}`} />
+              {selectedSkillIds.length > 0 && <span aria-hidden="true" className="absolute bottom-0 right-0 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-action px-0.5 text-[8px] font-semibold leading-none text-on-action">{selectedSkillIds.length}</span>}
+            </button>
+            {toolsMenuOpen && <div role="menu" aria-label="Message tools" className="absolute bottom-full left-0 z-50 mb-3 max-h-[min(72vh,38rem)] w-[min(24rem,calc(100vw-2rem))] animate-slide-up overflow-y-auto rounded-2xl border border-divider bg-surface-high p-2 shadow-2xl shadow-black/60">
+              <ChatSkillTools inline skills={skills} selectedSkillIds={selectedSkillIds} onSkillIdsChange={onSkillIdsChange}
+                draft={message} onDraftChange={onMessageChange} onImprove={onImprovePrompt} onError={onPromptError}
+                onScan={onScanSkills} scanning={scanningSkills} />
+            </div>}
+          </div>
           <ProjectPicker projects={projects} projectId={projectId} onChange={onProjectChange} />
           <label className="sr-only" htmlFor="chat-home-approval-mode">Model access</label>
           <span className="relative flex items-center">

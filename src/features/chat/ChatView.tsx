@@ -89,6 +89,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Card } from '@/shared/components/ui/card';
 import { Badge } from '@/shared/components/ui/badge';
 import { ChatSkillTools } from './ChatSkillTools';
+import { ChatSkillCommandSuggestions, getChatSkillCommandAtCursor, matchChatSkills, MAX_SELECTED_SKILLS, type ChatSkillCommandQuery } from './ChatSkillCommand';
 
 const MODE_META: Record<AgentCallMode, {
   label: string;
@@ -678,6 +679,7 @@ export const ChatView: React.FC = () => {
     setRoutingMessageId(null);
     setRepositoryMenuOpen(false);
     setMentionQuery(null);
+    setSkillCommandQuery(null);
     setMemoryThreadId(null);
   }, [activeThreadId]);
   const [calls, setCalls] = useState<Record<string, AgentCall>>({});
@@ -698,6 +700,8 @@ export const ChatView: React.FC = () => {
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
   const [mentionQuery, setMentionQuery] = useState<ChatMentionQuery | null>(null);
   const [activeMentionIndex, setActiveMentionIndex] = useState(0);
+  const [skillCommandQuery, setSkillCommandQuery] = useState<ChatSkillCommandQuery | null>(null);
+  const [activeSkillCommandIndex, setActiveSkillCommandIndex] = useState(0);
 
   useEffect(() => {
     if (!openThreadMenuId && !openProjectMenuId) return undefined;
@@ -869,6 +873,10 @@ export const ChatView: React.FC = () => {
       .filter(agent => !query || `${agent.name} ${agent.role}`.toLowerCase().includes(query))
       .slice(0, 8);
   }, [activeTurnMessageId, isClient, mentionQuery, snapshot?.agents]);
+  const skillCommandSuggestions = useMemo(() => {
+    if (!skillCommandQuery || isClient || activeTurnMessageId) return [];
+    return matchChatSkills(skills, skillCommandQuery.query);
+  }, [activeTurnMessageId, isClient, skillCommandQuery, skills]);
   useEffect(() => {
     const views = pendingFiles.map(file => ({
       file,
@@ -895,6 +903,8 @@ export const ChatView: React.FC = () => {
   useEffect(() => {
     setMentionQuery(null);
     setActiveMentionIndex(0);
+    setSkillCommandQuery(null);
+    setActiveSkillCommandIndex(0);
   }, [activeThreadId]);
 
   useEffect(() => {
@@ -1268,6 +1278,7 @@ export const ChatView: React.FC = () => {
     followNextMessage();
     setInput('');
     setMentionQuery(null);
+    setSkillCommandQuery(null);
     const buildRepositories = validBuildRepositories;
     const uploadedAttachments: ChatAttachmentReference[] = [];
     try {
@@ -1475,9 +1486,13 @@ export const ChatView: React.FC = () => {
   const updateMessageInput = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
     const next = event.target.value;
     setInput(next);
-    const nextMention = getMentionQueryAtCursor(next, event.target.selectionStart ?? next.length);
+    const cursor = event.target.selectionStart ?? next.length;
+    const nextMention = getMentionQueryAtCursor(next, cursor);
     setMentionQuery(nextMention);
+    const nextSkillCommand = nextMention ? null : getChatSkillCommandAtCursor(next, cursor);
+    setSkillCommandQuery(nextSkillCommand);
     if (nextMention) setActiveMentionIndex(0);
+    if (nextSkillCommand) setActiveSkillCommandIndex(0);
   };
 
   const insertAgentMention = (agent: ProjectChatAgent) => {
@@ -1508,6 +1523,25 @@ export const ChatView: React.FC = () => {
     });
   };
 
+  const insertSkillCommand = (skill: import('@/shared/types').Skill) => {
+    if (!skillCommandQuery) return;
+    if (!selectedSkillIds.includes(skill.id) && selectedSkillIds.length >= MAX_SELECTED_SKILLS) return;
+    setSelectedSkillIds(current => current.includes(skill.id) ? current : [...current, skill.id]);
+    const before = input.slice(0, skillCommandQuery.start);
+    let after = input.slice(skillCommandQuery.end);
+    if (!before || before.endsWith(' ')) after = after.replace(/^\s+/, '');
+    const next = before + after;
+    const cursor = before.length;
+    setInput(next);
+    setSkillCommandQuery(null);
+    setActiveSkillCommandIndex(0);
+    window.requestAnimationFrame(() => {
+      const textarea = messageInputRef.current;
+      textarea?.focus();
+      textarea?.setSelectionRange(cursor, cursor);
+    });
+  };
+
   const handleMessageInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (mentionQuery && mentionSuggestions.length) {
       if (event.key === 'ArrowDown') {
@@ -1526,9 +1560,27 @@ export const ChatView: React.FC = () => {
         return;
       }
     }
-    if (event.key === 'Escape' && mentionQuery) {
+    if (skillCommandQuery && skillCommandSuggestions.length) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setActiveSkillCommandIndex(index => (index + 1) % skillCommandSuggestions.length);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setActiveSkillCommandIndex(index => (index - 1 + skillCommandSuggestions.length) % skillCommandSuggestions.length);
+        return;
+      }
+      if ((event.key === 'Enter' && !event.shiftKey) || event.key === 'Tab') {
+        event.preventDefault();
+        insertSkillCommand(skillCommandSuggestions[activeSkillCommandIndex] ?? skillCommandSuggestions[0]);
+        return;
+      }
+    }
+    if (event.key === 'Escape' && (mentionQuery || skillCommandQuery)) {
       event.preventDefault();
       setMentionQuery(null);
+      setSkillCommandQuery(null);
       return;
     }
     if (event.key === 'Enter' && !event.shiftKey) {
@@ -1894,7 +1946,7 @@ export const ChatView: React.FC = () => {
               <Button variant="ghost" size="icon" aria-label={panelVisible ? 'Hide open tabs' : 'Show open tabs'} aria-expanded={Boolean(panelVisible)} aria-controls="chat-side-panel" title="Open tabs" onClick={toggleSidePanel} className="rounded-lg"><PanelRight className="h-4 w-4" /></Button>
             </>}
           </header>
-          <ChatConversationLayout summaryOpen={!isClient && summaryOpen} summary={projectSummary}>
+          <ChatConversationLayout summaryOpen={!isClient && summaryOpen} sidePanelOpen={!isClient && Boolean(panelVisible)} summary={projectSummary}>
           {!isClient && chatSyncStatus?.state === 'failed' && <div className="shrink-0 px-5 pt-3 lg:px-7"><div className="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-full border border-status-warning-border bg-status-warning-subtle px-4 py-2 text-[11px] text-status-warning"><span>Chat sync paused</span><button type="button" onClick={() => void handleRetryChatSync()} disabled={syncRetrying} className="font-medium hover:text-content disabled:opacity-50">{syncRetrying ? 'Retrying…' : 'Retry'}</button></div></div>}
 
 
@@ -1955,16 +2007,19 @@ export const ChatView: React.FC = () => {
               {isDesktop && role === 'dev' && activeThread?.projectId && (
                 <BoardChangesWaiting projectId={activeThread.projectId} working={Boolean(activeTurnMessageId)} />
               )}
-              {!isClient && <ChatSkillTools skills={skills} selectedSkillIds={selectedSkillIds} onSkillIdsChange={setSelectedSkillIds} draft={input} onDraftChange={setInput} onImprove={async (draft, skillIds) => (await apiService.improveChatPrompt({ draft, skillIds })).suggestion} onError={message => showToast('Prompt not improved', message, 'error')} onScan={can('manage_skills') ? scanInstalledSkills : undefined} scanning={isScanningSkills} disabled={Boolean(activeTurnMessageId)} />}
               <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-1.5 rounded-[1.75rem] border border-divider bg-surface-raised/95 p-1.5 shadow-2xl shadow-black/50 transition-colors focus-within:border-control ${isDraggingFiles ? 'ring-2 ring-selected-content/70' : ''}`}>
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
                 <div ref={repositoryMenuRef} className="relative shrink-0">
-                  <button type="button" aria-label="Open message tools" aria-haspopup="menu" aria-expanded={repositoryMenuOpen} onClick={() => setRepositoryMenuOpen(value => !value)} className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${repositoryMenuOpen ? 'bg-surface-raised text-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>
+                  <button type="button" aria-label={`Open message tools${selectedSkillIds.length ? `; ${selectedSkillIds.length} skills selected` : ''}`} aria-haspopup="menu" aria-expanded={repositoryMenuOpen} onClick={() => setRepositoryMenuOpen(value => !value)} className={`relative flex h-10 w-10 items-center justify-center rounded-full transition-colors ${repositoryMenuOpen ? 'bg-surface-raised text-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>
                     <Plus className={`h-5 w-5 transition-transform duration-200 ${repositoryMenuOpen ? 'rotate-45' : ''}`} />
                     {buildIsOpen && <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-rose-400" />}
+                    {selectedSkillIds.length > 0 && <span aria-hidden="true" className="absolute bottom-0.5 right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-action px-0.5 text-[8px] font-semibold leading-none text-on-action">{selectedSkillIds.length}</span>}
                   </button>
-                  {repositoryMenuOpen && <div role="menu" aria-label="Message tools" className="absolute bottom-full left-0 z-40 mb-3 w-[min(22rem,calc(100vw-2rem))] animate-slide-up overflow-hidden rounded-2xl border border-divider bg-surface-high p-1.5 shadow-2xl shadow-black/60">
+                  {repositoryMenuOpen && <div role="menu" aria-label="Message tools" className="absolute bottom-full left-0 z-40 mb-3 max-h-[min(72vh,38rem)] w-[min(22rem,calc(100vw-2rem))] animate-slide-up overflow-y-auto rounded-2xl border border-divider bg-surface-high p-1.5 shadow-2xl shadow-black/60">
                     <button type="button" role="menuitem" disabled={Boolean(activeTurnMessageId) || pendingFiles.length >= MAX_CHAT_FILES} onClick={() => { setRepositoryMenuOpen(false); fileInputRef.current?.click(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-content transition hover:bg-surface-high disabled:cursor-not-allowed disabled:opacity-40"><Paperclip className="h-4 w-4 shrink-0 text-content-secondary" /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">Attach files</span><span className="block text-[10px] text-content-muted">{activeTurnMessageId ? 'Finish this response before attaching files.' : 'Images, documents, or code'}</span></span></button>
+                    {!isClient && <div className="border-t border-divider px-1.5 py-1.5">
+                      <ChatSkillTools inline skills={skills} selectedSkillIds={selectedSkillIds} onSkillIdsChange={setSelectedSkillIds} draft={input} onDraftChange={setInput} onImprove={async (draft, skillIds) => (await apiService.improveChatPrompt({ draft, skillIds })).suggestion} onError={message => showToast('Prompt not improved', message, 'error')} onScan={can('manage_skills') ? scanInstalledSkills : undefined} scanning={isScanningSkills} disabled={Boolean(activeTurnMessageId)} />
+                    </div>}
                     {!isClient && project && <div className="mt-1 border-t border-divider pt-1.5">
                       {projectRepositories.length > 1 ? <>
                         <div className="flex items-center justify-between px-3 py-1.5">
@@ -1995,7 +2050,8 @@ export const ChatView: React.FC = () => {
                   </button>) : <div className="px-2.5 py-3 text-xs text-content-secondary">No matching project agents.</div>}
                   <div className="border-t border-divider px-2.5 py-2 text-[10px] text-content-muted">Use ↑ and ↓ to choose, Enter to add, or Esc to close.</div>
                 </div>}
-                <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : undefined} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : 'Ask Alpha anything or describe what to build. Type @ to call an agent…'} className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-content placeholder-content-muted outline-none" />
+                {!mentionQuery && skillCommandQuery && !isClient && !activeTurnMessageId && <ChatSkillCommandSuggestions id="chat-skill-command-suggestions" query={skillCommandQuery} skills={skills} selectedSkillIds={selectedSkillIds} activeIndex={activeSkillCommandIndex} onActiveIndexChange={setActiveSkillCommandIndex} onSelect={insertSkillCommand} onScan={can('manage_skills') ? scanInstalledSkills : undefined} scanning={isScanningSkills} className="left-12" />}
+                <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length || skillCommandQuery)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : skillCommandQuery ? 'chat-skill-command-suggestions' : undefined} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : 'Ask Alpha anything, type @ for agents or / for skills…'} className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-content placeholder-content-muted outline-none" />
                 <div className="flex shrink-0 items-center gap-1">
                 {!isClient && !activeTurnMessageId && <span className="relative flex items-center">
                   <select aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => setApprovalMode(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-36 cursor-pointer appearance-none rounded-md bg-transparent py-1.5 pl-2 pr-5 text-[11px] text-content-secondary outline-none hover:text-content focus-visible:text-content focus-visible:ring-2 focus-visible:ring-focus [&>option]:bg-surface-high [&>option]:text-content">
