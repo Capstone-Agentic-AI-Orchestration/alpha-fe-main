@@ -23,7 +23,7 @@ const labels: Record<string, string> = {
   uat_ready: 'UAT ready for PM review', repair_required: 'CI needs repair', blocked: 'Delivery needs attention', superseded: 'Replaced by repair build'
 };
 
-export function OrchestrationDeliveryPanel({ projectId, runId, onRepairPrepared }: { projectId: string; runId: string; onRepairPrepared?: () => void }) {
+export function OrchestrationDeliveryPanel({ projectId, runId, onRepairPrepared, compact = false }: { projectId: string; runId: string; onRepairPrepared?: () => void; compact?: boolean }) {
   const scope = projectId + ':' + runId;
   const [loaded, setLoaded] = useState<{ scope: string; response: DeliveryResponse } | null>(null);
   const [error, setError] = useState('');
@@ -69,7 +69,7 @@ export function OrchestrationDeliveryPanel({ projectId, runId, onRepairPrepared 
       if (generation.current === current) { setFresh(false); setError(failure instanceof Error ? failure.message : 'Delivery action failed. Refresh before retrying.'); }
     } finally { if (generation.current === current) setBusy(false); }
   };
-  return <section aria-label="Delivery to UAT" className="mt-2 rounded-xl border border-divider bg-surface-raised px-4 py-3 text-xs text-content-secondary">
+  return <section aria-label="Delivery to UAT" className={compact ? 'pt-3 text-xs text-content-secondary' : 'mt-2 rounded-xl border border-divider bg-surface-raised px-4 py-3 text-xs text-content-secondary'}>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <p className="font-medium text-content-primary">Delivery · {delivery ? labels[delivery.stage] ?? 'Checking status' : 'Status unavailable'}</p>
       <button type="button" disabled={busy} onClick={() => void refreshRef.current()} className="rounded px-2 py-1 hover:bg-surface-high focus-visible:outline focus-visible:outline-2">Refresh</button>

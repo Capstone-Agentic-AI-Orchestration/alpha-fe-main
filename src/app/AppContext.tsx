@@ -1034,6 +1034,7 @@ ${e.detail}`;
   const [isScanningRuntimes, setIsScanningRuntimes] = useState(false);
   const [isScanningSkills, setIsScanningSkills] = useState(false);
   const [chatTypingByThread, setChatTypingByThread] = useState<Record<string, boolean>>({});
+  const activeChatPlaceholders = useRef(new Map<string, Set<string>>());
   const isAgentTyping = activeThreadId ? Boolean(chatTypingByThread[activeThreadId]) : false;
   const [activeChatAgentId, setActiveChatAgentId] = useState<string | null>(null);
   const [chatThreadsLoadState, setChatThreadsLoadState] = useState<ChatThreadsLoadState>(
@@ -1376,7 +1377,7 @@ ${e.detail}`;
         if (!Array.isArray(messages)) throw new Error('Chat messages response was invalid');
         loadedThreadsRef.current.add(threadId);
         setChatThreads(prev =>
-          prev.map(t => (t.id === threadId ? { ...t, messages: mergeLoadedTranscript(messages, t.messages) } : t))
+          prev.map(t => (t.id === threadId ? { ...t, messages: mergeLoadedTranscript(messages, t.messages, activeChatPlaceholders.current.get(threadId) ?? new Set()) } : t))
         );
       })
       .catch(() => {
@@ -3225,10 +3226,10 @@ ${e.detail}`;
     const messages = await apiService.getChatMessages(threadId);
     loadedThreadsRef.current.add(threadId);
     setChatThreads(prev => prev.map(thread => thread.id === threadId
-      ? { ...thread, messages: mergeLoadedTranscript(messages, thread.messages) }
+      ? { ...thread, messages: mergeLoadedTranscript(messages, thread.messages, activeChatPlaceholders.current.get(threadId) ?? new Set()) }
       : thread
     ));
-    if (activeThreadId === threadId) setChatMessages(prev => mergeLoadedTranscript(messages, prev));
+    if (activeThreadId === threadId) setChatMessages(prev => mergeLoadedTranscript(messages, prev, activeChatPlaceholders.current.get(threadId) ?? new Set()));
     return messages;
   };
 
@@ -3345,6 +3346,9 @@ ${e.detail}`;
 
     // Streaming placeholder
     const streamingMsgId = `msg-${Date.now() + 1}`;
+    const placeholders = activeChatPlaceholders.current.get(targetThreadId) ?? new Set<string>();
+    placeholders.add(streamingMsgId);
+    activeChatPlaceholders.current.set(targetThreadId, placeholders);
     const streamingMsg: ChatMessage = {
       id: streamingMsgId,
       senderType: 'agent',
@@ -3478,6 +3482,9 @@ ${e.detail}`;
 
       setChatMessages(prev => applyChatReplies(prev, streamingMsgId, [fallbackMsg]));
     } finally {
+      const placeholders = activeChatPlaceholders.current.get(targetThreadId);
+      placeholders?.delete(streamingMsgId);
+      if (!placeholders?.size) activeChatPlaceholders.current.delete(targetThreadId);
       setChatTypingByThread(prev => {
         if (!prev[targetThreadId!]) return prev;
         const next = { ...prev };

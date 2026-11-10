@@ -75,6 +75,11 @@ describe('first reply in a new conversation', () => {
     expect(applyChatReplies(afterRead, placeholder.id, [reply])).toEqual([question, reply]);
   });
 
+  it('removes an orphaned placeholder after a reload but keeps an active send', () => {
+    expect(mergeLoadedTranscript([question, reply], [question, placeholder], new Set())).toEqual([question, reply]);
+    expect(mergeLoadedTranscript([question], [question, placeholder], new Set([placeholder.id]))).toEqual([question, placeholder]);
+  });
+
   it('still shows the reply when the placeholder was removed by another reload', () => {
     expect(applyChatReplies([question], placeholder.id, [reply])).toEqual([question, reply]);
   });

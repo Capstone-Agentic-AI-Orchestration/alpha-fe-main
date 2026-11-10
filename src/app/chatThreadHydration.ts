@@ -26,10 +26,11 @@ export function mergeThreadsWithCachedMessages(
  */
 export function mergeLoadedTranscript(
   serverMessages: ChatMessage[],
-  localMessages: ChatMessage[] | undefined
+  localMessages: ChatMessage[] | undefined,
+  activePlaceholderIds?: ReadonlySet<string>
 ): ChatMessage[] {
   const saved = new Set(serverMessages.map(message => message.id));
-  const pending = (localMessages ?? []).filter(message => message.isStreaming && !saved.has(message.id));
+  const pending = (localMessages ?? []).filter(message => message.isStreaming && !saved.has(message.id) && (!activePlaceholderIds || activePlaceholderIds.has(message.id)));
   return pending.length ? [...serverMessages, ...pending] : serverMessages;
 }
 
