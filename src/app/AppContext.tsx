@@ -492,6 +492,8 @@ export interface ChatSendOptions {
   projectId?: string;
   /** Approval policy for the selected runtime when this message is handled as chat. */
   approvalMode?: 'ask' | 'approve' | 'full';
+  /** Optional installed skills selected for this message only. */
+  skillIds?: string[];
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -3272,6 +3274,7 @@ ${e.detail}`;
       senderName: currentUser.name,
       content,
       attachments: attachments.length ? attachments : undefined,
+      skillIds: options.skillIds?.length ? [...options.skillIds] : undefined,
       timestamp: new Date().toISOString()
     };
 
@@ -3390,7 +3393,8 @@ ${e.detail}`;
         approvalMode: options.approvalMode,
         buildDecision: options.buildDecision,
         clientMessageId: userMsg.id,
-        attachmentIds: attachments.map(attachment => attachment.id)
+        attachmentIds: attachments.map(attachment => attachment.id),
+        skillIds: options.skillIds
       });
 
       /**

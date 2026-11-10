@@ -1023,7 +1023,9 @@ export const apiService = {
       `/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/route`,
       { method: 'POST', body: JSON.stringify(payload) }
     ),
-  sendChatMessage: (payload: { buildDecision?: import('@/features/chat/chatBuildDecision').ChatBuildDecision; threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string; attachmentIds?: string[]; issueId?: string; approvalMode?: 'ask' | 'approve' | 'full'; /** Ask Alpha only: the board tasks the Orchestrator should look at. */ scopeIssueIds?: string[] }) =>
+  improveChatPrompt: (payload: { draft: string; skillIds: string[] }) =>
+    fetchJson<{ suggestion: string; skillIds: string[] }>('/chat/improve-prompt', { method: 'POST', body: JSON.stringify(payload) }),
+  sendChatMessage: (payload: { buildDecision?: import('@/features/chat/chatBuildDecision').ChatBuildDecision; threadId: string; content: string; senderName?: string; repository?: string; repositories?: string[]; projectId?: string; intent?: 'auto' | 'build' | 'ask'; clientMessageId?: string; attachmentIds?: string[]; skillIds?: string[]; issueId?: string; approvalMode?: 'ask' | 'approve' | 'full'; /** Ask Alpha only: the board tasks the Orchestrator should look at. */ scopeIssueIds?: string[] }) =>
     fetchJson<{
       userMessage: ChatMessage;
       agentMessage: ChatMessage;
