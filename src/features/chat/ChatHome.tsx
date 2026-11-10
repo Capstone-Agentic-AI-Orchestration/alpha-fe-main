@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Check, ChevronDown, FolderOpen, MessageSquare } from 'lucide-react';
 
 import alphaMarkUrl from '@/assets/alpha-mark.png';
+import type { Skill } from '@/shared/types';
+import { ChatSkillTools } from './ChatSkillTools';
 
 export interface ChatHomeRecent {
   id: string;
@@ -21,6 +23,13 @@ export interface ChatHomeProps {
   onMessageChange: (message: string) => void;
   approvalMode: 'ask' | 'approve' | 'full';
   onApprovalModeChange: (mode: 'ask' | 'approve' | 'full') => void;
+  skills: Skill[];
+  selectedSkillIds: string[];
+  onSkillIdsChange: (ids: string[]) => void;
+  onImprovePrompt: (draft: string, skillIds: string[]) => Promise<string>;
+  onPromptError: (message: string) => void;
+  onScanSkills?: () => Promise<void>;
+  scanningSkills?: boolean;
   /** Creates the conversation and sends the first message. */
   onSend: () => void;
   canSend: boolean;
@@ -99,7 +108,9 @@ function timeAgo(iso: string, now = Date.now()): string {
  * sent, so opening Alpha or pressing New chat never leaves empty conversations.
  */
 export function ChatHome({
-  userName, projects, projectId, onProjectChange, message, onMessageChange, approvalMode, onApprovalModeChange, onSend, canSend, blockedReason, recent, onOpenRecent
+  userName, projects, projectId, onProjectChange, message, onMessageChange, approvalMode, onApprovalModeChange,
+  skills, selectedSkillIds, onSkillIdsChange, onImprovePrompt, onPromptError, onScanSkills, scanningSkills,
+  onSend, canSend, blockedReason, recent, onOpenRecent
 }: ChatHomeProps) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -135,6 +146,9 @@ export function ChatHome({
           placeholder="Ask Alpha anything or describe what to build…"
           className="max-h-56 min-h-14 w-full resize-none bg-transparent px-1.5 py-1 text-sm text-content placeholder-content-muted outline-none"
         />
+        <ChatSkillTools skills={skills} selectedSkillIds={selectedSkillIds} onSkillIdsChange={onSkillIdsChange}
+          draft={message} onDraftChange={onMessageChange} onImprove={onImprovePrompt} onError={onPromptError}
+          onScan={onScanSkills} scanning={scanningSkills} />
         <div className="mt-2 flex items-center gap-2">
           <ProjectPicker projects={projects} projectId={projectId} onChange={onProjectChange} />
           <label className="sr-only" htmlFor="chat-home-approval-mode">Model access</label>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiService } from '@/shared/services/apiService';
 import type { DeliveryAction, DeliveryResponse, OrchestrationDelivery } from '@/shared/types/delivery';
+import { Badge } from '@/shared/components/ui/badge';
 
 export function deliveryActionFor(delivery: OrchestrationDelivery, canControl: boolean, canPromote: boolean): { action: DeliveryAction; label: string } | null {
   if (!canControl || !canPromote) return null;
@@ -55,6 +56,11 @@ export function OrchestrationDeliveryPanel({ projectId, runId, onRepairPrepared,
   const response = loaded?.scope === scope ? loaded.response : null;
   const delivery = response?.delivery;
   if (!delivery && !error) return null;
+  const statusTone = delivery?.stage === 'blocked' || delivery?.stage === 'repair_required'
+    ? 'border-status-warning-border bg-status-warning-subtle text-status-warning'
+    : delivery?.stage === 'uat_ready'
+      ? 'border-status-success-border bg-status-success-subtle text-status-success'
+      : 'border-transparent bg-surface-high text-content-secondary';
   const next = delivery && response && fresh ? deliveryActionFor(delivery, response.canControl, response.canPromote) : null;
   const act = async () => {
     if (!next || !delivery || busy || !fresh) return;
@@ -71,8 +77,11 @@ export function OrchestrationDeliveryPanel({ projectId, runId, onRepairPrepared,
   };
   return <section aria-label="Delivery to UAT" className={compact ? 'pt-3 text-xs text-content-secondary' : 'mt-2 rounded-xl border border-divider bg-surface-raised px-4 py-3 text-xs text-content-secondary'}>
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <p className="font-medium text-content-primary">Delivery · {delivery ? labels[delivery.stage] ?? 'Checking status' : 'Status unavailable'}</p>
-      <button type="button" disabled={busy} onClick={() => void refreshRef.current()} className="rounded px-2 py-1 hover:bg-surface-high focus-visible:outline focus-visible:outline-2">Refresh</button>
+      <div className="flex min-w-0 flex-wrap items-center gap-2">
+        <p className="font-medium text-content-primary">Delivery</p>
+        <Badge variant="secondary" className={`max-w-full truncate text-[10px] ${statusTone}`}>{delivery ? labels[delivery.stage] ?? 'Checking status' : 'Status unavailable'}</Badge>
+      </div>
+      <button type="button" disabled={busy} onClick={() => void refreshRef.current()} className="rounded px-2 py-1 text-content-secondary hover:bg-surface-high hover:text-content focus-visible:outline focus-visible:outline-2">Refresh</button>
     </div>
     {delivery && <>
       <p role="status" className="mt-1">{delivery.reason}</p>

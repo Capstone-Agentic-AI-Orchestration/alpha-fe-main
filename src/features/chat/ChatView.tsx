@@ -2,6 +2,7 @@ import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { buildDecisionContext } from './chatBuildDecision';
 import { CHAT_ORCHESTRATOR_BAR_ENABLED } from '@/config/features';
 import { ChatPanelHandle } from './ChatPanelHandle';
+import { ChatConversationLayout } from './ChatConversationLayout';
 import { LocalPreviewTab, WebPreviewCard, useLocalPreviews } from './LocalPreview';
 import { reconcileCallSnapshot } from './chatCallSnapshot';
 import { WorkUsageRow, useChatUsage, entriesAtMessage } from './ChatUsage';
@@ -84,6 +85,10 @@ import { OrchestrationDeliveryPanel } from './OrchestrationDeliveryPanel';
 import { inferRecoveryAction, isBuildDirection, isContinueRequest, isExplicitBuildRetry, isRetryRequest, resolveRecoveryAction } from './chatRecoveryIntent';
 import { ChatHome } from './ChatHome';
 import { useTranscriptScroll } from './useTranscriptScroll';
+import { Button } from '@/shared/components/ui/button';
+import { Card } from '@/shared/components/ui/card';
+import { Badge } from '@/shared/components/ui/badge';
+import { ChatSkillTools } from './ChatSkillTools';
 
 const MODE_META: Record<AgentCallMode, {
   label: string;
@@ -515,6 +520,15 @@ function MessageAttachments({ attachments }: { attachments?: ChatAttachmentRefer
   </span>)}</div>;
 }
 
+function ChatSkillTags({ skillIds, skills }: { skillIds?: string[]; skills: import('@/shared/types').Skill[] }) {
+  if (!skillIds?.length) return null;
+  return <div aria-label="Skills used for this message" className="mt-1 flex flex-wrap justify-end gap-1">
+    {skillIds.map(id => <Badge key={id} variant="secondary" title={id} className="max-w-48 truncate text-[9px]">
+      {skills.find(skill => skill.id === id)?.name ?? id}
+    </Badge>)}
+  </div>;
+}
+
 /** One thing open in the chat's right side panel. */
 type SideTab =
   | { id: string; kind: 'plan'; projectId: string; runId: string; planVersion: number }
@@ -552,6 +566,9 @@ export const ChatView: React.FC = () => {
     activeTabId,
     agents: workspaceAgents,
     runtimes,
+    skills,
+    isScanningSkills,
+    scanInstalledSkills,
     updateAgent,
     currentUser,
     issues
@@ -559,6 +576,7 @@ export const ChatView: React.FC = () => {
 
   const sessionStateKey = (key: string, threadId = activeThreadId) => `chat.session.${threadId ?? 'draft'}.${key}`;
   const [input, setInput] = useTabSessionState<string>(sessionStateKey('draft'), '');
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
   const [approvalMode, setApprovalMode] = useTabSessionState<'ask' | 'approve' | 'full'>(sessionStateKey('approvalMode'), 'ask');
   /** A board task handed to this conversation from its details; sent with the next message. */
   const [taskRefId, setTaskRefId] = useTabSessionState<string | null>(sessionStateKey('taskRef'), null);
@@ -571,7 +589,17 @@ export const ChatView: React.FC = () => {
   /** What is open in the right side panel, one tab each, and which tab is showing. */
   const panelKey = (key: string) => `${sessionStateKey(key)}.${activeWorkspace?.id ?? ''}.${currentUser?.id ?? ''}`;
   const [panelVisible, setPanelVisible] = useTabSessionState<boolean>(panelKey('panelVisible'), false);
-  const [summaryOpen, setSummaryOpen] = useTabSessionState<boolean>(panelKey('summaryOpen'), false);
+  const [summaryOpen, setSummaryOpen] = useTabSessionState<boolean>(panelKey('summaryOpen'), true);
+
+  const showSidePanel = () => {
+    setPanelVisible(true);
+    setSummaryOpen(false);
+  };
+
+  const toggleSidePanel = () => {
+    if (panelVisible) setPanelVisible(false);
+    else showSidePanel();
+  };
   const [sideTabs, setSideTabs] = useTabSessionState<SideTab[]>(panelKey('sideTabs'), []);
   const [activeSideTabId, setActiveSideTabId] = useTabSessionState<string | null>(panelKey('activeSideTab'), null);
   const [openedReviewDecisions, setOpenedReviewDecisions] = useTabSessionState<string[]>(sessionStateKey('openedReviewDecisions'), []);
@@ -580,8 +608,8 @@ export const ChatView: React.FC = () => {
   const inspectedBuildAgentId = activeSideTab?.kind === 'agent' ? activeSideTab.agentId : null;
   const openSideTab = (tab: SideTab, focus = true) => {
     setSideTabs(current => current.some(item => item.id === tab.id) ? current.map(item => item.id === tab.id ? tab : item) : [...current, tab]);
-    if (focus) { setActiveSideTabId(tab.id); setPanelVisible(true); }
-    else { setActiveSideTabId(active => active ?? tab.id); if (!sideTabs.length) setPanelVisible(true); }
+    if (focus) { setActiveSideTabId(tab.id); showSidePanel(); }
+    else { setActiveSideTabId(active => active ?? tab.id); if (!sideTabs.length) showSidePanel(); }
   };
   const closeSideTab = (id: string) => {
     if (sideTabs.find(tab => tab.id === id)?.kind === 'preview') void previews.stop();
@@ -698,6 +726,7 @@ export const ChatView: React.FC = () => {
     () => chatThreads.find(thread => thread.id === activeThreadId) ?? null,
     [chatThreads, activeThreadId]
   );
+  useEffect(() => { setSelectedSkillIds([]); }, [activeThread?.id]);
   const currentMessages = activeThread?.messages ?? [];
   const activeTranscript = activeThread ? transcriptState(activeThread.id) : 'ready';
   useEffect(() => {
@@ -1180,6 +1209,7 @@ export const ChatView: React.FC = () => {
 
   const handleSend = async (event: React.FormEvent) => {
     event.preventDefault();
+    const messageSkillIds = [...selectedSkillIds];
     const typedMessage = input.trim();
     if (activeTurnMessageId) {
       if (!typedMessage || !activeThread?.id || chatTurnActionBusy) return;
@@ -1270,13 +1300,17 @@ export const ChatView: React.FC = () => {
         }
       } catch { buildDecision.evidenceReady = false; }
     }
+    const sendOptions = handedOff
+      ? { approvalMode, issueId: handedOff.id, projectId: handedOff.projectId }
+      : { approvalMode, buildDecision };
+    setSelectedSkillIds([]);
     await sendChatMessage(
       handedOff ? `${message}\n\n${taskHandoffContext(handedOff)}` : message,
       activeThread?.id,
       buildRepositories,
       'auto',
       uploadedAttachments,
-      handedOff ? { approvalMode, issueId: handedOff.id, projectId: handedOff.projectId } : { approvalMode, buildDecision }
+      { ...sendOptions, skillIds: messageSkillIds }
     );
     if (activeThread?.id) {
       void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
@@ -1613,12 +1647,14 @@ export const ChatView: React.FC = () => {
       showToast('Chat unavailable', 'Your workspace role cannot create conversations.', 'info');
       return;
     }
+    const messageSkillIds = [...selectedSkillIds];
     const threadId = createNewThread(message.slice(0, 32) + (message.length > 32 ? '...' : ''), draftProjectId ?? undefined);
     if (!threadId) return;
     setInput('');
     setDraftProjectChoice('');
     followNextMessage();
-    await sendChatMessage(message, threadId, undefined, 'auto', [], { approvalMode });
+    setSelectedSkillIds([]);
+    await sendChatMessage(message, threadId, undefined, 'auto', [], { approvalMode, skillIds: messageSkillIds });
   };
 
   const startNewThread = () => {
@@ -1745,6 +1781,46 @@ export const ChatView: React.FC = () => {
     }
   };
 
+  const projectSummaryId = `chat-project-summary-${activeTabId}`;
+  const projectSummary = (
+    <Card id={projectSummaryId} role="region" aria-label="Project summary" className="space-y-4 border-divider bg-surface p-4 shadow-sm shadow-black/10">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="truncate text-sm font-semibold text-content">{project?.name ?? activeThread?.title ?? 'Project'}</h2>
+          <p className="mt-0.5 text-[10px] text-content-muted">Project summary</p>
+        </div>
+        <Button variant="ghost" size="icon" aria-label="Close project summary" title="Close project summary" onClick={() => setSummaryOpen(false)} className="h-8 w-8 shrink-0 rounded-lg">
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <section aria-label="Project codebases" className="space-y-2">
+        <h3 className="text-[10px] font-semibold uppercase tracking-wide text-content-muted">Codebases</h3>
+        {projectRepositories.length ? projectRepositories.map(repository => (
+          <div key={repository.repo} className="border-t border-divider py-2 first:border-t-0 first:pt-0">
+            <p className="break-all text-xs font-medium text-content-secondary">{repository.repo}</p>
+            {latestBuild && project && (
+              <Button variant="ghost" size="sm" onClick={() => openSideTab({ id: 'changes:' + latestBuild.runId, kind: 'changes', projectId: project.id, runId: latestBuild.runId })} className="mt-1 w-full justify-start rounded-md px-2 text-content">
+                <FileDiff className="h-4 w-4" />Changes
+              </Button>
+            )}
+          </div>
+        )) : <p className="text-xs text-content-muted">No connected codebases.</p>}
+      </section>
+
+      <section aria-label="Project delivery" className="border-t border-divider pt-3">
+        {isDesktop && project?.id && latestBuild?.status === 'completed'
+          ? <OrchestrationDeliveryPanel projectId={project.id} runId={latestBuild.runId} onRepairPrepared={() => void refreshLiveBuild()} compact />
+          : <p className="text-xs leading-5 text-content-muted">Delivery information will appear after a build is completed.</p>}
+      </section>
+    </Card>
+  );
+
+  const conversationContentStyle: React.CSSProperties = {
+    marginLeft: summaryOpen ? 0 : 'auto',
+    marginRight: 'auto',
+  };
+
   return (
     <PlanPanelContext.Provider value={isClient ? null : openPlanTab}>
     <div className="relative h-full min-h-0 flex overflow-hidden bg-shell text-sm text-content">
@@ -1813,37 +1889,26 @@ export const ChatView: React.FC = () => {
             <FolderOpen className="h-4 w-4 shrink-0 text-content-secondary" aria-hidden="true" />
             <h1 className="min-w-0 flex-1 truncate text-sm font-semibold text-content">{activeThread.title}</h1>
             {!isClient && <>
-              <button type="button" aria-label={summaryOpen ? 'Hide project summary' : 'Show project summary'} aria-expanded={summaryOpen} aria-controls="chat-project-summary" title="Project summary" onClick={() => setSummaryOpen(value => !value)} className={`rounded-lg p-2 text-content-secondary hover:bg-surface-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus ${summaryOpen ? 'bg-surface-high text-content' : ''}`}><ListChecks className="h-4 w-4" /></button>
+              <Button variant="ghost" size="icon" aria-label={summaryOpen ? 'Hide project summary' : 'Show project summary'} aria-expanded={summaryOpen} aria-controls={projectSummaryId} title="Project summary" onClick={() => setSummaryOpen(value => !value)} className={`rounded-lg ${summaryOpen ? 'bg-surface-high text-content' : ''}`}><ListChecks className="h-4 w-4" /></Button>
               <span className="h-6 w-px bg-divider" />
-              <button type="button" aria-label={panelVisible ? 'Hide open tabs' : 'Show open tabs'} aria-expanded={Boolean(panelVisible)} aria-controls="chat-side-panel" title="Open tabs" onClick={() => setPanelVisible(value => !value)} className="rounded-lg p-2 text-content-secondary hover:bg-surface-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"><PanelRight className="h-4 w-4" /></button>
+              <Button variant="ghost" size="icon" aria-label={panelVisible ? 'Hide open tabs' : 'Show open tabs'} aria-expanded={Boolean(panelVisible)} aria-controls="chat-side-panel" title="Open tabs" onClick={toggleSidePanel} className="rounded-lg"><PanelRight className="h-4 w-4" /></Button>
             </>}
           </header>
-          {!isClient && summaryOpen && <aside id="chat-project-summary" aria-label="Project summary" className="absolute right-4 top-16 z-30 max-h-[min(70vh,36rem)] w-[min(22rem,calc(100%-2rem))] overflow-y-auto rounded-2xl border border-divider bg-surface-high p-4 text-xs text-content-secondary shadow-xl lg:right-6">
-            <div className="space-y-2">
-              <p className="font-semibold text-content">{project?.name ?? 'Project'}</p>
-              {projectRepositories.length ? projectRepositories.map(repository => <div key={repository.repo} className="border-t border-divider pt-2">
-                <div className="break-all font-medium text-content-secondary">{repository.repo}</div>
-                {latestBuild && project && <button type="button" onClick={() => openSideTab({ id: 'changes:' + latestBuild.runId, kind: 'changes', projectId: project.id, runId: latestBuild.runId })} className="mt-2 flex w-full items-center gap-2 rounded-md px-1 py-1.5 text-left text-content hover:bg-surface-raised"><FileDiff className="h-4 w-4" />Changes</button>}
-              </div>) : <p className="text-content-muted">No connected codebases.</p>}
-            </div>
-            <div className="mt-3 border-t border-divider">
-              {isDesktop && project?.id && latestBuild?.status === 'completed' ? <OrchestrationDeliveryPanel projectId={project.id} runId={latestBuild.runId} onRepairPrepared={() => void refreshLiveBuild()} compact /> : <p className="pt-3 text-content-muted">Delivery information will appear after a build is completed.</p>}
-            </div>
-          </aside>}
+          <ChatConversationLayout summaryOpen={!isClient && summaryOpen} summary={projectSummary}>
           {!isClient && chatSyncStatus?.state === 'failed' && <div className="shrink-0 px-5 pt-3 lg:px-7"><div className="mx-auto flex max-w-3xl items-center justify-between gap-3 rounded-full border border-status-warning-border bg-status-warning-subtle px-4 py-2 text-[11px] text-status-warning"><span>Chat sync paused</span><button type="button" onClick={() => void handleRetryChatSync()} disabled={syncRetrying} className="font-medium hover:text-content disabled:opacity-50">{syncRetrying ? 'Retrying…' : 'Retry'}</button></div></div>}
 
 
           {CHAT_ORCHESTRATOR_BAR_ENABLED && !isClient && <div className="relative z-20 shrink-0 px-5 pt-2 lg:px-7"><OrchestratorFlow calls={callList} agents={snapshot?.agents ?? []} isWorking={isAgentTyping} title={project?.name ?? 'Alpha'} selectedCallId={inspectedCall ? inspectedCallId : null} onSelectCall={selectCall} build={latestBuild ? { runId: latestBuild.runId, label: buildStatusLabel(latestBuild), running: latestBuild.running, status: latestBuild.status, agents: latestBuild.agents, handoffs: buildHandoffs(latestBuild.orchestration) } : null} sidePanelOpen={Boolean(panelVisible)} selectedBuildAgentId={inspectedBuildAgent ? inspectedBuildAgentId : null} onSelectBuildAgent={selectBuildAgent} roster={workspaceAgents} runtimes={runtimes} canEditAgents={can('manage_agents')} onUpdateAgent={updateAgent} action={orchestratorAction} /></div>}
-          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className={`flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 [overflow-anchor:none] [mask-image:linear-gradient(to_bottom,transparent,black_20px)] ${!isClient && summaryOpen ? 'xl:pr-[25rem]' : ''}`}><div className={'mx-auto w-full max-w-5xl space-y-5 ' + (currentMessages.length === 0 ? 'h-full' : '')}>{currentMessages.length === 0 && activeTranscript === 'loading' ? <LoadingRows label="Loading messages" layout="conversation" /> : currentMessages.length === 0 && activeTranscript === 'error' && activeThread ? <div role="alert" className="space-y-2 py-4 text-sm text-content-secondary"><p>Could not load this conversation.</p><button type="button" className="text-link" onClick={() => loadTranscript(activeThread.id)}>Retry loading messages</button></div> : currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-divider bg-selected flex items-center justify-center"><Sparkles className="h-6 w-6 text-link" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-content">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-content-muted max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div></div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.isStreaming && !isAgentTyping && !activeChatTurnCall) return null; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-divider bg-surface-raised p-4 text-xs text-content-secondary">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-divider bg-surface-raised px-4 py-2 text-xs text-content-secondary flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-link" />{message.content}</div></div>; return <div key={message.id} className={`flex w-full items-start gap-3 ${isUser ? 'justify-end' : ''}`}>{!isUser && <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-selected text-link"><Sparkles className="h-5 w-5" /></span>}<div className={`min-w-0 space-y-2 ${isUser ? 'flex max-w-[80%] flex-col items-end' : 'flex-1'}`}><div className={`text-sm leading-relaxed ${isUser ? 'rounded-xl border border-divider bg-selected px-4 py-2.5 text-content' : 'text-content'}`}>{isUser ? <time dateTime={message.timestamp} className="mb-1 block text-right text-[10px] text-content-muted">{formatMessageTime(message.timestamp)}</time> : <div className="mb-1 flex flex-wrap items-baseline gap-2"><span className="font-semibold text-content">{message.senderName || 'Alpha'}</span><time dateTime={message.timestamp} className="text-[10px] text-content-muted">{formatMessageTime(message.timestamp)}</time></div>}{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-link"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 py-2 text-xs text-content"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-link" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-link">Build update</div><MessageMarkdown content={message.content} /></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-link"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
+          <div ref={transcriptRef} onScroll={onScroll} aria-label="Conversation messages" style={{ paddingBottom: composerHeight + 120 }} className={`flex-1 min-h-0 overflow-y-auto overscroll-contain p-5 lg:p-7 [overflow-anchor:none] [mask-image:linear-gradient(to_bottom,transparent,black_20px)] `}><div className={'w-full max-w-6xl space-y-5 ' + (currentMessages.length === 0 ? 'h-full' : '')} style={conversationContentStyle}>{currentMessages.length === 0 && activeTranscript === 'loading' ? <LoadingRows label="Loading messages" layout="conversation" /> : currentMessages.length === 0 && activeTranscript === 'error' && activeThread ? <div role="alert" className="space-y-2 py-4 text-sm text-content-secondary"><p>Could not load this conversation.</p><button type="button" className="text-link" onClick={() => loadTranscript(activeThread.id)}>Retry loading messages</button></div> : currentMessages.length === 0 ? <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4"><div className="h-12 w-12 rounded-2xl border border-divider bg-selected flex items-center justify-center"><Sparkles className="h-6 w-6 text-link" /></div><div className="space-y-1.5"><h3 className="text-base font-semibold text-content">{isClient ? `Message ${pmName}` : 'Start a project conversation'}</h3><p className="text-xs text-content-muted max-w-md leading-relaxed">{isClient ? `${pmName} manages your project and can help with scope, progress, and timing.` : project ? 'Ask a question or describe a product change. For a change, Alpha plans it as the Orchestrator and waits for your approval before any code changes.' : 'Ask Alpha anything. Choose a project above when you want Alpha to plan a build in its codebases.'}</p></div></div> : currentMessages.map(message => { const isUser = message.senderType === 'user'; const isSystem = message.senderType === 'system'; const call = message.agentCallId ? calls[message.agentCallId] : undefined; const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id); const turnIsActive = activeTurnMessageId === message.id; if (message.isStreaming && !isAgentTyping && !activeChatTurnCall) return null; if (message.agentCallId && !isUser && call) return <div key={message.id} className="w-full">{renderCallCard(call, message)}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div>; if (message.agentCallId && !isUser && !call) return <div key={message.id} className="w-full rounded-xl border border-divider bg-surface-raised p-4 text-xs text-content-secondary">Loading agent call details…</div>; if (isSystem) return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-divider bg-surface-raised px-4 py-2 text-xs text-content-secondary flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-link" />{message.content}</div></div>; return <div key={message.id} className={`flex w-full items-start gap-3 ${isUser ? 'justify-end' : ''}`}>{!isUser && <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-selected text-link"><Sparkles className="h-5 w-5" /></span>}<div className={`min-w-0 space-y-2 ${isUser ? 'flex max-w-[80%] flex-col items-end' : 'flex-1'}`}><div className={`text-sm leading-relaxed ${isUser ? 'rounded-xl border border-divider bg-selected px-4 py-2.5 text-content' : 'text-content'}`}>{isUser ? <time dateTime={message.timestamp} className="mb-1 block text-right text-[10px] text-content-muted">{formatMessageTime(message.timestamp)}</time> : <div className="mb-1 flex flex-wrap items-baseline gap-2"><span className="font-semibold text-content">{message.senderName || 'Alpha'}</span><time dateTime={message.timestamp} className="text-[10px] text-content-muted">{formatMessageTime(message.timestamp)}</time></div>}{message.isStreaming ? <span className="flex items-center gap-2 text-xs text-link"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span> : isUser ? <div className="whitespace-pre-wrap break-words">{message.content}</div> : (message.messageType === 'build_proposal' || message.messageType === 'project_needed') ? renderRouteProposal(message)  : message.messageType === 'build_milestone' ? <div className="flex items-start gap-2.5 py-2 text-xs text-content"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-link" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-link">Build update</div><MessageMarkdown content={message.content} /></div></div>: message.messageType === 'build' ? <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-link"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
   const setupRequired = /review the project setup|project needs setup|configured model|available model|workspace identity|reconnect (?:this )?repository/i.test(message.content);
   if (message.content.includes('Choose a codebase') || message.content.includes('Choose one repository')) {
     return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
   }
   return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div>{isUser && <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-raised text-content-secondary"><UserRound className="h-5 w-5" /></span>}</div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}</div></div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <><ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Alpha · Starting response</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div>{isUser && <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-surface-raised text-content-secondary"><UserRound className="h-5 w-5" /></span>}</div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}</div></div>
 
-          <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-4 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-8 lg:pb-6">
-            <div className="pointer-events-auto mx-auto w-full max-w-3xl space-y-2">
+          <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-5 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-7 lg:pb-6">
+            <div className="pointer-events-auto w-full max-w-6xl space-y-2" style={conversationContentStyle}>
               {showLatest && <div className="flex justify-center"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-divider bg-surface-raised px-4 py-2 text-xs font-medium text-selected-content shadow-lg shadow-black/40 hover:bg-selected">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
               {publishedBuild && publishedBuild.projectId === project?.id && !buildDecision && <div role="status" className="flex items-center gap-3 rounded-2xl border border-status-success-border bg-surface-raised/95 px-4 py-2.5 text-[11px] text-status-success shadow-lg shadow-black/40">
                 <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-status-success" aria-hidden="true" />
@@ -1890,6 +1955,7 @@ export const ChatView: React.FC = () => {
               {isDesktop && role === 'dev' && activeThread?.projectId && (
                 <BoardChangesWaiting projectId={activeThread.projectId} working={Boolean(activeTurnMessageId)} />
               )}
+              {!isClient && <ChatSkillTools skills={skills} selectedSkillIds={selectedSkillIds} onSkillIdsChange={setSelectedSkillIds} draft={input} onDraftChange={setInput} onImprove={async (draft, skillIds) => (await apiService.improveChatPrompt({ draft, skillIds })).suggestion} onError={message => showToast('Prompt not improved', message, 'error')} onScan={can('manage_skills') ? scanInstalledSkills : undefined} scanning={isScanningSkills} disabled={Boolean(activeTurnMessageId)} />}
               <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-1.5 rounded-[1.75rem] border border-divider bg-surface-raised/95 p-1.5 shadow-2xl shadow-black/50 transition-colors focus-within:border-control ${isDraggingFiles ? 'ring-2 ring-selected-content/70' : ''}`}>
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
                 <div ref={repositoryMenuRef} className="relative shrink-0">
@@ -1951,6 +2017,7 @@ export const ChatView: React.FC = () => {
               {(pendingFiles.length > 0 || Boolean(activeTurnMessageId)) && <div className="px-4 text-center text-[10px] text-content-muted">{pendingFiles.length ? `Files stay in this device’s private Alpha storage. ${forcedBuild ? 'Project builds store attachments but do not inspect them yet.' : 'Unsupported file types are marked as not analyzed.'}` : 'Directions are queued and picked up at the next safe point.'}</div>}
             </div>
           </div>
+          </ChatConversationLayout>
 
         </> : isClient ? <div className="h-full flex flex-col items-center justify-center p-8 text-center space-y-4"><MessageSquare className="h-12 w-12 text-content-muted" /><p className="text-sm text-content-muted">Pick a project conversation, or start a new one with +.</p></div>
           : <ChatHome
@@ -1961,7 +2028,7 @@ export const ChatView: React.FC = () => {
               message={input}
               onMessageChange={setInput}
               approvalMode={approvalMode}
-              onApprovalModeChange={setApprovalMode}
+              onApprovalModeChange={setApprovalMode} skills={skills} selectedSkillIds={selectedSkillIds} onSkillIdsChange={setSelectedSkillIds} onImprovePrompt={async (draft, skillIds) => (await apiService.improveChatPrompt({ draft, skillIds })).suggestion} onPromptError={message => showToast('Prompt not improved', message, 'error')} onScanSkills={can('manage_skills') ? scanInstalledSkills : undefined} scanningSkills={isScanningSkills}
               onSend={() => void sendFromHome()}
               canSend={canStartThread}
               blockedReason={canStartThread ? undefined : 'Your workspace role cannot start conversations.'}
@@ -1973,7 +2040,7 @@ export const ChatView: React.FC = () => {
               onOpenRecent={threadId => setActiveThreadId(threadId)}
             />}
       </main>
-      {!isClient && <ChatPanelHandle open={Boolean(panelVisible)} onToggle={() => setPanelVisible(value => !value)} />}
+      {!isClient && <ChatPanelHandle open={Boolean(panelVisible)} onToggle={toggleSidePanel} />}
       {!isClient && panelVisible && <ChatSidePanel tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setPanelVisible(false); document.getElementById('chat-panel-toggle')?.focus(); }}>
         {activeSideTab ? renderSideTab(activeSideTab) : <section className="space-y-4 p-5"><h2 className="text-sm font-semibold">Side panel</h2><p className="text-xs text-content-secondary">Keep previews, plans, agents and changes beside your conversation.</p>{latestBuild && project && <><button type="button" onClick={() => openPlanTab({ projectId: project.id, runId: latestBuild.runId, planVersion: latestBuild.orchestration.run.planVersion, auto: false })} className="block text-xs text-link">Open saved plan</button><button type="button" onClick={() => openSavedBuildReview(latestBuild.runId)} className="block text-xs text-link">Build review</button><button type="button" onClick={openBuildChanges} className="block text-xs text-link">Code changes</button></>}</section>}
       </ChatSidePanel>}

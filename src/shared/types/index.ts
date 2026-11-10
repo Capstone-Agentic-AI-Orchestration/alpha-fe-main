@@ -1634,6 +1634,8 @@ export interface ChatMessage {
   revisionTarget?: AgentCallTarget;
   /** Attachment details are local metadata only; file bytes stay on this device. */
   attachments?: ChatAttachmentReference[];
+  /** Optional skill IDs selected for this message only. */
+  skillIds?: string[];
 }
 
 /** A build Alpha proposed in chat. */

@@ -1,6 +1,8 @@
 import React from 'react';
-import { AlertCircle, CheckCircle2, Info, X } from 'lucide-react';
+import { AlertCircleIcon, CheckCircle2Icon, InfoIcon, XIcon } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
+import { Alert, AlertDescription, AlertTitle } from '@/shared/components/ui/alert';
+import { Button } from '@/shared/components/ui/button';
 
 export const ToastRegion: React.FC = () => {
   const { toasts, dismissToast } = useApp();
@@ -13,38 +15,36 @@ export const ToastRegion: React.FC = () => {
     >
       {toasts.map(toast => {
         const Icon = toast.tone === 'success'
-          ? CheckCircle2
+          ? CheckCircle2Icon
           : toast.tone === 'error'
-            ? AlertCircle
-            : Info;
-        const iconColor = toast.tone === 'success'
-          ? 'text-status-success'
+            ? AlertCircleIcon
+            : InfoIcon;
+        const toneClasses = toast.tone === 'success'
+          ? 'border-status-success-border bg-status-success-subtle [&>svg]:text-status-success'
           : toast.tone === 'error'
-            ? 'text-status-danger'
-            : 'text-status-info';
+            ? 'border-status-danger-border bg-status-danger-subtle [&>svg]:text-status-danger'
+            : 'border-status-info-border bg-status-info-subtle [&>svg]:text-status-info';
 
         return (
-          <div
+          <Alert
             key={toast.id}
-            className="pointer-events-auto flex items-start gap-3 border border-divider bg-surface px-4 py-3 shadow-2xl"
+            className={`pointer-events-auto pr-11 ${toneClasses}`}
             role="status"
           >
-            <Icon className={`mt-0.5 h-4 w-4 flex-shrink-0 ${iconColor}`} />
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-content">{toast.title}</p>
-              {toast.description && (
-                <p className="mt-0.5 text-xs leading-relaxed text-content-secondary">{toast.description}</p>
-              )}
-            </div>
-            <button
+            <Icon aria-hidden="true" />
+            <AlertTitle>{toast.title}</AlertTitle>
+            {toast.description && <AlertDescription>{toast.description}</AlertDescription>}
+            <Button
               type="button"
               onClick={() => dismissToast(toast.id)}
-              className="p-0.5 text-content-muted transition-colors hover:text-content"
+              variant="ghost"
+              size="icon"
+              className="absolute right-2 top-2 h-7 w-7 rounded-md text-content-muted hover:text-content"
               aria-label="Dismiss notification"
             >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
+              <XIcon className="h-3.5 w-3.5" />
+            </Button>
+          </Alert>
         );
       })}
     </div>
