@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { CloudOff, RotateCw } from 'lucide-react';
 
-import { LoadingRows } from '@/shared/components/ui/skeleton';
+import { AlphaStartupLoader } from './AlphaStartupLoader';
 
 /**
  * What the web build shows before it knows who you are.
@@ -41,46 +41,38 @@ export const ConnectingScreen: React.FC<Props> = ({ status, onRetry }) => {
     return () => window.clearTimeout(timer);
   }, [status]);
 
+  if (status === 'loading') {
+    return <AlphaStartupLoader
+      label="Connecting to Alpha"
+      detail={slow ? 'The server may take a moment to wake up. This page continues on its own.' : undefined}
+    />;
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center bg-canvas p-6 text-sm text-gray-300">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-surface p-8">
-        {status === 'loading' ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-3">
-              <h1 className="text-base font-semibold text-gray-100">Connecting to Alpha</h1>
-            </div>
-            <LoadingRows label="Connecting to Alpha" layout="detail" rows={2} />
-            {slow && (
+        <div role="alert" className="space-y-5">
+          <div className="flex items-start gap-3">
+            <CloudOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
+            <div className="space-y-1.5">
+              <h1 className="text-base font-semibold text-gray-100">
+                Can&rsquo;t reach Alpha&rsquo;s server
+              </h1>
               <p className="text-xs leading-relaxed text-gray-400">
-                The server sleeps when nobody has used it for a while, and can take up to a
-                minute to wake. This page continues on its own.
+                Alpha shows nothing until it knows who you are. Check your connection and
+                try again. If it keeps failing, the server may be restarting or down.
               </p>
-            )}
-          </div>
-        ) : (
-          <div role="alert" className="space-y-5">
-            <div className="flex items-start gap-3">
-              <CloudOff className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" aria-hidden="true" />
-              <div className="space-y-1.5">
-                <h1 className="text-base font-semibold text-gray-100">
-                  Can&rsquo;t reach Alpha&rsquo;s server
-                </h1>
-                <p className="text-xs leading-relaxed text-gray-400">
-                  Alpha shows nothing until it knows who you are. Check your connection and
-                  try again. If it keeps failing, the server may be restarting or down.
-                </p>
-              </div>
             </div>
-            <button
-              type="button"
-              onClick={onRetry}
-              className="flex w-full items-center justify-center gap-2 rounded-xl bg-content px-4 py-3 font-medium text-canvas transition hover:bg-content-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
-            >
-              <RotateCw className="h-4 w-4" aria-hidden="true" />
-              Try again
-            </button>
           </div>
-        )}
+          <button
+            type="button"
+            onClick={onRetry}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-content px-4 py-3 font-medium text-canvas transition hover:bg-content-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface"
+          >
+            <RotateCw className="h-4 w-4" aria-hidden="true" />
+            Try again
+          </button>
+        </div>
       </div>
     </main>
   );
