@@ -295,7 +295,7 @@ export const OperationsCenterView: React.FC = () => {
 
   return (
     <div className="flex h-full flex-col overflow-y-auto bg-canvas text-content-secondary select-none">
-      <header className="sticky top-0 z-20 border-b border-divider bg-canvas/95 px-5 py-4 backdrop-blur-sm lg:px-7">
+      <header className="sticky top-0 z-20 bg-canvas px-5 py-4 lg:px-7">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-raised text-content-secondary"><Activity className="h-4 w-4" /></span>
@@ -305,7 +305,7 @@ export const OperationsCenterView: React.FC = () => {
             <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? 'animate-spin' : ''}`} />Refresh
           </button>
         </div>
-        <nav aria-label="Operations views" className="mt-4 flex gap-1 overflow-x-auto border-b border-divider">
+        <nav aria-label="Operations views" className="mt-4 flex gap-1 overflow-x-auto">
           {panels.map(item => <button key={item.id} type="button" onClick={() => setPanel(item.id)} className={`-mb-px flex-shrink-0 border-b-2 px-3 py-2 text-xs transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-focus ${panel === item.id ? 'border-action font-medium text-content' : 'border-transparent text-content-muted hover:text-content'}`}>{item.label}</button>)}
         </nav>
       </header>

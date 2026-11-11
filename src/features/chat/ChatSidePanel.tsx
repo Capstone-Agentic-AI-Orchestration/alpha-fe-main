@@ -32,8 +32,10 @@ export const ChatSidePanel: React.FC<{
   /** Panels can use a separate remembered width and a narrower initial size. */
   widthStorageKey?: string;
   defaultWidth?: number;
+  /** Slides the panel open when it mounts, or shut while it is closing. */
+  motion?: 'opening' | 'closing';
   children: React.ReactNode;
-}> = ({ tabs, activeId, onSelect, onClose, onCloseAll, widthStorageKey = WIDTH_KEY, defaultWidth = DEFAULT_WIDTH, children }) => {
+}> = ({ tabs, activeId, onSelect, onClose, onCloseAll, widthStorageKey = WIDTH_KEY, defaultWidth = DEFAULT_WIDTH, motion, children }) => {
   const [width, setWidth] = useState(() => storedWidth(widthStorageKey, defaultWidth));
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
 
@@ -61,7 +63,7 @@ export const ChatSidePanel: React.FC<{
     if (next) { onSelect(next.id); document.getElementById('chat-side-tab-' + next.id)?.focus(); }
   };
 
-  return <aside id="chat-side-panel" aria-label="Side panel" style={{ '--chat-panel-width': width + 'px' } as React.CSSProperties} className="relative flex h-full w-[var(--chat-panel-width)] max-w-full shrink-0 flex-col border-l border-divider bg-shell max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-full">
+  return <aside id="chat-side-panel" aria-label="Side panel" aria-hidden={motion === 'closing' || undefined} style={{ '--chat-panel-width': width + 'px' } as React.CSSProperties} className={'relative flex h-full w-[var(--chat-panel-width)] max-w-full shrink-0 flex-col border-l border-divider bg-shell max-md:absolute max-md:inset-y-0 max-md:right-0 max-md:z-40 max-md:w-full ' + (motion === 'closing' ? 'chat-panel-closing' : motion === 'opening' ? 'chat-panel-opening' : '')}>
     <div role="separator" aria-orientation="vertical" aria-label="Resize side panel" tabIndex={0}
       onPointerDown={event => { drag.current = { startX: event.clientX, startWidth: width }; document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }}
       onKeyDown={event => { if (event.key === 'ArrowLeft') setWidth(value => value + 24); if (event.key === 'ArrowRight') setWidth(value => Math.max(MIN_WIDTH, value - 24)); }}

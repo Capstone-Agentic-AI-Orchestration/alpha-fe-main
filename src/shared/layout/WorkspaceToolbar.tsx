@@ -2,15 +2,21 @@ import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefO
 import { createPortal } from 'react-dom';
 import { Plus, X } from 'lucide-react';
 
-/** Shared workspace chrome; each persona supplies its own destinations and actions. */
+/**
+ * Shared workspace chrome; each persona supplies its own destinations and actions.
+ * It has no container of its own: the tabs sit directly on the window chrome,
+ * 32px tall so on Windows desktop they line up with the 40px title-bar controls.
+ */
 export function WorkspaceToolbar({ children, actions, draggable = false }: {
   children: ReactNode;
   actions: ReactNode;
   draggable?: boolean;
 }) {
-  return <div className={`pointer-events-auto mx-auto flex w-full max-w-[1800px] items-center gap-1.5 rounded-2xl border border-divider bg-surface/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5 dark:ring-content/[0.04] ${draggable ? 'app-drag-region' : ''}`}>
+  return <div className={`pointer-events-auto mx-auto flex h-[32px] w-full max-w-[1800px] items-center gap-1 ${draggable ? 'app-drag-region' : ''}`}>
     {children}
-    <div className="app-no-drag ml-auto flex flex-shrink-0 items-center gap-2">{actions}</div>
+    {/* Beside the Windows title-bar controls (centered at 20px), the actions sit 2px
+        higher than the tabs so they line up with those controls. */}
+    <div className={`app-no-drag ml-auto flex flex-shrink-0 items-center gap-2 ${draggable ? 'relative -top-[2px]' : ''}`}>{actions}</div>
   </div>;
 }
 
@@ -70,7 +76,7 @@ export function WorkspaceTab({ active, title, icon, onActivate, onClose, closabl
       }
     }}
     role="tab" aria-selected={active} aria-controls={controls} tabIndex={active ? 0 : -1} title={title}
-    className={`group flex h-9 min-w-[112px] max-w-[220px] cursor-pointer select-none items-center gap-2 rounded-xl border px-3 text-xs font-medium transition-all ${active
+    className={`group flex h-[28px] min-w-[112px] max-w-[220px] cursor-pointer select-none items-center gap-2 rounded-lg border px-3 text-xs font-medium transition-all ${active
       ? 'border-divider bg-selected text-selected-content shadow-sm'
       : 'border-transparent text-content-muted hover:bg-surface-high hover:text-content'}`}>
     <span className={`flex-shrink-0 ${active ? 'text-link' : 'text-content-muted group-hover:text-content-secondary'}`}>{icon}</span>
@@ -129,7 +135,7 @@ export function WorkspaceNewTabMenu({ items, onSelect, boundaryRef, portalRootRe
 
   return <div className="app-no-drag relative flex-shrink-0">
     <button type="button" ref={buttonRef} disabled={disabled} onClick={() => setOpen(value => !value)}
-      className={`flex h-9 w-9 items-center justify-center rounded-xl transition-colors disabled:opacity-50 ${open ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}
+      className={`flex h-[28px] w-[28px] items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${open ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}
       title="Open new tab" aria-label="Open new tab" aria-expanded={open} aria-haspopup="menu"><Plus className="w-4 h-4" /></button>
     {open && position && createPortal(<div ref={menuRef} role="menu" aria-label="Open new tab" style={position}
       onKeyDown={event => {

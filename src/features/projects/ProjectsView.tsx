@@ -231,7 +231,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
         <ProjectRepositoryView
           renderHeader={tabs => (
-        <div className="flex shrink-0 items-center gap-3 border-b border-divider bg-shell px-4 py-2 sm:px-5">
+        <div className="flex shrink-0 items-center gap-3 bg-shell px-4 py-2 sm:px-5">
 
           {/* Left: Breadcrumbs navigation */}
           <div className="flex min-w-0 max-w-[32%] shrink-0 items-center gap-2">
@@ -616,34 +616,17 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   // VIEW 2: MAIN PROJECTS TABLE LIST
   // =========================================================================
   return (
-    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-shell p-5 text-content-secondary select-none font-sans lg:p-6">
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-shell p-5 text-content-secondary select-none font-sans pt-3 lg:p-6 lg:pt-3">
 
-      {/* ================= TOP HEADER BAR ================= */}
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <Folder className="w-4 h-4 text-content-secondary" />
-            <h1 className="text-base font-semibold text-content">Projects</h1>
-            <span className="text-xs tabular-nums text-content-muted">{projects.length}</span>
-          </div>
-          <p className="mt-1 text-xs text-content-muted">{showAi ? 'Choose a project, then open a task to prepare an agent run.' : 'Choose a project to view its board and manage tasks.'}</p>
-        </div>
-
-        {/* + New project button */}
-        {canManageProjects && (
-          <button
-            onClick={() => setCreateModalOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-action hover:bg-action-hover text-xs font-medium text-on-action transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New project</span>
-          </button>
-        )}
-      </div>
+      {/* The open tab already names the page; the heading is for screen readers and
+          sits inside the first row so the page's spacing leaves no gap above it.
+          With no projects yet, the empty state below offers "Create project". */}
+      {projects.length === 0 && <h1 className="sr-only">Projects</h1>}
 
       {/* ================= SEARCH & ACTION ROW ================= */}
       {projects.length > 0 && (
       <div className="flex items-center justify-between gap-4">
+        <h1 className="sr-only">Projects</h1>
         {/* Left: Search input */}
         <div className="relative flex-1 max-w-xs">
           <Search className="w-3.5 h-3.5 text-content-muted absolute left-3 top-1/2 -translate-y-1/2" />
@@ -658,6 +641,16 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
         {/* Right: Action Buttons (Filter, Created Sort, Table view) */}
         <div className="flex items-center gap-2 relative">
+
+          {canManageProjects && (
+            <button
+              onClick={() => setCreateModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-action hover:bg-action-hover text-xs font-medium text-on-action transition-colors"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              <span>New project</span>
+            </button>
+          )}
 
           {/* Filter Button */}
           <div className="relative">

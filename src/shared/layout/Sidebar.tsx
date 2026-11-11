@@ -106,19 +106,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const closeWorkspaceMenu = (event?: React.SyntheticEvent<HTMLElement>) => {
     setWorkspaceMenuOpen(false);
-    // When the rail is in hover mode, a focused menu item must not keep the
-    // entire sidebar expanded after the action is complete.
+    // Return focus to the page rather than leaving it on a menu item that is about to disappear.
     if (collapsed) event?.currentTarget.blur();
   };
 
-  const navButton = (tab: NavigationTab, compact: boolean) => {
+  const navButton = (tab: NavigationTab, compact: boolean, closeIfFloating: () => void) => {
     const active = activeTab === tab;
     const label = labelFor(tab);
 
     return (
       <button
         key={tab}
-        onClick={() => setActiveTab(tab)}
+        onClick={() => { setActiveTab(tab); closeIfFloating(); }}
         title={compact ? label : undefined}
         aria-label={label}
         className={`group relative flex w-full items-center rounded-lg transition-colors ${
@@ -150,20 +149,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className={`flex items-center ${compact ? 'justify-center' : ''}`}>
         <button
           onClick={() => setWorkspaceMenuOpen(open => !open)}
-          className={`flex min-w-0 items-center rounded-lg py-1.5 text-left transition-colors hover:bg-surface-high ${
-            compact ? 'w-9 justify-center px-0' : 'flex-1 justify-between gap-2 px-2'
+          className={`flex h-[32px] min-w-0 items-center rounded-lg text-left transition-colors hover:bg-surface-high ${
+            compact ? 'w-[36px] justify-center px-0' : 'flex-1 justify-between gap-2 px-1.5'
           }`}
           title={compact ? `${workspaceName} workspace` : undefined}
           aria-label={`Open workspace menu for ${workspaceName}`}
           aria-expanded={workspaceMenuOpen}
         >
           <span className={`flex min-w-0 items-center ${compact ? '' : 'gap-2'}`}>
-            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md bg-action dark:bg-surface-raised ring-1 ring-inset ring-content/[0.08]">
+            <span className="flex h-[28px] w-[28px] flex-shrink-0 items-center justify-center rounded-md bg-action dark:bg-surface-raised ring-1 ring-inset ring-content/[0.08]">
               <img
                 src={alphaMarkUrl}
                 alt=""
                 aria-hidden="true"
-                className="h-7 w-6 object-contain"
+                className="h-[24px] w-[20px] object-contain"
               />
             </span>
             <span
@@ -241,7 +240,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   );
 
   const renderProfileFooter = (compact: boolean) => (
-    <div className="border-t border-divider px-2 py-2.5">
+    <div className="px-2 py-2.5">
       <div className={`flex items-center ${compact ? 'justify-center' : 'gap-2'}`}>
         {onSwitchProfile ? (
           <button
@@ -306,7 +305,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </button>
         )}
       </div>
-      {!compact && <div className="mt-1 px-1.5 text-right font-mono text-[10px] text-content-muted">v2.0.0</div>}
     </div>
   );
 
@@ -317,10 +315,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       ariaLabel="Application sidebar"
       onBeforeCollapse={() => closeWorkspaceMenu()}
     >
-      {({ compact }) => (
+      {({ compact, closeIfFloating }) => (
         <>
           {/* Workspace and primary actions */}
-          <div className="space-y-3 px-2 pb-3 pt-3">
+          {/* The switcher shares the tab row (6px down, 32px tall) so neither it
+              nor its hover highlight crosses the page panel's top edge at 44px. */}
+          <div className="space-y-3 px-2 pb-3 pt-[6px]">
             {renderWorkspaceSwitcher(compact)}
 
             <div className={`space-y-1.5 pt-1 ${compact ? 'flex flex-col items-center' : ''}`}>
@@ -374,7 +374,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <span>{section.label}</span>
                   <span className="h-px flex-1 bg-surface-raised" aria-hidden="true" />
                 </div>
-                {items.map(item => navButton(item.id, compact))}
+                {items.map(item => navButton(item.id, compact, closeIfFloating))}
               </div>
             ))}
           </div>

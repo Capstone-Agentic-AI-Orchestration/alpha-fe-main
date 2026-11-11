@@ -2,7 +2,6 @@ import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useState, useMemo, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import {
-  Cpu,
   RefreshCw,
   Server,
   Globe,
@@ -129,31 +128,12 @@ export const RuntimesView: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-content-secondary select-none font-sans lg:p-6">
-
-      {/* ================= TOP HEADER BAR ================= */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Cpu className="w-4 h-4 text-content-secondary" />
-          <h1 className="text-base font-semibold tracking-tight text-content">Runtimes</h1>
-          <span className="text-xs text-content-muted font-mono">{runtimes.length}</span>
-        </div>
-
-        {/* Scan host engines button */}
-        {canManageRuntimes && (
-          <button
-            onClick={scanLocalRuntimes}
-            disabled={isScanningRuntimes}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content transition-colors shadow-sm disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isScanningRuntimes ? 'animate-spin' : ''}`} />
-            <span>{isScanningRuntimes ? 'Scanning runtimes…' : 'Scan host engines'}</span>
-          </button>
-        )}
-      </div>
+    <div className="flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-content-secondary select-none font-sans pt-3 lg:p-6 lg:pt-3">
 
       {/* ================= SEARCH & ACTION ROW ================= */}
       <div className="flex items-center justify-between gap-4">
+        {/* The open tab already names the page; this heading is for screen readers. It sits inside the first row so the page's spacing does not leave a gap above it. */}
+        <h1 className="sr-only">Runtimes</h1>
         {/* Search input */}
         <div className="relative flex-1 max-w-xs">
           <Search className="w-3.5 h-3.5 text-content-muted absolute left-3 top-1/2 -translate-y-1/2" />
@@ -168,6 +148,17 @@ export const RuntimesView: React.FC = () => {
 
         {/* Right Actions: Filter, Sort, Table indicator */}
         <div className="flex items-center gap-2 relative">
+
+          {canManageRuntimes && (
+            <button
+              onClick={scanLocalRuntimes}
+              disabled={isScanningRuntimes}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content transition-colors shadow-sm disabled:opacity-50"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isScanningRuntimes ? 'animate-spin' : ''}`} />
+              <span>{isScanningRuntimes ? 'Scanning runtimes…' : 'Scan host engines'}</span>
+            </button>
+          )}
 
           {/* Filter Popover */}
           <div className="relative">
@@ -403,14 +394,16 @@ export const RuntimesView: React.FC = () => {
         </div>}
       </div>
 
-      {/* ================= RUNTIME INSPECTOR DRAWER ================= */}
+      {/* ================= RUNTIME INSPECTOR DRAWER =================
+          Opens inside the page panel, below the tab row, so it never covers the
+          notification bell or the window controls. */}
       {selectedRuntime && (
-        <div className="fixed inset-y-0 right-0 w-full max-w-xl bg-shell border-l border-divider shadow-2xl z-50 flex flex-col animate-slide-left font-sans">
+        <div className="absolute inset-y-0 right-0 z-40 !mt-0 flex w-full max-w-xl flex-col border-l border-divider bg-canvas shadow-2xl animate-slide-left font-sans">
 
           {/* Drawer Header */}
-          <div className="p-5 border-b border-divider flex items-start justify-between bg-surface">
+          <div className="flex items-start justify-between gap-3 px-5 pb-4 pt-5">
             <div className="flex items-start gap-3 min-w-0">
-              <div className="w-10 h-10 rounded-xl bg-surface-raised border border-divider flex items-center justify-center text-xl shadow-md flex-shrink-0">
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-surface-raised">
                 {selectedRuntime.type === 'local' ? <Server className="w-5 h-5 text-status-success" /> : <Globe className="w-5 h-5 text-status-info" />}
               </div>
               <div className="min-w-0 space-y-1">
@@ -441,27 +434,27 @@ export const RuntimesView: React.FC = () => {
             </div>
           </div>
 
-          {/* Drawer Body */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-6 text-xs text-content-secondary">
+          {/* Drawer Body: plain sections with one level of grouping. */}
+          <div className="flex-1 space-y-6 overflow-y-auto px-5 pb-5 text-xs text-content-secondary">
 
             {/* Runtime connection */}
-            <div className="p-3.5 rounded-xl bg-surface border border-divider space-y-2">
-              <div className="flex items-center justify-between text-[11px] text-content-secondary">
+            <section className="space-y-2">
+              <div className="flex items-center justify-between text-[11px] font-medium uppercase tracking-wider text-content-muted">
                 <span>{selectedRuntime.endpoint ? 'Inference API Endpoint' : 'Runtime connection'}</span>
                 {selectedRuntime.endpoint && (
                   <button
                     onClick={() => handleCopyEndpoint(selectedRuntime.endpoint || '', selectedRuntime.id)}
-                    className="flex items-center gap-1 text-content-secondary hover:text-content"
+                    className="flex items-center gap-1 normal-case tracking-normal text-content-secondary hover:text-content"
                   >
                     {copiedEndpointId === selectedRuntime.id ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
                     <span>{copiedEndpointId === selectedRuntime.id ? 'Copied' : 'Copy'}</span>
                   </button>
                 )}
               </div>
-              <div className="font-mono text-content text-xs bg-well p-2.5 rounded-lg border border-divider truncate">
+              <div className="truncate rounded-lg bg-well px-3 py-2 font-mono text-xs text-content">
                 {selectedRuntime.endpoint || 'Local CLI process'}
               </div>
-            </div>
+            </section>
 
             {selectedRuntime.isolation && (
               <RuntimeIsolationPanel
@@ -472,64 +465,32 @@ export const RuntimesView: React.FC = () => {
             )}
 
             {selectedRuntime.account && (
-              <div className="p-3.5 rounded-xl bg-surface border border-divider space-y-3">
-                <div className="text-[11px] font-medium text-content-secondary uppercase tracking-wider">
-                  Account &amp; billing
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-2.5 rounded-lg bg-well border border-divider space-y-1">
-                    <div className="text-[10px] text-content-muted font-mono">Authentication</div>
-                    <div className="text-content font-medium truncate">
-                      {selectedRuntime.account.authMethod || selectedRuntime.account.email || 'Not reported'}
-                    </div>
-                  </div>
-                  <div className="p-2.5 rounded-lg bg-well border border-divider space-y-1">
-                    <div className="text-[10px] text-content-muted font-mono">Billing route</div>
-                    <div className="text-status-success font-medium">
-                      {billingLabel(selectedRuntime.account.billing) || 'Not reported'}
-                    </div>
-                  </div>
-                </div>
-                {(selectedRuntime.account.plan || selectedRuntime.account.org || selectedRuntime.account.email || selectedRuntime.account.note) && (
-                  <div className="rounded-lg bg-well border border-divider p-2.5 space-y-1">
-                    {selectedRuntime.account.plan && (
-                      <div><span className="text-content-muted">Plan:</span> {selectedRuntime.account.plan}</div>
-                    )}
-                    {selectedRuntime.account.org && (
-                      <div><span className="text-content-muted">Organization:</span> {selectedRuntime.account.org}</div>
-                    )}
-                    {selectedRuntime.account.email && (
-                      <div><span className="text-content-muted">Account:</span> {selectedRuntime.account.email}</div>
-                    )}
-                    {selectedRuntime.account.note && (
-                      <p className="text-content-secondary leading-relaxed">{selectedRuntime.account.note}</p>
-                    )}
-                  </div>
-                )}
-              </div>
+              <section className="space-y-2">
+                <h3 className="text-[11px] font-medium uppercase tracking-wider text-content-muted">Account &amp; billing</h3>
+                <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-2">
+                  <dt className="text-content-muted">Authentication</dt>
+                  <dd className="truncate font-medium text-content">{selectedRuntime.account.authMethod || selectedRuntime.account.email || 'Not reported'}</dd>
+                  <dt className="text-content-muted">Billing route</dt>
+                  <dd className="font-medium text-status-success">{billingLabel(selectedRuntime.account.billing) || 'Not reported'}</dd>
+                  {selectedRuntime.account.plan && <><dt className="text-content-muted">Plan</dt><dd className="text-content">{selectedRuntime.account.plan}</dd></>}
+                  {selectedRuntime.account.org && <><dt className="text-content-muted">Organization</dt><dd className="truncate text-content">{selectedRuntime.account.org}</dd></>}
+                  {selectedRuntime.account.email && <><dt className="text-content-muted">Account</dt><dd className="truncate text-content">{selectedRuntime.account.email}</dd></>}
+                </dl>
+                {selectedRuntime.account.note && <p className="leading-relaxed text-content-secondary">{selectedRuntime.account.note}</p>}
+              </section>
             )}
 
             {/* Local Host Hardware Telemetry (if local) */}
             {selectedRuntime.type === 'local' && (
-              <div className="p-3.5 rounded-xl bg-surface border border-divider space-y-3">
-                <div className="text-[11px] font-medium text-content-secondary uppercase tracking-wider">
-                  Host Hardware & VRAM Telemetry
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="p-2.5 rounded-lg bg-well border border-divider space-y-1">
-                    <div className="text-[10px] text-content-muted font-mono">GPU / Acceleration</div>
-                    <div className="text-content font-medium truncate">{selectedRuntime.gpuName || 'Apple Silicon Unified'}</div>
-                  </div>
-
-                  <div className="p-2.5 rounded-lg bg-well border border-divider space-y-1">
-                    <div className="text-[10px] text-content-muted font-mono">Allocated VRAM</div>
-                    <div className="text-status-success font-mono font-medium">
-                      {selectedRuntime.vramUsageGb || 38.4} GB / {selectedRuntime.vramTotalGb || 64.0} GB
-                    </div>
-                  </div>
-                </div>
-              </div>
+              <section className="space-y-2">
+                <h3 className="text-[11px] font-medium uppercase tracking-wider text-content-muted">Host hardware</h3>
+                <dl className="grid grid-cols-[8rem_minmax(0,1fr)] gap-x-3 gap-y-2">
+                  <dt className="text-content-muted">GPU / acceleration</dt>
+                  <dd className="truncate font-medium text-content">{selectedRuntime.gpuName || 'Apple Silicon Unified'}</dd>
+                  <dt className="text-content-muted">Allocated VRAM</dt>
+                  <dd className="font-mono font-medium text-status-success">{selectedRuntime.vramUsageGb || 38.4} GB / {selectedRuntime.vramTotalGb || 64.0} GB</dd>
+                </dl>
+              </section>
             )}
 
             {/* Available models Catalog */}
@@ -544,12 +505,12 @@ export const RuntimesView: React.FC = () => {
                 </span>
               </div>
 
-              <div className="space-y-2">
-                {runtimeModels(selectedRuntime).length === 0 && <p className="rounded-xl border border-dashed border-divider p-4 text-xs leading-relaxed text-content-muted">No models reported. Check the engine’s model catalog, then scan this host again.</p>}
+              {runtimeModels(selectedRuntime).length === 0 && <p className="rounded-lg border border-dashed border-divider p-4 text-xs leading-relaxed text-content-muted">No models reported. Check the engine’s model catalog, then scan this host again.</p>}
+              <div className={runtimeModels(selectedRuntime).length ? 'divide-y divide-divider rounded-lg border border-divider' : 'hidden'}>
                 {runtimeModels(selectedRuntime).map((model) => (
                   <div
                     key={model}
-                    className="p-3 rounded-xl bg-surface border border-divider flex items-center justify-between"
+                    className="flex items-center justify-between px-3 py-2.5"
                   >
                     <div className="flex items-center gap-2.5 min-w-0">
                       <span className="w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0" />
