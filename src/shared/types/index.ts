@@ -15,6 +15,68 @@ export type NavigationTab =
   | 'build_room'
   | 'settings';
 
+export type AiUsageProvider = 'claude' | 'codex' | 'antigravity';
+export interface AiUsageTotals {
+  invocations: number;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  cacheReadTokens: number | null;
+  cacheCreationTokens: number | null;
+  thinkingTokens: number | null;
+  totalTokens: number | null;
+  reportedCostUsd: number | null;
+  estimatedCostUsd: number | null;
+  unknownCostInvocations: number;
+  unreportedTokenInvocations: number;
+}
+export interface AiUsageBreakdown extends AiUsageTotals {
+  key: string;
+  label: string;
+  provider?: AiUsageProvider;
+  model?: string;
+  agentId?: string;
+}
+export interface AiUsageDaily extends AiUsageTotals { date: string }
+export interface AiUsageSummary {
+  available: boolean;
+  source: 'this_desktop';
+  from: string;
+  to: string;
+  provider: AiUsageProvider | 'all';
+  priceTableVersion: string;
+  lastUpdatedAt: string | null;
+  totals: AiUsageTotals;
+  byProvider: AiUsageBreakdown[];
+  byModel: AiUsageBreakdown[];
+  byAgent: AiUsageBreakdown[];
+  byDay: AiUsageDaily[];
+}
+export type ProviderLimitStatus = 'available' | 'signed_out' | 'unsupported' | 'unavailable';
+export interface ProviderLimitWindow {
+  id: string;
+  label: string;
+  usedPercent: number;
+  remainingPercent: number;
+  resetsAt: string | null;
+}
+export interface ProviderLimits {
+  provider: 'codex' | 'claude';
+  name: string;
+  status: ProviderLimitStatus;
+  accountLabel?: string;
+  plan?: string;
+  windows: ProviderLimitWindow[];
+  dashboardUrl: string;
+  detail: string;
+  lastCheckedAt: string | null;
+}
+export interface ProviderLimitsSnapshot {
+  available: boolean;
+  source: 'this_desktop';
+  lastRefreshedAt: string | null;
+  providers: ProviderLimits[];
+}
+
 export interface TabItem {
   id: string;
   view: NavigationTab;

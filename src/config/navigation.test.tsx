@@ -12,9 +12,9 @@ const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB
  */
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'chat', 'settings'],
-  pm: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
-  admin: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'analytics', 'settings'],
+  pm: ['issues', 'projects', 'agents', 'skills', 'analytics', 'settings'],
+  admin: ['issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
  * Existing sidebar ordering differs from ROLE_NAV; preserve it independently.
@@ -22,9 +22,9 @@ const existing: Record<UserRole, NavigationTab[]> = {
  */
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['chat', 'issues', 'projects', 'agents', 'runtimes', 'skills', 'settings'],
-  pm: ['projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'settings'],
-  admin: ['projects', 'issues', 'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'],
+  dev: ['chat', 'issues', 'projects', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['projects', 'issues', 'agents', 'skills', 'analytics', 'settings'],
+  admin: ['projects', 'issues', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 describe('existing navigation compatibility', () => {
   it('shows Tasks while preserving the existing issues route identifier', () => {
@@ -84,7 +84,7 @@ describe('existing navigation compatibility', () => {
   it('shows PM AI destinations while keeping their actions capability-gated', () => {
     expect(AI_FEATURES_BY_ROLE.pm).toBe(true);
     for (const tab of AI_NAV_TABS) {
-      if (tab === 'chat') {
+      if (tab === 'chat' || tab === 'runtimes') {
         expect(ROLE_NAV.pm).not.toContain(tab);
         continue;
       }

@@ -510,7 +510,7 @@ export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
   'portal', 'intake', 'documents', 'chat', 'issues', 'projects', 'tickets', 'agents',
-  'analytics', 'runtimes', 'skills', 'deployments', 'operations',
+  'analytics', 'skills', 'deployments', 'operations',
   'build_room', 'settings'
 ];
 
@@ -526,9 +526,12 @@ function normalizeTabs(saved: unknown, fallback: TabItem, allowedViews: Navigati
   const normalized = saved.flatMap((item: unknown): TabItem[] => {
     if (!item || typeof item !== 'object') return [];
     const raw = item as Partial<TabItem>;
-    const savedView = navigationTabs.includes(raw.view as NavigationTab)
-      ? raw.view as NavigationTab
-      : fallback.view;
+    const legacyRuntimeView = raw.view === 'runtimes';
+    const savedView = legacyRuntimeView
+      ? 'settings'
+      : navigationTabs.includes(raw.view as NavigationTab)
+        ? raw.view as NavigationTab
+        : fallback.view;
     // Archive destinations removed for this role by migrating their saved tab
     // to the role's landing view. This also updates the visible tab title.
     const view = allowedViews.includes(savedView) ? savedView : fallback.view;
@@ -538,6 +541,7 @@ function normalizeTabs(saved: unknown, fallback: TabItem, allowedViews: Navigati
     const sessionState = raw.sessionState && typeof raw.sessionState === 'object' && !Array.isArray(raw.sessionState)
       ? raw.sessionState as Record<string, unknown>
       : {};
+    if (legacyRuntimeView && !sessionState['settings.section']) sessionState['settings.section'] = 'providers';
     return [{ ...raw, id, view, sessionState }];
   });
   return normalized.length ? normalized : [fallback];

@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { ShieldCheck, ShieldAlert, Copy, Check, ExternalLink } from 'lucide-react';
 import { apiService, parseApiError } from '@/shared/services/apiService';
 import type { CodexAlphaSignInState, RuntimeEngine } from '@/shared/types';
+import { Button } from '@/shared/components/ui/button';
+import { Card } from '@/shared/components/ui/card';
 
 interface IsolationViewProps {
   isolation: NonNullable<RuntimeEngine['isolation']>;
@@ -22,7 +24,7 @@ export const RuntimeIsolationView: React.FC<IsolationViewProps> = ({
 }) => {
   const Icon = isolation.isolated ? ShieldCheck : ShieldAlert;
   return (
-    <div className={`p-3.5 rounded-xl border space-y-2.5 ${isolation.isolated ? 'bg-surface border-divider' : 'bg-status-warning-subtle border-status-warning-border'}`}>
+    <Card className={`p-3.5 space-y-2.5 ${isolation.isolated ? 'bg-surface border-divider' : 'bg-status-warning-subtle border-status-warning-border'}`}>
       <div className="flex items-start gap-2">
         <Icon className={`w-4 h-4 flex-shrink-0 mt-0.5 ${isolation.isolated ? 'text-status-success' : 'text-status-warning'}`} aria-hidden="true" />
         <div className="space-y-1">
@@ -38,18 +40,18 @@ export const RuntimeIsolationView: React.FC<IsolationViewProps> = ({
           <div className="text-content-secondary">Open the link, sign in, and enter this one-time code. It expires in 15 minutes.</div>
           <div className="flex items-center gap-2">
             <span className="font-mono text-sm text-content tracking-wider" aria-label="One-time code">{signIn.userCode}</span>
-            <button type="button" onClick={() => onCopyCode?.(signIn.userCode!)} className="flex items-center gap-1 text-content-secondary hover:text-content">
+            <Button size="sm" variant="ghost" type="button" onClick={() => onCopyCode?.(signIn.userCode!)} className="h-7 text-[11px]">
               {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
               <span>{copied ? 'Copied' : 'Copy code'}</span>
-            </button>
+            </Button>
           </div>
           <a href={signIn.verificationUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-selected-content hover:underline">
             Open sign-in page <ExternalLink className="w-3 h-3" />
           </a>
           <div>
-            <button type="button" disabled={busy} onClick={onCancel} className="text-content-secondary hover:text-content disabled:opacity-50">
+            <Button size="sm" variant="ghost" type="button" disabled={busy} onClick={onCancel} className="h-7 text-[11px]">
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -61,16 +63,16 @@ export const RuntimeIsolationView: React.FC<IsolationViewProps> = ({
 
       {signIn && signIn.status !== 'waiting' && (
         signIn.status === 'signed_in' ? (
-          <button type="button" disabled={busy} onClick={onSignOut} className="text-[11px] text-content-secondary hover:text-content disabled:opacity-50">
+          <Button size="sm" variant="ghost" type="button" disabled={busy} onClick={onSignOut} className="h-7 text-[11px]">
             Sign Codex out of Alpha
-          </button>
+          </Button>
         ) : (
-          <button type="button" disabled={busy} onClick={onStart} className="px-2.5 py-1 rounded-md text-[11px] font-medium bg-surface-raised border border-divider text-content hover:bg-surface-high disabled:opacity-50">
+          <Button size="sm" variant="outline" type="button" disabled={busy} onClick={onStart} className="h-7 text-[11px]">
             {busy ? 'Starting…' : 'Sign in to Codex for Alpha'}
-          </button>
+          </Button>
         )
       )}
-    </div>
+    </Card>
   );
 };
 

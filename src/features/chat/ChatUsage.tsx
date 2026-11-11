@@ -14,7 +14,7 @@ export interface UsageEntry {
   updatedAt: string;
   endedAt?: string;
   status: 'running' | 'completed' | 'stopped' | 'failed' | 'interrupted';
-  usage: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheCreationTokens?: number; thinkingTokens?: number; totalTokens?: number };
+  usage: { inputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheCreationTokens?: number; thinkingTokens?: number; totalTokens?: number; reportedCostUsd?: number; estimatedCostUsd?: number };
 }
 export interface ChatUsageSnapshot { available: boolean; reason?: string; entries: UsageEntry[] }
 
@@ -81,6 +81,16 @@ function tokens(entries: UsageEntry[]) {
   const partial = entries.some(entry => entry.usage.totalTokens === undefined || entry.status === 'interrupted');
   return total === undefined ? 'Tokens not reported' : `${total.toLocaleString()} tokens${partial ? ' · partial' : ''}`;
 }
+function cost(entries: UsageEntry[]) {
+  const reported = entries.flatMap(entry => typeof entry.usage.reportedCostUsd === 'number' ? [entry.usage.reportedCostUsd] : []);
+  const estimated = entries.flatMap(entry => typeof entry.usage.estimatedCostUsd === 'number' ? [entry.usage.estimatedCostUsd] : []);
+  const format = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD', maximumFractionDigits: 4 }).format(amount);
+  const parts = [
+    reported.length ? `Provider reported ${format(reported.reduce((sum, value) => sum + value, 0))}` : '',
+    estimated.length ? `API-equivalent est. ${format(estimated.reduce((sum, value) => sum + value, 0))}` : ''
+  ].filter(Boolean);
+  return parts.length ? parts.join(' · ') : 'Cost unknown';
+}
 
 export function WorkUsageRow({ entries, now, names = {} }: { entries: UsageEntry[]; now: number; names?: Record<string, string> }) {
   const [expanded, setExpanded] = useState(false);
@@ -91,15 +101,15 @@ export function WorkUsageRow({ entries, now, names = {} }: { entries: UsageEntry
   return <div className="mt-3 border-b border-divider pb-2 text-[11px] text-content-muted">
     <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="inline-flex flex-wrap items-center gap-2 py-1 text-left hover:text-content-secondary">
       <span>{label} {duration(workDuration(entries, now))}</span>
-      <span>· {tokens(entries)}</span><ChevronRight className={'h-3 w-3 transition-transform ' + (expanded ? 'rotate-90' : '')} />
+      <span>· {tokens(entries)}</span><span>· {cost(entries)}</span><ChevronRight className={'h-3 w-3 transition-transform ' + (expanded ? 'rotate-90' : '')} />
     </button>
     {expanded && <div className="space-y-2 py-2">
       {entries.map(entry => <div key={entry.id} className="space-y-1">
         <div className="text-content-secondary">{names[entry.agentId ?? ''] ?? (entry.agentId === 'alpha-assistant' ? 'Orchestrator' : 'Agent')} · {entry.model ?? entry.provider} · {entry.status}</div>
-        <div>{tokens([entry])} · {duration(workDuration([entry], now))}{entry.usage.totalTokens !== undefined ? ` · Last reported ${new Date(entry.updatedAt).toLocaleTimeString()}` : entry.status === 'running' ? ' · Awaiting provider usage' : ''}</div>
-        <div className="flex flex-wrap gap-x-3 gap-y-1">{Object.entries(entry.usage).filter(([key]) => key !== 'totalTokens').map(([key, value]) => <span key={key}>{key.replace(/Tokens$/, '').replace(/([A-Z])/g, ' $1').toLowerCase()}: {value?.toLocaleString()}</span>)}</div>
+        <div>{tokens([entry])} · {duration(workDuration([entry], now))} · {cost([entry])}{entry.usage.totalTokens !== undefined ? ` · Last reported ${new Date(entry.updatedAt).toLocaleTimeString()}` : entry.status === 'running' ? ' · Awaiting provider usage' : ''}</div>
+        <div className="flex flex-wrap gap-x-3 gap-y-1">{Object.entries(entry.usage).filter(([key]) => key !== 'totalTokens' && key !== 'reportedCostUsd' && key !== 'estimatedCostUsd').map(([key, value]) => <span key={key}>{key.replace(/Tokens$/, '').replace(/([A-Z])/g, ' $1').toLowerCase()}: {value?.toLocaleString()}</span>)}</div>
       </div>)}
-      <p>Provider-reported usage for this work. Cached input and reasoning may overlap other categories; the total accounts for the runtime’s format. Counts update when the runtime reports them.</p>
+      <p>Usage is recorded from work Alpha launched. Provider-reported cost and API-equivalent estimates are separate; neither is an actual bill. Cached input and reasoning may overlap other categories, and unknown values stay unknown.</p>
     </div>}
   </div>;
 }

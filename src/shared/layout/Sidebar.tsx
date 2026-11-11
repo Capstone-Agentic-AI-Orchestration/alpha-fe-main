@@ -5,6 +5,7 @@ import { useApp } from '@/app/AppContext';
 import { NavigationTab, UserRole } from '@/shared/types';
 import { CreateWorkspaceModal } from '@/features/settings/CreateWorkspaceModal';
 import { SidebarFrame } from './SidebarFrame';
+import { UsageLimitsPopover } from './UsageLimitsPopover';
 import {
   ChevronDown,
   Edit3,
@@ -379,6 +380,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             ))}
           </div>
 
+          {role !== 'client' && <UsageLimitsPopover compact={compact} />}
           {renderProfileFooter(compact)}
           <CreateWorkspaceModal
             isOpen={createOpen}

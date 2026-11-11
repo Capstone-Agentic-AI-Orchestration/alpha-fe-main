@@ -30,6 +30,9 @@ import {
   ChatMessage,
   ChatAttachmentReference,
   ChatSyncStatus,
+  AiUsageProvider,
+  AiUsageSummary,
+  ProviderLimitsSnapshot,
   McpServer,
   McpServerInput,
   RemoteAction,
@@ -958,6 +961,12 @@ export const apiService = {
 
   // Chat
   getChatUsage: (threadId: string) => fetchJson<ChatUsageSnapshot>(`/chat/threads/${encodeURIComponent(threadId)}/usage`),
+  getAiUsageSummary: (input: { from: string; to: string; provider?: AiUsageProvider | 'all' }) => {
+    const query = new URLSearchParams({ from: input.from, to: input.to, provider: input.provider ?? 'all' });
+    return fetchJson<AiUsageSummary>(`/ai-usage/summary?${query.toString()}`);
+  },
+  getProviderLimits: () => fetchJson<ProviderLimitsSnapshot>('/ai-usage/limits'),
+  refreshProviderLimits: () => fetchJson<ProviderLimitsSnapshot>('/ai-usage/limits/refresh', { method: 'POST' }),
   getChatThreads: () => fetchJson<ChatThread[]>('/chat/threads'),
   getChatSyncStatus: (threadId?: string) =>
     fetchJson<ChatSyncStatus>(`/chat/sync/status${threadId ? `?threadId=${encodeURIComponent(threadId)}` : ''}`),

@@ -2,7 +2,7 @@ import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, PenLine, FileText, MessageSquare, Activity,
-  CheckSquare, FolderKanban, Rocket, Bot, BarChart3, Monitor, BookOpen, Settings,
+  CheckSquare, FolderKanban, Rocket, Bot, BarChart3, BookOpen, Settings,
   Ticket
 } from 'lucide-react';
 
@@ -82,7 +82,7 @@ export const NAV_SECTIONS: NavSection[] = [
 
 const ROLE_SECTION_ORDER: Record<UserRole, SectionId[]> = {
   client: ['portal', 'requests', 'communication', 'documents', 'settings'],
-  dev: ['build', 'my_work', 'automation', 'resources', 'communication', 'settings'],
+  dev: ['build', 'my_work', 'automation', 'resources', 'communication', 'insights', 'settings'],
   pm: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'workspace'],
   admin: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'administration']
 };
@@ -139,7 +139,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
 
   { id: 'agents', label: 'Agents', labels: { dev: 'Agent Directory' }, title: 'Agent Studio', subtitle: 'Manage personas, models, and autonomy', group: 'configure', section: 'resources', icon: Bot },
-  { id: 'runtimes', label: 'Runtimes', title: 'AI Runtimes & Endpoints', subtitle: 'Local Ollama/LM Studio & cloud APIs', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: Monitor },
   { id: 'skills', label: 'Skills', labels: { pm: 'Integrations', admin: 'Integrations' }, title: 'System Skills & MCP', subtitle: 'Tool registry, bash, browser, & MCP', group: 'configure', section: 'resources', sectionByRole: { pm: 'operations', admin: 'operations' }, icon: BookOpen },
 
   { id: 'analytics', label: 'Analytics', labels: { pm: 'Delivery Health', admin: 'Delivery Health' }, title: 'Operational Analytics', subtitle: 'Run health, delivery activity, and performance', group: 'workspace', section: 'insights', icon: BarChart3 },
@@ -197,14 +196,14 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  */
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'runtimes', 'skills', 'chat', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'analytics', 'settings'],
   pm: [
     'issues', 'projects', 'tickets',
-    'agents', 'runtimes', 'skills', 'analytics', 'settings'
+    'agents', 'skills', 'analytics', 'settings'
   ],
   admin: [
     'issues', 'projects',
-    'agents', 'runtimes', 'skills', 'analytics', 'operations', 'settings'
+    'agents', 'skills', 'analytics', 'operations', 'settings'
   ]
 };
 
