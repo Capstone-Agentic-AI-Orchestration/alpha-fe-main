@@ -1,6 +1,8 @@
 import { LoadingRows, Skeleton } from '@/shared/components/ui/skeleton';
-import React from 'react';
+import React, { useState } from 'react';
 import { useApp } from '@/app/AppContext';
+import { Button } from '@/shared/components/ui/button';
+import { AiUsageDashboard } from './AiUsageDashboard';
 import {
   Activity,
   AlertTriangle,
@@ -8,26 +10,40 @@ import {
   Bot,
   CheckCircle2,
   Clock3,
+  Coins,
   PieChart
 } from 'lucide-react';
 
 const metricCard = 'rounded-2xl border border-divider bg-surface p-4';
 
 export const AnalyticsView: React.FC = () => {
-  const { analytics, workspaceLoading, localMode } = useApp();
+  const { analytics, workspaceLoading, localMode, role } = useApp();
+  const [section, setSection] = useState<'operations' | 'ai_usage'>('operations');
+  const canViewAiUsage = role === 'dev';
+  const activeSection = canViewAiUsage ? section : 'operations';
   const maxRuns = Math.max(...analytics.runTimeline.map(item => item.runs), 1);
 
   return (
     <div className="flex h-full flex-col gap-5 overflow-y-auto bg-canvas p-5 text-content-secondary select-none font-sans lg:p-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <BarChart3 className="h-4 w-4 text-content-secondary" />
-          <h1 className="text-base font-semibold tracking-tight text-content">Operational analytics</h1>
-          <span className="font-mono text-[11px] text-content-muted">last 24 hours</span>
+          {activeSection === 'operations'
+            ? <BarChart3 className="h-4 w-4 text-content-secondary" />
+            : <Coins className="h-4 w-4 text-content-secondary" />}
+          <h1 className="text-base font-semibold tracking-tight text-content">{activeSection === 'operations' ? 'Operational analytics' : 'AI Usage'}</h1>
+          {activeSection === 'operations' && <span className="font-mono text-[11px] text-content-muted">last 24 hours</span>}
         </div>
-        <span className="text-[11px] text-content-muted">Run health and delivery activity</span>
+        <span className="text-[11px] text-content-muted">{activeSection === 'operations' ? 'Run health and delivery activity' : 'Local usage, cost estimates, and provider limits'}</span>
       </div>
 
+      {canViewAiUsage && <div className="flex w-fit items-center gap-1 rounded-lg border border-divider bg-surface p-1">
+        <Button variant={activeSection === 'operations' ? 'default' : 'ghost'} size="sm" onClick={() => setSection('operations')}>Operations</Button>
+        <Button variant={activeSection === 'ai_usage' ? 'default' : 'ghost'} size="sm" onClick={() => setSection('ai_usage')}>
+          <Coins className="mr-1.5 h-4 w-4" aria-hidden="true" />AI Usage
+        </Button>
+      </div>}
+
+      {activeSection === 'ai_usage' && canViewAiUsage ? <AiUsageDashboard /> : <>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <div className={metricCard}>
           <div className="flex items-center justify-between text-xs text-content-secondary"><span>Runs in the last 24h</span><Activity className="h-3.5 w-3.5 text-content-muted" /></div>
@@ -94,6 +110,7 @@ export const AnalyticsView: React.FC = () => {
           <div className="mt-6 flex items-start gap-2 border-t border-divider pt-4 text-[11px] text-content-muted"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-content-muted" /><span>Operational telemetry is scoped to the active workspace.</span></div>
         </section>
       </div>
+      </>}
     </div>
   );
 };

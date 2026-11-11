@@ -20,16 +20,22 @@ import { McpServersPanel } from './McpServersPanel';
 import { WorkspaceAccessPanel } from './WorkspaceAccessPanel';
 import { ProjectFoldersPanel } from './ProjectFoldersPanel';
 import { AppearancePanel } from './AppearancePanel';
+import { ProvidersPanel } from './ProvidersPanel';
 
-export const SettingsView: React.FC = () => {
+type SettingsSection = 'general' | 'appearance' | 'members' | 'project_access' | 'integrations' | 'keys' | 'providers' | 'runtimes' | 'autonomy';
+
+export const SettingsView: React.FC<{ defaultSection?: SettingsSection }> = ({ defaultSection = 'general' }) => {
   const { settings, updateSettings, role, can, activeWorkspaceId } = useApp();
   const canManageSettings = can('manage_settings');
-  const canManageRuntimeSettings = can('manage_runtimes');
   const canManageAutonomySettings = can('manage_agents');
   const canManageMcp = can('manage_mcp');
-  const [requestedTab, setActiveTab] = useTabSessionState<'general' | 'appearance' | 'members' | 'project_access' | 'integrations' | 'keys' | 'runtimes' | 'autonomy'>('settings.section', 'general');
+  const [requestedTab, setActiveTab] = useTabSessionState<SettingsSection>('settings.section', defaultSection);
   const [savedSuccess, setSavedSuccess] = useState(false);
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    if (requestedTab === 'runtimes') setActiveTab('providers');
+  }, [requestedTab, setActiveTab]);
 
   const [formData, setFormData] = useState({
     workspaceName: settings.workspaceName,
@@ -106,19 +112,20 @@ export const SettingsView: React.FC = () => {
     // code needs it — not just whoever administers the workspace.
     { id: 'integrations', label: 'Connected Accounts', icon: <Plug className="w-4 h-4 text-emerald-400" />, roles: ['dev', 'pm', 'admin'] },
     { id: 'keys', label: 'API Keys Vault', icon: <Key className="w-4 h-4 text-amber-400" />, roles: ['admin'] },
-    { id: 'runtimes', label: 'Local Inference Engine', icon: <Server className="w-4 h-4 text-teal-400" />, roles: ['pm', 'admin'] },
+    { id: 'providers', label: 'Providers', icon: <Server className="w-4 h-4 text-content-secondary" />, roles: ['dev'] },
     { id: 'autonomy', label: 'Autonomy Governance', icon: <Shield className="w-4 h-4 text-indigo-400" />, roles: ['pm', 'admin'] },
   ];
   const tabs = allTabs.filter(t => t.roles.includes(role));
 
   // A tab this role may not open resolves to the first one it can, derived
   // rather than stored so no render-time state write is needed.
-  const activeTab = tabs.some(t => t.id === requestedTab)
-    ? requestedTab
+  const normalizedRequestedTab = requestedTab === 'runtimes' ? 'providers' : requestedTab;
+  const activeTab = tabs.some(t => t.id === normalizedRequestedTab)
+    ? normalizedRequestedTab
     : (tabs[0]?.id as typeof requestedTab);
   const isAccessTab = activeTab === 'members' || activeTab === 'project_access';
-  const canEditActiveSettings = activeTab === 'runtimes'
-    ? canManageRuntimeSettings
+  const canEditActiveSettings = activeTab === 'providers'
+    ? canManageSettings
     : activeTab === 'autonomy'
       ? canManageAutonomySettings
       : canManageSettings;
@@ -147,14 +154,14 @@ export const SettingsView: React.FC = () => {
       </div>
 
       {/* Settings Content Area */}
-      <div className="max-w-5xl flex-1 space-y-5 overflow-y-auto p-6 md:p-7">
+      <div className="min-w-0 flex-1 space-y-5 overflow-y-auto p-6 md:p-7">
         <div className="flex items-center justify-between border-b border-divider pb-4">
           <div>
             <h2 className="text-lg font-bold text-content capitalize">
               {tabs.find(t => t.id === activeTab)?.label}
             </h2>
             <p className="text-xs text-content-secondary mt-0.5">
-              {activeTab === 'appearance' ? 'Personal appearance for this device. No workspace administration permission is required.' : 'Configure system parameters and preferences for your Alpha workspace.'}
+              {activeTab === 'appearance' ? 'Personal appearance for this device. No workspace administration permission is required.' : activeTab === 'providers' ? 'Manage the AI runtimes and provider accounts available on this desktop.' : 'Configure system parameters and preferences for your Alpha workspace.'}
             </p>
           </div>
 
@@ -313,31 +320,9 @@ export const SettingsView: React.FC = () => {
             </div>
           )}
 
-          {/* Local Runtimes Tab */}
-          {activeTab === 'runtimes' && (
-            <div className="p-6 rounded-2xl bg-surface/50 border border-divider space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-content-secondary uppercase tracking-wider mb-1">Local Ollama Host Endpoint</label>
-                <input
-                  type="text"
-                  value={formData.localRuntimeUrl}
-                  disabled={!canManageRuntimeSettings}
-                  onChange={(e) => setFormData({ ...formData, localRuntimeUrl: e.target.value })}
-                  placeholder="http://localhost:11434"
-                  className="w-full bg-surface-raised border border-control rounded-lg px-3.5 py-2 text-xs font-mono text-content focus:outline-none focus:border-focus"
-                />
-              </div>
-
-              <div className="p-4 rounded-xl bg-surface-raised border border-control space-y-2">
-                <div className="text-xs font-semibold text-teal-300 flex items-center gap-1.5">
-                  <Server className="w-4 h-4" /> Local Engine Probe
-                </div>
-                <p className="text-[11px] text-content-secondary">
-                  When enabled, Alpha polls `http://localhost:11434/api/tags` and `http://localhost:1234/v1/models` every 30s to discover newly downloaded models.
-                </p>
-                {!canManageRuntimeSettings && <p className="text-[11px] text-content-muted">Runtime settings are read-only for PMs. A developer or admin manages host detection.</p>}
-              </div>
-            </div>
+          {/* Providers and local runtimes */}
+          {activeTab === 'providers' && (
+            <ProvidersPanel />
           )}
 
           {/* Autonomy Governance Tab */}
