@@ -9,6 +9,7 @@ import { Progress } from '@/shared/components/ui/progress';
 import { RuntimeIsolationPanel } from '@/features/runtimes/RuntimeIsolationPanel';
 import { apiService } from '@/shared/services/apiService';
 import { isDesktop } from '@/shared/desktop';
+import { providerUsageUrl } from '@/shared/lib/providerUsageUrl';
 import type { ProviderLimitsSnapshot, RuntimeEngine, RuntimeStatus } from '@/shared/types';
 import { ProviderBrandIcon } from './ProviderBrandIcon';
 
@@ -244,7 +245,7 @@ const ProvidersPanelContent: React.FC = () => {
             </div>)}
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-divider pt-2">
               <span className="text-[10px] text-content-muted">Last checked {selectedLimit.lastCheckedAt ? new Date(selectedLimit.lastCheckedAt).toLocaleString() : 'not yet'}</span>
-              <a href={selectedLimit.dashboardUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-link hover:underline">Open provider usage <ExternalLink className="h-3.5 w-3.5" /></a>
+              <a href={providerUsageUrl(selectedLimit)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-link hover:underline">Open provider usage <ExternalLink className="h-3.5 w-3.5" /></a>
             </div>
           </div> : <p className="rounded-lg border border-divider bg-surface-raised/40 p-3 text-xs text-content-secondary">{selected?.id === 'antigravity' ? 'Antigravity limits are not included in this first release.' : 'Provider quota data is not available yet. Check the provider CLI sign-in and refresh.'}</p>}
         </section>
