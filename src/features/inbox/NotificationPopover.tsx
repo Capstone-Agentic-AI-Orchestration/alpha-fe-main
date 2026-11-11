@@ -218,7 +218,7 @@ export const NotificationPopover: React.FC = () => {
         ref={triggerRef}
         type="button"
         onClick={() => setNotificationPanelOpen(open => !open)}
-        className={`relative flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl transition-colors focus:outline-none focus:ring-2 focus:ring-focus ${notificationPanelOpen ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}
+        className={`relative flex h-[28px] w-[28px] flex-shrink-0 items-center justify-center rounded-lg transition-colors focus:outline-none focus:ring-2 focus:ring-focus ${notificationPanelOpen ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}
         title="Notifications"
         aria-label={unreadInboxCount > 0 ? `Notifications, ${unreadInboxCount} unread` : 'Notifications'}
         aria-expanded={notificationPanelOpen}

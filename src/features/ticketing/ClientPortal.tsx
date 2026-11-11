@@ -25,6 +25,7 @@ import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './Clie
 import { StatusPill } from './ClientProjectSections';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
 import { WorkspaceToolbar, WorkspaceTabStrip, WorkspaceTab, WorkspaceNewTabMenu } from '@/shared/layout/WorkspaceToolbar';
+import { isEmptySidebarSpace, useSidebarDocked, useSidebarToggle } from '@/shared/layout/useSidebarToggle';
 import { useClientWorkspaceTabs, type ClientPage as Page } from './clientWorkspaceTabs';
 import './clientDesignTokens.css';
 import './clientPortal.css';
@@ -90,6 +91,27 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash));
   const portalRootRef = useRef<HTMLElement>(null);
   const workspaceFrameRef = useRef<HTMLDivElement>(null);
+  // Same sidebar behavior as the staff app: no hover; double-click empty sidebar
+  // space or press Ctrl+B. Open on wide windows pushes the page over; on narrow
+  // ones it floats and closes on navigation, Escape or an outside click.
+  const clientNav = useSidebarToggle('alpha.client-sidebar');
+  const navDocked = useSidebarDocked();
+  const navFloating = clientNav.open && !navDocked;
+  const clientSidebarRef = useRef<HTMLElement>(null);
+  const { setOpen: setClientNavOpen } = clientNav;
+  useEffect(() => {
+    if (!navFloating) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!clientSidebarRef.current?.contains(event.target as Node)) setClientNavOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') setClientNavOpen(false); };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [navFloating, setClientNavOpen]);
   const [portalState, setPortalState] = useState<PortalState>('checking');
   const [session, setSession] = useState<ClientSession | null>(null);
   const [phaseWorkflowEnabled, setPhaseWorkflowEnabled] = useState(false);
@@ -566,6 +588,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   }
 
   function navigate(nextPage: Page) {
+    if (navFloating) setClientNavOpen(false);
     setPage(nextPage); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
     if (nextPage !== 'requests') { setReturnToProjects(false); setQueueNotice(''); }
     if (nextPage === 'projects') setSelectedProjectKey(null);
@@ -614,8 +637,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const clientName = session?.fullName?.trim() || 'Client';
   const clientInitials = clientName.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 
-  return <main ref={portalRootRef} className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}${inspectionOnly ? ' client-portal-shell--inspection' : ''}`}>
-    <aside className="client-sidebar" aria-label="Client portal navigation">
+  return <main ref={portalRootRef} className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}${inspectionOnly ? ' client-portal-shell--inspection' : ''}${clientNav.open && navDocked ? ' client-portal-shell--nav-open' : ''}`}>
+    <aside ref={clientSidebarRef} className={`client-sidebar${clientNav.open ? ' is-open' : ''}`} aria-label="Client portal navigation"
+      onDoubleClick={event => { if (isEmptySidebarSpace(event.target)) clientNav.toggle(); }}>
       <div className="client-sidebar-brand"><img src={alphaMarkUrl} alt="" /><div><strong>Alphaexplora</strong><small>Client portal</small></div></div>
       <nav className="client-sidebar-nav">
         <button type="button" aria-current={currentNav === 'overview' ? 'page' : undefined} onClick={() => navigate('overview')}>
@@ -648,7 +672,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             title="Client quick guide" onClick={() => setQuickGuideOpen(true)}>
             <CircleHelp size={17} /><span>Quick guide</span>
           </button>
-          <span className="client-sidebar-version" aria-label="Client portal version 2.0">2.0<span>v2.0.0</span></span>
+          <span className="client-sidebar-version" aria-label="Client portal version 2.0">2.0</span>
         </div>
       </div>
     </aside>

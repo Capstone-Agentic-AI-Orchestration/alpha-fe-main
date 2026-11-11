@@ -2,6 +2,7 @@ import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { buildDecisionContext } from './chatBuildDecision';
 import { CHAT_ORCHESTRATOR_BAR_ENABLED } from '@/config/features';
 import { ChatPanelHandle } from './ChatPanelHandle';
+import { usePanelPresence } from './usePanelPresence';
 import { ChatConversationLayout } from './ChatConversationLayout';
 import { LocalPreviewTab, WebPreviewCard, useLocalPreviews } from './LocalPreview';
 import { reconcileCallSnapshot } from './chatCallSnapshot';
@@ -601,6 +602,8 @@ export const ChatView: React.FC = () => {
     if (panelVisible) setPanelVisible(false);
     else showSidePanel();
   };
+  // The side panel slides open and shut from its button.
+  const sidePanelPresence = usePanelPresence(Boolean(panelVisible));
   const [sideTabs, setSideTabs] = useTabSessionState<SideTab[]>(panelKey('sideTabs'), []);
   const [activeSideTabId, setActiveSideTabId] = useTabSessionState<string | null>(panelKey('activeSideTab'), null);
   const [openedReviewDecisions, setOpenedReviewDecisions] = useTabSessionState<string[]>(sessionStateKey('openedReviewDecisions'), []);
@@ -640,8 +643,9 @@ export const ChatView: React.FC = () => {
   const [syncRetrying, setSyncRetrying] = useState(false);
   const [selectedBuildRepositories, setSelectedBuildRepositories] = useTabSessionState<string[]>(sessionStateKey('buildRepositories'), []);
   const [routingMessageId, setRoutingMessageId] = useState<string | null>(null);
-  // The list stays docked; a collapsed rail expands only on click.
   const [threadListCollapsed, setThreadListCollapsed] = useTabSessionState<boolean>('chatThreadListCollapsed', false);
+  // The conversation list slides open and shut from its buttons.
+  const threadListPresence = usePanelPresence(!threadListCollapsed);
   const [expandedProjectIds, setExpandedProjectIds] = useTabSessionState<string[]>('chatExpandedProjectIds', []);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [threadPendingDelete, setThreadPendingDelete] = useState<{ id: string; title: string } | null>(null);
@@ -1876,10 +1880,12 @@ export const ChatView: React.FC = () => {
   return (
     <PlanPanelContext.Provider value={isClient ? null : openPlanTab}>
     <div className="relative h-full min-h-0 flex overflow-hidden bg-shell text-sm text-content">
-      <div className={'relative shrink-0 ' + (threadListCollapsed ? 'w-12' : 'w-72 sm:w-80')}>
-      {threadListCollapsed ? <div className="group flex h-full items-center justify-center bg-shell">
+      {/* The width animates; the list keeps its full width inside and is clipped while it slides. */}
+      <div className={'relative shrink-0 overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none ' + (threadListCollapsed ? 'w-12' : 'w-72 sm:w-80')}>
+      {!threadListPresence.mounted && <div className="group flex h-full items-center justify-center bg-shell">
         <button type="button" onClick={() => setThreadListCollapsed(false)} aria-label="Show conversations" title="Show conversations" className="flex h-16 w-5 items-center justify-center rounded-full border border-divider bg-surface-raised/90 text-content-secondary opacity-0 shadow-lg shadow-black/40 transition-all duration-200 hover:border-divider hover:text-content group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"><ChevronRight className="h-3.5 w-3.5" /></button>
-      </div> : <aside aria-label="Project conversations" className="relative z-30 flex h-full w-full min-w-0 flex-col border-r border-divider bg-shell">
+      </div>}
+      {threadListPresence.mounted && <aside aria-label="Project conversations" aria-hidden={threadListPresence.closing || undefined} className="relative z-30 flex h-full w-72 min-w-0 flex-col border-r border-divider bg-shell sm:w-80">
         <div className="flex items-start justify-between gap-2 border-b border-divider px-4 py-3"><div className="min-w-0"><h2 className="text-base font-semibold text-content">{isClient ? 'Messages' : 'Project chat'}</h2><p className="mt-0.5 truncate text-[10px] text-content-muted">{activeWorkspace?.name ?? 'Workspace'}</p></div><div className="flex shrink-0 items-center gap-1"><button type="button" onClick={startNewThread} aria-label="New chat" title="New chat" className="rounded-lg p-1.5 text-content-secondary hover:bg-surface-high hover:text-content"><Plus className="h-4 w-4" /></button><button type="button" onClick={() => setThreadListCollapsed(true)} aria-label="Collapse conversations" title="Collapse conversations" className="rounded-lg p-1.5 text-content-secondary hover:bg-surface-high hover:text-content"><PanelLeftClose className="h-4 w-4" /></button></div></div>
         {chatThreadsLoadState === 'loading' && !chatThreads.length && <LoadingRows label="Loading conversations" className="px-3" />}
         {chatThreadsError && <div role="alert" className="mx-3 mt-3 rounded-lg border border-status-warning-border bg-status-warning-subtle px-3 py-2.5 text-[11px] text-status-warning"><div className="flex items-start gap-2"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" /><div className="min-w-0 flex-1"><p className="font-semibold">Conversations could not be loaded</p><p className="mt-1 break-words text-status-warning/80">{chatThreadsError}</p></div><button type="button" onClick={() => void retryChatThreads()} disabled={chatThreadsLoadState === 'loading'} className="inline-flex shrink-0 items-center gap-1 rounded-md border border-status-warning-border px-2 py-1 font-semibold hover:bg-status-warning-subtle disabled:opacity-50"><RefreshCw className="h-3 w-3" />Retry</button></div></div>}
@@ -1937,7 +1943,7 @@ export const ChatView: React.FC = () => {
       </Modal>
       <main className="relative flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden bg-shell">
         {activeThread ? <>
-          <header className="flex h-14 shrink-0 items-center gap-3 border-b border-divider px-5 lg:px-7">
+          <header className="flex h-14 shrink-0 items-center gap-3 px-5 lg:px-7">
             <FolderOpen className="h-4 w-4 shrink-0 text-content-secondary" aria-hidden="true" />
             <h1 className="min-w-0 flex-1 truncate text-sm font-semibold text-content">{activeThread.title}</h1>
             {!isClient && <>
@@ -2097,7 +2103,7 @@ export const ChatView: React.FC = () => {
             />}
       </main>
       {!isClient && <ChatPanelHandle open={Boolean(panelVisible)} onToggle={toggleSidePanel} />}
-      {!isClient && panelVisible && <ChatSidePanel tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setPanelVisible(false); document.getElementById('chat-panel-toggle')?.focus(); }}>
+      {!isClient && sidePanelPresence.mounted && <ChatSidePanel motion={sidePanelPresence.closing ? 'closing' : 'opening'} tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setPanelVisible(false); document.getElementById('chat-panel-toggle')?.focus(); }}>
         {activeSideTab ? renderSideTab(activeSideTab) : <section className="space-y-4 p-5"><h2 className="text-sm font-semibold">Side panel</h2><p className="text-xs text-content-secondary">Keep previews, plans, agents and changes beside your conversation.</p>{latestBuild && project && <><button type="button" onClick={() => openPlanTab({ projectId: project.id, runId: latestBuild.runId, planVersion: latestBuild.orchestration.run.planVersion, auto: false })} className="block text-xs text-link">Open saved plan</button><button type="button" onClick={() => openSavedBuildReview(latestBuild.runId)} className="block text-xs text-link">Build review</button><button type="button" onClick={openBuildChanges} className="block text-xs text-link">Code changes</button></>}</section>}
       </ChatSidePanel>}
     </div>

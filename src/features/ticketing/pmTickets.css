@@ -487,7 +487,8 @@
 .pm-ticket-page__tab-actions { display: flex; min-width: 0; align-items: center; justify-content: flex-end; margin-left: auto; }
 .pm-ticket-page__tab-actions > button { min-height: 32px !important; height: 32px; padding: 0 9px !important; border-radius: 6px; color: rgb(var(--ui-text-secondary)); font-size: 12px !important; }
 .pm-ticket-page__tab-actions > button:hover { background: rgb(var(--ui-raised)); color: rgb(var(--ui-text-primary)); }
-.pm-ticket-page--nested > .pm-ticket-page__tabs { position: relative; inset: auto; z-index: 4; display: flex; width: 100%; height: 44px; min-height: 44px; padding-inline: clamp(16px, 3vw, 32px); border-right: 0; border-bottom: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-shell)); }
+/* The queue tabs sit on the page background with no divider, like the workspace header above them. */
+.pm-ticket-page--nested > .pm-ticket-page__tabs { position: relative; inset: auto; z-index: 4; display: flex; width: 100%; height: 44px; min-height: 44px; padding-inline: clamp(16px, 3vw, 32px); border-right: 0; border-bottom: 0; background: transparent; }
 .pm-ticket-page--nested > .pm-ticket-page__tabs button { min-height: 44px; }
 
 .pm-tickets__navigation-heading { display: none !important; }
@@ -514,7 +515,7 @@
 .pm-tickets.pm-tickets--ticket-open .pm-tickets__navigation { display: flex; min-height: 0; overflow: hidden; padding: 14px 10px 16px; }
 .pm-tickets.pm-tickets--ticket-open .pm-tickets__header { display: none; }
 .pm-tickets__chat-list { display: flex !important; min-height: 0; flex: 1; flex-direction: column; overflow-y: auto; border-top: 1px solid rgb(var(--ui-divider)); margin-top: 4px; padding-top: 12px; }
-.pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-header { padding: 8px clamp(20px, 3vw, 32px) 7px; border-bottom: 1px solid rgb(var(--ui-divider)); }
+.pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-header { padding: 8px clamp(20px, 3vw, 32px) 7px; border-bottom: 0; }
 .pm-tickets__detail-heading { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; min-width: 0; align-items: start; }
 .pm-tickets__detail-heading-copy { min-width: 0; }
 .pm-tickets__detail-back { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 6px; background: none; color: var(--pm-muted); }
@@ -592,7 +593,7 @@
 .pm-inquiries__list-item time { color: rgb(var(--ui-text-secondary)); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
 .pm-inquiries__new-marker { position: absolute; top: 10px; right: 12px; color: rgb(var(--ui-selected-content)); font-size: 9px; }
 .pm-inquiries__load-more, .pm-inquiries__queue-load-more { flex: none; justify-content: center; margin: 10px 0 0; }
-.pm-inquiries__queue-header { display: flex; min-height: 68px; flex: none; align-items: center; justify-content: space-between; gap: 18px; padding: 14px clamp(16px, 3vw, 32px); border-bottom: 1px solid rgb(var(--ui-divider)); }
+.pm-inquiries__queue-header { display: flex; min-height: 68px; flex: none; align-items: center; justify-content: space-between; gap: 18px; padding: 14px clamp(16px, 3vw, 32px); border-bottom: 0; }
 .pm-inquiries__view-heading { display: flex; min-width: 0; align-items: center; gap: 10px; }
 .pm-inquiries__view-heading h1 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 18px; font-weight: 600; letter-spacing: -.3px; }
 .pm-inquiries__view-heading > span { color: rgb(var(--ui-text-muted)); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -624,7 +625,7 @@
 .pm-inquiries__skeleton-row > :first-child { flex: 1 1 40%; }
 .pm-inquiries__skeleton-row > :nth-child(2) { flex: 1 1 24%; }
 .pm-inquiries__skeleton-row > :last-child { flex: 0 1 18%; }
-.pm-inquiries__detail-header { flex: none; padding: 8px clamp(16px, 3vw, 32px) 7px; border-bottom: 1px solid rgb(var(--ui-divider)); }
+.pm-inquiries__detail-header { flex: none; padding: 8px clamp(16px, 3vw, 32px) 7px; border-bottom: 0; }
 .pm-inquiries__detail-heading { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; min-width: 0; align-items: start; }
 .pm-inquiries__detail-heading-copy { min-width: 0; }
 .pm-inquiries__detail-back { display: grid; width: 32px; height: 32px; place-items: center; border: 0; border-radius: 6px; background: none; color: rgb(var(--ui-text-secondary)); }

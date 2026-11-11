@@ -33,7 +33,6 @@ import {
   Minus,
   BarChart2,
   Flame,
-  CheckSquare,
   RefreshCw,
   Play,
   CalendarDays,
@@ -558,9 +557,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   );
 
   return (
-    <div className="h-full flex flex-col overflow-hidden bg-shell text-sm text-content">
-      {/* Shared task controls stay in one place for list, Kanban, and Gantt views. */}
-      <div className="space-y-2 border-b border-divider bg-shell px-5 py-3">
+    <div className="h-full flex flex-col overflow-hidden bg-surface text-sm text-content">
+      {/* Shared task controls stay in one place for list, Kanban, and Gantt views.
+          They share the task area's surface, with no divider, so the page reads as one panel. */}
+      <div className="space-y-2 bg-surface px-5 py-3">
         {/* Top Row: Title, Filters & Controls */}
         <div className={`flex flex-col justify-between gap-4 ${embedded ? 'xl:flex-row xl:flex-wrap xl:items-center' : 'sm:flex-row sm:items-center'}`}>
           {/* Left: Tasks title & category pills */}
@@ -572,16 +572,12 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
               inside a project as outside one.
             */}
             {!embedded && (
-              <div className="flex items-center gap-2">
-                <CheckSquare className="w-4 h-4 text-content-secondary" />
-                <h1 className="text-base font-semibold text-content">
-                  Tasks
-                </h1>
-              </div>
+              // The open tab already names the page; the heading stays for screen readers.
+              <h1 className="sr-only">Tasks</h1>
             )}
 
             {/* Scope is a compact text control, not a second container inside the header. */}
-            <div className={`flex items-center gap-1 text-xs ${role === 'dev' ? 'rounded-lg border border-divider bg-surface-raised p-1' : ''}`} role={role === 'dev' ? 'tablist' : undefined} aria-label={role === 'dev' ? 'Task scope' : undefined}>
+            <div className={`flex items-center gap-1 text-xs ${role === 'dev' ? 'rounded-lg border border-divider p-1' : ''}`} role={role === 'dev' ? 'tablist' : undefined} aria-label={role === 'dev' ? 'Task scope' : undefined}>
               <button
                 onClick={() => setFilterCategory('all')}
                 role={role === 'dev' ? 'tab' : undefined}
@@ -672,7 +668,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             </button>
 
             {/* Alternate layouts for the same filtered task set. */}
-            <div role="group" aria-label="Task view" className="inline-flex items-center gap-0.5 rounded-lg border border-divider bg-surface p-0.5 text-xs">
+            <div role="group" aria-label="Task view" className="inline-flex items-center gap-0.5 rounded-lg border border-divider p-0.5 text-xs">
               <Button
                 type="button"
                 onClick={() => setViewMode('list')}

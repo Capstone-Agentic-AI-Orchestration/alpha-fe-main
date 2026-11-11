@@ -2,7 +2,6 @@ import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useState, useMemo } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import {
-  Bot,
   Plus,
   Search,
   Filter,
@@ -278,50 +277,12 @@ export const AgentsView: React.FC = () => {
   };
 
   return (
-    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-content-secondary select-none font-sans lg:p-6">
-
-      {/* ================= TOP HEADER BAR ================= */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Bot className="w-4 h-4 text-content-secondary" />
-          <h1 className="text-base font-semibold tracking-tight text-content">Agents</h1>
-          <span className="text-xs text-content-muted font-mono">{agents.length}</span>
-        </div>
-
-        {canManageAgents && (
-          <>
-            {/* Import from a shared persona file */}
-            <input
-              ref={importInputRef}
-              type="file"
-              accept=".md,text/markdown"
-              className="hidden"
-              onChange={(e) => void handleImportFile(e.target.files)}
-            />
-            <button
-              onClick={() => importInputRef.current?.click()}
-              disabled={importing}
-              title="Import an agent from a persona file a teammate shared"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content-secondary hover:text-content transition-colors shadow-sm disabled:opacity-40"
-            >
-              <Upload className="w-3.5 h-3.5" />
-              <span>{importing ? 'Importing...' : 'Import'}</span>
-            </button>
-
-            {/* + New agent button */}
-            <button
-              onClick={() => setCreateModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content transition-colors shadow-sm"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              <span>New agent</span>
-            </button>
-          </>
-        )}
-      </div>
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-content-secondary select-none font-sans pt-3 lg:p-6 lg:pt-3">
 
       {/* ================= SEARCH & ACTION ROW ================= */}
       <div className="flex items-center justify-between gap-4">
+        {/* The open tab already names the page; this heading is for screen readers. It sits inside the first row so the page's spacing does not leave a gap above it. */}
+        <h1 className="sr-only">Agents</h1>
         {/* Left: Search Input */}
         <div className="relative flex-1 max-w-xs">
           <Search className="w-3.5 h-3.5 text-content-muted absolute left-3 top-1/2 -translate-y-1/2" />
@@ -336,6 +297,35 @@ export const AgentsView: React.FC = () => {
 
         {/* Right Actions: Filter, Sort, Table indicator */}
         <div className="flex items-center gap-2 relative">
+
+          {canManageAgents && (
+            <>
+              {/* Import from a shared persona file */}
+              <input
+                ref={importInputRef}
+                type="file"
+                accept=".md,text/markdown"
+                className="hidden"
+                onChange={(e) => void handleImportFile(e.target.files)}
+              />
+              <button
+                onClick={() => importInputRef.current?.click()}
+                disabled={importing}
+                title="Import an agent from a persona file a teammate shared"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content-secondary hover:text-content transition-colors shadow-sm disabled:opacity-40"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                <span>{importing ? 'Importing...' : 'Import'}</span>
+              </button>
+              <button
+                onClick={() => setCreateModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content transition-colors shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>New agent</span>
+              </button>
+            </>
+          )}
 
           {/* Filter Popover */}
           <div className="relative">

@@ -11,6 +11,7 @@ import { API_BASE } from '@/shared/config';
 import { TabSessionContext, useApp, useTabSessionState } from '@/app/AppContext';
 import { Sidebar } from '@/shared/layout/Sidebar';
 import { WorkspaceToolbar, WorkspaceTabStrip, WorkspaceTab, WorkspaceNewTabMenu } from '@/shared/layout/WorkspaceToolbar';
+import { useSidebarToggle } from '@/shared/layout/useSidebarToggle';
 import { CommandPalette } from '@/shared/components/CommandPalette';
 import { CreateIssueModal } from '@/features/issues/CreateIssueModal';
 import { AgentRunModal } from '@/features/runs/AgentRunModal';
@@ -193,9 +194,9 @@ export const App: React.FC = () => {
       setSigningOut(false);
     }
   };
-  // Start in the compact rail. The sidebar reveals itself on pointer hover or
-  // keyboard focus, and users can pin it open from the rail's control.
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  // The sidebar opens only on request: double-click empty sidebar space or press
+  // Ctrl+B. The choice is remembered on this device.
+  const sidebar = useSidebarToggle('alpha.sidebar');
   const workspaceFrameRef = useRef<HTMLDivElement>(null);
   // The desktop app on Windows draws its own title bar area; see main.js.
   const nativeWindowControls = isDesktop && desktop?.platform === 'win32';
@@ -309,8 +310,8 @@ export const App: React.FC = () => {
     <div className="flex h-dvh w-full bg-background text-content font-sans overflow-hidden text-sm">
       {/* Sidebar */}
       <Sidebar
-        collapsed={sidebarCollapsed}
-        setCollapsed={setSidebarCollapsed}
+        collapsed={!sidebar.open}
+        setCollapsed={collapsed => sidebar.setOpen(!collapsed)}
         onOpenNewIssue={() => setTabSessionState(activeTabId, 'issueModal.open', true)}
         onSignOut={signOut}
         onSwitchProfile={isDesktop ? () => setProfilePickerOpen(true) : undefined}
@@ -318,13 +319,19 @@ export const App: React.FC = () => {
       />
 
       {/* Main Workspace Frame */}
+      {/* The frame is window chrome: the rail, the tab bar and the Windows
+          controls share the shell color. The open page sits in an inset panel
+          whose left and top edges form one line with a curved corner. */}
       <div ref={workspaceFrameRef} className="relative flex-1 min-w-0 bg-shell overflow-hidden">
         {/* On Windows the native title bar is hidden and its minimize, maximize
             and close buttons are drawn over the top-right corner. The strip
             above the toolbar and the toolbar's empty space move the window. */}
-        {nativeWindowControls && <div aria-hidden="true" className="app-drag-region absolute inset-x-0 top-0 z-20 h-3 sm:h-4" />}
-        {/* Floating workspace toolbar */}
-        <div className={`pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4 ${nativeWindowControls ? 'pr-[9.5rem] sm:pr-[9.5rem]' : ''}`}>
+        {nativeWindowControls && <div aria-hidden="true" className="app-drag-region absolute inset-x-0 top-0 z-20 h-1" />}
+        {/* Workspace tabs. Their 32px row starts 6px down so it is centered
+            between the window's top edge and the page panel's line at 44px; the
+            sidebar's workspace switcher uses the same row. Pixel units on
+            purpose: the root font is 15px, so rem-based sizes would drift. */}
+        <div className={`pointer-events-none absolute inset-x-0 top-0 z-30 pt-[6px] pl-5 ${nativeWindowControls ? 'pr-[9.5rem]' : 'pr-5'}`}>
           <WorkspaceToolbar draggable={nativeWindowControls} actions={<NotificationPopover />}>
             {/* Scrollable Open Tabs List */}
             <WorkspaceTabStrip label="Open workspace tabs">
@@ -352,7 +359,7 @@ export const App: React.FC = () => {
         </div>
 
         {/* Dynamic View Content */}
-        <main className="relative h-full overflow-hidden pt-16 sm:pt-20">
+        <main className="absolute inset-x-0 bottom-0 top-[44px] overflow-hidden rounded-tl-xl border-l border-t border-divider">
           {tabs.filter(tab => mountedTabIds.has(tab.id)).map(tab => {
             const view = resolveView(tab.view);
             const isActive = activeTabId === tab.id;

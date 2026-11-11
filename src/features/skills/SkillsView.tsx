@@ -125,31 +125,13 @@ export const SkillsView: React.FC = () => {
   };
 
   return (
-    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-content-secondary select-none font-sans lg:p-6">
+    <div className="relative flex h-full flex-col space-y-5 overflow-y-auto bg-canvas p-5 text-content-secondary select-none font-sans pt-3 lg:p-6 lg:pt-3">
 
-      {/* ================= TOP HEADER BAR ================= */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Terminal className="w-4 h-4 text-content-secondary" />
-          <h1 className="text-base font-semibold tracking-tight text-content">Skills & Tools</h1>
-          <span className="text-xs text-content-muted font-mono">{enabledCount}/{skills.length} enabled</span>
-        </div>
-
-        {canManageSkills && (
-          <button
-            onClick={() => void scanInstalledSkills()}
-            disabled={isScanningSkills}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-divider bg-surface hover:bg-surface-raised text-xs font-medium text-content-secondary hover:text-content disabled:opacity-60 disabled:cursor-wait transition-colors"
-            title="Scan the installed SKILL.md folders on this machine"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isScanningSkills ? 'animate-spin' : ''}`} />
-            <span>{isScanningSkills ? 'Scanning skill folders…' : 'Scan installed skills'}</span>
-          </button>
-        )}
-
-      </div>
-
-      <div className="-mt-4 flex items-center gap-2 text-[11px] text-content-muted font-mono">
+      <div className="flex items-center gap-2 text-[11px] text-content-muted font-mono">
+        {/* The open tab already names the page; this heading is for screen readers. It sits inside the first row so the page's spacing does not leave a gap above it. */}
+        <h1 className="sr-only">Skills & Tools</h1>
+        <span>{enabledCount}/{skills.length} enabled</span>
+        <span className="text-content-muted">•</span>
         <span>{installedCount} installed on this machine</span>
         <span className="text-content-muted">•</span>
         <span>Codex, agent, project, and plugin folders</span>
@@ -173,6 +155,18 @@ export const SkillsView: React.FC = () => {
 
         {/* Right Actions: Filter, Sort, Table indicator */}
         <div className="flex items-center gap-2 relative">
+
+          {canManageSkills && (
+            <button
+              onClick={() => void scanInstalledSkills()}
+              disabled={isScanningSkills}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-divider bg-surface hover:bg-surface-raised text-xs font-medium text-content-secondary hover:text-content disabled:opacity-60 disabled:cursor-wait transition-colors"
+              title="Scan the installed SKILL.md folders on this machine"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isScanningSkills ? 'animate-spin' : ''}`} />
+              <span>{isScanningSkills ? 'Scanning skill folders…' : 'Scan installed skills'}</span>
+            </button>
+          )}
 
           {/* Filter Popover */}
           <div className="relative">
