@@ -8,6 +8,7 @@ import { useActionsResource } from './useActionsResource';
 import { ActionsRunDetail, ActionsStatus, PageControls, actionsButton, actionsInput } from './ActionsRunDetail';
 import { relativeTime } from './repoFormat';
 import { PipelineStrip } from './PipelineStrip';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 
 interface Props { projectId: string; repositories: string[]; repository: string | null; active: boolean; canPromote: boolean; canPromoteUat?: boolean }
 const initialFilters: ActionsFilters = {};
@@ -35,8 +36,8 @@ export function ProjectActionsView({ projectId, repositories, repository, active
         {[['', 'All statuses'], ['success', 'Success'], ['failure', 'Failed'], ['in_progress', 'In progress'], ['queued', 'Queued'], ['waiting', 'Waiting'], ['cancelled', 'Cancelled'], ['timed_out', 'Timed out'], ['skipped', 'Skipped'], ['action_required', 'Action required']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}
       </select></label>
       <label className="text-[11px] text-content-secondary">Event<input list="actions-events" placeholder="All events" className={`${actionsInput} mt-1 block w-36`} value={draft.event || ''} onChange={e => setDraft(f => ({ ...f, event: e.target.value.trim() || undefined }))} /><datalist id="actions-events">{['push', 'pull_request', 'workflow_dispatch', 'schedule', 'workflow_run', 'release'].map(event => <option key={event} value={event} />)}</datalist></label>
-      <label className="text-[11px] text-content-secondary">From<input aria-label="Runs from date" type="date" value={draft.from || ''} onChange={e => setDraft(f => ({ ...f, from: e.target.value || undefined }))} className={`${actionsInput} mt-1 block [color-scheme:dark]`} /></label>
-      <label className="text-[11px] text-content-secondary">To<input aria-label="Runs to date" type="date" value={draft.to || ''} onChange={e => setDraft(f => ({ ...f, to: e.target.value || undefined }))} className={`${actionsInput} mt-1 block [color-scheme:dark]`} /></label>
+      <label className="text-[11px] text-content-secondary">From<DatePicker aria-label="Runs from date" value={draft.from || ''} onChange={value => setDraft(f => ({ ...f, from: value || undefined }))} buttonClassName={`${actionsInput} mt-1 h-8 justify-start text-[11px]`} /></label>
+      <label className="text-[11px] text-content-secondary">To<DatePicker aria-label="Runs to date" min={draft.from} value={draft.to || ''} onChange={value => setDraft(f => ({ ...f, to: value || undefined }))} buttonClassName={`${actionsInput} mt-1 h-8 justify-start text-[11px]`} /></label>
       <button className={actionsButton} type="submit">Apply filters</button>
       <button className={actionsButton} type="button" onClick={() => { setDraft({}); setFilters({}); }}>Clear filters</button>
     </form>

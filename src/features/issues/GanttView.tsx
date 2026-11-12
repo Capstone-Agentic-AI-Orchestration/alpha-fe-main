@@ -9,6 +9,7 @@ import {
   Link2
 } from 'lucide-react';
 import type { Issue, Project } from '@/shared/types';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 
 interface GanttViewProps {
   project?: Project;
@@ -542,20 +543,21 @@ export const GanttView: React.FC<GanttViewProps> = ({
                   <div className="grid grid-cols-2 gap-3">
                     <label className="space-y-1 text-[11px] font-medium text-content-secondary">
                       <span className="block">Start date</span>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={rangeDraftStart}
-                        onChange={event => setRangeDraftStart(event.target.value)}
-                        className="w-full rounded-md border border-divider bg-surface px-2 py-1.5 text-[12px] text-content"
+                        onChange={setRangeDraftStart}
+                        aria-label="Timeline start date"
+                        buttonClassName="h-8 w-full justify-start px-2 text-[12px]"
                       />
                     </label>
                     <label className="space-y-1 text-[11px] font-medium text-content-secondary">
                       <span className="block">End date</span>
-                      <input
-                        type="date"
+                      <DatePicker
                         value={rangeDraftEnd}
-                        onChange={event => setRangeDraftEnd(event.target.value)}
-                        className="w-full rounded-md border border-divider bg-surface px-2 py-1.5 text-[12px] text-content"
+                        onChange={setRangeDraftEnd}
+                        aria-label="Timeline end date"
+                        min={rangeDraftStart || undefined}
+                        buttonClassName="h-8 w-full justify-start px-2 text-[12px]"
                       />
                     </label>
                   </div>

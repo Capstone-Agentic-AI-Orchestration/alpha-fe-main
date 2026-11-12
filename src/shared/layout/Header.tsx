@@ -8,6 +8,7 @@ import {
   Bell,
   ChevronRight
 } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 
 interface HeaderProps {
   onOpenNewIssue: () => void;
@@ -105,33 +106,52 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
       {/* Right Controls */}
       <div className="flex items-center gap-2.5 sm:gap-3">
         {/* Mobile Search Button */}
-        <button
-          onClick={() => setCommandPaletteOpen(true)}
-          className="sm:hidden p-2 rounded-lg text-content-secondary hover:text-content hover:bg-surface-high"
-        >
-          <Search className="w-4 h-4" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setCommandPaletteOpen(true)}
+              aria-label="Search or jump to"
+              className="sm:hidden p-2 rounded-lg text-content-secondary hover:text-content hover:bg-surface-high"
+            >
+              <Search className="w-4 h-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Search or jump to</TooltipContent>
+        </Tooltip>
 
         {/* Local AI Runtime Badge */}
-        <button
-          onClick={() => setActiveTab('runtimes')}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-status-success-subtle border border-status-success-border text-status-success text-xs font-medium hover:bg-status-success-subtle transition-colors"
-          title="Local Runtimes Online"
-        >
-          <Cpu className="w-3.5 h-3.5 text-status-success" />
-          <span className="hidden lg:inline">{localRuntimesOnline} Local AI Ready</span>
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setActiveTab('runtimes')}
+              aria-label={`${localRuntimesOnline} local runtimes online`}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-status-success-subtle border border-status-success-border text-status-success text-xs font-medium hover:bg-status-success-subtle transition-colors"
+            >
+              <Cpu className="w-3.5 h-3.5 text-status-success" />
+              <span className="hidden lg:inline">{localRuntimesOnline} Local AI Ready</span>
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Open runtime connections and authentication status</TooltipContent>
+        </Tooltip>
 
         {/* Active Agents Running Indicator */}
         {activeAgentsRunning > 0 && (
-          <div
-            onClick={() => setActiveTab('agents')}
-            className="cursor-pointer flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-status-info-subtle border border-status-info-border text-status-info text-xs font-semibold animate-pulse shadow-glow-cyan"
-            title="Agents Currently Running Tasks"
-          >
-            <Bot className="w-3.5 h-3.5 text-status-info" />
-            <span className="hidden sm:inline">{activeAgentsRunning} Running</span>
-          </div>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={() => setActiveTab('agents')}
+                aria-label={`${activeAgentsRunning} agents currently running tasks`}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-status-info-subtle border border-status-info-border text-status-info text-xs font-semibold"
+              >
+                <Bot className="w-3.5 h-3.5 text-status-info" />
+                <span className="hidden sm:inline">{activeAgentsRunning} Running</span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Open agents currently running tasks</TooltipContent>
+          </Tooltip>
         )}
 
         {/* New Issue Button */}
@@ -144,19 +164,24 @@ export const Header: React.FC<HeaderProps> = ({ onOpenNewIssue }) => {
         </button>
 
         {/* Notification Bell */}
-        <button
-          onClick={() => setNotificationPanelOpen(open => !open)}
-          className="relative p-2 rounded-lg text-content-secondary hover:text-content hover:bg-surface-high transition-colors"
-          title="Notifications"
-          aria-label={unreadInboxCount > 0 ? `Notifications, ${unreadInboxCount} unread` : 'Notifications'}
-          aria-expanded={notificationPanelOpen}
-          aria-haspopup="dialog"
-        >
-          <Bell className="w-4 h-4" />
-          {unreadInboxCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-divider animate-pulse" />
-          )}
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              onClick={() => setNotificationPanelOpen(open => !open)}
+              className="relative p-2 rounded-lg text-content-secondary hover:text-content hover:bg-surface-high transition-colors"
+              aria-label={unreadInboxCount > 0 ? `Notifications, ${unreadInboxCount} unread` : 'Notifications'}
+              aria-expanded={notificationPanelOpen}
+              aria-haspopup="dialog"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadInboxCount > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 ring-2 ring-divider" />
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>Notifications and updates</TooltipContent>
+        </Tooltip>
       </div>
 
     </header>

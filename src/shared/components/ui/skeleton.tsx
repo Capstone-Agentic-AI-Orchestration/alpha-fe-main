@@ -39,6 +39,9 @@ export function LoadingRows({ label, rows = 3, layout = 'list', className }: {
 
 export function EntrySkeleton({ label }: { label: string }) {
   return <main className="grid min-h-dvh place-items-center bg-canvas p-6">
-    <LoadingRows label={label} layout="detail" className="w-full max-w-md" />
+    <div role="status" className="flex flex-col items-center gap-5">
+      <img src={`${import.meta.env.BASE_URL}alpha-loading.svg`} alt="" className="h-20 w-20 object-contain" />
+      <span className="text-sm text-content-muted">{label}</span>
+    </div>
   </main>;
 }

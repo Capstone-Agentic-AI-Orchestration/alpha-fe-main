@@ -6,6 +6,7 @@ import { NavigationTab, UserRole } from '@/shared/types';
 import { CreateWorkspaceModal } from '@/features/settings/CreateWorkspaceModal';
 import { SidebarFrame } from './SidebarFrame';
 import { UsageLimitsPopover } from './UsageLimitsPopover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 import {
   ChevronDown,
   Edit3,
@@ -115,11 +116,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
     const active = activeTab === tab;
     const label = labelFor(tab);
 
-    return (
+    const button = (
       <button
         key={tab}
         onClick={() => { setActiveTab(tab); closeIfFloating(); }}
-        title={compact ? label : undefined}
         aria-label={label}
         className={`group relative flex w-full items-center rounded-lg transition-colors ${
           compact ? 'justify-center px-0 py-2.5' : 'justify-between px-3 py-2'
@@ -142,6 +142,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </span>
         </span>
       </button>
+    );
+
+    if (!compact) return button;
+    return (
+      <Tooltip key={`nav-${tab}`}>
+        <TooltipTrigger asChild>{button}</TooltipTrigger>
+        <TooltipContent side="right">{label}</TooltipContent>
+      </Tooltip>
     );
   };
 

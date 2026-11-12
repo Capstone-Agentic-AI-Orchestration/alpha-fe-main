@@ -6,6 +6,7 @@ import {
   Trash2, XCircle
 } from 'lucide-react';
 import { useApp } from '@/app/AppContext';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 import { apiService } from '@/shared/services/apiService';
 import type {
   OperationsDeployment, OperationsExpense, OperationsIncident, OperationsSnapshot, OperationsTarget,
@@ -410,8 +411,8 @@ export const OperationsCenterView: React.FC = () => {
               <label className="grid gap-1.5 text-[10px] text-content-secondary">Category<input className={control} required maxLength={80} value={expenseCategory} onChange={event => setExpenseCategory(event.target.value)} /></label>
               <label className="grid gap-1.5 text-[10px] text-content-secondary">Amount · USD<input className={control} required type="number" min="0" step="0.01" value={expenseAmount} onChange={event => setExpenseAmount(event.target.value)} placeholder="0.00" /></label>
               <label className="grid gap-1.5 text-[10px] text-content-secondary">Recurrence<select className={control} value={expenseRecurrence} onChange={event => setExpenseRecurrence(event.target.value as OperationsExpense['recurrence'])}><option value="one_off">One-off</option><option value="monthly">Monthly</option><option value="annual">Annual</option></select></label>
-              <label className="grid gap-1.5 text-[10px] text-content-secondary">Effective from<input className={control} type="date" required value={expenseEffectiveAt} onChange={event => setExpenseEffectiveAt(event.target.value)} /></label>
-              <label className="grid gap-1.5 text-[10px] text-content-secondary">Ends on · optional<input className={control} type="date" min={expenseEffectiveAt} value={expenseEndsAt} onChange={event => setExpenseEndsAt(event.target.value)} /></label>
+              <label className="grid gap-1.5 text-[10px] text-content-secondary">Effective from<DatePicker required aria-label="Effective from date" className="w-full" buttonClassName={`${control} h-9 w-full justify-start text-left`} value={expenseEffectiveAt} onChange={setExpenseEffectiveAt} /></label>
+              <label className="grid gap-1.5 text-[10px] text-content-secondary">Ends on · optional<DatePicker aria-label="Expense end date" className="w-full" buttonClassName={`${control} h-9 w-full justify-start text-left`} min={expenseEffectiveAt} value={expenseEndsAt} onChange={setExpenseEndsAt} /></label>
               <div className="flex justify-end sm:col-span-2 xl:col-span-4"><button type="submit" disabled={saving} className="rounded-lg bg-action px-4 py-2 text-xs font-medium text-action-content hover:bg-action-hover disabled:opacity-60">Add expense</button></div>
             </form>
           </section>}

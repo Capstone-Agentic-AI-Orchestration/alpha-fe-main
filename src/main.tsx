@@ -5,6 +5,7 @@ import { selectAppEntry } from '@/features/ticketing/entry';
 import { ErrorBoundary } from '@/app/ErrorBoundary';
 import './index.css';
 import { ThemeProvider } from '@/shared/theme';
+import { TooltipProvider } from '@/shared/components/ui/tooltip';
 
 function ApplicationRoot() {
   const [entry, setEntry] = React.useState(() => selectAppEntry(window.location, import.meta.env.DEV));
@@ -19,7 +20,9 @@ function ApplicationRoot() {
   }, []);
 
   return <ThemeProvider enabled={['internal','client-portal','preview-client','preview-pm'].includes(entry)}>
-    <ErrorBoundary key={entry} internal={entry === 'internal'}><AppEntry entry={entry} /></ErrorBoundary>
+    <TooltipProvider delayDuration={350} skipDelayDuration={100}>
+      <ErrorBoundary key={entry} internal={entry === 'internal'}><AppEntry entry={entry} /></ErrorBoundary>
+    </TooltipProvider>
   </ThemeProvider>;
 }
 

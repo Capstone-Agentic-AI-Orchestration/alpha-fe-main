@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, X } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
 
 /**
  * Shared workspace chrome; each persona supplies its own destinations and actions.
@@ -81,9 +82,12 @@ export function WorkspaceTab({ active, title, icon, onActivate, onClose, closabl
       : 'border-transparent text-content-muted hover:bg-surface-high hover:text-content'}`}>
     <span className={`flex-shrink-0 ${active ? 'text-link' : 'text-content-muted group-hover:text-content-secondary'}`}>{icon}</span>
     <span className="truncate flex-1 text-left">{title}</span>
-    {onClose && closable && <button type="button" onClick={event => { event.stopPropagation(); onClose(); }}
-      className="rounded-md p-1 text-content-muted opacity-0 transition-all hover:bg-surface-high hover:text-content focus:opacity-100 group-hover:opacity-100"
-      title="Close tab" aria-label={`Close ${title} tab`}><X className="w-3 h-3" /></button>}
+    {onClose && closable && <Tooltip>
+      <TooltipTrigger asChild><button type="button" onClick={event => { event.stopPropagation(); onClose(); }}
+        className="rounded-md p-1 text-content-muted opacity-0 transition-all hover:bg-surface-high hover:text-content focus:opacity-100 group-hover:opacity-100"
+        aria-label={`Close ${title} tab`}><X className="w-3 h-3" /></button></TooltipTrigger>
+      <TooltipContent>Close {title} tab</TooltipContent>
+    </Tooltip>}
   </div>;
 }
 
@@ -134,9 +138,12 @@ export function WorkspaceNewTabMenu({ items, onSelect, boundaryRef, portalRootRe
   useEffect(() => { if (open && position) menuRef.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus(); }, [open, Boolean(position)]);
 
   return <div className="app-no-drag relative flex-shrink-0">
-    <button type="button" ref={buttonRef} disabled={disabled} onClick={() => setOpen(value => !value)}
-      className={`flex h-[28px] w-[28px] items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${open ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}
-      title="Open new tab" aria-label="Open new tab" aria-expanded={open} aria-haspopup="menu"><Plus className="w-4 h-4" /></button>
+    <Tooltip>
+      <TooltipTrigger asChild><button type="button" ref={buttonRef} disabled={disabled} onClick={() => setOpen(value => !value)}
+        className={`flex h-[28px] w-[28px] items-center justify-center rounded-lg transition-colors disabled:opacity-50 ${open ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}
+        aria-label="Open new tab" aria-expanded={open} aria-haspopup="menu"><Plus className="w-4 h-4" /></button></TooltipTrigger>
+      <TooltipContent>Open new tab</TooltipContent>
+    </Tooltip>
     {open && position && createPortal(<div ref={menuRef} role="menu" aria-label="Open new tab" style={position}
       onKeyDown={event => {
         if (event.key === 'Tab') { setOpen(false); return; }

@@ -45,6 +45,12 @@ import {
   modelSourceNote,
   REASONING_EFFORT_LABELS
 } from '@/shared/lib/providers';
+import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
+import { AgentRobotAvatar } from '@/features/agents/AgentRobotAvatar';
 
 export const AgentsView: React.FC = () => {
   const {
@@ -286,12 +292,13 @@ export const AgentsView: React.FC = () => {
         {/* Left: Search Input */}
         <div className="relative flex-1 max-w-xs">
           <Search className="w-3.5 h-3.5 text-content-muted absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
+          <Input
+            type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search agents, roles, models..."
-            className="w-full bg-surface border border-control rounded-xl pl-8 pr-3 py-1.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control transition-colors"
+            aria-label="Search agents, roles, and models"
+            className="h-8 w-full rounded-xl border-control bg-surface pl-8 pr-3 text-xs placeholder:text-content-muted"
           />
         </div>
 
@@ -308,44 +315,49 @@ export const AgentsView: React.FC = () => {
                 className="hidden"
                 onChange={(e) => void handleImportFile(e.target.files)}
               />
-              <button
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => importInputRef.current?.click()}
                 disabled={importing}
-                title="Import an agent from a persona file a teammate shared"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content-secondary hover:text-content transition-colors shadow-sm disabled:opacity-40"
+                className="gap-1.5 px-3"
               >
                 <Upload className="w-3.5 h-3.5" />
                 <span>{importing ? 'Importing...' : 'Import'}</span>
-              </button>
-              <button
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
                 onClick={() => setCreateModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-raised hover:bg-surface-high border border-divider text-xs font-medium text-content transition-colors shadow-sm"
+                className="gap-1.5 px-3 text-content"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>New agent</span>
-              </button>
+              </Button>
             </>
           )}
 
           {/* Filter Popover */}
-          <div className="relative">
-            <button
-              onClick={() => {
-                setFilterDropdownOpen(prev => !prev);
-                setSortDropdownOpen(false);
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+          <Popover open={filterDropdownOpen} onOpenChange={open => { setFilterDropdownOpen(open); if (open) setSortDropdownOpen(false); }}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={`gap-1.5 px-3 ${
                 scopeTab !== 'all' || statusFilter !== 'all' || accessFilter !== 'all'
                   ? 'bg-selected text-selected-content border-divider'
-                  : 'bg-surface hover:bg-surface-raised text-content-secondary hover:text-content border-divider'
+                  : 'bg-surface hover:bg-surface-raised text-content-secondary hover:text-content'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
               <span>Filter</span>
-            </button>
+              </Button>
+            </PopoverTrigger>
 
-            {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-48 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-2 text-xs">
+            <PopoverContent align="end" sideOffset={6} className="w-48 space-y-2 p-2 text-xs">
                 <div className="text-[10px] font-mono uppercase text-content-secondary px-2 py-1">Scope</div>
                 {(['all', 'mine', 'archived'] as const).map((sc) => (
                   <button
@@ -396,25 +408,19 @@ export const AgentsView: React.FC = () => {
                     {accessFilter === acc && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
-              </div>
-            )}
-          </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Sort Button */}
-          <div className="relative">
-            <button
-              onClick={() => {
-                setSortDropdownOpen(prev => !prev);
-                setFilterDropdownOpen(false);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-divider text-xs font-medium text-content-secondary hover:text-content transition-colors"
-            >
+          <Popover open={sortDropdownOpen} onOpenChange={open => { setSortDropdownOpen(open); if (open) setFilterDropdownOpen(false); }}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" size="sm" className="gap-1.5 px-3 bg-surface text-content-secondary hover:bg-surface-raised hover:text-content">
               {sortOrder === 'desc' ? <ArrowDown className="w-3.5 h-3.5" /> : <ArrowUp className="w-3.5 h-3.5" />}
               <span>{sortBy === 'lastActive' ? 'Active' : sortBy === 'runs' ? 'Runs' : 'Name'}</span>
-            </button>
+              </Button>
+            </PopoverTrigger>
 
-            {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-1 text-xs">
+            <PopoverContent align="end" sideOffset={6} className="w-44 space-y-1 p-2 text-xs">
                 {(['lastActive', 'runs', 'name'] as const).map((field) => (
                   <button
                     key={field}
@@ -442,60 +448,78 @@ export const AgentsView: React.FC = () => {
                     <span className="font-mono text-[10px] text-link uppercase">{sortOrder}</span>
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Table View Button */}
-          <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-divider text-xs font-medium text-content-secondary shadow-sm cursor-default"
-          >
+          <Button type="button" variant="outline" size="sm" aria-current="true" className="cursor-default gap-1.5 px-3 bg-surface text-content-secondary shadow-sm">
             <TableIcon className="w-3.5 h-3.5" />
             <span>Table</span>
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* ================= MINIMALIST CLEAN AGENTS TABLE ================= */}
       <div className="w-full">
-        {/* Table Column Headers */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-content-muted border-b border-divider items-center">
-          <div className="col-span-4 flex items-center gap-3">
-            {canManageAgents && (
-              <input
-                type="checkbox"
-                checked={selectedAgentIds.length > 0 && selectedAgentIds.length === filteredAgents.length}
-                onChange={selectAllFiltered}
-                className="rounded bg-surface-raised border-control text-link focus:ring-0 cursor-pointer"
-              />
-            )}
-            <span>Agent</span>
-          </div>
-          <div className="col-span-2">Status</div>
-          <div className="col-span-2">Machine & Model</div>
-          <div className="col-span-2">Runs & Active</div>
-          <div className="col-span-1 text-left">Access</div>
-          {canManageChat && <div className="col-span-1 text-right">Chat</div>}
-        </div>
-
-        {/* Table Rows (No Pills / Clean Typography) */}
-        <div className="divide-y divide-divider">
-          {workspaceLoading && !agents.length && <LoadingRows label="Loading agents" layout="table" rows={4} className="px-4" />}
+        {workspaceLoading && !agents.length && <LoadingRows label="Loading agents" layout="table" rows={4} className="px-4" />}
+        <Table className="min-w-[1040px] table-fixed">
+          <colgroup>
+            <col className={canManageChat ? 'w-[35%]' : 'w-[38%]'} />
+            <col className={canManageChat ? 'w-[14%]' : 'w-[16%]'} />
+            <col className={canManageChat ? 'w-[19%]' : 'w-[20%]'} />
+            <col className={canManageChat ? 'w-[16%]' : 'w-[16%]'} />
+            <col className={canManageChat ? 'w-[9%]' : 'w-[10%]'} />
+            {canManageChat && <col className="w-[7%]" />}
+          </colgroup>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="px-4">
+                <div className="flex items-center gap-3">
+                  {canManageAgents && (
+                    <input
+                      type="checkbox"
+                      aria-label="Select all filtered agents"
+                      checked={selectedAgentIds.length > 0 && selectedAgentIds.length === filteredAgents.length}
+                      onChange={selectAllFiltered}
+                      className="rounded bg-surface-raised border-control text-link focus:ring-0 cursor-pointer"
+                    />
+                  )}
+                  <span>Agent</span>
+                </div>
+              </TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Machine &amp; Model</TableHead>
+              <TableHead>Runs &amp; Active</TableHead>
+              <TableHead>Access</TableHead>
+              {canManageChat && <TableHead className="text-right">Chat</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
           {filteredAgents.map((agent) => {
             const isSelected = selectedAgentIds.includes(agent.id);
             const detectedModels = modelsForProvider(runtimes, agent.modelProvider);
             const detectedModelLabel = detectedModels.join(', ');
 
             return (
-              <div
+              <TableRow
                 key={agent.id}
                 onClick={() => setSelectedAgentId(agent.id)}
-                className={`grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-xs hover:bg-surface-high cursor-pointer transition-colors group ${
+                onKeyDown={event => {
+                  if (event.target !== event.currentTarget && (event.target as HTMLElement).closest('button, input, select, textarea, a, [role="button"]')) return;
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedAgentId(agent.id);
+                  }
+                }}
+                tabIndex={0}
+                aria-selected={isSelected}
+                className={`group cursor-pointer text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
                   selectedAgentId === agent.id ? 'bg-surface-raised' : ''
                 }`}
               >
                 {/* 1. Avatar, Name, Role, Description */}
-                <div className="col-span-4 flex items-center gap-3 min-w-0">
+                <TableCell className="px-4 py-3.5">
+                  <div className="flex min-w-0 items-center gap-3">
                   {canManageAgents && (
                     <input
                       type="checkbox"
@@ -507,11 +531,7 @@ export const AgentsView: React.FC = () => {
                   )}
 
                   <div className="relative flex-shrink-0">
-                    <img
-                      src={agent.avatar}
-                      alt=""
-                      className="w-8 h-8 rounded-full object-cover ring-1 ring-content/10"
-                    />
+                    <AgentRobotAvatar agentId={agent.id} className="h-8 w-8 rounded-full ring-1 ring-divider" />
                     <span
                       className={`absolute -bottom-0.5 -right-0.5 w-2 h-2 rounded-full ring-2 ring-canvas ${
                         agent.machineStatus === 'online' ? 'bg-emerald-400' :
@@ -533,26 +553,27 @@ export const AgentsView: React.FC = () => {
                       {agent.description || `${agent.role} autonomous assistant`}
                     </p>
                   </div>
-                </div>
+                  </div>
+                </TableCell>
 
                 {/* 2. Status (Clean Dot & Text - No Pill Container) */}
-                <div className="col-span-2">
+                <TableCell>
                   {renderStatus(agent)}
                   <AgentReadinessDot agent={agent} />
-                </div>
+                </TableCell>
 
                 {/* 3. Machine & Model (Plain Text) */}
-                <div className="col-span-2 min-w-0 space-y-0.5 font-mono">
+                <TableCell className="min-w-0 space-y-0.5 font-mono">
                   <div className="flex items-center gap-1.5 text-content-secondary truncate text-[11px]">
                     <Server className="w-3 h-3 text-content-muted flex-shrink-0" />
                     <span className="truncate">{agent.machineName || 'Host Node'}</span>
                   </div>
-                  <div
-                    className="text-[10px] text-content-muted truncate"
-                    title={detectedModelLabel || agent.modelName}
-                  >
-                    {agent.modelName} ({agent.modelProvider})
-                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="cursor-help truncate text-[10px] text-content-muted">{agent.modelName} ({agent.modelProvider})</div>
+                    </TooltipTrigger>
+                    <TooltipContent className="max-w-sm">{detectedModelLabel || agent.modelName}</TooltipContent>
+                  </Tooltip>
                   <div className="text-[9px] text-content-muted truncate">
                     Reasoning: {agent.reasoningEffort ? REASONING_EFFORT_LABELS[agent.reasoningEffort] : 'Auto'}
                   </div>
@@ -561,37 +582,46 @@ export const AgentsView: React.FC = () => {
                       {detectedModels.length} models available on this runtime
                     </div>
                   )}
-                </div>
+                </TableCell>
 
                 {/* 4. Runs & Last Active */}
-                <div className="col-span-2 space-y-0.5 font-mono">
+                <TableCell className="space-y-0.5 font-mono">
                   <div className="text-content text-[11px]">
                     {agent.stats?.totalRuns || 0} tasks done
                   </div>
                   <div className="text-[10px] text-content-muted">
                     {agent.lastActive ? `Last active ${agent.lastActive}` : 'No recorded activity'}
                   </div>
-                </div>
+                </TableCell>
 
                 {/* 5. Access (Plain Text) */}
-                <div className="col-span-1 text-[11px] text-content-secondary font-mono capitalize">
+                <TableCell className="text-[11px] text-content-secondary font-mono capitalize">
                   {agent.allowedUsers || 'team'}
-                </div>
+                </TableCell>
 
                 {/* 6. Chat Action — build chat is developer-only. */}
-                {canManageChat && <div className="col-span-1 text-right">
-                  <button
-                    onClick={(e) => handleChatWithAgent(agent.id, e)}
-                    className="p-1.5 rounded-lg text-content-muted hover:text-content hover:bg-surface-high transition-colors"
-                    title="Direct Chat"
-                  >
-                    <MessageSquare className="w-3.5 h-3.5" />
-                  </button>
-                </div>}
-              </div>
+                {canManageChat && <TableCell className="text-right">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" aria-label={`Chat with ${agent.name}`} onClick={event => handleChatWithAgent(agent.id, event)} className="h-8 w-8 text-content-muted hover:text-content">
+                        <MessageSquare className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Direct chat</TooltipContent>
+                  </Tooltip>
+                </TableCell>}
+              </TableRow>
             );
           })}
-        </div>
+          {!workspaceLoading && filteredAgents.length === 0 && (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={canManageChat ? 6 : 5} className="px-4 py-10 text-center text-sm text-content-muted">
+                No agents match these search and filter settings.
+              </TableCell>
+            </TableRow>
+          )}
+          </TableBody>
+        </Table>
       </div>
 
       {/* ================= CENTERED AGENT PROFILE POPUP MODAL ================= */}
@@ -610,11 +640,7 @@ export const AgentsView: React.FC = () => {
             <div className="p-5 border-b border-divider flex items-start justify-between bg-surface">
               <div className="flex items-start gap-3.5 min-w-0">
                 <div className="relative flex-shrink-0">
-                  <img
-                    src={selectedAgent.avatar}
-                    alt=""
-                    className="w-11 h-11 rounded-full object-cover ring-1 ring-content/10"
-                  />
+                  <AgentRobotAvatar agentId={selectedAgent.id} className="h-11 w-11 rounded-full ring-1 ring-divider" />
                   <span
                     className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full ring-2 ring-surface ${
                       selectedAgent.machineStatus === 'online' ? 'bg-emerald-400' :

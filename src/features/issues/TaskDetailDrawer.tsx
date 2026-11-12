@@ -12,6 +12,7 @@ import { TaskBuildPanel, type SpecState } from '@/features/board-build/TaskBuild
 import { useFeatureSpec } from '@/features/board-build/useTaskBuild';
 import { isDesktop } from '@/shared/desktop';
 import { TASK_PRIORITIES, TASK_STATUSES, nextStepFor, type NextStepAction } from './taskFlow';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 
 interface TaskDetailDrawerProps {
   onOpenTask?: (id: string, projectId: string) => void;
@@ -373,35 +374,35 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                 </div>
                 <label htmlFor={`${ids}-due-date`} className="mb-3 block max-w-xs space-y-1 text-[11.5px] text-content-muted">
                   <span className="block font-medium text-content-secondary">Due date</span>
-                  <input
+                  <DatePicker
                     id={`${ids}-due-date`}
-                    type="date"
                     value={issue.dueDate ?? ''}
                     disabled={!canManageIssues}
-                    onChange={event => updateIssue(issue.id, { dueDate: event.target.value })}
-                    className="h-8 w-full rounded-md border border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                    onChange={value => updateIssue(issue.id, { dueDate: value })}
+                    buttonClassName="h-8 w-full justify-start border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                    className="w-full"
                   />
                   <span className="block text-[10.5px]">Expected finish for this task.</span>
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <label className="space-y-1 text-[11.5px] text-content-muted">
                     <span className="block">Planned start</span>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={issue.plannedStartDate ?? ''}
                       disabled={!canManageIssues}
-                      onChange={event => updateIssue(issue.id, { plannedStartDate: event.target.value })}
-                      className="h-8 w-full rounded-md border border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                      onChange={value => updateIssue(issue.id, { plannedStartDate: value })}
+                      buttonClassName="h-8 w-full justify-start border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full"
                     />
                   </label>
                   <label className="space-y-1 text-[11.5px] text-content-muted">
                     <span className="block">Planned finish</span>
-                    <input
-                      type="date"
+                    <DatePicker
                       value={issue.plannedEndDate ?? ''}
                       disabled={!canManageIssues}
-                      onChange={event => updateIssue(issue.id, { plannedEndDate: event.target.value })}
-                      className="h-8 w-full rounded-md border border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                      onChange={value => updateIssue(issue.id, { plannedEndDate: value })}
+                      buttonClassName="h-8 w-full justify-start border-control bg-well px-2 text-[12px] text-content-secondary disabled:cursor-not-allowed disabled:opacity-60"
+                      className="w-full"
                     />
                   </label>
                 </div>

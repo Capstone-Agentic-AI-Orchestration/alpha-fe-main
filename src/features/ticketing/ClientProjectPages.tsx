@@ -2,6 +2,7 @@ import { LoadingRows, Skeleton } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, CheckCircle2, ChevronRight, CircleDot, FolderKanban, MessageSquare, RefreshCw, Send, Plus } from 'lucide-react';
 import { Modal } from '@/shared/components/Modal';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectProposal, ClientProjectProposalInput,
   ClientProjectProposalReplyInput, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
@@ -328,7 +329,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     <form id="client-proposal-form" className="client-proposal-form" onSubmit={submitProposal}>
       <label htmlFor="client-proposal-title">Project title<input id="client-proposal-title" value={proposalTitle} onChange={event => setProposalTitle(event.target.value)} maxLength={160} required disabled={proposalSubmitting || proposalNeedsRetry} /></label>
       <label htmlFor="client-proposal-description">What would you like to accomplish?<textarea id="client-proposal-description" value={proposalDescription} onChange={event => setProposalDescription(event.target.value)} maxLength={6000} rows={4} required disabled={proposalSubmitting || proposalNeedsRetry} /></label>
-      <label htmlFor="client-proposal-deadline">Target date (optional)<input id="client-proposal-deadline" type="date" value={proposalDeadline} onChange={event => setProposalDeadline(event.target.value)} disabled={proposalSubmitting || proposalNeedsRetry} /></label>
+      <label htmlFor="client-proposal-deadline">Target date (optional)<DatePicker id="client-proposal-deadline" value={proposalDeadline} onChange={setProposalDeadline} disabled={proposalSubmitting || proposalNeedsRetry} className="w-full" buttonClassName="h-10 w-full justify-start text-left" /></label>
       <p id="client-proposal-note" className="client-proposal-note">Sending this proposal does not create a project or promise a start date. If your PM accepts it, a request will appear here so you can discuss the scope together.</p>
       {proposalError && <p role="alert" className="client-project-error">{proposalError}</p>}
       <div className="client-proposal-actions">

@@ -1,4 +1,5 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import {
@@ -550,23 +551,25 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label htmlFor="edit-project-start-date" className="block text-[11px] font-medium text-content-secondary mb-1">Start Date</label>
-                  <input
+                  <DatePicker
                     id="edit-project-start-date"
-                    type="date"
+                    aria-label="Project start date"
                     value={editingProject.startDate || ''}
-                    onChange={(e) => setEditingProject({ ...editingProject, startDate: e.target.value })}
-                    className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content font-mono focus:outline-none focus:border-control"
+                    onChange={value => setEditingProject({ ...editingProject, startDate: value })}
+                    buttonClassName="h-9 w-full justify-start text-left font-mono"
+                    className="w-full"
                   />
                 </div>
 
                 <div>
                   <label htmlFor="edit-project-target-date" className="block text-[11px] font-medium text-content-secondary mb-1">Target Date</label>
-                  <input
+                  <DatePicker
                     id="edit-project-target-date"
-                    type="date"
+                    aria-label="Project target date"
                     value={editingProject.targetDate || ''}
-                    onChange={(e) => setEditingProject({ ...editingProject, targetDate: e.target.value })}
-                    className="w-full bg-surface-raised border border-control rounded-xl px-3 py-2 text-content font-mono focus:outline-none focus:border-control"
+                    onChange={value => setEditingProject({ ...editingProject, targetDate: value })}
+                    buttonClassName="h-9 w-full justify-start text-left font-mono"
+                    className="w-full"
                   />
                 </div>
               </div>

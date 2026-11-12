@@ -1,4 +1,5 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
+import { AgentRobotAvatar } from '@/features/agents/AgentRobotAvatar';
 import { buildDecisionContext } from './chatBuildDecision';
 import { CHAT_ORCHESTRATOR_BAR_ENABLED } from '@/config/features';
 import { usePanelPresence } from './usePanelPresence';
@@ -1760,7 +1761,7 @@ export const ChatView: React.FC = () => {
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-9 w-9 rounded-xl flex items-center justify-center text-on-accent shrink-0" style={{ backgroundColor: agent?.color || '#6d28d9' }}>
-              {agent?.avatar ? <img src={agent.avatar} alt="" className="h-9 w-9 rounded-xl object-cover" /> : <Bot className="h-4 w-4" />}
+              {agent ? <AgentRobotAvatar agentId={agent.id} className="h-9 w-9 rounded-xl" /> : <Bot className="h-4 w-4" />}
             </div>
             <div className="min-w-0"><div className="flex items-center gap-2 flex-wrap"><span className="text-xs font-semibold text-content">{agent?.name ?? call.agentId}</span><span className="text-[10px] text-content-muted">{agent?.role ?? 'Project agent'}</span><span className="text-[10px] text-content-muted">·</span><span className="text-[10px] text-content-muted">{formatDate(call.createdAt)}</span></div><div className="flex items-center gap-1.5 text-[10px] text-content-muted mt-0.5"><Users className="h-3 w-3" /><span>{agent?.role ?? 'Project agent'}</span><span>·</span><span>{project?.key ?? call.projectId}</span></div></div>
           </div>
@@ -2050,7 +2051,7 @@ export const ChatView: React.FC = () => {
                 {mentionQuery && !isClient && !activeTurnMessageId && <div id="chat-mention-suggestions" role="listbox" aria-label="Project agent suggestions" className="absolute bottom-full left-12 z-50 mb-3 w-[min(22rem,calc(100vw-5rem))] overflow-hidden rounded-xl border border-divider bg-surface-high p-1.5 shadow-2xl shadow-black/50">
                   <div className="px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-content-muted">Mention a project agent</div>
                   {!snapshot ? <div className="px-2.5 py-3 text-xs text-content-secondary">Open a project conversation to see its agents.</div> : mentionSuggestions.length ? mentionSuggestions.map((agent, index) => <button key={agent.id} type="button" role="option" aria-selected={index === activeMentionIndex} onMouseDown={event => event.preventDefault()} onMouseEnter={() => setActiveMentionIndex(index)} onClick={() => insertAgentMention(agent)} className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition ${index === activeMentionIndex ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high'}`}>
-                    <span className="flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-md text-[10px] font-semibold text-on-accent" style={{ backgroundColor: agent.color || '#6d28d9' }}>{agent.avatar ? <img src={agent.avatar} alt="" className="h-full w-full object-cover" /> : agent.name.charAt(0)}</span>
+                    <AgentRobotAvatar agentId={agent.id} className="h-7 w-7 rounded-md" />
                     <span className="min-w-0 flex-1"><span className="block truncate text-xs font-medium">{agent.name}</span><span className="block truncate text-[10px] text-content-muted">{agent.role}</span></span>
                     <span className="text-[10px] text-link">@</span>
                   </button>) : <div className="px-2.5 py-3 text-xs text-content-secondary">No matching project agents.</div>}

@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 297 332" fill="none" role="img" aria-labelledby="title">
+  <title id="title">Alpha loading</title>
+  <style>
+    .mark { stroke: #f8f7ff; stroke-width: 13; stroke-linecap: round; stroke-linejoin: round; }
+    .draw { stroke-dasharray: 1; stroke-dashoffset: 1; }
+    .left { animation: left 6s cubic-bezier(.65,0,.25,1) infinite; }
+    .right { animation: right 6s cubic-bezier(.65,0,.25,1) infinite; }
+    .base { animation: base 6s cubic-bezier(.65,0,.25,1) infinite; }
+    .inner { animation: inner 6s cubic-bezier(.65,0,.25,1) infinite; }
+    .orbit { animation: orbit 6s cubic-bezier(.65,0,.25,1) infinite; }
+    .trail { animation: trail 6s cubic-bezier(.22,.61,.36,1) infinite; }
+    .trail-2 { animation-delay: .14s; }
+    .trail-3 { animation-delay: .28s; }
+    @keyframes left { 0%, 4% { stroke-dashoffset: 1; opacity: 0 } 25%, 76% { stroke-dashoffset: 0; opacity: 1 } 94%, 100% { stroke-dashoffset: -1; opacity: 0 } }
+    @keyframes right { 0%, 13% { stroke-dashoffset: 1; opacity: 0 } 34%, 76% { stroke-dashoffset: 0; opacity: 1 } 94%, 100% { stroke-dashoffset: -1; opacity: 0 } }
+    @keyframes base { 0%, 25% { stroke-dashoffset: 1; opacity: 0 } 42%, 76% { stroke-dashoffset: 0; opacity: 1 } 94%, 100% { stroke-dashoffset: -1; opacity: 0 } }
+    @keyframes inner { 0%, 31% { stroke-dashoffset: 1; opacity: 0 } 48%, 76% { stroke-dashoffset: 0; opacity: 1 } 94%, 100% { stroke-dashoffset: -1; opacity: 0 } }
+    @keyframes orbit { 0%, 37% { stroke-dashoffset: 1; opacity: 0 } 58%, 76% { stroke-dashoffset: 0; opacity: 1 } 96%, 100% { stroke-dashoffset: -1; opacity: 0 } }
+    @keyframes trail { 0%, 46% { stroke-dashoffset: 1; opacity: 0 } 59%, 76% { stroke-dashoffset: 0; opacity: 1 } 93%, 100% { stroke-dashoffset: -1; opacity: 0 } }
+    @media (prefers-reduced-motion: reduce) { .draw { animation: none; stroke-dashoffset: 0; opacity: 1; } }
+  </style>
+  <g class="mark">
+    <path class="draw left" pathLength="1" d="M53 242 L151 34" />
+    <path class="draw right" pathLength="1" d="M151 34 L248 242" />
+    <path class="draw base" pathLength="1" d="M248 242 L151 193 L53 242" />
+    <path class="draw inner" pathLength="1" d="M105 188 L151 91 L196 188 L151 165 Z" />
+    <path class="draw orbit" pathLength="1" d="M39 195 C8 112 46 42 120 22 M182 22 C256 42 294 112 263 195 M202 255 C178 267 151 270 125 263" />
+    <path class="draw trail" pathLength="1" d="M117 229 L93 279" />
+    <path class="draw trail trail-2" pathLength="1" d="M81 247 L56 296" />
+    <path class="draw trail trail-3" pathLength="1" d="M47 260 L22 309" />
+  </g>
+</svg>

@@ -6,6 +6,7 @@ import { apiService } from '@/shared/services/apiService';
 import { isDesktop } from '@/shared/desktop';
 import { Modal } from '@/shared/components/Modal';
 import { TASK_PRIORITIES, TASK_STATUSES } from './taskFlow';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -276,11 +277,11 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           )}
           <label className="space-y-1.5 sm:w-48">
             <span className="block text-[11.5px] font-medium text-content-secondary">Due date <span className="font-normal text-content-muted">Optional</span></span>
-            <input
-              type="date"
+            <DatePicker
               value={dueDate}
-              onChange={event => setDueDate(event.target.value)}
-              className={fieldClass}
+              onChange={setDueDate}
+              buttonClassName={`${fieldClass} h-9 text-xs`}
+              className="w-full"
               aria-label="Task due date"
             />
           </label>

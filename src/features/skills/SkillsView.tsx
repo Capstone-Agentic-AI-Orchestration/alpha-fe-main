@@ -22,6 +22,12 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { SkillCategory } from '@/shared/types';
+import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/shared/components/ui/popover';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/shared/components/ui/table';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
+import { AgentRobotAvatar } from '@/features/agents/AgentRobotAvatar';
 
 export const SkillsView: React.FC = () => {
   const { skills, workspaceLoading, toggleSkill, agents, scanInstalledSkills, isScanningSkills, can } = useApp();
@@ -144,12 +150,13 @@ export const SkillsView: React.FC = () => {
         {/* Left: Search Input */}
         <div className="relative flex-1 max-w-xs">
           <Search className="w-3.5 h-3.5 text-content-muted absolute left-3 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
+          <Input
+            type="search"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder="Search skills..."
-            className="w-full bg-surface border border-control rounded-xl pl-8 pr-3 py-1.5 text-xs text-content placeholder-content-muted focus:outline-none focus:border-control transition-colors"
+            aria-label="Search skills"
+            className="h-8 w-full rounded-xl border-control bg-surface pl-8 pr-3 text-xs placeholder:text-content-muted"
           />
         </div>
 
@@ -157,36 +164,38 @@ export const SkillsView: React.FC = () => {
         <div className="flex items-center gap-2 relative">
 
           {canManageSkills && (
-            <button
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
               onClick={() => void scanInstalledSkills()}
               disabled={isScanningSkills}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-divider bg-surface hover:bg-surface-raised text-xs font-medium text-content-secondary hover:text-content disabled:opacity-60 disabled:cursor-wait transition-colors"
-              title="Scan the installed SKILL.md folders on this machine"
+              className="gap-1.5 px-3 disabled:cursor-wait"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isScanningSkills ? 'animate-spin' : ''}`} />
               <span>{isScanningSkills ? 'Scanning skill folders…' : 'Scan installed skills'}</span>
-            </button>
+            </Button>
           )}
 
           {/* Filter Popover */}
-          <div className="relative">
-            <button
-              onClick={() => {
-                setFilterDropdownOpen(prev => !prev);
-                setSortDropdownOpen(false);
-              }}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+          <Popover open={filterDropdownOpen} onOpenChange={open => { setFilterDropdownOpen(open); if (open) setSortDropdownOpen(false); }}>
+            <PopoverTrigger asChild>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className={`gap-1.5 px-3 ${
                 selectedCategory !== 'all' || statusFilter !== 'all'
                   ? 'bg-selected text-selected-content border-divider'
-                  : 'bg-surface hover:bg-surface-raised text-content-secondary hover:text-content border-divider'
+                  : 'bg-surface hover:bg-surface-raised text-content-secondary hover:text-content'
               }`}
             >
               <Filter className="w-3.5 h-3.5" />
               <span>Filter</span>
-            </button>
+              </Button>
+            </PopoverTrigger>
 
-            {filterDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-52 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-2 text-xs">
+            <PopoverContent align="end" sideOffset={6} className="w-52 space-y-2 p-2 text-xs">
                 <div className="text-[10px] font-mono uppercase text-content-secondary px-2 py-1">Category</div>
                 {['all', ...categories].map((cat) => (
                   <button
@@ -220,25 +229,19 @@ export const SkillsView: React.FC = () => {
                     {statusFilter === st && <Check className="w-3 h-3 text-status-success" />}
                   </button>
                 ))}
-              </div>
-            )}
-          </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Sort Button */}
-          <div className="relative">
-            <button
-              onClick={() => {
-                setSortDropdownOpen(prev => !prev);
-                setFilterDropdownOpen(false);
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface hover:bg-surface-raised border border-divider text-xs font-medium text-content-secondary hover:text-content transition-colors"
-            >
+          <Popover open={sortDropdownOpen} onOpenChange={open => { setSortDropdownOpen(open); if (open) setFilterDropdownOpen(false); }}>
+            <PopoverTrigger asChild>
+              <Button type="button" variant="outline" size="sm" className="gap-1.5 px-3 bg-surface text-content-secondary hover:bg-surface-raised hover:text-content">
               {sortOrder === 'asc' ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
               <span>{sortBy === 'name' ? 'Name' : sortBy === 'category' ? 'Category' : 'Agents'}</span>
-            </button>
+              </Button>
+            </PopoverTrigger>
 
-            {sortDropdownOpen && (
-              <div className="absolute right-0 mt-1.5 w-44 p-2 rounded-xl bg-surface-raised border border-divider shadow-2xl z-30 space-y-1 text-xs">
+            <PopoverContent align="end" sideOffset={6} className="w-44 space-y-1 p-2 text-xs">
                 {(['name', 'category', 'agents'] as const).map((field) => (
                   <button
                     key={field}
@@ -266,48 +269,61 @@ export const SkillsView: React.FC = () => {
                     <span className="font-mono text-[10px] text-link uppercase">{sortOrder}</span>
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
+            </PopoverContent>
+          </Popover>
 
           {/* Table View Button */}
-          <button
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface border border-divider text-xs font-medium text-content-secondary shadow-sm cursor-default"
-          >
+          <Button type="button" variant="outline" size="sm" aria-current="true" className="cursor-default gap-1.5 px-3 bg-surface text-content-secondary shadow-sm">
             <TableIcon className="w-3.5 h-3.5" />
             <span>Table</span>
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* ================= STREAMLINED CLEAN SKILLS TABLE ================= */}
       <div className="w-full">
-        {/* Table Column Headers */}
-        <div className="grid grid-cols-12 gap-4 px-4 py-2 text-xs font-normal text-content-muted border-b border-divider items-center">
-          <div className="col-span-4">Tool & Schema</div>
-          <div className="col-span-4">Description</div>
-          <div className="col-span-2">Active in Agents</div>
-          <div className="col-span-2 text-right">Status</div>
-        </div>
-
-        {/* Table Rows (No Pills / Clean Typography) */}
-        <div className="divide-y divide-divider">
-          {workspaceLoading && !skills.length && <LoadingRows label="Loading skills and integrations" layout="table" className="px-4" />}
+        {workspaceLoading && !skills.length && <LoadingRows label="Loading skills and integrations" layout="table" className="px-4" />}
+        <Table className="min-w-[920px] table-fixed">
+          <colgroup>
+            <col className="w-[34%]" />
+            <col className="w-[34%]" />
+            <col className="w-[17%]" />
+            <col className="w-[15%]" />
+          </colgroup>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="px-4">Tool &amp; Schema</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Active in Agents</TableHead>
+              <TableHead className="text-right">Status</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
           {filteredSkills.map((skill) => {
             const isSelected = selectedSkillId === skill.id;
             const isCopied = copiedSkillId === skill.id;
             const boundAgents = agents.filter(a => (a.skills || []).includes(skill.id));
 
             return (
-              <div
+              <TableRow
                 key={skill.id}
                 onClick={() => setSelectedSkillId(skill.id)}
-                className={`grid grid-cols-12 gap-4 px-4 py-3.5 items-center text-xs hover:bg-surface-high cursor-pointer transition-colors group ${
+                onKeyDown={event => {
+                  if (event.target !== event.currentTarget && (event.target as HTMLElement).closest('button, input, select, textarea, a, [role="button"]')) return;
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    setSelectedSkillId(skill.id);
+                  }
+                }}
+                tabIndex={0}
+                aria-selected={isSelected}
+                className={`group cursor-pointer text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset ${
                   isSelected ? 'bg-surface-raised' : ''
                 } ${!skill.enabled ? 'opacity-60' : ''}`}
               >
                 {/* 1. Tool Name & Command Schema with 1-Click Copy */}
-                <div className="col-span-4 flex items-start gap-3 min-w-0">
+                <TableCell className="px-4 py-3.5">
+                  <div className="flex min-w-0 items-start gap-3">
                   <div className="p-2 rounded-xl bg-surface border border-divider flex-shrink-0 mt-0.5">
                     {getCategoryIcon(skill.category)}
                   </div>
@@ -319,44 +335,51 @@ export const SkillsView: React.FC = () => {
                       </span>
                     </div>
 
-                    <div className="text-[10px] font-mono text-content-muted capitalize truncate" title={skill.path || undefined}>
-                      {sourceLabel(skill)}
+                    <div className="text-[10px] font-mono text-content-muted capitalize truncate">
+                      {skill.path ? <Tooltip><TooltipTrigger asChild><span className="cursor-help">{sourceLabel(skill)}</span></TooltipTrigger><TooltipContent side="top" className="max-w-sm break-all">{skill.path}</TooltipContent></Tooltip> : sourceLabel(skill)}
                     </div>
 
                     {skill.commandExample && (
                       <div className="flex items-center gap-1.5 text-[11px] font-mono text-content-secondary group/cmd max-w-sm">
                         <span className="truncate text-content-secondary hover:text-content">{skill.commandExample}</span>
-                        <button
-                          onClick={(e) => handleCopyCommand(skill.id, skill.commandExample!, e)}
-                          className="text-content-muted hover:text-content transition-colors p-0.5 flex-shrink-0"
-                          title="Copy invocation schema"
-                        >
-                          {isCopied ? <Check className="w-3 h-3 text-status-success" /> : <Copy className="w-3 h-3" />}
-                        </button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={event => handleCopyCommand(skill.id, skill.commandExample!, event)}
+                              aria-label={isCopied ? 'Invocation schema copied' : 'Copy invocation schema'}
+                              className="h-6 w-6 shrink-0 p-0 text-content-muted hover:text-content"
+                            >
+                              {isCopied ? <Check className="h-3 w-3 text-status-success" /> : <Copy className="h-3 w-3" />}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>{isCopied ? 'Copied' : 'Copy invocation schema'}</TooltipContent>
+                        </Tooltip>
                       </div>
                     )}
                   </div>
-                </div>
+                  </div>
+                </TableCell>
 
                 {/* 2. Plain Text Description */}
-                <div className="col-span-4 min-w-0 pr-4">
+                <TableCell className="min-w-0 pr-4">
                   <p className="text-content-secondary text-xs leading-relaxed line-clamp-2">
                     {skill.description}
                   </p>
-                </div>
+                </TableCell>
 
                 {/* 3. Active in Agents (Avatars & Count) */}
-                <div className="col-span-2 flex items-center gap-2 min-w-0">
+                <TableCell>
+                  <div className="flex min-w-0 items-center gap-2">
                   {boundAgents.length > 0 ? (
                     <>
                       <div className="flex -space-x-1.5 overflow-hidden flex-shrink-0">
                         {boundAgents.slice(0, 3).map((agent) => (
-                          <img
+                          <AgentRobotAvatar
                             key={agent.id}
-                            src={agent.avatar}
-                            alt={agent.name}
-                            title={agent.name}
-                            className="inline-block h-5 w-5 rounded-full ring-1 ring-canvas object-cover"
+                            agentId={agent.id}
+                            className="h-5 w-5 rounded-full ring-1 ring-canvas"
                           />
                         ))}
                       </div>
@@ -367,10 +390,12 @@ export const SkillsView: React.FC = () => {
                   ) : (
                     <span className="text-[11px] text-content-muted font-mono">—</span>
                   )}
-                </div>
+                  </div>
+                </TableCell>
 
                 {/* 4. Status Dot & Toggle Switch */}
-                <div className="col-span-2 flex items-center justify-end gap-3 text-right">
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-3 text-right">
                   <div className="flex items-center gap-1.5 text-[11px] font-mono">
                     <span className={`w-1.5 h-1.5 rounded-full ${skill.enabled ? 'bg-emerald-400' : 'bg-gray-600'}`} />
                     <span className={skill.enabled ? 'text-content-secondary' : 'text-content-muted'}>
@@ -378,25 +403,39 @@ export const SkillsView: React.FC = () => {
                     </span>
                   </div>
 
-                  <button
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
                     disabled={!canManageSkills}
                     onClick={(e) => {
                       e.stopPropagation();
                       toggleSkill(skill.id);
                     }}
-                    className="p-1 text-content-secondary hover:text-content transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label={`${skill.enabled ? 'Disable' : 'Enable'} ${skill.name}`}
+                    aria-pressed={skill.enabled}
+                    className="h-8 w-8 p-0 text-content-secondary hover:text-content disabled:cursor-not-allowed"
                   >
                     {skill.enabled ? (
                       <ToggleRight className="w-6 h-6 text-link" />
                     ) : (
                       <ToggleLeft className="w-6 h-6 text-content-muted" />
                     )}
-                  </button>
-                </div>
-              </div>
+                  </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
             );
           })}
-        </div>
+          {!workspaceLoading && filteredSkills.length === 0 && (
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={4} className="px-4 py-10 text-center text-sm text-content-muted">
+                No skills match these search and filter settings.
+              </TableCell>
+            </TableRow>
+          )}
+          </TableBody>
+        </Table>
       </div>
 
       {/* ================= CENTERED SKILL INSPECTOR POPUP MODAL ================= */}
@@ -502,7 +541,7 @@ export const SkillsView: React.FC = () => {
                   ) : (
                     agents.filter(a => (a.skills || []).includes(selectedSkill.id)).map(agent => (
                       <div key={agent.id} className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-well border border-divider text-xs text-content">
-                        <img src={agent.avatar} alt="" className="w-4 h-4 rounded-full object-cover" />
+                        <AgentRobotAvatar agentId={agent.id} className="h-4 w-4 rounded-full" />
                         <span>{agent.name}</span>
                         <span className="text-[10px] text-content-muted font-mono">• {agent.role}</span>
                       </div>

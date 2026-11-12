@@ -3,6 +3,7 @@ import { ArrowLeft, Plus, ShieldCheck, Ticket } from 'lucide-react';
 
 import type { ClientTicketCreateInput, ClientTicketIntakeContext } from './clientApi';
 import { input, primary, secondary } from './ticketUi';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 
 type ProjectPreference = 'not_sure' | 'new_project' | 'shared_project';
 
@@ -91,7 +92,7 @@ export function ClientCreateTicketForm({
         <p className="text-xs text-content-muted">Choosing a shared project links this request to it. “Not sure” and “new project” requests stay unlinked for PM review.</p>
       </fieldset>
       <label className="block max-w-xs space-y-2"><span className="text-xs font-medium text-content-secondary">Requested date <span className="text-content-muted">(optional, not guaranteed)</span></span>
-        <input className={input} type="date" value={deadline} disabled={busy} onChange={event => { edited(); setDeadline(event.target.value); }} /></label>
+        <DatePicker className="w-full" buttonClassName={`${input} h-10 w-full justify-start text-left`} value={deadline} disabled={busy} onChange={value => { edited(); setDeadline(value); }} /></label>
       <div className="flex items-start gap-2 rounded-lg bg-surface-raised p-3 text-xs leading-relaxed text-content-secondary"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-content-muted" />
         <p>Submitting asks the PM to review the request. It does not automatically create a project, assign a developer, or start AI work.</p></div>
       {error && <p role="alert" className="text-sm text-status-danger">{error}</p>}

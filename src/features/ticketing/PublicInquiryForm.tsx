@@ -5,6 +5,7 @@ import type { PublicTicketInquiryPayload, PublicTicketInquiryResponse } from './
 import { PublicTicketIntakeApiError } from './publicIntakeApi';
 import { composeInquiryDescription, INQUIRY_DETAILS_MAX_LENGTH, INQUIRY_LINKS_MAX_LENGTH, INQUIRY_PROMPTS } from './inquiryDetails';
 import { useClientPageMotion } from './publicClient/useClientPageMotion';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 
 export type InquiryNavigationState = { dirty: boolean; locked: boolean };
 
@@ -108,7 +109,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
       <label className="ca-field"><span>Company <span>(optional)</span></span>
         <input maxLength={160} autoComplete="organization" disabled={fieldsDisabled} value={company} onChange={event => { setCompany(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
       <label className="ca-field"><span>Target date <span>(optional, not guaranteed)</span></span>
-        <input type="date" disabled={fieldsDisabled} value={requestedDeadline} onChange={event => { setRequestedDeadline(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+        <DatePicker className="ca-date-picker" buttonClassName="h-11 w-full justify-start rounded-none border-0 bg-transparent px-0 text-left text-content shadow-none hover:bg-transparent" disabled={fieldsDisabled} value={requestedDeadline} onChange={value => { setRequestedDeadline(value); operationId.current = crypto.randomUUID(); }} /></label>
       <label className="ca-field iq-wide"><span>What do you need? <span>(required)</span></span>
         <input required maxLength={160} disabled={fieldsDisabled} value={title} onChange={event => { setTitle(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="A short summary" /></label>
       <label className="ca-field iq-wide iq-details"><span>Details <span>(required)</span></span>

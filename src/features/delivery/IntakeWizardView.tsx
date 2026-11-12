@@ -3,6 +3,7 @@ import { useApp, useTabSessionState } from '@/app/AppContext';
 import { IntakeAnswers, IssuePriority } from '@/shared/types';
 import { SectionLabel } from '@/features/delivery/Ledger';
 import { ArrowLeft, ArrowRight, Check, Plus, X, Paperclip, Loader2 } from 'lucide-react';
+import { DatePicker } from '@/shared/components/ui/date-picker';
 
 const EMPTY: IntakeAnswers = {
   title: '',
@@ -300,12 +301,12 @@ export const IntakeWizardView: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div className="space-y-2">
                 <label className="text-sm text-content-secondary block">When do you need it?</label>
-                <input
+                <DatePicker
                   autoFocus
-                  type="date"
-                  className={field}
                   value={a.targetDate}
-                  onChange={e => set('targetDate', e.target.value)}
+                  onChange={value => set('targetDate', value)}
+                  buttonClassName={`${field} h-9 text-xs`}
+                  className="w-full"
                 />
               </div>
               <div className="space-y-2">
