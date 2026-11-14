@@ -13,7 +13,7 @@ const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
-  pm: ['issues', 'projects', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
@@ -23,7 +23,7 @@ const existing: Record<UserRole, NavigationTab[]> = {
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
-  pm: ['projects', 'issues', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['projects', 'issues', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['projects', 'issues', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 describe('existing navigation compatibility', () => {
@@ -47,10 +47,15 @@ describe('existing navigation compatibility', () => {
     expect(visible.every(tab => ROLE_NAV[role].includes(tab))).toBe(true);
     expect(visible.length).toBe(new Set(visible).size);
   });
-  it('adds Tickets only to PM navigation without replacing Tasks', () => {
+  it('adds Tickets and Inquiries only to PM navigation without replacing Tasks', () => {
     expect(ROLE_NAV.pm).toContain('tickets');
+    expect(ROLE_NAV.pm).toContain('inquiries');
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('tickets');
-    for (const role of ['client', 'dev', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('tickets');
+    expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('inquiries');
+    for (const role of ['client', 'dev', 'admin'] as const) {
+      expect(ROLE_NAV[role]).not.toContain('tickets');
+      expect(ROLE_NAV[role]).not.toContain('inquiries');
+    }
   });
   it('shows the Chat tab to developers only', () => {
     expect(CHAT_TAB_ENABLED).toBe(true);
