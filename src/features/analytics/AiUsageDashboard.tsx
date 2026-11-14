@@ -247,9 +247,9 @@ export const AiUsageDashboard: React.FC = () => {
           </div> : <p className="text-xs leading-relaxed text-content-secondary">{providerLimit.detail}</p>}
           <div className="flex items-center justify-between gap-3 border-t border-divider pt-3">
             <span className="text-[10px] text-content-muted">Checked {formatDateTime(providerLimit.lastCheckedAt)}</span>
-            <a href={providerUsageUrl(providerLimit)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-link hover:underline">
+            {providerUsageUrl(providerLimit) && <a href={providerUsageUrl(providerLimit)!} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-link hover:underline">
               Open provider usage <ArrowUpRight className="h-3.5 w-3.5" />
-            </a>
+            </a>}
           </div>
         </Card>)}
       </div>

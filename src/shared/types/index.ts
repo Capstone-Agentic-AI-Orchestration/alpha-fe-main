@@ -60,7 +60,7 @@ export interface ProviderLimitWindow {
   resetsAt: string | null;
 }
 export interface ProviderLimits {
-  provider: 'codex' | 'claude';
+  provider: 'codex' | 'claude' | 'antigravity' | 'opencode';
   name: string;
   status: ProviderLimitStatus;
   accountLabel?: string;
@@ -69,6 +69,8 @@ export interface ProviderLimits {
   dashboardUrl: string;
   detail: string;
   lastCheckedAt: string | null;
+  /** Local spending for providers without plan limits, such as OpenCode. */
+  spend?: { days: number; costUsd: number; sessions: number; inputTokens: number; outputTokens: number };
 }
 export interface ProviderLimitsSnapshot {
   available: boolean;

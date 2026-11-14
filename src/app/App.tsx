@@ -18,6 +18,7 @@ import { AgentRunModal } from '@/features/runs/AgentRunModal';
 import { PrototypeGuide } from '@/features/onboarding/PrototypeGuide';
 import { ToastRegion } from '@/shared/components/ToastRegion';
 import { NotificationPopover } from '@/features/inbox/NotificationPopover';
+import { ChatHistory } from '@/features/chat/ChatHistory';
 import { ChatView } from '@/features/chat/ChatView';
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectsView } from '@/features/projects/ProjectsView';
@@ -47,7 +48,9 @@ const ALL_TABS = NAV_ITEMS;
 
 const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
   const [createIssueOpen, setCreateIssueOpen] = useTabSessionState<boolean>('issueModal.open', false);
-  const { isActiveTab, runSetupIssueId } = useApp();
+  const { isActiveTab, runSetupIssueId, role, can } = useApp();
+  const [chatHistory] = useTabSessionState('chat.history', false);
+  const unifiedChat = role === 'dev' && can('manage_chat');
   const onOpenNewIssue = () => setCreateIssueOpen(true);
   let content: React.ReactNode;
   switch (view) {
@@ -55,7 +58,7 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
     case 'intake': content = <IntakeWizardView />; break;
     case 'documents': content = <DocumentsView />; break;
     case 'tickets': content = <PmTicketsPage />; break;
-    case 'chat': content = <ChatView />; break;
+    case 'chat': content = unifiedChat && chatHistory ? <ChatHistory /> : <ChatView unifiedNavigation={unifiedChat} />; break;
     case 'issues': content = <IssuesView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'projects': content = <ProjectsView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'agents': content = <AgentsView />; break;
@@ -100,7 +103,7 @@ const desktopDownloadUrl = `${API_BASE}/download/desktop`;
 export const App: React.FC = () => {
   const {
     tabs, activeTabId, setActiveTabId, openNewTab, closeTab, visibleTabs, role, setTabSessionState,
-    projects, chatThreads, issues, agents, skills, deployments, requirementDocs,
+    projects, chatThreads, chatTypingByThread, issues, agents, skills, deployments, requirementDocs,
     identity,
     identityStatus,
     refreshIdentity,
@@ -145,9 +148,10 @@ export const App: React.FC = () => {
     const contextualTitle = (label: string | undefined) => label ? `${getTabTitle(view)} · ${label}` : getTabTitle(view);
 
     if (view === 'chat') {
+      if (session['chat.history']) return 'All chats';
       const threadId = session.activeThreadId;
       const thread = typeof threadId === 'string' ? chatThreads.find(item => item.id === threadId) : undefined;
-      return contextualTitle(thread?.title);
+      return contextualTitle(thread?.title ?? projectTitle(session['chat.session.draft.projectId']));
     }
     if (view === 'projects') return contextualTitle(projectTitle(session['projects.selectedProject']));
     if (view === 'issues') {
@@ -335,10 +339,12 @@ export const App: React.FC = () => {
             {/* Scrollable Open Tabs List */}
             <WorkspaceTabStrip label="Open workspace tabs">
             {tabs.map((tab) => {
+              const threadId = tab.sessionState?.activeThreadId;
+              const responding = resolveView(tab.view) === 'chat' && typeof threadId === 'string' && Boolean(chatTypingByThread[threadId]);
               const title = getTabContextTitle(tab);
               return (
                 <WorkspaceTab key={tab.id} active={activeTabId === tab.id} title={title}
-                  icon={getTabIcon(resolveView(tab.view))} onActivate={() => activateTab(tab.id)}
+                  icon={getTabIcon(resolveView(tab.view))} responding={responding} onActivate={() => activateTab(tab.id)}
                   onClose={() => closeWorkspaceTab(tab.id)} closable={tabs.length > 1} />
               );
             })}
@@ -359,7 +365,7 @@ export const App: React.FC = () => {
 
         {/* Dynamic View Content */}
         <main className="absolute inset-x-0 bottom-0 top-[44px] overflow-hidden rounded-tl-xl border-l border-t border-divider">
-          {tabs.filter(tab => mountedTabIds.has(tab.id)).map(tab => {
+          {tabs.filter(tab => tab.id === activeTabId || mountedTabIds.has(tab.id)).map(tab => {
             const view = resolveView(tab.view);
             const isActive = activeTabId === tab.id;
             return (

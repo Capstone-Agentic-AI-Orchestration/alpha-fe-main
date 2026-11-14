@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useApp } from '@/app/AppContext';
 import { NAV_ITEMS, navIcon } from '@/config/navigation';
-import { Search, Bot, FolderKanban, CheckSquare, Cpu, Rocket, ArrowRight, Sparkles } from 'lucide-react';
+import { Search, Bot, FolderKanban, CheckSquare, Cpu, Rocket, ArrowRight, Sparkles, MessageSquare } from 'lucide-react';
+import { byChatActivity, chatMatches } from '@/features/chat/chatDirectory';
 import { NavigationTab } from '@/shared/types';
 
 export const CommandPalette: React.FC = () => {
@@ -12,9 +13,14 @@ export const CommandPalette: React.FC = () => {
     issues,
     agents,
     projects,
+    role,
+    chatThreads,
+    openChatThread,
+    openChatHistory,
     scanLocalRuntimes,
     triggerDeployment,
     visibleTabs,
+    workspaceLoading, workspaceSwitching,
     can
   } = useApp();
 
@@ -70,6 +76,22 @@ export const CommandPalette: React.FC = () => {
         });
       }
     });
+
+    if (!workspaceLoading && !workspaceSwitching && role === 'dev' && visibleTabs.includes('chat') && can('manage_chat')) {
+      const projectsById = new Map(projects.map(project => [project.id, project]));
+      const chats = chatThreads.filter(thread => chatMatches(thread, projectsById.get(thread.projectId ?? ''), q)).sort(byChatActivity);
+      chats.slice(0, 12).forEach(thread => results.push({
+        id: 'chat-' + thread.id, title: thread.title,
+        subtitle: projectsById.get(thread.projectId ?? '')?.name ?? (thread.projectId ? 'Project chat' : 'No project'),
+        icon: <MessageSquare className="h-4 w-4 text-link" />, type: 'Chat',
+        action: () => { openChatThread(thread.id); setCommandPaletteOpen(false); }
+      }));
+      if (chats.length > 12 || 'all chats'.includes(q)) results.push({
+        id: 'all-chats', title: 'All chats', subtitle: 'Browse and filter conversation history',
+        icon: <MessageSquare className="h-4 w-4 text-link" />, type: 'Chat',
+        action: () => { openChatHistory(); setCommandPaletteOpen(false); }
+      });
+    }
 
     // Search issues
     if (visibleTabs.includes('issues')) issues.forEach(iss => {
@@ -154,7 +176,7 @@ export const CommandPalette: React.FC = () => {
     }
 
     return results;
-  }, [query, navigationItems, visibleTabs, issues, agents, projects, setActiveTab, setCommandPaletteOpen, scanLocalRuntimes, triggerDeployment, can]);
+  }, [workspaceLoading, workspaceSwitching, query, navigationItems, visibleTabs, issues, agents, projects, role, chatThreads, openChatThread, openChatHistory, setActiveTab, setCommandPaletteOpen, scanLocalRuntimes, triggerDeployment, can]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -200,7 +222,7 @@ export const CommandPalette: React.FC = () => {
               setQuery(e.target.value);
               setSelectedIndex(0);
             }}
-            placeholder="Type a command, search tasks, agents, or projects..."
+            placeholder={role === 'dev' ? "Search tasks, projects, chats, or commands…" : "Type a command or search the workspace…"}
             className="w-full bg-transparent text-content placeholder-content-muted text-sm focus:outline-none font-medium"
             autoFocus
           />

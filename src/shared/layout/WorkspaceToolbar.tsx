@@ -45,7 +45,7 @@ export function WorkspaceTabStrip({ children, label }: { children: ReactNode; la
   </div>;
 }
 
-export function WorkspaceTab({ active, title, icon, onActivate, onClose, closable = true, controls }: {
+export function WorkspaceTab({ active, title, icon, onActivate, onClose, closable = true, controls, responding = false }: {
   active: boolean;
   title: string;
   icon: ReactNode;
@@ -53,6 +53,7 @@ export function WorkspaceTab({ active, title, icon, onActivate, onClose, closabl
   onClose?: () => void;
   closable?: boolean;
   controls?: string;
+  responding?: boolean;
 }) {
   const tabRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -82,6 +83,7 @@ export function WorkspaceTab({ active, title, icon, onActivate, onClose, closabl
       : 'border-transparent text-content-muted hover:bg-surface-high hover:text-content'}`}>
     <span className={`flex-shrink-0 ${active ? 'text-link' : 'text-content-muted group-hover:text-content-secondary'}`}>{icon}</span>
     <span className="truncate flex-1 text-left">{title}</span>
+    {responding && <span role="img" aria-label="Responding" className="h-1.5 w-1.5 shrink-0 rounded-full bg-action" />}
     {onClose && closable && <Tooltip>
       <TooltipTrigger asChild><button type="button" onClick={event => { event.stopPropagation(); onClose(); }}
         className="rounded-md p-1 text-content-muted opacity-0 transition-all hover:bg-surface-high hover:text-content focus:opacity-100 group-hover:opacity-100"

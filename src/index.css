@@ -220,6 +220,23 @@ input[type='radio']:disabled {
   transition: width 200ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* Secondary labels (a chat's project, a task key) return once the sidebar is wide enough for them. */
+.sidebar-flyout { container-type: inline-size; }
+@container (max-width: 239px) {
+  .sidebar-detail { display: none; }
+}
+
+/* Provider rings rise out of the usage button one after another. */
+@keyframes usage-ring-in { from { opacity: 0; transform: translateY(8px) scale(0.85); } }
+.usage-ring { animation: usage-ring-in 180ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--ring-index, 0) * 35ms); }
+@media (prefers-reduced-motion: reduce) { .usage-ring { animation: none; } }
+
+/* Follow the pointer exactly while the sidebar edge is dragged. */
+.sidebar-resizing,
+.sidebar-resizing .sidebar-flyout {
+  transition: none;
+}
+
 /* The chat side panel grows from and shrinks to the right edge (see usePanelPresence). */
 @keyframes chat-panel-open { from { width: 0; min-width: 0; opacity: 0.4; } }
 @keyframes chat-panel-close { to { width: 0; min-width: 0; opacity: 0.4; } }

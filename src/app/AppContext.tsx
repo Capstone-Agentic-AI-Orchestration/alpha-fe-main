@@ -112,6 +112,11 @@ export interface RunPlanDraft {
   updatedAt: string;
 }
 
+const isBlankChatTab = (tab: TabItem) => tab.view === 'chat'
+  && !tab.sessionState?.activeThreadId && !tab.sessionState?.['chat.history']
+  && !Object.entries(tab.sessionState ?? {}).some(([key, value]) =>
+    key.startsWith('chat.session.draft.') && (Array.isArray(value) ? value.length > 0 : Boolean(value) && value !== 'ask'));
+
 export type ChatThreadsLoadState = 'idle' | 'loading' | 'ready' | 'stale' | 'error';
 
 interface AppContextType {
@@ -122,7 +127,10 @@ interface AppContextType {
   tabs: TabItem[];
   activeTabId: string;
   setActiveTabId: (id: string) => void;
-  openNewTab: (view?: NavigationTab) => string;
+  openNewTab: (view?: NavigationTab, sessionState?: Record<string, unknown>) => string;
+  openChatThread: (id: string) => void;
+  openChatDraft: (projectId?: string) => void;
+  openChatHistory: (projectId?: string) => void;
   closeTab: (tabId: string) => void;
   isActiveTab: boolean;
   setTabView: (tabId: string, view: NavigationTab) => void;
@@ -797,26 +805,17 @@ ${e.detail}`;
     // Storage checks the fallback shape; null would reject every saved array.
     const savedCurrent = loadFromStorage<unknown[]>('workspace_tabs_v3', []);
     const savedLegacy = loadFromStorage<unknown[]>('workspace_tabs_v2', []);
-    const restored = normalizeTabs(savedCurrent.length ? savedCurrent : savedLegacy, initialDefaultTabs[0], roleTabs);
-    // Desktop opens on Chat, keeping every restored tab and its drafts intact.
-    if (isDesktop && defaultTab === 'chat' && !restored.some(tab => tab.view === 'chat')) {
-      return [{ id: createTabId(), view: 'chat', sessionState: {} }, ...restored];
-    }
-    // The chat tab Alpha opens on starts as a fresh chat. Earlier conversations stay in the list.
-    const startupChatIndex = isDesktop ? restored.findIndex(tab => tab.view === 'chat') : -1;
-    if (startupChatIndex >= 0) {
-      const { activeThreadId: _previous, ...rest } = restored[startupChatIndex].sessionState ?? {};
-      return restored.map((tab, index) => (index === startupChatIndex ? { ...tab, sessionState: rest } : tab));
-    }
-    return restored;
+    // Desktop identity is still loading; preserve chat tabs until the workspace role is known.
+    return normalizeTabs(savedCurrent.length ? savedCurrent : savedLegacy, initialDefaultTabs[0],
+      isDesktop ? [...new Set([...roleTabs, 'chat' as const])] : roleTabs);
   });
 
   const [activeTabId, setActiveTabId] = useState<string>(() => {
-    const startupChat = isDesktop ? tabs.find(tab => tab.view === 'chat') : undefined;
-    if (startupChat) return startupChat.id;
     const saved = loadFromStorage<string>('active_tab_id_v3', loadFromStorage<string>('active_tab_id_v2', 'tab-default'));
     return tabs.some(tab => tab.id === saved) ? saved : tabs[0].id;
   });
+
+  const desktopTabStartup = useRef(false);
 
   // Calculate current active tab view.
   // A view the current role may not open resolves to that role's landing
@@ -856,9 +855,9 @@ ${e.detail}`;
 
   // Only when user presses + (and selects a destination):
   // Creates a brand new tab and activates it!
-  const openNewTab = (view: NavigationTab = defaultTab) => {
+  const openNewTab: AppContextType['openNewTab'] = (view = defaultTab, sessionState = {}) => {
     const newTabId = createTabId();
-    const newTab: TabItem = { id: newTabId, view, sessionState: {} };
+    const newTab: TabItem = { id: newTabId, view, sessionState };
     setTabs(prev => [...prev, newTab]);
     setActiveTabId(newTabId);
     return newTabId;
@@ -1404,7 +1403,37 @@ ${e.detail}`;
 
   // Sync to local storage
   useEffect(() => { saveToStorage('active_workspace_id', activeWorkspaceId); }, [activeWorkspaceId]);
-  useEffect(() => { saveToStorage('workspace_tabs_v3', tabs); }, [tabs]);
+  useEffect(() => {
+    if (identityStatus !== 'ready' || workspaceLoading || !isDesktop || desktopTabStartup.current) return;
+    desktopTabStartup.current = true;
+    if (!identity?.login || !activeWorkspaceId) return;
+    const scope = JSON.stringify([identity.login, activeWorkspaceId]);
+    const previousScope = loadFromStorage('workspace_tabs_scope', '');
+    const restored = previousScope && previousScope !== scope ? [] : tabs;
+    if (!roleTabs.includes('chat')) {
+      if (!restored.length) {
+        const id = createTabId();
+        setTabs([{ id, view: roleTabs[0], sessionState: {} }]);
+        setActiveTabId(id);
+      }
+      return;
+    }
+    const blank = restored.find(isBlankChatTab);
+    if (blank) setActiveTabId(blank.id);
+    else {
+      const id = createTabId();
+      const startup: TabItem = { id, view: 'chat', sessionState: {} };
+      setTabs([startup, ...restored]);
+      setActiveTabId(id);
+    }
+  }, [identityStatus, identity?.login, activeWorkspaceId, roleTabs, workspaceLoading, tabs]);
+  useEffect(() => {
+    if (isDesktop && (identityStatus !== 'ready' || workspaceLoading || workspaceSwitching)) return;
+    saveToStorage('workspace_tabs_v3', tabs);
+    if (isDesktop && identity?.login && activeWorkspaceId) {
+      saveToStorage('workspace_tabs_scope', JSON.stringify([identity.login, activeWorkspaceId]));
+    }
+  }, [tabs, identityStatus, identity?.login, workspaceLoading, workspaceSwitching, activeWorkspaceId]);
   useEffect(() => { saveToStorage('active_tab_id_v3', activeTabId); }, [activeTabId]);
   // Issues, projects and agents are cached by the board sync code with their
   // cursor. Saving them here wrote one workspace's rows under another's key
@@ -1531,6 +1560,11 @@ ${e.detail}`;
     setChatThreadsError(null);
     const superseded = () => activeWorkspaceRef.current !== workspaceId;
     setActiveThreadId(null);
+    setChatTypingByThread({});
+    const nextTabId = createTabId();
+    const nextView = isDesktop && ROLE_TABS[target.role].includes('chat') ? 'chat' : ROLE_TABS[target.role][0];
+    setTabs([{ id: nextTabId, view: nextView, sessionState: {} }]);
+    setActiveTabId(nextTabId);
     // The next workspace may have thread IDs loaded earlier in this session.
     // Clear this cache so opening one always rehydrates its transcript from
     // that workspace's authoritative store.
@@ -1576,10 +1610,6 @@ ${e.detail}`;
         setAnalytics(normalizeAnalytics(snapshot.analytics));
       }
       setServerStatus('online');
-      const nextTabId = createTabId();
-      const nextView = isDesktop && ROLE_TABS[target.role].includes('chat') ? 'chat' : ROLE_TABS[target.role][0];
-      setTabs([{ id: nextTabId, view: nextView, sessionState: {} }]);
-      setActiveTabId(nextTabId);
       showToast('Workspace switched', `Now viewing ${target.name}.`, 'success');
     } catch (error) {
       if (!superseded()) {
@@ -1666,7 +1696,8 @@ ${e.detail}`;
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        setCommandPaletteOpen(prev => !prev);
+        // The sidebar's search field handles the shortcut when it is mounted.
+        if (window.dispatchEvent(new CustomEvent('alpha:focus-sidebar-search', { cancelable: true }))) setCommandPaletteOpen(prev => !prev);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -3267,6 +3298,7 @@ ${e.detail}`;
 
   const sendChatMessage = async (content: string, threadIdOverride?: string | null, repositories?: string[], intent?: ChatIntent, attachments: ChatAttachmentReference[] = [], options: ChatSendOptions = {}) => {
     if (!requireCapability('manage_chat')) return;
+    const sendWorkspaceId = activeWorkspaceRef.current;
     let targetThreadId = threadIdOverride ?? activeThreadId;
     if (!targetThreadId) {
       targetThreadId = createNewThread(content.slice(0, 32) + (content.length > 32 ? '...' : ''));
@@ -3410,6 +3442,7 @@ ${e.detail}`;
        * placeholder becomes that first reply and the rest are appended after
        * it, in the order the agents spoke.
        */
+      if (activeWorkspaceRef.current !== sendWorkspaceId) return;
       const replies = (res.agentMessages?.length ? res.agentMessages : [res.agentMessage]).map(
         (reply: any, index: number): ChatMessage => ({
           // The first reply takes over the placeholder's id so it replaces it
@@ -3451,6 +3484,7 @@ ${e.detail}`;
 
       setChatMessages(prev => applyChatReplies(prev, streamingMsgId, replies));
     } catch (err: any) {
+      if (activeWorkspaceRef.current !== sendWorkspaceId) return;
       console.warn('Real AI chat service unavailable, falling back to local persona:', err);
 
       /**
@@ -3493,7 +3527,7 @@ ${e.detail}`;
       const placeholders = activeChatPlaceholders.current.get(targetThreadId);
       placeholders?.delete(streamingMsgId);
       if (!placeholders?.size) activeChatPlaceholders.current.delete(targetThreadId);
-      setChatTypingByThread(prev => {
+      if (activeWorkspaceRef.current === sendWorkspaceId) setChatTypingByThread(prev => {
         if (!prev[targetThreadId!]) return prev;
         const next = { ...prev };
         delete next[targetThreadId!];
@@ -3953,6 +3987,31 @@ ${e.detail}`;
     return chatThreads.filter(t => t.audience !== 'client');
   }, [chatThreads, role, currentUser]);
 
+  const canOpenProjectChat = role === 'dev' && can('manage_chat') && visibleTabs.includes('chat') && !workspaceLoading && !workspaceSwitching;
+  const openChatThread = (id: string) => {
+    if (!canOpenProjectChat || !scopedChatThreads.some(thread => thread.id === id)) return;
+    const existing = tabs.find(tab => tab.view === 'chat' && !tab.sessionState?.['chat.history'] && tab.sessionState?.activeThreadId === id);
+    if (existing) setActiveTabId(existing.id);
+    else openNewTab('chat', { activeThreadId: id });
+  };
+  const openChatDraft = (projectId?: string) => {
+    if (!canOpenProjectChat) return;
+    openNewTab('chat', {
+      'chat.session.draft.projectId': projectId ?? '',
+      'chat.session.draft.approvalMode': 'ask',
+    });
+  };
+  const openChatHistory = (projectId?: string) => {
+    if (!canOpenProjectChat) return;
+    const existing = tabs.find(tab => tab.view === 'chat' && tab.sessionState?.['chat.history'] === true);
+    if (existing) {
+      setTabSessionState(existing.id, 'chat.history.project', projectId ?? '');
+      setTabSessionState(existing.id, 'chat.history.query', '');
+      setTabSessionState(existing.id, 'chat.history.page', 0);
+      setActiveTabId(existing.id);
+    } else openNewTab('chat', { 'chat.history': true, 'chat.history.project': projectId ?? '' });
+  };
+
   /** Analytics is operational only; clients do not receive internal run data. */
   const scopedAnalytics = useMemo<AnalyticsData>(() => {
     if (role === 'admin' || role === 'pm') return analytics;
@@ -3988,6 +4047,9 @@ ${e.detail}`;
       activeTabId,
       setActiveTabId,
       openNewTab,
+      openChatThread,
+      openChatDraft,
+      openChatHistory,
       closeTab,
       isActiveTab: true,
       setTabView,

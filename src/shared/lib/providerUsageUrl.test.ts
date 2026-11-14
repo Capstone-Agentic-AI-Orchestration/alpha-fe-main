@@ -9,5 +9,6 @@ describe('provider usage links', () => {
   it('does not open an untrusted URL from a provider response', () => {
     expect(providerUsageUrl({ provider: 'codex', dashboardUrl: 'javascript:alert(1)' })).toBe('https://chatgpt.com/settings/usage');
     expect(providerUsageUrl({ provider: 'claude', dashboardUrl: 'https://example.com/' })).toBe('https://claude.ai/settings/usage');
+    expect(providerUsageUrl({ provider: 'antigravity', dashboardUrl: 'https://example.com/' })).toBeNull();
   });
 });

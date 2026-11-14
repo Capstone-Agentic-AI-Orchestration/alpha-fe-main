@@ -1,3 +1,5 @@
+import { freshQuota, limitForRuntime, useProviderUsage } from '@/shared/layout/ProviderUsageContext';
+import { ChatThreadDialogs } from './ChatThreadDialogs';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { AgentRobotAvatar } from '@/features/agents/AgentRobotAvatar';
 import { buildDecisionContext } from './chatBuildDecision';
@@ -55,7 +57,6 @@ import { useApp, useTabSessionState } from '@/app/AppContext';
 import { statusLabel as taskStatusLabel, taskHandoffContext } from '@/features/issues';
 import { isDesktop } from '@/shared/desktop';
 import { BoardChangesWaiting } from '@/features/board-agent/BoardChangesWaiting';
-import { Modal } from '@/shared/components/Modal';
 import { apiService } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import {
@@ -546,7 +547,7 @@ type SideTab =
   | { id: string; kind: 'preview' }
   | { id: string; kind: 'changes'; projectId: string; runId: string };
 
-export const ChatView: React.FC = () => {
+export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNavigation = false }) => {
   const {
     chatThreads,
     chatThreadsLoadState,
@@ -557,7 +558,6 @@ export const ChatView: React.FC = () => {
     activeThreadId,
     setActiveThreadId,
     createNewThread,
-    deleteThread,
     sendChatMessage,
     refreshChatThread,
     isAgentTyping,
@@ -584,6 +584,8 @@ export const ChatView: React.FC = () => {
 
   const sessionStateKey = (key: string, threadId = activeThreadId) => `chat.session.${threadId ?? 'draft'}.${key}`;
   const [input, setInput] = useTabSessionState<string>(sessionStateKey('draft'), '');
+  const { data: quotaSnapshot, error: quotaError, now: quotaTime } = useProviderUsage();
+
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
   const [approvalMode, setApprovalMode] = useTabSessionState<'ask' | 'approve' | 'full'>(sessionStateKey('approvalMode'), 'ask');
   /** A board task handed to this conversation from its details; sent with the next message. */
@@ -656,10 +658,6 @@ export const ChatView: React.FC = () => {
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [threadPendingDelete, setThreadPendingDelete] = useState<{ id: string; title: string } | null>(null);
   const [memoryThreadId, setMemoryThreadId] = useState<string | null>(null);
-  const [memoryContent, setMemoryContent] = useState('');
-  const [memoryBusy, setMemoryBusy] = useState(false);
-  const [memoryLoading, setMemoryLoading] = useState(false);
-  const [memoryError, setMemoryError] = useState<string | null>(null);
   const [openThreadMenuId, setOpenThreadMenuId] = useState<string | null>(null);
   const threadMenuRef = useRef<HTMLDivElement>(null);
   const [openProjectMenuId, setOpenProjectMenuId] = useState<string | null>(null);
@@ -749,6 +747,12 @@ export const ChatView: React.FC = () => {
   const usage = useChatUsage(activeThread?.id, `${activeWorkspace?.id ?? ''}:${currentUser?.id ?? ''}`, isActiveTab, isAgentTyping);
   const usageNames = Object.fromEntries(workspaceAgents.map(agent => [agent.id, agent.name]));
   const isClient = role === 'client';
+  // Automatic routing can fall back to other providers. Warn only for a chat
+  // with a known target, and only while the draft does not override it.
+  const targetAgent = !isClient && activeThread?.targetAgentId && !input.includes('@')
+    ? workspaceAgents.find(agent => agent.id === activeThread.targetAgentId && !agent.isArchived) : undefined;
+  const targetRuntime = targetAgent && runtimes.find(runtime => runtime.id === targetAgent.runtimeId);
+  const targetQuota = targetRuntime && !quotaError ? freshQuota(limitForRuntime(targetRuntime, quotaSnapshot), quotaTime) : undefined;
   const project = projects.find(item => item.id === activeThread?.projectId);
   const openPreview = () => openSideTab({ id: 'preview', kind: 'preview' });
   const previews = useLocalPreviews(activeThreadId ?? undefined, `${activeWorkspace?.id}:${currentUser?.id}:${activeThreadId}`, Boolean(project && !isClient && isActiveTab), openPreview);
@@ -1637,56 +1641,6 @@ export const ChatView: React.FC = () => {
   }, [activeThread?.projectId, projects]);
   const canStartThread = isClient || can('manage_chat');
 
-  useEffect(() => {
-    if (!memoryThreadId) {
-      setMemoryContent('');
-      setMemoryError(null);
-      setMemoryLoading(false);
-      return undefined;
-    }
-    let cancelled = false;
-    setMemoryLoading(true);
-    setMemoryError(null);
-    apiService.getChatThreadMemory(memoryThreadId).then(memory => {
-      if (!cancelled) setMemoryContent(memory.content);
-    }).catch((error: any) => {
-      if (!cancelled) setMemoryError(error?.message ?? 'Could not load this chat\'s memory.');
-    }).finally(() => {
-      if (!cancelled) setMemoryLoading(false);
-    });
-    return () => { cancelled = true; };
-  }, [memoryThreadId]);
-
-  const saveSessionMemory = async () => {
-    if (!memoryThreadId) return;
-    setMemoryBusy(true);
-    setMemoryError(null);
-    try {
-      const saved = await apiService.saveChatThreadMemory(memoryThreadId, memoryContent);
-      setMemoryContent(saved.content);
-      showToast('Session memory saved', 'These notes will be used only in this conversation.', 'success');
-    } catch (error: any) {
-      setMemoryError(error?.message ?? 'Could not save this chat\'s memory.');
-    } finally {
-      setMemoryBusy(false);
-    }
-  };
-
-  const clearSessionMemory = async () => {
-    if (!memoryThreadId) return;
-    setMemoryBusy(true);
-    setMemoryError(null);
-    try {
-      await apiService.clearChatThreadMemory(memoryThreadId);
-      setMemoryContent('');
-      showToast('Session memory cleared', 'This conversation will start with no saved notes.', 'success');
-    } catch (error: any) {
-      setMemoryError(error?.message ?? 'Could not clear this chat\'s memory.');
-    } finally {
-      setMemoryBusy(false);
-    }
-  };
-
   // A new chat is a draft until its first message, and is connected to no project until one is picked.
   const [draftProjectChoice, setDraftProjectChoice] = useTabSessionState<string>('chat.session.draft.projectId', '');
   const draftProjectId = draftProjectChoice && assignedProjects.some(item => item.id === draftProjectChoice) ? draftProjectChoice : null;
@@ -1881,6 +1835,7 @@ export const ChatView: React.FC = () => {
   return (
     <PlanPanelContext.Provider value={isClient ? null : openPlanTab}>
     <div className="relative h-full min-h-0 flex overflow-hidden bg-shell text-sm text-content">
+      {!unifiedNavigation && <>
       {/* The width animates; the list keeps its full width inside and is clipped while it slides. */}
       <div className={'relative shrink-0 overflow-hidden transition-[width] duration-200 ease-out motion-reduce:transition-none ' + (threadListCollapsed ? 'w-12' : 'w-72 sm:w-80')}>
       {!threadListPresence.mounted && <div className="group flex h-full items-center justify-center bg-shell">
@@ -1916,32 +1871,9 @@ export const ChatView: React.FC = () => {
       </aside>}
       </div>
       <CreateProjectModal isOpen={showCreateProject} onClose={() => setShowCreateProject(false)} onCreated={created => { setExpandedProjectIds(current => current.includes(created.id) ? current : [...current, created.id]); startDraft(created.id); }} />
-      <Modal
-        isOpen={Boolean(threadPendingDelete)}
-        onClose={() => setThreadPendingDelete(null)}
-        title="Delete chat?"
-        subtitle="This permanently removes the conversation and its messages."
-        maxWidth="max-w-md"
-        footer={<div className="flex justify-end gap-2"><button type="button" onClick={() => setThreadPendingDelete(null)} className="rounded-lg px-3 py-2 text-xs text-content-secondary hover:bg-surface-high">Cancel</button><button type="button" onClick={() => { if (threadPendingDelete) deleteThread(threadPendingDelete.id); setThreadPendingDelete(null); }} className="rounded-lg bg-status-danger-subtle px-3 py-2 text-xs font-semibold text-status-danger hover:bg-status-danger-subtle">Delete chat</button></div>}
-      >
-        <p className="text-sm text-content-secondary">Are you sure you want to delete <span className="font-semibold text-content">{threadPendingDelete?.title}</span>?</p>
-      </Modal>
-      <Modal
-        isOpen={Boolean(memoryThreadId)}
-        onClose={() => setMemoryThreadId(null)}
-        title="Session memory"
-        subtitle="Private notes used only in this chat. Add durable facts or decisions you want Alpha to remember."
-        maxWidth="max-w-2xl"
-        closeDisabled={memoryBusy}
-        footer={<div className="flex items-center justify-between gap-3"><button type="button" onClick={() => void clearSessionMemory()} disabled={memoryBusy || memoryLoading} className="rounded-lg px-3 py-2 text-xs text-status-danger hover:bg-status-danger-subtle disabled:opacity-50">Clear notes</button><div className="flex gap-2"><button type="button" onClick={() => setMemoryThreadId(null)} disabled={memoryBusy} className="rounded-lg px-3 py-2 text-xs text-content-secondary hover:bg-surface-high">Close</button><button type="button" onClick={() => void saveSessionMemory()} disabled={memoryBusy || memoryLoading || memoryContent.length > 6000} className="rounded-lg bg-action px-3 py-2 text-xs font-semibold text-on-action hover:bg-action-hover disabled:opacity-50">{memoryBusy ? 'Saving…' : 'Save notes'}</button></div></div>}
-      >
-        <div className="space-y-3">
-          <p className="text-xs leading-5 text-content-secondary">These notes stay in this conversation’s local session memory. They are not copied to project, agent, or global memory. Keep secrets and credentials out of notes.</p>
-          <textarea value={memoryContent} onChange={event => setMemoryContent(event.target.value)} maxLength={6000} rows={12} disabled={memoryLoading || memoryBusy} aria-label="Session memory notes" placeholder="Example: We chose PostgreSQL, the API must remain backward compatible, and the next step is to add migration tests." className="w-full resize-y rounded-xl border border-control bg-well p-3 text-sm leading-6 text-content outline-none placeholder:text-content-muted focus:border-control disabled:opacity-60" />
-          <div className="flex items-center justify-between text-[10px] text-content-muted"><span>{memoryLoading ? 'Loading saved notes…' : 'Notes are added to future turns in this chat.'}</span><span>{memoryContent.length}/6000</span></div>
-          {memoryError && <p role="alert" className="rounded-lg border border-status-danger-border bg-status-danger-subtle p-2.5 text-xs text-status-danger">{memoryError}</p>}
-        </div>
-      </Modal>
+      </>}
+      <ChatThreadDialogs threadPendingDelete={threadPendingDelete} setThreadPendingDelete={setThreadPendingDelete}
+        memoryThreadId={memoryThreadId} setMemoryThreadId={setMemoryThreadId} />
       <main className="relative flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden bg-shell">
         {activeThread ? <>
           <header className="flex h-14 shrink-0 items-center gap-3 px-5 lg:px-7">
@@ -2014,6 +1946,10 @@ export const ChatView: React.FC = () => {
               {isDesktop && role === 'dev' && activeThread?.projectId && (
                 <BoardChangesWaiting projectId={activeThread.projectId} working={Boolean(activeTurnMessageId)} />
               )}
+              {!forcedBuild && targetRuntime && targetQuota && targetQuota.remainingPercent <= 25 && <p role="status" className="px-4 text-xs text-status-warning">
+                {targetRuntime.name}: {targetQuota.remainingPercent === 0 ? 'quota exhausted' : targetQuota.remainingPercent + '% remaining'} ({targetQuota.label})
+                {targetQuota.resetsAt ? ' · Resets ' + new Date(targetQuota.resetsAt).toLocaleString() : ''}
+              </p>}
               <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-1.5 rounded-[1.75rem] border border-divider bg-surface-raised/95 p-1.5 shadow-2xl shadow-black/50 transition-colors focus-within:border-control ${isDraggingFiles ? 'ring-2 ring-selected-content/70' : ''}`}>
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
                 <div ref={repositoryMenuRef} className="relative shrink-0">
@@ -2095,7 +2031,7 @@ export const ChatView: React.FC = () => {
               onSend={() => void sendFromHome()}
               canSend={canStartThread}
               blockedReason={canStartThread ? undefined : 'Your workspace role cannot start conversations.'}
-              recent={[...chatThreads]
+              recent={unifiedNavigation ? [] : [...chatThreads]
                 .filter(thread => (thread.messages?.length ?? 0) > 0 || thread.lastMessageSnippet !== 'Ready for instructions...')
                 .sort((a, b) => Date.parse(b.lastMessageAt) - Date.parse(a.lastMessageAt))
                 .slice(0, 5)
@@ -2103,7 +2039,7 @@ export const ChatView: React.FC = () => {
               onOpenRecent={threadId => setActiveThreadId(threadId)}
             />}
       </main>
-      {!isClient && sidePanelPresence.mounted && <ChatSidePanel motion={sidePanelPresence.closing ? 'closing' : 'opening'} tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setPanelVisible(false); document.getElementById('chat-panel-toggle')?.focus(); }}>
+      {!isClient && sidePanelPresence.mounted && <ChatSidePanel variant="inset" widthStorageKey="alpha.chatSidePanelWidth.inset" defaultWidth={300} minWidth={260} motion={sidePanelPresence.closing ? 'closing' : 'opening'} tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setPanelVisible(false); document.getElementById('chat-panel-toggle')?.focus(); }}>
         {activeSideTab ? renderSideTab(activeSideTab) : <section className="space-y-4 p-5"><h2 className="text-sm font-semibold">Side panel</h2><p className="text-xs text-content-secondary">Keep previews, plans, agents and changes beside your conversation.</p>{latestBuild && project && <><button type="button" onClick={() => openPlanTab({ projectId: project.id, runId: latestBuild.runId, planVersion: latestBuild.orchestration.run.planVersion, auto: false })} className="block text-xs text-link">Open saved plan</button><button type="button" onClick={() => openSavedBuildReview(latestBuild.runId)} className="block text-xs text-link">Build review</button><button type="button" onClick={openBuildChanges} className="block text-xs text-link">Code changes</button></>}</section>}
       </ChatSidePanel>}
     </div>
