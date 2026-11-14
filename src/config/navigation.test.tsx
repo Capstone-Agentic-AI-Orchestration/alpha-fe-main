@@ -23,7 +23,7 @@ const existing: Record<UserRole, NavigationTab[]> = {
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
-  pm: ['projects', 'issues', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['projects', 'inquiries', 'issues', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['projects', 'issues', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 describe('existing navigation compatibility', () => {
