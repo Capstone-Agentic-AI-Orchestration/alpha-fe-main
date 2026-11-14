@@ -32,6 +32,7 @@ import { ClientPortalView } from '@/features/delivery/ClientPortalView';
 import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
 import { DocumentsView } from '@/features/delivery/DocumentsView';
 import { PmTicketsPage } from '@/features/ticketing/PmTicketsPage';
+import { PmInquiriesPage } from '@/features/ticketing/PmInquiriesPage';
 import { NavigationTab } from '@/shared/types';
 // Whether this is the packaged desktop app rather than a browser tab, read from
 // the preload bridge. Shared with the settings panel rather than defined twice.
@@ -58,6 +59,7 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
     case 'intake': content = <IntakeWizardView />; break;
     case 'documents': content = <DocumentsView />; break;
     case 'tickets': content = <PmTicketsPage />; break;
+    case 'inquiries': content = <PmInquiriesPage />; break;
     case 'chat': content = unifiedChat && chatHistory ? <ChatHistory /> : <ChatView unifiedNavigation={unifiedChat} />; break;
     case 'issues': content = <IssuesView onOpenNewIssue={onOpenNewIssue} />; break;
     case 'projects': content = <ProjectsView onOpenNewIssue={onOpenNewIssue} />; break;

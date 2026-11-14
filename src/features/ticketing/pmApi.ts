@@ -42,6 +42,7 @@ export interface PmTicketQueuePage {
   nextCursor: string | null;
   counters: { kind: 'pm'; needsPm: number; inProgress: number; waitingClient: number; closedMonth: number };
 }
+export interface PmTicketClientGroup { key: string; displayName: string }
 export interface PmTicketMessage { id: string; author: 'pm' | 'client'; body: string; createdAt: string }
 export interface PmTicketNote extends PmTicketMessage { authorId: string }
 export interface PmTicketPage<T> { items: T[]; nextCursor: string | null }
@@ -109,6 +110,7 @@ export interface PmTicketQueueOptions {
   after?: string | null;
   search?: string;
   filter?: 'all' | 'history' | 'open' | 'needs_pm' | 'in_progress' | 'waiting_client' | 'closed_month';
+  clientGroupKey?: string;
 }
 export interface PmTicketMessageInput {
   schemaVersion: 1;
@@ -325,8 +327,24 @@ export const pmTicketApi = {
   list(options: PmTicketQueueOptions = {}) {
     return apiService.ticketRequest<PmTicketQueuePage>(`/tickets${query({
       limit: options.limit === undefined ? undefined : String(options.limit),
-      after: options.after, search: options.search, filter: options.filter,
+      after: options.after, search: options.search, filter: options.filter, clientGroupKey: options.clientGroupKey,
     })}`);
+  },
+  async listClientGroups(): Promise<PmTicketClientGroup[]> {
+    const value = await apiService.ticketRequest<unknown>('/tickets/client-groups');
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Client list response is invalid.');
+    const items = (value as Record<string, unknown>).items;
+    if (!Array.isArray(items)) throw new Error('Client list response is invalid.');
+    const keys = new Set<string>();
+    return items.map(item => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) throw new Error('Client list response is invalid.');
+      const group = item as Record<string, unknown>;
+      if (typeof group.key !== 'string' || !group.key.trim() || group.key.trim() !== group.key || group.key.length > 200
+        || typeof group.displayName !== 'string' || !group.displayName.trim() || group.displayName.trim() !== group.displayName
+        || group.displayName.length > 200 || keys.has(group.key)) throw new Error('Client list response is invalid.');
+      keys.add(group.key);
+      return { key: group.key, displayName: group.displayName };
+    });
   },
   get(ticketId: string) {
     return apiService.ticketRequest<PmTicketDetail>(`/tickets/${encodeId(ticketId)}`);

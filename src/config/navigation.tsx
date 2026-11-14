@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, PenLine, FileText, MessageSquare, Activity,
   CheckSquare, FolderKanban, Rocket, Bot, BarChart3, BookOpen, Settings,
-  Ticket
+  Inbox, Ticket
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
@@ -135,6 +135,7 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
 
   { id: 'tickets', label: 'Tickets', title: 'Tickets', subtitle: 'Review client requests, communicate, and track delivery', group: 'workspace', section: 'delivery', icon: Ticket },
+  { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review and clarify new client inquiries', group: 'workspace', section: 'delivery', icon: Inbox },
   { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'delivery', admin: 'delivery' }, icon: CheckSquare },
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
 
@@ -198,7 +199,7 @@ const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
   pm: [
-    'issues', 'projects', 'tickets',
+    'issues', 'projects', 'tickets', 'inquiries',
     'agents', 'skills', 'analytics', 'settings'
   ],
   admin: [

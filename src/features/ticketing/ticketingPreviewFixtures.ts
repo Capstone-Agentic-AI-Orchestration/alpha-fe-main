@@ -185,8 +185,11 @@ function filterTickets(tickets: readonly DemoTicket[], options: PmTicketQueueOpt
       || (options.filter === 'in_progress' && ticket.status === 'in_progress')
       || (options.filter === 'waiting_client' && !terminal && ticket.actionOwner === 'client')
       || (options.filter === 'closed_month' && ticket.status === 'closed' && ticket.closedAt?.slice(0, 7) === new Date().toISOString().slice(0, 7));
-    const matchesSearch = !search || `${ticket.reference} ${ticket.title} ${ticket.description}`.toLowerCase().includes(search);
-    return matchesFilter && matchesSearch;
+    const clientGroupKey = ticket.clientAccessActive ? 'preview-northstar' : `ticket:${ticket.id}`;
+    const clientName = ticket.contact?.fullName ?? ticket.companyLabel;
+    const matchesClient = !options.clientGroupKey || options.clientGroupKey === clientGroupKey;
+    const matchesSearch = !search || `${ticket.reference} ${ticket.title} ${ticket.description} ${clientName}`.toLowerCase().includes(search);
+    return matchesFilter && matchesClient && matchesSearch;
   });
 }
 
@@ -199,6 +202,14 @@ const queueCounters = {
 };
 
 const localMethods: Partial<typeof pmTicketApi> = {
+  async listClientGroups() {
+    const groups = new Map<string, string>();
+    for (const ticket of DEMO_TICKETS) {
+      const key = ticket.clientAccessActive ? 'preview-northstar' : `ticket:${ticket.id}`;
+      if (!groups.has(key)) groups.set(key, ticket.contact?.fullName ?? ticket.companyLabel);
+    }
+    return [...groups].map(([key, displayName]) => ({ key, displayName }));
+  },
   async list(options: PmTicketQueueOptions = {}): Promise<PmTicketQueuePage> {
     const tickets = filterTickets(DEMO_TICKETS, options);
     const limit = Math.max(1, Math.min(options.limit ?? 50, 100));

@@ -12,7 +12,7 @@ import { ChatContextPanel } from './ChatContextPanel';
 import type {
   PmTicketCommandInput, PmTicketDetail, PmTicketMessage, PmTicketMessageInput,
   PmTicketNote, PmTicketNoteInput, PmTicketQueueItem, PmTicketQueueOptions,
-  PmTicketQueuePage, PmTicketReceipt, PmTicketScopeProposalInput, PmTicketProjectLinkInput, TicketStatus,
+  PmTicketQueuePage, PmTicketReceipt, PmTicketScopeProposalInput, PmTicketProjectLinkInput, PmTicketClientGroup, TicketStatus,
 } from './pmApi';
 import { PmScopeProposalForm, type PmScopeProposalDraft } from './PmScopeProposalForm';
 import { PmWorkHandoffForm, type PmWorkHandoffDraft } from './PmWorkHandoffForm';
@@ -200,9 +200,13 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
 } = {}) {
   const [queue, setQueue] = useState<PmTicketQueuePage | null>(null);
   const [filter, setFilter] = useState<Filter>('all');
+  const [clientGroupKey, setClientGroupKey] = useState('');
+  const [clientGroups, setClientGroups] = useState<PmTicketClientGroup[]>([]);
+  const [clientGroupsLoading, setClientGroupsLoading] = useState(intakeEnabled);
+  const [clientGroupsError, setClientGroupsError] = useState('');
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
-  const queueScope = JSON.stringify([filter, search]);
+  const queueScope = JSON.stringify([filter, search, clientGroupKey]);
   const [resolvedQueueScope, setResolvedQueueScope] = useState('');
   const lastQueueScope = useRef('');
   const [dateRange, setDateRange] = useState<DateRange>('all');
@@ -285,6 +289,25 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     return () => window.clearTimeout(timer);
   }, [searchInput]);
 
+  useEffect(() => {
+    let current = true;
+    if (!intakeEnabled) {
+      setClientGroups([]); setClientGroupKey(''); setClientGroupsLoading(false); setClientGroupsError('');
+      return () => { current = false; };
+    }
+    setClientGroupsLoading(true); setClientGroupsError('');
+    void api.listClientGroups().then(groups => {
+      if (!current) return;
+      setClientGroups(groups);
+      setClientGroupKey(selected => selected && groups.some(group => group.key === selected) ? selected : '');
+    }).catch(error => {
+      if (current) setClientGroupsError(safeError(error, 'queue'));
+    }).finally(() => {
+      if (current) setClientGroupsLoading(false);
+    });
+    return () => { current = false; };
+  }, [api, intakeEnabled, refreshVersion]);
+
   const loadQueue = useCallback(async () => {
     const generation = ++queueGeneration.current;
     if (!intakeEnabled) {
@@ -295,7 +318,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     setQueueMoreLoading(false);
     setQueueError('');
     try {
-      const result = await api.list({ limit: 50, filter, search });
+      const result = await api.list({ limit: 50, filter, search, clientGroupKey: clientGroupKey || undefined });
       if (generation !== queueGeneration.current) return;
       setQueue(result); lastQueueScope.current = queueScope; setResolvedQueueScope(queueScope);
       setSelectedId(current => current && result.items.some(item => item.id === current) ? current : null);
@@ -308,7 +331,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     } finally {
       if (generation === queueGeneration.current) setQueueLoading(false);
     }
-  }, [api, filter, search, queueScope, intakeEnabled]);
+  }, [api, filter, search, clientGroupKey, queueScope, intakeEnabled]);
 
   useEffect(() => { void loadQueue(); }, [loadQueue, refreshVersion, refreshToken]);
 
@@ -672,7 +695,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     const generation = queueGeneration.current;
     setQueueMoreLoading(true); setQueueError('');
     try {
-      const page = await api.list({ limit: 50, after: queue.nextCursor, filter, search });
+      const page = await api.list({ limit: 50, after: queue.nextCursor, filter, search, clientGroupKey: clientGroupKey || undefined });
       if (generation !== queueGeneration.current) return;
       setQueue(current => {
         if (!current) return page;
@@ -932,6 +955,16 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
           </select>
         </label>}
         {!selectedId && <label className="pm-tickets__queue-select">
+          <span className="sr-only">Filter by client</span>
+          <select aria-label="Filter by client" value={clientGroupKey}
+            disabled={!intakeEnabled || clientGroupsLoading || Boolean(clientGroupsError) || writing || Boolean(pending)}
+            title={clientGroupsError || undefined}
+            onChange={event => { setSelectedId(null); setClientGroupKey(event.target.value); }}>
+            <option value="">All clients</option>
+            {clientGroups.map(group => <option key={group.key} value={group.key}>{group.displayName}</option>)}
+          </select>
+        </label>}
+        {!selectedId && <label className="pm-tickets__queue-select">
           <span className="sr-only">Filter by date</span>
           <select aria-label="Filter by date" value={dateRange} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => setDateRange(event.target.value as DateRange)}>
             {dateRanges.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
@@ -972,8 +1005,8 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
             : queue && visibleQueueItems.length > 0 ? <PmTicketQueueList items={visibleQueueItems} selectedId={selectedId}
               disabled={Boolean(pending)}
               onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }} />
-              : queue && <div className="pm-tickets__empty-state"><EmptyPanel title="No tickets in this view" detail={filter === 'all' && !search && dateRange === 'all' ? 'Accepted inquiries will appear here. New inquiries are reviewed in the separate intake inbox.' : 'Try another view or clear your filters.'} />
-                {(search || filter !== 'all' || dateRange !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); setDateRange('all'); setSortOrder('updated_desc'); activeFilter('all'); }}>Show all tickets</button>}</div>}
+              : queue && <div className="pm-tickets__empty-state"><EmptyPanel title="No tickets in this view" detail={filter === 'all' && !search && !clientGroupKey && dateRange === 'all' ? 'Accepted inquiries will appear here. New inquiries are reviewed in the separate intake inbox.' : 'Try another view or clear your filters.'} />
+                {(search || filter !== 'all' || clientGroupKey || dateRange !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); setClientGroupKey(''); setDateRange('all'); setSortOrder('updated_desc'); activeFilter('all'); }}>Show all tickets</button>}</div>}
         </div>
         {queue && resolvedQueueScope === queueScope && <div className="pm-tickets__queue-footer">
           <span>Showing {visibleQueueItems.length} ticket{visibleQueueItems.length === 1 ? '' : 's'}</span>
