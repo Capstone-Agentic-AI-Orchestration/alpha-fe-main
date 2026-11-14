@@ -106,6 +106,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     role,
     visibleTabs,
     setActiveTab,
+    openChatThread,
     activeTabId,
     setTabSessionState,
     chatThreads,
@@ -489,8 +490,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const openBuildChat = (issue: Issue) => {
     const thread = buildChatFor(issue);
     if (!thread) return;
-    setActiveThreadId(thread.id);
-    setActiveTab('chat');
+    if (role === 'dev') openChatThread(thread.id);
+    else { setActiveThreadId(thread.id); setActiveTab('chat'); }
   };
 
   /**

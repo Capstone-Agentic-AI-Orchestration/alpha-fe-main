@@ -196,7 +196,7 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
  */
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'analytics', 'settings'],
+  dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
   pm: [
     'issues', 'projects', 'tickets',
     'agents', 'skills', 'analytics', 'settings'
