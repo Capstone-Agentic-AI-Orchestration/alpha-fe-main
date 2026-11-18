@@ -501,9 +501,6 @@
 
 .pm-tickets:not(.pm-tickets--ticket-open) .pm-tickets__header { min-height: 68px !important; padding-block: 14px; }
 .pm-tickets__header-actions { flex-wrap: wrap; gap: 8px; }
-.pm-tickets__queue-select { display: flex; min-width: 0; align-items: center; }
-.pm-tickets__queue-select select { height: 34px; max-width: 160px; padding: 6px 9px; border: 1px solid rgb(var(--ui-control)); border-radius: 6px; background: rgb(var(--ui-surface)); color: var(--pm-muted); font-size: 12px; }
-.pm-tickets__queue-select select:hover { border-color: rgb(var(--ui-link) / .65); color: var(--pm-text); }
 
 /* Opening a ticket is a focused reading state, not another ticket browser. */
 .pm-tickets { grid-template-columns: minmax(0, 1fr); }
@@ -544,7 +541,6 @@
   .pm-tickets__header-actions { flex: 1 1 100%; justify-content: flex-end; }
   .pm-tickets__search { flex: 1 1 auto; }
   .pm-tickets__search-input { width: 100%; }
-  .pm-tickets__queue-select select { max-width: 132px; }
   .pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-header { padding-inline: 16px; }
   .pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-heading { grid-template-columns: 30px minmax(0, 1fr); gap: 8px; }
   .pm-tickets.pm-tickets--ticket-open .pm-tickets__detail-title { font-size: 18px; }
@@ -714,4 +710,39 @@
   .pm-inquiries__clarification-form .pm-inquiries__decision-actions > button { width: 100%; justify-content: center; }
   .pm-inquiries.is-navigation-collapsed.pm-inquiries--selected .pm-inquiries__shell { grid-template-columns: minmax(0, 1fr); }
   .pm-inquiries.is-navigation-collapsed .pm-inquiries__navigation { display: none; }
+}
+
+/* Match the spacing and density of the Clients directory. */
+.pm-tickets:not(.pm-tickets--ticket-open) .pm-tickets__header,
+.pm-inquiries__queue-header {
+  flex-wrap: wrap;
+  padding-inline: 24px;
+}
+.pm-tickets__queue,
+.pm-inquiries__queue-panel { padding-inline: 24px; }
+.pm-inquiries__queue-actions { flex-wrap: wrap; }
+.pm-inquiries__queue-scroll { border-top: 0; }
+.pm-queue-table { table-layout: fixed; }
+.pm-queue-table th:last-child { width: 75px; }
+.pm-queue-table__icon {
+  display: flex;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgb(var(--ui-divider));
+  border-radius: 50%;
+  background: rgb(var(--ui-raised));
+}
+.pm-queue-table .pm-ticket-queue__status {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pm-queue-table .pm-ticket-queue__status::before {
+  display: inline-block;
+  margin-inline-end: 5px;
+  vertical-align: middle;
 }
