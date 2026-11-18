@@ -68,7 +68,7 @@
 :where(.client-portal-shell) .client-portal-body { display: flex; min-width: 0; min-height: 0; flex: 1; flex-direction: column; gap: var(--client-space-4); }
 :where(.client-portal-shell) .client-portal-page-heading { display: flex; min-height: 74px; align-items: center; justify-content: space-between; gap: var(--client-space-5); }
 :where(.client-portal-shell) .client-eyebrow { margin: 0 0 5px; color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); font-weight: var(--client-weight-bold); letter-spacing: .12em; }
-:where(.client-portal-shell) .client-portal-page-heading h1 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: clamp(23px, 2.1vw, 30px); font-weight: var(--client-weight-bold); letter-spacing: -.045em; line-height: var(--client-line-heading); }
+:where(.client-portal-shell) .client-portal-page-heading h1 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: var(--client-type-page); font-weight: var(--client-weight-bold); letter-spacing: -.045em; line-height: var(--client-line-heading); }
 :where(.client-portal-shell) .client-page-description { margin: 5px 0 0; color: var(--cp-muted); font-size: var(--client-type-compact); }
 :where(.client-portal-shell) .client-attention-link { display: flex; max-width: 430px; min-height: 58px; align-items: center; gap: 11px; padding: 10px 14px; border: 1px solid rgb(var(--ui-warning) / .30); border-radius: var(--client-radius-surface); background: rgb(var(--ui-warning) / .10); color: rgb(var(--ui-warning)); text-align: left; cursor: pointer; }
 :where(.client-portal-shell) .client-attention-link:hover { background: rgb(var(--ui-warning) / .10); }
@@ -815,7 +815,7 @@
 .client-portal-shell .client-page-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--client-space-4); }
 .client-portal-shell .client-spotlights.is-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); align-items: start; }
 .client-portal-shell .client-home-hello { display: grid; gap: var(--client-space-1); }
-.client-portal-shell .client-home-hello h1 { margin: 0; color: var(--cp-ink); font-size: clamp(1.5rem, 2.4vw, 1.875rem); font-weight: var(--client-weight-bold); letter-spacing: -.025em; line-height: var(--client-line-heading); }
+.client-portal-shell .client-home-hello h1 { margin: 0; color: var(--cp-ink); font-size: var(--client-type-page); font-weight: var(--client-weight-bold); letter-spacing: -.025em; line-height: var(--client-line-heading); }
 .client-portal-shell .client-home-hello p { margin: 0; color: var(--cp-muted); font-size: var(--client-type-caption); }
 .client-portal-shell .client-home-hello p:first-child { color: var(--cp-faint); }
 
@@ -889,7 +889,7 @@
 
 /* Requests with nothing open: full width like Home and Projects, with the list framed as one card. */
 .client-portal-shell .client-requests-page:not(.has-selected-request) > .client-portal-page-heading { padding-bottom: var(--client-space-4); border-bottom: 0; }
-.client-portal-shell .client-requests-page:not(.has-selected-request) > .client-portal-page-heading h1 { font-size: clamp(1.5rem, 2.4vw, 1.875rem); }
+.client-portal-shell .client-requests-page:not(.has-selected-request) > .client-portal-page-heading h1 { font-size: var(--client-type-page); }
 .client-portal-shell .client-requests-page:not(.has-selected-request) > .client-portal-page-heading h1::before { display: none; }
 .client-portal-shell .client-requests-page:not(.has-selected-request) .client-request-list { overflow: hidden; border: 1px solid var(--cp-line); border-radius: 18px; background: rgb(var(--ui-surface)); }
 
@@ -923,20 +923,18 @@
   .client-portal-shell .client-timeline-row time { display: none; }
 }
 
-/* Client reading size. Clients visit occasionally and are often not technical, so page content uses
-   standard web reading sizes, well above the dense staff app: 14px for small notes, 16px for body text,
-   18px for card titles and 24-30px for page headings (the app root is 15px, so values are rem / 15).
-   Only the page area changes; the sidebar and tab bar keep the PM workspace sizes. */
+/* Client type scale, kept close to the PM and developer workspaces so every persona reads the same:
+   11.5px notes, 12.5px captions, 13px compact text, 14px body and messages, 16px card titles and
+   20-24px page headings (the app root is 15px, so values are rem / 15). Control heights use the
+   shared client defaults. */
 .client-portal-shell .client-portal-main--workspace {
-  --client-type-meta: 0.9333rem;
-  --client-type-caption: 1rem;
-  --client-type-compact: 1.0667rem;
-  --client-type-body: 1.2rem;
-  --client-type-subheading: 1.3333rem;
-  --client-type-page: clamp(1.6rem, 2.2vw, 2rem);
-  --client-type-title: 2rem;
-  --client-control-compact: 2.9333rem;
-  --client-control: 3.2rem;
+  --client-type-meta: 0.7667rem;
+  --client-type-caption: 0.8333rem;
+  --client-type-compact: 0.8667rem;
+  --client-type-body: 0.9333rem;
+  --client-type-subheading: 1.0667rem;
+  --client-type-page: clamp(1.3333rem, 1.8vw, 1.6rem);
+  --client-type-title: 1.6rem;
   font-size: var(--client-type-compact);
 }
 @media (max-width: 1100px) {
@@ -952,7 +950,7 @@
 /* Larger step labels need a wider tracker before they fit side by side. */
 .client-portal-shell .client-detail-tracker { max-width: 980px; }
 /* Message text, panel copy and Project Review labels also use fixed staff sizes; give them the client sizes. */
-.client-portal-shell .client-portal-main--workspace .ui-bubble-content { font-size: var(--client-type-compact); line-height: var(--client-line-body); }
+.client-portal-shell .client-portal-main--workspace .ui-bubble-content { font-size: var(--client-type-body); line-height: var(--client-line-body); }
 .client-portal-shell .client-portal-main--workspace :is(.role-chat-context__section p, .client-about-person, .pqa-empty p) { font-size: var(--client-type-caption); line-height: var(--client-line-body); }
 .client-portal-shell .client-portal-main--workspace .pqa-panel-tabs button { font-size: var(--client-type-meta); }
 /* With an open request, the request list gets enough width for the larger text, and status lines wrap instead of being cut off. */
