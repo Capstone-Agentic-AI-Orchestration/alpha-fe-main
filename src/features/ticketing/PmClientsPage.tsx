@@ -1,3 +1,4 @@
+import './pmTickets.css';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowLeft, ArrowUpRight, FolderKanban, RefreshCw, Search, ShieldCheck, ShieldOff, Users } from 'lucide-react';
 
@@ -338,7 +339,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
       </div>
     </header>
 
-    <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+    <div className="pm-table-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-6">
       {!error && summary && <p className="mb-2 text-xs text-content-secondary">{summary}</p>}
       {error ? <p role="alert" className="rounded-md border border-status-danger-border bg-status-danger-subtle px-3 py-2 text-[13px] text-status-danger">{error}</p>
         : loading && !clients ? <SkeletonTable label="Loading clients" columns={4} rows={5} header avatar />
@@ -348,7 +349,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
           <p className="max-w-sm text-xs text-content-muted">Clients appear here once they have a portal account. New inquiries are in Inquiries.</p>
           <button type="button" onClick={onOpenInquiries} className="mt-1 text-xs font-semibold text-link hover:text-link-hover">Open Inquiries</button>
         </div>
-        : <table className="w-full text-left text-[13px]">
+        : <table className="pm-date-table w-full text-left text-[13px]">
           <thead className="text-[10.5px] font-semibold uppercase tracking-wide text-content-muted">
             <tr className="border-b border-divider">
               <th scope="col" className="w-1/2 py-2 pr-3 font-semibold sm:w-2/5">Client</th>
@@ -360,7 +361,8 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
             </tr>
           </thead>
           <tbody>
-            {visible.map(client => <tr key={client.key} className="border-b border-divider hover:bg-surface-high/40">
+            {visible.map(client => <tr key={client.key} className="cursor-pointer border-b border-divider hover:bg-surface-high/40 aria-disabled:cursor-default"
+          onClick={event => { if (!(event.target instanceof Element && event.target.closest('button, a'))) onSelect(client.key); }}>
               <td className="max-w-0 py-2.5 pr-3">
                 <button type="button" onClick={() => onSelect(client.key)} className="flex w-full min-w-0 items-center gap-2.5 text-left">
                   <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-divider bg-surface-raised text-[11px] font-semibold text-content">{clientInitials(client.displayName)}</span>

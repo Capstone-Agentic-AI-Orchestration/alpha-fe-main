@@ -1,4 +1,4 @@
-import { PmQueueSelect } from './PmQueueSelect';
+import { PmQueueSelect, type PmQueueTone } from './PmQueueSelect';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { TicketDetailSkeleton, TicketQueueSkeleton } from './TicketingSkeletons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -52,14 +52,14 @@ interface PendingOperation {
   refresh?: boolean;
 }
 
-const filters: Array<{ id: Filter; label: string; counter?: 'needsPm' | 'inProgress' | 'waitingClient' | 'closedMonth' }> = [
+const filters: Array<{ id: Filter; label: string; tone?: PmQueueTone; counter?: 'needsPm' | 'inProgress' | 'waitingClient' | 'closedMonth' }> = [
   { id: 'all', label: 'All tickets' },
-  { id: 'open', label: 'Open tickets' },
-  { id: 'needs_pm', label: 'Needs attention', counter: 'needsPm' },
-  { id: 'in_progress', label: 'In progress', counter: 'inProgress' },
-  { id: 'waiting_client', label: 'Waiting for client', counter: 'waitingClient' },
-  { id: 'closed_month', label: 'Closed this month', counter: 'closedMonth' },
-  { id: 'history', label: 'History' },
+  { id: 'open', label: 'Open tickets', tone: 'active' },
+  { id: 'needs_pm', label: 'Needs attention', tone: 'attention', counter: 'needsPm' },
+  { id: 'in_progress', label: 'In progress', tone: 'active', counter: 'inProgress' },
+  { id: 'waiting_client', label: 'Waiting for client', tone: 'waiting', counter: 'waitingClient' },
+  { id: 'closed_month', label: 'Closed this month', tone: 'complete', counter: 'closedMonth' },
+  { id: 'history', label: 'History', tone: 'neutral' },
 ];
 
 const dateRanges: Array<{ id: DateRange; label: string }> = [
@@ -998,6 +998,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
         <PmQueueSelect label="Filter requests" value={filter} disabled={!intakeEnabled || writing || Boolean(pending)}
           onChange={activeFilter} options={filters.map(option => ({
             value: option.id,
+            tone: option.tone,
             label: option.label + (option.counter && queue?.counters.kind === 'pm' ? ` · ${queue.counters[option.counter]}` : ''),
           }))} />
         {fixedClientGroupKey === undefined && <PmQueueSelect label="Filter by client" value={clientGroupKey}
@@ -1031,7 +1032,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
             : fixedClientGroupKey ? 'This client’s requests and their next steps.' : 'Your client requests and their next steps.'}</p>
           <span>Open a ticket to continue</span>
         </div>
-        <div className="pm-tickets__queue-scroll">
+        <div className="pm-tickets__queue-scroll pm-table-scroll">
           {!intakeEnabled ? <EmptyPanel title="Live tickets are not connected yet" detail="No ticket data is loaded while ticketing is disabled." />
             : queuePending ? <TicketQueueSkeleton label="Loading tickets" className="px-4" />
             : queue && visibleQueueItems.length > 0 ? <PmTicketQueueList items={visibleQueueItems} selectedId={selectedId}

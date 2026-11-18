@@ -41,7 +41,7 @@ export function PmTicketQueueList({ items, selectedId, disabled, onSelect }: {
   const clients = groupPmTickets(items);
   const clientByTicket = new Map(clients.flatMap(client => client.projects.flatMap(project =>
     project.tickets.map(item => [item.id, client] as const))));
-  return <table aria-label="Client tickets" className="pm-queue-table w-full text-left text-[13px]">
+  return <table aria-label="Client tickets" className="pm-queue-table pm-date-table w-full text-left text-[13px]">
     <thead className="text-[10.5px] font-semibold uppercase tracking-wide text-content-muted">
       <tr className="border-b border-divider">
         <th scope="col" className="w-1/2 py-2 pr-3 font-semibold sm:w-2/5">Request</th>
@@ -53,7 +53,8 @@ export function PmTicketQueueList({ items, selectedId, disabled, onSelect }: {
     <tbody>
       {items.map(item => {
         const client = clientByTicket.get(item.id)!;
-        return <tr key={item.id} className="border-b border-divider hover:bg-surface-high/40">
+        return <tr key={item.id} className="cursor-pointer border-b border-divider hover:bg-surface-high/40 aria-disabled:cursor-default" aria-disabled={disabled}
+          onClick={event => { if (!disabled && !(event.target instanceof Element && event.target.closest('button, a'))) onSelect(item.id); }}>
           <td className="max-w-0 py-2.5 pr-3">
             <button type="button" data-ticket-id={item.id} aria-pressed={selectedId === item.id} disabled={disabled}
               onClick={() => onSelect(item.id)} className="flex w-full min-w-0 items-center gap-2.5 text-left hover:text-link disabled:opacity-50">
