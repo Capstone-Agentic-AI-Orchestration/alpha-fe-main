@@ -45,7 +45,7 @@ import {
   normalizeRequirementDocs,
   normalizeSettings
 } from '@/data/defaults';
-import { apiService, normalizeGitHubRepo, normalizeSkill, onWorkspaceRefused, setActiveWorkspaceId } from '@/shared/services/apiService';
+import { apiService, normalizeGitHubRepo, normalizeSkill, onWorkspaceRefused, parseApiError, setActiveWorkspaceId } from '@/shared/services/apiService';
 import { chatSendFailureText } from '@/features/chat/chatSendFailure';
 import { applyChatReplies, mergeLoadedTranscript, mergeThreadsWithCachedMessages } from './chatThreadHydration';
 import { createBoardSyncCoordinator } from './boardSyncCoordinator';
@@ -250,6 +250,8 @@ interface AppContextType {
   loadTranscript: (threadId: string) => void;
   setActiveThreadId: (id: string | null) => void;
   createNewThread: (title?: string, projectId?: string) => string;
+  /** Rename a conversation; resolves false when nothing was saved (blank, unchanged or refused). */
+  renameThread: (threadId: string, title: string) => Promise<boolean>;
   setThreadProject: (threadId: string, projectId: string | null) => Promise<ChatThread & {
     workspaceDir: string | null;
     workspaceManaged: boolean | null;
@@ -3275,6 +3277,27 @@ ${e.detail}`;
     return updated;
   };
 
+  /**
+   * Rename a conversation everywhere at once (sidebar, tab, header), then save it.
+   * A refused or failed save puts the old name back and says why.
+   */
+  const renameThread = async (threadId: string, title: string): Promise<boolean> => {
+    if (!requireCapability('manage_chat')) return false;
+    const name = title.replace(/\s+/g, ' ').trim();
+    const previous = chatThreads.find(thread => thread.id === threadId)?.title;
+    if (!name || name === previous) return false;
+    setChatThreads(prev => prev.map(thread => thread.id === threadId ? { ...thread, title: name } : thread));
+    try {
+      const updated = await apiService.renameChatThread(threadId, name);
+      setChatThreads(prev => prev.map(thread => thread.id === threadId ? { ...thread, title: updated.title } : thread));
+      return true;
+    } catch (error: any) {
+      setChatThreads(prev => prev.map(thread => thread.id === threadId && thread.title === name ? { ...thread, title: previous ?? thread.title } : thread));
+      showToast('Chat not renamed', parseApiError(error).message || 'Alpha could not save the new name.', 'error');
+      return false;
+    }
+  };
+
   const refreshChatThread = async (threadId: string): Promise<ChatMessage[]> => {
     const messages = await apiService.getChatMessages(threadId);
     loadedThreadsRef.current.add(threadId);
@@ -4160,6 +4183,7 @@ ${e.detail}`;
       setActiveThreadId,
       createNewThread,
       setThreadProject,
+      renameThread,
       refreshChatThread,
       deleteThread,
       chatMessages,

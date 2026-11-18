@@ -3,13 +3,36 @@ import { useApp } from '@/app/AppContext';
 import { apiService } from '@/shared/services/apiService';
 import { Modal } from '@/shared/components/Modal';
 
-export function ChatThreadDialogs({ threadPendingDelete, setThreadPendingDelete, memoryThreadId, setMemoryThreadId }: {
+/** Longest conversation name the engine accepts. */
+export const CHAT_TITLE_MAX_LENGTH = 120;
+
+export function ChatThreadDialogs({ threadPendingDelete, setThreadPendingDelete, memoryThreadId, setMemoryThreadId, threadPendingRename = null, setThreadPendingRename }: {
   threadPendingDelete: { id: string; title: string } | null;
   setThreadPendingDelete: (thread: { id: string; title: string } | null) => void;
   memoryThreadId: string | null;
   setMemoryThreadId: (id: string | null) => void;
+  /** The conversation being renamed, from a row's Rename item. */
+  threadPendingRename?: { id: string; title: string } | null;
+  setThreadPendingRename?: (thread: { id: string; title: string } | null) => void;
 }) {
-  const { deleteThread, showToast } = useApp();
+  const { deleteThread, renameThread, showToast } = useApp();
+  const [renameValue, setRenameValue] = useState('');
+  const [renameBusy, setRenameBusy] = useState(false);
+  useEffect(() => { setRenameValue(threadPendingRename?.title ?? ''); }, [threadPendingRename]);
+  const renameName = renameValue.replace(/\s+/g, ' ').trim();
+  const closeRename = () => { if (!renameBusy) setThreadPendingRename?.(null); };
+  const saveRename = async () => {
+    if (!threadPendingRename || !renameName || renameName.length > CHAT_TITLE_MAX_LENGTH) return;
+    if (renameName === threadPendingRename.title) { setThreadPendingRename?.(null); return; }
+    setRenameBusy(true);
+    try {
+      // On failure renameThread puts the old name back and says why; the dialog closes either way.
+      await renameThread(threadPendingRename.id, renameName);
+    } finally {
+      setRenameBusy(false);
+      setThreadPendingRename?.(null);
+    }
+  };
   const [memoryContent, setMemoryContent] = useState('');
   const [memoryBusy, setMemoryBusy] = useState(false);
   const [memoryLoading, setMemoryLoading] = useState(false);
@@ -66,6 +89,19 @@ export function ChatThreadDialogs({ threadPendingDelete, setThreadPendingDelete,
   };
 
   return <>
+      <Modal
+        isOpen={Boolean(threadPendingRename)}
+        onClose={closeRename}
+        title="Rename chat"
+        maxWidth="max-w-md"
+        closeDisabled={renameBusy}
+        footer={<div className="flex justify-end gap-2"><button type="button" onClick={closeRename} disabled={renameBusy} className="rounded-lg px-3 py-2 text-xs text-content-secondary hover:bg-surface-high">Cancel</button><button type="submit" form="chat-rename-form" disabled={renameBusy || !renameName || renameName.length > CHAT_TITLE_MAX_LENGTH} className="rounded-lg bg-action px-3 py-2 text-xs font-semibold text-on-action hover:bg-action-hover disabled:opacity-50">{renameBusy ? 'Saving…' : 'Save'}</button></div>}
+      >
+        <form id="chat-rename-form" onSubmit={event => { event.preventDefault(); void saveRename(); }}>
+          <label htmlFor="chat-rename-input" className="mb-1.5 block text-xs font-medium text-content-secondary">Name</label>
+          <input id="chat-rename-input" autoFocus value={renameValue} maxLength={CHAT_TITLE_MAX_LENGTH} onChange={event => setRenameValue(event.target.value)} onFocus={event => event.currentTarget.select()} className="w-full rounded-lg border border-control bg-well px-3 py-2 text-sm text-content outline-none focus:border-link" />
+        </form>
+      </Modal>
       <Modal
         isOpen={Boolean(threadPendingDelete)}
         onClose={() => setThreadPendingDelete(null)}
