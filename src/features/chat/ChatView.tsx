@@ -1,5 +1,6 @@
 import { freshQuota, limitForRuntime, useProviderUsage } from '@/shared/layout/ProviderUsageContext';
 import { ChatThreadDialogs } from './ChatThreadDialogs';
+import { ChatTitleEditor } from './ChatTitleEditor';
 import { LoadingRows, SkeletonText } from '@/shared/components/ui/skeleton';
 import { AgentRobotAvatar } from '@/features/agents/AgentRobotAvatar';
 import { buildDecisionContext } from './chatBuildDecision';
@@ -579,7 +580,8 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     scanInstalledSkills,
     updateAgent,
     currentUser,
-    issues
+    issues,
+    renameThread
   } = useApp();
 
   const sessionStateKey = (key: string, threadId = activeThreadId) => `chat.session.${threadId ?? 'draft'}.${key}`;
@@ -658,6 +660,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const [expandedProjectIds, setExpandedProjectIds] = useTabSessionState<string[]>('chatExpandedProjectIds', []);
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [threadPendingDelete, setThreadPendingDelete] = useState<{ id: string; title: string } | null>(null);
+  const [threadPendingRename, setThreadPendingRename] = useState<{ id: string; title: string } | null>(null);
   const [memoryThreadId, setMemoryThreadId] = useState<string | null>(null);
   const [openThreadMenuId, setOpenThreadMenuId] = useState<string | null>(null);
   const threadMenuRef = useRef<HTMLDivElement>(null);
@@ -1701,6 +1704,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       {!isClient && <div className="absolute right-1 top-1">
         <button type="button" onClick={() => setOpenThreadMenuId(value => value === thread.id ? null : thread.id)} aria-label={`More options for ${thread.title}`} aria-expanded={rowMenuOpen} className={`rounded-md p-1 text-content-muted hover:bg-surface-high hover:text-content focus:opacity-100 ${rowMenuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}><MoreHorizontal className="h-3.5 w-3.5" /></button>
         {rowMenuOpen && <div ref={threadMenuRef} role="menu" aria-label={`Options for ${thread.title}`} className="absolute right-0 top-full z-50 mt-1 min-w-52 rounded-xl border border-divider bg-surface-raised p-1.5 shadow-xl">
+          {isDesktop && <button type="button" role="menuitem" onClick={() => { setOpenThreadMenuId(null); setThreadPendingRename({ id: thread.id, title: thread.title }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-content-secondary hover:bg-surface-high"><PencilLine className="h-3.5 w-3.5" />Rename</button>}
           {isDesktop && <button type="button" role="menuitem" onClick={() => { setOpenThreadMenuId(null); setMemoryThreadId(thread.id); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-content-secondary hover:bg-surface-high"><Brain className="h-3.5 w-3.5" />Session memory</button>}
           <button type="button" role="menuitem" onClick={() => { setOpenThreadMenuId(null); setThreadPendingDelete({ id: thread.id, title: thread.title }); }} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-[11px] text-status-danger hover:bg-status-danger-subtle"><Trash2 className="h-3.5 w-3.5" />Delete chat</button>
         </div>}
@@ -1879,12 +1883,14 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       <CreateProjectModal isOpen={showCreateProject} onClose={() => setShowCreateProject(false)} onCreated={created => { setExpandedProjectIds(current => current.includes(created.id) ? current : [...current, created.id]); startDraft(created.id); }} />
       </>}
       <ChatThreadDialogs threadPendingDelete={threadPendingDelete} setThreadPendingDelete={setThreadPendingDelete}
-        memoryThreadId={memoryThreadId} setMemoryThreadId={setMemoryThreadId} />
+        memoryThreadId={memoryThreadId} setMemoryThreadId={setMemoryThreadId}
+        threadPendingRename={threadPendingRename} setThreadPendingRename={setThreadPendingRename} />
       <main className="relative flex-1 flex flex-col min-h-0 min-w-0 h-full overflow-hidden bg-shell">
         {activeThread ? <>
           <header className="flex h-14 shrink-0 items-center gap-3 px-5 lg:px-7">
             <FolderOpen className="h-4 w-4 shrink-0 text-content-secondary" aria-hidden="true" />
-            <h1 className="min-w-0 flex-1 truncate text-sm font-semibold text-content">{activeThread.title}</h1>
+            {/* Click the name to rename the chat; the engine route is desktop only and clients cannot manage chats. */}
+            <ChatTitleEditor title={activeThread.title} onRename={isDesktop && !isClient ? name => { void renameThread(activeThread.id, name); } : undefined} />
             {/* People can see when project memory shapes answers; it is listed on the project's Details page. */}
             {!isClient && project && (
               <span className="hidden shrink-0 text-[11px] text-content-muted lg:inline" title="Each repository's AGENTS.md. See the project's Details page.">

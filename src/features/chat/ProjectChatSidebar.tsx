@@ -31,6 +31,7 @@ export function ProjectChatSidebar({ onNavigate, storageKey }: { onNavigate: () 
   const [creating, setCreating] = useState(false);
   const [threadPendingDelete, setThreadPendingDelete] = useState<Pick<ChatThread, 'id' | 'title'> | null>(null);
   const [memoryThreadId, setMemoryThreadId] = useState<string | null>(null);
+  const [threadPendingRename, setThreadPendingRename] = useState<Pick<ChatThread, 'id' | 'title'> | null>(null);
   const activeTab = tabs.find(tab => tab.id === activeTabId && tab.view === 'chat' && !tab.sessionState?.['chat.history']);
   const activeThread = chatThreads.find(thread => thread.id === activeTab?.sessionState?.activeThreadId);
   const activeProject = activeThread?.projectId ?? activeTab?.sessionState?.['chat.session.draft.projectId'];
@@ -64,6 +65,7 @@ export function ProjectChatSidebar({ onNavigate, storageKey }: { onNavigate: () 
         <DropdownMenu modal={false}>
           <DropdownMenuTrigger asChild><button type="button" aria-label={'Options for ' + thread.title} className={iconButton}><MoreHorizontal className="h-3.5 w-3.5" /></button></DropdownMenuTrigger>
           <DropdownMenuContent side="right" align="start" data-sidebar-overlay="">
+            {isDesktop && <DropdownMenuItem onSelect={() => setThreadPendingRename(thread)}>Rename</DropdownMenuItem>}
             {isDesktop && <DropdownMenuItem onSelect={() => setMemoryThreadId(thread.id)}>Session memory</DropdownMenuItem>}
             <DropdownMenuItem onSelect={() => setThreadPendingDelete(thread)} className="text-status-danger">Delete chat</DropdownMenuItem>
           </DropdownMenuContent>
@@ -140,6 +142,7 @@ export function ProjectChatSidebar({ onNavigate, storageKey }: { onNavigate: () 
     </div>
     <CreateProjectModal isOpen={creating} onClose={() => setCreating(false)} onCreated={project => go(() => openChatDraft(project.id))} />
     <ChatThreadDialogs threadPendingDelete={threadPendingDelete} setThreadPendingDelete={setThreadPendingDelete}
-      memoryThreadId={memoryThreadId} setMemoryThreadId={setMemoryThreadId} />
+      memoryThreadId={memoryThreadId} setMemoryThreadId={setMemoryThreadId}
+      threadPendingRename={threadPendingRename} setThreadPendingRename={setThreadPendingRename} />
   </section>;
 }

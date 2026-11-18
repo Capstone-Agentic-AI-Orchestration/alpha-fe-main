@@ -1029,6 +1029,9 @@ export const apiService = {
       `/chat/threads/${id}`,
       { method: 'PUT', body: JSON.stringify({ projectId }) }
     ),
+  /** Rename a conversation. Its own route, so a rename can never move a chat between projects. */
+  renameChatThread: (id: string, title: string) =>
+    fetchJson<ChatThread>(`/chat/threads/${encodeURIComponent(id)}/title`, { method: 'PUT', body: JSON.stringify({ title }) }),
   createChatThread: (thread: Partial<ChatThread>) =>
     fetchJson<ChatThread>('/chat/threads', { method: 'POST', body: JSON.stringify(thread) }),
   /** Delete a conversation. Its messages cascade; its CLI session rows go too. */
