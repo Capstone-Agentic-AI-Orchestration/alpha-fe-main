@@ -117,6 +117,32 @@ export function defaultGanttRange(days: number[], today: number): DateRange {
   return { start, end: Math.max(last, nearToday ? today : last, start + 6) };
 }
 
+/** Width of an unscheduled task's "Set dates" chip, fixed so it can be placed without crossing the Today line. */
+export const SET_DATES_WIDTH = 84;
+const LANE_GAP = 8;
+
+/**
+ * Where an unscheduled task's "Set dates" chip sits in its lane.
+ *
+ * Just after the Today line, where new work usually starts. When Today is too
+ * close to the end of the chart for that, just before it instead: never across
+ * the line, and never past either edge of the chart.
+ */
+export function unscheduledLaneLeft(todayOffset: number | undefined, timelineWidth: number, width = SET_DATES_WIDTH): number {
+  const max = Math.max(LANE_GAP, timelineWidth - width - LANE_GAP);
+  if (todayOffset === undefined) return LANE_GAP;
+  const after = todayOffset + LANE_GAP;
+  if (after <= max) return Math.max(LANE_GAP, after);
+  return Math.min(max, Math.max(LANE_GAP, todayOffset - LANE_GAP - width));
+}
+
+/** How the Today label lines up with its line: centred, or pinned inside the chart near either edge so it is never cut off. */
+export function todayLabelAlign(todayOffset: number, timelineWidth: number, halfLabel = 28): 'start' | 'center' | 'end' {
+  if (todayOffset < halfLabel) return 'start';
+  if (timelineWidth - todayOffset < halfLabel) return 'end';
+  return 'center';
+}
+
 /** Fit stretches or shrinks the days to fill the chart; otherwise each scale keeps its own day width. */
 export function ganttDayWidth(fit: boolean, baseDayWidth: number, availableWidth: number, dayCount: number): number {
   if (!fit || dayCount <= 0 || availableWidth <= 0) return baseDayWidth;
@@ -916,15 +942,15 @@ export const GanttView: React.FC<GanttViewProps> = ({
                     }
 
                     if (row.kind === 'unscheduled') {
-                      // Sit just after the Today line, where new work would usually start.
-                      const laneLeft = Math.max(8, Math.min(timelineWidth - 96, (todayOffset ?? 0) + 8));
+                      const laneLeft = unscheduledLaneLeft(todayOffset, timelineWidth);
                       return canManageIssues ? (
                         <button
                           key={row.issue.id}
                           type="button"
                           onClick={() => onOpenIssue(row.issue.id)}
-                          className="absolute z-10 rounded-md border border-dashed border-control px-2.5 text-[11px] font-medium text-link hover:bg-selected focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
-                          style={{ left: laneLeft, top: index * ROW_HEIGHT + BAR_TOP, height: BAR_HEIGHT }}
+                          // Solid, so the chart's grid lines stop at its edge instead of running through the label.
+                          className="absolute z-20 flex items-center justify-center rounded-md border border-dashed border-control bg-surface-raised text-[11px] font-medium text-link hover:border-link hover:bg-selected focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+                          style={{ left: laneLeft, width: SET_DATES_WIDTH, top: index * ROW_HEIGHT + BAR_TOP, height: BAR_HEIGHT }}
                           aria-label={'Set dates for ' + row.issue.identifier + ': ' + row.issue.title}
                         >
                           Set dates
@@ -932,8 +958,8 @@ export const GanttView: React.FC<GanttViewProps> = ({
                       ) : (
                         <span
                           key={row.issue.id}
-                          className="absolute z-10 flex items-center text-[11px] text-content-muted"
-                          style={{ left: laneLeft, top: index * ROW_HEIGHT + BAR_TOP, height: BAR_HEIGHT }}
+                          className="absolute z-20 flex items-center justify-center rounded-md bg-surface-raised text-[11px] text-content-muted"
+                          style={{ left: laneLeft, width: SET_DATES_WIDTH, top: index * ROW_HEIGHT + BAR_TOP, height: BAR_HEIGHT }}
                         >
                           No dates yet
                         </span>
@@ -1044,7 +1070,8 @@ export const GanttView: React.FC<GanttViewProps> = ({
                   style={{ left: effectiveTaskColumnWidth + todayOffset, top: 64 }}
                 >
                   <div className="absolute inset-y-0 border-l-2 border-selected" />
-                  <span className="absolute left-0 top-0 -translate-x-1/2 -translate-y-1/2 rounded-md bg-selected px-2 py-1 text-[11px] font-semibold leading-none text-selected-content shadow">
+                  <span className={'absolute left-0 top-0 -translate-y-1/2 rounded-md bg-selected px-2 py-1 text-[11px] font-semibold leading-none text-selected-content shadow ' +
+                    { start: '', center: '-translate-x-1/2', end: '-translate-x-full' }[todayLabelAlign(todayOffset, timelineWidth)]}>
                     Today
                   </span>
                 </div>

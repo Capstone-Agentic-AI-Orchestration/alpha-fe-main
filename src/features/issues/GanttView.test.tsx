@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { Issue, Project } from '@/shared/types';
-import { GanttView, defaultGanttRange, ganttDayWidth } from './GanttView';
+import { GanttView, SET_DATES_WIDTH, defaultGanttRange, ganttDayWidth, todayLabelAlign, unscheduledLaneLeft } from './GanttView';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 const day = (key: string) => Math.floor(Date.parse(key + 'T00:00:00.000Z') / DAY_MS);
@@ -64,5 +64,29 @@ describe('gantt rows', () => {
   it('keeps the empty state for a project with no tasks and no dates', () => {
     const html = renderToStaticMarkup(<GanttView project={project()} issues={[]} canManageIssues onOpenIssue={() => {}} />);
     expect(html).toContain('No tasks to plan yet');
+  });
+});
+
+describe('Gantt chips and the Today marker', () => {
+  it('puts "Set dates" just after the Today line when there is room', () => {
+    expect(unscheduledLaneLeft(200, 1000)).toBe(208);
+  });
+
+  it('puts "Set dates" before the Today line when Today is near the end, never across it', () => {
+    const today = 980;
+    const left = unscheduledLaneLeft(today, 1000);
+    expect(left + SET_DATES_WIDTH).toBeLessThanOrEqual(today);
+    expect(left).toBeGreaterThanOrEqual(0);
+  });
+
+  it('keeps "Set dates" inside the chart without a Today line or in a tiny chart', () => {
+    expect(unscheduledLaneLeft(undefined, 1000)).toBe(8);
+    expect(unscheduledLaneLeft(40, 60)).toBe(8);
+  });
+
+  it('pins the Today label inside the chart near either edge', () => {
+    expect(todayLabelAlign(5, 1000)).toBe('start');
+    expect(todayLabelAlign(500, 1000)).toBe('center');
+    expect(todayLabelAlign(990, 1000)).toBe('end');
   });
 });

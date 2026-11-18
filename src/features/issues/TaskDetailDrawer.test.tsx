@@ -56,6 +56,16 @@ describe('Task details', () => {
     expect(aside).toEqual(expect.arrayContaining(['max-md:absolute', 'max-md:w-full']));
   });
 
+  it('wraps a long title and lets the description grow, instead of cutting text off or scrolling a small box', () => {
+    const html = render('todo', false);
+    // The title is a wrapping field, not a one-line input.
+    expect(html).toMatch(/<textarea[^>]*id="[^"]*-title"/);
+    expect(html).not.toMatch(/<input[^>]*id="[^"]*-title"/);
+    const description = html.match(/<textarea[^>]*id="[^"]*-description"[^>]*>/)?.[0] ?? '';
+    expect(description).toContain('resize-none');
+    expect(description).not.toContain('resize-y');
+  });
+
   it('shows status as a details row, with Overview and Build tabs in the desktop app', () => {
     const html = render('todo', false);
     for (const shown of ['WEB-19', 'Status', 'Backlog', 'In review', 'Priority', 'Assignee', 'Overview', 'Build', 'Comments', 'No comments yet.', 'Archive task WEB-19', '1 of 2', 'Leave a comment']) {
