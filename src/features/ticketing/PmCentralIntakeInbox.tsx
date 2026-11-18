@@ -1,3 +1,4 @@
+import { PmQueueSelect } from './PmQueueSelect';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle2, Inbox, Mail, MessageSquare, PanelLeftOpen, RefreshCw, Search, Send, UserRound, XCircle } from 'lucide-react';
 import { Skeleton, SkeletonRegion } from '@/shared/components/ui/skeleton';
@@ -237,6 +238,28 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
           : item.kind === 'project_proposal' ? 'Proposal · verified client' : 'Inquiry · email not verified'
       : item.status === 'accepted' ? 'Accepted' : 'Declined';
     const statusTone = filter === 'pending' ? 'pending' : item.status;
+    if (variant === 'queue') return <tr key={item.id} className="border-b border-divider hover:bg-surface-high/40">
+      <td className="max-w-0 py-2.5 pr-3">
+        <button type="button" onClick={() => selectInquiry(item.id)} className="flex w-full min-w-0 items-center gap-2.5 text-left hover:text-link">
+          <span className="pm-queue-table__icon"><Inbox size={14} aria-hidden="true" /></span>
+          <span className="min-w-0">
+            <span className="block truncate font-medium" title={item.title}>{item.title}</span>
+            <span className="block truncate text-[11px] text-content-muted">{item.publicReference ?? (item.kind === 'project_proposal' ? 'Project proposal' : 'Inquiry')}</span>
+          </span>
+        </button>
+      </td>
+      <td className="hidden max-w-0 py-2.5 pr-3 sm:table-cell">
+        <span className="block truncate font-medium">{item.fullName}</span>
+        <span className="block truncate text-[11px] text-content-muted" title={item.email}>{item.email}</span>
+      </td>
+      <td className="max-w-0 py-2.5 pr-3">
+        <span className="block truncate font-medium" title={statusText}>{statusText}</span>
+        <span className="block truncate text-[11px] text-content-muted">{newIds.has(item.id) ? 'New · ' : ''}{item.company ?? 'No company linked'}</span>
+      </td>
+      <td className="whitespace-nowrap py-2.5 text-right tabular-nums text-content-muted">
+        <time dateTime={item.submittedAt}>{formatCompactDate(item.submittedAt)}</time>
+      </td>
+    </tr>;
     return <button key={item.id} type="button" onClick={() => selectInquiry(item.id)} aria-pressed={selected?.id === item.id}
       className={`pm-inquiries__list-item pm-inquiries__list-item--${variant}${selected?.id === item.id ? ' is-selected' : ''}`}>
       <span className="pm-inquiries__item-request"><strong>{item.title}</strong><small>{item.publicReference ?? (item.kind === 'project_proposal' ? 'Project proposal' : 'Inquiry')}</small></span>
@@ -295,7 +318,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
           <div className="pm-inquiries__queue-actions">
             <label className="pm-inquiries__search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search inquiries</span>
               <input value={searchInput} disabled={loading && items.length === 0} onChange={event => setSearchInput(event.target.value)} placeholder="Search inquiries…" /></label>
-            {statusControls('pm-inquiries__status-toggle--queue')}
+            <PmQueueSelect label="Inquiry status" value={filter} onChange={setFilter} disabled={accepting || declining}
+              options={[{ value: 'pending', label: 'Pending review' }, { value: 'handled', label: 'Handled' }]} />
           </div>
         </header>}
 
@@ -387,9 +411,18 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
           </div>}
         </div> : <div className="pm-inquiries__queue-panel">
           <div className="pm-inquiries__queue-toolbar"><span>{visibleItems.length} {visibleItems.length === 1 ? 'inquiry' : 'inquiries'} · {filter === 'pending' ? 'Pending review' : 'Handled'}{newIds.size > 0 ? ` · ${newIds.size} new` : ''}</span><span>Open an inquiry to review</span></div>
-          <div className="pm-inquiries__queue-columns" aria-hidden="true"><span>INQUIRY</span><span>CLIENT</span><span>STATUS</span><span>SUBMITTED</span></div>
           <div className="pm-inquiries__queue-scroll">
-            {loading && items.length === 0 ? loadingRows : visibleItems.length === 0 ? <div className="pm-inquiries__empty"><Inbox size={20} aria-hidden="true" /><p>{search ? 'No inquiries match your search.' : filter === 'pending' ? 'No inquiries waiting for review' : 'No handled inquiries yet'}</p></div> : visibleItems.map(item => renderInquiryItem(item, 'queue'))}
+            {loading && items.length === 0 ? loadingRows : visibleItems.length === 0 ? <div className="pm-inquiries__empty"><Inbox size={20} aria-hidden="true" /><p>{search ? 'No inquiries match your search.' : filter === 'pending' ? 'No inquiries waiting for review' : 'No handled inquiries yet'}</p></div> : <table aria-label="Client inquiries" className="pm-queue-table w-full text-left text-[13px]">
+              <thead className="text-[10.5px] font-semibold uppercase tracking-wide text-content-muted">
+                <tr className="border-b border-divider">
+                  <th scope="col" className="w-1/2 py-2 pr-3 font-semibold sm:w-2/5">Inquiry</th>
+                  <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Client</th>
+                  <th scope="col" className="py-2 pr-3 font-semibold">Status</th>
+                  <th scope="col" className="py-2 text-right font-semibold">Submitted</th>
+                </tr>
+              </thead>
+              <tbody>{visibleItems.map(item => renderInquiryItem(item, 'queue'))}</tbody>
+            </table>}
           </div>
           {nextCursor && <button type="button" className={`${secondary} pm-inquiries__queue-load-more`} onClick={() => void load(nextCursor)} disabled={loadingMore}>{loadingMore ? 'Loading…' : 'Load more'}</button>}
         </div>}

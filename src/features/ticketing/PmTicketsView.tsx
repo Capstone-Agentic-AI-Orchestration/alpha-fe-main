@@ -1,3 +1,4 @@
+import { PmQueueSelect } from './PmQueueSelect';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { TicketDetailSkeleton, TicketQueueSkeleton } from './TicketingSkeletons';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -994,34 +995,19 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
           <span className="sr-only">Search tickets</span>
           <input value={searchInput} disabled={!intakeEnabled} onChange={event => setSearchInput(event.target.value)} placeholder="Search tickets…" className="pm-tickets__search-input" />
         </label>}
-        {!selectedId && <label className="pm-tickets__queue-select">
-          <span className="sr-only">Filter requests</span>
-          <select aria-label="Filter requests" value={filter} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => activeFilter(event.target.value as Filter)}>
-            {filters.map(option => <option key={option.id} value={option.id}>{option.label}{option.counter && queue?.counters.kind === 'pm' ? ` · ${queue.counters[option.counter]}` : ''}</option>)}
-          </select>
-        </label>}
-        {!selectedId && fixedClientGroupKey === undefined && <label className="pm-tickets__queue-select">
-          <span className="sr-only">Filter by client</span>
-          <select aria-label="Filter by client" value={clientGroupKey}
-            disabled={!intakeEnabled || clientGroupsLoading || Boolean(clientGroupsError) || writing || Boolean(pending)}
-            title={clientGroupsError || undefined}
-            onChange={event => { setSelectedId(null); setClientGroupKey(event.target.value); }}>
-            <option value="">All clients</option>
-            {clientGroups.map(group => <option key={group.key} value={group.key}>{group.displayName}</option>)}
-          </select>
-        </label>}
-        {!selectedId && <label className="pm-tickets__queue-select">
-          <span className="sr-only">Filter by date</span>
-          <select aria-label="Filter by date" value={dateRange} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => setDateRange(event.target.value as DateRange)}>
-            {dateRanges.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-          </select>
-        </label>}
-        {!selectedId && <label className="pm-tickets__queue-select">
-          <span className="sr-only">Sort tickets</span>
-          <select aria-label="Sort tickets" value={sortOrder} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => setSortOrder(event.target.value as SortOrder)}>
-            {sortOrders.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
-          </select>
-        </label>}
+        <PmQueueSelect label="Filter requests" value={filter} disabled={!intakeEnabled || writing || Boolean(pending)}
+          onChange={activeFilter} options={filters.map(option => ({
+            value: option.id,
+            label: option.label + (option.counter && queue?.counters.kind === 'pm' ? ` · ${queue.counters[option.counter]}` : ''),
+          }))} />
+        {fixedClientGroupKey === undefined && <PmQueueSelect label="Filter by client" value={clientGroupKey}
+          disabled={!intakeEnabled || clientGroupsLoading || Boolean(clientGroupsError) || writing || Boolean(pending)}
+          title={clientGroupsError || undefined} onChange={value => { setSelectedId(null); setClientGroupKey(value); }}
+          options={[{ value: '', label: 'All clients' }, ...clientGroups.map(group => ({ value: group.key, label: group.displayName }))]} />}
+        <PmQueueSelect label="Filter by date" value={dateRange} disabled={!intakeEnabled || writing || Boolean(pending)}
+          onChange={setDateRange} options={dateRanges.map(option => ({ value: option.id, label: option.label }))} />
+        <PmQueueSelect label="Sort tickets" value={sortOrder} disabled={!intakeEnabled || writing || Boolean(pending)}
+          onChange={setSortOrder} options={sortOrders.map(option => ({ value: option.id, label: option.label }))} />
         {refreshToken === undefined && <button type="button" onClick={refreshAll} disabled={!intakeEnabled || queueLoading || Boolean(pending)} className="pm-tickets__refresh" title="Refresh tickets">
           <RefreshCw size={15} className={queueLoading ? 'animate-spin' : ''} /><span>Refresh</span>
         </button>}

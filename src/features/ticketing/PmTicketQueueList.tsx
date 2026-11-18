@@ -1,4 +1,4 @@
-import { ArrowUpRight } from 'lucide-react';
+import { Ticket } from 'lucide-react';
 
 import type { PmTicketQueueItem } from './pmApi';
 import { groupPmTickets } from './pmTicketGrouping';
@@ -41,31 +41,42 @@ export function PmTicketQueueList({ items, selectedId, disabled, onSelect }: {
   const clients = groupPmTickets(items);
   const clientByTicket = new Map(clients.flatMap(client => client.projects.flatMap(project =>
     project.tickets.map(item => [item.id, client] as const))));
-  return <div className="pm-ticket-queue">
-    <div className="pm-ticket-queue__columns" aria-hidden="true"><span>Request</span><span>Client / project</span><span>Status / next step</span><span>Updated</span><span /></div>
-    <div role="list" aria-label="Client tickets">
+  return <table aria-label="Client tickets" className="pm-queue-table w-full text-left text-[13px]">
+    <thead className="text-[10.5px] font-semibold uppercase tracking-wide text-content-muted">
+      <tr className="border-b border-divider">
+        <th scope="col" className="w-1/2 py-2 pr-3 font-semibold sm:w-2/5">Request</th>
+        <th scope="col" className="hidden py-2 pr-3 font-semibold sm:table-cell">Client / project</th>
+        <th scope="col" className="py-2 pr-3 font-semibold">Status / next step</th>
+        <th scope="col" className="py-2 text-right font-semibold">Updated</th>
+      </tr>
+    </thead>
+    <tbody>
       {items.map(item => {
         const client = clientByTicket.get(item.id)!;
-        return <div key={item.id} role="listitem" className="pm-ticket-queue__row">
-          <button type="button" data-ticket-id={item.id} aria-pressed={selectedId === item.id} disabled={disabled} onClick={() => onSelect(item.id)}
-            className={`pm-ticket-queue__item focus-visible:outline${selectedId === item.id ? ' is-selected' : ''}`}>
-            <span className="pm-ticket-queue__request">
-              <span className="pm-ticket-queue__title">{item.title}{item.internal.clientReplyUnread && <span className="pm-ticket-queue__unread" aria-label="New client reply" />}</span>
-              <span className="pm-ticket-queue__reference" title={item.reference}>{item.reference.length > 20 ? `${item.reference.slice(0, 16)}…` : item.reference}</span>
-            </span>
-            <span className="pm-ticket-queue__client">
-              <span className="pm-ticket-queue__client-name">{client.name}</span>
-              <span className="pm-ticket-queue__project">{item.internal.projectName ?? 'No project linked'}</span>
-            </span>
-            <span className="pm-ticket-queue__state">
-              <span className={`pm-ticket-queue__status ${statusStyle(item.status)}`}>{statusLabel(item.status)}</span>
-              <span className="pm-ticket-queue__next-action" title={actionSummary(item)}>{item.internal.clientReplyUnread ? 'New client reply' : actionSummary(item)}</span>
-            </span>
+        return <tr key={item.id} className="border-b border-divider hover:bg-surface-high/40">
+          <td className="max-w-0 py-2.5 pr-3">
+            <button type="button" data-ticket-id={item.id} aria-pressed={selectedId === item.id} disabled={disabled}
+              onClick={() => onSelect(item.id)} className="flex w-full min-w-0 items-center gap-2.5 text-left hover:text-link disabled:opacity-50">
+              <span className="pm-queue-table__icon"><Ticket size={14} aria-hidden="true" /></span>
+              <span className="min-w-0">
+                <span className="block truncate font-medium" title={item.title}>{item.title}</span>
+                <span className="block truncate text-[11px] text-content-muted" title={item.reference}>{item.reference}</span>
+              </span>
+            </button>
+          </td>
+          <td className="hidden max-w-0 py-2.5 pr-3 sm:table-cell">
+            <span className="block truncate font-medium">{client.name}</span>
+            <span className="block truncate text-[11px] text-content-muted">{item.internal.projectName ?? 'No project linked'}</span>
+          </td>
+          <td className="max-w-0 py-2.5 pr-3">
+            <span className={`pm-ticket-queue__status ${statusStyle(item.status)}`}>{statusLabel(item.status)}</span>
+            <span className="block truncate text-[11px] text-content-muted" title={actionSummary(item)}>{item.internal.clientReplyUnread ? 'New client reply' : actionSummary(item)}</span>
+          </td>
+          <td className="whitespace-nowrap py-2.5 text-right tabular-nums text-content-muted">
             <time dateTime={item.updatedAt} title={time(item.updatedAt)}>{new Date(item.updatedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</time>
-            <ArrowUpRight size={16} className="pm-ticket-queue__open" aria-hidden="true" />
-          </button>
-        </div>;
+          </td>
+        </tr>;
       })}
-    </div>
-  </div>;
+    </tbody>
+  </table>;
 }
