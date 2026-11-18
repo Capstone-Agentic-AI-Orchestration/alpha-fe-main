@@ -983,3 +983,12 @@
 @media (min-width: 1024px) {
   .client-portal-shell.client-portal-shell--workspace.client-portal-shell--nav-open { grid-template-columns: 220px minmax(0, 1fr); }
 }
+
+/* Open sections, not cards: projects and recent activity sit directly on the page panel,
+   grouped by their heading and the hairlines between rows. Boxes stay only where they mean
+   something (the status hero, "needs your attention"). */
+.client-portal-shell .client-spotlights { gap: var(--client-space-7); }
+.client-portal-shell .client-spotlights.is-grid { column-gap: var(--client-space-8); }
+.client-portal-shell .client-spotlight { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.client-portal-shell .client-timeline { padding: 0; border: 0; border-radius: 0; background: transparent; }
+.client-portal-shell .client-timeline-day:first-child { padding-top: 0; }
