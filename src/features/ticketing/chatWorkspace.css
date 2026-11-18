@@ -1136,3 +1136,32 @@
 .client-portal-shell.client-portal-shell--workspace .client-chat-main .ticket-chat,
 .client-portal-shell.client-portal-shell--workspace .client-chat-main .ticket-chat__feed,
 .client-portal-shell.client-portal-shell--workspace .client-chat-main .client-reply-form { background: rgb(var(--ui-canvas)); }
+
+/* Breathing room for an open request. Same two-class prefix as the flat-surface block above,
+   so it outranks the older compact overrides. Spacing and single hairlines group the content;
+   no extra boxes. */
+@media (min-width: 768px) {
+  .client-portal-shell.client-portal-shell--workspace .has-selected-request .client-request-items { padding: var(--client-space-1) var(--client-space-3) var(--client-space-4); }
+  .client-portal-shell.client-portal-shell--workspace .has-selected-request .client-request-row { margin-bottom: var(--client-space-1); padding: var(--client-space-4); }
+  .client-portal-shell.client-portal-shell--workspace .client-request-copy { gap: var(--client-space-2); }
+  .client-portal-shell.client-portal-shell--workspace .client-request-group + .client-request-group { margin-top: var(--client-space-4); }
+  .client-portal-shell.client-portal-shell--workspace .client-request-group-label { padding-block: var(--client-space-4) var(--client-space-2); }
+
+  .client-portal-shell.client-portal-shell--workspace .client-detail-header { padding: var(--client-space-6) var(--client-space-7) var(--client-space-5); }
+  .client-portal-shell.client-portal-shell--workspace .client-detail-heading { column-gap: var(--client-space-4); }
+  .client-portal-shell.client-portal-shell--workspace .client-detail-reference-row { margin-top: var(--client-space-1); }
+  .client-portal-shell.client-portal-shell--workspace .client-detail-tracker { margin-top: var(--client-space-6); }
+
+  .client-portal-shell.client-portal-shell--workspace .client-chat-main .ticket-chat__feed { gap: var(--client-space-6); padding: var(--client-space-7) clamp(var(--client-space-6), 4vw, 4rem); }
+  .client-portal-shell.client-portal-shell--workspace .client-chat-main .ticket-chat__group { gap: var(--client-space-3); }
+  .client-portal-shell.client-portal-shell--workspace .client-chat-main .ticket-chat__message-meta { margin-bottom: var(--client-space-2); }
+  .client-portal-shell.client-portal-shell--workspace .client-chat-main .ticket-chat__message-footer { margin-top: var(--client-space-2); }
+  .client-portal-shell.client-portal-shell--workspace .client-chat-main .client-reply-form { padding: var(--client-space-4) clamp(var(--client-space-6), 4vw, 4rem) var(--client-space-6); }
+
+  .client-portal-shell.client-portal-shell--workspace .role-chat-context__panel { padding-inline: var(--client-space-6); }
+  .client-portal-shell.client-portal-shell--workspace .role-chat-context .role-chat-tools { gap: var(--client-space-2); padding: var(--client-space-4) 0; }
+  .client-portal-shell.client-portal-shell--workspace .role-chat-context__section { padding: var(--client-space-6) 0; }
+  .client-portal-shell.client-portal-shell--workspace .role-chat-context__section + .role-chat-context__section { border-top: 1px solid rgb(var(--ui-divider)); }
+  .client-portal-shell.client-portal-shell--workspace .role-chat-context__section h3 { margin-bottom: var(--client-space-3); }
+  .client-portal-shell.client-portal-shell--workspace .role-chat-context__section :is(p, small) + :is(p, small) { margin-top: var(--client-space-3); }
+}

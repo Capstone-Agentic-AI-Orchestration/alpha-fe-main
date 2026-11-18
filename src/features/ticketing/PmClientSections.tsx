@@ -61,8 +61,8 @@ export async function mapLimited<T, R>(items: readonly T[], limit: number, work:
 }
 
 function Panel({ title, caption, children }: { title: string; caption?: string; children: ReactNode }) {
-  return <section aria-label={title} className="min-w-0 rounded-lg border border-divider bg-surface">
-    <div className="flex items-center justify-between gap-3 px-4 pb-1.5 pt-3">
+  return <section aria-label={title} className="min-w-0">
+    <div className="flex items-baseline justify-between gap-3 pb-2.5">
       <h3 className="text-[13px] font-semibold text-content">{title}</h3>
       {caption && <p className="text-[11.5px] text-content-muted">{caption}</p>}
     </div>
@@ -70,13 +70,13 @@ function Panel({ title, caption, children }: { title: string; caption?: string; 
   </section>;
 }
 
-const rowClass = 'grid w-full grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-3 border-t border-divider px-4 py-2.5 text-left';
-const Empty = ({ children }: { children: ReactNode }) => <p className="px-4 py-4 text-[13px] text-content-muted">{children}</p>;
+const rowClass = 'grid w-full grid-cols-[16px_minmax(0,1fr)_auto] items-center gap-3 border-t border-divider py-3 text-left';
+const Empty = ({ children }: { children: ReactNode }) => <p className="border-t border-divider py-4 text-[13px] text-content-muted">{children}</p>;
 
 /** A Panel-shaped placeholder: title bar, then icon / two-line / date rows like the real list. */
 function PanelSkeleton({ rows = 3 }: { rows?: number }) {
-  return <div className="min-w-0 rounded-lg border border-divider bg-surface">
-    <div className="flex items-center justify-between gap-3 px-4 pb-2.5 pt-3.5"><Skeleton className="h-3 w-28" /><Skeleton className="h-2 w-16" /></div>
+  return <div className="min-w-0">
+    <div className="flex items-center justify-between gap-3 pb-3"><Skeleton className="h-3 w-28" /><Skeleton className="h-2 w-16" /></div>
     {Array.from({ length: rows }, (_, index) => <div key={index} className={rowClass}>
       <Skeleton className="h-3.5 w-3.5 justify-self-center" />
       <span className="min-w-0 space-y-1.5"><Skeleton className={`h-3 ${index % 2 ? 'w-2/5' : 'w-3/5'}`} /><Skeleton className="h-2 w-1/3" /></span>
@@ -87,12 +87,12 @@ function PanelSkeleton({ rows = 3 }: { rows?: number }) {
 
 function OverviewSkeleton() {
   return <SkeletonRegion label="Loading this client" className="px-6 py-5">
-    <div className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-divider bg-divider md:grid-cols-4">
-      {[0, 1, 2, 3].map(index => <div key={index} className="flex items-center justify-between gap-3 bg-surface px-4 py-3.5">
+    <div className="mb-8 grid grid-cols-2 gap-x-8 gap-y-5 border-b border-divider pb-6 md:grid-cols-4">
+      {[0, 1, 2, 3].map(index => <div key={index} className="flex flex-col gap-2">
         <Skeleton className="h-2.5 w-20" /><Skeleton className="h-5 w-6" />
       </div>)}
     </div>
-    <div className="grid items-start gap-4 lg:grid-cols-[1.3fr_1fr]"><PanelSkeleton rows={4} /><PanelSkeleton rows={3} /></div>
+    <div className="grid items-start gap-x-10 gap-y-8 lg:grid-cols-[1.3fr_1fr]"><PanelSkeleton rows={4} /><PanelSkeleton rows={3} /></div>
   </SkeletonRegion>;
 }
 
@@ -142,14 +142,14 @@ export function ClientOverview({ client, requests, conversations, onOpenRequest 
   ];
   const attentionCount = requests.filter(needsAttention).length;
   return <div className="h-full overflow-y-auto px-6 py-5">
-    {/* One strip with hairline dividers: the 1px gap shows the divider colour behind the cells. */}
-    <dl aria-label="Request summary" className="mb-5 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-divider bg-divider md:grid-cols-4">
-      {stats.map(stat => <div key={stat.label} className="flex items-baseline justify-between gap-3 bg-surface px-4 py-3">
+    {/* Open figures, not tiles: a label over each number, one hairline under the row. */}
+    <dl aria-label="Request summary" className="mb-8 grid grid-cols-2 gap-x-8 gap-y-5 border-b border-divider pb-6 md:grid-cols-4">
+      {stats.map(stat => <div key={stat.label} className="flex flex-col gap-1">
         <dt className="text-xs text-content-secondary">{stat.label}</dt>
         <dd className={`text-xl font-semibold tabular-nums ${stat.attention ? 'text-status-warning' : 'text-content'}`}>{stat.value}</dd>
       </div>)}
     </dl>
-    <div className="grid items-start gap-4 lg:grid-cols-[1.3fr_1fr]">
+    <div className="grid items-start gap-x-10 gap-y-8 lg:grid-cols-[1.3fr_1fr]">
       <Panel title={open.length ? 'Open requests' : 'Recent requests'}
         caption={attentionCount ? `${attentionCount} ${attentionCount === 1 ? 'needs' : 'need'} you` : open.length ? 'Nothing needs you right now' : undefined}>
         {listed.length ? <ul>{listed.map(item => {
@@ -323,8 +323,8 @@ export function ClientProjects({ client, projects, knownProjectIds, onOpenProjec
   onOpenProject: (projectId: string) => void;
 }) {
   if (!client.projects.length) return <p className="text-[13px] text-content-muted">This client can’t see any projects yet. A project shows here once one of their requests is linked to it and shared with them.</p>;
-  if (!projects) return <SkeletonList label="Loading projects" variant="card" rows={2} className="lg:grid-cols-2" />;
-  return <div className="grid gap-4 lg:grid-cols-2">
+  if (!projects) return <SkeletonList label="Loading projects" rows={2} />;
+  return <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
     {projects.map(project => <ClientProjectCard key={project.projectId} client={client} project={project}
       canOpen={knownProjectIds.has(project.projectId)} onOpenProject={onOpenProject} />)}
   </div>;
@@ -337,8 +337,8 @@ function ClientProjectCard({ client, project, canOpen, onOpenProject }: {
   onOpenProject: (projectId: string) => void;
 }) {
   const url = safeUrl(project.previewUrl);
-  return <section aria-label={project.name} className="min-w-0 rounded-lg border border-divider bg-surface">
-    <div className="flex items-start gap-3 px-4 pb-2 pt-3">
+  return <section aria-label={project.name} className="min-w-0 border-t border-divider pt-4">
+    <div className="flex items-start gap-3 pb-2">
       <FolderKanban className="mt-0.5 h-4 w-4 shrink-0 text-content-muted" aria-hidden="true" />
       <div className="min-w-0 flex-1">
         <h3 className="truncate text-[13px] font-semibold text-content" title={project.name}>{project.name}</h3>
@@ -351,10 +351,10 @@ function ClientProjectCard({ client, project, canOpen, onOpenProject }: {
       </button>}
     </div>
     {url && <a href={url} target="_blank" rel="noreferrer noopener"
-      className="mx-4 mb-2 inline-flex items-center gap-1 text-xs font-medium text-link hover:text-link-hover">
+      className="mb-2 inline-flex items-center gap-1 text-xs font-medium text-link hover:text-link-hover">
       Open preview <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
     </a>}
-    <div className="border-t border-divider px-4 py-3">
+    <div className="mt-2">
       <h4 className="mb-2 text-[11.5px] font-medium text-content-muted">Latest feedback on this project</h4>
       {project.feedback === null
         ? <p className="text-[12.5px] text-content-muted">Project feedback could not be loaded.</p>
