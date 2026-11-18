@@ -1,3 +1,4 @@
+import './pmTickets.css';
 import { PmQueueSelect } from './PmQueueSelect';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AlertCircle, ArrowLeft, CheckCircle2, Inbox, Mail, MessageSquare, PanelLeftOpen, RefreshCw, Search, Send, UserRound, XCircle } from 'lucide-react';
@@ -238,7 +239,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
           : item.kind === 'project_proposal' ? 'Proposal · verified client' : 'Inquiry · email not verified'
       : item.status === 'accepted' ? 'Accepted' : 'Declined';
     const statusTone = filter === 'pending' ? 'pending' : item.status;
-    if (variant === 'queue') return <tr key={item.id} className="border-b border-divider hover:bg-surface-high/40">
+    if (variant === 'queue') return <tr key={item.id} className="cursor-pointer border-b border-divider hover:bg-surface-high/40 aria-disabled:cursor-default"
+          onClick={event => { if (!(event.target instanceof Element && event.target.closest('button, a'))) selectInquiry(item.id); }}>
       <td className="max-w-0 py-2.5 pr-3">
         <button type="button" onClick={() => selectInquiry(item.id)} className="flex w-full min-w-0 items-center gap-2.5 text-left hover:text-link">
           <span className="pm-queue-table__icon"><Inbox size={14} aria-hidden="true" /></span>
@@ -319,7 +321,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
             <label className="pm-inquiries__search"><Search size={15} aria-hidden="true" /><span className="sr-only">Search inquiries</span>
               <input value={searchInput} disabled={loading && items.length === 0} onChange={event => setSearchInput(event.target.value)} placeholder="Search inquiries…" /></label>
             <PmQueueSelect label="Inquiry status" value={filter} onChange={setFilter} disabled={accepting || declining}
-              options={[{ value: 'pending', label: 'Pending review' }, { value: 'handled', label: 'Handled' }]} />
+              options={[{ value: 'pending', label: 'Pending review', tone: 'attention' }, { value: 'handled', label: 'Handled', tone: 'complete' }]} />
           </div>
         </header>}
 
@@ -411,8 +413,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
           </div>}
         </div> : <div className="pm-inquiries__queue-panel">
           <div className="pm-inquiries__queue-toolbar"><span>{visibleItems.length} {visibleItems.length === 1 ? 'inquiry' : 'inquiries'} · {filter === 'pending' ? 'Pending review' : 'Handled'}{newIds.size > 0 ? ` · ${newIds.size} new` : ''}</span><span>Open an inquiry to review</span></div>
-          <div className="pm-inquiries__queue-scroll">
-            {loading && items.length === 0 ? loadingRows : visibleItems.length === 0 ? <div className="pm-inquiries__empty"><Inbox size={20} aria-hidden="true" /><p>{search ? 'No inquiries match your search.' : filter === 'pending' ? 'No inquiries waiting for review' : 'No handled inquiries yet'}</p></div> : <table aria-label="Client inquiries" className="pm-queue-table w-full text-left text-[13px]">
+          <div className="pm-inquiries__queue-scroll pm-table-scroll">
+            {loading && items.length === 0 ? loadingRows : visibleItems.length === 0 ? <div className="pm-inquiries__empty"><Inbox size={20} aria-hidden="true" /><p>{search ? 'No inquiries match your search.' : filter === 'pending' ? 'No inquiries waiting for review' : 'No handled inquiries yet'}</p></div> : <table aria-label="Client inquiries" className="pm-queue-table pm-date-table w-full text-left text-[13px]">
               <thead className="text-[10.5px] font-semibold uppercase tracking-wide text-content-muted">
                 <tr className="border-b border-divider">
                   <th scope="col" className="w-1/2 py-2 pr-3 font-semibold sm:w-2/5">Inquiry</th>

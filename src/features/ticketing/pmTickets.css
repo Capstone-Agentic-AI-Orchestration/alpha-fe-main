@@ -723,7 +723,10 @@
 .pm-inquiries__queue-actions { flex-wrap: wrap; }
 .pm-inquiries__queue-scroll { border-top: 0; }
 .pm-queue-table { table-layout: fixed; }
-.pm-queue-table th:last-child { width: 75px; }
+/* Keep the date clear of both reserved and overlay scrollbars. */
+.pm-table-scroll { scrollbar-gutter: stable; }
+.pm-date-table :is(th, td):last-child { padding-inline-end: 16px; }
+.pm-queue-table th:last-child { width: 91px; }
 .pm-queue-table__icon {
   display: flex;
   width: 32px;
