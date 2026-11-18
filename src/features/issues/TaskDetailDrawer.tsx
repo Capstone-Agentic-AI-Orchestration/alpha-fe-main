@@ -1,4 +1,4 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Archive, Bot, ChevronDown, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import type { BoardAgentChange, Issue, IssuePriority, IssueStatus } from '@/shared/types';
@@ -62,6 +62,23 @@ const formatTime = (iso: string) => {
 };
 
 /**
+ * Grow a textarea to fit its text, so long titles wrap and the description
+ * never scrolls inside its own little box. Rechecked on resize, since the
+ * panel's width decides where the text wraps.
+ */
+export function useAutoHeight(ref: React.RefObject<HTMLTextAreaElement | null>, ...deps: unknown[]) {
+  useLayoutEffect(() => {
+    const element = ref.current;
+    if (!element) return undefined;
+    const fit = () => { element.style.height = 'auto'; element.style.height = `${element.scrollHeight}px`; };
+    fit();
+    window.addEventListener('resize', fit);
+    return () => window.removeEventListener('resize', fit);
+    // The caller lists what changes the text or whether the field is shown.
+  }, deps);
+}
+
+/**
  * One task, and the one thing to do next with it.
  *
  * The board already shows where the task is, so status is one row in the
@@ -93,11 +110,15 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 }) => {
   const { updateIssue, addIssueComment, can, identity, currentUser, projects, issues } = useApp();
   const ids = useId();
+  const titleRef = useRef<HTMLTextAreaElement>(null);
+  const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const canManageIssues = can('manage_issues');
   const [savedTab, setTab] = useTabSessionState<DrawerTab>(`${sessionPrefix}.drawerTab`, 'overview');
   const buildsHere = isDesktop;
   // A tab saved before Activity was removed, or Build on the web, opens the overview.
   const tab: DrawerTab = buildsHere && savedTab === 'build' ? 'build' : 'overview';
+  useAutoHeight(titleRef, issue.title);
+  useAutoHeight(descriptionRef, issue.description, tab);
   const buildTabRef = useRef<HTMLButtonElement>(null);
   const [buildOpenCount, setBuildOpenCount] = useState(0);
   const [newSubtask, setNewSubtask] = useTabSessionState<string>(`${sessionPrefix}.newSubtaskTitle`, '');
@@ -256,12 +277,16 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
       <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6 pt-5">
         <label htmlFor={`${ids}-title`} className="sr-only">Title</label>
-        <input
+        {/* Wraps instead of cutting long titles off; still one line of text, so Enter finishes editing. */}
+        <textarea
           id={`${ids}-title`}
+          ref={titleRef}
+          rows={1}
           value={issue.title}
           readOnly={!canManageIssues}
-          onChange={event => updateIssue(issue.id, { title: event.target.value })}
-          className="mb-4 w-full rounded-md bg-transparent text-xl font-semibold tracking-tight text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          onChange={event => updateIssue(issue.id, { title: event.target.value.replace(/[\r\n]+/g, ' ') })}
+          onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); event.currentTarget.blur(); } }}
+          className="mb-4 block w-full resize-none overflow-hidden rounded-md bg-transparent text-xl font-semibold leading-snug tracking-tight text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-focus"
         />
 
 
@@ -479,14 +504,16 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
 
               <div>
                 <label htmlFor={`${ids}-description`} className="sr-only">Description</label>
+                {/* Grows with its text, so the panel scrolls once instead of a small box scrolling inside it. */}
                 <textarea
                   id={`${ids}-description`}
-                  rows={5}
+                  ref={descriptionRef}
+                  rows={3}
                   value={issue.description}
                   readOnly={!canManageIssues}
                   placeholder="No description yet."
                   onChange={event => updateIssue(issue.id, { description: event.target.value })}
-                  className="w-full resize-y rounded-md border border-transparent bg-transparent p-0 text-sm leading-relaxed text-content-secondary placeholder-content-muted hover:border-divider focus:border-control focus:bg-well focus:p-2.5 focus:outline-none"
+                  className="block w-full resize-none overflow-hidden rounded-md border border-transparent bg-transparent p-0 text-sm leading-relaxed text-content-secondary placeholder-content-muted hover:border-divider focus:border-control focus:bg-well focus:p-2.5 focus:outline-none"
                 />
               </div>
 
