@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type FormEvent, type ReactNode } from 'react';
-import { ChevronDown, LockKeyhole, MessageSquare, Send, StickyNote, UserRound } from 'lucide-react';
+import { ChevronDown, LockKeyhole, MessageSquare, Send, StickyNote, UserRound, Zap } from 'lucide-react';
 import { Button, type ButtonVariant } from '@/shared/components/ui/button';
 import { Bubble, BubbleContent } from '@/shared/components/ui/bubble';
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageGroup, MessageHeader, MessageScroller } from '@/shared/components/ui/message';
@@ -9,7 +9,8 @@ import './ticketChat.css';
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
 
-export type TicketChatAuthor = 'client' | 'pm' | 'note';
+/** 'system' marks a dated milestone (such as "Plan sent for your approval") shown between messages. */
+export type TicketChatAuthor = 'client' | 'pm' | 'note' | 'system';
 
 export interface TicketChatMessage {
   id: string;
@@ -201,8 +202,17 @@ export function TicketChat({
 
   const renderMessageGroup = (group: TicketChatMessage[], groupIndex: number) => {
     const firstMessage = group[0];
+    const dayDivider = (groupIndex === 0 || dateKey(messageGroups[groupIndex - 1][0].createdAt) !== dateKey(firstMessage.createdAt))
+      && <div className="ticket-chat__day" aria-label={`Messages from ${dateLabel(firstMessage.createdAt)}`}><span><time dateTime={firstMessage.createdAt}>{dateLabel(firstMessage.createdAt)}</time></span></div>;
+    if (firstMessage.author === 'system') return <Fragment key={firstMessage.id}>
+      {dayDivider}
+      {group.map(update => <div key={update.id} className="ticket-chat__system" role="note" aria-label={`Update at ${clockTime(update.createdAt)}: ${update.body}`}>
+        <p className="ticket-chat__system-meta" aria-hidden="true"><Zap size={13} />Update <time dateTime={update.createdAt}>{clockTime(update.createdAt)}</time></p>
+        <p className="ticket-chat__system-body" aria-hidden="true">{update.body}</p>
+      </div>)}
+    </Fragment>;
     return <Fragment key={firstMessage.id}>
-      {(groupIndex === 0 || dateKey(messageGroups[groupIndex - 1][0].createdAt) !== dateKey(firstMessage.createdAt)) && <div className="ticket-chat__day" aria-label={`Messages from ${dateLabel(firstMessage.createdAt)}`}><span><time dateTime={firstMessage.createdAt}>{dateLabel(firstMessage.createdAt)}</time></span></div>}
+      {dayDivider}
       <MessageGroup className="ticket-chat__group">
         {group.map((message, groupIndex) => {
           const note = mode === 'notes' || message.author === 'note';
