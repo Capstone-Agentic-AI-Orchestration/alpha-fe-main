@@ -10,6 +10,7 @@ import { PmTicketsView, type WorkflowActions } from './PmTicketsView';
 import { pmTicketsIntakeEnabled, usePmWorkflowActions } from './PmTicketsPage';
 import { ClientConversations, ClientDocuments, ClientOverview, ClientProjects, ClientProposals, loadClientProjects, loadClientRequests, type ClientProjectDetail } from './PmClientSections';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
+import { OPEN_INQUIRY_KEY, type OpenInquiry } from './PmInquiriesPage';
 
 export type ClientSection = 'overview' | 'tickets' | 'conversations' | 'documents' | 'proposals' | 'projects' | 'access';
 const SECTIONS: Array<{ id: ClientSection; label: string }> = [
@@ -85,13 +86,14 @@ export function PmClientsPage() {
   const [selectedKey, setSelectedKey] = useTabSessionState<string | null>('clients.selected', null);
   const [section, setSection] = useTabSessionState<ClientSection>('clients.section', 'overview');
   const [, setSelectedProject] = useTabSessionState<string | null>('projects.selectedProject', null);
+  const [, setOpenInquiry] = useTabSessionState<OpenInquiry | null>(OPEN_INQUIRY_KEY, null);
   const workflowActions = usePmWorkflowActions();
   const knownProjectIds = useMemo(() => new Set(projects.map(project => project.id)), [projects]);
 
   return <PmClientsWorkspace workspaceKey={activeWorkspace?.id ?? 'none'} intakeEnabled={pmTicketsIntakeEnabled}
     workflowActions={workflowActions} selectedKey={selectedKey} onSelectKey={setSelectedKey} section={section} onSection={setSection}
     knownProjectIds={knownProjectIds} onOpenProject={projectId => { setSelectedProject(projectId); setActiveTab('projects'); }}
-    onOpenInquiries={() => setActiveTab('inquiries')} />;
+    onOpenInquiries={inquiry => { setOpenInquiry(inquiry ?? null); setActiveTab('inquiries'); }} />;
 }
 
 /**
@@ -112,7 +114,7 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
   onSection: (section: ClientSection) => void;
   knownProjectIds: ReadonlySet<string>;
   onOpenProject: (projectId: string) => void;
-  onOpenInquiries: () => void;
+  onOpenInquiries: (inquiry?: OpenInquiry) => void;
   /** Parent-owned refresh, as in the preview toolbar. */
   refreshToken?: number;
 }) {
@@ -216,7 +218,7 @@ export interface PmClientsViewProps {
   /** Omitted when the parent owns refreshing, so the page shows no second Refresh. */
   onRefresh?: () => void;
   onOpenProject: (projectId: string) => void;
-  onOpenInquiries: () => void;
+  onOpenInquiries: (inquiry?: OpenInquiry) => void;
   /** The Tickets tab's content for one client. */
   renderTickets: (clientKey: string) => ReactNode;
   /** Optional tabs; each appears only when given. */
@@ -347,7 +349,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
           <Users className="h-6 w-6 text-content-muted" aria-hidden="true" />
           <p className="text-[13px] font-medium text-content">No clients yet</p>
           <p className="max-w-sm text-xs text-content-muted">Clients appear here once they have a portal account. New inquiries are in Inquiries.</p>
-          <button type="button" onClick={onOpenInquiries} className="mt-1 text-xs font-semibold text-link hover:text-link-hover">Open Inquiries</button>
+          <button type="button" onClick={() => onOpenInquiries()} className="mt-1 text-xs font-semibold text-link hover:text-link-hover">Open Inquiries</button>
         </div>
         : <table className="pm-date-table w-full text-left text-[13px]">
           <thead className="text-[10.5px] font-semibold uppercase tracking-wide text-content-muted">

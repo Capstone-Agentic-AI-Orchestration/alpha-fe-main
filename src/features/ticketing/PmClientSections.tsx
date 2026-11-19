@@ -6,6 +6,7 @@ import type { pmTicketApi, PmCentralIntakeItem, PmClientConversation, PmClientSu
 import { pmTicketNextAction } from './pmTicketNextAction';
 import { downloadTicketDocument, type TicketDocument, type TicketDocumentsReadApi } from './ticketDocuments';
 import { time } from './ticketUi';
+import type { OpenInquiry } from './PmInquiriesPage';
 
 /**
  * A client's Overview, Conversations and Documents tabs. Display only: replies,
@@ -378,7 +379,7 @@ const PROPOSAL_STATUS: Record<NonNullable<PmCentralIntakeItem['status']>, string
 export function ClientProposals({ proposals, error, onOpenInquiries }: {
   proposals: PmCentralIntakeItem[] | null;
   error: string;
-  onOpenInquiries: () => void;
+  onOpenInquiries: (inquiry?: OpenInquiry) => void;
 }) {
   if (error) return <div className="px-6 py-5"><p role="alert" className="rounded-md border border-status-danger-border bg-status-danger-subtle px-3 py-2 text-[13px] text-status-danger">{error}</p></div>;
   if (!proposals) return <SkeletonRegion label="Loading proposals" className="px-6 py-5"><PanelSkeleton rows={3} /></SkeletonRegion>;
@@ -388,7 +389,9 @@ export function ClientProposals({ proposals, error, onOpenInquiries }: {
       {proposals.length ? <ul>{proposals.map(item => <li key={item.id} className={`${rowClass} items-start`}>
         <Lightbulb className="mt-0.5 h-3.5 w-3.5 text-content-muted" aria-hidden="true" />
         <span className="min-w-0">
-          <span className="block truncate text-[13px] font-medium text-content" title={item.title}>{item.title}</span>
+          {/* Opens this exact inquiry, on the tab that lists it. */}
+          <button type="button" onClick={() => onOpenInquiries({ id: item.id, view: item.status === 'accepted' || item.status === 'declined' ? 'handled' : 'pending' })}
+            className="block max-w-full truncate text-left text-[13px] font-medium text-content hover:text-link hover:underline" title={`Open ${item.title} in Inquiries`}>{item.title}</button>
           <span className="block line-clamp-2 text-[12px] text-content-muted" title={item.description}>{item.description}</span>
           <span className="mt-0.5 block text-[11.5px] text-content-secondary">{PROPOSAL_STATUS[item.status ?? 'pending']}</span>
         </span>
@@ -396,6 +399,6 @@ export function ClientProposals({ proposals, error, onOpenInquiries }: {
       </li>)}</ul> : <Empty>This client hasn’t sent any project proposals.</Empty>}
     </Panel>
     <p className="mt-3 text-xs text-content-muted">Proposals are reviewed, clarified and accepted in{' '}
-      <button type="button" onClick={onOpenInquiries} className="font-semibold text-link hover:text-link-hover">Inquiries</button>.</p>
+      <button type="button" onClick={() => onOpenInquiries()} className="font-semibold text-link hover:text-link-hover">Inquiries</button>.</p>
   </div>;
 }
