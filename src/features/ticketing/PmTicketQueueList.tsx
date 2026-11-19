@@ -57,7 +57,8 @@ export function PmTicketQueueList({ items, selectedId, disabled, onSelect }: {
           onClick={event => { if (!disabled && !(event.target instanceof Element && event.target.closest('button, a'))) onSelect(item.id); }}>
           <td className="max-w-0 py-2.5 pr-3">
             <button type="button" data-ticket-id={item.id} aria-pressed={selectedId === item.id} disabled={disabled}
-              onClick={() => onSelect(item.id)} className="flex w-full min-w-0 items-center gap-2.5 text-left hover:text-link disabled:opacity-50">
+              // Its own keyboard focus ring: this list is also shown on a client's page, outside the Tickets page styles.
+              onClick={() => onSelect(item.id)} className="flex w-full min-w-0 items-center gap-2.5 rounded-sm text-left hover:text-link focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus disabled:opacity-50">
               <span className="pm-queue-table__icon"><Ticket size={14} aria-hidden="true" /></span>
               <span className="min-w-0">
                 <span className="block truncate font-medium" title={item.title}>{item.title}</span>
