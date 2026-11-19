@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -6,7 +6,8 @@ import {
   DraftingCompass,
   FlaskConical,
   Github,
-  Layers,
+  Pause,
+  Play,
   Rocket,
   ScanEye,
   ServerCog,
@@ -14,25 +15,13 @@ import {
   type LucideIcon
 } from 'lucide-react';
 
+import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { Identity } from '@/shared/types';
 
 /**
- * The hosted sign-in.
- *
- * Only the web build reaches this. The desktop app has no sign-in at all —
- * identity there is the machine's `gh` login, already resolved before the
- * window opens — so `authenticated` is never false and this never renders.
- *
- * Deliberately not a form. Alpha has no passwords of its own and no user
- * table: a person is their GitHub account, and their role is the team that
- * account belongs to in the workspace organisation. There is nothing to type.
- *
- * Nothing on this screen is personalised, because nothing can be: the daemon
- * answers an anonymous caller with `authenticated` and `signInUrl` only, so the
- * workspace org and the person's login are unknown until they come back.
+ * The hosted sign-in. Alpha has no passwords of its own: a person is their
+ * GitHub account, and their role comes from the team they belong to.
  */
-
-/** Reasons the daemon redirects back with, as `#alpha_error=...`. */
 export type SignInError = 'no_team' | 'oauth_failed';
 
 interface Props {
@@ -42,11 +31,6 @@ interface Props {
 }
 
 const ERROR_COPY: Record<SignInError, { title: string; detail: string }> = {
-  /**
-   * Distinct from `NoTeamAccess`, which is shown to someone already signed in.
-   * Here there is no session to keep — sign-in itself was refused — so the
-   * screen has to carry the explanation and the way back.
-   */
   no_team: {
     title: 'Your GitHub account has no Alpha role',
     detail:
@@ -62,76 +46,18 @@ const ERROR_COPY: Record<SignInError, { title: string; detail: string }> = {
   }
 };
 
-/**
- * The agents a fresh workspace is seeded with, as brand material.
- *
- * Named by role, as the daemon names them (`sqliteService` seeds Architect,
- * Developer, Reviewer, Tester and Operator), not by the invented personas they
- * replaced. Hues follow each agent's seeded colour; `rgb` feeds the flash halo.
- */
-const ROSTER: {
-  name: string;
-  does: string;
-  Icon: LucideIcon;
-  ring: string;
-  tint: string;
-  rgb: string;
-}[] = [
-  {
-    name: 'Architect',
-    does: 'Designs interfaces and module boundaries.',
-    Icon: DraftingCompass,
-    ring: 'border-indigo-400/40',
-    tint: 'text-indigo-300',
-    rgb: '129 140 248'
-  },
-  {
-    name: 'Developer',
-    does: 'Implements features across the stack.',
-    Icon: CodeXml,
-    ring: 'border-emerald-400/40',
-    tint: 'text-emerald-300',
-    rgb: '52 211 153'
-  },
-  {
-    name: 'Reviewer',
-    does: 'Audits diffs for correctness and security.',
-    Icon: ScanEye,
-    ring: 'border-amber-400/40',
-    tint: 'text-amber-300',
-    rgb: '251 191 36'
-  },
-  {
-    name: 'Tester',
-    does: 'Writes tests and reports coverage gaps.',
-    Icon: FlaskConical,
-    ring: 'border-pink-400/40',
-    tint: 'text-pink-300',
-    rgb: '244 114 182'
-  },
-  {
-    name: 'Operator',
-    does: 'Diagnoses failing CI and patches broken builds.',
-    Icon: Rocket,
-    ring: 'border-violet-400/40',
-    tint: 'text-violet-300',
-    rgb: '167 139 250'
-  }
+/** Roles seeded in every new workspace. */
+const ROSTER: { name: string; does: string; Icon: LucideIcon }[] = [
+  { name: 'Architect', does: 'Designs interfaces and module boundaries.', Icon: DraftingCompass },
+  { name: 'Developer', does: 'Implements features across the stack.', Icon: CodeXml },
+  { name: 'Reviewer', does: 'Audits diffs for correctness and security.', Icon: ScanEye },
+  { name: 'Tester', does: 'Writes tests and reports coverage gaps.', Icon: FlaskConical },
+  { name: 'Operator', does: 'Diagnoses failing CI and patches broken builds.', Icon: Rocket }
 ];
 
-/**
- * Seconds per glint cycle; must match `signin-glint` / `signin-flash` in
- * tailwind.config.js.
- *
- * The glint's centre crosses the rail during the first 60% of the cycle, from
- * 10% above it to 10% below. With five equal rows, row `i` is centred at
- * (2i + 1) / 10 of the rail, so the glint reaches it at (i + 1) / 10 of the
- * cycle. The flash peaks 4% into its own keyframes, hence the offset.
- */
-const GLINT_CYCLE_S = 6;
-const flashDelay = (i: number) => `${(GLINT_CYCLE_S * ((i + 1) / 10 - 0.04)).toFixed(2)}s`;
+/** Five roles advance every 1.2s, keeping the handoff loop on a six-second cycle. */
+const HANDOFF_STEP_MS = 1200;
 
-/** The order someone moves through, so they know where they will land. */
 const NEXT_STEPS: { title: string; detail: string }[] = [
   {
     title: 'GitHub confirms it is you',
@@ -148,135 +74,235 @@ const NEXT_STEPS: { title: string; detail: string }[] = [
 ];
 
 const DOT_GRID: React.CSSProperties = {
-  backgroundImage: 'radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1.5px)',
+  backgroundImage: 'radial-gradient(rgb(var(--c-white) / 0.055) 1px, transparent 1.5px)',
   backgroundSize: '24px 24px',
-  maskImage: 'radial-gradient(ellipse 75% 65% at 50% 42%, #000 20%, transparent 75%)',
-  WebkitMaskImage: 'radial-gradient(ellipse 75% 65% at 50% 42%, #000 20%, transparent 75%)'
+  maskImage: 'radial-gradient(ellipse 76% 68% at 48% 44%, #000 18%, transparent 76%)',
+  WebkitMaskImage: 'radial-gradient(ellipse 76% 68% at 48% 44%, #000 18%, transparent 76%)'
 };
 
 const RAIL_FADE = 'linear-gradient(to bottom, transparent, #000 10%, #000 90%, transparent)';
 
-/** Decorative page ground: a dot grid and two slow, soft light sources. */
+/** Low-contrast theme-tinted ground, with motion removed for reduced-motion users. */
 const Backdrop: React.FC = () => (
   <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
     <div className="absolute inset-0" style={DOT_GRID} />
     <div
-      className="absolute -left-[25vmax] -top-[30vmax] h-[80vmax] w-[80vmax] rounded-full motion-safe:animate-signin-drift"
-      style={{ background: 'radial-gradient(circle, rgb(139 92 246 / 0.16), transparent 62%)' }}
+      className="absolute -left-[26rem] -top-[28rem] h-[58rem] w-[58rem] rounded-full motion-safe:animate-signin-drift"
+      style={{ background: 'radial-gradient(circle, rgb(var(--ui-link) / 0.13), transparent 63%)' }}
     />
     <div
-      className="absolute -bottom-[35vmax] -right-[30vmax] h-[75vmax] w-[75vmax] rounded-full motion-safe:animate-signin-drift"
+      className="absolute -bottom-[31rem] -right-[26rem] h-[58rem] w-[58rem] rounded-full motion-safe:animate-signin-drift"
       style={{
-        background: 'radial-gradient(circle, rgb(99 102 241 / 0.10), transparent 60%)',
+        background: 'radial-gradient(circle, rgb(var(--ui-focus) / 0.08), transparent 62%)',
         animationDirection: 'alternate-reverse'
       }}
     />
   </div>
 );
 
-/** Wide screens only: what Alpha is, and the agents it ships with. */
-const Showcase: React.FC = () => (
-  <section aria-label="About Alpha" className="hidden lg:order-1 lg:block">
-    <p className="font-mono text-[11px] uppercase tracking-[0.16em] text-violet-300/80 motion-safe:animate-signin-rise">
-      AI agent orchestration
-    </p>
-    <p
-      className="mt-5 max-w-[12ch] font-semibold leading-[1.02] tracking-[-0.035em] text-white motion-safe:animate-signin-rise"
-      style={{ fontSize: 'clamp(2.75rem, 4.6vw, 4.25rem)', animationDelay: '60ms' }}
-    >
-      AI work,{' '}
-      <span className="bg-gradient-to-r from-violet-300 to-indigo-200 bg-clip-text text-violet-300 [-webkit-text-fill-color:transparent]">
-        orchestrated.
-      </span>
-    </p>
-    <p
-      className="mt-6 max-w-md text-[15px] leading-relaxed text-gray-400 motion-safe:animate-signin-rise"
-      style={{ animationDelay: '120ms' }}
-    >
-      One shared board for the people who plan the work and the AI agents that
-      carry it out on developers&apos; own machines.
-    </p>
+/** Compact role explorer with keyboard-accessible tabs and a handoff animation. */
+const Showcase: React.FC = () => {
+  const [activeRole, setActiveRole] = useState(0);
+  const [prefersReducedMotion, setPrefersReducedMotion] = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+  const [isPlaying, setIsPlaying] = useState(() =>
+    !(typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+  );
+  const tabRefs = useRef<Array<HTMLButtonElement | null>>([]);
 
-    <div className="mt-12 max-w-md">
-      <p
-        id="sign-in-roster"
-        className="font-mono text-[11px] uppercase tracking-[0.16em] text-gray-500 motion-safe:animate-signin-rise"
-        style={{ animationDelay: '200ms' }}
+  useEffect(() => {
+    const preference = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const updatePreference = () => {
+      setPrefersReducedMotion(preference.matches);
+      if (preference.matches) setIsPlaying(false);
+    };
+    preference.addEventListener('change', updatePreference);
+    return () => preference.removeEventListener('change', updatePreference);
+  }, []);
+
+  useEffect(() => {
+    if (!isPlaying || prefersReducedMotion) return;
+    const timer = window.setTimeout(
+      () => setActiveRole((current) => (current + 1) % ROSTER.length),
+      HANDOFF_STEP_MS
+    );
+    return () => window.clearTimeout(timer);
+  }, [activeRole, isPlaying, prefersReducedMotion]);
+
+  const selectRole = (index: number, moveFocus = false) => {
+    const nextIndex = (index + ROSTER.length) % ROSTER.length;
+    setActiveRole(nextIndex);
+    setIsPlaying(false);
+    if (moveFocus) tabRefs.current[nextIndex]?.focus();
+  };
+
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    let nextIndex: number | undefined;
+    switch (event.key) {
+      case 'ArrowDown':
+      case 'ArrowRight':
+        nextIndex = index + 1;
+        break;
+      case 'ArrowUp':
+      case 'ArrowLeft':
+        nextIndex = index - 1;
+        break;
+      case 'Home':
+        nextIndex = 0;
+        break;
+      case 'End':
+        nextIndex = ROSTER.length - 1;
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    selectRole(nextIndex, true);
+  };
+
+  const selected = ROSTER[activeRole];
+
+  return (
+    <section aria-label="About Alpha" className="w-full max-w-[29rem] justify-self-center lg:order-1">
+      <p className="font-mono text-[10px] uppercase tracking-[0.17em] text-link motion-safe:animate-signin-rise">
+        AI agent orchestration
+      </p>
+      <h2
+        className="mt-4 max-w-[12ch] text-[clamp(2.5rem,4vw,3.5rem)] font-semibold leading-[1.02] tracking-[-0.045em] text-content motion-safe:animate-signin-rise"
+        style={{ animationDelay: '60ms' }}
       >
-        Default agents
+        AI work, <span className="text-link">orchestrated.</span>
+      </h2>
+      <p
+        className="mt-4 max-w-md text-sm leading-relaxed text-content-secondary motion-safe:animate-signin-rise"
+        style={{ animationDelay: '120ms' }}
+      >
+        One shared board for the people who plan the work and the AI agents that
+        carry it out on developers&apos; own machines.
       </p>
 
-      <div className="relative mt-4">
-        {/* The rail, with a glint that hands off from one agent to the next. */}
-        <div
-          aria-hidden="true"
-          className="absolute inset-y-0 left-[1.125rem] w-[2px] -translate-x-1/2 overflow-hidden bg-white/[0.07]"
-          style={{ maskImage: RAIL_FADE, WebkitMaskImage: RAIL_FADE }}
-        >
-          <div
-            className="absolute inset-0 -translate-y-[60%] motion-safe:animate-signin-glint"
-            style={{
-              backgroundImage:
-                'linear-gradient(to bottom, transparent 40%, rgb(196 181 253) 50%, transparent 60%)'
-            }}
-          />
-        </div>
-
-        <ul aria-labelledby="sign-in-roster" className="grid auto-rows-fr">
-          {ROSTER.map(({ name, does, Icon, ring, tint, rgb }, i) => (
-            <li
-              key={name}
-              className="relative grid grid-cols-[2.25rem_minmax(0,1fr)] items-center gap-4 py-2.5 motion-safe:animate-signin-rise"
-              style={{ animationDelay: `${260 + i * 70}ms` }}
-            >
+      <div className="mt-8 max-w-md motion-safe:animate-signin-rise" style={{ animationDelay: '180ms' }}>
+        <div className="flex items-center justify-between gap-3">
+          <p id="sign-in-roster" className="font-mono text-[10px] uppercase tracking-[0.17em] text-content-muted">
+            Default agents
+          </p>
+          <div className="flex items-center gap-3">
+            <span className="inline-flex items-center gap-1.5 font-mono text-[9px] uppercase tracking-[0.12em] text-content-muted">
               <span
                 aria-hidden="true"
-                className={`relative flex h-9 w-9 items-center justify-center rounded-full border bg-shell ${ring}`}
+                className={`h-1.5 w-1.5 rounded-full ${isPlaying ? 'bg-link motion-safe:animate-pulse' : 'bg-content-muted'}`}
+              />
+              {prefersReducedMotion ? 'Motion off' : isPlaying ? 'Handoff running' : 'Handoff paused'}
+            </span>
+            {!prefersReducedMotion && (
+              <button
+                type="button"
+                aria-label={isPlaying ? 'Pause handoff sequence' : 'Resume handoff sequence'}
+                aria-pressed={!isPlaying}
+                onClick={() => setIsPlaying((playing) => !playing)}
+                className="inline-flex items-center gap-1 rounded px-1 py-0.5 text-[10px] font-medium text-content-muted transition-colors hover:text-content focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus motion-reduce:transition-none"
               >
-                <span
-                  className="absolute -inset-2.5 rounded-full opacity-0 motion-safe:animate-signin-flash"
-                  style={{
-                    background: `radial-gradient(circle, rgb(${rgb} / 0.5), rgb(${rgb} / 0) 68%)`,
-                    animationDelay: flashDelay(i)
-                  }}
-                />
-                <Icon className={`relative h-4 w-4 ${tint}`} />
-              </span>
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-gray-100">{name}</p>
-                <p className="text-[13px] leading-snug text-gray-500">{does}</p>
-              </div>
-            </li>
-          ))}
-        </ul>
+                {isPlaying ? <Pause aria-hidden="true" className="h-3 w-3" /> : <Play aria-hidden="true" className="h-3 w-3" />}
+                {isPlaying ? 'Pause' : 'Resume'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="relative mt-3 grid max-w-[27rem] grid-cols-[minmax(0,11rem)_minmax(0,1fr)] items-center gap-4 sm:gap-5">
+          {/* A visible guide line carries one bright glint through the five timed node pulses. */}
+          <div
+            aria-hidden="true"
+            className="absolute inset-y-0 left-5 z-0 w-px -translate-x-1/2 overflow-hidden bg-link/25"
+            style={{ maskImage: RAIL_FADE, WebkitMaskImage: RAIL_FADE }}
+          />
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute left-5 top-3 z-0 h-3 w-[3px] rounded-full bg-link shadow-[0_0_10px_rgb(var(--ui-link)/0.8)] transition-transform duration-700 ease-in-out motion-reduce:transition-none"
+            style={{ transform: `translate3d(-50%, ${activeRole * 40}px, 0)` }}
+          />
+
+          <div role="tablist" aria-labelledby="sign-in-roster" aria-orientation="vertical" className="relative z-10 grid gap-1">
+            {ROSTER.map(({ name, Icon }, i) => {
+              const isActive = activeRole === i;
+              return (
+                <button
+                  key={name}
+                  ref={(node) => { tabRefs.current[i] = node; }}
+                  id={`sign-in-role-${i}`}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  aria-controls="sign-in-role-panel"
+                  tabIndex={isActive ? 0 : -1}
+                  onClick={() => selectRole(i)}
+                  onFocus={() => setIsPlaying(false)}
+                  onKeyDown={(event) => onTabKeyDown(event, i)}
+                  className={`group grid min-h-9 w-full grid-cols-[2rem_minmax(0,1fr)] items-center gap-2 rounded-md border px-1 text-left transition-colors duration-500 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus motion-reduce:transition-none ${
+                    isActive
+                      ? 'border-divider bg-selected/35 text-content'
+                      : 'border-transparent text-content-secondary hover:bg-surface/55 hover:text-content'
+                  }`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`relative flex h-7 w-7 items-center justify-center rounded-full border bg-shell transition-colors duration-500 ${
+                      isActive ? 'border-link/60 text-link' : 'border-divider text-content-muted group-hover:text-content-secondary'
+                    }`}
+                  >
+                    <span
+                      className={`absolute -inset-2.5 rounded-full opacity-0 ${isActive ? 'motion-safe:animate-signin-flash' : ''}`}
+                      style={{
+                        background: 'radial-gradient(circle, rgb(var(--ui-link) / 0.48), rgb(var(--ui-link) / 0) 68%)'
+                      }}
+                    />
+                    <Icon className="relative h-3.5 w-3.5" />
+                  </span>
+                  <span className="text-[12px] font-medium">{name}</span>
+                </button>
+              );
+            })}
+          </div>
+
+          <div
+            id="sign-in-role-panel"
+            role="tabpanel"
+            aria-labelledby={`sign-in-role-${activeRole}`}
+            tabIndex={0}
+            className="min-h-[9.5rem] border-l border-link/40 py-2 pl-4 text-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus"
+          >
+            <div key={activeRole} className="motion-safe:animate-signin-role-change">
+              <h3 className="text-sm font-semibold text-content">{selected.name}</h3>
+              <p className="mt-2 max-w-[15ch] text-[12px] leading-relaxed">{selected.does}</p>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-  </section>
-);
+    </section>
+  );
+};
 
 const NextSteps: React.FC = () => (
-  <div className="mt-7 border-t border-white/[0.06] pt-6">
-    <h2 className="font-mono text-[11px] font-normal uppercase tracking-[0.16em] text-gray-500">
+  <div className="mt-5 border-t border-divider pt-4">
+    <h2 className="font-mono text-[10px] font-normal uppercase tracking-[0.17em] text-content-muted">
       What happens next
     </h2>
-    <ol className="mt-4 space-y-4">
+    <ol className="mt-3 space-y-3">
       {NEXT_STEPS.map((step, i) => (
-        <li key={step.title} className="relative grid grid-cols-[1.5rem_minmax(0,1fr)] gap-3">
+        <li key={step.title} className="relative grid grid-cols-[1.25rem_minmax(0,1fr)] gap-2.5">
           {i < NEXT_STEPS.length - 1 && (
-            <span
-              aria-hidden="true"
-              className="absolute bottom-[-0.875rem] left-3 top-7 w-px bg-white/[0.08]"
-            />
+            <span aria-hidden="true" className="absolute bottom-[-0.75rem] left-[0.6rem] top-6 w-px bg-divider" />
           )}
           <span
             aria-hidden="true"
-            className="flex h-6 w-6 items-center justify-center rounded-md border border-white/10 bg-white/[0.03] font-mono text-[11px] text-gray-400"
+            className="flex h-5 w-5 items-center justify-center rounded-md border border-divider bg-well font-mono text-[10px] text-content-muted"
           >
             {i + 1}
           </span>
-          <div className="min-w-0 pt-0.5">
-            <p className="text-[13px] font-medium leading-snug text-gray-200">{step.title}</p>
-            <p className="mt-0.5 text-[13px] leading-snug text-gray-500">{step.detail}</p>
+          <div className="min-w-0 pt-px">
+            <p className="text-[12px] font-medium leading-snug text-content">{step.title}</p>
+            <p className="mt-0.5 text-[12px] leading-snug text-content-muted">{step.detail}</p>
           </div>
         </li>
       ))}
@@ -288,114 +314,72 @@ export const SignIn: React.FC<Props> = ({ identity, error }) => {
   const problem = error ? ERROR_COPY[error] : undefined;
 
   return (
-    /*
-     * Sized to the viewport itself. App renders this directly, with no sized
-     * parent, and `body` is `overflow-hidden` for the workspace shell — so the
-     * screen claims the viewport and scrolls internally when a short one
-     * cannot fit the card.
-     */
-    <div className="relative h-dvh overflow-hidden bg-canvas text-sm text-gray-300">
+    <div className="relative h-dvh overflow-hidden bg-canvas text-sm text-content">
       <Backdrop />
 
       <div className="relative h-full overflow-y-auto">
-        <main className="mx-auto grid min-h-full w-full max-w-6xl items-center gap-12 px-4 py-10 sm:px-8 sm:py-14 lg:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] lg:gap-16 xl:gap-24">
-          {/*
-            First in the DOM so the heading and the sign-in control come first
-            to a screen reader; placed on the right on wide screens. Never
-            animated in: the control is usable from the first frame.
-          */}
-          <section
-            aria-labelledby="sign-in-heading"
-            className="w-full max-w-[26rem] justify-self-center lg:order-2"
-          >
-            <div className="relative rounded-3xl border border-white/10 bg-surface/80 p-6 shadow-2xl shadow-black/60 backdrop-blur-xl sm:p-8">
+        <main className="mx-auto grid min-h-full w-full max-w-[64rem] items-center gap-8 px-4 py-7 sm:px-8 sm:py-10 lg:grid-cols-[minmax(0,1fr)_minmax(0,25rem)] lg:gap-12 xl:gap-16">
+          {/* DOM order prioritises the sign-in control for screen readers; wide layouts place it on the right. */}
+          <section aria-labelledby="sign-in-heading" className="w-full max-w-[25rem] justify-self-center lg:order-2">
+            <div className="relative rounded-2xl border border-divider bg-surface/95 p-5 shadow-2xl shadow-black/25 backdrop-blur-xl sm:p-6">
               <span
                 aria-hidden="true"
-                className="pointer-events-none absolute inset-x-10 -top-px h-px bg-gradient-to-r from-transparent via-violet-300/60 to-transparent"
+                className="pointer-events-none absolute inset-x-8 -top-px h-px bg-gradient-to-r from-transparent via-link/50 to-transparent"
               />
 
-              <div className="flex items-center gap-2.5">
-                <span
-                  aria-hidden="true"
-                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-violet-400/30 bg-violet-500/15 text-violet-300"
-                >
-                  <Layers className="h-[18px] w-[18px]" />
-                </span>
-                <span className="text-[15px] font-semibold tracking-tight text-white">Alpha</span>
-                {/* The wide layout says this at display size beside the card. */}
-                <span className="truncate text-[13px] text-gray-500 lg:hidden">
-                  <span aria-hidden="true" className="text-gray-600">
-                    ·
-                  </span>{' '}
-                  AI work, orchestrated.
+              <div className="flex min-w-0 items-center gap-2.5">
+                <img src={alphaMarkUrl} alt="" className="h-8 w-8 shrink-0 object-contain invert dark:invert-0" />
+                <span className="text-sm font-semibold tracking-tight text-content">Alpha</span>
+                <span className="truncate text-[12px] text-content-muted lg:hidden">
+                  <span aria-hidden="true" className="text-content-muted">·</span> AI work, orchestrated.
                 </span>
               </div>
 
-              <div className="mt-8 space-y-2">
-                <h1 id="sign-in-heading" className="text-2xl font-semibold leading-tight text-white">
+              <div className="mt-6 space-y-1.5">
+                <h1 id="sign-in-heading" className="text-xl font-semibold leading-tight tracking-tight text-content">
                   Sign in to Alpha
                 </h1>
-                <p className="leading-relaxed text-gray-400">
+                <p className="text-[13px] leading-relaxed text-content-secondary">
                   The board where your team plans the work and AI agents carry it out.
                 </p>
               </div>
 
               {problem && (
-                <div
-                  role="alert"
-                  className="mt-6 flex items-start gap-3 rounded-xl border border-amber-400/25 bg-amber-400/[0.07] p-4"
-                >
-                  <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+                <div role="alert" className="mt-4 flex items-start gap-3 rounded-xl border border-status-warning-border bg-status-warning-subtle p-3.5">
+                  <AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-status-warning" />
                   <div className="min-w-0 space-y-1">
-                    <p className="font-semibold text-amber-100">{problem.title}</p>
-                    <p className="text-[13px] leading-relaxed text-amber-100/75">{problem.detail}</p>
+                    <p className="font-semibold text-content">{problem.title}</p>
+                    <p className="text-[12px] leading-relaxed text-content-secondary">{problem.detail}</p>
                   </div>
                 </div>
               )}
 
-              <div className="mt-6">
+              <div className="mt-5">
                 {identity.signInUrl ? (
                   <a
                     href={identity.signInUrl}
                     aria-describedby="sign-in-trust"
-                    className="group flex min-h-[3rem] w-full items-center justify-center gap-2.5 rounded-xl bg-content px-4 py-3 font-semibold text-canvas shadow-lg shadow-violet-500/10 transition duration-150 hover:bg-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-400 focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:scale-[0.99] active:bg-content-muted motion-reduce:transition-none motion-reduce:active:scale-100"
+                    className="group flex min-h-11 w-full items-center justify-center gap-2.5 rounded-lg bg-content px-4 py-2.5 font-semibold text-canvas shadow-sm transition duration-150 hover:bg-content-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-offset-2 focus-visible:ring-offset-surface active:scale-[0.99] motion-reduce:transition-none motion-reduce:active:scale-100"
                   >
-                    <Github aria-hidden="true" className="h-[18px] w-[18px]" />
+                    <Github aria-hidden="true" className="h-[17px] w-[17px]" />
                     Continue with GitHub
-                    <ArrowRight
-                      aria-hidden="true"
-                      className="h-4 w-4 text-current transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-current motion-reduce:transition-none"
-                    />
+                    <ArrowRight aria-hidden="true" className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
                   </a>
                 ) : (
-                  /**
-                   * No URL means the server has no OAuth credentials configured. A
-                   * button that cannot work is worse than none: it reads as a bug in
-                   * the app rather than a gap in the deployment.
-                   */
-                  <div className="flex items-start gap-3 rounded-xl border border-white/10 bg-well/80 p-4">
-                    <span
-                      aria-hidden="true"
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-gray-400"
-                    >
+                  <div className="flex items-start gap-3 rounded-xl border border-divider bg-well/80 p-3.5">
+                    <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-divider bg-surface text-content-muted">
                       <ServerCog className="h-4 w-4" />
                     </span>
                     <div className="min-w-0 space-y-1.5 break-words">
-                      <p className="font-medium text-gray-100">
-                        GitHub sign-in is not configured on this server
-                      </p>
-                      <p className="text-[13px] leading-relaxed text-gray-400">
+                      <p className="font-medium text-content">GitHub sign-in is not configured on this server</p>
+                      <p className="text-[12px] leading-relaxed text-content-secondary">
                         Set{' '}
-                        <code className="rounded bg-code px-1.5 py-0.5 font-mono text-[12px] text-code-content">
-                          GITHUB_CLIENT_ID
-                        </code>{' '}
-                        and{' '}
-                        <code className="rounded bg-code px-1.5 py-0.5 font-mono text-[12px] text-code-content">
-                          GITHUB_CLIENT_SECRET
-                        </code>{' '}
-                        in the server environment, then restart the server.
+                        <code className="rounded bg-code px-1.5 py-0.5 font-mono text-[11px] text-code-content">GITHUB_CLIENT_ID</code>
+                        {' '}and{' '}
+                        <code className="rounded bg-code px-1.5 py-0.5 font-mono text-[11px] text-code-content">GITHUB_CLIENT_SECRET</code>
+                        {' '}in the server environment, then restart the server.
                       </p>
-                      <p className="text-[13px] leading-relaxed text-gray-500">
+                      <p className="text-[12px] leading-relaxed text-content-muted">
                         This is a deployment setting. Nothing on your GitHub account needs to change.
                       </p>
                     </div>
@@ -403,15 +387,14 @@ export const SignIn: React.FC<Props> = ({ identity, error }) => {
                 )}
               </div>
 
-              <p id="sign-in-trust" className="mt-4 flex items-start gap-2 text-[13px] leading-relaxed text-gray-400">
-                <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300/80" />
+              <p id="sign-in-trust" className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed text-content-secondary">
+                <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-status-success" />
                 <span>
                   Alpha reads your organisation team membership to decide what you can
                   see. It never stores a password.
                 </span>
               </p>
 
-              {/* Only while there is a next: an unconfigured server has none. */}
               {identity.signInUrl && <NextSteps />}
             </div>
           </section>

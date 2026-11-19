@@ -121,14 +121,13 @@ export default {
         /*
          * Sign-in screen (features/onboarding/SignIn.tsx). Decorative only and
          * always applied through `motion-safe:`, so reduced motion gets the
-         * static layout. The 6s cycle is shared by `glint` and `flash`: the
-         * component staggers each agent node's flash to the moment the glint
-         * passes it, so change both together or not at all.
+         * static layout. SignIn advances the role, detail pane and rail
+         * together; this short pulse plays as each node receives the handoff.
          */
         'signin-rise': 'signinRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both',
-        'signin-glint': 'signinGlint 6s linear infinite',
-        'signin-flash': 'signinFlash 6s ease-out infinite',
+        'signin-flash': 'signinFlash 0.48s ease-out both',
         'signin-drift': 'signinDrift 24s ease-in-out infinite alternate',
+        'signin-role-change': 'signinRoleChange 0.5s cubic-bezier(0.22, 1, 0.36, 1) both',
       },
       keyframes: {
         fadeIn: {
@@ -143,19 +142,18 @@ export default {
           '0%': { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        // Travels for the first 60% of the cycle, then rests out of sight.
-        signinGlint: {
-          '0%': { transform: 'translateY(-60%)' },
-          '60%, 100%': { transform: 'translateY(60%)' },
-        },
         signinFlash: {
           '0%': { opacity: '0', transform: 'scale(0.6)' },
-          '4%': { opacity: '1', transform: 'scale(1)' },
-          '20%, 100%': { opacity: '0', transform: 'scale(1.5)' },
+          '30%': { opacity: '1', transform: 'scale(1.08)' },
+          '100%': { opacity: '0', transform: 'scale(1.5)' },
         },
         signinDrift: {
           '0%': { transform: 'translate3d(0, 0, 0)' },
           '100%': { transform: 'translate3d(6%, 8%, 0)' },
+        },
+        signinRoleChange: {
+          '0%': { opacity: '0', transform: 'translateY(5px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
         },
       }
     },
