@@ -16,10 +16,10 @@ import {
 } from './clientReview';
 import { clientTicketProgress } from './clientTicketProgress';
 import { clientWhatNext } from './clientFriendly';
-import { clientProgressSteps } from './clientProgressSteps';
+import { clientProgressSteps, type ClientProgressStep } from './clientProgressSteps';
 import { ClientProgressStrip } from './ClientProgressStrip';
-import { TicketChat, type TicketChatMessage } from './TicketChat';
-import { CxBadge, requestTone } from './clientKit';
+import { TicketChat, type TicketChatMessage, type TicketChatProps } from './TicketChat';
+import { CxBadge, requestTone, type CxTone } from './clientKit';
 import { Button } from '@/shared/components/ui/button';
 
 type Decision = Extract<ClientTicketCommandInput['command'], { type: 'agree_scope' | 'accept_delivery' }>;
@@ -190,102 +190,33 @@ export function ClientTicketDetail({
   const whatNext = clientWhatNext({ status: ticket.status, requestedAction });
   const history = requestHistory(ticket, workflowActionsDisabled);
 
-  // Milestones sit in the conversation at their dates, after whatever history is loaded.
-  const firstLoaded = messages[0]?.createdAt;
-  const updates: TicketChatMessage[] = history.slice(1)
-    .filter(event => !messageCursor || !firstLoaded || Date.parse(event.at) >= Date.parse(firstLoaded))
-    .map(event => ({ id: 'update:' + event.label, author: 'system', body: event.label, createdAt: event.at }));
-  const feed = [...messages, ...updates].sort((x, y) => Date.parse(x.createdAt) - Date.parse(y.createdAt));
-  const unread = useUnreadCount(ticket.id, messages);
+  const chatProps: Omit<TicketChatProps, 'messages'> = {
+    role: 'client', clientInitial, title: 'Conversation', subtitle: 'Private messages between you and your project manager', showHeader: false,
+    historyError, messageCursor, historyLoading, onLoadMore, showFeed: showConversationFeed,
+    unavailableTitle: 'About this conversation',
+    unavailableDescription: 'The conversation and result review are not available for this request yet. Try again later or contact your project manager.',
+    emptyTitle: 'No messages yet', emptyDescription: 'Send a note below if you have a question or an update.',
+    draft: body, onDraftChange: setBody, onSubmit: submitReply, canCompose: canReply, busy, writesAvailable: canReply,
+    inputId: 'client-ticket-reply', placeholder: 'Message your project manager…', sendAriaLabel: 'Send reply', composerClassName: 'client-reply-form',
+    composerNote: 'Enter sends · Shift + Enter starts a new line.', submitOnEnter: true,
+    readOnlyLabel: terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.',
+    leadingAction: communicationEnabled && !terminal ? <span className="ticket-chat__leading"><Button type="button" variant="outline" size="icon" onClick={showFiles} aria-label="Go to files"><Paperclip size={17} /></Button></span> : undefined,
+  };
+  const files = communicationEnabled ? <div ref={filesRef} tabIndex={-1} className="cx-reqcard cx-request-files">
+    <TicketDocumentsPanel api={documentsApi} scope={workspaceId} ticketId={ticket.id} canUpload={!terminal} heading="Files" />
+  </div> : null;
 
   return <section className="cx-request" aria-labelledby="client-request-title">
     <div className="cx-reqsplit">
-      <aside className="cx-reqrail" aria-label="About this request">
-        <div className="cx-reqrail-top">
-          <button type="button" className="cx-back" onClick={onBack} disabled={busy}><ArrowLeft size={15} aria-hidden="true" />{backLabel}</button>
-          <section className="cx-reqcard cx-reqhead">
-            <div className="cx-reqhead-top">
-              <span className="cx-reqhead-icon" aria-hidden="true"><FileText size={24} /></span>
-              <div className="cx-reqhead-copy">
-                <h1 id="client-request-title">{ticket.title}</h1>
-                <p>{ticket.sharedProjectName ?? 'Not linked to a project yet'}</p>
-                <p>Created {calendarDayOf(ticket.createdAt)}</p>
-              </div>
-            </div>
-            <CxBadge tone={requestTone(ticket.status, requestedAction)}>{progress.statusLabel}</CxBadge>
-            <p className="cx-request-summary">{progress.description}</p>
-            {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className="cx-button">Request additional work</button>}
-          </section>
-          {progressSteps.length > 0 && <RailCard icon={<Activity size={16} />} title="Request progress"><ClientProgressStrip steps={progressSteps} /></RailCard>}
-          {whatNext && <RailCard icon={<CornerDownRight size={16} />} title="What happens next"><p className="cx-request-copy">{whatNext}</p></RailCard>}
-        </div>
-        <div className="cx-reqrail-more">
-          {railPlan && <RailCard icon={<ShieldCheck size={16} />} title="The plan">{railPlan}</RailCard>}
-          {railResult && <RailCard icon={<CheckCircle2 size={16} />} title="Your result">{railResult}</RailCard>}
-          <RailCard icon={<MessageSquareText size={16} />} title="What you asked for"><p className="cx-request-copy">{ticket.description}</p></RailCard>
-          {communicationEnabled && <div ref={filesRef} tabIndex={-1} className="cx-reqcard cx-request-files">
-            <TicketDocumentsPanel api={documentsApi} scope={workspaceId} ticketId={ticket.id} canUpload={!terminal} heading="Files" />
-          </div>}
-          <RailCard icon={<Info size={16} />} title="Request details">
-            <dl className="cx-details">
-              <div><dt>Project</dt><dd>{ticket.sharedProjectName ?? 'Not linked yet'}</dd></div>
-              <div><dt>Created on</dt><dd>{calendarDayOf(ticket.createdAt)}</dd></div>
-              {ticket.request?.requestedDeadline && <div><dt>Hoped-for date</dt><dd>{calendarDay(ticket.request.requestedDeadline)} · not guaranteed</dd></div>}
-              <div><dt>Last update</dt><dd>{time(ticket.updatedAt)}</dd></div>
-              <div><dt>Project manager</dt><dd><span className="cx-details-pm" aria-hidden="true"><UserRound size={12} /></span>Your project manager</dd></div>
-              <div><dt>Reference</dt><dd className="cx-request-reference"><code>{ticket.reference}</code>
-                <button type="button" onClick={copyReference} aria-label="Copy request reference" className="cx-icon-button">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
-                {copied && <output className="cx-request-note">Copied</output>}</dd></div>
-            </dl>
-            {ticket.sharedProjectPreviewUrl && <a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)} className="cx-link cx-request-preview">Open hosted preview <ExternalLink size={12} /></a>}
-            {ticket.relatedTicket && <p className="cx-request-note">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
-          </RailCard>
-        </div>
-      </aside>
-
-      <section className="cx-reqchat" aria-labelledby="client-conversation-title">
-        <header className="cx-reqchat-head">
-          <span className="cx-reqchat-icon" aria-hidden="true"><MessagesSquare size={22} /></span>
-          <div><h2 id="client-conversation-title">Request conversation</h2><p>Private messages between you and your project manager.</p></div>
-          {unread > 0 && <output className="cx-new-pill">{unread === 1 ? '1 new message' : unread + ' new messages'}</output>}
-        </header>
-        {error && <p role="alert" className="cx-error">{error}</p>}
-        {decision && <section className="client-decision-slot cx-panel is-attention cx-decision" aria-labelledby="client-decision-title">
+      <RequestRail ticket={ticket} backLabel={backLabel} onBack={onBack} busy={busy} statusLabel={progress.statusLabel} description={progress.description}
+        tone={requestTone(ticket.status, requestedAction)} steps={progressSteps} whatNext={whatNext} plan={railPlan} result={railResult} files={files}
+        extraAction={newRequestsDisabled ? null : <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className="cx-button">Request additional work</button>}
+        details={<RequestDetails ticket={ticket} copied={copied} onCopy={copyReference} onOpenPreview={() => setPreviewOpenedKey(deliveryKey)} />} />
+      <RequestConversation ticketId={ticket.id} messages={messages} history={history} error={error} chat={chatProps}
+        decision={decision ? <section className="client-decision-slot cx-panel is-attention cx-decision" aria-labelledby="client-decision-title">
           <h2 id="client-decision-title">{'Action needed: ' + progress.label}</h2>
           {decision}
-        </section>}
-        <TicketChat
-          role="client"
-          messages={feed}
-          clientInitial={clientInitial}
-          title="Conversation"
-          subtitle="Private messages between you and your project manager"
-          showHeader={false}
-          historyError={historyError}
-          messageCursor={messageCursor}
-          historyLoading={historyLoading}
-          onLoadMore={onLoadMore}
-          showFeed={showConversationFeed}
-          unavailableTitle="About this conversation"
-          unavailableDescription="The conversation and result review are not available for this request yet. Try again later or contact your project manager."
-          emptyTitle="No messages yet"
-          emptyDescription="Send a note below if you have a question or an update."
-          draft={body}
-          onDraftChange={setBody}
-          onSubmit={submitReply}
-          canCompose={canReply}
-          busy={busy}
-          writesAvailable={canReply}
-          inputId="client-ticket-reply"
-          placeholder="Message your project manager…"
-          sendAriaLabel="Send reply"
-          composerClassName="client-reply-form"
-          composerNote="Enter sends · Shift + Enter starts a new line."
-          submitOnEnter
-          readOnlyLabel={terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.'}
-          leadingAction={communicationEnabled && !terminal ? <span className="ticket-chat__leading"><Button type="button" variant="outline" size="icon" onClick={showFiles} aria-label="Go to files"><Paperclip size={17} /></Button></span> : undefined}
-        />
-      </section>
+        </section> : null} />
     </div>
 
     {!workflowActionsDisabled && confirming && <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setConfirming(null); }}>
@@ -299,6 +230,86 @@ export function ClientTicketDetail({
         }} disabled={busy || (confirming.type === 'accept_delivery' && (!canReview || !reviewAcknowledged))} className={primary + ' min-h-[44px]'}>{confirming.type === 'accept_delivery' ? 'Accept result' : 'Approve plan'}</button></div>
       </section>
     </div>}
+  </section>;
+}
+
+/** The left column: the request, where it stands, what comes next, and everything else about it. */
+function RequestRail({ ticket, backLabel, onBack, busy, statusLabel, description, tone, steps, whatNext, plan, result, files, extraAction, details }: Readonly<{
+  ticket: ClientTicketRecord; backLabel: string; onBack: () => void; busy: boolean; statusLabel: string; description: string;
+  tone: CxTone; steps: ClientProgressStep[]; whatNext: string | null; plan: ReactNode; result: ReactNode; files: ReactNode;
+  extraAction: ReactNode; details: ReactNode;
+}>) {
+  return <aside className="cx-reqrail" aria-label="About this request">
+    <div className="cx-reqrail-top">
+      <button type="button" className="cx-back" onClick={onBack} disabled={busy}><ArrowLeft size={15} aria-hidden="true" />{backLabel}</button>
+      <section className="cx-reqcard cx-reqhead">
+        <div className="cx-reqhead-top">
+          <span className="cx-reqhead-icon" aria-hidden="true"><FileText size={24} /></span>
+          <div className="cx-reqhead-copy">
+            <h1 id="client-request-title">{ticket.title}</h1>
+            <p>{ticket.sharedProjectName ?? 'Not linked to a project yet'}</p>
+            <p>Created {calendarDayOf(ticket.createdAt)}</p>
+          </div>
+        </div>
+        <CxBadge tone={tone}>{statusLabel}</CxBadge>
+        <p className="cx-request-summary">{description}</p>
+        {extraAction}
+      </section>
+      {steps.length > 0 && <RailCard icon={<Activity size={16} />} title="Request progress"><ClientProgressStrip steps={steps} /></RailCard>}
+      {whatNext && <RailCard icon={<CornerDownRight size={16} />} title="What happens next"><p className="cx-request-copy">{whatNext}</p></RailCard>}
+    </div>
+    <div className="cx-reqrail-more">
+      {plan && <RailCard icon={<ShieldCheck size={16} />} title="The plan">{plan}</RailCard>}
+      {result && <RailCard icon={<CheckCircle2 size={16} />} title="Your result">{result}</RailCard>}
+      <RailCard icon={<MessageSquareText size={16} />} title="What you asked for"><p className="cx-request-copy">{ticket.description}</p></RailCard>
+      {files}
+      {details}
+    </div>
+  </aside>;
+}
+
+/** Project, dates, the project manager and the reference, as a short list. */
+function RequestDetails({ ticket, copied, onCopy, onOpenPreview }: Readonly<{
+  ticket: ClientTicketRecord; copied: boolean; onCopy: () => void; onOpenPreview: () => void;
+}>) {
+  const deadline = ticket.request?.requestedDeadline;
+  return <RailCard icon={<Info size={16} />} title="Request details">
+    <dl className="cx-details">
+      <div><dt>Project</dt><dd>{ticket.sharedProjectName ?? 'Not linked yet'}</dd></div>
+      <div><dt>Created on</dt><dd>{calendarDayOf(ticket.createdAt)}</dd></div>
+      {deadline && <div><dt>Hoped-for date</dt><dd>{calendarDay(deadline)} · not guaranteed</dd></div>}
+      <div><dt>Last update</dt><dd>{time(ticket.updatedAt)}</dd></div>
+      <div><dt>Project manager</dt><dd><span className="cx-details-pm" aria-hidden="true"><UserRound size={12} /></span>Your project manager</dd></div>
+      <div><dt>Reference</dt><dd className="cx-request-reference"><code>{ticket.reference}</code>
+        <button type="button" onClick={onCopy} aria-label="Copy request reference" className="cx-icon-button">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
+        {copied && <output className="cx-request-note">Copied</output>}</dd></div>
+    </dl>
+    {ticket.sharedProjectPreviewUrl && <a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={onOpenPreview} className="cx-link cx-request-preview">Open hosted preview <ExternalLink size={12} /></a>}
+    {ticket.relatedTicket && <p className="cx-request-note">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
+  </RailCard>;
+}
+
+/** The conversation at full height: a header with new messages, the pinned decision, then messages and milestone updates. */
+function RequestConversation({ ticketId, messages, history, error, decision, chat }: Readonly<{
+  ticketId: string; messages: ClientTicketMessage[]; history: Array<{ label: string; at: string }>; error: string;
+  decision: ReactNode; chat: Omit<TicketChatProps, 'messages'>;
+}>) {
+  const unread = useUnreadCount(ticketId, messages);
+  // Milestones sit in the conversation at their dates, after whatever history is loaded.
+  const firstLoaded = messages[0]?.createdAt;
+  const showFrom = chat.messageCursor && firstLoaded ? Date.parse(firstLoaded) : -Infinity;
+  const updates: TicketChatMessage[] = history.slice(1).filter(event => Date.parse(event.at) >= showFrom)
+    .map(event => ({ id: 'update:' + event.label, author: 'system', body: event.label, createdAt: event.at }));
+  const feed = [...messages, ...updates].sort((x, y) => Date.parse(x.createdAt) - Date.parse(y.createdAt));
+  return <section className="cx-reqchat" aria-labelledby="client-conversation-title">
+    <header className="cx-reqchat-head">
+      <span className="cx-reqchat-icon" aria-hidden="true"><MessagesSquare size={22} /></span>
+      <div><h2 id="client-conversation-title">Request conversation</h2><p>Private messages between you and your project manager.</p></div>
+      {unread > 0 && <output className="cx-new-pill">{unread === 1 ? '1 new message' : unread + ' new messages'}</output>}
+    </header>
+    {error && <p role="alert" className="cx-error">{error}</p>}
+    {decision}
+    <TicketChat {...chat} messages={feed} />
   </section>;
 }
 
