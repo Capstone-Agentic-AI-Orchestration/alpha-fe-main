@@ -179,8 +179,8 @@ describe('real ticketing interfaces in the Alpha app', () => {
     />);
     expect(html).toContain('No projects shared yet');
     expect(html).toContain('Propose a project');
-    expect(html).toContain('Your project manager is waiting on your reply to a project proposal.');
-    expect(html).toContain('Open proposals');
+    expect(html).toContain('Your project manager is waiting on your reply to a project idea.');
+    expect(html).toContain('Open project ideas');
     expect(html).not.toContain('Project proposals');
     expect(html).not.toContain('Send reply');
   });

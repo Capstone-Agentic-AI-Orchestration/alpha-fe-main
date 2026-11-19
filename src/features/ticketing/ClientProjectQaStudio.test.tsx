@@ -37,11 +37,11 @@ describe('client overview loading', () => {
       projects={[{ workspaceId: 'w1', projectId: 'p1', name: 'Shop', updatedAt: '2026-11-01T00:00:00Z', intakeOptionId: 'o1', preview: null }]}
       projectsLoading={false} projectsError="" onProposeProject={() => {}} {...callbacks} />);
     expect(html).toContain('1 thing needs you');
-    expect(html).toContain('Review proposal');
+    expect(html).toContain('Review plan');
     expect(html).not.toContain('all caught up');
     expect(html).toContain('2 open requests');
-    expect(html).toContain('Step 4 of 5');
     expect(html).toContain('Step 3 of 5');
+    expect(html).toContain('Step 2 of 5');
     expect(html).toContain('Propose a project');
     expect(html).not.toContain('REF-1');
   });

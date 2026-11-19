@@ -26,7 +26,7 @@ describe('client review preflight', () => {
   });
   it('explains acceptance in plain language', () => {
     expect(clientAcceptedResultNote(false)).toContain('Nothing more is needed from you');
-    expect(clientAcceptedResultNote(true)).toContain('closed');
+    expect(clientAcceptedResultNote(true)).toContain('This request is done');
   });
   it('turns a scope change request into a PM-visible reply and refuses empty or oversized text', () => {
     expect(scopeChangeMessage('   ')).toBeNull();

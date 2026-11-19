@@ -17,10 +17,12 @@ describe('client ticket detail', () => {
       onReply={async () => undefined} onDecision={() => undefined} onAdditionalWork={() => undefined}
       onCorrection={async () => undefined}
     />);
-    expect(html).toContain('Review the proposed work');
-    expect(html).toContain('Your project manager will confirm the work is approved before it begins.');
-    expect(html).toContain('Agree to proposed work');
-    expect(html).toContain('Request changes');
+    expect(html).toContain('Approve the plan');
+    expect(html).toContain('Work starts once it is approved.');
+    // The decision sits above the conversation, not behind a side tab.
+    expect(html.indexOf('Approve plan')).toBeGreaterThan(-1);
+    expect(html.indexOf('client-decision-slot')).toBeLessThan(html.indexOf('Message your project manager…'));
+    expect(html).toContain('Ask for changes');
   });
 
   it.each([false, true])('explains the current stage with disabled workflow actions (read-only preview: %s)', readOnlyPreview => {
@@ -38,11 +40,11 @@ describe('client ticket detail', () => {
       onReply={async () => undefined} onDecision={() => undefined} onAdditionalWork={() => undefined}
       onCorrection={async () => undefined}
     />);
-    expect(html).toContain('The agreed work is underway');
+    expect(html).toContain('The work is underway');
     expect(html).toContain('You do not need to do anything right now');
-    expect(html).toContain('Work underway (current step)');
+    expect(html).toContain('In progress (current step)');
     expect(html).not.toContain('Action needed:');
-    expect(html).not.toContain('Agree to proposed work');
+    expect(html).not.toContain('Approve plan');
     if (readOnlyPreview) {
       expect(html).toContain('Fictional project update');
       expect(html).not.toContain('aria-label="Send reply"');

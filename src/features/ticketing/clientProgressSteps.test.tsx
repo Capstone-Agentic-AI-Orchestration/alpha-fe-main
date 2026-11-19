@@ -14,12 +14,12 @@ describe('client progress steps', () => {
     ['a new request', { status: 'received', requestedAction: null, scope: null, delivery: null }, 'cuuuu'],
     ['PM review', { status: 'under_review', requestedAction: null, scope: null, delivery: null }, 'dcuuu'],
     ['asked for more details', { status: 'awaiting_client', requestedAction: 'reply', scope: null, delivery: null }, 'dcuuu'],
-    ['a proposed scope', { status: 'awaiting_client', requestedAction: 'agree_scope', scope: scope(false), delivery: null }, 'ddcuu'],
-    ['a scope the client asked to change', { status: 'under_review', requestedAction: null, scope: scope(false), delivery: null }, 'ddcuu'],
-    ['an agreed scope waiting to start', { status: 'under_review', requestedAction: null, scope: scope(true), delivery: null }, 'dddcu'],
-    ['work in progress', { status: 'in_progress', requestedAction: null, scope: scope(true), delivery: null }, 'dddcu'],
-    ['a result back for a fix', { status: 'under_review', requestedAction: null, scope: scope(true), delivery: delivery(false) }, 'dddcu'],
-    ['a result to review', { status: 'ready_for_review', requestedAction: 'review_result', scope: scope(true), delivery: delivery(false) }, 'ddddc'],
+    ['a plan to approve', { status: 'awaiting_client', requestedAction: 'agree_scope', scope: scope(false), delivery: null }, 'dcuuu'],
+    ['a plan the client asked to change', { status: 'under_review', requestedAction: null, scope: scope(false), delivery: null }, 'dcuuu'],
+    ['an approved plan waiting to start', { status: 'under_review', requestedAction: null, scope: scope(true), delivery: null }, 'ddcuu'],
+    ['work in progress', { status: 'in_progress', requestedAction: null, scope: scope(true), delivery: null }, 'ddcuu'],
+    ['a result back for a fix', { status: 'under_review', requestedAction: null, scope: scope(true), delivery: delivery(false) }, 'ddcuu'],
+    ['a result to review', { status: 'ready_for_review', requestedAction: 'review_result', scope: scope(true), delivery: delivery(false) }, 'dddcu'],
     ['an accepted result', { status: 'ready_for_review', requestedAction: null, scope: scope(true), delivery: delivery(true) }, 'ddddd'],
     ['an accepted, closed request', { status: 'closed', requestedAction: null, scope: scope(true), delivery: delivery(true) }, 'ddddd'],
   ])('shows %s', (_name, ticket, expected) => { expect(states(ticket)).toBe(expected); });
@@ -33,7 +33,7 @@ describe('client progress steps', () => {
 
   it('marks only the current step as needing the client, and only when something is asked of them', () => {
     const asked = clientProgressSteps({ status: 'awaiting_client', requestedAction: 'agree_scope', scope: scope(false), delivery: null });
-    expect(asked.filter(step => step.needsYou).map(step => step.label)).toEqual(['Review proposed work']);
+    expect(asked.filter(step => step.needsYou).map(step => step.label)).toEqual(['Approve the plan']);
     const quiet = clientProgressSteps({ status: 'in_progress', requestedAction: null, scope: scope(true), delivery: null });
     expect(quiet.some(step => step.needsYou)).toBe(false);
   });
@@ -42,8 +42,8 @@ describe('client progress steps', () => {
     const html = renderToStaticMarkup(<ClientProgressStrip steps={clientProgressSteps({ status: 'awaiting_client', requestedAction: 'agree_scope', scope: scope(false), delivery: null })} />);
     expect(html).toContain('aria-label="Request progress"');
     expect(html).toContain('aria-current="step"');
-    expect(html).toContain('Review proposed work · you');
-    expect(html).toContain('Step 3 of 5: Review proposed work · you');
+    expect(html).toContain('Approve the plan · you');
+    expect(html).toContain('Step 2 of 5: Approve the plan · you');
     expect(html).toContain('(current step)');
     expect(html).toContain('(done)');
     expect(renderToStaticMarkup(<ClientProgressStrip steps={[]} />)).toBe('');
