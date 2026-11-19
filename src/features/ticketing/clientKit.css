@@ -156,7 +156,16 @@ span.cx-button { pointer-events: none; }
 /* Project page: requests beside the project chat. */
 .cx-project-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 400px); gap: var(--client-space-6); align-items: start; }
 .cx-project-main { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-6); }
-.cx-preview-frame { height: 520px; overflow: hidden; border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); }
+/* The shared preview: the full page width and nearly a screen tall, or the whole display in full screen. */
+.cx-preview-frame { display: flex; height: clamp(560px, calc(100dvh - 170px), 960px); flex-direction: column; overflow: hidden; border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); }
+.cx-preview-frame > .pqa-preview { flex: 1; }
+.cx-preview-frame:fullscreen { height: 100vh; border: 0; border-radius: 0; }
+.cx-preview-frame .pqa-toolbar { min-height: 56px; gap: var(--client-space-2); padding: var(--client-space-2) var(--client-space-3); font-size: var(--cx-type-small); }
+.cx-preview-frame .pqa-toolbar :is(button, a) { min-height: 36px; font-size: var(--cx-type-small); }
+.cx-preview-frame .pqa-toolbar a { display: inline-flex; align-items: center; gap: var(--client-space-1); white-space: nowrap; }
+.cx-preview-frame .pqa-toolbar-end { flex: none; justify-content: flex-end; margin-left: auto; }
+.cx-preview-frame .cx-preview-full { display: inline-flex; align-items: center; gap: var(--client-space-2); padding: 0 var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--client-radius-control); background: var(--cx-surface); color: var(--cx-ink); font-weight: var(--client-weight-semibold); cursor: pointer; }
+.cx-preview-frame .cx-preview-full:hover { background: var(--cx-raised); }
 .cx-meta-action { color: var(--cx-attention); font-weight: var(--client-weight-medium); }
 .cx-row-time { color: var(--cx-faint); font-size: var(--client-type-meta); white-space: nowrap; }
 .cx-chat { position: sticky; top: var(--client-space-4); display: flex; max-height: calc(100dvh - 140px); min-height: 360px; flex-direction: column; }
@@ -339,7 +348,9 @@ span.cx-button { pointer-events: none; }
   .cx-home-grid { grid-template-columns: minmax(0, 1fr); }
   .cx-project-layout { grid-template-columns: minmax(0, 1fr); }
   .cx-chat { position: static; max-height: none; }
-  .cx-preview-frame { height: 420px; }
+  .cx-preview-frame { height: 72dvh; min-height: 460px; }
+  /* The full date beside a request squeezes its title on phones; the request page still shows it. */
+  .cx-row-time { display: none; }
   .cx-panel.is-attention .cx-row { flex-wrap: wrap; }
   .cx-request-progress { padding: var(--client-space-3) var(--client-space-4); }
   .cx-steps-list { display: flex; gap: 4px; }
