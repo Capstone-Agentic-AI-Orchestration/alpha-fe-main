@@ -159,21 +159,21 @@ export function ClientTicketDetail({
   </InfoCard> : null;
   const resultCard = !workflowActionsDisabled && ticket.delivery ? <InfoCard title="Your result" icon={<CheckCircle2 size={14} />}>
     <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.delivery.summary}</p>
-    <p className="mt-2 text-[10px] text-content-muted">Shared {time(ticket.delivery.sharedAt)}{ticket.delivery.accepted ? ' · accepted' : ''}</p>
+    <p className="mt-2 text-xs text-content-muted">Shared {time(ticket.delivery.sharedAt)}{ticket.delivery.accepted ? ' · accepted' : ''}</p>
     <ClientDeliveryFiles key={JSON.stringify([workspaceId, ticket.id, ticket.delivery.id, ticket.delivery.scopeVersionId])}
       workspaceId={workspaceId} ticketId={ticket.id} deliveryId={ticket.delivery.id} scopeVersionId={ticket.delivery.scopeVersionId} onInspectionChange={inspected} api={api} />
     {ticket.sharedProjectPreviewUrl && !ticket.delivery.accepted && <a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)}
       className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-link hover:bg-surface-high hover:text-link-hover">Open the project preview <ExternalLink size={12} /></a>}
-    {!ticket.delivery.accepted && !canReview && <p className="mt-3 flex items-start gap-1.5 text-[10px] leading-relaxed text-status-warning"><LockKeyhole size={12} className="mt-0.5 shrink-0" />{clientReviewLockMessage(Boolean(ticket.sharedProjectPreviewUrl))}</p>}
+    {!ticket.delivery.accepted && !canReview && <p className="mt-3 flex items-start gap-1.5 text-xs leading-relaxed text-status-warning"><LockKeyhole size={12} className="mt-0.5 shrink-0" />{clientReviewLockMessage(Boolean(ticket.sharedProjectPreviewUrl))}</p>}
     {canReview && <div className="mt-3 space-y-3">
-      <label className="flex items-start gap-2 text-[11px] leading-relaxed text-content-secondary"><input type="checkbox" checked={reviewAcknowledged} disabled={busy} onChange={event => setReviewAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I checked the result against the plan.</label>
+      <label className="flex items-start gap-2 text-xs leading-relaxed text-content-secondary"><input type="checkbox" checked={reviewAcknowledged} disabled={busy} onChange={event => setReviewAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I checked the result against the plan.</label>
       <div className="flex flex-wrap gap-2"><button disabled={busy || !reviewAcknowledged} onClick={() => { setCorrectionOpen(false); setConfirming({ type: 'accept_delivery', deliveryId: ticket.delivery!.id }); }} className={`${primary} min-h-[44px]`}>Accept result</button>
         <button disabled={busy} onClick={() => { setConfirming(null); setCorrectionOpen(value => !value); }} className={`${secondary} min-h-[44px]`}>{correctionOpen ? 'Cancel' : 'Needs a fix'}</button></div>
       {correctionOpen && <form className="space-y-2" onSubmit={async event => {
         event.preventDefault(); if (!canReview || busy || !correctionBody.trim()) return;
         try { await onCorrection(correctionBody.trim(), ticket.delivery!.id); setCorrectionBody(''); setCorrectionOpen(false); }
         catch { /* Preserve this draft while the original operation is reconciled. */ }
-      }}><label htmlFor="client-result-feedback" className="block text-[11px] text-content-secondary">What does not match the plan?</label>
+      }}><label htmlFor="client-result-feedback" className="block text-xs text-content-secondary">What does not match the plan?</label>
         <textarea id="client-result-feedback" rows={3} maxLength={4000} disabled={busy} value={correctionBody} onChange={event => setCorrectionBody(event.target.value)} className={input} />
         <p className="text-xs leading-relaxed text-content-secondary">Your project manager will look at your note and tell you the next step.</p>
         <button type="submit" disabled={busy || !correctionBody.trim()} className={`${primary} min-h-[44px]`}>Send fix request</button></form>}

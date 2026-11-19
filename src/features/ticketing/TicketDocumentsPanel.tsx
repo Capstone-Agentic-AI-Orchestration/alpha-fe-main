@@ -9,8 +9,8 @@ import { downloadTicketDocument, ticketDocumentOperationId } from './ticketDocum
 const MAX_BYTES = 10 * 1024 * 1024;
 const ACCEPT = '.pdf,.png,.jpg,.jpeg,.txt,.csv,application/pdf,image/png,image/jpeg,text/plain,text/csv';
 const input = 'w-full rounded-lg border border-control bg-well px-3 py-2 text-xs text-content placeholder:text-content-muted focus:border-control focus:outline-none disabled:opacity-50';
-const secondary = 'inline-flex items-center gap-1.5 rounded-lg border border-divider px-3 py-2 text-[11px] text-content hover:bg-surface-high disabled:cursor-not-allowed disabled:opacity-50';
-const primary = 'inline-flex items-center gap-1.5 rounded-lg bg-action px-3 py-2 text-[11px] font-medium text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50';
+const secondary = 'inline-flex items-center gap-1.5 rounded-lg border border-divider px-3 py-2 text-xs text-content hover:bg-surface-high disabled:cursor-not-allowed disabled:opacity-50';
+const primary = 'inline-flex items-center gap-1.5 rounded-lg bg-action px-3 py-2 text-xs font-medium text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50';
 
 interface PendingUpload { file: File; replacesDocumentId: string | null; operationId: string }
 
@@ -123,18 +123,18 @@ export function TicketDocumentsPanel({
       {showRefresh && <button type="button" onClick={() => void refresh()} disabled={loading || busy} className={secondary} aria-label="Refresh ticket documents"><RefreshCw size={12} />Refresh</button>}
     </header>
 
-    {error && <p role="alert" className="mx-4 mt-3 rounded-md border border-status-danger-border bg-status-danger-subtle p-2.5 text-[11px] text-status-danger">{error}</p>}
+    {error && <p role="alert" className="mx-4 mt-3 rounded-md border border-status-danger-border bg-status-danger-subtle p-2.5 text-xs text-status-danger">{error}</p>}
     {loading ? <LoadingRows label="Loading documents" rows={2} className="px-5" />
-      : groups.length === 0 ? <p className="p-5 text-center text-[11px] text-content-muted">{emptyMessage}</p>
+      : groups.length === 0 ? <p className="p-5 text-center text-xs text-content-muted">{emptyMessage}</p>
         : <div className="divide-y divide-divider">
           {groups.map(group => <div key={group.groupId} className="space-y-2 p-3">
             {group.versions.map((document, index) => <article key={document.id} className="ticket-document-item flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-divider bg-surface-raised p-3">
               <div className="ticket-document-copy min-w-0 max-w-full flex-1">
-                <p title={document.filename} className="ticket-document-name truncate text-xs font-medium text-content">{document.filename}<span className="ml-2 text-[10px] font-normal text-content-muted">v{document.version}</span></p>
-                <p className="ticket-document-meta mt-1 text-[10px] text-content-muted">{document.author === 'pm' ? 'Project Manager' : 'Client'} · {new Date(document.createdAt).toLocaleString()}</p>
-                {document.changeProposed && <p className="mt-1 text-[10px] text-status-warning">Proposed change · prior version is preserved; this does not change agreed work.</p>}
-                {document.status === 'pending' && <p className="mt-1 text-[10px] text-status-warning">Upload not confirmed. Reselect the same file to safely retry.</p>}
-                {index < group.versions.length - 1 && <p className="mt-1 text-[10px] text-content-muted">Earlier version retained in this ticket’s history.</p>}
+                <p title={document.filename} className="ticket-document-name truncate text-xs font-medium text-content">{document.filename}<span className="ml-2 text-xs font-normal text-content-muted">v{document.version}</span></p>
+                <p className="ticket-document-meta mt-1 text-xs text-content-muted">{document.author === 'pm' ? 'Project Manager' : 'Client'} · {new Date(document.createdAt).toLocaleString()}</p>
+                {document.changeProposed && <p className="mt-1 text-xs text-status-warning">Proposed change · prior version is preserved; this does not change agreed work.</p>}
+                {document.status === 'pending' && <p className="mt-1 text-xs text-status-warning">Upload not confirmed. Reselect the same file to safely retry.</p>}
+                {index < group.versions.length - 1 && <p className="mt-1 text-xs text-content-muted">Earlier version retained in this ticket’s history.</p>}
               </div>
               <div className="ticket-document-actions flex min-w-0 max-w-full shrink-0 flex-wrap gap-1.5">
                 {document.status === 'available' && <button type="button" onClick={() => void download(document)} disabled={busy} className={secondary}><Download size={12} />Download</button>}
@@ -145,13 +145,13 @@ export function TicketDocumentsPanel({
         </div>}
 
     {canUpload && api.upload && <form onSubmit={upload} className="space-y-2 border-t border-divider p-3">
-      <div className="flex items-center justify-between gap-2"><label htmlFor={`ticket-document-${ticketId}`} className="text-[11px] text-content-secondary">{replacementId ? 'Choose the proposed replacement' : 'Add a document'}</label>
-        {replacementId && <button type="button" onClick={() => { setReplacementId(null); setFile(null); setPending(null); if (fileInput.current) fileInput.current.value = ''; }} className="inline-flex items-center gap-1 text-[10px] text-content-muted hover:text-content-secondary"><X size={11} />Cancel replacement</button>}</div>
+      <div className="flex items-center justify-between gap-2"><label htmlFor={`ticket-document-${ticketId}`} className="text-xs text-content-secondary">{replacementId ? 'Choose the proposed replacement' : 'Add a document'}</label>
+        {replacementId && <button type="button" onClick={() => { setReplacementId(null); setFile(null); setPending(null); if (fileInput.current) fileInput.current.value = ''; }} className="inline-flex items-center gap-1 text-xs text-content-muted hover:text-content-secondary"><X size={11} />Cancel replacement</button>}</div>
       <input ref={fileInput} id={`ticket-document-${ticketId}`} type="file" accept={ACCEPT} disabled={busy} onChange={event => selectFile(event.currentTarget.files?.[0] ?? null)} className={`${input} ticket-document-input`} />
-      <p className="text-[10px] leading-relaxed text-content-muted">PDF, PNG, JPEG, plain text or CSV · up to 10 MB. Documents remain private to this ticket. A replacement is a proposal, not an automatic change to agreed work.</p>
-      {file && <p className="ticket-document-selected-file break-all text-[10px] text-content-secondary">Selected: {file.name} · {(file.size / 1024).toFixed(1)} KB</p>}
+      <p className="text-xs leading-relaxed text-content-muted">PDF, PNG, JPEG, plain text or CSV · up to 10 MB. Documents remain private to this ticket. A replacement is a proposal, not an automatic change to agreed work.</p>
+      {file && <p className="ticket-document-selected-file break-all text-xs text-content-secondary">Selected: {file.name} · {(file.size / 1024).toFixed(1)} KB</p>}
       <div className="flex justify-end"><button type="submit" disabled={!file || busy || file.size < 1 || file.size > MAX_BYTES} className={primary}><Upload size={12} />{busy ? 'Working…' : pending ? 'Retry same upload' : replacementId ? 'Propose replacement' : 'Upload document'}</button></div>
     </form>}
-    {(!canUpload || !api.upload) && <p className="border-t border-divider px-4 py-3 text-center text-[10px] text-content-muted">{readOnlyMessage}</p>}
+    {(!canUpload || !api.upload) && <p className="border-t border-divider px-4 py-3 text-center text-xs text-content-muted">{readOnlyMessage}</p>}
   </section>;
 }
