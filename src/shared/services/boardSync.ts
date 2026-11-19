@@ -238,9 +238,29 @@ async function bootstrapBoard(workspaceId: string): Promise<BoardSyncResult> {
 }
 
 /**
+ * Projects this page's cards belong to that the cache does not have.
+ *
+ * A project's own change always comes before its cards', so a card whose project
+ * is missing means the cache never received that project: a desktop once skipped
+ * projects created on the web and moved its cursor past them for good. Replaying
+ * deltas cannot bring such a change back; only a fresh snapshot can.
+ */
+export function missingCardProjects(state: BoardState, page: BoardChangePage): string[] {
+  const known = new Set(state.projects.map(project => project.id));
+  const missing = new Set<string>();
+  for (const change of page.changes) {
+    if (change.table !== 'issues' || change.operation === 'delete' || !change.row) continue;
+    const projectId = (change.row as { projectId?: unknown }).projectId;
+    if (typeof projectId === 'string' && projectId && !known.has(projectId)) missing.add(projectId);
+  }
+  return [...missing];
+}
+
+/**
  * Bring a workspace's cached board up to date with delta pages, or replace it
  * with one snapshot when there is no usable cache, the server says the history
- * expired, or the cache was read for a different account.
+ * expired or the sync version changed, the cache was read for a different
+ * account, or a page shows the cache missed a project.
  */
 export async function catchUpBoard(workspaceId: string): Promise<BoardSyncResult> {
   if (!workspaceId.trim()) throw new Error('A workspace is required to sync the board.');
@@ -260,6 +280,11 @@ export async function catchUpBoard(workspaceId: string): Promise<BoardSyncResult
     if (page.resetRequired || accountChanged) return bootstrapBoard(workspaceId);
     const previousCursor = currentCursor;
     currentState = applyBoardChangePage(currentState, page);
+    const missing = missingCardProjects(currentState, page);
+    if (missing.length) {
+      console.warn(`Board sync: cards arrived for project(s) this device never received (${missing.join(', ')}); reloading the board.`);
+      return bootstrapBoard(workspaceId);
+    }
     currentCursor = page.nextCursor;
     if (!page.hasMore) break;
     if (compareCursor(currentCursor.value, previousCursor.value) <= 0) {

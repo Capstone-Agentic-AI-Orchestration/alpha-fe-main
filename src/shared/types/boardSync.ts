@@ -8,6 +8,11 @@ export interface BoardCursor {
   workspaceId: string;
   /** PostgreSQL bigint sent as decimal text so it remains exact in JavaScript. */
   value: string;
+  /**
+   * The server's sync version the cursor was issued under. Kept and sent back as
+   * it came; the server answers an out-of-date one with `resetRequired`.
+   */
+  epoch?: number;
 }
 
 export interface BoardChange {
