@@ -26,10 +26,10 @@ const render = () => renderToStaticMarkup(<CreateIssueModal isOpen onClose={() =
 describe('New task dialog', () => {
   it('is one form, with no agent mode and no create-another toggle', () => {
     const html = render();
-    for (const shown of ['New task', 'Task title', 'What needs to happen?', 'Description', 'Due date', 'More options', 'Status', 'Priority', 'Assignee', 'Labels', 'Suggest steps with Alpha', 'Create task']) {
+    for (const shown of ['New task', 'Task title', 'What needs to happen?', 'Description', 'Due date', 'Status', 'Priority', 'Assignee', 'Labels', 'Checklist items', 'Suggest steps with Alpha', 'Create task']) {
       expect(html).toContain(shown);
     }
-    for (const gone of ['Create another', 'Switch to', 'Create with agent', 'Deconstruct user prompt', 'Suggest from description', 'Plan a build when it’s created']) {
+    for (const gone of ['More options', '<details', 'Create another', 'Switch to', 'Create with agent', 'Deconstruct user prompt', 'Suggest from description', 'Plan a build when it’s created']) {
       expect(html).not.toContain(gone);
     }
   });

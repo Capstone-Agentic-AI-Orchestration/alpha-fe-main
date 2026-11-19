@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { ChevronDown, Plus, Sparkles, X } from 'lucide-react';
+import { Plus, Sparkles, X } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import type { IssuePriority, IssueStatus, SystemProposal } from '@/shared/types';
 import { apiService } from '@/shared/services/apiService';
@@ -29,7 +29,7 @@ const AVAILABLE_LABELS = ['frontend', 'backend', 'UI/UX', 'bug', 'feature', 'per
 const MAX_STEP_SUGGESTION_CHARS = 4_000;
 const fieldClass = 'h-9 w-full rounded-md border border-control bg-well px-2.5 text-[13px] text-content focus:outline-none focus-visible:ring-2 focus-visible:ring-focus';
 
-/** A short form first; optional task setup stays behind More options. */
+/** One form: the name and outcome first, then status, priority, assignee, labels and checklist, all shown. */
 export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   isOpen,
   onClose,
@@ -333,12 +333,8 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           </section>
         )}
 
-        <details className="group border-t border-divider pt-3">
-          <summary className="flex cursor-pointer list-none items-center justify-between text-[12px] font-medium text-content-secondary [&::-webkit-details-marker]:hidden">
-            More options
-            <ChevronDown aria-hidden="true" className="h-4 w-4 transition-transform group-open:rotate-180" />
-          </summary>
-          <div className="space-y-4 pt-4">
+        <div className="border-t border-divider pt-4">
+          <div className="space-y-4">
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
               <label className="space-y-1.5">
                 <span className="block text-[11.5px] text-content-muted">Status</span>
@@ -429,7 +425,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               </div>
             </section>
           </div>
-        </details>
+        </div>
       </div>
     </Modal>
   );
