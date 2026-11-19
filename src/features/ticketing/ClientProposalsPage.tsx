@@ -16,7 +16,8 @@ import { clientProposalView } from './clientProposalPresentation';
  * Projects, conversations and all, which made that page read as two pages at once.
  */
 export function ClientProposalsPage({ api = clientTicketApi, proposals, projects, loading, error, inspectionOnly,
-  selectedProposalId, onSelectedProposalIdChange, onRefresh, onSubmitted, onOpenProject, openForm = false, onOpenFormHandled, idPrefix = 'client' }: {
+  selectedProposalId, onSelectedProposalIdChange, onRefresh, onSubmitted, onOpenProject, openForm = false, onOpenFormHandled, idPrefix = 'client',
+  embedded = false }: {
   api?: typeof clientTicketApi;
   proposals: ClientProjectProposal[];
   /** Projects this client can open, so an accepted proposal can link to the project it became. */
@@ -37,6 +38,8 @@ export function ClientProposalsPage({ api = clientTicketApi, proposals, projects
   openForm?: boolean;
   onOpenFormHandled?: () => void;
   idPrefix?: string;
+  /** Shown as one view of Requests, under that page's own header. */
+  embedded?: boolean;
 }) {
   const ordered = orderProposals(proposals);
   const chosen = ordered.find(proposal => proposal.id === selectedProposalId) ?? null;
@@ -70,18 +73,23 @@ export function ClientProposalsPage({ api = clientTicketApi, proposals, projects
       onBack={() => onSelectedProposalIdChange(null)} onReplied={onRefresh} onOpenProject={onOpenProject} />}
   </div>;
 
-  return <section className={`client-page client-proposals-page is-wide${chosen ? ' has-selected-proposal' : ''}`} aria-labelledby={`${idPrefix}-proposals-title`}>
-    <header className="client-page-head">
+  const actions = <div className="client-proposals-head-actions">
+    <button type="button" className="client-icon-action" aria-label="Refresh project proposals" disabled={loading} onClick={onRefresh}><RefreshCw size={15} /></button>
+    {!inspectionOnly && <button type="button" className="client-primary-action" aria-haspopup="dialog" aria-expanded={formOpen}
+      onClick={() => { setFormOpen(true); setSuccess(''); }}><Plus size={15} />Propose a project</button>}
+  </div>;
+  return <section className={`${embedded ? 'cx-ideas' : 'client-page is-wide'} client-proposals-page${chosen ? ' has-selected-proposal' : ''}`} aria-labelledby={`${idPrefix}-proposals-title`}>
+    {embedded ? <div className="cx-toolbar">
+      <div><h2 id={`${idPrefix}-proposals-title`} className="cx-subheading">Project ideas</h2>
+        <p className="cx-page-description">Ideas you’ve sent to your project manager. They review each one and reply here.</p></div>
+      {actions}
+    </div> : <header className="client-page-head">
       <div className="client-home-hello">
         <h1 id={`${idPrefix}-proposals-title`}>Project ideas</h1>
         <p>Ideas you’ve sent to your project manager. They review each one and reply here.</p>
       </div>
-      <div className="client-proposals-head-actions">
-        <button type="button" className="client-icon-action" aria-label="Refresh project proposals" disabled={loading} onClick={onRefresh}><RefreshCw size={15} /></button>
-        {!inspectionOnly && <button type="button" className="client-primary-action" aria-haspopup="dialog" aria-expanded={formOpen}
-          onClick={() => { setFormOpen(true); setSuccess(''); }}><Plus size={15} />Propose a project</button>}
-      </div>
-    </header>
+      {actions}
+    </header>}
     {success && <p role="status" className="client-proposal-success">{success}</p>}
     {error && <p role="alert" className="client-project-error">{error} <button type="button" onClick={onRefresh}>Try again</button></p>}
 

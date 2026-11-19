@@ -1,13 +1,12 @@
 import { EntrySkeleton, LoadingRows } from '@/shared/components/ui/skeleton';
 import { TicketDetailSkeleton } from './TicketingSkeletons';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  AlertCircle, ArrowRight, Check, ChevronDown, ChevronLeft, ChevronsUpDown, FileText, FolderKanban, House,
+  AlertCircle, ArrowRight, ChevronDown, ChevronLeft, FileText, FolderKanban, House,
   Lightbulb, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Search, Ticket, type LucideIcon,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 
-import alphaMarkUrl from '@/assets/alpha-mark.png';
 import type {
   ClientProject, ClientProjectProposal, ClientProjectRequestItem, ClientProjectRequestQueue, ClientSession,
   ClientTicketCommandInput, ClientTicketCreateInput, ClientTicketDetail as TicketDetail,
@@ -27,11 +26,8 @@ import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './Clie
 import { ClientProposalsPage } from './ClientProposalsPage';
 import { StatusPill } from './ClientProjectSections';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
-import { WorkspaceToolbar } from '@/shared/layout/WorkspaceToolbar';
-import { SIDEBAR_DOCK_QUERY, useSidebarToggle } from '@/shared/layout/useSidebarToggle';
-import { SidebarFrame } from '@/shared/layout/SidebarFrame';
-import { sidebarRow } from '@/features/chat/ProjectChatSidebar';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
+import { ClientTabBar, ClientTopBar } from './ClientTopBar';
+import { CxChips, CxPageHeader } from './clientKit';
 import { useClientWorkspaceTabs, type ClientPage as Page } from './clientWorkspaceTabs';
 import './clientDesignTokens.css';
 import './clientPortal.css';
@@ -87,7 +83,6 @@ const CLIENT_PAGES: Record<Page, { label: string; subtitle: string; Icon: Lucide
   proposals: { label: 'Project ideas', subtitle: 'New project ideas you have sent to your project manager', Icon: Lightbulb },
   requests: { label: 'Requests', subtitle: 'Follow requests and message your project manager', Icon: ListChecks },
 };
-const CLIENT_PAGE_ORDER: readonly Page[] = ['overview', 'projects', 'proposals', 'requests'];
 
 export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false,
   workflowActionsDisabled: workflowActionsDisabledOverride = false, newRequestsDisabled = true,
@@ -105,12 +100,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const { tabs, activeTabId, tabState, resetTabs, selectProject } = useClientWorkspaceTabs(
     typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash));
   const portalRootRef = useRef<HTMLElement>(null);
-  const workspaceFrameRef = useRef<HTMLDivElement>(null);
-  // The staff sidebar's frame (SidebarFrame): no hover; double-click empty sidebar
-  // space or press Ctrl+B. Open on wide windows pushes the page over; on narrow
-  // ones it floats and closes on navigation, Escape or an outside click.
-  // Clients see the page names: the sidebar starts open on wide screens until they close it.
-  const clientNav = useSidebarToggle('alpha.client-sidebar', typeof window !== 'undefined' && window.matchMedia?.(SIDEBAR_DOCK_QUERY).matches === true);
   /** Where the open request's back button returns: Home, when it was opened from Home. */
   const [returnToHome, setReturnToHome] = useState(false);
   // Home's "Propose a project" opens the form on the Projects page of the same tab.
@@ -640,121 +629,80 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   const activeRequest = selectedQueueItem;
   const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review';
-  const currentNav = page;
   const proposalsNeedingReply = (projectProposals ?? []).filter(proposal => proposal.status === 'awaiting_client').length;
   const proposeProject = inspectionOnly ? undefined : () => { setProposeRequestTab(activeTabId); navigate('proposals'); };
   const clientEmail = session?.email?.trim() ?? '';
   const clientName = session?.fullName?.trim() || 'Client';
   const clientInitials = clientName.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
 
-  return <main ref={portalRootRef} className={`client-portal-shell client-portal-shell--workspace${page === 'requests' && selectedId ? ' client-portal-shell--chat-open' : ''}${inspectionOnly ? ' client-portal-shell--inspection' : ''}`}>
-    {/* The PM and Developer sidebar, row for row: SidebarFrame's 56px rail that opens to a
-        resizable 200px panel, the workspace-style header, 32px rows and the account footer. */}
-    <SidebarFrame collapsed={!clientNav.open} setCollapsed={collapsed => clientNav.setOpen(!collapsed)}
-      ariaLabel="Client portal navigation" widthStorageKey="client_sidebar_width" expandedWidth={200}>
-      {({ compact, closeIfFloating }) => <>
-        <div className={'shrink-0 px-2 pb-2 pt-[6px] ' + (compact ? 'flex flex-col items-center gap-1.5' : 'space-y-2')}>
-          <div className={'flex h-[32px] min-w-0 items-center rounded-lg ' + (compact ? 'w-[36px] justify-center px-0' : 'gap-2 px-1.5')}
-            title={compact ? 'Alphaexplora client portal' : undefined}>
-            <span className="flex h-[28px] w-[28px] flex-shrink-0 items-center justify-center">
-              <img src={alphaMarkUrl} alt="" aria-hidden="true" className="h-[24px] w-[20px] object-contain invert dark:invert-0" />
-            </span>
-            {!compact && <span className="truncate text-sm font-semibold text-content">Alphaexplora</span>}
-          </div>
-        </div>
-        <nav aria-label="Client portal pages" className={'flex min-h-0 flex-1 flex-col overflow-hidden pb-1 ' + (compact ? 'items-center gap-0.5 px-1.5' : 'px-2')}>
-          {CLIENT_PAGE_ORDER.map(id => {
-            const { label, Icon } = CLIENT_PAGES[id];
-            const active = currentNav === id;
-            const waiting = id === 'proposals' ? proposalsNeedingReply : 0;
-            const button = <button key={id} type="button" aria-label={waiting ? `${label}, ${waiting} waiting on your reply` : label} aria-current={active ? 'page' : undefined}
-              onClick={() => { navigate(id); closeIfFloating(); }}
-              className={(compact ? 'relative grid h-9 w-9 place-items-center rounded-lg transition-colors ' : sidebarRow + ' w-full gap-2.5 ')
-                + (active ? 'bg-selected font-medium text-selected-content hover:bg-selected' : 'text-content-secondary hover:bg-surface-high hover:text-content')}>
-              <span className={active ? 'text-link' : 'text-content-muted'}><Icon className="h-4 w-4" aria-hidden="true" /></span>
-              {!compact && <span className="truncate">{label}</span>}
-              {waiting > 0 && (compact
-                ? <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-warning" />
-                : <span aria-hidden="true" className="ml-auto rounded-full bg-warning-subtle px-1.5 text-[11px] font-semibold leading-5 text-warning">{waiting}</span>)}
-            </button>;
-            return compact
-              ? <Tooltip key={id}><TooltipTrigger asChild>{button}</TooltipTrigger><TooltipContent side="right">{label}</TooltipContent></Tooltip>
-              : button;
-          })}
-        </nav>
-        {/* The account menu holds sign-out, so the footer stays one quiet row, as for staff. */}
-        <div className={'shrink-0 px-2 pb-2 pt-1 ' + (compact ? 'flex justify-center' : '')}>
-          <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <button type="button" aria-label={`Account menu for ${clientName}`}
-                className={'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus data-[state=open]:bg-surface-high '
-                  + (compact ? 'grid h-9 w-9 place-items-center rounded-full hover:bg-surface-high' : 'flex w-full min-w-0 items-center gap-2.5 rounded-lg px-1.5 py-1.5 text-left hover:bg-surface-high')}>
-                <span aria-hidden="true" className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-divider bg-surface-raised text-xs font-semibold text-content">{clientInitials}</span>
-                {!compact && <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium text-content" title={clientName}>{clientName}</span>
-                  <span className="block truncate text-[11px] text-content-muted">Client</span>
-                </span>}
-                {!compact && <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-content-muted" aria-hidden="true" />}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side={compact ? 'right' : 'top'} align="start" sideOffset={6} data-sidebar-overlay=""
-              className="w-[min(15rem,calc(100vw-1rem))] rounded-xl p-1.5">
-              <div className="flex items-center gap-2.5 px-2 py-2">
-                <span aria-hidden="true" className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-divider bg-surface-raised text-xs font-semibold text-content">{clientInitials}</span>
-                <div className="min-w-0">
-                  <p className="truncate text-[13px] font-medium text-content">{clientName}</p>
-                  {clientEmail && <p className="truncate text-[11px] text-content-muted">{clientEmail}</p>}
-                </div>
-              </div>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem className="gap-2.5 py-2 text-[13px] text-content-secondary focus:text-content"
-                disabled={inspectionOnly || signingOut || Boolean(pending)} onSelect={() => void signOut()}>
-                <LogOut className="h-4 w-4" aria-hidden="true" />{signingOut ? 'Signing out…' : 'Log out'}
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-      </>}
-    </SidebarFrame>
+  const newRequestMenu = !inspectionOnly && (canStartProjectRequest || proposeProject)
+    ? (trigger: ReactNode) => <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild disabled={createLoading || writing || Boolean(pending)}>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent align="end" sideOffset={6} className="w-[min(18rem,calc(100vw-1rem))] rounded-xl p-1.5">
+        <p className="px-2 pb-1.5 pt-1 text-xs font-medium text-content-secondary">What is this for?</p>
+        {canStartProjectRequest && (projects ?? []).map(project => <DropdownMenuItem key={clientProjectKey(project)}
+          className="gap-2.5 py-2 text-[13px]" onSelect={() => startRequestFor(project)}>
+          <FolderKanban className="h-4 w-4 text-content-muted" aria-hidden="true" /><span className="truncate">{project.name}</span>
+        </DropdownMenuItem>)}
+        {canStartProjectRequest && (projects ?? []).length > 0 && proposeProject && <DropdownMenuSeparator />}
+        {proposeProject && <DropdownMenuItem className="gap-2.5 py-2 text-[13px]" onSelect={() => proposeProject()}>
+          <Lightbulb className="h-4 w-4 text-content-muted" aria-hidden="true" />
+          <span><span className="block">Something new</span><span className="block text-xs text-content-muted">Suggest a new project</span></span>
+        </DropdownMenuItem>}
+      </DropdownMenuContent>
+    </DropdownMenu> : null;
+  const needsYouCount = (workflowActionsDisabled ? 0 : queue?.counters.needsClient ?? 0) + proposalsNeedingReply;
+  const goTo = (target: Page) => { if (!writing && !pending) navigate(target); };
+  /** Requests and project ideas share one header: ideas are one of the Requests views. */
+  const requestViews = [
+    ...filters.filter(option => !workflowActionsDisabled || option.id !== 'needs_client').map(option => ({
+      id: option.id as string, label: option.label, tone: option.id === 'needs_client' ? 'attention' as const : undefined,
+      count: queue?.counters.kind !== 'client' ? null : option.id === 'open' ? queue.counters.open : option.id === 'needs_client' ? queue.counters.needsClient : null,
+    })),
+    { id: 'ideas', label: 'Project ideas', count: proposalsNeedingReply || (projectProposals?.length ?? null),
+      tone: proposalsNeedingReply ? 'attention' as const : undefined },
+  ];
+  const requestsHeader = <>
+    <CxPageHeader titleId={activeTabId + '-requests-title'} title="Requests"
+      description="Everything you’ve asked for, including new project ideas, and where each one stands." />
+    <CxChips label="Show" value={page === 'proposals' ? 'ideas' : filter as string} options={requestViews} disabled={Boolean(pending)}
+      onChange={(value: string) => { if (value === 'ideas') { goTo('proposals'); return; } if (page !== 'requests') goTo('requests');
+        setFilter(value as NonNullable<Filter>); setSearchInput(''); setSearch(''); }} />
+  </>;
 
-    <div ref={workspaceFrameRef} className="client-portal-mainview">
-      <header className="client-portal-toolbar client-portal-toolbar--shared" aria-label="Client portal navigation and actions">
-        <WorkspaceToolbar actions={<>
-          {!inspectionOnly && (canStartProjectRequest || proposeProject) && <DropdownMenu modal={false}>
-            <DropdownMenuTrigger asChild>
-              <button type="button" className="client-new-request" disabled={createLoading || writing || Boolean(pending)}>
-                <Plus size={15} aria-hidden="true" />{createLoading ? 'Checking access…' : 'New request'}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" sideOffset={6} className="w-[min(18rem,calc(100vw-1rem))] rounded-xl p-1.5">
-              <p className="px-2 pb-1.5 pt-1 text-[12px] font-medium text-content-secondary">What is this for?</p>
-              {canStartProjectRequest && (projects ?? []).map(project => <DropdownMenuItem key={clientProjectKey(project)}
-                className="gap-2.5 py-2 text-[13px]" onSelect={() => startRequestFor(project)}>
-                <FolderKanban className="h-4 w-4 text-content-muted" aria-hidden="true" /><span className="truncate">{project.name}</span>
-              </DropdownMenuItem>)}
-              {canStartProjectRequest && (projects ?? []).length > 0 && proposeProject && <DropdownMenuSeparator />}
-              {proposeProject && <DropdownMenuItem className="gap-2.5 py-2 text-[13px]" onSelect={() => proposeProject()}>
-                <Lightbulb className="h-4 w-4 text-content-muted" aria-hidden="true" />
-                <span><span className="block">Something new</span><span className="block text-[11px] text-content-muted">Suggest a new project</span></span>
-              </DropdownMenuItem>}
-            </DropdownMenuContent>
-          </DropdownMenu>}
-          <button type="button" aria-label="Refresh portal" title="Refresh portal"
-            onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
-            disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
-            <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
-          </button>
-          <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
-            loading={notificationsLoading} error={notificationsError}
-            onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
-        </>}>
-          <h1 className="client-portal-toolbar-title">{(page === 'projects' && projects?.find(project => clientProjectKey(project) === selectedProjectKey)?.name) || CLIENT_PAGES[page].label}</h1>
-        </WorkspaceToolbar>
-      </header>
-      <div id="client-portal-page" role="tabpanel" aria-label={CLIENT_PAGES[currentNav].label} className="client-portal-main client-portal-main--workspace">
-        {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
-        {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
-        {refreshError && <div role="status" className="client-portal-error">{refreshError}</div>}
+  return <main ref={portalRootRef} className={'client-portal-shell cx-shell' + (inspectionOnly ? ' client-portal-shell--inspection' : '')}>
+    <ClientTopBar page={page} onNavigate={goTo} needsYou={needsYouCount}
+      newRequest={newRequestMenu?.(<button type="button" className="cx-button is-primary cx-new-request"><Plus size={15} aria-hidden="true" />{createLoading ? 'Checking access…' : 'New request'}</button>)}
+      actions={<>
+        <button type="button" aria-label="Refresh portal" title="Refresh portal"
+          onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
+          disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="cx-icon-button">
+          <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
+        </button>
+        <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
+          loading={notificationsLoading} error={notificationsError}
+          onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
+      </>}
+      account={<DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button type="button" className="cx-avatar" aria-label={'Account menu for ' + clientName}>{clientInitials}</button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" sideOffset={6} className="w-[min(15rem,calc(100vw-1rem))] rounded-xl p-1.5">
+          <div className="min-w-0 px-2 py-2">
+            <p className="truncate text-[13px] font-medium text-content">{clientName}</p>
+            {clientEmail && <p className="truncate text-xs text-content-muted">{clientEmail}</p>}
+          </div>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem className="gap-2.5 py-2 text-[13px] text-content-secondary focus:text-content"
+            disabled={inspectionOnly || signingOut || Boolean(pending)} onSelect={() => void signOut()}>
+            <LogOut className="h-4 w-4" aria-hidden="true" />{signingOut ? 'Signing out…' : 'Log out'}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>} />
+    <div id="client-portal-page" aria-label={CLIENT_PAGES[page].label} className="cx-main client-portal-main--workspace">
+        {inspectionOnly && <p role="status" className="client-portal-notice cx-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
+        {pageError && <div role="alert" className="client-portal-error cx-notice"><AlertCircle size={16} />{pageError}</div>}
+        {refreshError && <div role="status" className="client-portal-error cx-notice">{refreshError}</div>}
 
         {page === 'overview' && <ClientOverviewPage clientName={session?.fullName ?? ''} requests={displayQueue} projects={projects ?? []}
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
@@ -781,20 +729,14 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')} onProposeProject={proposeProject} />
         </div>)}
 
-        {page === 'proposals' && <ClientProposalsPage key={activeTabId} idPrefix={activeTabId} api={api} projects={projects ?? []}
+        {page === 'proposals' && <div className="cx-page">{requestsHeader}<ClientProposalsPage key={activeTabId} embedded idPrefix={activeTabId} api={api} projects={projects ?? []}
           proposals={projectProposals ?? []} loading={projectProposalsLoading || (!projectProposals && !projectProposalsError)} error={projectProposalsError}
           inspectionOnly={inspectionOnly} selectedProposalId={selectedProposalId} onSelectedProposalIdChange={setSelectedProposalId}
           onRefresh={() => setRefreshVersion(value => value + 1)} onSubmitted={() => setRefreshVersion(value => value + 1)}
-          onOpenProject={openProject} openForm={proposeRequestTab === activeTabId} onOpenFormHandled={() => setProposeRequestTab(null)} />}
+          onOpenProject={openProject} openForm={proposeRequestTab === activeTabId} onOpenFormHandled={() => setProposeRequestTab(null)} /></div>}
 
         {page === 'requests' && <div className={`client-requests-page ${selectedId ? 'has-selected-request' : ''}`}>
-          <section className={`client-portal-page-heading ${selectedId && !requestListShown ? 'client-mobile-heading-hidden' : ''}`} aria-label="Request overview">
-            <div><h1>Requests</h1><p className="client-page-description">Everything you’ve asked for, and where each one stands.</p></div>
-            {queue && queue.counters.needsClient > 0 && !workflowActionsDisabled && <button type="button" className="client-attention-link" onClick={() => { setFilter('needs_client'); setSearchInput(''); setSearch(''); }}>
-              <span className="client-attention-dot" /><span><strong>{queue.counters.needsClient} {queue.counters.needsClient === 1 ? 'request needs' : 'requests need'} your attention</strong><small>Open a request to see the next step.</small></span><ArrowRight size={17} />
-            </button>}
-            {queue && queue.counters.needsClient === 0 && !workflowActionsDisabled && <p className="client-all-caught-up"><Check size={15} />Nothing needs your reply right now</p>}
-          </section>
+          {!selectedId && <div className="cx-requests-head">{requestsHeader}</div>}
           {queueNotice && <p role="status" className="client-project-pending-notice">{queueNotice}</p>}
           {queueError && <p role="alert" className="client-project-error">{queueError}</p>}
           {/* Collapsing narrows the list beside an open request. With none open the list is
@@ -900,8 +842,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           <Toast {...clientToast} onDismiss={() => setClientToast(null)} className="pointer-events-auto" />
         </div>}
         {session?.expiresAt && <span className="sr-only">Session expires {session.expiresAt}</span>}
-      </div>
     </div>
+    <ClientTabBar page={page} onNavigate={goTo} needsYou={needsYouCount} newRequest={newRequestMenu} />
   </main>;
 }
 

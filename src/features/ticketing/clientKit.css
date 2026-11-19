@@ -62,6 +62,9 @@
 .cx-section { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); }
 .cx-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--client-space-3); }
 .cx-section-head h2 { display: flex; align-items: center; gap: var(--client-space-2); margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
+.cx-subheading { margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
+.cx-requests-head { display: flex; flex-direction: column; gap: var(--client-space-4); width: min(var(--cx-page-width), 100%); margin: 0 auto; padding: var(--client-space-6) var(--client-portal-gutter) 0; }
+.cx-ideas { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-4); }
 .cx-count { color: var(--cx-muted); font-weight: var(--client-weight-medium); }
 .cx-link { display: inline-flex; align-items: center; gap: var(--client-space-1); padding: 0; border: 0; background: none; color: var(--cx-accent); font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); text-decoration: none; cursor: pointer; }
 .cx-link:hover { text-decoration: underline; }
