@@ -32,13 +32,15 @@ describe('New project access by role', () => {
     }
   });
 
-  it('shows a project manager on the hosted web app a plain project form, with no AI setup', () => {
+  it('shows a project manager on the hosted web app a plain project form with no AI setup, but lets them create repositories', () => {
     const html = render('pm', false);
     expect(html).toContain('Project name');
     expect(html).toContain('Name the project and describe what it is for.');
-    for (const hidden of ['Build lead: Orchestrator', 'Shared with agents', 'Set up repositories next', 'Repository URL', 'Attach a local folder']) {
+    for (const hidden of ['Build lead: Orchestrator', 'Shared with agents', 'Repository URL', 'Attach a local folder']) {
       expect(html).not.toContain(hidden);
     }
+    // Creating a project means creating its repositories: a PM does that from the web too (inquiry flow, phase 2).
+    for (const shown of ['Set up repositories next', 'Target date']) expect(html).toContain(shown);
   });
 
   it('keeps the Orchestrator and repository setup for developers', () => {
