@@ -2,7 +2,7 @@ import { EntrySkeleton, LoadingRows } from '@/shared/components/ui/skeleton';
 import { TicketDetailSkeleton } from './TicketingSkeletons';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  AlertCircle, ArrowRight, ChevronDown, ChevronLeft, FileText, FolderKanban, House,
+  AlertCircle, ArrowRight, ChevronDown, FileText, FolderKanban, House,
   Lightbulb, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Search, Ticket, type LucideIcon,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
@@ -711,11 +711,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')}
           onProposeProject={proposeProject} />}
 
-        {page === 'projects' && view === 'create' && createContext && createProject && <div className="client-create-view client-create-view--project">
-          <div className="client-create-project-context"><button type="button" className="client-back-link" onClick={cancelCreateForm}><ChevronLeft size={15} />Back to {createProject.name}</button>
-            {createError && <p role="alert" className="client-project-error">{createError}</p>}
-          </div>
-          <ClientCreateTicketForm key={clientProjectKey(createProject)} context={createContext} submissionEnabled={!inspectionOnly && createContext.canCreate}
+        {page === 'projects' && view === 'create' && createContext && createProject && <div className="cx-page cx-form-page">
+          <CxPageHeader titleId={activeTabId + '-new-request-title'} title="New request"
+            back={{ label: 'Back to ' + createProject.name, onClick: cancelCreateForm, disabled: Boolean(pending) }}
+            description={'For ' + createProject.name + '. Your project manager will review it before any work is scheduled.'} />
+          {createError && <p role="alert" className="cx-error">{createError}</p>}
+          <ClientCreateTicketForm key={clientProjectKey(createProject)} embedded context={createContext} submissionEnabled={!inspectionOnly && createContext.canCreate}
             relatedTicket={null} busy={writing || Boolean(pending)} error={writeError} onCreate={submitNewTicket} onCancel={cancelCreateForm}
             selectedProjectOptionId={createProject.intakeOptionId} selectedProjectName={createProject.name} />
         </div>}

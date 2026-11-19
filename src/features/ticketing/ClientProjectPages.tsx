@@ -1,6 +1,6 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Check, FolderKanban, Lightbulb, RefreshCw, Send, Plus } from 'lucide-react';
+import { useEffect, useState, type FormEvent } from 'react';
+import { ArrowRight, Check, ExternalLink, FolderKanban, Lightbulb, RefreshCw, Send, Plus } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
@@ -9,8 +9,8 @@ import { clientTicketProgress } from './clientTicketProgress';
 import { clientGreeting, clientNextStep, clientRequestGroup, listProgressIndex, relativeTime } from './clientFriendly';
 import { CLIENT_PROGRESS_LABELS } from './clientProgressSteps';
 import { time } from './ticketUi';
-import { ClientProjectQaStudio } from './ClientProjectQaStudio';
-import { clientProjectKey, projectLoadError, ProjectOverviewTab, ProjectRequestsTab, type ProjectRequestFilter } from './ClientProjectSections';
+import { QaPreview } from './ProjectQaStudio';
+import { clientProjectKey, projectLoadError, ProjectRequestsTab, type ProjectRequestFilter } from './ClientProjectSections';
 
 export { clientProjectKey } from './ClientProjectSections';
 
@@ -40,7 +40,7 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
   const firstName = clientName?.trim().split(/\s+/)[0] ?? '';
   const shownProjects = [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 4);
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-  return <section className="cx-page client-home" aria-labelledby="client-overview-title">
+  return <section className="cx-page" aria-labelledby="client-overview-title">
     <CxPageHeader titleId="client-overview-title" eyebrow={today} title={clientGreeting() + (firstName ? ', ' + firstName : '')} />
 
     <section className="cx-section" aria-labelledby="client-attention-title" aria-busy={requestsLoading && !requests}>
@@ -160,112 +160,44 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   refreshToken: number;
 }) {
   const selectedProject = projects.find(project => clientProjectKey(project) === selectedProjectKey) ?? null;
-  const [tab, setTab] = useState<'overview' | 'preview' | 'requests'>('overview');
   const [requestFilter, setRequestFilter] = useState<ProjectRequestFilter>('all');
-  useEffect(() => { setTab('overview'); setRequestFilter('all'); }, [selectedProjectKey, projectFocusVersion]);
-  const [feedbackResult, setFeedbackResult] = useState<{ key: string; items: ClientProjectFeedbackMessage[] } | null>(null);
-  const [feedbackCursor, setFeedbackCursor] = useState<string | null>(null);
-  const [feedbackLoading, setFeedbackLoading] = useState(false);
-  const [feedbackError, setFeedbackError] = useState('');
-  const [feedbackMoreLoading, setFeedbackMoreLoading] = useState(false);
-  const [feedbackRefresh, setFeedbackRefresh] = useState(0);
-  const [projectDrafts, setProjectDrafts] = useState<Record<string,string>>({});
-  const projectKey=selectedProject?clientProjectKey(selectedProject):'';
-  const feedbackReady = feedbackResult?.key === projectKey;
-  const feedback = feedbackReady ? feedbackResult.items : [];
-  const activeProject=useRef(projectKey);activeProject.current=projectKey;
-  const draft=projectDrafts[projectKey]??'';
-  const setDraft=(value:string)=>{if(projectKey)setProjectDrafts(current=>({...current,[projectKey]:value}));};
-  const [sending, setSending] = useState(false);
-  const [sendError, setSendError] = useState('');
+  useEffect(() => { setRequestFilter('all'); }, [selectedProjectKey, projectFocusVersion]);
 
-  useEffect(() => {
-    if (!selectedProject || tab !== 'preview') return;
-    let active = true;
-    setFeedbackLoading(true); setFeedbackError('');
-    void api.getProjectFeedbackMessages(selectedProject.workspaceId, selectedProject.projectId, { limit: 50 }).then(page => {
-      if (active) { setFeedbackResult({ key: projectKey, items: page.items }); setFeedbackCursor(page.nextCursor); }
-    }).catch(error => {
-      if (active) setFeedbackError(projectLoadError(error, 'feedback'));
-    }).finally(() => { if (active) setFeedbackLoading(false); });
-    return () => { active = false; };
-  }, [api, selectedProject?.workspaceId, selectedProject?.projectId, feedbackRefresh, tab]);
-
-  async function loadMoreFeedback() {
-    if (!selectedProject || !feedbackReady || !feedbackCursor || feedbackMoreLoading) return;
-    setFeedbackMoreLoading(true); setFeedbackError('');
-    try {
-      const page = await api.getProjectFeedbackMessages(selectedProject.workspaceId, selectedProject.projectId,
-        { limit: 50, before: feedbackCursor });
-      if(activeProject.current!==projectKey)return;
-      setFeedbackResult(current => current?.key === projectKey ? { key: projectKey, items: [...page.items, ...current.items] } : current); setFeedbackCursor(page.nextCursor);
-    } catch (error) { setFeedbackError(projectLoadError(error, 'feedback')); }
-    finally { setFeedbackMoreLoading(false); }
-  }
-
-  async function sendFeedback(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!selectedProject || inspectionOnly || sending || !draft.trim()) return;
-    const body = draft.trim(); const operationId = crypto.randomUUID();
-    setSending(true); setSendError('');
-    try {
-      await api.sendProjectFeedbackMessage(selectedProject.workspaceId, selectedProject.projectId,
-        { schemaVersion: 1, operationId, body });
-      setDraft(''); setFeedbackRefresh(value => value + 1);
-    } catch (error) { setSendError(projectLoadError(error, 'send')); }
-    finally { setSending(false); }
-  }
-
-  const newRequestButton = selectedProject && newRequestEnabled ? <button type="button" className="client-primary-action" disabled={newRequestLoading}
-    onClick={() => onNewRequest(selectedProject)}><Plus size={15} />{newRequestLoading ? 'Checking access…' : 'New request'}</button> : null;
-
-  if (selectedProject) return <section className="client-page client-project-detail" aria-labelledby={`${idPrefix}-project-title`}>
-    <h1 id={`${idPrefix}-project-title`} className="sr-only">{selectedProject.name}</h1>
-    <div className="client-project-bar">
-      <button type="button" className="client-project-back" aria-label="Back to projects" title="Back to projects"
-        onClick={() => { onSelectedProjectKeyChange(null); setTab('overview'); }}><ArrowLeft size={16} /></button>
-      <div className="client-project-tabs" role="tablist" aria-label="Project sections">
-        {(['overview', 'preview', 'requests'] as const).map(value => <button key={value} type="button" role="tab"
-          aria-selected={tab === value} onClick={() => setTab(value)}>{value === 'preview' ? 'Project Review' : value[0].toUpperCase() + value.slice(1)}</button>)}
-      </div>
-    </div>
-    {tab === 'overview' && <ProjectOverviewTab api={api} project={selectedProject} refreshToken={refreshToken}
-      onOpenRequest={item => onOpenRequest(item)} onShowReview={() => setTab('preview')}
-      onShowRequests={filter => { setRequestFilter(filter); setTab('requests'); }} />}
-    {tab === 'preview' && <ClientProjectQaStudio key={clientProjectKey(selectedProject)}
-      projectName={selectedProject.name} preview={selectedProject.preview} feedback={
-      <section className="client-feedback" aria-labelledby={`${idPrefix}-feedback-title`}>
-        <div className="client-section-heading"><div><h2 id={`${idPrefix}-feedback-title`}>Project conversation</h2>
-          <p>Feedback about this project preview, shared with your project manager.</p></div>
-          <button type="button" className="client-icon-action" aria-label="Refresh project conversation" disabled={feedbackLoading}
-            onClick={() => setFeedbackRefresh(value => value + 1)}><RefreshCw size={15} /></button></div>
-        {feedbackError && <p role="alert" className="client-project-error">{feedbackError} <button type="button" onClick={() => setFeedbackRefresh(value => value + 1)}>Try again</button></p>}
-        <div className="client-feedback-messages" aria-live="polite">
-          {!feedbackReady && !feedbackError ? <LoadingRows label="Loading project conversation" layout="conversation" />
-            : feedback.length ? <>
-              {feedbackCursor && <button type="button" className="client-text-action" disabled={feedbackMoreLoading} onClick={() => void loadMoreFeedback()}>
-                {feedbackMoreLoading ? 'Loading…' : 'Load earlier messages'}
-              </button>}
-              {feedback.map(message => <FeedbackBubble key={message.id} message={message} />)}
-            </> : !feedbackError && <p className="client-section-state">No project messages yet. Send a note if you have feedback or a question.</p>}
+  if (selectedProject) {
+    const projectRequests = requests.filter(item => item.workspaceId === selectedProject.workspaceId && item.projectId === selectedProject.projectId);
+    const attention = projectRequests.filter(item => clientRequestGroup(item) === 'needs_you');
+    const open = projectRequests.filter(item => clientRequestGroup(item) !== 'done').length;
+    const titleId = idPrefix + '-project-title';
+    return <section className="cx-page" aria-labelledby={titleId}>
+      <CxPageHeader titleId={titleId} title={selectedProject.name} back={{ label: 'Projects', onClick: () => onSelectedProjectKeyChange(null) }}
+        description={'Updated ' + relativeTime(selectedProject.updatedAt) + ' · ' + open + ' open ' + (open === 1 ? 'request' : 'requests')}
+        actions={<>
+          {selectedProject.preview && <a className="cx-button" href={selectedProject.preview.url} target="_blank" rel="noopener noreferrer">
+            <ExternalLink size={15} aria-hidden="true" />Open preview</a>}
+          {newRequestEnabled && <button type="button" className="cx-button is-primary" disabled={newRequestLoading} onClick={() => onNewRequest(selectedProject)}>
+            <Plus size={15} aria-hidden="true" />{newRequestLoading ? 'Checking access…' : 'New request'}</button>}
+        </>} />
+      {attention.length > 0 && <CxPanel tone="attention">{attention.map(item => {
+        const step = clientNextStep(item.requestedAction);
+        return <CxRow key={requestKey(item)} title={item.title} meta={step?.prompt} onClick={() => onOpenRequest(item)}
+          trailing={<span className="cx-button is-primary">{step?.action ?? 'Open request'}</span>} />;
+      })}</CxPanel>}
+      <div className="cx-project-layout">
+        <div className="cx-project-main">
+          <ProjectRequestsTab api={api} project={selectedProject} refreshToken={refreshToken} filter={requestFilter}
+            onFilterChange={setRequestFilter} onOpenRequest={onOpenRequest} newRequest={null} idPrefix={idPrefix} />
+          {selectedProject.preview && <CxSection titleId={idPrefix + '-project-preview'} title="Preview">
+            <div className="cx-preview-frame"><QaPreview audience="client"
+              preview={{ branch: selectedProject.preview.branch, url: selectedProject.preview.url, embeddable: true, reason: null }} /></div>
+          </CxSection>}
         </div>
-        <form className="client-feedback-composer" onSubmit={event => void sendFeedback(event)}>
-          <label className="sr-only" htmlFor={`${idPrefix}-project-feedback`}>Message your project manager about this project</label>
-          <textarea id={`${idPrefix}-project-feedback`} value={draft} maxLength={4000} disabled={inspectionOnly || sending}
-            onChange={event => setDraft(event.target.value)} placeholder="Write a message about this project…" />
-          {sendError && <p role="alert" className="client-project-error">{sendError}</p>}
-          <div><span>Only you and your project manager can see this conversation.</span>
-            <button type="submit" className="client-primary-action" disabled={inspectionOnly || sending || !draft.trim()}>
-              <Send size={14} />{sending ? 'Sending…' : 'Send'}
-            </button></div>
-        </form>
-      </section>
-    }/>}
-    {tab === 'requests' && <ProjectRequestsTab api={api} project={selectedProject} refreshToken={refreshToken} filter={requestFilter}
-      onFilterChange={setRequestFilter} onOpenRequest={onOpenRequest} newRequest={newRequestButton} idPrefix={idPrefix} />}
-  </section>;
+        <ProjectChat key={clientProjectKey(selectedProject)} api={api} project={selectedProject} inspectionOnly={inspectionOnly}
+          refreshToken={refreshToken} idPrefix={idPrefix} />
+      </div>
+    </section>;
+  }
 
-  return <section className="cx-page client-projects-page" aria-labelledby={idPrefix + '-projects-page-title'}>
+  return <section className="cx-page" aria-labelledby={idPrefix + '-projects-page-title'}>
     <CxPageHeader titleId={idPrefix + '-projects-page-title'} title="Your projects" description="Everything your project manager has shared with you."
       actions={!inspectionOnly && onProposeProject ? <button type="button" className="cx-button" onClick={onProposeProject}><Plus size={15} aria-hidden="true" />Propose a project</button> : undefined} />
     {proposalsNeedingReply > 0 && onOpenProposals && <CxPanel tone="attention"><div className="cx-row" role="status">
@@ -279,7 +211,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         : projects.length ? <div className="cx-project-grid">
           {[...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(project => <ClientProjectSpotlight
             key={clientProjectKey(project)} project={project} requests={requests} onOpenRequest={onOpenRequest}
-            onOpenProject={() => { onSelectedProjectKeyChange(clientProjectKey(project)); setTab('overview'); }} />)}
+            onOpenProject={() => onSelectedProjectKeyChange(clientProjectKey(project))} />)}
         </div>
           : !error && <CxPanel><CxEmpty icon={<FolderKanban size={22} />} title="No projects shared yet"
             body="When your project manager gives your account access to a project, it will appear here." /></CxPanel>}
@@ -287,11 +219,80 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   </section>;
 }
 
+/** The project's own conversation with the project manager, beside its requests. */
+function ProjectChat({ api, project, inspectionOnly, refreshToken, idPrefix }: {
+  api: typeof clientTicketApi; project: ClientProject; inspectionOnly: boolean; refreshToken: number; idPrefix: string;
+}) {
+  const [messages, setMessages] = useState<ClientProjectFeedbackMessage[] | null>(null);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [moreLoading, setMoreLoading] = useState(false);
+  const [reload, setReload] = useState(0);
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState('');
+  const titleId = idPrefix + '-project-chat';
+
+  useEffect(() => {
+    let active = true;
+    setLoadError('');
+    void api.getProjectFeedbackMessages(project.workspaceId, project.projectId, { limit: 50 }).then(page => {
+      if (active) { setMessages(page.items); setCursor(page.nextCursor); }
+    }).catch(error => { if (active) setLoadError(projectLoadError(error, 'feedback')); });
+    return () => { active = false; };
+  }, [api, project.workspaceId, project.projectId, reload, refreshToken]);
+
+  async function loadEarlier() {
+    if (!cursor || moreLoading) return;
+    setMoreLoading(true); setLoadError('');
+    try {
+      const page = await api.getProjectFeedbackMessages(project.workspaceId, project.projectId, { limit: 50, before: cursor });
+      setMessages(current => [...page.items, ...(current ?? [])]); setCursor(page.nextCursor);
+    } catch (error) { setLoadError(projectLoadError(error, 'feedback')); }
+    finally { setMoreLoading(false); }
+  }
+
+  async function send(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const body = draft.trim();
+    if (inspectionOnly || sending || !body) return;
+    setSending(true); setSendError('');
+    try {
+      await api.sendProjectFeedbackMessage(project.workspaceId, project.projectId, { schemaVersion: 1, operationId: crypto.randomUUID(), body });
+      setDraft(''); setReload(value => value + 1);
+    } catch (error) { setSendError(projectLoadError(error, 'send')); }
+    finally { setSending(false); }
+  }
+
+  return <section className="cx-panel cx-chat" aria-labelledby={titleId}>
+    <div className="cx-chat-head">
+      <div><h2 id={titleId}>Project chat</h2><p>General questions and feedback about this project.</p></div>
+      <button type="button" className="cx-icon-button" aria-label="Refresh project chat" onClick={() => setReload(value => value + 1)}><RefreshCw size={15} /></button>
+    </div>
+    <div className="cx-chat-messages" aria-live="polite">
+      {loadError && <p role="alert" className="cx-error">{loadError} <button type="button" onClick={() => setReload(value => value + 1)}>Try again</button></p>}
+      {!messages && !loadError ? <LoadingRows label="Loading project chat" layout="conversation" />
+        : messages?.length ? <>
+          {cursor && <button type="button" className="cx-link" disabled={moreLoading} onClick={() => void loadEarlier()}>{moreLoading ? 'Loading…' : 'Load earlier messages'}</button>}
+          {messages.map(message => <FeedbackBubble key={message.id} message={message} />)}
+        </> : !loadError && <p className="cx-chat-empty">No messages yet. Send a note if you have a question or feedback.</p>}
+    </div>
+    <form className="cx-chat-composer" onSubmit={event => void send(event)}>
+      <label className="sr-only" htmlFor={idPrefix + '-project-message'}>Message your project manager about this project</label>
+      <textarea id={idPrefix + '-project-message'} value={draft} maxLength={4000} rows={2} disabled={inspectionOnly || sending}
+        onChange={event => setDraft(event.target.value)} placeholder="Message your project manager…" />
+      <button type="submit" className="cx-button is-primary" aria-label="Send message" disabled={inspectionOnly || sending || !draft.trim()}>
+        <Send size={14} aria-hidden="true" />{sending ? 'Sending…' : 'Send'}</button>
+    </form>
+    {sendError && <p role="alert" className="cx-error cx-chat-send-error">{sendError}</p>}
+    <p className="cx-chat-note">Only you and your project manager can see this chat.</p>
+  </section>;
+}
 
 function FeedbackBubble({ message }: { message: ClientProjectFeedbackMessage }) {
   const own = message.author === 'client';
-  return <article className={`client-feedback-message ${own ? 'is-mine' : ''}`}>
-    <span>{own ? 'You' : 'Project manager'}</span><p>{message.body}</p><time dateTime={message.createdAt}>{time(message.createdAt)}</time>
+  return <article className={'cx-message' + (own ? ' is-mine' : '')}>
+    <span>{own ? 'You' : 'Project manager'} · <time dateTime={message.createdAt}>{time(message.createdAt)}</time></span><p>{message.body}</p>
   </article>;
 }
 

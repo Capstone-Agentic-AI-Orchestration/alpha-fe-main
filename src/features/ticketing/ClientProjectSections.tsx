@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowRight, CheckCircle2, ChevronRight, ExternalLink, RefreshCw, Search } from 'lucide-react';
+import { ArrowRight, CheckCircle2, ExternalLink, RefreshCw, Search } from 'lucide-react';
 import { LoadingRows, Skeleton } from '@/shared/components/ui/skeleton';
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue,
   ClientTicketPage, ClientTicketQueueOptions } from './clientApi';
 import { clientTicketApi, ClientTicketApiError } from './clientApi';
 import { clientTicketProgress } from './clientTicketProgress';
 import { time } from './ticketUi';
+import { CxBadge, CxChips, CxEmpty, CxPanel, CxRequestBadge, CxRow, CxSection } from './clientKit';
 
 export type ProjectRequestFilter = NonNullable<ClientTicketQueueOptions['filter']>;
 type Api = typeof clientTicketApi;
@@ -71,14 +72,10 @@ function ProjectRequestRow({ item, onOpen }: { item: ClientProjectRequestItem; o
   const action = needsClient(item);
   const next = pending ? 'Waiting for your project manager to add this to the project'
     : clientTicketProgress(item.status, item.requestedAction).label;
-  return <button type="button" className={`client-proj-row${action ? ' needs-action' : ''}`} onClick={() => onOpen(item)}>
-    <span className="client-proj-row-main"><strong>{item.title}</strong>
-      <small><span className={action ? 'is-action' : undefined}>{next}</span><span title={item.reference}>{shortReference(item.reference)}</span></small></span>
-    {pending ? <span className="client-status is-neutral">Pending link</span>
-      : <StatusPill status={item.status} requestedAction={action ? item.requestedAction : null} />}
-    <time dateTime={item.updatedAt}>{time(item.updatedAt)}</time>
-    <ChevronRight size={15} aria-hidden />
-  </button>;
+  return <CxRow title={item.title} onClick={() => onOpen(item)}
+    meta={<><span className={action ? 'cx-meta-action' : undefined}>{next}</span> · <span title={item.reference}>{shortReference(item.reference)}</span></>}
+    trailing={<>{pending ? <CxBadge>Pending link</CxBadge> : <CxRequestBadge status={item.status} requestedAction={action ? item.requestedAction : null} />}
+      <time className="cx-row-time" dateTime={item.updatedAt}>{time(item.updatedAt)}</time></>} />;
 }
 
 const FILTERS: Array<{ id: ProjectRequestFilter; label: string; counter?: 'needsClient' | 'open' }> = [
@@ -138,37 +135,32 @@ export function ProjectRequestsTab({ api, project, refreshToken, filter, onFilte
   const action = filter === 'all' ? items.filter(needsClient) : [];
   const rest = filter === 'all' ? items.filter(item => !needsClient(item)) : items;
   const error = first.error ? projectLoadError(first.error, 'requests') : moreError;
-  return <section className="client-proj-requests" aria-labelledby={`${idPrefix}-project-requests-title`}>
-    <header className="client-proj-head">
-      <div><h2 id={`${idPrefix}-project-requests-title`}>Requests</h2>
-        <p>Everything you and your project manager are working on in this project.</p></div>
-      <div className="client-section-actions">
-        <button type="button" className="client-icon-action" aria-label="Refresh project requests" onClick={first.reload}><RefreshCw size={15} /></button>
-        {newRequest}
-      </div>
-    </header>
-    <div className="client-proj-toolbar">
-      <div className="client-proj-filters" role="group" aria-label="Filter requests">
-        {FILTERS.map(option => <button key={option.id} type="button" aria-pressed={filter === option.id} onClick={() => onFilterChange(option.id)}>
-          {option.label}{option.counter && counts && <span>{counts[option.counter]}</span>}</button>)}
-      </div>
-      <label className="client-proj-search"><Search size={15} aria-hidden /><span className="sr-only">Search project requests</span>
+  return <CxSection titleId={idPrefix + '-project-requests-title'} title="Requests"
+    action={<div className="cx-page-actions">
+      <button type="button" className="cx-icon-button" aria-label="Refresh project requests" onClick={first.reload}><RefreshCw size={15} /></button>
+      {newRequest}
+    </div>}>
+    <div className="cx-toolbar">
+      <CxChips label="Filter requests" value={filter} onChange={onFilterChange} options={FILTERS.map(option => ({
+        id: option.id, label: option.label, tone: option.id === 'needs_client' ? 'attention' as const : undefined,
+        count: option.counter && counts ? counts[option.counter] : undefined }))} />
+      <label className="cx-search"><Search size={15} aria-hidden /><span className="sr-only">Search project requests</span>
         <input value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search requests" /></label>
     </div>
-    {error && <p role="alert" className="client-project-error">{error} <button type="button" onClick={first.reload}>Try again</button></p>}
-    <div className="client-proj-list">
-      {first.pending ? <LoadingRows label="Loading project requests" layout="table" rows={4} />
-        : !items.length ? !first.error && <p className="client-section-state">{search ? `No requests match “${search}”.` : EMPTY[filter]}</p>
+    {error && <p role="alert" className="cx-error">{error} <button type="button" onClick={first.reload}>Try again</button></p>}
+    <CxPanel>
+      {first.pending ? <LoadingRows label="Loading project requests" layout="table" rows={4} className="p-4" />
+        : !items.length ? !first.error && <CxEmpty title={search ? 'No requests match “' + search + '”.' : EMPTY[filter]} />
           : <>
-            {action.length > 0 && <p className="client-proj-group">Needs your action</p>}
+            {action.length > 0 && <p className="cx-group-label">Needs your action</p>}
             {action.map(item => <ProjectRequestRow key={item.id} item={item} onOpen={onOpenRequest} />)}
-            {action.length > 0 && rest.length > 0 && <p className="client-proj-group">Other requests</p>}
+            {action.length > 0 && rest.length > 0 && <p className="cx-group-label">Other requests</p>}
             {rest.map(item => <ProjectRequestRow key={item.id} item={item} onOpen={onOpenRequest} />)}
           </>}
-    </div>
-    {cursor && <button type="button" className="client-text-action client-proj-more" disabled={moreLoading} onClick={() => void loadMore()}>
-      {moreLoading ? 'Loading…' : 'Load more requests'} <ArrowRight size={15} /></button>}
-  </section>;
+    </CxPanel>
+    {cursor && <button type="button" className="cx-link" disabled={moreLoading} onClick={() => void loadMore()}>
+      {moreLoading ? 'Loading…' : 'Load more requests'} <ArrowRight size={14} aria-hidden="true" /></button>}
+  </CxSection>;
 }
 
 type Activity = { id: string; at: string; title: string; detail: string; open: () => void };
