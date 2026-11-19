@@ -12,6 +12,7 @@ import { activationFailureMessage, activationLink, scrubbedActivationUrl } from 
 import { ClientTicketApiError } from './clientApi';
 import { ClientPasswordSignIn } from './ClientPasswordSignIn';
 import { ClientProjectsPage } from './ClientProjectPages';
+import { ClientProposalsPage } from './ClientProposalsPage';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -116,45 +117,72 @@ describe('real ticketing interfaces in the Alpha app', () => {
 
   it('shows an accepted proposal with the project it became and a link to open it', () => {
     const project = { workspaceId: 'ws-1', projectId: 'proj-1', name: 'Info site', updatedAt: '2026-11-19T09:00:00.000Z', intakeOptionId: 'opt', preview: null };
-    const html = renderToStaticMarkup(<ClientProjectsPage
-      projects={[project]} loading={false} error="" selectedProjectKey={null}
-      onSelectedProjectKeyChange={() => undefined} onOpenRequest={() => undefined} onNewRequest={() => undefined}
-      inspectionOnly={false} newRequestEnabled={false} newRequestLoading={false} projectFocusVersion={0} refreshToken={0}
+    const html = renderToStaticMarkup(<ClientProposalsPage
+      projects={[project]} loading={false} error="" inspectionOnly={false}
+      selectedProposalId={null} onSelectedProposalIdChange={() => undefined}
+      onRefresh={() => undefined} onSubmitted={() => undefined} onOpenProject={() => undefined}
       proposals={[{ id: 'proposal-accepted', title: 'Info site', description: 'An animated site', requestedDeadline: null,
         submittedAt: '2026-11-19T08:00:00.000Z', status: 'accepted', acceptedAt: '2026-11-19T09:00:00.000Z',
         project: { workspaceId: 'ws-1', projectId: 'proj-1', name: 'Info site' } }]}
-      proposalsLoading={false} proposalsError="" onRefreshProposals={() => undefined} onProposalSubmitted={() => undefined}
     />);
     expect(html).toContain('Accepted · Info site');
     expect(html).toContain('View project');
     expect(html).not.toContain('Not moving forward');
   });
 
-  it('keeps client project proposals separate from projects and explains their next step', () => {
-    const html = renderToStaticMarkup(<ClientProjectsPage
-      projects={[]} loading={false} error="" selectedProjectKey={null}
-      onSelectedProjectKeyChange={() => undefined} onOpenRequest={() => undefined} onNewRequest={() => undefined}
-      inspectionOnly={false} newRequestEnabled={false} newRequestLoading={false} projectFocusVersion={0} refreshToken={0}
-      proposals={[
-        { id: 'proposal-pending', title: 'Client portal refresh', description: 'A simpler project space', requestedDeadline: null, submittedAt: '2026-10-29T10:00:00.000Z', status: 'pending' },
-        { id: 'proposal-needs-reply', title: 'Customer dashboard', description: 'A dashboard for account owners', requestedDeadline: null,
-          submittedAt: '2026-10-27T10:00:00.000Z', status: 'awaiting_client', clarificationMessages: [
-            { id: 'question-1', author: 'pm', body: 'Which customer group should we support first?', createdAt: '2026-10-29T11:00:00.000Z' },
-          ] },
-        { id: 'proposal-declined', title: 'Archived data export', description: 'An older reporting request', requestedDeadline: '2026-12-01', submittedAt: '2026-10-28T10:00:00.000Z', status: 'declined' },
-      ]}
-      proposalsLoading={false} proposalsError="" onRefreshProposals={() => undefined} onProposalSubmitted={() => undefined}
-    />);
+  const proposals = [
+    { id: 'proposal-pending', title: 'Client portal refresh', description: 'A simpler project space', requestedDeadline: null, submittedAt: '2026-10-29T10:00:00.000Z', status: 'pending' as const },
+    { id: 'proposal-needs-reply', title: 'Customer dashboard', description: 'A dashboard for account owners', requestedDeadline: null,
+      submittedAt: '2026-10-27T10:00:00.000Z', status: 'awaiting_client' as const, clarificationMessages: [
+        { id: 'question-1', author: 'pm' as const, body: 'Which customer group should we support first?', createdAt: '2026-10-29T11:00:00.000Z' },
+      ] },
+    { id: 'proposal-declined', title: 'Archived data export', description: 'An older reporting request', requestedDeadline: '2026-12-01', submittedAt: '2026-10-28T10:00:00.000Z', status: 'declined' as const },
+  ];
+  const proposalsPage = (selectedProposalId: string | null) => renderToStaticMarkup(<ClientProposalsPage
+    projects={[]} loading={false} error="" inspectionOnly={false} proposals={proposals}
+    selectedProposalId={selectedProposalId} onSelectedProposalIdChange={() => undefined}
+    onRefresh={() => undefined} onSubmitted={() => undefined} onOpenProject={() => undefined} />);
+
+  it('lists every proposal and opens the one waiting on the client first, with its conversation and a reply box', () => {
+    const html = proposalsPage(null);
     expect(html).toContain('Propose a project');
+    for (const title of ['Customer dashboard', 'Client portal refresh', 'Archived data export']) expect(html).toContain(title);
     expect(html).toContain('With your project manager');
+    expect(html).toContain('Not moving forward');
+    // Waiting on the client sorts first and is the one shown.
+    expect(html.indexOf('Customer dashboard')).toBeLessThan(html.indexOf('Client portal refresh'));
     expect(html).toContain('Your project manager needs a little more information to review this proposal.');
     expect(html).toContain('Which customer group should we support first?');
     expect(html).toContain('Your reply');
     expect(html).toContain('Send reply');
-    expect(html).toContain('Not moving forward');
+    // Only the shown proposal's details are on the page, not every conversation at once.
+    expect(html).not.toContain('An older reporting request');
+    expect(html).not.toContain('has-selected-proposal');
+  });
+
+  it('shows the proposal the client picked, without a reply box when nothing is asked of them', () => {
+    const html = proposalsPage('proposal-declined');
+    expect(html).toContain('has-selected-proposal');
+    expect(html).toContain('An older reporting request');
     expect(html).toContain('Your project manager decided not to move forward. No project was created.');
-    expect(html.indexOf('No projects shared yet')).toBeLessThan(html.indexOf('Project proposals'));
+    expect(html).not.toContain('Which customer group should we support first?');
+    expect(html).not.toContain('Send reply');
     expect(html).not.toContain('decline note');
+  });
+
+  it('keeps the Projects page to projects, pointing to proposals that need a reply', () => {
+    const html = renderToStaticMarkup(<ClientProjectsPage
+      projects={[]} loading={false} error="" selectedProjectKey={null}
+      onSelectedProjectKeyChange={() => undefined} onOpenRequest={() => undefined} onNewRequest={() => undefined}
+      inspectionOnly={false} newRequestEnabled={false} newRequestLoading={false} projectFocusVersion={0} refreshToken={0}
+      proposalsNeedingReply={1} onOpenProposals={() => undefined} onProposeProject={() => undefined}
+    />);
+    expect(html).toContain('No projects shared yet');
+    expect(html).toContain('Propose a project');
+    expect(html).toContain('Your project manager is waiting on your reply to a project proposal.');
+    expect(html).toContain('Open proposals');
+    expect(html).not.toContain('Project proposals');
+    expect(html).not.toContain('Send reply');
   });
 
   it('checks the real inquiry link before enabling its form and preserves context on return', () => {

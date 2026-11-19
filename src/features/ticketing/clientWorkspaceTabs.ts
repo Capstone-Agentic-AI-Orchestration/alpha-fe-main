@@ -3,10 +3,11 @@ import type { ClientProjectRequestItem, ClientTicketQueueOptions } from './clien
 
 type ClientPortalFilter = NonNullable<ClientTicketQueueOptions['filter']>;
 
-export type ClientPage = 'overview' | 'projects' | 'requests';
+export type ClientPage = 'overview' | 'projects' | 'proposals' | 'requests';
 interface Navigation {
   page: ClientPage;
   selectedProjectKey: string | null;
+  selectedProposalId: string | null;
   selectedId: string | null;
   selectedWorkspaceId: string | null;
   selectedItemFallback: ClientProjectRequestItem | null;
@@ -31,7 +32,7 @@ export function initialClientTabs(filter: ClientPortalFilter = 'all'): Tabs {
   return { items: [createTab('client-tab-default', 'overview', filter)], activeId: 'client-tab-default' };
 }
 function createTab(id: string, page: ClientPage, filter: ClientPortalFilter = 'all'): Tab {
-  return { id, navigation: { page, selectedProjectKey: null, selectedId: null, selectedWorkspaceId: null,
+  return { id, navigation: { page, selectedProjectKey: null, selectedProposalId: null, selectedId: null, selectedWorkspaceId: null,
     selectedItemFallback: null, filter, searchInput: '', search: '', replyDrafts: {}, returnToProjects: false,
     navigationCollapsed: false, requestListShown: true, notificationProjectFocus: 0 } };
 }
