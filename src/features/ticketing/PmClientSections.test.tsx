@@ -111,6 +111,10 @@ describe('Client proposals', () => {
     const html = renderToStaticMarkup(<ClientProposals proposals={[item]} error="" onOpenInquiries={() => undefined} />);
     for (const shown of ['Booking app', 'Let guests book online', 'Waiting on the client', '1 still open', 'Inquiries']) expect(html).toContain(shown);
   });
+  it('lets each proposal open that exact inquiry, on the tab that lists it', () => {
+    const html = renderToStaticMarkup(<ClientProposals proposals={[item]} error="" onOpenInquiries={() => undefined} />);
+    expect(html).toMatch(/<button[^>]*title="Open Booking app in Inquiries"[^>]*>Booking app<\/button>/);
+  });
   it('shows an empty state and errors', () => {
     expect(renderToStaticMarkup(<ClientProposals proposals={[]} error="" onOpenInquiries={() => undefined} />)).toContain('hasn’t sent any project proposals');
     expect(renderToStaticMarkup(<ClientProposals proposals={null} error="Nope" onOpenInquiries={() => undefined} />)).toContain('role="alert"');

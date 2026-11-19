@@ -4,6 +4,7 @@ import { FlaskConical } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { PmTicketsView } from './PmTicketsView';
 import { pmTicketApi } from './pmApi';
+import { OPEN_TICKET_KEY } from './PmInquiriesPage';
 
 // Use the real cloud-backed queue by default. "0" keeps it disabled.
 // The server's rollout switch, workspace gate and fresh PM authorization
@@ -47,6 +48,10 @@ export function PmTicketsPage() {
   const { activeWorkspace, setActiveTab } = useApp();
   const [, setSelectedClient] = useTabSessionState<string | null>('clients.selected', null);
   const openClient = (key: string) => { setSelectedClient(key); setActiveTab('clients'); };
+  // A request an inquiry just became: open it once on arrival, then forget it so Tickets opens normally next time.
+  const [openTicket, setOpenTicket] = useTabSessionState<string | null>(OPEN_TICKET_KEY, null);
+  const [initialTicket] = useState(openTicket);
+  useEffect(() => { if (openTicket) setOpenTicket(null); }, [openTicket, setOpenTicket]);
 
   return <div className="pm-ticket-page pm-ticket-page--nested">
     {SampleTickets && <div className="pm-ticket-page__sample">
@@ -59,7 +64,7 @@ export function PmTicketsPage() {
     <div className="pm-ticket-page__content">
       {samples && SampleTickets
         ? <Suspense fallback={<TicketQueueSkeleton label="Loading sample tickets" className="p-6" />}><SampleTickets /></Suspense>
-        : <PmTicketsView key={activeWorkspace?.id ?? 'no-workspace'} intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled onOpenClient={openClient} />}
+        : <PmTicketsView key={activeWorkspace?.id ?? 'no-workspace'} intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled onOpenClient={openClient} initialSelectedId={initialTicket} />}
     </div>
   </div>;
 }

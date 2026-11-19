@@ -1,7 +1,8 @@
 import './pmTickets.css';
 import { PmQueueSelect } from './PmQueueSelect';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { AlertCircle, ArrowLeft, CheckCircle2, Inbox, Mail, MessageSquare, PanelLeftOpen, RefreshCw, Search, Send, UserRound, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Copy, Inbox, Mail, MessageSquare, PanelLeftOpen, RefreshCw, Search, Send, UserRound, XCircle } from 'lucide-react';
+import { acceptOutcome, handledOutcome, inquiryContact, inquiryFor, inquiryKind, inquiryStatus, shortReference } from './inquiryPresentation';
 import { Skeleton, SkeletonRegion } from '@/shared/components/ui/skeleton';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, type PmCentralIntakeItem } from './pmApi';
@@ -40,17 +41,22 @@ function formatCompactDate(value: string): string {
   return Number.isFinite(date.getTime()) ? date.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : 'Date unavailable';
 }
 
-export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanReview, onAccepted, api = pmTicketApi, refreshToken }: {
+// eslint-disable-next-line sonarjs/cognitive-complexity -- existing inbox; this change adds the initial selection and moves display rules into inquiryPresentation
+export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanReview, onAccepted, api = pmTicketApi, refreshToken, initialSelection = null }: {
   workspaceName: string | null;
   workspaceId: string | null;
   workspaceCanReview: boolean;
-  onAccepted: (reference: string) => void;
+  /** Called with the new request's reference and id, so the page can open it. */
+  onAccepted: (reference: string, ticketId: string) => void;
   api?: CentralIntakeApi;
   /** Parent-owned refresh control shared with the Tickets/Inquiries subtab. */
   refreshToken?: number;
+  /** Open this inquiry once it loads, e.g. from a client's Proposals tab. */
+  initialSelection?: { id: string; view: 'pending' | 'handled' } | null;
 }) {
   const [items, setItems] = useState<PmCentralIntakeItem[]>([]);
-  const [filter, setFilter] = useState<'pending' | 'handled'>('pending');
+  const [filter, setFilter] = useState<'pending' | 'handled'>(initialSelection?.view ?? 'pending');
+  const pendingSelection = useRef<string | null>(initialSelection?.id ?? null);
   const loadGeneration = useRef(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -62,6 +68,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   const [clarificationDraft, setClarificationDraft] = useState('');
   const [sendingClarification, setSendingClarification] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
+  const [confirmingDecline, setConfirmingDecline] = useState(false);
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
@@ -74,6 +81,15 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   const initialized = useRef(false);
   const selected = items.find(item => item.id === selectedId) ?? null;
   const selectedClarificationMessages = selected?.clarificationMessages ?? [];
+  const selectedContact = selected ? inquiryContact(selected) : null;
+  /** Which one thing the decision area shows for a pending inquiry. */
+  const decisionMode = ((): 'waiting' | 'ask' | 'decline' | 'choose' => {
+    const proposal = selected?.kind === 'project_proposal';
+    if (proposal && selected?.status === 'awaiting_client') return 'waiting';
+    if (proposal && clarifying) return 'ask';
+    if (confirmingDecline) return 'decline';
+    return 'choose';
+  })();
   const visibleItems = useMemo(() => {
     const needle = search.trim().toLowerCase();
     if (!needle) return items;
@@ -104,7 +120,11 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
         initialized.current = true;
         itemsRef.current = page.items;
         setItems(page.items);
-        setSelectedId(current => current && page.items.some(item => item.id === current) ? current : null);
+        const wanted = pendingSelection.current;
+        if (wanted) pendingSelection.current = null;
+        const listed = (id: string | null) => (id && page.items.some(item => item.id === id) ? id : null);
+        // An inquiry asked for from another page wins once; otherwise keep the current one if it is still listed.
+        setSelectedId(current => listed(wanted) ?? listed(current));
       }
       setNextCursor(page.nextCursor);
     } catch (loadError) {
@@ -153,7 +173,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
       if (generation !== loadGeneration.current) return;
       if (result.workspaceId !== workspaceId) throw new Error('The inquiry was accepted into a different workspace.');
       operationIds.current.delete(selected.id);
-      onAccepted(result.reference);
+      onAccepted(result.reference, result.ticketId);
     } catch (acceptError) {
       // Retain the same operation key after an uncertain response so a retry
       // safely reconciles the original acceptance rather than creating twice.
@@ -186,7 +206,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
       itemsRef.current = remaining;
       setItems(remaining);
       setSelectedId(null);
-      setDeclineReason('');
+      setDeclineReason(''); setConfirmingDecline(false);
     } catch (declineError) {
       if (!(declineError instanceof ApiRequestError) || (declineError.status !== null && declineError.status < 500)) {
         declineOperationIds.current.delete(selected.id);
@@ -228,17 +248,15 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     setSelectedId(id);
     setNavigationCollapsed(false);
     setNewIds(current => { const next = new Set(current); next.delete(id); return next; });
-    setDeclineReason('');
+    setDeclineReason(''); setConfirmingDecline(false);
     setClarifying(false); setClarificationDraft('');
   };
 
   const renderInquiryItem = (item: PmCentralIntakeItem, variant: 'queue' | 'sidebar') => {
-    const statusText = filter === 'pending'
-      ? item.status === 'awaiting_client' ? 'Waiting for client'
-        : item.kind === 'project_proposal' && item.clarificationMessages?.at(-1)?.author === 'client' ? 'Client replied'
-          : item.kind === 'project_proposal' ? 'Proposal · verified client' : 'Inquiry · email not verified'
-      : item.status === 'accepted' ? 'Accepted' : 'Declined';
+    const statusText = inquiryStatus(item, filter);
     const statusTone = filter === 'pending' ? 'pending' : item.status;
+    const contact = inquiryContact(item);
+    const kindLine = [inquiryKind(item), shortReference(item.publicReference)].filter(Boolean).join(' · ');
     if (variant === 'queue') return <tr key={item.id} className="cursor-pointer border-b border-divider hover:bg-surface-high/40 aria-disabled:cursor-default"
           onClick={event => { if (!(event.target instanceof Element && event.target.closest('button, a'))) selectInquiry(item.id); }}>
       <td className="max-w-0 py-2.5 pr-3">
@@ -246,17 +264,17 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
           <span className="pm-queue-table__icon"><Inbox size={14} aria-hidden="true" /></span>
           <span className="min-w-0">
             <span className="block truncate font-medium" title={item.title}>{item.title}</span>
-            <span className="block truncate text-[11px] text-content-muted">{item.publicReference ?? (item.kind === 'project_proposal' ? 'Project proposal' : 'Inquiry')}</span>
+            <span className="block truncate text-[11px] text-content-muted" title={item.publicReference}>{kindLine}</span>
           </span>
         </button>
       </td>
       <td className="hidden max-w-0 py-2.5 pr-3 sm:table-cell">
-        <span className="block truncate font-medium">{item.fullName}</span>
-        <span className="block truncate text-[11px] text-content-muted" title={item.email}>{item.email}</span>
+        <span className="block truncate font-medium" title={item.email}>{contact.name}</span>
+        {contact.detail && <span className="block truncate text-[11px] text-content-muted">{contact.detail}</span>}
       </td>
       <td className="max-w-0 py-2.5 pr-3">
         <span className="block truncate font-medium" title={statusText}>{statusText}</span>
-        <span className="block truncate text-[11px] text-content-muted">{newIds.has(item.id) ? 'New · ' : ''}{item.company ?? 'No company linked'}</span>
+        <span className="block truncate text-[11px] text-content-muted">{newIds.has(item.id) ? 'New · ' : ''}{inquiryFor(item)}</span>
       </td>
       <td className="whitespace-nowrap py-2.5 text-right tabular-nums text-content-muted">
         <time dateTime={item.submittedAt}>{formatCompactDate(item.submittedAt)}</time>
@@ -264,9 +282,9 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     </tr>;
     return <button key={item.id} type="button" onClick={() => selectInquiry(item.id)} aria-pressed={selected?.id === item.id}
       className={`pm-inquiries__list-item pm-inquiries__list-item--${variant}${selected?.id === item.id ? ' is-selected' : ''}`}>
-      <span className="pm-inquiries__item-request"><strong>{item.title}</strong><small>{item.publicReference ?? (item.kind === 'project_proposal' ? 'Project proposal' : 'Inquiry')}</small></span>
-      <span className="pm-inquiries__item-client"><strong>{item.fullName}</strong><small>{item.email}</small></span>
-      <span className={`pm-inquiries__item-status pm-inquiries__item-status--${statusTone}`}><strong>{statusText}</strong><small>{item.company ?? 'No company linked'}</small></span>
+      <span className="pm-inquiries__item-request"><strong>{item.title}</strong><small title={item.publicReference}>{kindLine}</small></span>
+      <span className="pm-inquiries__item-client"><strong title={item.email}>{contact.name}</strong>{contact.detail && <small>{contact.detail}</small>}</span>
+      <span className={`pm-inquiries__item-status pm-inquiries__item-status--${statusTone}`}><strong>{statusText}</strong><small>{inquiryFor(item)}</small></span>
       <time dateTime={item.submittedAt}>{formatCompactDate(item.submittedAt)}</time>
       {newIds.has(item.id) && <span className="pm-inquiries__new-marker">New</span>}
     </button>;
@@ -332,11 +350,17 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
             </button>
             <div className="pm-inquiries__detail-heading-copy">
               <div className="pm-inquiries__detail-meta">
-                <div className="pm-inquiries__detail-identity"><Inbox size={16} aria-hidden="true" /><span>{selected.publicReference ?? 'Inquiry'}</span><span className={`pm-inquiries__detail-status pm-inquiries__detail-status--${filter === 'pending' ? 'pending' : selected.status}`}>{filter === 'pending' ? selected.status === 'awaiting_client' ? 'Waiting for client' : selected.kind === 'project_proposal' && selected.clarificationMessages?.at(-1)?.author === 'client' ? 'Client replied · Pending review' : 'Pending review' : selected.status === 'accepted' ? 'Accepted' : 'Declined'}</span></div>
+                <div className="pm-inquiries__detail-identity"><Inbox size={16} aria-hidden="true" /><span>{inquiryKind(selected)}</span>
+                  {selected.publicReference && <button type="button" title={`Copy ${selected.publicReference}`} aria-label={`Copy reference ${selected.publicReference}`}
+                    onClick={() => void navigator.clipboard?.writeText(selected.publicReference!).catch(() => undefined)}
+                    className="inline-flex items-center gap-1 rounded px-1 font-mono text-[11px] text-content-muted hover:bg-surface-high hover:text-content">
+                    {shortReference(selected.publicReference)}<Copy size={11} aria-hidden="true" />
+                  </button>}
+                  <span className={`pm-inquiries__detail-status pm-inquiries__detail-status--${filter === 'pending' ? 'pending' : selected.status}`}>{inquiryStatus(selected, filter)}</span></div>
                 <span>Submitted {formatCompactDate(selected.submittedAt)}</span>
               </div>
               <h2>{selected.title}</h2>
-              <p>{selected.fullName}<span>·</span>{selected.company ?? selected.email}</p>
+              <p>{selectedContact?.name}{selectedContact?.detail && <><span>·</span>{selectedContact.detail}</>}<span>·</span>{inquiryFor(selected)}</p>
             </div>
           </div>
         </header>}
@@ -344,34 +368,33 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
         {error && <p role="alert" className="pm-inquiries__error"><AlertCircle size={15} aria-hidden="true" />{error}</p>}
 
         {selected ? <div className="pm-inquiries__detail-content">
-          <div className="pm-inquiries__meta-grid">
-            <div className="pm-inquiries__info-card">
-              <p className="pm-inquiries__eyebrow">{selected.kind === 'project_proposal' ? 'Client account · Verified email' : filter === 'pending' ? 'Client contact · Unverified' : 'Original inquiry contact'}</p>
-              <p className="pm-inquiries__info-value"><UserRound size={14} aria-hidden="true" />{selected.fullName}</p>
-              <p className="pm-inquiries__info-secondary"><Mail size={14} aria-hidden="true" />{selected.email}</p>
-              {selected.company && <p className="pm-inquiries__info-secondary">{selected.company}</p>}
-            </div>
-            <div className="pm-inquiries__info-card">
-              <p className="pm-inquiries__eyebrow">{selected.kind === 'project_proposal' ? 'Target date' : 'Requested date'}</p>
-              <p className="pm-inquiries__info-value">{selected.requestedDeadline ?? 'Not specified'}</p>
-              <p className="pm-inquiries__info-secondary">{selected.kind === 'project_proposal' ? 'Preferred date' : 'Client preference'}</p>
-            </div>
+          {/* One readable column: the facts on a single line, then what they asked for, then the conversation. No boxes. */}
+          <div className="pm-inquiries__body">
+            <ul className="pm-inquiries__facts" aria-label="Inquiry details">
+              <li title={selected.kind === 'project_proposal' ? 'Signed-in client account' : 'Sent from the public website form'}>
+                <Mail size={13} aria-hidden="true" />{selected.email}
+                <span className={selected.kind === 'project_proposal' ? 'is-verified' : 'is-unverified'}>{selected.kind === 'project_proposal' ? 'Verified' : 'Not verified'}</span>
+              </li>
+              {selected.company && <li><UserRound size={13} aria-hidden="true" />{selected.company}</li>}
+              <li><CalendarDays size={13} aria-hidden="true" />{selected.requestedDeadline ? `Target ${selected.requestedDeadline}` : 'No target date'}</li>
+            </ul>
+            <section className="pm-inquiries__section" aria-label={selected.kind === 'project_proposal' ? 'What the client wants' : 'What they need'}>
+              <h3>{selected.kind === 'project_proposal' ? 'What the client wants' : 'What they need'}</h3>
+              <p className="pm-inquiries__description">{selected.description}</p>
+            </section>
+            {selected.kind === 'project_proposal' && selectedClarificationMessages.length > 0 && <section className="pm-inquiries__section" aria-label="Conversation with the client">
+              <h3>Conversation</h3>
+              <ol className="pm-inquiries__thread">
+                {selectedClarificationMessages.map(message => <li key={message.id} className={message.author === 'pm' ? 'is-pm' : ''}>
+                  <div><strong>{message.author === 'pm' ? 'You' : 'Client'}</strong><time dateTime={message.createdAt} title={formatDate(message.createdAt)}>{formatCompactDate(message.createdAt)}</time></div>
+                  <p>{message.body}</p>
+                </li>)}
+              </ol>
+            </section>}
           </div>
-          <div className="pm-inquiries__request">
-            <p className="pm-inquiries__eyebrow">{selected.kind === 'project_proposal' ? 'Project goal' : 'What they need'}</p>
-            <p className="pm-inquiries__description">{selected.description}</p>
-          </div>
-          {selected.kind === 'project_proposal' && selectedClarificationMessages.length > 0 && <section className="pm-inquiries__clarification-thread" aria-label="Conversation with the client">
-            <h3>Conversation with the client</h3>
-            {selectedClarificationMessages.map(message => <article key={message.id} className={`pm-inquiries__clarification-message${message.author === 'pm' ? ' is-pm' : ''}`}>
-              <div><strong>{message.author === 'pm' ? 'You' : selected.fullName}</strong><time dateTime={message.createdAt}>{formatDate(message.createdAt)}</time></div>
-              <p>{message.body}</p>
-            </article>)}
-          </section>}
           {filter === 'pending' ? <div className={`pm-inquiries__decision${selected.status === 'awaiting_client' ? ' pm-inquiries__decision--waiting' : ''}`}>
-            {selected.kind === 'project_proposal' && selected.status === 'awaiting_client' ? <>
-              <p className="pm-inquiries__decision-copy">Waiting for the client to reply. The proposal stays open and can be routed after they respond.</p>
-            </> : selected.kind === 'project_proposal' && clarifying ? <form className="pm-inquiries__clarification-form" onSubmit={event => void sendClarification(event)}>
+            {decisionMode === 'waiting' && <p className="pm-inquiries__decision-copy">Waiting for the client to reply. It stays open, and you can accept or decline it once they answer.</p>}
+            {decisionMode === 'ask' && <form className="pm-inquiries__clarification-form" onSubmit={event => void sendClarification(event)}>
               <div><h3>Ask the client</h3><p>Ask for the details you need to review the proposal.</p></div>
               <label><span className="sr-only">Question for the client</span><textarea maxLength={4000} rows={3} value={clarificationDraft}
                 disabled={sendingClarification} onChange={event => setClarificationDraft(event.target.value)}
@@ -383,29 +406,37 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
                   className="inline-flex items-center gap-2 rounded-lg bg-action px-4 py-2.5 text-sm font-medium text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50">
                   {sendingClarification ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}{sendingClarification ? 'Sending…' : 'Send question'}
                 </button></div>
-            </form> : <>
-            <p className="pm-inquiries__decision-copy">{selected.kind === 'project_proposal'
-              ? <>Route this proposal to <span className="font-medium text-content">{workspaceName ?? 'the selected workspace'}</span> after reviewing the requested scope.</>
-              : <>Accepting creates a normal ticket in <span className="font-medium text-content">{workspaceName ?? 'the selected workspace'}</span>.</>}</p>
-            <label className="pm-inquiries__decline-note"><span>Optional internal decline note</span><textarea maxLength={1000} rows={2} value={declineReason} disabled={declining || accepting} onChange={event => setDeclineReason(event.target.value)} placeholder="For your team's records only" /></label>
+            </form>}
+            {decisionMode === 'decline' && <div className="pm-inquiries__clarification-form">
+              <div><h3>Decline this {selected.kind === 'project_proposal' ? 'request' : 'inquiry'}?</h3>
+                <p>{selected.kind === 'project_proposal' ? 'The client sees that it is not moving forward. No request or project is created.' : 'The sender is emailed that it is not moving forward. No request is created.'}</p></div>
+              <label className="pm-inquiries__decline-note"><span>Internal note (optional, never shown to the client)</span><textarea maxLength={1000} rows={2} value={declineReason} disabled={declining} onChange={event => setDeclineReason(event.target.value)} placeholder="Why it was declined, for your team" /></label>
+              <div className="pm-inquiries__decision-actions"><button type="button" onClick={() => { setConfirmingDecline(false); setDeclineReason(''); }} disabled={declining}
+                className="pm-inquiries__clarification-action">Cancel</button>
+                <button type="button" onClick={() => void decline()} disabled={declining || !workspaceName}
+                  className="inline-flex items-center gap-2 rounded-lg border border-status-danger-border px-4 py-2.5 text-sm font-medium text-status-danger hover:bg-status-danger-subtle disabled:cursor-not-allowed disabled:opacity-50">
+                  {declining ? <RefreshCw size={15} className="animate-spin" /> : <XCircle size={15} />}{declining ? 'Declining…' : 'Decline'}
+                </button></div>
+            </div>}
+            {decisionMode === 'choose' && <>
+            <div className="pm-inquiries__next-step" aria-label="Next step">
+              <p className="pm-inquiries__eyebrow">Next step</p>
+              <p className="pm-inquiries__decision-copy">{acceptOutcome(selected, workspaceName)}</p>
+            </div>
             <div className="pm-inquiries__decision-actions">{selected.kind === 'project_proposal' && <button type="button" onClick={() => setClarifying(true)} disabled={declining || accepting || sendingClarification || !api.clarifyCentralIntake}
               className="pm-inquiries__clarification-action">
-              <MessageSquare size={15} />Ask for clarification
-            </button>}<button type="button" onClick={() => void decline()} disabled={declining || accepting || !workspaceName}
+              <MessageSquare size={15} />Ask the client
+            </button>}<button type="button" onClick={() => setConfirmingDecline(true)} disabled={declining || accepting || !workspaceName}
               className="inline-flex items-center gap-2 rounded-lg border border-status-danger-border px-4 py-2.5 text-sm font-medium text-status-danger hover:bg-status-danger-subtle disabled:cursor-not-allowed disabled:opacity-50">
-              {declining ? <RefreshCw size={15} className="animate-spin" /> : <XCircle size={15} />}
-              {declining ? 'Declining…' : selected.kind === 'project_proposal' ? 'Decline proposal' : 'Decline inquiry'}
+              <XCircle size={15} />Decline…
             </button><button type="button" onClick={() => void accept()} disabled={accepting || declining || !workspaceName}
               className="inline-flex items-center gap-2 rounded-lg bg-action px-4 py-2.5 text-sm font-medium text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50">
               {accepting ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-              {accepting ? 'Routing…' : selected.kind === 'project_proposal' ? `Route proposal to ${workspaceName ?? 'workspace'}` : `Accept into ${workspaceName ?? 'workspace'}`}
+              {accepting ? 'Accepting…' : 'Accept and open request'}
             </button></div></>}
           </div> : <div className="pm-inquiries__decision pm-inquiries__decision--handled">
             {selected.handledAt && <p>Handled {formatDate(selected.handledAt)}</p>}
-            <p>{selected.status === 'accepted' ? selected.kind === 'project_proposal'
-              ? 'A request was created in its workspace and linked to this client.'
-              : 'Accepted into a workspace. The regular ticket is managed in that workspace’s Tickets page.'
-              : selected.kind === 'project_proposal' ? 'Declined. No ticket or project was created.' : 'Declined. This record creates no ticket or client access.'}</p>
+            <p>{handledOutcome(selected)}</p>
             {selected.status === 'declined' && selected.kind === 'public_inquiry' && <p>{selected.outcomeEmailStatus === 'delivered'
               ? 'Outcome email accepted by the provider; inbox delivery is not confirmed.'
               : selected.outcomeEmailStatus === 'dead' ? 'Outcome email could not be sent. Contact the client directly.'
