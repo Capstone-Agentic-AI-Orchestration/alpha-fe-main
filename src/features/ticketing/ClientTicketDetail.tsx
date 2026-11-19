@@ -235,7 +235,7 @@ export function ClientTicketDetail({
               <div><dt>Project manager</dt><dd><span className="cx-details-pm" aria-hidden="true"><UserRound size={12} /></span>Your project manager</dd></div>
               <div><dt>Reference</dt><dd className="cx-request-reference"><code>{ticket.reference}</code>
                 <button type="button" onClick={copyReference} aria-label="Copy request reference" className="cx-icon-button">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
-                {copied && <span role="status" className="cx-request-note">Copied</span>}</dd></div>
+                {copied && <output className="cx-request-note">Copied</output>}</dd></div>
             </dl>
             {ticket.sharedProjectPreviewUrl && <a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)} className="cx-link cx-request-preview">Open hosted preview <ExternalLink size={12} /></a>}
             {ticket.relatedTicket && <p className="cx-request-note">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
