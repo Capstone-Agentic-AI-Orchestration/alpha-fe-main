@@ -1,8 +1,8 @@
 import type { ReactNode } from 'react';
-import { ArrowLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ChevronRight, FolderKanban } from 'lucide-react';
 import type { ClientProjectRequestItem } from './clientApi';
 import { clientTicketProgress } from './clientTicketProgress';
-import { listProgressIndex, relativeTime } from './clientFriendly';
+import { clientNextLine, listProgressIndex, relativeTime, shortReference } from './clientFriendly';
 import { time } from './ticketUi';
 import './clientKit.css';
 
@@ -101,20 +101,47 @@ export function CxEmpty({ icon, title, body, action }: { icon?: ReactNode; title
     <p className="cx-empty-title">{title}</p>{body && <p>{body}</p>}{action}</div>;
 }
 
-/** A request in a list: its title, where it stands in plain words, the five-step track, and its badge. */
-export function CxRequestRow({ item, onOpen, disabled }: {
-  item: ClientProjectRequestItem; onOpen: (item: ClientProjectRequestItem) => void; disabled?: boolean;
+/**
+ * A request in a list: its title, what happens next in plain words, where it belongs, the five-step
+ * track and its badge. The compact form (inside project cards) keeps only the status sentence and track.
+ */
+export function CxRequestRow({ item, onOpen, disabled, compact = false }: {
+  item: ClientProjectRequestItem; onOpen: (item: ClientProjectRequestItem) => void; disabled?: boolean; compact?: boolean;
 }) {
   const pendingLink = item.projectLinkStatus === 'pending_review';
   const index = pendingLink ? null : listProgressIndex(item);
+  const next = compact ? null : clientNextLine(item);
   const sentence = pendingLink
     ? 'Your project manager is confirming the project' + (item.requestedProjectName ? ' · ' + item.requestedProjectName : '')
     : clientTicketProgress(item.status, item.requestedAction).label;
-  return <CxRow title={item.title} onClick={() => onOpen(item)} disabled={disabled}
-    meta={<><span className={item.requestedAction && !pendingLink ? 'cx-meta-action' : undefined}>{sentence}</span>
-      {' · '}<time dateTime={item.updatedAt} title={time(item.updatedAt)}>{relativeTime(item.updatedAt)}</time></>}
+  const project = item.projectName ?? item.requestedProjectName;
+  const meta = next
+    ? <span className={item.requestedAction && !pendingLink ? 'cx-meta-action' : undefined}><b className="cx-next-label">Next:</b> {next}</span>
+    : <span className={item.requestedAction && !pendingLink ? 'cx-meta-action' : undefined}>{sentence}</span>;
+  return <CxRow title={item.title} onClick={() => onOpen(item)} disabled={disabled} meta={meta}
     trailing={pendingLink ? <CxBadge>Pending link</CxBadge> : <CxRequestBadge status={item.status} requestedAction={item.requestedAction} />}>
+    {!compact && <span className="cx-row-facts">
+      {project && <span><FolderKanban size={12} aria-hidden="true" />{project}</span>}
+      <span title={item.reference}>{shortReference(item.reference)}</span>
+      <span>Updated <time dateTime={item.updatedAt} title={time(item.updatedAt)}>{relativeTime(item.updatedAt)}</time></span>
+    </span>}
     {index !== null && <CxTrack index={index} label={'Step ' + (index + 1) + ' of 5'} />}
   </CxRow>;
+}
+
+/** A few counts side by side, such as "Needs you 2 · In progress 3 · Done 1". */
+export function CxStats({ label, items }: { label: string; items: Array<{ label: string; value: number; tone?: 'attention' | 'done' }> }) {
+  return <dl className="cx-stats" aria-label={label}>
+    {items.map(item => <div key={item.label} className={'cx-stat' + (item.tone && item.value ? ' is-' + item.tone : '')}>
+      <dt>{item.label}</dt><dd>{item.value}</dd></div>)}
+  </dl>;
+}
+
+/** A message from the project manager, quoted with where and when it was written. */
+export function CxQuote({ body, meta, action }: { body: string; meta: ReactNode; action?: ReactNode }) {
+  return <div className="cx-quote">
+    <span className="cx-quote-avatar" aria-hidden="true">PM</span>
+    <div className="cx-quote-copy"><p>{body}</p><small>{meta}</small>{action}</div>
+  </div>;
 }
 

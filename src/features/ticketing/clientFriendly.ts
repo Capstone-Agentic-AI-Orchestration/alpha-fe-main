@@ -52,6 +52,67 @@ export function relativeTime(value: string, now = Date.now()): string {
   });
 }
 
+type RequestWithLink = RequestLike & Partial<Pick<ClientProjectRequestItem, 'projectLinkStatus'>>;
+
+/** Long generated references stay unique in a title attribute; rows show a readable prefix. */
+export function shortReference(reference: string): string {
+  const match = /^([A-Z]+-)([0-9A-F]{12,})$/i.exec(reference);
+  return match ? match[1] + match[2].slice(0, 6).toUpperCase() : reference;
+}
+
+const NEXT_FOR_ACTION: Record<NonNullable<ClientProjectRequestItem['requestedAction']>, string> = {
+  reply: 'reply to your project manager’s question',
+  agree_scope: 'approve the plan so the work can start',
+  review_result: 'check the result, then accept it or ask for a fix',
+};
+const NEXT_FOR_STATUS: Partial<Record<ClientProjectRequestItem['status'], string>> = {
+  received: 'your project manager reviews your request',
+  under_review: 'your project manager prepares the plan',
+  awaiting_client: 'your project manager sends the next update',
+  in_progress: 'your project manager shares the result',
+  ready_for_review: 'tell your project manager if anything looks wrong',
+  on_hold: 'your project manager updates you when work resumes',
+};
+
+/** One short "Next:" line for a request in a list; null once the request has ended. */
+export function clientNextLine(item: RequestWithLink): string | null {
+  if (TERMINAL.has(item.status)) return null;
+  if (item.projectLinkStatus === 'pending_review') return 'your project manager confirms which project this belongs to';
+  if (item.requestedAction) return NEXT_FOR_ACTION[item.requestedAction];
+  return NEXT_FOR_STATUS[item.status] ?? null;
+}
+
+const WHAT_NEXT_FOR_ACTION: Record<NonNullable<ClientProjectRequestItem['requestedAction']>, string> = {
+  reply: 'Once you reply below, your project manager picks it up from there.',
+  agree_scope: 'Once you approve, your project manager starts the work. It moves to In progress here, and you get a notification when the result is ready.',
+  review_result: 'If you accept, the request is finished. If you ask for a fix, your project manager makes the change and shares it again.',
+};
+const WHAT_NEXT_FOR_STATUS: Partial<Record<ClientProjectRequestItem['status'], string>> = {
+  received: 'Your project manager will read your request, then send a plan or ask a question here.',
+  under_review: 'Your project manager is preparing the plan. You get a notification when there is something to approve.',
+  awaiting_client: 'Your project manager will post the next update here.',
+  in_progress: 'When the work is done, your project manager shares the result here for you to check.',
+  ready_for_review: 'If anything looks wrong, tell your project manager in the conversation below.',
+  on_hold: 'Your project manager will update you here when work resumes.',
+};
+
+/** What the client can expect after the current step, in one or two sentences; null once the request has ended. */
+export function clientWhatNext(item: RequestLike): string | null {
+  if (TERMINAL.has(item.status)) return null;
+  if (item.requestedAction) return WHAT_NEXT_FOR_ACTION[item.requestedAction];
+  return WHAT_NEXT_FOR_STATUS[item.status] ?? null;
+}
+
+/** The five steps, each with one plain sentence, for the Requests page guide. */
+export const CLIENT_STEP_GUIDE: Array<{ label: string; detail: string }> = [
+  { label: 'Received', detail: 'Your project manager reads your request.' },
+  { label: 'Planning', detail: 'They send a plan. You approve it or ask for changes.' },
+  { label: 'In progress', detail: 'The work happens. Nothing is needed from you.' },
+  { label: 'Ready for you', detail: 'Check the result. Accept it or ask for a fix.' },
+  { label: 'Done', detail: 'The request is finished. Its history stays here.' },
+];
+
+
 /**
  * Which of the five client steps (0-4, see CLIENT_PROGRESS_LABELS) a listed request is on, using only
  * the fields a list row has. Mirrors clientProgressSteps; returns null where the row alone cannot tell

@@ -51,6 +51,11 @@ describe('client ticket detail layout', () => {
     expect(side).toContain('Request details');
     expect(side).toContain('TKT-1');
     expect(side).toContain('Copy request reference');
+    // What follows the decision, and the request's dated milestones.
+    expect(main).toContain('What happens next');
+    expect(main).toContain('Once you approve, your project manager starts the work.');
+    expect(side).toContain('History');
+    expect(side.indexOf('You sent the request')).toBeLessThan(side.indexOf('Plan sent for your approval'));
   });
 
   it('keeps an agreed plan in the side column once nothing is asked of the client', () => {
