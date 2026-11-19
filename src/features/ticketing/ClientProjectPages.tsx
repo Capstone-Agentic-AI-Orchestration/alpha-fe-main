@@ -94,15 +94,8 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
 
       <CxSection titleId="client-recent-title" title={latest ? 'Latest from your project manager' : 'Latest updates'}
         action={<button type="button" className="cx-link" onClick={onGoToRequests}>All requests <ArrowRight size={14} aria-hidden="true" /></button>}>
-        {!requests && requestsLoading ? <CxPanel><LoadingRows label="Loading recent request updates" layout="table" rows={4} className="p-4" /></CxPanel>
-          : !requests ? null
-          : recent.length || latest ? <CxPanel>
-            {latest && <CxQuote body={latest.message.body}
-              meta={<>Project chat · {latest.project.name} · <time dateTime={latest.message.createdAt} title={time(latest.message.createdAt)}>{relativeTime(latest.message.createdAt)}</time></>}
-              action={<button type="button" className="cx-link" onClick={() => onOpenProject(latest.project)}>Reply in the project chat <ArrowRight size={14} aria-hidden="true" /></button>} />}
-            {recent.map(item => <UpdateRow key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}
-          </CxPanel>
-            : <CxPanel><CxEmpty title="No updates yet" body="Your project manager will share requests here." /></CxPanel>}
+        <LatestUpdates loading={!requests && requestsLoading} loaded={Boolean(requests)} recent={recent} latest={latest}
+          onOpenProject={onOpenProject} onOpenRequest={onOpenRequest} />
       </CxSection>
     </div>
 
@@ -111,6 +104,23 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
       <button type="button" className="cx-button" onClick={onProposeProject}><Plus size={15} aria-hidden="true" />Propose a project</button>
     </CxPanel>}
   </section>;
+}
+
+/** Home's right column: the project manager's latest project-chat message, then recently updated requests. */
+function LatestUpdates({ loading, loaded, recent, latest, onOpenProject, onOpenRequest }: {
+  loading: boolean; loaded: boolean; recent: ClientProjectRequestItem[];
+  latest: { project: ClientProject; message: ClientProjectFeedbackMessage } | null;
+  onOpenProject: (project: ClientProject) => void; onOpenRequest: (request: ClientProjectRequestItem) => void;
+}) {
+  if (loading) return <CxPanel><LoadingRows label="Loading recent request updates" layout="table" rows={4} className="p-4" /></CxPanel>;
+  if (!loaded) return null;
+  if (!recent.length && !latest) return <CxPanel><CxEmpty title="No updates yet" body="Your project manager will share requests here." /></CxPanel>;
+  return <CxPanel>
+    {latest && <CxQuote body={latest.message.body}
+      meta={<>Project chat · {latest.project.name} · <time dateTime={latest.message.createdAt} title={time(latest.message.createdAt)}>{relativeTime(latest.message.createdAt)}</time></>}
+      action={<button type="button" className="cx-link" onClick={() => onOpenProject(latest.project)}>Reply in the project chat <ArrowRight size={14} aria-hidden="true" /></button>} />}
+    {recent.map(item => <UpdateRow key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}
+  </CxPanel>;
 }
 
 /** One project with each open request and where it is on the five steps. */
@@ -234,14 +244,14 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     </div></CxPanel>}
     {error && <p role="alert" className="cx-error">{error}</p>}
     <section aria-label="Shared projects">
-      {loading ? <CxPanel><LoadingRows label="Loading your projects" className="p-4" /></CxPanel>
-        : projects.length ? <div className="cx-project-stack">
-          {sortedProjects.map(project => <ClientProjectOverviewCard key={clientProjectKey(project)} project={project} requests={requests}
-            latest={latestByProject[clientProjectKey(project)] ?? null} onOpenRequest={onOpenRequest}
-            onOpenProject={() => onSelectedProjectKeyChange(clientProjectKey(project))} />)}
-        </div>
-          : !error && <CxPanel><CxEmpty icon={<FolderKanban size={22} />} title="No projects shared yet"
-            body="When your project manager gives your account access to a project, it will appear here." /></CxPanel>}
+      {loading && <CxPanel><LoadingRows label="Loading your projects" className="p-4" /></CxPanel>}
+      {!loading && projects.length > 0 && <div className="cx-project-stack">
+        {sortedProjects.map(project => <ClientProjectOverviewCard key={clientProjectKey(project)} project={project} requests={requests}
+          latest={latestByProject[clientProjectKey(project)] ?? null} onOpenRequest={onOpenRequest}
+          onOpenProject={() => onSelectedProjectKeyChange(clientProjectKey(project))} />)}
+      </div>}
+      {!loading && !projects.length && !error && <CxPanel><CxEmpty icon={<FolderKanban size={22} />} title="No projects shared yet"
+        body="When your project manager gives your account access to a project, it will appear here." /></CxPanel>}
     </section>
     {!inspectionOnly && onProposeProject && <CxPanel className="cx-idea">
       <div><strong>Have something new in mind?</strong><p>Send your project manager an idea. They review it with you before anything is set up.</p></div>
