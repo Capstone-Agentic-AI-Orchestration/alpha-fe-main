@@ -1,5 +1,5 @@
 /* Shared client-facing design values. Keep these scoped away from staff pages. */
-:where(.alpha-public, .client-portal-shell, .client-landing) {
+:where(.alpha-public, .client-portal-shell, .client-landing, .cx-scope) {
   --client-font-family: 'DM Sans', Inter, sans-serif;
 
   --client-space-1: 0.25rem;

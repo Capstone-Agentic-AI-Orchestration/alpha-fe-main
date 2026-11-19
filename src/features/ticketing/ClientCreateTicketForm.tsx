@@ -9,7 +9,7 @@ type ProjectPreference = 'not_sure' | 'new_project' | 'shared_project';
 
 export function ClientCreateTicketForm({
   context, relatedTicket, busy, error, onCreate, onCancel, submissionEnabled = true,
-  selectedProjectOptionId, selectedProjectName,
+  selectedProjectOptionId, selectedProjectName, embedded = false,
 }: {
   context: ClientTicketIntakeContext;
   relatedTicket: { id: string; reference: string; title: string } | null;
@@ -21,6 +21,8 @@ export function ClientCreateTicketForm({
   /** Opaque optionId returned by the selected project and revalidated by intake-context. */
   selectedProjectOptionId?: string;
   selectedProjectName?: string;
+  /** Inside a page that already shows its own back link and title. */
+  embedded?: boolean;
 }) {
   const operationId = useRef(crypto.randomUUID());
   const [title, setTitle] = useState('');
@@ -45,13 +47,13 @@ export function ClientCreateTicketForm({
     </div>
   </section>;
 
-  return <section className="mx-auto w-full max-w-2xl p-5 md:p-10">
-    <button onClick={onCancel} disabled={busy} className="mb-6 inline-flex items-center gap-2 text-xs text-content-secondary hover:text-content disabled:opacity-50"><ArrowLeft size={14} />My Tickets</button>
-    <div className="mb-7 flex items-start gap-3">
+  return <section className={embedded ? 'w-full max-w-2xl' : 'mx-auto w-full max-w-2xl p-5 md:p-10'}>
+    {!embedded && <button onClick={onCancel} disabled={busy} className="mb-6 inline-flex items-center gap-2 text-xs text-content-secondary hover:text-content disabled:opacity-50"><ArrowLeft size={14} />My Tickets</button>}
+    {!embedded && <div className="mb-7 flex items-start gap-3">
       <span className="rounded-xl border border-divider bg-selected p-3 text-selected-content"><Ticket size={22} /></span>
       <div><h1 className="text-2xl font-semibold text-content">{relatedTicket ? 'Request additional work' : 'New request'}</h1>
         <p className="mt-1 text-sm text-content-secondary">Your project manager will review it before any work is scheduled.</p></div>
-    </div>
+    </div>}
     <form className="space-y-5 rounded-xl border border-divider bg-surface p-5 md:p-7" onSubmit={event => {
       event.preventDefault();
       if (!submissionEnabled || busy) return;

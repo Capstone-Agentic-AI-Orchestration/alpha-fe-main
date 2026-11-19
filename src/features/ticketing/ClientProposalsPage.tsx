@@ -9,11 +9,12 @@ import { clientTicketApi, ClientTicketApiError } from './clientApi';
 import { relativeTime } from './clientFriendly';
 import { time } from './ticketUi';
 import { clientProposalView } from './clientProposalPresentation';
+import { CxEmpty } from './clientKit';
+import './clientProposals.css';
 
 /**
- * Proposals the client has sent, on their own page: a short list on the left and the one
- * selected on the right, with its conversation. They used to sit under the project cards on
- * Projects, conversations and all, which made that page read as two pages at once.
+ * Project ideas the client has sent, shown as one view of Requests: a short list on the left and
+ * the one selected on the right, with its conversation.
  */
 export function ClientProposalsPage({ api = clientTicketApi, proposals, projects, loading, error, inspectionOnly,
   selectedProposalId, onSelectedProposalIdChange, onRefresh, onSubmitted, onOpenProject, openForm = false, onOpenFormHandled, idPrefix = 'client' }: {
@@ -52,8 +53,8 @@ export function ClientProposalsPage({ api = clientTicketApi, proposals, projects
 
   let body: ReactNode;
   if (loading && !proposals.length) body = <LoadingRows label="Loading project proposals" rows={3} />;
-  else if (!ordered.length) body = error ? null : <div className="client-project-empty"><Lightbulb size={24} /><h2>No proposals yet</h2>
-    <p>Have an idea for something new? Propose a project and your project manager will review it with you.</p></div>;
+  else if (!ordered.length) body = error ? null : <CxEmpty icon={<Lightbulb size={22} />} title="No proposals yet"
+    body="Have an idea for something new? Propose a project and your project manager will review it with you." />;
   else body = <div className="client-proposals-layout">
     <ul className="client-proposal-index" aria-label="Your proposals">
       {ordered.map(proposal => {
@@ -70,20 +71,19 @@ export function ClientProposalsPage({ api = clientTicketApi, proposals, projects
       onBack={() => onSelectedProposalIdChange(null)} onReplied={onRefresh} onOpenProject={onOpenProject} />}
   </div>;
 
-  return <section className={`client-page client-proposals-page is-wide${chosen ? ' has-selected-proposal' : ''}`} aria-labelledby={`${idPrefix}-proposals-title`}>
-    <header className="client-page-head">
-      <div className="client-home-hello">
-        <h1 id={`${idPrefix}-proposals-title`}>Project ideas</h1>
-        <p>Ideas you’ve sent to your project manager. They review each one and reply here.</p>
-      </div>
-      <div className="client-proposals-head-actions">
-        <button type="button" className="client-icon-action" aria-label="Refresh project proposals" disabled={loading} onClick={onRefresh}><RefreshCw size={15} /></button>
-        {!inspectionOnly && <button type="button" className="client-primary-action" aria-haspopup="dialog" aria-expanded={formOpen}
-          onClick={() => { setFormOpen(true); setSuccess(''); }}><Plus size={15} />Propose a project</button>}
-      </div>
-    </header>
+  const actions = <div className="client-proposals-head-actions">
+    <button type="button" className="cx-icon-button" aria-label="Refresh project proposals" disabled={loading} onClick={onRefresh}><RefreshCw size={15} /></button>
+    {!inspectionOnly && <button type="button" className="cx-button is-primary" aria-haspopup="dialog" aria-expanded={formOpen}
+      onClick={() => { setFormOpen(true); setSuccess(''); }}><Plus size={15} />Propose a project</button>}
+  </div>;
+  return <section className={`cx-ideas client-proposals-page${chosen ? ' has-selected-proposal' : ''}`} aria-labelledby={`${idPrefix}-proposals-title`}>
+    <div className="cx-toolbar">
+      <div><h2 id={`${idPrefix}-proposals-title`} className="cx-subheading">Project ideas</h2>
+        <p className="cx-page-description">Ideas you’ve sent to your project manager. They review each one and reply here.</p></div>
+      {actions}
+    </div>
     {success && <p role="status" className="client-proposal-success">{success}</p>}
-    {error && <p role="alert" className="client-project-error">{error} <button type="button" onClick={onRefresh}>Try again</button></p>}
+    {error && <p role="alert" className="cx-error">{error} <button type="button" onClick={onRefresh}>Try again</button></p>}
 
     {body}
 
@@ -141,7 +141,7 @@ function ProposalDetail({ api, proposal, projects, inspectionOnly, onBack, onRep
       <span className={`client-proposal-status is-${view.tone}`}>{view.badge}</span>
     </header>
     <p className="client-proposal-next">{view.next}</p>
-    {view.project && <button type="button" className="client-primary-action client-proposal-open-project" onClick={() => onOpenProject(view.project!)}>
+    {view.project && <button type="button" className="cx-button is-primary client-proposal-open-project" onClick={() => onOpenProject(view.project!)}>
       View project <ArrowRight size={14} aria-hidden="true" />
     </button>}
     <section className="client-proposal-section" aria-label="What you asked for">
@@ -160,8 +160,8 @@ function ProposalDetail({ api, proposal, projects, inspectionOnly, onBack, onRep
         <label htmlFor={`proposal-reply-${proposal.id}`}>Your reply</label>
         <textarea id={`proposal-reply-${proposal.id}`} maxLength={4000} rows={3} value={draft} disabled={inspectionOnly || replying}
           onChange={event => setDraft(event.target.value)} placeholder="Type your response…" />
-        {replyError && <p role="alert" className="client-project-error">{replyError}</p>}
-        <div><small>Your reply goes back to your project manager.</small><button type="submit" className="client-primary-action"
+        {replyError && <p role="alert" className="cx-error">{replyError}</p>}
+        <div><small>Your reply goes back to your project manager.</small><button type="submit" className="cx-button is-primary"
           disabled={inspectionOnly || replying || !draft.trim()}>
           <Send size={14} />{replying ? 'Sending…' : 'Send reply'}
         </button></div>
@@ -217,16 +217,16 @@ function ProposalForm({ api, open, onClose, onSent, inspectionOnly }: {
 
   return <Modal isOpen={open} onClose={onClose} closeDisabled={submitting}
     title="Propose a project" subtitle="Describe the outcome you want. Your project manager will review it and choose the right workspace."
-    dialogClassName="client-proposal-modal" maxWidth="max-w-xl">
+    dialogClassName="client-proposal-modal cx-scope" maxWidth="max-w-xl">
     <form id="client-proposal-form" className="client-proposal-form" onSubmit={event => void submit(event)}>
       <label htmlFor="client-proposal-title">Project title<input id="client-proposal-title" value={title} onChange={event => setTitle(event.target.value)} maxLength={160} required disabled={submitting || needsRetry} /></label>
       <label htmlFor="client-proposal-description">What would you like to accomplish?<textarea id="client-proposal-description" value={description} onChange={event => setDescription(event.target.value)} maxLength={6000} rows={4} required disabled={submitting || needsRetry} /></label>
       <label htmlFor="client-proposal-deadline">Target date (optional)<DatePicker id="client-proposal-deadline" value={deadline} onChange={setDeadline} disabled={submitting || needsRetry} className="w-full" buttonClassName="h-10 w-full justify-start text-left" /></label>
       <p id="client-proposal-note" className="client-proposal-note">Sending this proposal does not create a project or promise a start date. If your PM accepts it, the project will appear under Projects.</p>
-      {error && <p role="alert" className="client-project-error">{error}</p>}
+      {error && <p role="alert" className="cx-error">{error}</p>}
       <div className="client-proposal-actions">
-        {!needsRetry && <button type="button" className="client-proposal-cancel" disabled={submitting} onClick={onClose}>Cancel</button>}
-        <button type="submit" className="client-primary-action" aria-describedby="client-proposal-note" disabled={submitting || (!needsRetry && (!title.trim() || !description.trim()))}>
+        {!needsRetry && <button type="button" className="cx-button" disabled={submitting} onClick={onClose}>Cancel</button>}
+        <button type="submit" className="cx-button is-primary" aria-describedby="client-proposal-note" disabled={submitting || (!needsRetry && (!title.trim() || !description.trim()))}>
           <Send size={14} />{submitLabel(submitting, needsRetry)}
         </button>
       </div>
@@ -250,3 +250,4 @@ function submitLabel(submitting: boolean, needsRetry: boolean): string {
   if (submitting) return 'Sending…';
   return needsRetry ? 'Retry same proposal' : 'Send proposal';
 }
+

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Check, CheckCircle2, Clock3, Copy, ExternalLink, FileText, FolderKanban, LockKeyhole, MessageSquare, Paperclip, Send, ShieldCheck, UserRound } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Check, CheckCircle2, Copy, ExternalLink, LockKeyhole, Paperclip, Send } from 'lucide-react';
 
 import type {
   ClientTicketCommandInput, ClientTicketDetail as ClientTicketRecord,
@@ -17,20 +17,23 @@ import {
 import { clientTicketProgress } from './clientTicketProgress';
 import { clientProgressSteps } from './clientProgressSteps';
 import { ClientProgressStrip } from './ClientProgressStrip';
-import { ChatContextPanel } from './ChatContextPanel';
 import { TicketChat } from './TicketChat';
+import { CxBadge, CxPageHeader, requestTone } from './clientKit';
 import { Button } from '@/shared/components/ui/button';
 
 type Decision = Extract<ClientTicketCommandInput['command'], { type: 'agree_scope' | 'accept_delivery' }>;
-export type ClientTicketTab = 'conversation' | 'details' | 'documents';
 
+/**
+ * One request, on one page: where it stands, the decision the client owes (if any), the conversation,
+ * and a quiet side column with everything else about the request.
+ */
 export function ClientTicketDetail({
   workspaceId, ticket, messages, messageCursor, historyLoading, historyError, busy, error, replyResetVersion,
   onBack, onLoadMore, onReply, onDecision, onAdditionalWork, onCorrection, api = clientTicketApi,
   documentsApi = clientTicketDocumentsApi, workflowActionsDisabled = false, newRequestsDisabled = true, communicationEnabled = false,
-  defaultTab = 'conversation', readOnlyPreview = false, replyDraft, onReplyDraftChange, backLabel = 'Back to requests',
+  readOnlyPreview = false, replyDraft, onReplyDraftChange, backLabel = 'Back to requests',
 }: {
-  /** Names where the header's back button goes, since it is the page's only way back. */
+  /** Names where the back link goes, since it is the page's only way back. */
   backLabel?: string;
   workspaceId: string;
   api?: typeof clientTicketApi;
@@ -38,7 +41,6 @@ export function ClientTicketDetail({
   workflowActionsDisabled?: boolean;
   newRequestsDisabled?: boolean;
   communicationEnabled?: boolean;
-  defaultTab?: ClientTicketTab;
   /** Show fictional history in the development preview, with every reply disabled. */
   readOnlyPreview?: boolean;
   replyDraft?: string;
@@ -58,7 +60,6 @@ export function ClientTicketDetail({
   onAdditionalWork: () => void;
   onCorrection: (body: string, deliveryId: string) => Promise<void>;
 }) {
-  const [tab, setTab] = useState<ClientTicketTab>(defaultTab);
   const [localBody, setLocalBody] = useState('');
   const body = replyDraft ?? localBody;
   const setBody = (value: string) => { setLocalBody(value); onReplyDraftChange?.(value); };
@@ -72,6 +73,7 @@ export function ClientTicketDetail({
   const [previewOpenedKey, setPreviewOpenedKey] = useState('');
   const [scopeChangeOpen, setScopeChangeOpen] = useState(false);
   const [scopeChangeBody, setScopeChangeBody] = useState('');
+  const filesRef = useRef<HTMLDivElement>(null);
   const deliveryKey = clientDeliveryReviewKey(ticket);
   const inspected = useCallback((verified: boolean) => {
     setInspectedKey(verified ? deliveryKey : ''); setReviewAcknowledged(false); setConfirming(null);
@@ -79,8 +81,9 @@ export function ClientTicketDetail({
   const canReview = canReviewClientDelivery(ticket, clientReviewEvidenceKey(inspectedKey, previewOpenedKey, deliveryKey));
   const terminal = ticket.status === 'closed' || ticket.status === 'declined' || ticket.status === 'cancelled';
   const canReply = !readOnlyPreview && (communicationEnabled ? !terminal : ticket.writesAvailable && !ticket.readOnly);
-  const progress = clientTicketProgress(ticket.status, workflowActionsDisabled ? null : ticket.requestedAction);
-  const progressSteps = clientProgressSteps(workflowActionsDisabled ? { ...ticket, requestedAction: null } : ticket);
+  const requestedAction = workflowActionsDisabled ? null : ticket.requestedAction;
+  const progress = clientTicketProgress(ticket.status, requestedAction);
+  const progressSteps = clientProgressSteps({ ...ticket, requestedAction });
   const scopeDecision = ticket.requestedAction === 'agree_scope' && ticket.scope && !ticket.scope.agreed
     ? { type: 'agree_scope' as const, scopeVersionId: ticket.scope.id } : null;
   const awaitingResultReview = ticket.requestedAction === 'review_result' && Boolean(ticket.delivery) && !ticket.delivery?.accepted;
@@ -118,216 +121,169 @@ export function ClientTicketDetail({
     if (!scopeChangeText || !canReply || busy) return;
     try {
       await onReply(scopeChangeText);
-      setScopeChangeBody(''); setScopeChangeOpen(false); setTab('conversation');
+      setScopeChangeBody(''); setScopeChangeOpen(false);
     } catch {
       // Keep the draft while the original operation is reconciled.
     }
+  }
+
+  async function submitCorrection(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!canReview || busy || !correctionBody.trim() || !ticket.delivery) return;
+    try { await onCorrection(correctionBody.trim(), ticket.delivery.id); setCorrectionBody(''); setCorrectionOpen(false); }
+    catch { /* Preserve this draft while the original operation is reconciled. */ }
   }
 
   function copyReference() {
     void navigator.clipboard?.writeText(ticket.reference).then(() => setCopied(true)).catch(() => undefined);
   }
 
-  const tabs: Array<{ id: ClientTicketTab; label: string; icon: React.ReactNode }> = [
-    { id: 'conversation', label: 'Status', icon: <MessageSquare size={14} /> },
-    { id: 'details', label: 'Details', icon: <FileText size={14} /> },
-    ...(communicationEnabled ? [{ id: 'documents' as const, label: 'Files', icon: <Paperclip size={14} /> }] : []),
-  ];
-  const panelScroll = 'client-detail-panel';
+  function showFiles() {
+    filesRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    filesRef.current?.focus({ preventScroll: true });
+  }
 
-  // The decision the client is being asked for sits on top of the conversation, not in a side tab.
-  const decisionRef = useRef<HTMLDivElement>(null);
-  const showDecision = () => {
-    setTab('conversation');
-    window.setTimeout(() => decisionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0);
-  };
-  const planCard = !workflowActionsDisabled && ticket.scope ? <InfoCard title="The plan" icon={<ShieldCheck size={14} />}>
-    <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.scope.summary}</p>
-    <p className="mt-2 text-xs text-content-secondary">{ticket.scope.agreed
+  const planBody = !workflowActionsDisabled && ticket.scope ? <>
+    <p className="cx-request-copy">{ticket.scope.summary}</p>
+    <p className="cx-request-note">{ticket.scope.agreed
       ? ticket.scope.approvedBy === 'pm' ? 'Your project manager approved this plan and is going ahead with it.' : 'You approved this plan.'
       : 'Waiting for your approval.'}</p>
-    {scopeDecision && canReply && <div className="mt-3 flex flex-wrap gap-2">
-      <button onClick={() => { setScopeChangeOpen(false); setConfirming(scopeDecision); }} disabled={busy} className={`${primary} min-h-[44px]`}><CheckCircle2 size={14} />Approve plan</button>
-      <button onClick={() => { setConfirming(null); setScopeChangeOpen(value => !value); }} disabled={busy} className={`${secondary} min-h-[44px]`}>{scopeChangeOpen ? 'Cancel' : 'Ask for changes'}</button>
+    {scopeDecision && canReply && <div className="cx-request-actions">
+      <button onClick={() => { setScopeChangeOpen(false); setConfirming(scopeDecision); }} disabled={busy} className={primary + ' min-h-[44px]'}><CheckCircle2 size={14} />Approve plan</button>
+      <button onClick={() => { setConfirming(null); setScopeChangeOpen(value => !value); }} disabled={busy} className={secondary + ' min-h-[44px]'}>{scopeChangeOpen ? 'Cancel' : 'Ask for changes'}</button>
     </div>}
-    {scopeDecision && canReply && scopeChangeOpen && <form className="mt-3 space-y-2" onSubmit={submitScopeChange}>
-      <label htmlFor="client-scope-change" className="block text-xs text-content-secondary">What would you like changed in this plan?</label>
+    {scopeDecision && canReply && scopeChangeOpen && <form className="cx-request-form" onSubmit={submitScopeChange}>
+      <label htmlFor="client-scope-change">What would you like changed in this plan?</label>
       <textarea id="client-scope-change" rows={3} maxLength={SCOPE_CHANGE_MAX_LENGTH} disabled={busy} value={scopeChangeBody} onChange={event => setScopeChangeBody(event.target.value)} className={input} />
-      <p className="text-xs leading-relaxed text-content-secondary">This goes to your project manager in the conversation below. They can reply or send you an updated plan.</p>
-      <button type="submit" disabled={busy || !scopeChangeText} className={`${primary} min-h-[44px]`}><Send size={13} />Send to my project manager</button>
+      <p className="cx-request-note">This goes to your project manager in the conversation below. They can reply or send you an updated plan.</p>
+      <button type="submit" disabled={busy || !scopeChangeText} className={primary + ' min-h-[44px]'}><Send size={13} />Send to my project manager</button>
     </form>}
-  </InfoCard> : null;
-  const resultCard = !workflowActionsDisabled && ticket.delivery ? <InfoCard title="Your result" icon={<CheckCircle2 size={14} />}>
-    <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.delivery.summary}</p>
-    <p className="mt-2 text-[10px] text-content-muted">Shared {time(ticket.delivery.sharedAt)}{ticket.delivery.accepted ? ' · accepted' : ''}</p>
-    <ClientDeliveryFiles key={JSON.stringify([workspaceId, ticket.id, ticket.delivery.id, ticket.delivery.scopeVersionId])}
-      workspaceId={workspaceId} ticketId={ticket.id} deliveryId={ticket.delivery.id} scopeVersionId={ticket.delivery.scopeVersionId} onInspectionChange={inspected} api={api} />
-    {ticket.sharedProjectPreviewUrl && !ticket.delivery.accepted && <a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)}
-      className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-link hover:bg-surface-high hover:text-link-hover">Open the project preview <ExternalLink size={12} /></a>}
-    {!ticket.delivery.accepted && !canReview && <p className="mt-3 flex items-start gap-1.5 text-[10px] leading-relaxed text-status-warning"><LockKeyhole size={12} className="mt-0.5 shrink-0" />{clientReviewLockMessage(Boolean(ticket.sharedProjectPreviewUrl))}</p>}
-    {canReview && <div className="mt-3 space-y-3">
-      <label className="flex items-start gap-2 text-[11px] leading-relaxed text-content-secondary"><input type="checkbox" checked={reviewAcknowledged} disabled={busy} onChange={event => setReviewAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I checked the result against the plan.</label>
-      <div className="flex flex-wrap gap-2"><button disabled={busy || !reviewAcknowledged} onClick={() => { setCorrectionOpen(false); setConfirming({ type: 'accept_delivery', deliveryId: ticket.delivery!.id }); }} className={`${primary} min-h-[44px]`}>Accept result</button>
-        <button disabled={busy} onClick={() => { setConfirming(null); setCorrectionOpen(value => !value); }} className={`${secondary} min-h-[44px]`}>{correctionOpen ? 'Cancel' : 'Needs a fix'}</button></div>
-      {correctionOpen && <form className="space-y-2" onSubmit={async event => {
-        event.preventDefault(); if (!canReview || busy || !correctionBody.trim()) return;
-        try { await onCorrection(correctionBody.trim(), ticket.delivery!.id); setCorrectionBody(''); setCorrectionOpen(false); }
-        catch { /* Preserve this draft while the original operation is reconciled. */ }
-      }}><label htmlFor="client-result-feedback" className="block text-[11px] text-content-secondary">What does not match the plan?</label>
+  </> : null;
+
+  const delivery = workflowActionsDisabled ? null : ticket.delivery;
+  const resultBody = delivery ? <>
+    <p className="cx-request-copy">{delivery.summary}</p>
+    <p className="cx-request-note">Shared {time(delivery.sharedAt)}{delivery.accepted ? ' · accepted' : ''}</p>
+    <ClientDeliveryFiles key={JSON.stringify([workspaceId, ticket.id, delivery.id, delivery.scopeVersionId])}
+      workspaceId={workspaceId} ticketId={ticket.id} deliveryId={delivery.id} scopeVersionId={delivery.scopeVersionId} onInspectionChange={inspected} api={api} />
+    {ticket.sharedProjectPreviewUrl && !delivery.accepted && <a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)}
+      className="cx-link cx-request-preview">Open the project preview <ExternalLink size={12} /></a>}
+    {!delivery.accepted && !canReview && <p className="cx-request-lock"><LockKeyhole size={12} aria-hidden="true" />{clientReviewLockMessage(Boolean(ticket.sharedProjectPreviewUrl))}</p>}
+    {canReview && <div className="cx-request-form">
+      <label className="cx-request-check"><input type="checkbox" checked={reviewAcknowledged} disabled={busy} onChange={event => setReviewAcknowledged(event.target.checked)} />I checked the result against the plan.</label>
+      <div className="cx-request-actions"><button disabled={busy || !reviewAcknowledged} onClick={() => { setCorrectionOpen(false); setConfirming({ type: 'accept_delivery', deliveryId: delivery.id }); }} className={primary + ' min-h-[44px]'}>Accept result</button>
+        <button disabled={busy} onClick={() => { setConfirming(null); setCorrectionOpen(value => !value); }} className={secondary + ' min-h-[44px]'}>{correctionOpen ? 'Cancel' : 'Needs a fix'}</button></div>
+      {correctionOpen && <form className="cx-request-form" onSubmit={submitCorrection}>
+        <label htmlFor="client-result-feedback">What does not match the plan?</label>
         <textarea id="client-result-feedback" rows={3} maxLength={4000} disabled={busy} value={correctionBody} onChange={event => setCorrectionBody(event.target.value)} className={input} />
-        <p className="text-xs leading-relaxed text-content-secondary">Your project manager will look at your note and tell you the next step.</p>
-        <button type="submit" disabled={busy || !correctionBody.trim()} className={`${primary} min-h-[44px]`}>Send fix request</button></form>}
+        <p className="cx-request-note">Your project manager will look at your note and tell you the next step.</p>
+        <button type="submit" disabled={busy || !correctionBody.trim()} className={primary + ' min-h-[44px]'}>Send fix request</button></form>}
     </div>}
-    {ticket.delivery.accepted && <p className="mt-2 text-xs text-content-secondary">{clientAcceptedResultNote(ticket.status === 'closed')}</p>}
-  </InfoCard> : null;
-  const decisionCard = needsAction ? scopeDecision ? planCard : resultCard : null;
-  return <section className="client-ticket-detail">
-    <header className="client-detail-header">
-      <div className="client-detail-heading">
-        <button onClick={onBack} disabled={busy} className="client-detail-back" aria-label={backLabel} title={backLabel}><ArrowLeft size={15} /><span>{backLabel}</span></button>
-        <div className="client-detail-title-row">
-          <div className="min-w-0">
-            <h2 className="client-detail-title">{ticket.title}</h2>
-            {/* A plain sentence instead of the ticket code; the reference lives at the bottom of the side panel. */}
-            <p className={`client-detail-summary ${needsAction ? 'needs-action' : ''}`}>{progress.label}</p>
-            <p className="client-detail-date">Created {time(ticket.createdAt)} <span aria-hidden="true">·</span> Updated {time(ticket.updatedAt)}</p>
-          </div>
-          <div className="client-detail-heading-actions">
-            <Status status={ticket.status} label={progress.statusLabel} />
-            {needsAction && canReply && tab !== 'details' && <button type="button" onClick={showDecision} className="client-header-review">{scopeDecision ? 'Review plan' : 'Review result'}</button>}
-            {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className={`${secondary} min-h-[44px]`}>Request additional work</button>}
-          </div>
-        </div>
-        {progressSteps.length > 0 && <div className="client-detail-tracker"><ClientProgressStrip steps={progressSteps} /></div>}
-      </div>
-    </header>
+    {delivery.accepted && <p className="cx-request-note">{clientAcceptedResultNote(ticket.status === 'closed')}</p>}
+  </> : null;
 
+  // The decision the client owes leads the page; everything else about the request sits in the side column.
+  const decision = needsAction ? scopeDecision ? planBody : resultBody : null;
+  const railPlan = decision === planBody ? null : planBody;
+  const railResult = decision === resultBody ? null : resultBody;
 
-    {error && <p role="alert" className="client-detail-error">{error}</p>}
+  return <section className="cx-request" aria-labelledby="client-request-title">
+    <CxPageHeader titleId="client-request-title" title={ticket.title}
+      back={{ label: backLabel, onClick: onBack, disabled: busy }}
+      description={<span className="cx-request-summary">{progress.description}</span>}
+      actions={<>
+        <CxBadge tone={requestTone(ticket.status, requestedAction)}>{progress.statusLabel}</CxBadge>
+        {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className="cx-button">Request additional work</button>}
+      </>} />
+    {progressSteps.length > 0 && <div className="cx-panel cx-request-progress"><ClientProgressStrip steps={progressSteps} /></div>}
+    {error && <p role="alert" className="cx-error">{error}</p>}
 
-
-
-    <div className="client-detail-content role-chat-layout">
-      <div className="client-chat-main">
-      {decisionCard && <div ref={decisionRef} className="client-decision-slot" aria-label="Your decision">{decisionCard}</div>}
-      <TicketChat
-        role="client"
-        messages={messages}
-        clientInitial={clientInitial}
-        title="Conversation"
-        subtitle="Private messages between you and your project manager"
-        showHeader={false}
-        historyError={historyError}
-        messageCursor={messageCursor}
-        historyLoading={historyLoading}
-        onLoadMore={onLoadMore}
-        showFeed={showConversationFeed}
-        unavailableTitle="About this conversation"
-        unavailableDescription="The conversation and result review are not available for this request yet. Try again later or contact your project manager."
-        emptyTitle="No messages yet"
-        emptyDescription="Send a note below if you have a question or an update."
-        draft={body}
-        onDraftChange={setBody}
-        onSubmit={submitReply}
-        canCompose={canReply}
-        busy={busy}
-        writesAvailable={canReply}
-        inputId="client-ticket-reply"
-        placeholder="Message your project manager…"
-        sendAriaLabel="Send reply"
-        composerClassName="client-reply-form"
-        composerNote="Only you and your project manager can see this. Enter sends · Shift + Enter starts a new line."
-        submitOnEnter
-        readOnlyLabel={terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.'}
-        leadingAction={communicationEnabled && !terminal ? <span className="ticket-chat__leading"><Button type="button" variant="outline" size="icon" onClick={() => setTab('documents')} aria-label="Open documents"><Paperclip size={17} /></Button></span> : undefined}
-      />
-
-
-      </div>
-      <ChatContextPanel label="About this request" activeSection={tab} onClose={() => setTab('conversation')}>
-    <div role="tablist" aria-label="Request sections" className="client-detail-tabs role-chat-tools">
-      {tabs.map(item => <button key={item.id} role="tab" id={`client-tab-${item.id}`} aria-selected={tab === item.id} aria-controls={`client-panel-${item.id}`}
-        onClick={() => setTab(item.id)}
-        className={`client-detail-tab ${tab === item.id ? 'is-active' : ''}`}>{item.icon}{item.label}</button>)}
-    </div>
-      <div className={`client-other-panels ${tab === 'conversation' ? 'hidden' : ''}`}>
-        <section role="tabpanel" id="client-panel-details" aria-labelledby="client-tab-details" className={`${tab === 'details' ? 'block' : 'hidden'} ${panelScroll}`}>
-          <h2 className="sr-only">Request details</h2>
-          <div className="grid gap-5">
-            <InfoCard title="Your request" icon={<FileText size={14} />}>
-              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.description}</p>
-              {ticket.request?.requestedDeadline && <p className="mt-3 text-xs text-content-secondary">Requested date: {ticket.request.requestedDeadline} · not guaranteed</p>}
-            </InfoCard>
-            <InfoCard title="Shared project" icon={<FolderKanban size={14} />}>
-              {ticket.sharedProjectName ? <><p className="text-xs font-medium text-content">{ticket.sharedProjectName}</p><p className="mt-1 text-xs leading-relaxed text-content-secondary">This is a limited project preview. Private project work and files are not shown here.</p>
-                {ticket.sharedProjectPreviewUrl && <div className="mt-3 rounded-lg border border-divider p-3"><a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)} className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-link hover:bg-surface-high hover:text-link-hover">Open hosted project preview <ExternalLink size={12} /></a><p className="mt-1.5 text-xs leading-relaxed text-status-warning">This opens the hosted site. Anyone with the link may be able to see it. It does not open your private Alphaexplora requests.</p></div>}</>
-                : <p className="text-xs leading-relaxed text-content-secondary">Your project manager has not shared a project preview for this request yet. They will update you here if that changes.</p>}
-              {ticket.relatedTicket && <p className="mt-3 text-xs leading-relaxed text-content-secondary">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
-            </InfoCard>
-            {decisionCard !== planCard && planCard}
-            {decisionCard !== resultCard && resultCard}
-          </div>
-        </section>
-
-        {communicationEnabled && <section role="tabpanel" id="client-panel-documents" aria-labelledby="client-tab-documents" className={`${tab === 'documents' ? 'block' : 'hidden'} ${panelScroll}`}>
-          <TicketDocumentsPanel api={documentsApi} scope={workspaceId} ticketId={ticket.id}
-            canUpload={!terminal} heading="Documents for this request" />
+    <div className="cx-request-layout">
+      <div className="cx-request-main">
+        {decision && <section className="client-decision-slot cx-panel is-attention cx-decision" aria-labelledby="client-decision-title">
+          <h2 id="client-decision-title">{'Action needed: ' + progress.label}</h2>
+          {decision}
         </section>}
+        <section className="cx-panel cx-request-chat" aria-label="Conversation with your project manager">
+          <header className="cx-chat-head"><div><h2>Conversation</h2><p><LockKeyhole size={11} aria-hidden="true" /> Only you and your project manager can see this.</p></div></header>
+          <TicketChat
+            role="client"
+            messages={messages}
+            clientInitial={clientInitial}
+            title="Conversation"
+            subtitle="Private messages between you and your project manager"
+            showHeader={false}
+            historyError={historyError}
+            messageCursor={messageCursor}
+            historyLoading={historyLoading}
+            onLoadMore={onLoadMore}
+            showFeed={showConversationFeed}
+            unavailableTitle="About this conversation"
+            unavailableDescription="The conversation and result review are not available for this request yet. Try again later or contact your project manager."
+            emptyTitle="No messages yet"
+            emptyDescription="Send a note below if you have a question or an update."
+            draft={body}
+            onDraftChange={setBody}
+            onSubmit={submitReply}
+            canCompose={canReply}
+            busy={busy}
+            writesAvailable={canReply}
+            inputId="client-ticket-reply"
+            placeholder="Message your project manager…"
+            sendAriaLabel="Send reply"
+            composerClassName="client-reply-form"
+            composerNote="Enter sends · Shift + Enter starts a new line."
+            submitOnEnter
+            readOnlyLabel={terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.'}
+            leadingAction={communicationEnabled && !terminal ? <span className="ticket-chat__leading"><Button type="button" variant="outline" size="icon" onClick={showFiles} aria-label="Go to files"><Paperclip size={17} /></Button></span> : undefined}
+          />
+        </section>
       </div>
-        <div role="tabpanel" id="client-panel-conversation" aria-labelledby="client-tab-conversation" hidden={tab !== 'conversation'}>
-    <section aria-live="polite" className={`client-detail-status client-sidebar-progress is-open ${needsAction ? 'needs-action' : ''}`}>
-      <div className="client-detail-status-head">
-        <div className="client-detail-status-copy">
-        <span className="client-detail-status-icon"><Clock3 size={16} /></span>
-          <div><span className="client-detail-status-eyebrow">Where it stands</span><h2>{needsAction ? `Action needed: ${progress.label}` : progress.label}</h2><p>{progress.description}</p></div>
-        </div>
-        {needsAction && canReply && tab !== 'details' && <div className="client-detail-status-actions">
-          <button type="button" onClick={showDecision} className={`${primary} min-h-[44px] client-review-action`}>{scopeDecision ? 'Review plan' : 'Review result'}</button>
+
+      <aside className="cx-request-rail" aria-label="About this request">
+        <RailSection title="What you asked for">
+          <p className="cx-request-copy">{ticket.description}</p>
+          <p className="cx-request-note">Sent {time(ticket.createdAt)}</p>
+          {ticket.request?.requestedDeadline && <p className="cx-request-note">Hoped-for date: {ticket.request.requestedDeadline} · not guaranteed</p>}
+        </RailSection>
+        {railPlan && <RailSection title="The plan">{railPlan}</RailSection>}
+        {railResult && <RailSection title="Your result">{railResult}</RailSection>}
+        <RailSection title="Project">
+          {ticket.sharedProjectName ? <>
+            <p className="cx-request-strong">{ticket.sharedProjectName}</p>
+            {ticket.sharedProjectPreviewUrl && <>
+              <a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)} className="cx-link cx-request-preview">Open hosted preview <ExternalLink size={12} /></a>
+              <p className="cx-request-note">This opens the hosted site. Anyone with the link may be able to see it.</p>
+            </>}
+          </> : <p className="cx-request-note">Your project manager will link this request to a project.</p>}
+          {ticket.relatedTicket && <p className="cx-request-note">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
+        </RailSection>
+        {communicationEnabled && <div ref={filesRef} tabIndex={-1} className="cx-rail-section cx-request-files">
+          <TicketDocumentsPanel api={documentsApi} scope={workspaceId} ticketId={ticket.id} canUpload={!terminal} heading="Files" />
         </div>}
-      </div>
-    </section>
-        <section className="role-chat-context__section client-about-manager"><h3>Your project manager</h3>
-          <p className="client-about-person"><span className="client-pm-avatar" aria-hidden="true"><UserRound size={14} /></span>Ask questions and share updates in the conversation.</p>
-          <small><LockKeyhole size={12} className="inline" /> Private between you and your project manager</small></section>
-        <section className="role-chat-context__section"><h3>What you asked for</h3><p>{ticket.description}</p><small>Sent {time(ticket.createdAt)}</small>
-          {ticket.request?.requestedDeadline && <small>Hoped-for date: {ticket.request.requestedDeadline} · not guaranteed</small>}
-        </section>
-        <section className="role-chat-context__section"><h3>Project</h3><p>{ticket.sharedProjectName ?? 'Your project manager will link this to a project.'}</p>
-          <button type="button" className="role-chat-context__link" onClick={() => setTab('details')}><FolderKanban size={15} />See full details</button>
-        </section>
-        {communicationEnabled && <section className="role-chat-context__section"><h3>Files</h3><p>Share or download files for this request.</p><button type="button" className="role-chat-context__link" onClick={() => setTab('documents')}><Paperclip size={15} />Open files</button></section>}
-        <section className="role-chat-context__section client-about-reference"><h3>Reference</h3>
-          <p className="client-about-reference-row"><span className="client-detail-reference">{ticket.reference}</span>
-            <button type="button" onClick={copyReference} aria-label="Copy request reference" className="client-copy-reference">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
-            {copied && <span role="status" className="client-copied-note">Copied</span>}</p>
-          <small>Mention this if you contact your project manager outside the portal.</small>
-        </section>
-        </div>
-      </ChatContextPanel>
+        <RailSection title="Reference">
+          <p className="cx-request-reference"><code>{ticket.reference}</code>
+            <button type="button" onClick={copyReference} aria-label="Copy request reference" className="cx-icon-button">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
+            {copied && <span role="status" className="cx-request-note">Copied</span>}</p>
+          <p className="cx-request-note">Mention this if you contact your project manager outside the portal. Updated {time(ticket.updatedAt)}.</p>
+        </RailSection>
+      </aside>
     </div>
 
     {!workflowActionsDisabled && confirming && <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setConfirming(null); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="client-ticket-confirm-title" className="w-full max-w-md rounded-xl border border-divider bg-surface p-5 shadow-2xl">
         <h2 id="client-ticket-confirm-title" className="text-base font-semibold text-content">{confirming.type === 'accept_delivery' ? 'Accept this result?' : 'Approve this plan?'}</h2>
         <p className="mt-2 text-sm leading-relaxed text-content-secondary">{confirming.type === 'accept_delivery' ? 'This finishes the request. Nothing more is needed from you.' : 'Your project manager will then start the work.'}</p>
-        <div className="mt-5 flex justify-end gap-2"><button onClick={() => setConfirming(null)} disabled={busy} className={`${secondary} min-h-[44px]`}>Cancel</button><button onClick={() => {
+        <div className="mt-5 flex justify-end gap-2"><button onClick={() => setConfirming(null)} disabled={busy} className={secondary + ' min-h-[44px]'}>Cancel</button><button onClick={() => {
           if (confirming.type === 'accept_delivery' && (!canReview || !reviewAcknowledged || confirming.deliveryId !== ticket.delivery?.id)) return;
           if (confirming.type === 'agree_scope' && confirming.scopeVersionId !== ticket.scope?.id) return;
           onDecision(confirming); setConfirming(null);
-        }} disabled={busy || (confirming.type === 'accept_delivery' && (!canReview || !reviewAcknowledged))} className={`${primary} min-h-[44px]`}>{confirming.type === 'accept_delivery' ? 'Accept result' : 'Approve plan'}</button></div>
+        }} disabled={busy || (confirming.type === 'accept_delivery' && (!canReview || !reviewAcknowledged))} className={primary + ' min-h-[44px]'}>{confirming.type === 'accept_delivery' ? 'Accept result' : 'Approve plan'}</button></div>
       </section>
     </div>}
   </section>;
 }
 
-function InfoCard({ title, icon, children }: { title: string; icon: React.ReactNode; children: React.ReactNode }) {
-  return <article className="client-detail-card"><h2>{icon}{title}</h2>{children}</article>;
-}
-
-function Status({ status, label }: { status: ClientTicketRecord['status']; label: string }) {
-  const tone = status === 'closed' ? 'is-complete'
-    : status === 'ready_for_review' || status === 'awaiting_client' ? 'is-waiting'
-      : status === 'in_progress' ? 'is-active'
-        : status === 'declined' || status === 'cancelled' ? 'is-ended' : 'is-neutral';
-  return <span className={`client-status ${tone}`}>{label}</span>;
+function RailSection({ title, children }: { title: string; children: ReactNode }) {
+  return <section className="cx-rail-section"><h2>{title}</h2>{children}</section>;
 }

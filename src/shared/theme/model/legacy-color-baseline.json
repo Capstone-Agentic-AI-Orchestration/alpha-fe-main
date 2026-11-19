@@ -92,9 +92,6 @@
     "rgba(127,29,29,.15)": 1,
     "#fecdd3": 1
   },
-  "src/features/ticketing/clientPortal.css": {
-    "#20182d": 1
-  },
   "src/features/ticketing/publicClient/clientPublic.css": {
     "#0d0d14": 1,
     "#15151f": 1,

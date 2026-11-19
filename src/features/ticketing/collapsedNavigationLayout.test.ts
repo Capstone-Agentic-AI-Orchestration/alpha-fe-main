@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
  * and the filters spill sideways. The collapse preference outlives the open
  * item, so every such rule must also require the "something is open" class.
  */
-const STYLESHEETS = ['pmTickets.css', 'chatWorkspace.css', 'clientPortal.css'];
+const STYLESHEETS = ['pmTickets.css', 'chatWorkspace.css'];
 const OPEN_CLASSES = ['pm-tickets--ticket-open', 'has-selected-request', 'pm-inquiries--selected'];
 
 function narrowRailSelectors(css: string): string[] {

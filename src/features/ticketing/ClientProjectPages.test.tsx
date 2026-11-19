@@ -1,8 +1,6 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { ClientOverviewPage } from './ClientProjectPages';
-import { ClientProjectQaStudio } from './ClientProjectQaStudio';
-import { ProjectOverviewTab } from './ClientProjectSections';
 import { sharedBuildState } from './PmProjectQaStudio';
 import { QaPreview, previewViewport } from './ProjectQaStudio';
 import type { QaBuild } from './projectQaApi';
@@ -73,37 +71,7 @@ describe('client project review presentation', () => {
   });
 });
 
-describe('project review without a checklist', () => {
-  const preview = { branch: 'uat' as const, url: 'https://shop-uat.vercel.app/' };
-
-  afterEach(() => { vi.unstubAllGlobals(); });
-
-  it('gives the client the shared preview and the project conversation, with no checklist or history', () => {
-    // The embed check compares against the page's own origin.
-    vi.stubGlobal('window', { location: { origin: 'https://alpha-portal.vercel.app' } });
-    const html = renderToStaticMarkup(<ClientProjectQaStudio projectName="Shop" preview={preview} feedback={<p>Project conversation</p>} />);
-    expect(html).toContain('src="https://shop-uat.vercel.app/"');
-    expect(html).toContain('Project conversation');
-    expect(html).not.toContain('role="tab"');
-    expect(html).not.toMatch(/Checklist|History|Review round|Submit review/);
-  });
-
-  it('tells the client when nothing has been shared yet', () => {
-    const html = renderToStaticMarkup(<ClientProjectQaStudio projectName="Shop" preview={null} feedback={null} />);
-    expect(html).toContain('No preview shared yet');
-    expect(html).not.toContain('<iframe');
-  });
-
-  it('points the client overview at the shared preview instead of review rounds', () => {
-    const api = new Proxy({}, { get: () => () => new Promise(() => {}) }) as never;
-    const project = { workspaceId: 'w', projectId: 'p', name: 'Shop', updatedAt: '2026-11-01T00:00:00.000Z', intakeOptionId: 'o', preview };
-    const props = { api, refreshToken: 0, onOpenRequest: () => {}, onShowRequests: () => {}, onShowReview: () => {} };
-    const shared = renderToStaticMarkup(<ProjectOverviewTab {...props} project={project} />);
-    expect(shared).toContain('Open Project Review');
-    expect(shared).not.toMatch(/Latest review|Review rounds|ready to test/);
-    expect(renderToStaticMarkup(<ProjectOverviewTab {...props} project={{ ...project, preview: null }} />)).toContain('No preview shared yet');
-  });
-
+describe('project review shared build', () => {
   it('tells the PM whether clients see the current UAT build', () => {
     const build = { frontend: { repository: 'org/shop', branch: 'uat', deploymentId: 'd', commitSha: 'c', url: 'https://shop-new.vercel.app' } } as QaBuild;
     const shared = { repository: 'org/shop', branch: 'uat' as const, url: 'https://shop-old.vercel.app' };

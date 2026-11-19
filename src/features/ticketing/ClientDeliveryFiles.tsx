@@ -66,14 +66,14 @@ export function ClientDeliveryFiles({ workspaceId, ticketId, deliveryId, scopeVe
 
   return <section aria-label="Protected delivery files" className="mt-3 space-y-2 border-t border-divider pt-3">
     {loading && <LoadingRows label="Checking protected result files" rows={1} />}
-    {error && <div role="alert" className="space-y-2 text-[11px] text-status-warning"><p>{error}</p>
+    {error && <div role="alert" className="space-y-2 text-xs text-status-warning"><p>{error}</p>
       <button onClick={() => setRetry(value => value + 1)} disabled={loading || downloading !== null} className={secondary}><RefreshCw size={12} />Refresh files</button></div>}
     {manifest?.files.map(file => <div key={file.id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-divider p-2">
       <div className="min-w-0"><p className="break-words text-xs text-content">{file.filename}</p>
-        <p className="text-[10px] text-content-muted">{new Intl.NumberFormat().format(file.byteLength)} bytes · pinned result</p></div>
+        <p className="text-xs text-content-muted">{new Intl.NumberFormat().format(file.byteLength)} bytes · pinned result</p></div>
       <button onClick={() => void download(file)} disabled={downloading !== null} className={`${secondary} shrink-0`} aria-label={`Download ${file.filename}`}>
         <Download size={12} />{downloading === file.id ? 'Checking…' : 'Download'}</button>
     </div>)}
-    {manifest && <p className="text-[10px] leading-relaxed text-content-muted">Downloads are checked against this shared result. These files do not grant repository or internal project access.</p>}
+    {manifest && <p className="text-xs leading-relaxed text-content-muted">Downloads are checked against this shared result. These files do not grant repository or internal project access.</p>}
   </section>;
 }
