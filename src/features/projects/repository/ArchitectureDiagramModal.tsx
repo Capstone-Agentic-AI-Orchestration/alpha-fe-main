@@ -10,6 +10,7 @@ import {
   Globe2,
   LoaderCircle,
   Maximize2,
+  Move,
   Minus,
   Plus,
   RefreshCw,
@@ -31,6 +32,7 @@ interface ArchitectureDiagramModalProps {
 type DiagramNode = ArchitectureNode & { x: number; y: number; sectionIndex: number; rank: number };
 interface DiagramSection extends ArchitectureSection { x: number; y: number; width: number; height: number; count: number }
 interface DiagramLayout { nodes: DiagramNode[]; sections: DiagramSection[]; width: number; height: number }
+interface PanGesture { pointerId: number; startX: number; startY: number; scrollLeft: number; scrollTop: number; moved: boolean }
 
 const NODE_WIDTH = 244;
 const NODE_HEIGHT = 84;
@@ -209,6 +211,8 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
   const [zoom, setZoom] = useState(0.85);
   const [query, setQuery] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [isPanning, setIsPanning] = useState(false);
+  const panGesture = useRef<PanGesture | null>(null);
   const normalizedQuery = query.trim().toLowerCase();
   const matchingIds = useMemo(() => {
     if (!normalizedQuery) return new Set<string>();
@@ -235,6 +239,51 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
   const fitWidth = () => {
     const viewport = viewportRef.current;
     if (viewport) setZoom(Math.min(1, Math.max(0.4, (viewport.clientWidth - 28) / layout.width)));
+  };
+  const beginPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0 || event.pointerType === 'touch') return;
+    const target = event.target;
+    if (target instanceof Element && target.closest('[data-architecture-node], button, input, a')) return;
+    const viewport = event.currentTarget;
+    event.preventDefault();
+    panGesture.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+      moved: false,
+    };
+    viewport.setPointerCapture(event.pointerId);
+    setIsPanning(true);
+  };
+  const movePan = (event: React.PointerEvent<HTMLDivElement>) => {
+    const gesture = panGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (!gesture.moved && Math.hypot(deltaX, deltaY) < 4) return;
+    gesture.moved = true;
+    event.preventDefault();
+    event.currentTarget.scrollLeft = gesture.scrollLeft - deltaX;
+    event.currentTarget.scrollTop = gesture.scrollTop - deltaY;
+  };
+  const endPan = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (panGesture.current?.pointerId !== event.pointerId) return;
+    panGesture.current = null;
+    setIsPanning(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  };
+  const panWithKeyboard = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (event.target !== event.currentTarget) return;
+    const step = 64;
+    const offsets: Record<string, [number, number]> = {
+      ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step],
+    };
+    const offset = offsets[event.key];
+    if (!offset) return;
+    event.preventDefault();
+    event.currentTarget.scrollBy({ left: offset[0], top: offset[1] });
   };
   const getEdgeRoute = (edge: ArchitectureEdge, index: number) => {
     const from = byId.get(edge.from);
@@ -328,6 +377,9 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
         <button type="button" onClick={fitWidth} className="inline-flex h-9 items-center gap-2 rounded-lg border border-divider bg-well px-3 text-xs font-medium text-content-secondary transition hover:bg-surface-raised hover:text-content" title="Fit diagram to available width">
           <Maximize2 className="h-3.5 w-3.5" /> Fit width
         </button>
+        <span className="hidden items-center gap-1.5 whitespace-nowrap text-[11px] text-content-muted sm:inline-flex" title="Drag an empty part of the diagram to move around it">
+          <Move className="h-3.5 w-3.5" /> Drag to pan
+        </span>
       </div>
 
       {selected && (
@@ -347,7 +399,17 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
         </div>
       )}
 
-      <div ref={viewportRef} className="min-h-0 flex-1 overflow-auto bg-well p-3 sm:p-5">
+      <div
+        ref={viewportRef}
+        tabIndex={0}
+        aria-label="Architecture canvas. Drag empty space to pan, or use the arrow keys while this canvas is focused."
+        onPointerDown={beginPan}
+        onPointerMove={movePan}
+        onPointerUp={endPan}
+        onPointerCancel={endPan}
+        onKeyDown={panWithKeyboard}
+        className={`min-h-0 flex-1 overflow-auto bg-well p-3 sm:p-5 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-link ${isPanning ? 'cursor-grabbing select-none' : 'cursor-grab'}`}
+      >
         <svg
           width={Math.round(layout.width * zoom)}
           height={Math.round(layout.height * zoom)}
@@ -436,6 +498,7 @@ function ArchitectureGraph({ diagram }: { diagram: RepoArchitecture }) {
             return (
               <g
                 key={node.id}
+                data-architecture-node="true"
                 role="button"
                 tabIndex={0}
                 aria-label={`Inspect ${node.label}${node.technology ? `, ${node.technology}` : ''}`}
