@@ -16,8 +16,6 @@ interface Navigation {
   search: string;
   replyDrafts: Record<string, string>;
   returnToProjects: boolean;
-  navigationCollapsed: boolean;
-  requestListShown: boolean;
   notificationProjectFocus: number;
 }
 interface Tab { id: string; navigation: Navigation }
@@ -34,7 +32,7 @@ export function initialClientTabs(filter: ClientPortalFilter = 'all'): Tabs {
 function createTab(id: string, page: ClientPage, filter: ClientPortalFilter = 'all'): Tab {
   return { id, navigation: { page, selectedProjectKey: null, selectedProposalId: null, selectedId: null, selectedWorkspaceId: null,
     selectedItemFallback: null, filter, searchInput: '', search: '', replyDrafts: {}, returnToProjects: false,
-    navigationCollapsed: false, requestListShown: true, notificationProjectFocus: 0 } };
+    notificationProjectFocus: 0 } };
 }
 export function clientWorkspaceTabsReducer(state: Tabs, action: Action): Tabs {
   switch (action.type) {

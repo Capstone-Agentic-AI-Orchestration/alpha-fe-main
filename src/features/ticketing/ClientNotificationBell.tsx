@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { Bell, CheckCheck, ChevronRight, FileText, FolderKanban, MessageSquare, X } from 'lucide-react';
 import type { ClientProject, ClientProjectProposal, ClientProjectRequestItem } from './clientApi';
 import { time } from './ticketUi';
+import './clientNotifications.css';
 
 export type ClientPortalUpdate = {
   id: string;
@@ -120,7 +121,7 @@ export function ClientNotificationBell({ email, updates, ready, loading, error, 
   }, [open]);
 
   return <>
-    <button ref={triggerRef} type="button" className="client-portal-action client-notification-trigger"
+    <button ref={triggerRef} type="button" className="cx-icon-button client-notification-trigger"
       aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : 'Notifications'} title="Notifications and updates"
       aria-expanded={open} aria-haspopup="dialog" aria-controls="client-notification-panel" onClick={() => setOpen(value => !value)}>
       <Bell size={17} aria-hidden="true" />
@@ -128,7 +129,7 @@ export function ClientNotificationBell({ email, updates, ready, loading, error, 
     </button>
     {open && position && createPortal(<section ref={panelRef} id="client-notification-panel" role="dialog" aria-label="Client notifications and updates"
       aria-modal="false" tabIndex={-1} style={{ position: 'fixed', top: position.top, left: position.left, width: position.width, maxHeight: position.maxHeight }}
-      className="client-notification-popover">
+      className="client-notification-popover cx-scope">
       <header className="client-notification-header">
         <div><h2>Updates</h2><p>{unreadCount ? `${unreadCount} unread` : 'You’re up to date'}</p></div>
         <div className="client-notification-header-actions">

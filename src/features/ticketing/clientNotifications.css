@@ -1,0 +1,30 @@
+/* The client notification bell and its pop-up (rendered outside the page shell, so theme colours are used directly). */
+.client-notification-trigger { position: relative; }
+.client-notification-count { position: absolute; top: -5px; right: -5px; display: grid; min-width: 16px; height: 16px; place-items: center; padding: 0 var(--client-space-1); border: 2px solid rgb(var(--ui-shell)); border-radius: var(--client-radius-pill); background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); font-size: var(--client-type-meta); font-weight: var(--client-weight-bold); line-height: 1; }
+.client-notification-popover { z-index: 80; display: flex; flex-direction: column; overflow: hidden; border: 1px solid rgb(var(--ui-divider)); border-radius: var(--client-radius-panel); background: rgb(var(--ui-surface)); color: rgb(var(--ui-text-primary)); box-shadow: var(--client-shadow-popover); outline: none; }
+.client-notification-header { display: flex; flex: 0 0 auto; align-items: center; justify-content: space-between; gap: var(--client-space-3); padding: var(--client-space-3) var(--client-space-4); border-bottom: 1px solid rgb(var(--ui-divider)); background: rgb(var(--ui-shell)); }
+.client-notification-header h2 { margin: 0; font-size: var(--client-type-compact); font-weight: var(--client-weight-bold); }
+.client-notification-header p { margin: 3px 0 0; color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); }
+.client-notification-header-actions { display: flex; align-items: center; gap: var(--client-space-1); }
+.client-notification-header-actions button { display: inline-flex; min-height: var(--client-control-compact); align-items: center; justify-content: center; gap: var(--client-space-1); padding: 0 var(--client-space-2); border: 0; border-radius: var(--client-radius-control); background: transparent; color: rgb(var(--ui-text-secondary)); font-size: var(--client-type-meta); cursor: pointer; }
+.client-notification-header-actions button:hover:not(:disabled) { background: rgb(var(--ui-raised)); color: rgb(var(--ui-text-primary)); }
+.client-notification-header-actions button:disabled { opacity: .45; cursor: default; }
+.client-notification-list { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.client-notification-item { display: grid; width: 100%; grid-template-columns: 34px minmax(0,1fr) 12px; align-items: start; gap: var(--client-space-3); padding: var(--client-space-3) var(--client-space-4); border: 0; border-bottom: 1px solid rgb(var(--ui-divider)); background: transparent; color: rgb(var(--ui-text-secondary)); text-align: left; cursor: pointer; }
+.client-notification-item:hover { background: rgb(var(--ui-raised)); }
+.client-notification-item.is-unread { background: rgb(var(--ui-selected) / .28); }
+.client-notification-item.is-unread:hover { background: rgb(var(--ui-selected) / .48); }
+.client-notification-icon { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid rgb(var(--ui-divider)); border-radius: var(--client-radius-surface); background: rgb(var(--ui-surface)); color: rgb(var(--ui-link)); }
+.client-notification-copy { display: grid; min-width: 0; gap: var(--client-space-1); overflow-wrap: anywhere; }
+.client-notification-copy strong { overflow: hidden; color: rgb(var(--ui-text-primary)); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); text-overflow: ellipsis; }
+.client-notification-copy > span { color: rgb(var(--ui-text-secondary)); font-size: var(--client-type-meta); line-height: var(--client-line-body); }
+.client-notification-copy time { color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); font-variant-numeric: tabular-nums; }
+.client-notification-unread-dot { width: 8px; height: 8px; margin-top: 5px; border-radius: 50%; background: rgb(var(--ui-link)); }
+.client-notification-chevron { margin-top: 7px; color: rgb(var(--ui-text-muted)); }
+.client-notification-empty { display: grid; justify-items: center; gap: var(--client-space-2); padding: var(--client-space-7) var(--client-space-6); color: rgb(var(--ui-text-secondary)); font-size: var(--client-type-meta); text-align: center; }
+.client-notification-empty svg { color: rgb(var(--ui-link)); }
+.client-notification-empty strong { color: rgb(var(--ui-text-primary)); font-size: var(--client-type-caption); }
+.client-notification-empty span { max-width: 245px; color: rgb(var(--ui-text-muted)); line-height: var(--client-line-body); }
+.client-notification-error { display: flex; align-items: center; justify-content: space-between; gap: var(--client-space-2); padding: var(--client-space-2) var(--client-space-4); border-bottom: 1px solid rgb(var(--ui-danger) / .3); color: rgb(var(--ui-danger)); font-size: var(--client-type-meta); }
+.client-notification-error button { min-height: var(--client-control-compact); padding: 0 var(--client-space-2); border: 1px solid rgb(var(--ui-divider)); border-radius: var(--client-radius-control); background: rgb(var(--ui-surface)); color: rgb(var(--ui-text-primary)); cursor: pointer; }
+.client-notification-footer { flex: 0 0 auto; padding: var(--client-space-2) var(--client-space-4); border-top: 1px solid rgb(var(--ui-divider)); color: rgb(var(--ui-text-muted)); font-size: var(--client-type-meta); text-align: center; }
