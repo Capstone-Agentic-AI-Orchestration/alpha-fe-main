@@ -1,11 +1,12 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Check, FolderKanban, Hand, Lightbulb, RefreshCw, Send, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, FolderKanban, Lightbulb, RefreshCw, Send, Plus } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
+import { CxBadge, CxEmpty, CxPageHeader, CxPanel, CxRow, CxSection, CxTrack } from './clientKit';
 import { clientTicketProgress } from './clientTicketProgress';
-import { clientGreeting, clientNextStep, clientRequestGroup, dayLabel, listProgressIndex, relativeTime } from './clientFriendly';
+import { clientGreeting, clientNextStep, clientRequestGroup, listProgressIndex, relativeTime } from './clientFriendly';
 import { CLIENT_PROGRESS_LABELS } from './clientProgressSteps';
 import { time } from './ticketUi';
 import { ClientProjectQaStudio } from './ClientProjectQaStudio';
@@ -34,83 +35,58 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
 }) {
   const items = requests?.items ?? [];
   const attention = items.filter(item => clientRequestGroup(item) === 'needs_you');
+  const waiting = attention.length + (proposalsNeedingReply && onOpenProposals ? 1 : 0);
   const recent = [...items].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 6);
-  const days = recent.reduce<Array<{ day: string; rows: ClientProjectRequestItem[] }>>((groups, item) => {
-    const day = dayLabel(item.updatedAt);
-    const last = groups[groups.length - 1];
-    if (last?.day === day) last.rows.push(item); else groups.push({ day, rows: [item] });
-    return groups;
-  }, []);
   const firstName = clientName?.trim().split(/\s+/)[0] ?? '';
   const shownProjects = [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 4);
   const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
-  return <section className="client-page client-home is-wide" aria-labelledby="client-overview-title">
-    <header className="client-home-hello">
-      <p>{today}</p>
-      <h1 id="client-overview-title">{clientGreeting()}{firstName ? `, ${firstName}` : ''}</h1>
-    </header>
+  return <section className="cx-page client-home" aria-labelledby="client-overview-title">
+    <CxPageHeader titleId="client-overview-title" eyebrow={today} title={clientGreeting() + (firstName ? ', ' + firstName : '')} />
 
-    <section aria-labelledby="client-attention-title" aria-busy={requestsLoading && !requests}>
-      <h2 id="client-attention-title" className="sr-only">Needs you</h2>
-      {requestsError && <p role="alert" className="client-project-error">{requestsError}</p>}
-      {!requests && requestsLoading ? <div className="client-hero"><LoadingRows label="Loading requests needing attention" layout="detail" rows={1} className="w-full" /></div>
+    <section className="cx-section" aria-labelledby="client-attention-title" aria-busy={requestsLoading && !requests}>
+      {requestsError && <p role="alert" className="cx-error">{requestsError}</p>}
+      {!requests && requestsLoading ? <CxPanel><LoadingRows label="Loading requests needing attention" layout="detail" rows={1} className="w-full p-4" /></CxPanel>
         : !requests ? null
-        : attention.length || proposalsNeedingReply ? <div className="client-hero is-attention">
-          <div className="client-hero-head">
-            <span className="client-hero-icon" aria-hidden="true"><Hand size={19} /></span>
-            <div><strong>{attention.length + (proposalsNeedingReply ? 1 : 0)} {attention.length + (proposalsNeedingReply ? 1 : 0) === 1 ? 'thing needs' : 'things need'} you</strong><p>Everything else is moving along.</p></div>
-          </div>
-          <ul className="client-hero-list">{attention.map(item => {
-            const step = clientNextStep(item.requestedAction);
-            return <li key={requestKey(item)}><button type="button" className="client-hero-row" onClick={() => onOpenRequest(item)}>
-              <span><strong>{item.title}</strong><small>{step?.prompt ?? 'Your project manager needs you'}</small></span>
-              <span className="client-hero-action">{step?.action ?? 'Open request'}<ArrowRight size={14} aria-hidden /></span>
-            </button></li>;
-          })}
-          {proposalsNeedingReply > 0 && onOpenProposals && <li><button type="button" className="client-hero-row" onClick={onOpenProposals}>
-            <span><strong>{proposalsNeedingReply === 1 ? 'Your project idea' : `${proposalsNeedingReply} project ideas`}</strong><small>Your project manager has a question</small></span>
-            <span className="client-hero-action">Reply<ArrowRight size={14} aria-hidden /></span>
-          </button></li>}</ul>
-        </div>
-          : <div className="client-hero is-clear">
-            <span className="client-hero-icon" aria-hidden="true"><Check size={20} /></span>
-            <div><strong>You’re all caught up</strong><p>Your project manager is on it. We’ll let you know here when something needs you.</p></div>
-          </div>}
+        : waiting ? <>
+          <div className="cx-section-head"><h2 id="client-attention-title">{waiting} {waiting === 1 ? 'thing needs' : 'things need'} you</h2></div>
+          <CxPanel tone="attention">
+            {attention.map(item => {
+              const step = clientNextStep(item.requestedAction);
+              return <CxRow key={requestKey(item)} title={item.title} meta={step?.prompt ?? 'Your project manager needs you'} onClick={() => onOpenRequest(item)}
+                trailing={<span className="cx-button is-primary">{step?.action ?? 'Open request'}</span>} />;
+            })}
+            {proposalsNeedingReply > 0 && onOpenProposals && <CxRow onClick={onOpenProposals}
+              title={proposalsNeedingReply === 1 ? 'Your project idea' : proposalsNeedingReply + ' project ideas'} meta="Your project manager has a question"
+              trailing={<span className="cx-button is-primary">Reply</span>} />}
+          </CxPanel>
+        </>
+          : <CxPanel><div className="cx-caught-up"><Check size={18} aria-hidden="true" /><div><h2 id="client-attention-title">You’re all caught up</h2>
+            <p>Your project manager is on it. We’ll let you know here when something needs you.</p></div></div></CxPanel>}
     </section>
 
-    {/* Wide screens: projects and recent activity side by side, so the page uses the whole panel. */}
-    <div className="client-home-grid">
-    <section className="client-home-block" aria-labelledby="client-projects-title">
-      <div className="client-home-block-head">
-        <h2 id="client-projects-title">{shownProjects.length === 1 ? 'Your project' : 'Your projects'}</h2>
-        {projects.length > shownProjects.length && <button type="button" className="client-text-action" onClick={onGoToProjects}>All projects <ArrowRight size={15} /></button>}
-      </div>
-      {projectsError && <p role="alert" className="client-project-error">{projectsError}</p>}
-      {projectsLoading && !projects.length ? <div className="client-spotlight"><LoadingRows label="Loading shared projects" rows={2} /></div>
-        : shownProjects.length ? <div className="client-spotlights">{shownProjects.map(project => <ClientProjectSpotlight key={clientProjectKey(project)}
-          project={project} requests={items} onOpenProject={() => onOpenProject(project)} onOpenRequest={onOpenRequest} />)}</div>
-          : !projectsError && <p className="client-home-empty">No projects have been shared with your account yet. When your project manager shares one, it will appear here.</p>}
-    </section>
+    <div className="cx-home-grid">
+      <CxSection titleId="client-projects-title" title={shownProjects.length === 1 ? 'Your project' : 'Your projects'}
+        action={projects.length > shownProjects.length ? <button type="button" className="cx-link" onClick={onGoToProjects}>All projects <ArrowRight size={14} aria-hidden="true" /></button> : undefined}>
+        {projectsError && <p role="alert" className="cx-error">{projectsError}</p>}
+        {projectsLoading && !projects.length ? <CxPanel><LoadingRows label="Loading shared projects" rows={2} className="p-4" /></CxPanel>
+          : shownProjects.length ? <div className="cx-project-list">{shownProjects.map(project => <ClientProjectSpotlight key={clientProjectKey(project)}
+            project={project} requests={items} onOpenProject={() => onOpenProject(project)} onOpenRequest={onOpenRequest} />)}</div>
+            : !projectsError && <CxPanel><CxEmpty title="No projects yet" body="No projects have been shared with your account yet. When your project manager shares one, it will appear here." /></CxPanel>}
+      </CxSection>
 
-    <section className="client-home-block" aria-labelledby="client-recent-title">
-      <div className="client-home-block-head">
-        <h2 id="client-recent-title">Recent activity</h2>
-        <button type="button" className="client-text-action" onClick={onGoToRequests}>All requests <ArrowRight size={15} /></button>
-      </div>
-      {!requests && requestsLoading ? <div className="client-spotlight"><LoadingRows label="Loading recent request updates" layout="table" rows={4} /></div>
-        : !requests ? null
-        : days.length ? <ol className="client-timeline">{days.map(group => <li key={group.day}>
-          <p className="client-timeline-day">{group.day}</p>
-          <ul>{group.rows.map(item => <li key={requestKey(item)}><UpdateRow item={item} onOpen={onOpenRequest} /></li>)}</ul>
-        </li>)}</ol>
-          : <p className="client-home-empty">No request updates yet. Your project manager will share requests here.</p>}
-    </section>
+      <CxSection titleId="client-recent-title" title="Latest updates"
+        action={<button type="button" className="cx-link" onClick={onGoToRequests}>All requests <ArrowRight size={14} aria-hidden="true" /></button>}>
+        {!requests && requestsLoading ? <CxPanel><LoadingRows label="Loading recent request updates" layout="table" rows={4} className="p-4" /></CxPanel>
+          : !requests ? null
+          : recent.length ? <CxPanel>{recent.map(item => <UpdateRow key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}</CxPanel>
+            : <CxPanel><CxEmpty title="No updates yet" body="Your project manager will share requests here." /></CxPanel>}
+      </CxSection>
     </div>
 
-    {onProposeProject && <div className="client-home-idea">
+    {onProposeProject && <CxPanel className="cx-idea">
       <div><strong>Have a new idea?</strong><p>Tell your project manager what you’d like to build next.</p></div>
-      <button type="button" className="client-secondary-action" onClick={onProposeProject}><Plus size={15} />Propose a project</button>
-    </div>}
+      <button type="button" className="cx-button" onClick={onProposeProject}><Plus size={15} aria-hidden="true" />Propose a project</button>
+    </CxPanel>}
   </section>;
 }
 
@@ -125,44 +101,37 @@ export function ClientProjectSpotlight({ project, requests, onOpenProject, onOpe
     && clientRequestGroup(item) !== 'done').sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   const needsYou = open.filter(item => clientRequestGroup(item) === 'needs_you').length;
   const shown = open.slice(0, 3);
-  return <article className="client-spotlight">
-    <header className="client-spotlight-head">
-      <span className="client-spotlight-icon" aria-hidden="true"><FolderKanban size={18} /></span>
-      <div className="client-spotlight-title">
+  return <article className="cx-panel cx-project-card">
+    <header className="cx-project-card-head">
+      <span className="cx-project-icon" aria-hidden="true"><FolderKanban size={18} /></span>
+      <div className="cx-project-card-title">
         <h3>{project.name}</h3>
-        <p>{open.length ? `${open.length} open ${open.length === 1 ? 'request' : 'requests'}` : 'No open requests'} · updated {relativeTime(project.updatedAt)}{project.preview ? ' · preview ready' : ''}</p>
+        <p>{open.length ? open.length + ' open ' + (open.length === 1 ? 'request' : 'requests') : 'No open requests'} · updated {relativeTime(project.updatedAt)}{project.preview ? ' · preview ready' : ''}</p>
       </div>
-      {needsYou > 0 && <span className="client-soft-badge is-attention">{needsYou} {needsYou === 1 ? 'needs' : 'need'} you</span>}
-      <button type="button" className="client-text-action" onClick={onOpenProject} aria-label={`View project ${project.name}`}>View project <ArrowRight size={15} /></button>
+      {needsYou > 0 && <CxBadge tone="attention">{needsYou} {needsYou === 1 ? 'needs' : 'need'} you</CxBadge>}
+      <button type="button" className="cx-link" onClick={onOpenProject} aria-label={'View project ' + project.name}>View project <ArrowRight size={14} aria-hidden="true" /></button>
     </header>
-    {shown.length > 0 && <ul className="client-spotlight-requests">{shown.map(item => <li key={requestKey(item)}><RequestProgressRow item={item} onOpen={onOpenRequest} /></li>)}</ul>}
-    {open.length > shown.length && <button type="button" className="client-spotlight-more" onClick={onOpenProject}>{open.length - shown.length} more in this project</button>}
+    {shown.map(item => <RequestProgressRow key={requestKey(item)} item={item} onOpen={onOpenRequest} />)}
+    {open.length > shown.length && <button type="button" className="cx-row is-interactive cx-more" onClick={onOpenProject}>{open.length - shown.length} more in this project</button>}
   </article>;
 }
 
 function RequestProgressRow({ item, onOpen }: { item: ClientProjectRequestItem; onOpen: (item: ClientProjectRequestItem) => void }) {
   const index = listProgressIndex(item);
   const label = clientTicketProgress(item.status, item.requestedAction).label;
-  return <button type="button" className="client-spotlight-request" onClick={() => onOpen(item)}>
-    <strong>{item.title}</strong>
-    {index !== null && <span className="client-mini-track" aria-hidden="true">{CLIENT_PROGRESS_LABELS.map((step, stepIndex) => <span key={step}
-      className={stepIndex < index ? 'is-done' : stepIndex === index ? 'is-current' : ''} />)}</span>}
-    <small>{index !== null ? `Step ${index + 1} of ${CLIENT_PROGRESS_LABELS.length} · ${label}` : label}</small>
-  </button>;
+  return <CxRow title={item.title} onClick={() => onOpen(item)}
+    meta={index !== null ? 'Step ' + (index + 1) + ' of ' + CLIENT_PROGRESS_LABELS.length + ' · ' + label : label}>
+    {index !== null && <CxTrack index={index} total={CLIENT_PROGRESS_LABELS.length} />}
+  </CxRow>;
 }
 
 function UpdateRow({ item, onOpen }: { item: ClientProjectRequestItem; onOpen: (item: ClientProjectRequestItem) => void }) {
   const pending = item.projectLinkStatus === 'pending_review';
   const sentence = pending
-    ? `Your project manager is confirming the project${item.requestedProjectName ? ` for ${item.requestedProjectName}` : ''}`
+    ? 'Your project manager is confirming the project' + (item.requestedProjectName ? ' for ' + item.requestedProjectName : '')
     : clientTicketProgress(item.status, item.requestedAction).label;
-  return <button type="button" className="client-timeline-row" onClick={() => onOpen(item)}>
-    <span className={`client-feed-dot is-${clientRequestGroup(item)}`} aria-hidden="true" />
-    <span className="client-feed-copy"><strong>{item.title}</strong><small>{sentence}</small></span>
-    {/* The day heading already names the date, so older rows show only the time of day. */}
-    <time dateTime={item.updatedAt} title={time(item.updatedAt)}>{dayLabel(item.updatedAt) === 'Today' ? relativeTime(item.updatedAt)
-      : new Date(item.updatedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</time>
-  </button>;
+  return <CxRow title={item.title} onClick={() => onOpen(item)} meta={<>{sentence} · <time dateTime={item.updatedAt} title={time(item.updatedAt)}>{relativeTime(item.updatedAt)}</time></>}
+    trailing={<span className={'cx-dot is-' + clientRequestGroup(item)} aria-hidden="true" />} />;
 }
 
 export function ClientProjectsPage({ api = clientTicketApi, projects, loading, error, selectedProjectKey,
@@ -296,30 +265,24 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
       onFilterChange={setRequestFilter} onOpenRequest={onOpenRequest} newRequest={newRequestButton} idPrefix={idPrefix} />}
   </section>;
 
-  return <section className="client-page client-projects-page is-wide" aria-labelledby={`${idPrefix}-projects-page-title`}>
-    <header className="client-page-head">
-      <div className="client-home-hello">
-        <h1 id={`${idPrefix}-projects-page-title`}>Your projects</h1>
-        <p>Everything your project manager has shared with you.</p>
-      </div>
-      {!inspectionOnly && onProposeProject && <button type="button" className="client-secondary-action" onClick={onProposeProject}>
-        <Plus size={15} />Propose a project</button>}
-    </header>
-    {proposalsNeedingReply > 0 && onOpenProposals && <div className="client-proposals-notice" role="status">
+  return <section className="cx-page client-projects-page" aria-labelledby={idPrefix + '-projects-page-title'}>
+    <CxPageHeader titleId={idPrefix + '-projects-page-title'} title="Your projects" description="Everything your project manager has shared with you."
+      actions={!inspectionOnly && onProposeProject ? <button type="button" className="cx-button" onClick={onProposeProject}><Plus size={15} aria-hidden="true" />Propose a project</button> : undefined} />
+    {proposalsNeedingReply > 0 && onOpenProposals && <CxPanel tone="attention"><div className="cx-row" role="status">
       <Lightbulb size={16} aria-hidden="true" />
-      <span>Your project manager is waiting on your reply to {proposalsNeedingReply === 1 ? 'a project idea' : `${proposalsNeedingReply} project ideas`}.</span>
-      <button type="button" className="client-text-action" onClick={onOpenProposals}>Open project ideas <ArrowRight size={14} aria-hidden="true" /></button>
-    </div>}
-    {error && <p role="alert" className="client-project-error">{error}</p>}
-    <section className="client-existing-projects" aria-label="Shared projects">
-      {loading ? <div className="client-spotlight"><LoadingRows label="Loading your projects" /></div>
-        : projects.length ? <div className="client-spotlights is-grid">
+      <span className="cx-row-copy"><strong>Your project manager is waiting on your reply to {proposalsNeedingReply === 1 ? 'a project idea' : proposalsNeedingReply + ' project ideas'}.</strong></span>
+      <button type="button" className="cx-link" onClick={onOpenProposals}>Open project ideas <ArrowRight size={14} aria-hidden="true" /></button>
+    </div></CxPanel>}
+    {error && <p role="alert" className="cx-error">{error}</p>}
+    <section aria-label="Shared projects">
+      {loading ? <CxPanel><LoadingRows label="Loading your projects" className="p-4" /></CxPanel>
+        : projects.length ? <div className="cx-project-grid">
           {[...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).map(project => <ClientProjectSpotlight
             key={clientProjectKey(project)} project={project} requests={requests} onOpenRequest={onOpenRequest}
             onOpenProject={() => { onSelectedProjectKeyChange(clientProjectKey(project)); setTab('overview'); }} />)}
         </div>
-          : !error && <div className="client-project-empty"><FolderKanban size={24} /><h2>No projects shared yet</h2>
-            <p>When your project manager gives your account access to a project, it will appear here.</p></div>}
+          : !error && <CxPanel><CxEmpty icon={<FolderKanban size={22} />} title="No projects shared yet"
+            body="When your project manager gives your account access to a project, it will appear here." /></CxPanel>}
     </section>
   </section>;
 }
