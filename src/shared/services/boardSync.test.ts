@@ -135,6 +135,62 @@ describe('browser board cursor sync', () => {
     expect(result.state).toEqual({ projects: bootstrap.projects, agents: bootstrap.agents, issues: bootstrap.issues });
   });
 
+  it('keeps the server’s sync version on the cursor and sends it back as it came', async () => {
+    const versioned = { ...cursor('5'), epoch: 2 };
+    vi.spyOn(apiService, 'getBoardBootstrap').mockResolvedValue({ ...bootstrap, cursor: versioned });
+    await catchUpBoard(workspaceId);
+    expect(loadCachedBoard(workspaceId).cursor).toEqual(versioned);
+
+    const changesSpy = vi.spyOn(apiService, 'getBoardChanges').mockResolvedValue({
+      workspaceId, nextCursor: { ...cursor('6'), epoch: 2 }, hasMore: false, resetRequired: false, changes: []
+    });
+    const result = await catchUpBoard(workspaceId);
+
+    expect(changesSpy).toHaveBeenCalledExactlyOnceWith(versioned, 100);
+    expect(result.cursor).toEqual({ ...cursor('6'), epoch: 2 });
+  });
+
+  /**
+   * A desktop once moved its cursor past projects created on the web without
+   * receiving them. Their cards arriving later is the tell: reload once, loudly.
+   */
+  it('reloads the board once when cards arrive for a project the cache never received', async () => {
+    seedRecord({ cursor: cursor('5'), projects: [project('project-1')] });
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const fresh = { ...bootstrap, cursor: cursor('8'), projects: [project('project-1'), project('project-web')], issues: [issue('issue-web', 'project-web')] };
+    const bootstrapSpy = vi.spyOn(apiService, 'getBoardBootstrap').mockResolvedValue(fresh);
+    const changesSpy = vi.spyOn(apiService, 'getBoardChanges').mockResolvedValue({
+      workspaceId, nextCursor: cursor('7'), hasMore: true, resetRequired: false,
+      changes: [{ cursor: '7', table: 'issues', rowKey: { id: 'issue-web' }, operation: 'update', row: issue('issue-web', 'project-web') as unknown as Record<string, unknown> }]
+    });
+
+    const result = await catchUpBoard(workspaceId);
+
+    expect(changesSpy).toHaveBeenCalledOnce();
+    expect(bootstrapSpy).toHaveBeenCalledOnce();
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('project-web'));
+    expect(result.state.projects.map(row => row.id)).toEqual(['project-1', 'project-web']);
+    expect(loadCachedBoard(workspaceId).cursor).toEqual(cursor('8'));
+  });
+
+  it('does not reload for cards whose project arrives in the same page or is already cached', async () => {
+    seedRecord({ cursor: cursor('5'), projects: [project('project-1')] });
+    const bootstrapSpy = vi.spyOn(apiService, 'getBoardBootstrap');
+    vi.spyOn(apiService, 'getBoardChanges').mockResolvedValue({
+      workspaceId, nextCursor: cursor('8'), hasMore: false, resetRequired: false,
+      changes: [
+        { cursor: '6', table: 'projects', rowKey: { id: 'project-new' }, operation: 'insert', row: project('project-new') as unknown as Record<string, unknown> },
+        { cursor: '7', table: 'issues', rowKey: { id: 'issue-new' }, operation: 'insert', row: issue('issue-new', 'project-new') as unknown as Record<string, unknown> },
+        { cursor: '8', table: 'issues', rowKey: { id: 'issue-old' }, operation: 'insert', row: issue('issue-old', 'project-1') as unknown as Record<string, unknown> }
+      ]
+    });
+
+    const result = await catchUpBoard(workspaceId);
+
+    expect(bootstrapSpy).not.toHaveBeenCalled();
+    expect(result.state.issues.map(row => row.id)).toEqual(['issue-new', 'issue-old']);
+  });
+
   it('applies repeated rows idempotently and removes issue and comment delete markers', () => {
     const original = {
       ...state,
