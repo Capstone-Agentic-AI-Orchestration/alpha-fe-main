@@ -997,7 +997,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       writesAvailable={detail.writesAvailable}
       inputId={`ticket-${mode}-draft`}
       placeholder={mode === 'notes' ? 'Write a private note…' : 'Write a message to the client…'}
-      sendLabel={mode === 'notes' ? 'Save note' : messageAction === 'request_details' ? 'Ask for details' : 'Reply'}
+      sendLabel={mode === 'notes' ? 'Save note' : messageAction === 'request_details' ? 'Ask' : 'Reply'}
       sendAriaLabel={mode === 'notes' ? 'Save private note' : 'Send reply'}
       sendIcon={mode === 'notes' ? <StickyNote size={14} aria-hidden="true" /> : <Send size={14} aria-hidden="true" />}
       sendVariant={mode === 'notes' ? 'outline' : 'default'}
@@ -1257,7 +1257,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   <section className="pm-tickets__context-section">
                     <p className="pm-tickets__context-label">Project</p>
                     <p className="pm-tickets__context-value">{detail.internal.projectName ?? selectedQueueItem.internal.projectName ?? detail.request?.projectLabel ?? 'No project linked'}</p>
-                    <p className="pm-tickets__context-detail">{detail.internal.projectId ? (detail.internal.projectClientVisible ? 'Client-visible project name' : 'PM-only project link') : 'Link a project after scope is agreed.'}</p>
+                    <p className="pm-tickets__context-detail">{detail.internal.projectId ? (detail.internal.projectClientVisible ? 'Client-visible project name' : 'PM-only project link') : 'Link a project when you start the work.'}</p>
                   </section>
                   {detail.internal.requiredIssueIds.length > 0 && <section className="pm-tickets__context-section" aria-label="Tasks authorized for this ticket">
                     <p className="pm-tickets__context-label">Authorized task IDs</p>
@@ -1268,7 +1268,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   </section>}
                   <section className="pm-tickets__context-section">
                     <p className="pm-tickets__context-label">Next step</p>
-                    <p className="pm-tickets__context-value pm-tickets__context-value--accent"><CircleDot size={14} aria-hidden="true" />{selectedNextStep}</p>
+                    <p className="pm-tickets__context-value pm-tickets__context-value--accent"><CircleDot size={14} aria-hidden="true" />{step?.title ?? selectedNextStep}</p>
                   </section>
                   <section className="pm-tickets__context-section pm-tickets__context-section--request">
                     <p className="pm-tickets__context-label">Request summary</p>

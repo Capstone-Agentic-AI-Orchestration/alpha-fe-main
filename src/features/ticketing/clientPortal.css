@@ -1023,6 +1023,7 @@
 .client-decision-slot .client-detail-card { border: 1px solid rgb(var(--ui-link) / .45); box-shadow: 0 0 0 3px rgb(var(--ui-link) / .08); }
 @media (max-width: 760px) {
   .client-new-request { padding: 0 10px; }
-  .client-decision-slot { max-height: none; margin: 10px 12px 0; }
+  /* Leave room on the right for the floating "About this request" toggle. */
+  .client-decision-slot { max-height: none; margin: 10px 56px 0 12px; }
 }
 

@@ -791,7 +791,8 @@
 .pm-step__panel-close { position: absolute; top: 10px; right: 10px; z-index: 1; display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: none; color: var(--pm-muted); }
 .pm-step__panel-close:hover { background: var(--pm-hover); color: var(--pm-text); }
 @media (max-width: 760px) {
-  .pm-step { align-items: stretch; flex-direction: column; margin: 10px 12px 0; }
+  /* Leave room on the right for the floating "Ticket context" toggle. */
+  .pm-step { align-items: stretch; flex-direction: column; margin: 10px 56px 0 12px; }
   .pm-step__actions { justify-content: stretch; }
   .pm-step__actions > button, .pm-step__actions > details { flex: 1 1 auto; }
   .pm-step__panel { max-height: none; margin: 10px 12px 0; }
