@@ -278,6 +278,14 @@ export interface PmCentralIntakeItem {
   outcomeEmailStatus?: 'pending' | 'retry' | 'leased' | 'delivered' | 'dead' | null;
   id: string; publicReference?: string; fullName: string; email: string; company: string | null; title: string;
   description: string; requestedDeadline: string | null; submittedAt: string;
+  /** Accepted into this workspace: the request it became, and that request's project once linked. */
+  acceptedTicketId?: string; acceptedTicketReference?: string;
+  acceptedProjectId?: string | null; acceptedProjectName?: string | null;
+}
+/** Start a project from an inquiry: a new one from these details, or an existing one. */
+export type PmIntakeProjectChoice = { name: string; key?: string; description?: string; targetDate?: string } | { existingProjectId: string };
+export interface PmIntakeProjectStart {
+  ticketId: string; reference: string; projectId: string; projectName: string; projectKey: string; created: boolean; clientVisible: boolean;
 }
 export interface PmCentralIntakePage { items: PmCentralIntakeItem[]; nextCursor: string | null }
 export interface PmCentralIntakeAcceptance { ticketId: string; workspaceId: string; reference: string; operationId: string }
@@ -286,6 +294,14 @@ export interface PmCentralIntakeClarify { intakeId: string; operationId: string;
 export type PmTicketInvitationEmailReceipt = PmTicketInvitationReceipt;
 
 function encodeId(value: string): string { return encodeURIComponent(value); }
+/** What an accepted inquiry became, when the server says: its request and that request's project. */
+function acceptedOutcome(row: Record<string, unknown>): Pick<PmCentralIntakeItem, 'acceptedTicketId' | 'acceptedTicketReference' | 'acceptedProjectId' | 'acceptedProjectName'> {
+  if (typeof row.acceptedTicketId !== 'string' || typeof row.acceptedTicketReference !== 'string'
+    || !/^TKT-[A-F0-9]{32}$/.test(row.acceptedTicketReference)) return {};
+  const optional = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null);
+  return { acceptedTicketId: row.acceptedTicketId, acceptedTicketReference: row.acceptedTicketReference,
+    acceptedProjectId: optional(row.acceptedProjectId), acceptedProjectName: optional(row.acceptedProjectName) };
+}
 function query(values: Record<string, string | null | undefined>): string {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(values)) if (value !== null && value !== undefined) params.set(key, value);
@@ -366,9 +382,24 @@ export const pmTicketApi = {
         clarificationMessages,
         ...(row.status !== undefined ? { status: row.status as PmCentralIntakeItem['status'] } : {}),
         ...(row.handledAt !== undefined ? { handledAt: row.handledAt as string | null } : {}),
-        ...(row.outcomeEmailStatus !== undefined ? { outcomeEmailStatus: row.outcomeEmailStatus as PmCentralIntakeItem['outcomeEmailStatus'] } : {}) };
+        ...(row.outcomeEmailStatus !== undefined ? { outcomeEmailStatus: row.outcomeEmailStatus as PmCentralIntakeItem['outcomeEmailStatus'] } : {}),
+        ...acceptedOutcome(row) };
     });
     return { items, nextCursor: page.nextCursor as string | null };
+  },
+  /** Accept, create (or pick) the project and link them in one action. Retry with the same operationId. */
+  async startProjectFromIntake(intakeId: string, operationId: string, project: PmIntakeProjectChoice, clientVisible: boolean): Promise<PmIntakeProjectStart> {
+    const value = await apiService.ticketRequest<unknown>(`/tickets/intakes/${encodeId(intakeId)}/start-project`, {
+      method: 'POST', body: JSON.stringify({ schemaVersion: 1, operationId, project, clientVisible }),
+    });
+    if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Project start response is invalid.');
+    const row = value as Record<string, unknown>;
+    const text = (field: unknown): field is string => typeof field === 'string' && field.trim().length > 0;
+    if (!text(row.ticketId) || typeof row.reference !== 'string' || !/^TKT-[A-F0-9]{32}$/.test(row.reference)
+      || !text(row.projectId) || !text(row.projectName) || !text(row.projectKey)
+      || typeof row.created !== 'boolean' || typeof row.clientVisible !== 'boolean') throw new Error('Project start response is invalid.');
+    return { ticketId: row.ticketId, reference: row.reference, projectId: row.projectId, projectName: row.projectName,
+      projectKey: row.projectKey, created: row.created, clientVisible: row.clientVisible };
   },
   async acceptCentralIntake(intakeId: string, operationId: string): Promise<PmCentralIntakeAcceptance> {
     const value = await apiService.ticketRequest<unknown>(`/tickets/intakes/${encodeId(intakeId)}/accept`, {

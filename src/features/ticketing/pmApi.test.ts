@@ -274,3 +274,31 @@ describe('PM client proposals transport', () => {
     expect(request).not.toHaveBeenCalled();
   });
 });
+
+describe('starting a project from an inquiry', () => {
+  const started = { ticketId: 'ticket-1', reference: `TKT-${'A'.repeat(32)}`, projectId: 'proj-intake-1', projectName: 'Informational Website',
+    projectKey: 'INF', created: true, clientVisible: true };
+
+  it('sends the operation, the project and client visibility, and returns what was made', async () => {
+    const request = vi.spyOn(apiService, 'ticketRequest').mockResolvedValue(started as never);
+    const result = await pmTicketApi.startProjectFromIntake('intake-1', 'op-1', { name: 'Informational Website', targetDate: '2026-12-01' }, true);
+    expect(result).toEqual(started);
+    expect(request).toHaveBeenCalledWith('/tickets/intakes/intake-1/start-project', expect.objectContaining({ method: 'POST' }));
+    expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toEqual({ schemaVersion: 1, operationId: 'op-1',
+      project: { name: 'Informational Website', targetDate: '2026-12-01' }, clientVisible: true });
+  });
+
+  it('refuses a response that does not describe a project', async () => {
+    vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ ...started, projectId: '' } as never);
+    await expect(pmTicketApi.startProjectFromIntake('intake-1', 'op-1', { existingProjectId: 'p1' }, false)).rejects.toThrow('Project start response is invalid.');
+  });
+
+  it('reads what an accepted inquiry became from the list', async () => {
+    const row = { kind: 'project_proposal', id: 'i1', publicReference: `INQ-${'B'.repeat(32)}`, fullName: 'a@example.test', email: 'a@example.test',
+      company: null, title: 'Site', description: 'A site', requestedDeadline: null, submittedAt: '2026-11-19T00:00:00Z', status: 'accepted',
+      acceptedTicketId: 'ticket-1', acceptedTicketReference: `TKT-${'A'.repeat(32)}`, acceptedProjectId: 'p1', acceptedProjectName: 'Site' };
+    vi.spyOn(apiService, 'ticketRequest').mockResolvedValue({ items: [row], nextCursor: null } as never);
+    const page = await pmTicketApi.listCentralIntakes(null, 'handled');
+    expect(page.items[0]).toMatchObject({ acceptedTicketId: 'ticket-1', acceptedProjectId: 'p1', acceptedProjectName: 'Site' });
+  });
+});

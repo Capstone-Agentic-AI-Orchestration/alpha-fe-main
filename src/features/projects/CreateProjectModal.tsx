@@ -9,19 +9,34 @@ import { AlertCircle, ChevronDown, FolderOpen, GitBranch, Loader2, Plus, Sparkle
 import { aiFeaturesEnabled } from '@/config/features';
 import { DatePicker } from '@/shared/components/ui/date-picker';
 
+/** What the form collects for a new project. */
+export interface NewProjectInput {
+  name: string; key: string; description: string; icon: string; priority: ProjectPriority; targetDate: string; resources: ProjectResource[];
+}
+
 interface CreateProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreated?: (project: Project) => void;
+  /** Start the form filled in, e.g. from a client's inquiry. */
+  initial?: { name?: string; description?: string; targetDate?: string };
+  /** Create the project another way (from an inquiry, which also opens its request and links them). */
+  create?: (input: NewProjectInput) => Promise<Project>;
+  title?: string;
+  subtitle?: string;
+  submitLabel?: string;
 }
 
 const ICONS = ['⚡', '🎨', '🚀', '🛡️', '💳', '🧠', '📦', '🌐', '⚙️', '🎯', '📱', '🔒'];
 const inputClass = 'w-full min-w-0 rounded-xl border border-control bg-surface px-3.5 py-2.5 text-sm text-content placeholder-content-muted outline-none transition-colors focus:border-control';
 
-export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose, onCreated }) => {
+export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose, onCreated, initial, create, title, subtitle, submitLabel }) => {
   const { createProject, updateProject, projects, can, role } = useApp();
-  // Orchestrator, planning and repository setup are AI tooling, hidden for roles without it (config/features.ts).
+  // Orchestrator and planning are AI tooling, hidden for roles without it (config/features.ts).
   const showBuildSetup = aiFeaturesEnabled(role);
+  // Creating a project's repositories is not AI tooling: a PM can do it on the web as on the
+  // desktop, as the Projects page already allows. Attaching a folder stays a desktop thing.
+  const showRepositorySetup = showBuildSetup || can('provision_repositories');
   const [createdProject, setCreatedProject] = useState<Project | null>(null);
   const [setupRepository, setSetupRepository] = useState(true);
   const [repositoryProvisioning, setRepositoryProvisioning] = useState(false);
@@ -44,8 +59,9 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
   useEffect(() => {
     if (!isOpen) return;
     setCreatedProject(null); setSetupRepository(true); setRepositoryProvisioning(false);
-    setName(''); setIcon('⚡'); setDescription(''); setPriority('medium');
-    setTargetDate(''); setResources([]); setRepoUrl(''); setError(null); setRepoError(null); setShowIcons(false);
+    setName(initial?.name ?? ''); setIcon('⚡'); setDescription(initial?.description ?? ''); setPriority('medium');
+    setTargetDate(initial?.targetDate ?? ''); setResources([]); setRepoUrl(''); setError(null); setRepoError(null); setShowIcons(false);
+    // Read the prefill once per opening, not on every parent render.
   }, [isOpen]);
 
   const pendingRepository = (): ProjectResource | null => {
@@ -85,9 +101,11 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
     catch (err) { setRepoError((err as Error).message); return; }
     submittingRef.current = true; setSubmitting(true); setError(null); setRepoError(null);
     try {
-      const project = await createProject({ name: name.trim(), key, description: description.trim(), icon, color: '#6366f1', status: 'planned', priority, targetDate,
-        leadType: 'agent', leadName: 'Orchestrator', resources: pending ? [...resources, pending] : resources });
-      if (setupRepository && showBuildSetup) setCreatedProject(project);
+      const input: NewProjectInput = { name: name.trim(), key, description: description.trim(), icon, priority, targetDate,
+        resources: pending ? [...resources, pending] : resources };
+      const project = create ? await create(input) : await createProject({ ...input, color: '#6366f1', status: 'planned',
+        leadType: 'agent', leadName: 'Orchestrator' });
+      if (setupRepository && showRepositorySetup) setCreatedProject(project);
       else { onCreated?.(project); onClose(); }
     } catch (err) { setError(err instanceof Error ? err.message : 'Could not create the project. Please try again.'); }
     finally { submittingRef.current = false; setSubmitting(false); }
@@ -110,8 +128,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
     </Modal>;
   }
 
-  return <Modal isOpen={isOpen} onClose={() => { if (!submittingRef.current) onClose(); }} title="New project" subtitle={showBuildSetup ? 'Set the direction and connect the code. The Orchestrator leads every build.' : 'Name the project and describe what it is for.'} maxWidth="max-w-3xl"
-    footer={<div className="flex items-center justify-between gap-4">{showBuildSetup && <span className="hidden text-[11px] text-content-muted sm:block">You can refine the project after creating it.</span>}<div className="ml-auto flex items-center gap-2"><button type="button" onClick={onClose} disabled={submitting} className="rounded-lg px-4 py-2.5 text-xs font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content disabled:opacity-50">Cancel</button><button type="submit" form={formId} disabled={submitting || !name.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-action px-5 py-2.5 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">{submitting && <Loader2 className="h-4 w-4 animate-spin" />}{submitting ? 'Creating project…' : 'Create project'}</button></div></div>}>
+  return <Modal isOpen={isOpen} onClose={() => { if (!submittingRef.current) onClose(); }} title={title ?? 'New project'} subtitle={subtitle ?? (showBuildSetup ? 'Set the direction and connect the code. The Orchestrator leads every build.' : 'Name the project and describe what it is for.')} maxWidth="max-w-3xl"
+    footer={<div className="flex items-center justify-between gap-4">{showBuildSetup && <span className="hidden text-[11px] text-content-muted sm:block">You can refine the project after creating it.</span>}<div className="ml-auto flex items-center gap-2"><button type="button" onClick={onClose} disabled={submitting} className="rounded-lg px-4 py-2.5 text-xs font-medium text-content-secondary transition-colors hover:bg-surface-high hover:text-content disabled:opacity-50">Cancel</button><button type="submit" form={formId} disabled={submitting || !name.trim()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-action px-5 py-2.5 text-sm font-semibold text-on-action transition-colors hover:bg-action-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-40">{submitting && <Loader2 className="h-4 w-4 animate-spin" />}{submitting ? 'Creating project…' : submitLabel ?? 'Create project'}</button></div></div>}>
     <form id={formId} onSubmit={submit} className="space-y-6">
       <fieldset disabled={submitting} className="space-y-6 min-w-0">
         <div className="space-y-2">
@@ -124,18 +142,17 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
           </div>
         </div>
         <div className="space-y-2"><label htmlFor={`${formId}-description`} className="block text-xs font-medium text-content-secondary">Goal & ground rules <span className="ml-1 font-normal text-content-muted">Optional</span></label><textarea id={`${formId}-description`} rows={3} maxLength={8000} value={description} onChange={event => setDescription(event.target.value)} placeholder="What are we building? Include the stack, constraints, and what success looks like." className={`${inputClass} resize-y leading-relaxed`} /><div className="flex items-center justify-between gap-3">{showBuildSetup ? <p className="text-[11px] text-content-muted">Shared with agents as context for every Orchestrator build.</p> : <span />}<span className="shrink-0 text-[10px] text-content-muted">{description.length.toLocaleString()} / 8,000</span></div></div>
-        {showBuildSetup && <>
-        <div className="flex items-start gap-3 rounded-xl border border-divider bg-selected p-3.5"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-divider bg-selected text-selected-content"><Workflow className="h-4 w-4" /></div><div><div className="flex items-center gap-1.5 text-xs font-semibold text-link"><Sparkles className="h-3.5 w-3.5" />Build lead: Orchestrator</div><p className="mt-1 text-[11px] leading-5 text-content-secondary">No team setup is needed. For each build, the Orchestrator shows its plan and specialist assignments for you to review before work starts.</p></div></div>
+        {showBuildSetup && <div className="flex items-start gap-3 rounded-xl border border-divider bg-selected p-3.5"><div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-divider bg-selected text-selected-content"><Workflow className="h-4 w-4" /></div><div><div className="flex items-center gap-1.5 text-xs font-semibold text-link"><Sparkles className="h-3.5 w-3.5" />Build lead: Orchestrator</div><p className="mt-1 text-[11px] leading-5 text-content-secondary">No team setup is needed. For each build, the Orchestrator shows its plan and specialist assignments for you to review before work starts.</p></div></div>}
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><label htmlFor={`${formId}-priority`} className="text-xs font-medium text-content-secondary">Priority</label><select id={`${formId}-priority`} value={priority} onChange={event => setPriority(event.target.value as ProjectPriority)} className={inputClass}><option value="none">No priority</option><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="urgent">Urgent</option></select></div><div className="space-y-2"><label htmlFor={`${formId}-date`} className="text-xs font-medium text-content-secondary">Target date <span className="ml-1 font-normal text-content-muted">Optional</span></label><DatePicker id={`${formId}-date`} value={targetDate} onChange={setTargetDate} buttonClassName={`${inputClass} h-10 justify-start text-left`} className="w-full" /></div></div>
-        </>}
-        {showBuildSetup && <section className="space-y-3 border-t border-divider pt-5" aria-label="Project repositories">
-          <label className="flex items-start gap-3 text-sm text-content"><input type="checkbox" checked={setupRepository} onChange={event => setSetupRepository(event.target.checked)} className="mt-1 accent-brand-500" /><span>Set up repositories next<span className="mt-1 block text-xs text-content-muted">Create a GitHub repository or connect existing code after saving this project.</span></span></label>
-          <div className="space-y-2"><label htmlFor={`${formId}-repo`} className="text-xs font-medium text-content-secondary">Repository URL <span className="ml-1 font-normal text-content-muted">Optional</span></label><div className="flex gap-2"><div className="relative min-w-0 flex-1"><GitBranch className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-content-muted" /><input id={`${formId}-repo`} value={repoUrl} onChange={event => { setRepoUrl(event.target.value); setRepoError(null); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addRepository(); } }} placeholder="https://github.com/owner/repository" aria-invalid={!!repoError} aria-describedby={repoError ? `${formId}-repo-error` : `${formId}-repo-hint`} className={`${inputClass} pl-9`} /></div><button type="button" onClick={addRepository} disabled={!repoUrl.trim()} aria-label="Attach repository and add another" title="Attach repository and add another" className="rounded-xl border border-divider px-3 text-content-secondary hover:bg-surface-high disabled:opacity-30"><Plus className="h-4 w-4" /></button></div>
+        {showRepositorySetup && <section className="space-y-3 border-t border-divider pt-5" aria-label="Project repositories">
+          <label className="flex items-start gap-3 text-sm text-content"><input type="checkbox" checked={setupRepository} onChange={event => setSetupRepository(event.target.checked)} className="mt-1 accent-brand-500" /><span>Set up repositories next<span className="mt-1 block text-xs text-content-muted">Create its GitHub repositories, with CI, hosting and protected branches, right after saving this project.</span></span></label>
+          {showBuildSetup && <><div className="space-y-2"><label htmlFor={`${formId}-repo`} className="text-xs font-medium text-content-secondary">Repository URL <span className="ml-1 font-normal text-content-muted">Optional</span></label><div className="flex gap-2"><div className="relative min-w-0 flex-1"><GitBranch className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-content-muted" /><input id={`${formId}-repo`} value={repoUrl} onChange={event => { setRepoUrl(event.target.value); setRepoError(null); }} onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); addRepository(); } }} placeholder="https://github.com/owner/repository" aria-invalid={!!repoError} aria-describedby={repoError ? `${formId}-repo-error` : `${formId}-repo-hint`} className={`${inputClass} pl-9`} /></div><button type="button" onClick={addRepository} disabled={!repoUrl.trim()} aria-label="Attach repository and add another" title="Attach repository and add another" className="rounded-xl border border-divider px-3 text-content-secondary hover:bg-surface-high disabled:opacity-30"><Plus className="h-4 w-4" /></button></div>
           {repoError ? <p id={`${formId}-repo-error`} role="alert" className="text-xs text-status-danger">{repoError}</p> : <p id={`${formId}-repo-hint`} className="text-[11px] text-content-muted">Saved when you create the project. Use + to attach more than one.</p>}</div>
           {resources.map(resource => <div key={resource.id} className="flex items-center justify-between gap-3 rounded-lg bg-surface-raised px-3 py-2 text-xs"><span className="min-w-0 truncate text-content-secondary" title={resource.pathOrUrl}>{resource.pathOrUrl}</span><button type="button" onClick={() => setResources(previous => previous.filter(item => item.id !== resource.id))} aria-label={`Remove ${resource.name}`} className="shrink-0 rounded p-1 text-content-muted hover:text-status-danger"><Trash2 className="h-3.5 w-3.5" /></button></div>)}
           <button type="button" onClick={chooseFolder} className="inline-flex items-center gap-2 text-xs text-content-secondary transition-colors hover:text-content"><FolderOpen className="h-3.5 w-3.5" />Attach a local folder</button>
           {resources.some(resource => resource.type === 'local_dir') && <p className="text-[11px] text-status-warning">Local folders are available only on this machine.</p>}
           <input ref={folderRef} type="file" className="hidden" {...{ webkitdirectory: '', directory: '' } as any} onChange={event => { const file = event.target.files?.[0] as (File & { path?: string }) | undefined; if (file) addFolder(file.path || file.webkitRelativePath.split('/')[0]); event.target.value = ''; }} />
+          </>}
         </section>}
       </fieldset>
       {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-status-danger-border bg-status-danger-subtle p-3 text-xs leading-relaxed text-status-danger"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}

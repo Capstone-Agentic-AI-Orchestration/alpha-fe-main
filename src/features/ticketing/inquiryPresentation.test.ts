@@ -37,9 +37,16 @@ describe('how an inquiry reads on the Inquiries page', () => {
     expect(handledOutcome({ ...inquiry, status: 'declined' })).toBe('Declined. No request or client access was created.');
   });
 
-  it('says what accepting does, including that it does not start the project by itself', () => {
-    expect(acceptOutcome(proposal, 'Alpha Workspace')).toContain("Alpha Workspace's Tickets");
-    expect(acceptOutcome(proposal, 'Alpha Workspace')).toContain('start or link the project');
+  it('says what starting a project does', () => {
+    expect(acceptOutcome(proposal, 'Alpha Workspace')).toContain('creates it in Alpha Workspace');
+    expect(acceptOutcome(proposal, 'Alpha Workspace')).toContain('lets this client see the project');
     expect(acceptOutcome(inquiry, null)).toContain('no portal access until you invite them');
+  });
+
+  it('names the project an accepted inquiry went into, and says when it has none yet', () => {
+    const accepted = { ...proposal, status: 'accepted' as const, acceptedTicketId: 't1' };
+    expect(inquiryFor({ ...accepted, acceptedProjectName: 'Informational Website' })).toBe('Project: Informational Website');
+    expect(inquiryFor(accepted)).toBe('No project linked yet');
+    expect(handledOutcome({ ...accepted, acceptedProjectName: 'Informational Website' })).toBe('Accepted into Informational Website. The client follows it from their projects.');
   });
 });

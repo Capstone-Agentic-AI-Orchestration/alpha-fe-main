@@ -1,11 +1,11 @@
 import './pmTickets.css';
 import { PmQueueSelect } from './PmQueueSelect';
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Copy, Inbox, Mail, MessageSquare, PanelLeftOpen, RefreshCw, Search, Send, UserRound, XCircle } from 'lucide-react';
+import { AlertCircle, ArrowLeft, CalendarDays, CheckCircle2, Copy, FolderPlus, Inbox, Rocket, Mail, MessageSquare, PanelLeftOpen, RefreshCw, Search, Send, UserRound, XCircle } from 'lucide-react';
 import { acceptOutcome, handledOutcome, inquiryContact, inquiryFor, inquiryKind, inquiryStatus, shortReference } from './inquiryPresentation';
 import { Skeleton, SkeletonRegion } from '@/shared/components/ui/skeleton';
 import { ApiRequestError } from '@/shared/services/apiService';
-import { pmTicketApi, type PmCentralIntakeItem } from './pmApi';
+import { pmTicketApi, type PmCentralIntakeItem, type PmIntakeProjectChoice, type PmIntakeProjectStart } from './pmApi';
 import { secondary } from './ticketUi';
 
 interface CentralIntakeApi {
@@ -13,6 +13,7 @@ interface CentralIntakeApi {
   acceptCentralIntake(intakeId: string, operationId: string): ReturnType<typeof pmTicketApi.acceptCentralIntake>;
   clarifyCentralIntake?(intakeId: string, operationId: string, body: string): ReturnType<typeof pmTicketApi.clarifyCentralIntake>;
   declineCentralIntake(intakeId: string, operationId: string, reason?: string | null): ReturnType<typeof pmTicketApi.declineCentralIntake>;
+  startProjectFromIntake?(intakeId: string, operationId: string, project: PmIntakeProjectChoice, clientVisible: boolean): ReturnType<typeof pmTicketApi.startProjectFromIntake>;
 }
 
 function friendlyError(error: unknown): string {
@@ -31,6 +32,14 @@ function friendlyError(error: unknown): string {
   return 'Could not complete that action. Check your connection and refresh the inbox.';
 }
 
+/** The "Add to existing project" picker's value for opening the request with no project yet. */
+const REQUEST_ONLY = '__request_only__';
+
+function existingButtonLabel(busy: boolean, choice: string): string {
+  if (busy) return 'Adding…';
+  return choice === REQUEST_ONLY ? 'Open request' : 'Add to project';
+}
+
 function formatDate(value: string): string {
   const date = new Date(value);
   return Number.isFinite(date.getTime()) ? date.toLocaleString() : 'Date unavailable';
@@ -42,7 +51,8 @@ function formatCompactDate(value: string): string {
 }
 
 // eslint-disable-next-line sonarjs/cognitive-complexity -- existing inbox; this change adds the initial selection and moves display rules into inquiryPresentation
-export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanReview, onAccepted, api = pmTicketApi, refreshToken, initialSelection = null }: {
+export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanReview, onAccepted, api = pmTicketApi, refreshToken, initialSelection = null,
+  onStartNewProject, projects = [], onProjectStarted, onOpenTicket, onOpenProject }: {
   workspaceName: string | null;
   workspaceId: string | null;
   workspaceCanReview: boolean;
@@ -53,6 +63,15 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   refreshToken?: number;
   /** Open this inquiry once it loads, e.g. from a client's Proposals tab. */
   initialSelection?: { id: string; view: 'pending' | 'handled' } | null;
+  /** Open the new-project form for this inquiry. Without it, only "Add to existing project" is offered. */
+  onStartNewProject?: (item: PmCentralIntakeItem) => void;
+  /** This workspace's projects, to add an inquiry to one. */
+  projects?: readonly { id: string; name: string; key: string }[];
+  /** An inquiry became a request in a project. */
+  onProjectStarted?: (result: PmIntakeProjectStart) => void;
+  /** Open what a handled inquiry became. */
+  onOpenTicket?: (ticketId: string) => void;
+  onOpenProject?: (projectId: string) => void;
 }) {
   const [items, setItems] = useState<PmCentralIntakeItem[]>([]);
   const [filter, setFilter] = useState<'pending' | 'handled'>(initialSelection?.view ?? 'pending');
@@ -69,6 +88,9 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   const [sendingClarification, setSendingClarification] = useState(false);
   const [declineReason, setDeclineReason] = useState('');
   const [confirmingDecline, setConfirmingDecline] = useState(false);
+  const [choosingExisting, setChoosingExisting] = useState(false);
+  const [existingChoice, setExistingChoice] = useState('');
+  const startOperations = useRef(new Map<string, string>());
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [navigationCollapsed, setNavigationCollapsed] = useState(false);
@@ -83,11 +105,12 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   const selectedClarificationMessages = selected?.clarificationMessages ?? [];
   const selectedContact = selected ? inquiryContact(selected) : null;
   /** Which one thing the decision area shows for a pending inquiry. */
-  const decisionMode = ((): 'waiting' | 'ask' | 'decline' | 'choose' => {
+  const decisionMode = ((): 'waiting' | 'ask' | 'decline' | 'existing' | 'choose' => {
     const proposal = selected?.kind === 'project_proposal';
     if (proposal && selected?.status === 'awaiting_client') return 'waiting';
     if (proposal && clarifying) return 'ask';
     if (confirmingDecline) return 'decline';
+    if (choosingExisting) return 'existing';
     return 'choose';
   })();
   const visibleItems = useMemo(() => {
@@ -248,8 +271,28 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     setSelectedId(id);
     setNavigationCollapsed(false);
     setNewIds(current => { const next = new Set(current); next.delete(id); return next; });
-    setDeclineReason(''); setConfirmingDecline(false);
+    setDeclineReason(''); setConfirmingDecline(false); setChoosingExisting(false); setExistingChoice('');
     setClarifying(false); setClarificationDraft('');
+  };
+
+  /** Add the inquiry to a project that exists, or open its request with no project yet. */
+  const addToExisting = async () => {
+    if (!selected || !existingChoice || accepting || declining || filter !== 'pending') return;
+    if (existingChoice === REQUEST_ONLY || !api.startProjectFromIntake) { await accept(); return; }
+    // One operation per inquiry until it succeeds, so a retry finishes instead of repeating.
+    let operationId = startOperations.current.get(selected.id);
+    if (!operationId) { operationId = crypto.randomUUID(); startOperations.current.set(selected.id, operationId); }
+    setAccepting(true); setError('');
+    try {
+      const result = await api.startProjectFromIntake(selected.id, operationId, { existingProjectId: existingChoice }, selected.kind === 'project_proposal');
+      startOperations.current.delete(selected.id);
+      setChoosingExisting(false); setExistingChoice('');
+      onProjectStarted?.(result);
+      void load();
+    } catch (startError) {
+      if (!(startError instanceof ApiRequestError) || (startError.status !== null && startError.status < 500)) startOperations.current.delete(selected.id);
+      setError(friendlyError(startError));
+    } finally { setAccepting(false); }
   };
 
   const renderInquiryItem = (item: PmCentralIntakeItem, variant: 'queue' | 'sidebar') => {
@@ -429,14 +472,36 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
             </button>}<button type="button" onClick={() => setConfirmingDecline(true)} disabled={declining || accepting || !workspaceName}
               className="inline-flex items-center gap-2 rounded-lg border border-status-danger-border px-4 py-2.5 text-sm font-medium text-status-danger hover:bg-status-danger-subtle disabled:cursor-not-allowed disabled:opacity-50">
               <XCircle size={15} />Decline…
-            </button><button type="button" onClick={() => void accept()} disabled={accepting || declining || !workspaceName}
+            </button><span className="flex-1" aria-hidden="true" /><button type="button" onClick={() => setChoosingExisting(true)} disabled={accepting || declining || !workspaceName}
+              className="pm-inquiries__clarification-action">
+              <FolderPlus size={15} />Add to existing project
+            </button>{onStartNewProject && <button type="button" onClick={() => onStartNewProject(selected)} disabled={accepting || declining || !workspaceName}
               className="inline-flex items-center gap-2 rounded-lg bg-action px-4 py-2.5 text-sm font-medium text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50">
-              {accepting ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}
-              {accepting ? 'Accepting…' : 'Accept and open request'}
-            </button></div></>}
+              <Rocket size={15} />Start new project
+            </button>}</div></>}
+            {decisionMode === 'existing' && <div className="pm-inquiries__clarification-form">
+              <div><h3>Add to an existing project</h3><p>The request opens in that project{selected.kind === 'project_proposal' ? ', and the client can see it there' : ''}.</p></div>
+              <label className="pm-inquiries__decline-note"><span>Project</span>
+                <select value={existingChoice} disabled={accepting} onChange={event => setExistingChoice(event.target.value)}
+                  className="w-full rounded-lg border border-control bg-surface px-3 py-2 text-sm text-content">
+                  <option value="" disabled>Choose a project…</option>
+                  {projects.map(project => <option key={project.id} value={project.id}>{project.name} ({project.key})</option>)}
+                  <option value={REQUEST_ONLY}>No project yet: open the request only</option>
+                </select></label>
+              <div className="pm-inquiries__decision-actions"><button type="button" onClick={() => { setChoosingExisting(false); setExistingChoice(''); }} disabled={accepting}
+                className="pm-inquiries__clarification-action">Cancel</button>
+                <button type="button" onClick={() => void addToExisting()} disabled={accepting || !existingChoice}
+                  className="inline-flex items-center gap-2 rounded-lg bg-action px-4 py-2.5 text-sm font-medium text-on-action hover:bg-action-hover disabled:cursor-not-allowed disabled:opacity-50">
+                  {accepting ? <RefreshCw size={15} className="animate-spin" /> : <CheckCircle2 size={15} />}{existingButtonLabel(accepting, existingChoice)}
+                </button></div>
+            </div>}
           </div> : <div className="pm-inquiries__decision pm-inquiries__decision--handled">
             {selected.handledAt && <p>Handled {formatDate(selected.handledAt)}</p>}
             <p>{handledOutcome(selected)}</p>
+            {(selected.acceptedTicketId || selected.acceptedProjectId) && <p className="flex flex-wrap gap-3">
+              {selected.acceptedTicketId && onOpenTicket && <button type="button" onClick={() => onOpenTicket(selected.acceptedTicketId!)} className="font-medium text-link hover:underline">Open request</button>}
+              {selected.acceptedProjectId && onOpenProject && <button type="button" onClick={() => onOpenProject(selected.acceptedProjectId!)} className="font-medium text-link hover:underline">Open project</button>}
+            </p>}
             {selected.status === 'declined' && selected.kind === 'public_inquiry' && <p>{selected.outcomeEmailStatus === 'delivered'
               ? 'Outcome email accepted by the provider; inbox delivery is not confirmed.'
               : selected.outcomeEmailStatus === 'dead' ? 'Outcome email could not be sent. Contact the client directly.'

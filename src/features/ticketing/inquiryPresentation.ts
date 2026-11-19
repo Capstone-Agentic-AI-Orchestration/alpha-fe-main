@@ -14,7 +14,9 @@ export function inquiryKind(item: Pick<PmCentralIntakeItem, 'kind'>): string {
  * Which project it is for. A proposal from a signed-in client always asks for a
  * new project; a website inquiry could become either, so it is not decided yet.
  */
-export function inquiryFor(item: Pick<PmCentralIntakeItem, 'kind'>): string {
+export function inquiryFor(item: Pick<PmCentralIntakeItem, 'kind' | 'status' | 'acceptedProjectName' | 'acceptedTicketId'>): string {
+  if (item.acceptedProjectName) return `Project: ${item.acceptedProjectName}`;
+  if (item.status === 'accepted' && item.acceptedTicketId) return 'No project linked yet';
   return item.kind === 'project_proposal' ? 'For a new project' : 'Project not decided';
 }
 
@@ -45,18 +47,21 @@ export function inquiryStatus(item: Pick<PmCentralIntakeItem, 'kind' | 'status' 
 }
 
 /** What became of a handled inquiry, in one sentence. */
-export function handledOutcome(item: Pick<PmCentralIntakeItem, 'kind' | 'status'>): string {
+export function handledOutcome(item: Pick<PmCentralIntakeItem, 'kind' | 'status' | 'acceptedProjectName'>): string {
   const proposal = item.kind === 'project_proposal';
+  if (item.status === 'accepted' && item.acceptedProjectName) {
+    return proposal ? `Accepted into ${item.acceptedProjectName}. The client follows it from their projects.` : `Accepted into ${item.acceptedProjectName}.`;
+  }
   if (item.status === 'accepted') {
     return proposal ? 'Accepted. Its request is in Tickets, where the client follows it and you start or link the project.' : 'Accepted. Its request is in Tickets.';
   }
   return proposal ? 'Declined. No request or project was created.' : 'Declined. No request or client access was created.';
 }
 
-/** One sentence on what accepting does, so the button never has to explain itself. */
+/** One sentence on what starting a project does, so the buttons never have to explain themselves. */
 export function acceptOutcome(item: Pick<PmCentralIntakeItem, 'kind'>, workspaceName: string | null): string {
   const where = workspaceName ?? 'this workspace';
   return item.kind === 'project_proposal'
-    ? `Accepting opens a request in ${where}'s Tickets, where this client can follow it. From that request you start or link the project.`
-    : `Accepting opens a request in ${where}'s Tickets. The sender's email is not verified, so they get no portal access until you invite them.`;
+    ? `Start a new project and Alpha creates it in ${where}, with its repositories if you choose, opens the request and lets this client see the project. Or add it to a project you already have.`
+    : `Start a new project, or add it to one you already have, and Alpha opens the request in ${where}. The sender's email is not verified, so they get no portal access until you invite them.`;
 }
