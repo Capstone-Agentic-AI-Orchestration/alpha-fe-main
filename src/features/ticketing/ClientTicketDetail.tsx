@@ -247,7 +247,7 @@ export function ClientTicketDetail({
         <header className="cx-reqchat-head">
           <span className="cx-reqchat-icon" aria-hidden="true"><MessagesSquare size={22} /></span>
           <div><h2 id="client-conversation-title">Request conversation</h2><p>Private messages between you and your project manager.</p></div>
-          {unread > 0 && <span className="cx-new-pill" role="status">{unread === 1 ? '1 new message' : unread + ' new messages'}</span>}
+          {unread > 0 && <output className="cx-new-pill">{unread === 1 ? '1 new message' : unread + ' new messages'}</output>}
         </header>
         {error && <p role="alert" className="cx-error">{error}</p>}
         {decision && <section className="client-decision-slot cx-panel is-attention cx-decision" aria-labelledby="client-decision-title">
@@ -302,7 +302,7 @@ export function ClientTicketDetail({
   </section>;
 }
 
-function RailCard({ icon, title, children }: { icon: ReactNode; title: string; children: ReactNode }) {
+function RailCard({ icon, title, children }: Readonly<{ icon: ReactNode; title: string; children: ReactNode }>) {
   return <section className="cx-reqcard"><h2><span aria-hidden="true">{icon}</span>{title}</h2>{children}</section>;
 }
 

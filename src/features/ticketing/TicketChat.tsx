@@ -104,6 +104,24 @@ function messageAvatar(message: TicketChatMessage, role: TicketChatProps['role']
   return message.author === 'pm' ? 'PM' : clientInitial;
 }
 
+/** Message groups in order; milestone groups are drawn as update cards instead of bubbles. */
+function renderChatGroups(groups: TicketChatMessage[][], renderMessages: (group: TicketChatMessage[], index: number) => ReactNode) {
+  return groups.map((group, index) => group[0].author === 'system'
+    ? <SystemUpdates key={group[0].id} group={group} showDay={index === 0 || dateKey(groups[index - 1][0].createdAt) !== dateKey(group[0].createdAt)} />
+    : renderMessages(group, index));
+}
+
+function SystemUpdates({ group, showDay }: Readonly<{ group: TicketChatMessage[]; showDay: boolean }>) {
+  const first = group[0];
+  return <>
+    {showDay && <div className="ticket-chat__day" aria-label={'Messages from ' + dateLabel(first.createdAt)}><span><time dateTime={first.createdAt}>{dateLabel(first.createdAt)}</time></span></div>}
+    {group.map(update => <div key={update.id} className="ticket-chat__system" role="note" aria-label={'Update at ' + clockTime(update.createdAt) + ': ' + update.body}>
+      <p className="ticket-chat__system-meta" aria-hidden="true"><Zap size={13} />Update <time dateTime={update.createdAt}>{clockTime(update.createdAt)}</time></p>
+      <p className="ticket-chat__system-body" aria-hidden="true">{update.body}</p>
+    </div>)}
+  </>;
+}
+
 function MessageSkeleton({ align = 'start', width = 'w-2/3' }: { align?: 'start' | 'end'; width?: string }) {
   return <div className={`ticket-chat__message-skeleton ${align === 'end' ? 'is-end' : ''}`}>
     <Skeleton className="ticket-chat__message-skeleton-avatar" />
@@ -202,17 +220,8 @@ export function TicketChat({
 
   const renderMessageGroup = (group: TicketChatMessage[], groupIndex: number) => {
     const firstMessage = group[0];
-    const dayDivider = (groupIndex === 0 || dateKey(messageGroups[groupIndex - 1][0].createdAt) !== dateKey(firstMessage.createdAt))
-      && <div className="ticket-chat__day" aria-label={`Messages from ${dateLabel(firstMessage.createdAt)}`}><span><time dateTime={firstMessage.createdAt}>{dateLabel(firstMessage.createdAt)}</time></span></div>;
-    if (firstMessage.author === 'system') return <Fragment key={firstMessage.id}>
-      {dayDivider}
-      {group.map(update => <div key={update.id} className="ticket-chat__system" role="note" aria-label={`Update at ${clockTime(update.createdAt)}: ${update.body}`}>
-        <p className="ticket-chat__system-meta" aria-hidden="true"><Zap size={13} />Update <time dateTime={update.createdAt}>{clockTime(update.createdAt)}</time></p>
-        <p className="ticket-chat__system-body" aria-hidden="true">{update.body}</p>
-      </div>)}
-    </Fragment>;
     return <Fragment key={firstMessage.id}>
-      {dayDivider}
+      {(groupIndex === 0 || dateKey(messageGroups[groupIndex - 1][0].createdAt) !== dateKey(firstMessage.createdAt)) && <div className="ticket-chat__day" aria-label={`Messages from ${dateLabel(firstMessage.createdAt)}`}><span><time dateTime={firstMessage.createdAt}>{dateLabel(firstMessage.createdAt)}</time></span></div>}
       <MessageGroup className="ticket-chat__group">
         {group.map((message, groupIndex) => {
           const note = mode === 'notes' || message.author === 'note';
@@ -304,7 +313,7 @@ export function TicketChat({
         <MessageSkeleton width="w-1/2" />
       </div> : locked ? <div className="ticket-chat__locked"><LockKeyhole size={18} aria-hidden="true" /><div><strong>{lockedTitle}</strong><p>{lockedDescription}</p></div></div>
         : messages.length === 0 ? <div className="ticket-chat__empty"><MessageSquare size={20} aria-hidden="true" /><strong>{emptyTitle}</strong><p>{emptyDescription}</p></div>
-          : messageGroups.map(renderMessageGroup)}
+          : renderChatGroups(messageGroups, renderMessageGroup)}
     </MessageScroller> : <div className="ticket-chat__unavailable"><h3>{unavailableTitle}</h3><p>{unavailableDescription}</p></div>}
 
     {showFeed && (composer ?? composerPromptView ?? (readOnlyLabel ? <p className="ticket-chat__readonly">{readOnlyLabel}</p> : null))}
