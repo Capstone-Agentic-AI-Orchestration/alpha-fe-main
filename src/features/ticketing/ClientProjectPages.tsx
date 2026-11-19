@@ -1,19 +1,15 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowLeft, ArrowRight, Check, FolderKanban, Hand, RefreshCw, Send, Plus } from 'lucide-react';
-import { Modal } from '@/shared/components/Modal';
-import { DatePicker } from '@/shared/components/ui/date-picker';
+import { ArrowLeft, ArrowRight, Check, FolderKanban, Hand, Lightbulb, RefreshCw, Send, Plus } from 'lucide-react';
 
-import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectProposal, ClientProjectProposalInput,
-  ClientProjectProposalReplyInput, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
-import { clientTicketApi, ClientTicketApiError } from './clientApi';
+import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
+import { clientTicketApi } from './clientApi';
 import { clientTicketProgress } from './clientTicketProgress';
 import { clientGreeting, clientNextStep, clientRequestGroup, dayLabel, listProgressIndex, relativeTime } from './clientFriendly';
 import { CLIENT_PROGRESS_LABELS } from './clientProgressSteps';
 import { time } from './ticketUi';
 import { ClientProjectQaStudio } from './ClientProjectQaStudio';
 import { clientProjectKey, projectLoadError, ProjectOverviewTab, ProjectRequestsTab, type ProjectRequestFilter } from './ClientProjectSections';
-import { clientProposalView } from './clientProposalPresentation';
 
 export { clientProjectKey } from './ClientProjectSections';
 
@@ -164,11 +160,13 @@ function UpdateRow({ item, onOpen }: { item: ClientProjectRequestItem; onOpen: (
 
 export function ClientProjectsPage({ api = clientTicketApi, projects, loading, error, selectedProjectKey,
   onSelectedProjectKeyChange, onOpenRequest, onNewRequest, inspectionOnly, newRequestEnabled, newRequestLoading, projectFocusVersion, refreshToken,
-  proposals, proposalsLoading, proposalsError, onRefreshProposals, onProposalSubmitted, idPrefix = 'client', requests = [],
-  openProposalVersion = 0 }: {
+  proposalsNeedingReply = 0, onOpenProposals, onProposeProject, idPrefix = 'client', requests = [] }: {
   idPrefix?: string;
-  /** Raised from Home's "Propose a project" card; each new value opens the proposal form once. */
-  openProposalVersion?: number;
+  /** Proposals the project manager is waiting on the client for; they live on their own page. */
+  proposalsNeedingReply?: number;
+  onOpenProposals?: () => void;
+  /** Opens the proposal form on the Proposals page; absent when the client cannot propose. */
+  onProposeProject?: () => void;
   /** Requests already loaded by the portal, used for each project card's counts. */
   requests?: ClientProjectRequestItem[];
   api?: typeof clientTicketApi;
@@ -184,29 +182,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   newRequestLoading: boolean;
   projectFocusVersion: number;
   refreshToken: number;
-  proposals: ClientProjectProposal[];
-  proposalsLoading: boolean;
-  proposalsError: string;
-  onRefreshProposals: () => void;
-  onProposalSubmitted: () => void;
 }) {
   const selectedProject = projects.find(project => clientProjectKey(project) === selectedProjectKey) ?? null;
-  const [proposalFormOpen, setProposalFormOpen] = useState(false);
-  useEffect(() => {
-    if (openProposalVersion > 0 && !inspectionOnly) { setProposalFormOpen(true); setProposalSuccess(''); }
-  }, [openProposalVersion]);
-  const [proposalTitle, setProposalTitle] = useState('');
-  const [proposalDescription, setProposalDescription] = useState('');
-  const [proposalDeadline, setProposalDeadline] = useState('');
-  const [proposalSubmitting, setProposalSubmitting] = useState(false);
-  const [proposalNeedsRetry, setProposalNeedsRetry] = useState(false);
-  const [proposalError, setProposalError] = useState('');
-  const [proposalSuccess, setProposalSuccess] = useState('');
-  const pendingProposal = useRef<ClientProjectProposalInput | null>(null);
-  const [proposalReplyDrafts, setProposalReplyDrafts] = useState<Record<string, string>>({});
-  const [proposalReplying, setProposalReplying] = useState<string | null>(null);
-  const [proposalReplyErrors, setProposalReplyErrors] = useState<Record<string, string>>({});
-  const pendingProposalReplies = useRef(new Map<string, ClientProjectProposalReplyInput>());
   const [tab, setTab] = useState<'overview' | 'preview' | 'requests'>('overview');
   const [requestFilter, setRequestFilter] = useState<ProjectRequestFilter>('all');
   useEffect(() => { setTab('overview'); setRequestFilter('all'); }, [selectedProjectKey, projectFocusVersion]);
@@ -225,70 +202,6 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   const setDraft=(value:string)=>{if(projectKey)setProjectDrafts(current=>({...current,[projectKey]:value}));};
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState('');
-
-  async function submitProposal(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (inspectionOnly || proposalSubmitting) return;
-    const input = pendingProposal.current ?? {
-      schemaVersion: 1 as const,
-      operationId: crypto.randomUUID(),
-      title: proposalTitle.trim(),
-      description: proposalDescription.trim(),
-      requestedDeadline: proposalDeadline || null,
-    };
-    pendingProposal.current = input;
-    setProposalSubmitting(true); setProposalError(''); setProposalSuccess('');
-    try {
-      await api.submitProjectProposal(input);
-      pendingProposal.current = null;
-      setProposalNeedsRetry(false); setProposalFormOpen(false);
-      setProposalTitle(''); setProposalDescription(''); setProposalDeadline('');
-      setProposalSuccess('Proposal sent. Your project manager will review it; it does not create a project automatically.');
-      onProposalSubmitted();
-    } catch (submitError) {
-      if (submitError instanceof ClientTicketApiError && submitError.reconciliationRequired) {
-        setProposalNeedsRetry(true);
-        setProposalError('We could not confirm the result. Retry to safely check this same proposal; do not start another one yet.');
-      } else {
-        pendingProposal.current = null;
-        setProposalNeedsRetry(false);
-        setProposalError(submitError instanceof ClientTicketApiError && submitError.status === 401
-          ? 'Your sign-in expired. Sign in again before sending a proposal.'
-          : submitError instanceof ClientTicketApiError && submitError.status === 503
-            ? 'Project proposals are temporarily unavailable. Try again later.'
-            : 'We could not send the proposal. Check the details and try again.');
-      }
-    } finally { setProposalSubmitting(false); }
-  }
-
-  async function replyToProposal(proposal: ClientProjectProposal) {
-    if (proposalReplying || inspectionOnly || proposal.status !== 'awaiting_client') return;
-    const body = (proposalReplyDrafts[proposal.id] ?? '').trim();
-    if (!body) return;
-    let input = pendingProposalReplies.current.get(proposal.id);
-    if (!input || input.body !== body) {
-      input = { schemaVersion: 1, operationId: crypto.randomUUID(), body };
-      pendingProposalReplies.current.set(proposal.id, input);
-    }
-    setProposalReplying(proposal.id);
-    setProposalReplyErrors(current => ({ ...current, [proposal.id]: '' }));
-    try {
-      await api.replyToProjectProposal(proposal.id, input);
-      pendingProposalReplies.current.delete(proposal.id);
-      setProposalReplyDrafts(current => ({ ...current, [proposal.id]: '' }));
-      onRefreshProposals();
-    } catch (error) {
-      if (!(error instanceof ClientTicketApiError)
-        || (error.status !== null && error.status < 500 && !error.reconciliationRequired)) {
-        pendingProposalReplies.current.delete(proposal.id);
-      }
-      setProposalReplyErrors(current => ({ ...current, [proposal.id]: error instanceof ClientTicketApiError && error.status === 401
-        ? 'Your sign-in expired. Sign in again before replying.'
-        : error instanceof ClientTicketApiError && error.reconciliationRequired
-          ? 'We could not confirm your reply. Retry this same message to check safely.'
-          : 'We could not send your reply. Refresh the proposal and try again.' }));
-    } finally { setProposalReplying(null); }
-  }
 
   useEffect(() => {
     if (!selectedProject || tab !== 'preview') return;
@@ -382,9 +295,14 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         <h1 id={`${idPrefix}-projects-page-title`}>Your projects</h1>
         <p>Everything your project manager has shared with you.</p>
       </div>
-      {!inspectionOnly && <button type="button" className="client-secondary-action" aria-haspopup="dialog" aria-expanded={proposalFormOpen}
-        onClick={() => { setProposalFormOpen(true); setProposalSuccess(''); }}><Plus size={15} />Propose a project</button>}
+      {!inspectionOnly && onProposeProject && <button type="button" className="client-secondary-action" onClick={onProposeProject}>
+        <Plus size={15} />Propose a project</button>}
     </header>
+    {proposalsNeedingReply > 0 && onOpenProposals && <div className="client-proposals-notice" role="status">
+      <Lightbulb size={16} aria-hidden="true" />
+      <span>Your project manager is waiting on your reply to {proposalsNeedingReply === 1 ? 'a project proposal' : `${proposalsNeedingReply} project proposals`}.</span>
+      <button type="button" className="client-text-action" onClick={onOpenProposals}>Open proposals <ArrowRight size={14} aria-hidden="true" /></button>
+    </div>}
     {error && <p role="alert" className="client-project-error">{error}</p>}
     <section className="client-existing-projects" aria-label="Shared projects">
       {loading ? <div className="client-spotlight"><LoadingRows label="Loading your projects" /></div>
@@ -395,64 +313,6 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         </div>
           : !error && <div className="client-project-empty"><FolderKanban size={24} /><h2>No projects shared yet</h2>
             <p>When your project manager gives your account access to a project, it will appear here.</p></div>}
-    </section>
-    <Modal isOpen={proposalFormOpen} onClose={() => setProposalFormOpen(false)} closeDisabled={proposalSubmitting}
-      title="Propose a project" subtitle="Describe the outcome you want. Your project manager will review it and choose the right workspace."
-      dialogClassName="client-proposal-modal" maxWidth="max-w-xl">
-    <form id="client-proposal-form" className="client-proposal-form" onSubmit={submitProposal}>
-      <label htmlFor="client-proposal-title">Project title<input id="client-proposal-title" value={proposalTitle} onChange={event => setProposalTitle(event.target.value)} maxLength={160} required disabled={proposalSubmitting || proposalNeedsRetry} /></label>
-      <label htmlFor="client-proposal-description">What would you like to accomplish?<textarea id="client-proposal-description" value={proposalDescription} onChange={event => setProposalDescription(event.target.value)} maxLength={6000} rows={4} required disabled={proposalSubmitting || proposalNeedsRetry} /></label>
-      <label htmlFor="client-proposal-deadline">Target date (optional)<DatePicker id="client-proposal-deadline" value={proposalDeadline} onChange={setProposalDeadline} disabled={proposalSubmitting || proposalNeedsRetry} className="w-full" buttonClassName="h-10 w-full justify-start text-left" /></label>
-      <p id="client-proposal-note" className="client-proposal-note">Sending this proposal does not create a project or promise a start date. If your PM accepts it, a request will appear here so you can discuss the scope together.</p>
-      {proposalError && <p role="alert" className="client-project-error">{proposalError}</p>}
-      <div className="client-proposal-actions">
-        {!proposalNeedsRetry && <button type="button" className="client-proposal-cancel" disabled={proposalSubmitting} onClick={() => setProposalFormOpen(false)}>Cancel</button>}
-        <button type="submit" className="client-primary-action" aria-describedby="client-proposal-note" disabled={proposalSubmitting || (!proposalNeedsRetry && (!proposalTitle.trim() || !proposalDescription.trim()))}>
-          <Send size={14} />{proposalSubmitting ? 'Sending…' : proposalNeedsRetry ? 'Retry same proposal' : 'Send proposal'}
-        </button>
-      </div>
-    </form>
-    </Modal>
-    {proposalSuccess && <p role="status" className="client-proposal-success">{proposalSuccess}</p>}
-    <section className="client-proposals" aria-labelledby="client-proposals-title">
-      <div className="client-section-heading"><div><h2 id="client-proposals-title">Project proposals</h2>
-        <p>Ideas you’ve sent to your project manager. They’ll review each one and reply here.</p></div>
-        <button type="button" className="client-icon-action" aria-label="Refresh project proposals" disabled={proposalsLoading} onClick={onRefreshProposals}><RefreshCw size={15} /></button>
-      </div>
-      {proposalsError && <p role="alert" className="client-project-error">{proposalsError} <button type="button" onClick={onRefreshProposals}>Try again</button></p>}
-      {proposalsLoading && !proposals.length ? <LoadingRows label="Loading project proposals" rows={2} />
-        : proposals.length ? <div className="client-proposal-list">{proposals.map(proposal => {
-          const messages = proposal.clarificationMessages ?? [];
-          const view = clientProposalView(proposal, projects);
-          return <article key={proposal.id} className="client-proposal-row">
-          <div className="client-proposal-content"><strong>{proposal.title}</strong><p>{proposal.description}</p><small>Sent {time(proposal.submittedAt)}{proposal.requestedDeadline ? ` · Target ${proposal.requestedDeadline}` : ''}</small>
-            <small className="client-proposal-next">{view.next}</small>
-            {view.project && <button type="button" className="client-proposal-open" onClick={() => { onSelectedProjectKeyChange(clientProjectKey(view.project!)); setTab('overview'); }}>
-              View project <ArrowRight size={13} aria-hidden="true" />
-            </button>}
-            {messages.length > 0 && <div className="client-proposal-conversation" aria-label="Conversation with your project manager">
-              {messages.map(message => <article key={message.id} className={`client-proposal-message${message.author === 'client' ? ' is-client' : ''}`}>
-                <div><strong>{message.author === 'pm' ? 'Project manager' : 'You'}</strong><time dateTime={message.createdAt}>{time(message.createdAt)}</time></div>
-                <p>{message.body}</p>
-              </article>)}
-            </div>}
-            {proposal.status === 'awaiting_client' && <form className="client-proposal-reply" onSubmit={event => { event.preventDefault(); void replyToProposal(proposal); }}>
-              <label htmlFor={`proposal-reply-${proposal.id}`}>Your reply</label>
-              <textarea id={`proposal-reply-${proposal.id}`} maxLength={4000} rows={3} value={proposalReplyDrafts[proposal.id] ?? ''}
-                disabled={inspectionOnly || proposalReplying !== null}
-                onChange={event => setProposalReplyDrafts(current => ({ ...current, [proposal.id]: event.target.value }))}
-                placeholder="Type your response…" />
-              {proposalReplyErrors[proposal.id] && <p role="alert" className="client-project-error">{proposalReplyErrors[proposal.id]}</p>}
-              <div><small>Your reply goes back to your project manager.</small><button type="submit" className="client-primary-action"
-                disabled={inspectionOnly || proposalReplying !== null || !(proposalReplyDrafts[proposal.id] ?? '').trim()}>
-                <Send size={14} />{proposalReplying === proposal.id ? 'Sending…' : 'Send reply'}
-              </button></div>
-            </form>}
-          </div>
-          <span className={`client-proposal-status is-${view.tone}`}>{view.badge}</span>
-        </article>;
-        })}</div>
-          : !proposalsError && <p className="client-section-state">No project proposals yet.</p>}
     </section>
   </section>;
 }

@@ -3,7 +3,7 @@ import { TicketDetailSkeleton } from './TicketingSkeletons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowRight, Check, ChevronDown, ChevronLeft, ChevronsUpDown, FileText, FolderKanban, House,
-  ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket,
+  Lightbulb, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket, type LucideIcon,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 
@@ -24,6 +24,7 @@ import { CLIENT_REQUEST_GROUPS, clientRequestGroup, relativeTime } from './clien
 import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink';
 import { secondary, time } from './ticketUi';
 import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './ClientProjectPages';
+import { ClientProposalsPage } from './ClientProposalsPage';
 import { StatusPill } from './ClientProjectSections';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
 import { WorkspaceToolbar, WorkspaceTabStrip, WorkspaceTab, WorkspaceNewTabMenu } from '@/shared/layout/WorkspaceToolbar';
@@ -80,6 +81,18 @@ function appendClientMessage(messages: ClientTicketMessage[], message: ClientTic
   return messages.some(current => current.id === message.id) ? messages : [...messages, message];
 }
 
+const CLIENT_PAGES: Record<Page, { label: string; subtitle: string; Icon: LucideIcon }> = {
+  overview: { label: 'Home', subtitle: 'What needs you and your latest updates', Icon: House },
+  projects: { label: 'Projects', subtitle: 'Projects shared by your project manager', Icon: FolderKanban },
+  proposals: { label: 'Proposals', subtitle: 'Ideas you have sent to your project manager', Icon: Lightbulb },
+  requests: { label: 'Requests', subtitle: 'Follow requests and message your project manager', Icon: ListChecks },
+};
+const CLIENT_PAGE_ORDER: readonly Page[] = ['overview', 'projects', 'proposals', 'requests'];
+function clientPageIcon(page: Page, size: number) {
+  const { Icon } = CLIENT_PAGES[page];
+  return <Icon size={size} />;
+}
+
 export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false,
   workflowActionsDisabled: workflowActionsDisabledOverride = false, newRequestsDisabled = true,
   communicationEnabled = false }: {
@@ -101,7 +114,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   // ones it floats and closes on navigation, Escape or an outside click.
   const clientNav = useSidebarToggle('alpha.client-sidebar');
   // Home's "Propose a project" opens the form on the Projects page of the same tab.
-  const [proposeRequest, setProposeRequest] = useState<{ tabId: string; version: number } | null>(null);
+  /** The tab whose Proposals page should open the proposal form once it shows. */
+  const [proposeRequestTab, setProposeRequestTab] = useState<string | null>(null);
   const [portalState, setPortalState] = useState<PortalState>('checking');
   const [session, setSession] = useState<ClientSession | null>(null);
   const [phaseWorkflowEnabled, setPhaseWorkflowEnabled] = useState(false);
@@ -114,6 +128,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [projectProposalsError, setProjectProposalsError] = useState('');
   const [page, setPage] = tabState('page');
   const [selectedProjectKey, setSelectedProjectKey] = tabState('selectedProjectKey');
+  const [selectedProposalId, setSelectedProposalId] = tabState('selectedProposalId');
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
@@ -580,6 +595,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     setPage(nextPage); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
     if (nextPage !== 'requests') { setReturnToProjects(false); setQueueNotice(''); }
     if (nextPage === 'projects') setSelectedProjectKey(null);
+    if (nextPage === 'proposals') setSelectedProposalId(null);
     if (nextPage === 'requests') setRequestListShown(true);
   }
 
@@ -597,8 +613,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       return;
     }
     if (update.target.kind === 'proposal') {
-      setPage('projects'); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
-      setSelectedProjectKey(null);
+      setPage('proposals'); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
+      setSelectedProposalId(update.target.item.id);
       setRefreshVersion(value => value + 1);
       return;
     }
@@ -625,6 +641,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const activeRequest = selectedQueueItem;
   const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review';
   const currentNav = page;
+  const proposalsNeedingReply = (projectProposals ?? []).filter(proposal => proposal.status === 'awaiting_client').length;
+  const proposeProject = inspectionOnly ? undefined : () => { setProposeRequestTab(activeTabId); navigate('proposals'); };
   const clientEmail = session?.email?.trim() ?? '';
   const clientName = session?.fullName?.trim() || 'Client';
   const clientInitials = clientName.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
@@ -645,14 +663,19 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </div>
         </div>
         <nav aria-label="Client portal pages" className={'flex min-h-0 flex-1 flex-col overflow-hidden pb-1 ' + (compact ? 'items-center gap-0.5 px-1.5' : 'px-2')}>
-          {([['overview', 'Home', House], ['projects', 'Projects', FolderKanban], ['requests', 'Requests', ListChecks]] as const).map(([id, label, Icon]) => {
+          {CLIENT_PAGE_ORDER.map(id => {
+            const { label, Icon } = CLIENT_PAGES[id];
             const active = currentNav === id;
-            const button = <button key={id} type="button" aria-label={label} aria-current={active ? 'page' : undefined}
+            const waiting = id === 'proposals' ? proposalsNeedingReply : 0;
+            const button = <button key={id} type="button" aria-label={waiting ? `${label}, ${waiting} waiting on your reply` : label} aria-current={active ? 'page' : undefined}
               onClick={() => { navigate(id); closeIfFloating(); }}
-              className={(compact ? 'grid h-9 w-9 place-items-center rounded-lg transition-colors ' : sidebarRow + ' w-full gap-2.5 ')
+              className={(compact ? 'relative grid h-9 w-9 place-items-center rounded-lg transition-colors ' : sidebarRow + ' w-full gap-2.5 ')
                 + (active ? 'bg-selected font-medium text-selected-content hover:bg-selected' : 'text-content-secondary hover:bg-surface-high hover:text-content')}>
               <span className={active ? 'text-link' : 'text-content-muted'}><Icon className="h-4 w-4" aria-hidden="true" /></span>
               {!compact && <span className="truncate">{label}</span>}
+              {waiting > 0 && (compact
+                ? <span aria-hidden="true" className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-warning" />
+                : <span aria-hidden="true" className="ml-auto rounded-full bg-warning-subtle px-1.5 text-[11px] font-semibold leading-5 text-warning">{waiting}</span>)}
             </button>;
             return compact
               ? <Tooltip key={id}><TooltipTrigger asChild>{button}</TooltipTrigger><TooltipContent side="right">{label}</TooltipContent></Tooltip>
@@ -707,9 +730,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
         </>}>
           <WorkspaceTabStrip label="Client portal pages">
-            {tabs.map(tab => <WorkspaceTab key={tab.id} title={tab.navigation.page === 'overview' ? 'Home'
-              : tab.navigation.page === 'projects' ? projects?.find(project => clientProjectKey(project) === tab.navigation.selectedProjectKey)?.name ?? 'Projects' : 'Requests'}
-              icon={tab.navigation.page === 'overview' ? <House size={14} /> : tab.navigation.page === 'projects' ? <FolderKanban size={14} /> : <ListChecks size={14} />}
+            {tabs.map(tab => <WorkspaceTab key={tab.id} title={(tab.navigation.page === 'projects'
+              && projects?.find(project => clientProjectKey(project) === tab.navigation.selectedProjectKey)?.name) || CLIENT_PAGES[tab.navigation.page].label}
+              icon={clientPageIcon(tab.navigation.page, 14)}
               active={activeTabId === tab.id} onActivate={() => { if (activeTabId !== tab.id) changeWorkspaceTab(() => activateTab(tab.id)); }}
               onClose={() => {
                 if (writing || pending || view === 'create') return;
@@ -718,14 +741,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
               }} closable={tabs.length > 1 && !writing && !pending && view !== 'create'} controls="client-portal-page" />)}
           </WorkspaceTabStrip>
           <WorkspaceNewTabMenu boundaryRef={workspaceFrameRef} portalRootRef={portalRootRef} disabled={writing || Boolean(pending) || view === 'create'}
-            items={[
-              { id: 'overview', title: 'Home', subtitle: 'What needs you and your latest updates', icon: <House size={18} /> },
-              { id: 'projects', title: 'Projects', subtitle: 'Projects shared by your project manager', icon: <FolderKanban size={18} /> },
-              { id: 'requests', title: 'Requests', subtitle: 'Follow requests and message your project manager', icon: <ListChecks size={18} /> },
-            ]} onSelect={id => changeWorkspaceTab(() => openTab(id as Page))} />
+            items={CLIENT_PAGE_ORDER.map(id => ({ id, title: CLIENT_PAGES[id].label, subtitle: CLIENT_PAGES[id].subtitle, icon: clientPageIcon(id, 18) }))} onSelect={id => changeWorkspaceTab(() => openTab(id as Page))} />
         </WorkspaceToolbar>
       </header>
-      <div id="client-portal-page" role="tabpanel" aria-label={currentNav === 'overview' ? 'Home' : currentNav === 'projects' ? 'Projects' : 'Requests'} className="client-portal-main client-portal-main--workspace">
+      <div id="client-portal-page" role="tabpanel" aria-label={CLIENT_PAGES[currentNav].label} className="client-portal-main client-portal-main--workspace">
         {inspectionOnly && <p role="status" className="client-portal-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
         {pageError && <div role="alert" className="client-portal-error"><AlertCircle size={16} />{pageError}</div>}
         {refreshError && <div role="status" className="client-portal-error">{refreshError}</div>}
@@ -734,7 +753,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
           onOpenRequest={item => openRequest(item)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
           onGoToRequests={() => navigate('requests')}
-          onProposeProject={inspectionOnly ? undefined : () => { const tabId = activeTabId; navigate('projects'); setProposeRequest(current => ({ tabId, version: (current?.version ?? 0) + 1 })); }} />}
+          onProposeProject={proposeProject} />}
 
         {page === 'projects' && view === 'create' && createContext && createProject && <div className="client-create-view client-create-view--project">
           <div className="client-create-project-context"><button type="button" className="client-back-link" onClick={cancelCreateForm}><ChevronLeft size={15} />Back to {createProject.name}</button>
@@ -746,15 +765,19 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         </div>}
         {tabs.filter(tab => tab.navigation.page === 'projects').map(tab => <div key={tab.id} hidden={tab.id !== activeTabId || view === 'create'} className="client-project-tab-pane">
           {tab.id === activeTabId && createError && <p role="alert" className="client-project-error">{createError}</p>}
-          <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} requests={displayQueue?.items ?? []} openProposalVersion={proposeRequest?.tabId === tab.id ? proposeRequest.version : 0} loading={!projects && !projectsError} error={projectsError}
+          <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} requests={displayQueue?.items ?? []} loading={!projects && !projectsError} error={projectsError}
             selectedProjectKey={tab.navigation.selectedProjectKey} onSelectedProjectKeyChange={key => selectProject(tab.id, key)}
             onOpenRequest={item => openRequest(item, true)} onNewRequest={project => void openCreateForm(project)}
             inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading}
             projectFocusVersion={tab.navigation.notificationProjectFocus} refreshToken={refreshVersion}
-            proposals={projectProposals ?? []} proposalsLoading={projectProposalsLoading || (!projectProposals && !projectProposalsError)} proposalsError={projectProposalsError}
-            onRefreshProposals={() => setRefreshVersion(value => value + 1)}
-            onProposalSubmitted={() => setRefreshVersion(value => value + 1)} />
+            proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')} onProposeProject={proposeProject} />
         </div>)}
+
+        {page === 'proposals' && <ClientProposalsPage key={activeTabId} idPrefix={activeTabId} api={api} projects={projects ?? []}
+          proposals={projectProposals ?? []} loading={projectProposalsLoading || (!projectProposals && !projectProposalsError)} error={projectProposalsError}
+          inspectionOnly={inspectionOnly} selectedProposalId={selectedProposalId} onSelectedProposalIdChange={setSelectedProposalId}
+          onRefresh={() => setRefreshVersion(value => value + 1)} onSubmitted={() => setRefreshVersion(value => value + 1)}
+          onOpenProject={openProject} openForm={proposeRequestTab === activeTabId} onOpenFormHandled={() => setProposeRequestTab(null)} />}
 
         {page === 'requests' && <div className={`client-requests-page ${selectedId ? 'has-selected-request' : ''}`}>
           <section className={`client-portal-page-heading ${selectedId && !requestListShown ? 'client-mobile-heading-hidden' : ''}`} aria-label="Request overview">

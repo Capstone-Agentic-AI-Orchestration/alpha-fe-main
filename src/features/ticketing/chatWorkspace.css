@@ -418,8 +418,6 @@
 .client-portal-shell .client-section-heading { gap: var(--client-space-3); }
 .client-portal-shell .client-section-heading h2 { font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
 .client-portal-shell .client-section-heading p { font-size: var(--client-type-meta); }
-.client-portal-shell .client-proposals { gap: var(--client-space-2); margin-top: 0; }
-.client-portal-shell .client-proposals .client-section-heading { padding-bottom: var(--client-space-2); }
 .client-portal-shell .client-project-list > button {
   min-height: 72px;
   gap: var(--client-space-3);
@@ -614,8 +612,7 @@
   line-height: var(--client-line-heading);
 }
 .client-portal-shell .client-project-tabs button[aria-selected="true"] { font-weight: var(--client-weight-semibold); }
-.client-portal-shell .client-project-list strong,
-.client-portal-shell .client-proposal-row strong { font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
+.client-portal-shell .client-project-list strong { font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
 .client-portal-shell .client-list-title h2 { font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
 .client-portal-shell .client-request-title { font-weight: var(--client-weight-semibold); }
 .client-portal-shell .role-chat-context__header h2 { font-size: var(--client-type-body); font-weight: var(--client-weight-bold); }
@@ -718,12 +715,6 @@
   letter-spacing: -.02em;
 }
 .client-portal-shell .client-existing-projects .client-section-heading p { font-size: var(--client-type-meta); }
-.client-portal-shell .client-proposals { margin-top: var(--client-space-2); }
-.client-portal-shell .client-proposals .client-section-heading h2 {
-  color: rgb(var(--ui-text-secondary));
-  font-size: var(--client-type-compact);
-  font-weight: var(--client-weight-semibold);
-}
 
 .pm-tickets__context-panel .ticket-documents-panel button { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 
