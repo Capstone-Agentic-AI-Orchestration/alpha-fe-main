@@ -19,7 +19,7 @@ import { clientWhatNext } from './clientFriendly';
 import { clientProgressSteps } from './clientProgressSteps';
 import { ClientProgressStrip } from './ClientProgressStrip';
 import { TicketChat } from './TicketChat';
-import { CxBadge, CxPageHeader, requestTone } from './clientKit';
+import { CxBadge, CxHero, CxPageHeader, requestTone } from './clientKit';
 import { Button } from '@/shared/components/ui/button';
 
 type Decision = Extract<ClientTicketCommandInput['command'], { type: 'agree_scope' | 'accept_delivery' }>;
@@ -191,14 +191,17 @@ export function ClientTicketDetail({
   const history = requestHistory(ticket, workflowActionsDisabled);
 
   return <section className="cx-request" aria-labelledby="client-request-title">
-    <CxPageHeader titleId="client-request-title" title={ticket.title}
-      back={{ label: backLabel, onClick: onBack, disabled: busy }}
-      description={<span className="cx-request-summary">{progress.description}</span>}
-      actions={<>
-        <CxBadge tone={requestTone(ticket.status, requestedAction)}>{progress.statusLabel}</CxBadge>
-        {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className="cx-button">Request additional work</button>}
-      </>} />
-    {progressSteps.length > 0 && <div className="cx-panel cx-request-progress"><ClientProgressStrip steps={progressSteps} /></div>}
+    <CxHero className="cx-request-hero">
+      <CxPageHeader titleId="client-request-title" title={ticket.title}
+        back={{ label: backLabel, onClick: onBack, disabled: busy }}
+        eyebrow={ticket.sharedProjectName ?? undefined}
+        description={<span className="cx-request-summary">{progress.description}</span>}
+        actions={<>
+          <CxBadge tone={requestTone(ticket.status, requestedAction)}>{progress.statusLabel}</CxBadge>
+          {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className="cx-button">Request additional work</button>}
+        </>} />
+      {progressSteps.length > 0 && <ClientProgressStrip steps={progressSteps} />}
+    </CxHero>
     {error && <p role="alert" className="cx-error">{error}</p>}
 
     <div className="cx-request-layout">
