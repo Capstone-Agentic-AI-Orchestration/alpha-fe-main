@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { ArrowLeft, ChevronRight } from 'lucide-react';
 import type { ClientProjectRequestItem } from './clientApi';
 import { clientTicketProgress } from './clientTicketProgress';
+import { listProgressIndex, relativeTime } from './clientFriendly';
+import { time } from './ticketUi';
 import './clientKit.css';
 
 /**
@@ -97,5 +99,22 @@ export function CxChips<T extends string>({ label, value, options, onChange, dis
 export function CxEmpty({ icon, title, body, action }: { icon?: ReactNode; title: string; body?: string; action?: ReactNode }) {
   return <div className="cx-empty">{icon && <span className="cx-empty-icon" aria-hidden="true">{icon}</span>}
     <p className="cx-empty-title">{title}</p>{body && <p>{body}</p>}{action}</div>;
+}
+
+/** A request in a list: its title, where it stands in plain words, the five-step track, and its badge. */
+export function CxRequestRow({ item, onOpen, disabled }: {
+  item: ClientProjectRequestItem; onOpen: (item: ClientProjectRequestItem) => void; disabled?: boolean;
+}) {
+  const pendingLink = item.projectLinkStatus === 'pending_review';
+  const index = pendingLink ? null : listProgressIndex(item);
+  const sentence = pendingLink
+    ? 'Your project manager is confirming the project' + (item.requestedProjectName ? ' · ' + item.requestedProjectName : '')
+    : clientTicketProgress(item.status, item.requestedAction).label;
+  return <CxRow title={item.title} onClick={() => onOpen(item)} disabled={disabled}
+    meta={<><span className={item.requestedAction && !pendingLink ? 'cx-meta-action' : undefined}>{sentence}</span>
+      {' · '}<time dateTime={item.updatedAt} title={time(item.updatedAt)}>{relativeTime(item.updatedAt)}</time></>}
+    trailing={pendingLink ? <CxBadge>Pending link</CxBadge> : <CxRequestBadge status={item.status} requestedAction={item.requestedAction} />}>
+    {index !== null && <CxTrack index={index} label={'Step ' + (index + 1) + ' of 5'} />}
+  </CxRow>;
 }
 

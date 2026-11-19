@@ -2,7 +2,8 @@
  * Client portal layout and building blocks. Theme colours only (--ui-*), client tokens for size
  * and spacing (clientDesignTokens.css). Nothing on a client page is smaller than 12px.
  */
-.cx-shell {
+/* .cx-scope carries the same values into pop-ups that render outside the page shell. */
+.cx-shell, .cx-scope {
   --cx-surface: rgb(var(--ui-surface));
   --cx-raised: rgb(var(--ui-raised));
   --cx-line: rgb(var(--ui-divider));
@@ -20,7 +21,14 @@
 }
 
 /* Shell: top bar, scrolling page, phone tab bar. */
-.cx-shell { display: flex; height: 100dvh; min-height: 0; flex-direction: column; }
+.cx-shell { display: flex; width: 100%; height: 100dvh; min-height: 0; flex-direction: column; overflow: hidden; background: rgb(var(--ui-canvas)); color: var(--cx-ink); font-size: var(--client-type-compact); line-height: var(--client-line-body); -webkit-font-smoothing: antialiased; }
+:is(.cx-shell, .cx-scope) { font-family: var(--client-font-family); }
+:is(.cx-shell, .cx-scope) :is(*, *::before, *::after) { box-sizing: border-box; }
+:is(.cx-shell, .cx-scope) button { font: inherit; touch-action: manipulation; }
+:is(.cx-shell, .cx-scope) :is(button, a, input, textarea, select):focus-visible { outline: var(--client-focus-width) solid rgb(var(--ui-focus)); outline-offset: var(--client-focus-offset); }
+/* The development preview stacks a notice bar above the portal. */
+.ticketing-client-preview { display: flex; height: 100dvh; min-height: 0; flex-direction: column; overflow: hidden; }
+.ticketing-client-preview > .cx-shell { height: auto; min-height: 0; flex: 1 1 0%; }
 .cx-topbar { z-index: 3; display: flex; flex: none; align-items: center; gap: var(--client-space-5); height: 56px; padding: 0 var(--client-portal-gutter); border-bottom: 1px solid var(--cx-line); background: rgb(var(--ui-shell)); }
 .cx-brand { display: flex; flex: none; align-items: center; gap: var(--client-space-2); color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-bold); }
 .cx-brand img { width: 22px; height: 22px; object-fit: contain; }
@@ -146,6 +154,69 @@ span.cx-button { pointer-events: none; }
 .cx-chat-note { margin: 0; padding: 0 var(--client-space-3) var(--client-space-3); color: var(--cx-faint); font-size: var(--client-type-meta); }
 .cx-chat-send-error { margin: 0 var(--client-space-3) var(--client-space-2); }
 
+/* Requests list. */
+.cx-request-groups { display: flex; flex-direction: column; gap: var(--client-space-6); }
+.cx-list-footer { display: flex; align-items: center; justify-content: space-between; gap: var(--client-space-3); color: var(--cx-faint); font-size: var(--client-type-meta); }
+.cx-status-note { margin: 0; padding: var(--client-space-3) var(--client-space-4); border: 1px solid var(--cx-line); border-radius: var(--client-radius-control); background: var(--cx-accent-soft); color: var(--cx-ink); font-size: var(--client-type-caption); }
+.cx-status-note strong { display: block; margin-bottom: 2px; }
+.cx-pending { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--client-space-3); }
+
+/* One request: header, five-step strip, then the decision and conversation beside a quiet side column. */
+.cx-request { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-5); }
+.cx-request-summary { display: block; max-width: 72ch; line-height: var(--client-line-copy); }
+.cx-request-progress { padding: var(--client-space-4) var(--client-space-5); }
+.cx-steps-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--client-space-2); margin: 0; padding: 0; list-style: none; }
+.cx-step { position: relative; display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-2); }
+.cx-step::before { position: absolute; top: 13px; left: 32px; right: calc(-1 * var(--client-space-2)); height: 2px; border-radius: var(--client-radius-pill); background: var(--cx-line); content: ''; }
+.cx-step:last-child::before { display: none; }
+.cx-step.is-done::before { background: var(--cx-accent); }
+.cx-step-node { position: relative; display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid var(--cx-line); border-radius: 50%; background: var(--cx-surface); color: var(--cx-muted); font-size: var(--cx-type-small); font-weight: var(--client-weight-semibold); }
+.cx-step.is-done .cx-step-node { border-color: var(--cx-accent); background: var(--cx-accent); color: rgb(var(--ui-on-action)); }
+.cx-step.is-current .cx-step-node { border: 2px solid var(--cx-accent); color: var(--cx-accent); }
+.cx-step.is-current.is-action .cx-step-node { border-color: var(--cx-attention); color: var(--cx-attention); }
+.cx-step-label { color: var(--cx-muted); font-size: var(--client-type-meta); line-height: 1.35; }
+.cx-step.is-current .cx-step-label { color: var(--cx-ink); font-weight: var(--client-weight-semibold); }
+.cx-step.is-current.is-action .cx-step-label { color: var(--cx-attention); }
+.cx-steps-summary { display: none; margin: 0; color: var(--cx-ink); font-size: var(--client-type-caption); font-weight: var(--client-weight-semibold); }
+.cx-steps-summary.is-action { color: var(--cx-attention); }
+.cx-request-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); gap: var(--client-space-6); align-items: start; }
+.cx-request-main { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-4); }
+.cx-decision { display: flex; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-5); }
+.cx-decision h2 { margin: 0; color: var(--cx-attention); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
+.cx-request-chat { display: flex; height: min(680px, calc(100dvh - 200px)); min-height: 420px; flex-direction: column; }
+.cx-request-chat .cx-chat-head p { display: flex; align-items: center; gap: var(--client-space-1); }
+.cx-request-chat .ticket-chat { background: var(--cx-surface); }
+.cx-request-chat .ticket-chat__feed { padding: var(--client-space-4) var(--client-space-5); }
+.cx-request-chat .ticket-chat [data-ticket-chat-composer] { padding: var(--client-space-3) var(--client-space-4); }
+/* The shared chat uses 9-11px labels; on client pages nothing is smaller than 12px. */
+.cx-shell .ticket-chat__group { width: 100%; max-width: none; margin-inline: 0; }
+.cx-shell :is(.ticket-chat__day, .ticket-chat__day time, .ui-message-header, .ui-message-header span, .ui-message-footer, .ui-message-footer time, .ui-message-avatar,
+  .ticket-chat__composer-note, .ticket-chat__visibility, .ticket-chat__readonly, .ticket-chat__empty p, .ticket-chat__locked p, .ticket-chat__error,
+  .ticket-chat__message-footer, .ticket-chat__composer-toolbar > span, .ticket-chat__avatar) { font-size: var(--cx-type-small); }
+.cx-shell .ui-bubble-content { font-size: var(--client-type-compact); line-height: var(--client-line-body); }
+.cx-request-rail { display: flex; min-width: 0; flex-direction: column; border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); }
+.cx-rail-section { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-2); padding: var(--client-space-4); border-top: 1px solid var(--cx-line); outline: none; }
+.cx-rail-section:first-child { border-top: 0; }
+.cx-rail-section > h2 { margin: 0; color: var(--cx-muted); font-size: var(--cx-type-small); font-weight: var(--client-weight-semibold); }
+.cx-request-copy { margin: 0; color: var(--cx-ink); font-size: var(--client-type-caption); line-height: var(--client-line-copy); white-space: pre-wrap; overflow-wrap: anywhere; }
+.cx-request-strong { margin: 0; color: var(--cx-ink); font-size: var(--client-type-caption); font-weight: var(--client-weight-semibold); }
+.cx-request-note { margin: 0; color: var(--cx-muted); font-size: var(--client-type-meta); line-height: var(--client-line-copy); }
+.cx-request-actions { display: flex; flex-wrap: wrap; gap: var(--client-space-2); }
+.cx-request-form { display: flex; flex-direction: column; gap: var(--client-space-2); }
+.cx-request-form label { color: var(--cx-muted); font-size: var(--client-type-caption); }
+.cx-request-form textarea { font-size: var(--client-type-caption); }
+.cx-request-check { display: flex; align-items: flex-start; gap: var(--client-space-2); }
+.cx-request-check input { margin-top: 2px; accent-color: rgb(var(--ui-action)); }
+.cx-request-lock { display: flex; align-items: flex-start; gap: var(--client-space-2); margin: 0; color: var(--cx-attention); font-size: var(--client-type-meta); line-height: var(--client-line-copy); }
+.cx-request-lock svg { flex: none; margin-top: 3px; }
+.cx-request-preview { align-self: flex-start; min-height: 32px; }
+.cx-request-reference { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-2); margin: 0; }
+.cx-request-reference code { overflow-wrap: anywhere; color: var(--cx-ink); font-size: var(--client-type-caption); }
+.cx-request-files { padding: 0; }
+.cx-request-files .ticket-documents-panel { margin: 0; border: 0; border-radius: 0; background: none; }
+.cx-request-files :is(.text-xs, h2, h3) { font-size: var(--cx-type-small); }
+.cx-request :is(button, a, textarea, input):focus-visible { outline: var(--client-focus-width) solid rgb(var(--ui-focus)); outline-offset: var(--client-focus-offset); }
+
 /* Empty and error states. */
 .cx-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--client-space-2); padding: var(--client-space-6) var(--client-space-4); color: var(--cx-muted); font-size: var(--client-type-caption); }
 .cx-empty p { margin: 0; }
@@ -158,6 +229,7 @@ span.cx-button { pointer-events: none; }
 @media (max-width: 1000px) {
   .cx-project-layout { grid-template-columns: minmax(0, 1fr); }
   .cx-chat { position: static; max-height: none; }
+  .cx-request-layout { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 760px) {
@@ -177,5 +249,19 @@ span.cx-button { pointer-events: none; }
   .cx-chat { position: static; max-height: none; }
   .cx-preview-frame { height: 420px; }
   .cx-panel.is-attention .cx-row { flex-wrap: wrap; }
+  .cx-request-progress { padding: var(--client-space-3) var(--client-space-4); }
+  .cx-steps-list { display: flex; gap: 4px; }
+  .cx-step { flex: 1; }
+  .cx-step::before { display: none; }
+  .cx-step-node { width: 100%; height: 5px; border: 0; border-radius: var(--client-radius-pill); background: var(--cx-raised); font-size: 0; }
+  .cx-step-node svg { display: none; }
+  .cx-step.is-done .cx-step-node { background: var(--cx-accent); }
+  .cx-step.is-current .cx-step-node { border: 0; background: color-mix(in srgb, var(--cx-accent) 55%, var(--cx-raised)); }
+  .cx-step.is-current.is-action .cx-step-node { background: var(--cx-attention); }
+  .cx-step-label { display: none; }
+  .cx-steps-summary { display: block; margin-top: var(--client-space-2); }
+  .cx-decision { padding: var(--client-space-4); }
+  .cx-request-chat { height: min(620px, calc(100dvh - 180px)); min-height: 380px; }
+  .cx-request-chat .ticket-chat__feed { padding: var(--client-space-3); }
 }
 
