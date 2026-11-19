@@ -28,7 +28,7 @@ export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=fals
     const rect=entries[0]?.contentRect;if(rect&&rect.width>0&&rect.height>0)setSize({width:rect.width,height:rect.height});
   });observer.observe(stage.current);return()=>observer.disconnect();},[]);
   const viewport=previewViewport(device,size),scale=viewport.scale;
-  const safe=preview&&safePreview(preview.url)?preview:null;
+  const safe=preview&&isEmbeddablePreviewUrl(preview.url)?preview:null;
   const [loadedFrame, setLoadedFrame] = useState('');
   const frameKey = safe ? `${safe.url}:${reload}:${device === 'desktop' ? 'desktop' : 'device'}` : '';
   const frameLoading = loadedFrame !== frameKey;
@@ -54,7 +54,8 @@ export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=fals
     </div>
   </section>;
 }
-function safePreview(value:string) {try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password&&!url.port
+/** Only a project's own hosted preview (an https *.vercel.app site on another origin) may be shown inside the portal. */
+export function isEmbeddablePreviewUrl(value:string) {try{const url=new URL(value);return url.protocol==='https:'&&!url.username&&!url.password&&!url.port
   &&url.hostname.endsWith('.vercel.app')&&url.origin!==window.location.origin;}catch{return false;}}
 export function Notice({error,onRetry}:{error:string;onRetry?:()=>void}) {
   return error?<div className="pqa-error" role="alert">{error}{onRetry&&<button type="button" onClick={onRetry}>Reload review</button>}</div>:null;

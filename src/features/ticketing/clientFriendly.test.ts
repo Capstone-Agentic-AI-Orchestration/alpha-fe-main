@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClientProjectRequestItem } from './clientApi';
-import { clientGreeting, clientNextStep, clientRequestGroup, dayLabel, listProgressIndex, relativeTime } from './clientFriendly';
+import { clientGreeting, clientNextLine, clientNextStep, clientRequestGroup, clientWhatNext, dayLabel, listProgressIndex, relativeTime } from './clientFriendly';
 
 const item = (overrides: Partial<ClientProjectRequestItem>): ClientProjectRequestItem => ({
   id: 'r1', reference: 'REF-1', title: 'Request', status: 'in_progress', createdAt: '2026-11-01T00:00:00Z',
@@ -53,5 +53,19 @@ describe('client friendly helpers', () => {
     expect(dayLabel(new Date(2026, 10, 15, 8).toISOString(), now)).toBe('Today');
     expect(dayLabel(new Date(2026, 10, 14, 23).toISOString(), now)).toBe('Yesterday');
     expect(dayLabel(new Date(2026, 9, 2, 9).toISOString(), now)).not.toMatch(/Today|Yesterday/);
+  });
+
+  it('says what happens next for a listed request, and nothing once it has ended', () => {
+    expect(clientNextLine(item({ status: 'awaiting_client', requestedAction: 'agree_scope' }))).toBe('approve the plan so the work can start');
+    expect(clientNextLine(item({ status: 'in_progress' }))).toBe('your project manager shares the result');
+    expect(clientNextLine(item({ status: 'received', projectLinkStatus: 'pending_review' }))).toMatch(/confirms which project/);
+    expect(clientNextLine(item({ status: 'closed', requestedAction: 'reply' }))).toBeNull();
+  });
+
+  it('explains what follows the current step on a request page', () => {
+    expect(clientWhatNext({ status: 'awaiting_client', requestedAction: 'agree_scope' })).toMatch(/^Once you approve/);
+    expect(clientWhatNext({ status: 'ready_for_review', requestedAction: 'review_result' })).toMatch(/If you accept, the request is finished/);
+    expect(clientWhatNext({ status: 'in_progress', requestedAction: null })).toMatch(/shares the result here/);
+    expect(clientWhatNext({ status: 'cancelled', requestedAction: null })).toBeNull();
   });
 });

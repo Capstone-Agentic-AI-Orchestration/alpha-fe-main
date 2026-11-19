@@ -4,6 +4,7 @@ import { LoadingRows } from '@/shared/components/ui/skeleton';
 import type { ClientProject, ClientProjectRequestItem, ClientProjectRequestQueue, ClientTicketQueueOptions } from './clientApi';
 import { clientTicketApi, ClientTicketApiError } from './clientApi';
 import { clientTicketProgress } from './clientTicketProgress';
+import { shortReference } from './clientFriendly';
 import { time } from './ticketUi';
 import { CxBadge, CxChips, CxEmpty, CxPanel, CxRequestBadge, CxRow, CxSection } from './clientKit';
 
@@ -48,12 +49,6 @@ function useScopedLoad<T>(key: string, load: (() => Promise<T>) | null, refresh 
 const ENDED = ['closed', 'declined', 'cancelled'];
 export function needsClient(item: ClientProjectRequestItem): boolean {
   return item.requestedAction !== null && !ENDED.includes(item.status) && item.projectLinkStatus !== 'pending_review';
-}
-
-/** Long generated references stay unique in the title attribute; rows show a readable prefix. */
-export function shortReference(reference: string): string {
-  const match = /^([A-Z]+-)([0-9A-F]{12,})$/i.exec(reference);
-  return match ? match[1] + match[2].slice(0, 6).toUpperCase() : reference;
 }
 
 function ProjectRequestRow({ item, onOpen }: { item: ClientProjectRequestItem; onOpen: (item: ClientProjectRequestItem) => void }) {

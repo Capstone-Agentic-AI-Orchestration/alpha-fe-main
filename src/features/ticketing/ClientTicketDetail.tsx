@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Check, CheckCircle2, Copy, ExternalLink, LockKeyhole, Paperclip, Send } from 'lucide-react';
+import { Check, CheckCircle2, Copy, CornerDownRight, ExternalLink, LockKeyhole, Paperclip, Send } from 'lucide-react';
 
 import type {
   ClientTicketCommandInput, ClientTicketDetail as ClientTicketRecord,
@@ -15,6 +15,7 @@ import {
   clientReviewLockMessage, SCOPE_CHANGE_MAX_LENGTH, scopeChangeMessage,
 } from './clientReview';
 import { clientTicketProgress } from './clientTicketProgress';
+import { clientWhatNext } from './clientFriendly';
 import { clientProgressSteps } from './clientProgressSteps';
 import { ClientProgressStrip } from './ClientProgressStrip';
 import { TicketChat } from './TicketChat';
@@ -186,6 +187,8 @@ export function ClientTicketDetail({
   const decision = needsAction ? scopeDecision ? planBody : resultBody : null;
   const railPlan = decision === planBody ? null : planBody;
   const railResult = decision === resultBody ? null : resultBody;
+  const whatNext = clientWhatNext({ status: ticket.status, requestedAction });
+  const history = requestHistory(ticket, workflowActionsDisabled);
 
   return <section className="cx-request" aria-labelledby="client-request-title">
     <CxPageHeader titleId="client-request-title" title={ticket.title}
@@ -203,6 +206,10 @@ export function ClientTicketDetail({
         {decision && <section className="client-decision-slot cx-panel is-attention cx-decision" aria-labelledby="client-decision-title">
           <h2 id="client-decision-title">{'Action needed: ' + progress.label}</h2>
           {decision}
+        </section>}
+        {whatNext && <section className="cx-next" aria-labelledby="client-next-title">
+          <h2 id="client-next-title"><CornerDownRight size={14} aria-hidden="true" />What happens next</h2>
+          <p>{whatNext}</p>
         </section>}
         <section className="cx-panel cx-request-chat" aria-label="Conversation with your project manager">
           <header className="cx-chat-head"><div><h2>Conversation</h2><p><LockKeyhole size={11} aria-hidden="true" /> Only you and your project manager can see this.</p></div></header>
@@ -244,8 +251,12 @@ export function ClientTicketDetail({
         <RailSection title="What you asked for">
           <p className="cx-request-copy">{ticket.description}</p>
           <p className="cx-request-note">Sent {time(ticket.createdAt)}</p>
-          {ticket.request?.requestedDeadline && <p className="cx-request-note">Hoped-for date: {ticket.request.requestedDeadline} · not guaranteed</p>}
+          {ticket.request?.requestedDeadline && <p className="cx-request-note">Hoped-for date: {calendarDay(ticket.request.requestedDeadline)} · not guaranteed</p>}
         </RailSection>
+        {history.length > 1 && <RailSection title="History">
+          <ol className="cx-history">{history.map((event, index) => <li key={event.label + event.at} className={index === history.length - 1 ? 'is-latest' : undefined}>
+            {event.label}<time dateTime={event.at}>{time(event.at)}</time></li>)}</ol>
+        </RailSection>}
         {railPlan && <RailSection title="The plan">{railPlan}</RailSection>}
         {railResult && <RailSection title="Your result">{railResult}</RailSection>}
         <RailSection title="Project">
@@ -286,4 +297,26 @@ export function ClientTicketDetail({
 
 function RailSection({ title, children }: { title: string; children: ReactNode }) {
   return <section className="cx-rail-section"><h2>{title}</h2>{children}</section>;
+}
+
+/** "2026-10-20" as "Oct 20, 2026", read as a calendar day so time zones cannot shift it. */
+function calendarDay(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+    .toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+const ENDED_LABEL: Partial<Record<ClientTicketRecord['status'], string>> = {
+  closed: 'Request finished', declined: 'Not going ahead', cancelled: 'Request cancelled',
+};
+
+/** The request's milestones with dates, oldest first: sent, plan, result, and how it ended. */
+function requestHistory(ticket: ClientTicketRecord, workflowActionsDisabled: boolean): Array<{ label: string; at: string }> {
+  const events = [{ label: 'You sent the request', at: ticket.createdAt }];
+  if (!workflowActionsDisabled && ticket.scope) events.push({ label: ticket.scope.agreed ? 'Plan agreed' : 'Plan sent for your approval', at: ticket.scope.proposedAt });
+  if (!workflowActionsDisabled && ticket.delivery) events.push({ label: ticket.delivery.accepted ? 'Result shared and accepted' : 'Result shared for you to check', at: ticket.delivery.sharedAt });
+  const ended = ENDED_LABEL[ticket.status];
+  if (ended && ticket.closedAt) events.push({ label: ended, at: ticket.closedAt });
+  return events.filter(event => Number.isFinite(Date.parse(event.at))).sort((a, b) => Date.parse(a.at) - Date.parse(b.at));
 }

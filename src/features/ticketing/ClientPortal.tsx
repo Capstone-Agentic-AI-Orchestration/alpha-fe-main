@@ -18,7 +18,7 @@ import { ClientNotificationBell, projectProposalPortalUpdate, type ClientPortalU
 import { ClientAccessPanel } from './ClientAccessPanel';
 import { ClientPasswordSignIn } from './ClientPasswordSignIn';
 import { clientTicketProgress } from './clientTicketProgress';
-import { CLIENT_REQUEST_GROUPS, clientRequestGroup } from './clientFriendly';
+import { CLIENT_REQUEST_GROUPS, CLIENT_STEP_GUIDE, clientRequestGroup } from './clientFriendly';
 import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink';
 import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './ClientProjectPages';
 import { ClientProposalsPage } from './ClientProposalsPage';
@@ -712,6 +712,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {refreshError && <p role="status" className="cx-error cx-notice">{refreshError}</p>}
 
         {page === 'overview' && <ClientOverviewPage clientName={session?.fullName ?? ''} requests={displayQueue} projects={projects ?? []}
+          api={api} refreshToken={refreshVersion}
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
           onOpenRequest={item => openRequest(item, false, true)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
           onGoToRequests={() => navigate('requests')}
@@ -751,6 +752,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </div>
           {queueNotice && <p role="status" className="cx-status-note">{queueNotice}</p>}
           {queueError && <p role="alert" className="cx-error">{queueError}</p>}
+          <div className="cx-requests-layout"><div className="cx-requests-main">
           {!queue && !queueError ? <CxPanel><LoadingRows label="Loading your requests" rows={4} className="px-3" /></CxPanel>
             : displayQueue?.items.length ? <div className="cx-request-groups">{CLIENT_REQUEST_GROUPS.map(group => {
               // Grouped by what the client needs to do, so the list reads as a to-do list rather than a ticket queue.
@@ -766,6 +768,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                 body={search ? 'Try a shorter search or clear the search field.' : 'Requests you send, and the ones your project manager opens for you, appear here.'} /></CxPanel>}
           {queue && <div className="cx-list-footer"><span>{queue.items.length} shown</span>{queue.nextCursor && <button type="button" className="cx-button" onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading}>
             {queueMoreLoading ? 'Loading…' : 'Load more'}</button>}</div>}
+          </div>
+          <aside className="cx-guide" aria-labelledby={activeTabId + '-guide-title'}>
+            <h2 id={activeTabId + '-guide-title'}>How a request moves</h2>
+            <ol>{CLIENT_STEP_GUIDE.map((step, index) => <li key={step.label}><span aria-hidden="true">{index + 1}</span>
+              <p><strong>{step.label}</strong>{step.detail}</p></li>)}</ol>
+          </aside></div>
         </div>}
 
         {page === 'requests' && selectedId && <div className="cx-page">
