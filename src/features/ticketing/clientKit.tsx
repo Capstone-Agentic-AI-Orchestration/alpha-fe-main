@@ -145,3 +145,38 @@ export function CxQuote({ body, meta, action }: { body: string; meta: ReactNode;
   </div>;
 }
 
+/** A page's opening band: large headline on a soft glow in the theme's accent colours. */
+export function CxHero({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={'cx-hero' + (className ? ' ' + className : '')}>{children}</div>;
+}
+
+/** A round progress meter, 0 to 100, with the number in the middle. */
+export function CxRing({ value, size = 68, label }: { value: number; size?: number; label: string }) {
+  const stroke = 7;
+  const radius = (size - stroke) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const clamped = Math.max(0, Math.min(100, value));
+  return <span className="cx-ring" role="img" aria-label={label} style={{ width: size, height: size }}>
+    <svg viewBox={'0 0 ' + size + ' ' + size} width={size} height={size} aria-hidden="true">
+      <circle className="cx-ring-track" cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={stroke} />
+      <circle className="cx-ring-fill" cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={stroke} strokeLinecap="round"
+        strokeDasharray={circumference} strokeDashoffset={circumference * (1 - clamped / 100)} transform={'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')'} />
+    </svg>
+    <b aria-hidden="true">{clamped}%</b>
+  </span>;
+}
+
+/** Something the client needs to do, as a large card: icon, title, context, where it is, and the action. */
+export function CxActionCard({ icon, title, meta, index, action, onClick, disabled }: {
+  icon: ReactNode; title: ReactNode; meta?: ReactNode; index?: number | null; action: string; onClick: () => void; disabled?: boolean;
+}) {
+  return <button type="button" className="cx-action-card" onClick={onClick} disabled={disabled}>
+    <span className="cx-action-icon" aria-hidden="true">{icon}</span>
+    <strong>{title}</strong>
+    {meta && <small>{meta}</small>}
+    <span className="cx-action-foot">
+      {index !== undefined && index !== null ? <CxTrack index={index} label={'Step ' + (index + 1) + ' of 5'} /> : <span className="cx-action-spacer" />}
+      <span className="cx-button is-primary">{action}</span>
+    </span>
+  </button>;
+}
