@@ -1,6 +1,6 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
-import { useEffect, useState, type FormEvent } from 'react';
-import { ArrowRight, Check, ExternalLink, FolderKanban, Lightbulb, RefreshCw, Send, Plus } from 'lucide-react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { ArrowRight, Check, ExternalLink, FolderKanban, Lightbulb, Maximize2, Minimize2, RefreshCw, Send, Plus } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
@@ -220,14 +220,11 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         return <CxRow key={requestKey(item)} title={item.title} meta={step?.prompt} onClick={() => onOpenRequest(item)}
           trailing={<span className="cx-button is-primary">{step?.action ?? 'Open request'}</span>} />;
       })}</CxPanel>}
+      {selectedProject.preview && <ProjectPreviewSection project={selectedProject} idPrefix={idPrefix} />}
       <div className="cx-project-layout">
         <div className="cx-project-main">
           <ProjectRequestsTab api={api} project={selectedProject} refreshToken={refreshToken} filter={requestFilter}
             onFilterChange={setRequestFilter} onOpenRequest={onOpenRequest} newRequest={null} idPrefix={idPrefix} />
-          {selectedProject.preview && <CxSection titleId={idPrefix + '-project-preview'} title="Preview">
-            <div className="cx-preview-frame"><QaPreview audience="client"
-              preview={{ branch: selectedProject.preview.branch, url: selectedProject.preview.url, embeddable: true, reason: null }} /></div>
-          </CxSection>}
         </div>
         <ProjectChat key={clientProjectKey(selectedProject)} api={api} project={selectedProject} inspectionOnly={inspectionOnly}
           refreshToken={refreshToken} idPrefix={idPrefix} />
@@ -324,6 +321,34 @@ function useLatestManagerMessages(api: typeof clientTicketApi, projects: ClientP
     return () => { active = false; };
   }, [api, keys, refreshToken]);
   return latest;
+}
+
+/**
+ * The shared preview at the full page width and nearly a screen tall, so a desktop site shows at
+ * close to its real size. Full screen hands the whole display to the preview where browsers allow it.
+ */
+function ProjectPreviewSection({ project, idPrefix }: { project: ClientProject; idPrefix: string }) {
+  const frame = useRef<HTMLDivElement>(null);
+  const [fullScreen, setFullScreen] = useState(false);
+  const canFullScreen = typeof document !== 'undefined' && document.fullscreenEnabled === true;
+  useEffect(() => {
+    const update = () => setFullScreen(document.fullscreenElement === frame.current && frame.current !== null);
+    document.addEventListener('fullscreenchange', update);
+    return () => document.removeEventListener('fullscreenchange', update);
+  }, []);
+  function toggleFullScreen() {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+    else void frame.current?.requestFullscreen().catch(() => undefined);
+  }
+  if (!project.preview) return null;
+  const fullScreenButton = canFullScreen
+    ? <button type="button" className="cx-preview-full" onClick={toggleFullScreen}>
+      {fullScreen ? <Minimize2 size={15} aria-hidden="true" /> : <Maximize2 size={15} aria-hidden="true" />}{fullScreen ? 'Exit full screen' : 'Full screen'}</button>
+    : undefined;
+  return <CxSection titleId={idPrefix + '-project-preview'} title="Preview" className="cx-preview-section">
+    <div ref={frame} className="cx-preview-frame"><QaPreview audience="client" toolbarEnd={fullScreenButton}
+      preview={{ branch: project.preview.branch, url: project.preview.url, embeddable: true, reason: null }} /></div>
+  </CxSection>;
 }
 
 /** The project's own conversation with the project manager, beside its requests. */

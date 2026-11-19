@@ -21,7 +21,9 @@ export function previewViewport(device:'desktop'|'tablet'|'phone',stage:{width:n
 export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=false}:{preview:Preview|null;version?:string;audience?:'pm'|'client';toolbarEnd?:ReactNode;pending?:boolean}) {
   const client=audience==='client';
   const previewLabel=client?'Project preview':'UAT preview';
-  const [device,setDevice]=useState<'desktop'|'tablet'|'phone'>('desktop');
+  // On a phone a desktop-width site would shrink to about a quarter, so clients start in phone view there.
+  const [device,setDevice]=useState<'desktop'|'tablet'|'phone'>(()=>client&&typeof window!=='undefined'
+    &&typeof window.matchMedia==='function'&&window.matchMedia('(max-width: 760px)').matches?'phone':'desktop');
   const [reload,setReload]=useState(0);
   const stage=useRef<HTMLDivElement|null>(null),[size,setSize]=useState({width:1000,height:650});
   useEffect(()=>{if(!stage.current||typeof ResizeObserver==='undefined')return;const observer=new ResizeObserver(entries=>{
