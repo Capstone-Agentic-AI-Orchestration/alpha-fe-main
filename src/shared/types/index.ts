@@ -414,6 +414,12 @@ export interface RepoTree {
 
 export type ArchitectureNodeKind = 'web' | 'api' | 'auth' | 'database' | 'jobs' | 'integration' | 'application' | 'module';
 
+export interface ArchitectureSection {
+  id: string;
+  label: string;
+  description?: string;
+}
+
 export interface ArchitectureNode {
   id: string;
   label: string;
@@ -421,6 +427,7 @@ export interface ArchitectureNode {
   technology?: string;
   details?: string;
   path?: string;
+  sectionId?: string;
 }
 
 export interface ArchitectureEdge {
@@ -433,9 +440,16 @@ export interface RepoArchitecture {
   repository: string;
   branch: string;
   commit: string;
+  sections?: ArchitectureSection[];
   nodes: ArchitectureNode[];
   edges: ArchitectureEdge[];
   truncated: boolean;
+  coverage?: {
+    repositoryFilesSeen: number;
+    sourceFilesFound: number;
+    sourceFilesAnalyzed: number;
+    inventoryTruncated: boolean;
+  };
 }
 
 export interface RepoFile {
