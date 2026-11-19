@@ -158,7 +158,8 @@ export interface PmTicketDetail {
   sharedProjectName: string | null;
   sharedProjectPreviewUrl?: string | null;
   relatedTicket: { id: string; reference: string; title: string } | null;
-  scope: { id: string; summary: string; proposedAt: string; agreed: boolean } | null;
+  /** approvedBy: the client, or the PM using their discretion to skip client approval. */
+  scope: { id: string; summary: string; proposedAt: string; agreed: boolean; approvedBy?: 'client' | 'pm' | null } | null;
   delivery: { id: string; scopeVersionId: string; summary: string; sharedAt: string; accepted: boolean } | null;
   request: { projectPreference: 'not_sure' | 'new_project' | 'shared_project'; projectLabel: string | null; requestedDeadline: string | null } | null;
   internal: {
@@ -214,7 +215,8 @@ export type PmTicketCommand =
   | { type: 'decline'; reason: string }
   | { type: 'request_details'; messageId: string }
   | { type: 'reply'; messageId: string }
-  | { type: 'propose_scope'; scopeVersionId: string }
+  | { type: 'propose_scope'; scopeVersionId: string; clientApproval?: 'required' | 'skipped' }
+  | { type: 'skip_scope_approval'; scopeVersionId: string }
   | { type: 'authorize_work'; scopeVersionId: string; projectId: string; issueIds: string[] }
   | { type: 'assess_delivery'; deliveryId: string }
   | { type: 'share_delivery'; deliveryId: string }
@@ -237,6 +239,8 @@ export interface PmTicketScopeProposalInput {
   expectedVersion: number;
   publicSummary: string;
   developerBrief: string;
+  /** 'skipped' starts work without waiting for the client to approve the plan. */
+  clientApproval?: 'required' | 'skipped';
 }
 export interface PmTicketScopeProposalReceipt extends PmTicketReceipt {
   scopeVersionId: string;

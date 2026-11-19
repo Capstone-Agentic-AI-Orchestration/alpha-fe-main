@@ -1,6 +1,6 @@
 import { TicketQueueSkeleton } from './TicketingSkeletons';
 import { lazy, Suspense, useEffect, useState } from 'react';
-import { FlaskConical } from 'lucide-react';
+import { ArrowRight, FlaskConical, Inbox } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { PmTicketsView } from './PmTicketsView';
 import { pmTicketApi } from './pmApi';
@@ -46,6 +46,7 @@ export function PmTicketsPage() {
   const [samples, setSamples] = useState(false);
   const workflowActions = usePmWorkflowActions();
   const { activeWorkspace, setActiveTab } = useApp();
+  const newInquiries = usePendingInquiryCount(activeWorkspace?.id ?? null);
   const [, setSelectedClient] = useTabSessionState<string | null>('clients.selected', null);
   const openClient = (key: string) => { setSelectedClient(key); setActiveTab('clients'); };
   // A request an inquiry just became: open it once on arrival, then forget it so Tickets opens normally next time.
@@ -61,10 +62,29 @@ export function PmTicketsPage() {
         {samples ? 'Hide sample data' : 'Show sample data'}
       </button>
     </div>}
+    {newInquiries.count > 0 && !samples && <button type="button" className="pm-inbox-notice" onClick={() => setActiveTab('inquiries')}>
+      <Inbox size={15} aria-hidden="true" />
+      <span><strong>{newInquiries.count}{newInquiries.more ? '+' : ''} new {newInquiries.count === 1 && !newInquiries.more ? 'inquiry' : 'inquiries'}</strong> waiting for you to accept or decline</span>
+      <span className="pm-inbox-notice__action">Review<ArrowRight size={14} aria-hidden="true" /></span>
+    </button>}
     <div className="pm-ticket-page__content">
       {samples && SampleTickets
         ? <Suspense fallback={<TicketQueueSkeleton label="Loading sample tickets" className="p-6" />}><SampleTickets /></Suspense>
-        : <PmTicketsView key={activeWorkspace?.id ?? 'no-workspace'} intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled onOpenClient={openClient} initialSelectedId={initialTicket} />}
+        : <PmTicketsView key={activeWorkspace?.id ?? 'no-workspace'} intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled onOpenClient={openClient} initialSelectedId={initialTicket} initialFilter="needs_pm" />}
     </div>
   </div>;
+}
+
+/** New inquiries are part of the PM's inbox: count them so Tickets can point to them. */
+function usePendingInquiryCount(workspaceId: string | null): { count: number; more: boolean } {
+  const [value, setValue] = useState({ count: 0, more: false });
+  useEffect(() => {
+    let current = true;
+    if (!intakeEnabled || !workspaceId) { setValue({ count: 0, more: false }); return () => { current = false; }; }
+    void pmTicketApi.listCentralIntakes(null, 'pending').then(page => {
+      if (current) setValue({ count: page.items.length, more: Boolean(page.nextCursor) });
+    }).catch(() => { if (current) setValue({ count: 0, more: false }); });
+    return () => { current = false; };
+  }, [workspaceId]);
+  return value;
 }

@@ -8,6 +8,11 @@
 .pm-ticket-page__tabs button.is-active { color: rgb(var(--ui-selected-content)); }
 .pm-ticket-page__tabs button.is-active::after { position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: rgb(var(--ui-accent)); content: ''; }
 .pm-ticket-page__content { min-height: 0; flex: 1; }
+.pm-inbox-notice { display: flex; flex: none; align-items: center; gap: 10px; margin: 12px 24px 0; padding: 10px 14px; border: 1px solid rgb(var(--ui-divider)); border-radius: 12px; background: rgb(var(--ui-raised)); color: rgb(var(--ui-text-secondary)); font-size: 13px; text-align: left; cursor: pointer; }
+.pm-inbox-notice svg { flex: none; color: rgb(var(--ui-link)); }
+.pm-inbox-notice strong { color: rgb(var(--ui-text-primary)); font-weight: 600; }
+.pm-inbox-notice__action { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: rgb(var(--ui-link)); font-weight: 500; }
+.pm-inbox-notice:hover { border-color: rgb(var(--ui-control)); }
 
 /* Existing app rail + 200px ticket views + flexible work area.
    At 1440px: 72 + 200 + 1168 = 1440px. A single open work surface, without nested cards. */
@@ -767,3 +772,29 @@
 .pm-inquiries__next-step { margin-bottom: 12px; }
 .pm-inquiries__next-step .pm-inquiries__eyebrow { margin-bottom: 4px; }
 .pm-inquiries__next-step .pm-inquiries__decision-copy { margin: 0; font-size: 12px; }
+
+/* One clear next step above the conversation: who is up, what happens next, one main button. */
+.pm-tickets__main-column { display: flex; flex: 1 1 auto; min-width: 0; min-height: 0; flex-direction: column; overflow: hidden; }
+.pm-tickets__main-column > .ticket-chat { flex: 1 1 auto; min-width: 0; min-height: 0; }
+.pm-step { display: flex; flex: none; align-items: center; justify-content: space-between; gap: 16px; margin: 14px clamp(16px, 2.5vw, 32px) 0; padding: 14px 16px; border: 1px solid var(--pm-line); border-radius: 14px; background: rgb(var(--ui-raised)); }
+.pm-step__copy { min-width: 0; }
+.pm-step__owner { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 4px; color: var(--pm-muted); font-size: 11px; font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+.pm-step__owner::before { width: 7px; height: 7px; border-radius: 999px; background: currentColor; content: ''; }
+.pm-step__owner--you { color: rgb(var(--ui-link)); }
+.pm-step__owner--client { color: rgb(var(--ui-status-warning, var(--ui-text-secondary))); }
+.pm-step__title { margin: 0; color: var(--pm-text); font-size: 15px; font-weight: 600; line-height: 1.35; }
+.pm-step__detail { margin: 2px 0 0; color: var(--pm-muted); font-size: 12px; }
+.pm-step__actions { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.pm-step__actions > button { min-height: 36px; }
+.pm-step__panel { position: relative; flex: none; max-height: min(60%, 560px); margin: 10px clamp(16px, 2.5vw, 32px) 0; padding: 4px 18px 18px; overflow-y: auto; border: 1px solid var(--pm-line); border-radius: 14px; background: var(--pm-surface); }
+.pm-step__panel > .pm-tickets__action-form:first-of-type { margin-top: 12px; padding-top: 0; border-top: 0; }
+.pm-step__panel-close { position: absolute; top: 10px; right: 10px; z-index: 1; display: inline-flex; width: 30px; height: 30px; align-items: center; justify-content: center; border: 0; border-radius: 8px; background: none; color: var(--pm-muted); }
+.pm-step__panel-close:hover { background: var(--pm-hover); color: var(--pm-text); }
+@media (max-width: 760px) {
+  /* Leave room on the right for the floating "Ticket context" toggle. */
+  .pm-step { align-items: stretch; flex-direction: column; margin: 10px 56px 0 12px; }
+  .pm-step__actions { justify-content: stretch; }
+  .pm-step__actions > button, .pm-step__actions > details { flex: 1 1 auto; }
+  .pm-step__panel { max-height: none; margin: 10px 12px 0; }
+}
+

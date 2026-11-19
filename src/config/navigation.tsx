@@ -138,9 +138,9 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
 
   // Client work sits together: who the clients are, every open request across them, and new inquiries.
-  { id: 'clients', label: 'Clients', title: 'Clients', subtitle: 'Clients, their projects and requests', group: 'workspace', section: 'clients', icon: Users },
   { id: 'tickets', label: 'Tickets', title: 'Tickets', subtitle: 'Review client requests, communicate, and track delivery', group: 'workspace', section: 'clients', icon: Ticket },
   { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review and clarify new client inquiries', group: 'workspace', section: 'clients', icon: Inbox },
+  { id: 'clients', label: 'Clients', title: 'Clients', subtitle: 'Clients, their projects and requests', group: 'workspace', section: 'clients', icon: Users },
   { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: CheckSquare },
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
 
@@ -203,8 +203,9 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
+  // A PM starts on Tickets, which opens on what needs them.
   pm: [
-    'issues', 'projects', 'clients', 'tickets', 'inquiries',
+    'tickets', 'inquiries', 'clients', 'issues', 'projects',
     'agents', 'skills', 'analytics', 'settings'
   ],
   admin: [

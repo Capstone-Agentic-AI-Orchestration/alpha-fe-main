@@ -3,7 +3,7 @@ import { TicketDetailSkeleton } from './TicketingSkeletons';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowRight, Check, ChevronDown, ChevronLeft, ChevronsUpDown, FileText, FolderKanban, House,
-  Lightbulb, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, RefreshCw, Search, Ticket, type LucideIcon,
+  Lightbulb, ListChecks, LogOut, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Search, Ticket, type LucideIcon,
 } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/shared/components/ui/dropdown-menu';
 
@@ -27,8 +27,8 @@ import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './Clie
 import { ClientProposalsPage } from './ClientProposalsPage';
 import { StatusPill } from './ClientProjectSections';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
-import { WorkspaceToolbar, WorkspaceTabStrip, WorkspaceTab, WorkspaceNewTabMenu } from '@/shared/layout/WorkspaceToolbar';
-import { useSidebarToggle } from '@/shared/layout/useSidebarToggle';
+import { WorkspaceToolbar } from '@/shared/layout/WorkspaceToolbar';
+import { SIDEBAR_DOCK_QUERY, useSidebarToggle } from '@/shared/layout/useSidebarToggle';
 import { SidebarFrame } from '@/shared/layout/SidebarFrame';
 import { sidebarRow } from '@/features/chat/ProjectChatSidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/shared/components/ui/tooltip';
@@ -84,14 +84,10 @@ function appendClientMessage(messages: ClientTicketMessage[], message: ClientTic
 const CLIENT_PAGES: Record<Page, { label: string; subtitle: string; Icon: LucideIcon }> = {
   overview: { label: 'Home', subtitle: 'What needs you and your latest updates', Icon: House },
   projects: { label: 'Projects', subtitle: 'Projects shared by your project manager', Icon: FolderKanban },
-  proposals: { label: 'Proposals', subtitle: 'Ideas you have sent to your project manager', Icon: Lightbulb },
+  proposals: { label: 'Project ideas', subtitle: 'New project ideas you have sent to your project manager', Icon: Lightbulb },
   requests: { label: 'Requests', subtitle: 'Follow requests and message your project manager', Icon: ListChecks },
 };
 const CLIENT_PAGE_ORDER: readonly Page[] = ['overview', 'projects', 'proposals', 'requests'];
-function clientPageIcon(page: Page, size: number) {
-  const { Icon } = CLIENT_PAGES[page];
-  return <Icon size={size} />;
-}
 
 export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false,
   workflowActionsDisabled: workflowActionsDisabledOverride = false, newRequestsDisabled = true,
@@ -105,14 +101,18 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   /** Enables ticket-scoped messages and documents independently of workflow decisions. */
   communicationEnabled?: boolean;
 } = {}) {
-  const { tabs, activeTabId, tabState, openTab, activateTab, closeTab, resetTabs, selectProject } = useClientWorkspaceTabs(
+  // One page at a time: the portal keeps a single workspace tab, so clients never manage browser-style tabs.
+  const { tabs, activeTabId, tabState, resetTabs, selectProject } = useClientWorkspaceTabs(
     typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash));
   const portalRootRef = useRef<HTMLElement>(null);
   const workspaceFrameRef = useRef<HTMLDivElement>(null);
   // The staff sidebar's frame (SidebarFrame): no hover; double-click empty sidebar
   // space or press Ctrl+B. Open on wide windows pushes the page over; on narrow
   // ones it floats and closes on navigation, Escape or an outside click.
-  const clientNav = useSidebarToggle('alpha.client-sidebar');
+  // Clients see the page names: the sidebar starts open on wide screens until they close it.
+  const clientNav = useSidebarToggle('alpha.client-sidebar', typeof window !== 'undefined' && window.matchMedia?.(SIDEBAR_DOCK_QUERY).matches === true);
+  /** Where the open request's back button returns: Home, when it was opened from Home. */
+  const [returnToHome, setReturnToHome] = useState(false);
   // Home's "Propose a project" opens the form on the Projects page of the same tab.
   /** The tab whose Proposals page should open the proposal form once it shows. */
   const [proposeRequestTab, setProposeRequestTab] = useState<string | null>(null);
@@ -494,8 +494,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       : current);
   }
 
-  async function openCreateForm(project: ClientProject) {
-    if (!canStartProjectRequest || !selectedProjectKey || selectedProjectKey !== clientProjectKey(project)
+  async function openCreateForm(project: ClientProject, fromChooser = false) {
+    if (!canStartProjectRequest || (!fromChooser && (!selectedProjectKey || selectedProjectKey !== clientProjectKey(project)))
       || createLoading || pending) return;
     setCreateLoading(true); setCreateError(''); setPageError('');
     try {
@@ -539,11 +539,18 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }).catch(() => undefined);
   }
 
-  function openRequest(item: ClientProjectRequestItem, fromProject = false) {
+  function openRequest(item: ClientProjectRequestItem, fromProject = false, fromHome = false) {
+    setReturnToHome(fromHome);
     historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setSelectedWorkspaceId(item.workspaceId);
     setSelectedItemFallback(item); setReturnToProjects(fromProject); setPage('requests'); setView('portal'); setWriteError(''); setNavigationCollapsed(false);
     if (fromProject) { setFilter('all'); setSearchInput(''); setSearch(''); }
     setRequestListShown(false);
+  }
+
+  /** "New request": a project the client already has, or a new project idea. */
+  function startRequestFor(project: ClientProject) {
+    navigate('projects'); setSelectedProjectKey(clientProjectKey(project));
+    void openCreateForm(project, true);
   }
 
   function sendReply(body: string): Promise<void> {
@@ -597,13 +604,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     if (nextPage === 'projects') setSelectedProjectKey(null);
     if (nextPage === 'proposals') setSelectedProposalId(null);
     if (nextPage === 'requests') setRequestListShown(true);
-  }
-
-  function changeWorkspaceTab(change: () => void) {
-    if (writing || pending || view === 'create') return;
-    historyGeneration.current += 1;
-    setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setHistoryError(''); setWriteError('');
-    change();
   }
 
   function openPortalUpdate(update: ClientPortalUpdate) {
@@ -720,6 +720,25 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     <div ref={workspaceFrameRef} className="client-portal-mainview">
       <header className="client-portal-toolbar client-portal-toolbar--shared" aria-label="Client portal navigation and actions">
         <WorkspaceToolbar actions={<>
+          {!inspectionOnly && (canStartProjectRequest || proposeProject) && <DropdownMenu modal={false}>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="client-new-request" disabled={createLoading || writing || Boolean(pending)}>
+                <Plus size={15} aria-hidden="true" />{createLoading ? 'Checking access…' : 'New request'}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" sideOffset={6} className="w-[min(18rem,calc(100vw-1rem))] rounded-xl p-1.5">
+              <p className="px-2 pb-1.5 pt-1 text-[12px] font-medium text-content-secondary">What is this for?</p>
+              {canStartProjectRequest && (projects ?? []).map(project => <DropdownMenuItem key={clientProjectKey(project)}
+                className="gap-2.5 py-2 text-[13px]" onSelect={() => startRequestFor(project)}>
+                <FolderKanban className="h-4 w-4 text-content-muted" aria-hidden="true" /><span className="truncate">{project.name}</span>
+              </DropdownMenuItem>)}
+              {canStartProjectRequest && (projects ?? []).length > 0 && proposeProject && <DropdownMenuSeparator />}
+              {proposeProject && <DropdownMenuItem className="gap-2.5 py-2 text-[13px]" onSelect={() => proposeProject()}>
+                <Lightbulb className="h-4 w-4 text-content-muted" aria-hidden="true" />
+                <span><span className="block">Something new</span><span className="block text-[11px] text-content-muted">Suggest a new project</span></span>
+              </DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>}
           <button type="button" aria-label="Refresh portal" title="Refresh portal"
             onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
             disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="client-portal-action">
@@ -729,19 +748,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
             loading={notificationsLoading} error={notificationsError}
             onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
         </>}>
-          <WorkspaceTabStrip label="Client portal pages">
-            {tabs.map(tab => <WorkspaceTab key={tab.id} title={(tab.navigation.page === 'projects'
-              && projects?.find(project => clientProjectKey(project) === tab.navigation.selectedProjectKey)?.name) || CLIENT_PAGES[tab.navigation.page].label}
-              icon={clientPageIcon(tab.navigation.page, 14)}
-              active={activeTabId === tab.id} onActivate={() => { if (activeTabId !== tab.id) changeWorkspaceTab(() => activateTab(tab.id)); }}
-              onClose={() => {
-                if (writing || pending || view === 'create') return;
-                if (tab.id === activeTabId) changeWorkspaceTab(() => closeTab(tab.id));
-                else closeTab(tab.id);
-              }} closable={tabs.length > 1 && !writing && !pending && view !== 'create'} controls="client-portal-page" />)}
-          </WorkspaceTabStrip>
-          <WorkspaceNewTabMenu boundaryRef={workspaceFrameRef} portalRootRef={portalRootRef} disabled={writing || Boolean(pending) || view === 'create'}
-            items={CLIENT_PAGE_ORDER.map(id => ({ id, title: CLIENT_PAGES[id].label, subtitle: CLIENT_PAGES[id].subtitle, icon: clientPageIcon(id, 18) }))} onSelect={id => changeWorkspaceTab(() => openTab(id as Page))} />
+          <h1 className="client-portal-toolbar-title">{(page === 'projects' && projects?.find(project => clientProjectKey(project) === selectedProjectKey)?.name) || CLIENT_PAGES[page].label}</h1>
         </WorkspaceToolbar>
       </header>
       <div id="client-portal-page" role="tabpanel" aria-label={CLIENT_PAGES[currentNav].label} className="client-portal-main client-portal-main--workspace">
@@ -751,8 +758,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
         {page === 'overview' && <ClientOverviewPage clientName={session?.fullName ?? ''} requests={displayQueue} projects={projects ?? []}
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
-          onOpenRequest={item => openRequest(item)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
+          onOpenRequest={item => openRequest(item, false, true)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
           onGoToRequests={() => navigate('requests')}
+          proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')}
           onProposeProject={proposeProject} />}
 
         {page === 'projects' && view === 'create' && createContext && createProject && <div className="client-create-view client-create-view--project">
@@ -874,9 +882,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                             busy={writing || Boolean(pending)} error={writeError} replyResetVersion={replyResetVersion}
                             workflowActionsDisabled={workflowActionsDisabled} newRequestsDisabled communicationEnabled={communicationEnabled && !inspectionOnly}
                             readOnlyPreview={inspectionOnly}
-                            backLabel={returnToProjects ? 'Back to project requests' : 'Back to requests'}
+                            backLabel={returnToProjects ? 'Back to project requests' : returnToHome ? 'Back to Home' : 'Back to requests'}
                             onBack={() => { historyGeneration.current += 1; setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null);
-                              setRequestListShown(true); if (returnToProjects) { setPage('projects'); setReturnToProjects(false); } }}
+                              setRequestListShown(true); if (returnToProjects) { setPage('projects'); setReturnToProjects(false); } else if (returnToHome) { setPage('overview'); setReturnToHome(false); } }}
                             onLoadMore={() => void loadMoreMessages()} onReply={sendReply} onCorrection={sendCorrection} onDecision={makeDecision}
                             onAdditionalWork={() => undefined} />
                         </>}

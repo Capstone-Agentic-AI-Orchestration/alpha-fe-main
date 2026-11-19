@@ -25,7 +25,7 @@ export function clientReviewLockMessage(hasPreview: boolean): string {
     : 'To review this result, download a file first. The Accept and Needs a fix buttons unlock afterwards.';
 }
 
-export const SCOPE_CHANGE_PREFIX = 'I would like changes to the proposed scope:\n\n';
+export const SCOPE_CHANGE_PREFIX = 'I would like changes to the plan:\n\n';
 export const SCOPE_CHANGE_MAX_LENGTH = 3800;
 
 /** A scope change request is an ordinary reply, so the ticket moves back to the PM. */
@@ -36,6 +36,6 @@ export function scopeChangeMessage(detail: string): string | null {
 
 export function clientAcceptedResultNote(closed: boolean): string {
   return closed
-    ? 'Accepted result · this request is closed.'
-    : 'Thanks, your acceptance is recorded. Your project manager will close this request. Nothing more is needed from you.';
+    ? 'You accepted this result. This request is done.'
+    : 'Thanks, your acceptance is recorded. Nothing more is needed from you.';
 }

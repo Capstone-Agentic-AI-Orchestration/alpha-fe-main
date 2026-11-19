@@ -10,6 +10,13 @@ const browserStorage = (): SidebarStorage | undefined => (typeof localStorage ==
 export const readSidebarOpen = (key: string, storage = browserStorage()) => {
   try { return storage?.getItem(key) === 'open'; } catch { return false; }
 };
+/** Like readSidebarOpen, but a device with no remembered choice gets `fallback`. */
+export const readSidebarOpenOr = (key: string, fallback: boolean, storage = browserStorage()) => {
+  try {
+    const saved = storage?.getItem(key);
+    return saved === 'open' ? true : saved === 'closed' ? false : fallback;
+  } catch { return fallback; }
+};
 export const writeSidebarOpen = (key: string, open: boolean, storage = browserStorage()) => {
   try { storage?.setItem(key, open ? 'open' : 'closed'); } catch { /* storage unavailable; state still works for this session */ }
 };
@@ -25,8 +32,8 @@ export const isSidebarShortcut = (event: Pick<KeyboardEvent, 'key' | 'ctrlKey' |
  * hover: people toggle it by double-clicking empty sidebar space or with
  * Ctrl+B (Cmd+B on macOS), which also gives keyboard users a way in.
  */
-export function useSidebarToggle(storageKey: string) {
-  const [open, setOpenState] = useState(() => readSidebarOpen(storageKey));
+export function useSidebarToggle(storageKey: string, openByDefault = false) {
+  const [open, setOpenState] = useState(() => readSidebarOpenOr(storageKey, openByDefault));
   const setOpen = useCallback((next: boolean) => {
     setOpenState(next);
     writeSidebarOpen(storageKey, next);

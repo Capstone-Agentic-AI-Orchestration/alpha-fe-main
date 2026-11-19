@@ -1012,3 +1012,18 @@
 .client-portal-shell .client-spotlight { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .client-portal-shell .client-timeline { padding: 0; border: 0; border-radius: 0; background: transparent; }
 .client-portal-shell .client-timeline-day:first-child { padding-top: 0; }
+
+/* Simple frame: the page name in the toolbar and one "New request" button. */
+.client-portal-toolbar-title { min-width: 0; margin: 0 0 0 4px; overflow: hidden; color: var(--cp-ink); font-size: 14px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.client-new-request { display: inline-flex; height: 1.75rem; align-items: center; gap: 6px; padding: 0 12px; border: 0; border-radius: var(--client-radius-surface); background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.client-new-request:hover:not(:disabled) { background: rgb(var(--ui-action-hover)); }
+.client-new-request:disabled { opacity: .6; cursor: not-allowed; }
+/* The decision the client is asked for, pinned above the conversation. */
+.client-decision-slot { flex: none; max-height: 55%; margin: 14px clamp(12px, 3vw, 40px) 0; overflow-y: auto; }
+.client-decision-slot .client-detail-card { border: 1px solid rgb(var(--ui-link) / .45); box-shadow: 0 0 0 3px rgb(var(--ui-link) / .08); }
+@media (max-width: 760px) {
+  .client-new-request { padding: 0 10px; }
+  /* Leave room on the right for the floating "About this request" toggle. */
+  .client-decision-slot { max-height: none; margin: 10px 56px 0 12px; }
+}
+

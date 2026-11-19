@@ -25,8 +25,8 @@ describe('client ticket detail layout', () => {
     expect(html).toMatch(new RegExp(`id="client-tab-conversation"[^>]*aria-selected="${defaultTab === 'conversation'}"`));
     expect(html).toMatch(new RegExp(`id="client-tab-details"[^>]*aria-selected="${defaultTab === 'details'}"`));
     expect(html).toContain('Action needed: ');
-    expect(html).toContain('Decision needed');
-    expect(html).toContain('Review proposed work');
+    expect(html).toContain('Approve the plan');
+    expect(html).toContain('Approve plan');
     expect(html).toContain('Message your project manager…');
     expect(html).not.toContain('Private messages between you and your project manager');
     expect(html).not.toContain('ticket-chat__header');
@@ -54,6 +54,6 @@ describe('client ticket detail layout', () => {
     expect(html).not.toContain('Orchestrator');
     expect(html).toContain('min-h-[44px]');
     // The progress path names the proposed work as the current step and makes the client's turn explicit.
-    expect(html).toContain('Review proposed work · you');
+    expect(html).toContain('Approve the plan · you');
   });
 });

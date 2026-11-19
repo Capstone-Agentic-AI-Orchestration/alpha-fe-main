@@ -17,7 +17,7 @@ describe('client friendly helpers', () => {
   });
 
   it('names the next step in plain words', () => {
-    expect(clientNextStep('agree_scope')).toEqual({ prompt: 'A proposal is ready for you', action: 'Review proposal' });
+    expect(clientNextStep('agree_scope')).toEqual({ prompt: 'A plan is ready for you to approve', action: 'Review plan' });
     expect(clientNextStep('review_result')?.action).toBe('Check the result');
     expect(clientNextStep(null)).toBeNull();
   });
@@ -40,9 +40,9 @@ describe('client friendly helpers', () => {
 
   it('places a listed request on the five steps only when the row can tell', () => {
     expect(listProgressIndex(item({ status: 'received' }))).toBe(0);
-    expect(listProgressIndex(item({ status: 'awaiting_client', requestedAction: 'agree_scope' }))).toBe(2);
-    expect(listProgressIndex(item({ status: 'in_progress' }))).toBe(3);
-    expect(listProgressIndex(item({ status: 'ready_for_review', requestedAction: 'review_result' }))).toBe(4);
+    expect(listProgressIndex(item({ status: 'awaiting_client', requestedAction: 'agree_scope' }))).toBe(1);
+    expect(listProgressIndex(item({ status: 'in_progress' }))).toBe(2);
+    expect(listProgressIndex(item({ status: 'ready_for_review', requestedAction: 'review_result' }))).toBe(3);
     expect(listProgressIndex(item({ status: 'awaiting_client', requestedAction: 'reply' }))).toBeNull();
     expect(listProgressIndex(item({ status: 'on_hold' }))).toBeNull();
     expect(listProgressIndex(item({ status: 'closed' }))).toBeNull();

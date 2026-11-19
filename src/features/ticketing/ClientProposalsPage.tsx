@@ -73,7 +73,7 @@ export function ClientProposalsPage({ api = clientTicketApi, proposals, projects
   return <section className={`client-page client-proposals-page is-wide${chosen ? ' has-selected-proposal' : ''}`} aria-labelledby={`${idPrefix}-proposals-title`}>
     <header className="client-page-head">
       <div className="client-home-hello">
-        <h1 id={`${idPrefix}-proposals-title`}>Project proposals</h1>
+        <h1 id={`${idPrefix}-proposals-title`}>Project ideas</h1>
         <p>Ideas you’ve sent to your project manager. They review each one and reply here.</p>
       </div>
       <div className="client-proposals-head-actions">

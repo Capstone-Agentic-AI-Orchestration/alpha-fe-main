@@ -14,7 +14,7 @@ import { clientProjectKey, projectLoadError, ProjectOverviewTab, ProjectRequests
 export { clientProjectKey } from './ClientProjectSections';
 
 export function ClientOverviewPage({ clientName, requests, projects, requestsLoading, requestsError, projectsLoading, projectsError,
-  onOpenRequest, onOpenProject, onGoToProjects, onGoToRequests, onProposeProject }: {
+  onOpenRequest, onOpenProject, onGoToProjects, onGoToRequests, onProposeProject, proposalsNeedingReply = 0, onOpenProposals }: {
   clientName?: string;
   requests: ClientProjectRequestQueue | null;
   projects: ClientProject[];
@@ -28,6 +28,9 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
   onGoToRequests: () => void;
   /** Shown as a closing "new idea" card when the client may propose projects. */
   onProposeProject?: () => void;
+  /** Project ideas where the project manager is waiting on the client's reply. */
+  proposalsNeedingReply?: number;
+  onOpenProposals?: () => void;
 }) {
   const items = requests?.items ?? [];
   const attention = items.filter(item => clientRequestGroup(item) === 'needs_you');
@@ -52,10 +55,10 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
       {requestsError && <p role="alert" className="client-project-error">{requestsError}</p>}
       {!requests && requestsLoading ? <div className="client-hero"><LoadingRows label="Loading requests needing attention" layout="detail" rows={1} className="w-full" /></div>
         : !requests ? null
-        : attention.length ? <div className="client-hero is-attention">
+        : attention.length || proposalsNeedingReply ? <div className="client-hero is-attention">
           <div className="client-hero-head">
             <span className="client-hero-icon" aria-hidden="true"><Hand size={19} /></span>
-            <div><strong>{attention.length} {attention.length === 1 ? 'thing needs' : 'things need'} you</strong><p>Everything else is moving along.</p></div>
+            <div><strong>{attention.length + (proposalsNeedingReply ? 1 : 0)} {attention.length + (proposalsNeedingReply ? 1 : 0) === 1 ? 'thing needs' : 'things need'} you</strong><p>Everything else is moving along.</p></div>
           </div>
           <ul className="client-hero-list">{attention.map(item => {
             const step = clientNextStep(item.requestedAction);
@@ -63,7 +66,11 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
               <span><strong>{item.title}</strong><small>{step?.prompt ?? 'Your project manager needs you'}</small></span>
               <span className="client-hero-action">{step?.action ?? 'Open request'}<ArrowRight size={14} aria-hidden /></span>
             </button></li>;
-          })}</ul>
+          })}
+          {proposalsNeedingReply > 0 && onOpenProposals && <li><button type="button" className="client-hero-row" onClick={onOpenProposals}>
+            <span><strong>{proposalsNeedingReply === 1 ? 'Your project idea' : `${proposalsNeedingReply} project ideas`}</strong><small>Your project manager has a question</small></span>
+            <span className="client-hero-action">Reply<ArrowRight size={14} aria-hidden /></span>
+          </button></li>}</ul>
         </div>
           : <div className="client-hero is-clear">
             <span className="client-hero-icon" aria-hidden="true"><Check size={20} /></span>
@@ -300,8 +307,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     </header>
     {proposalsNeedingReply > 0 && onOpenProposals && <div className="client-proposals-notice" role="status">
       <Lightbulb size={16} aria-hidden="true" />
-      <span>Your project manager is waiting on your reply to {proposalsNeedingReply === 1 ? 'a project proposal' : `${proposalsNeedingReply} project proposals`}.</span>
-      <button type="button" className="client-text-action" onClick={onOpenProposals}>Open proposals <ArrowRight size={14} aria-hidden="true" /></button>
+      <span>Your project manager is waiting on your reply to {proposalsNeedingReply === 1 ? 'a project idea' : `${proposalsNeedingReply} project ideas`}.</span>
+      <button type="button" className="client-text-action" onClick={onOpenProposals}>Open project ideas <ArrowRight size={14} aria-hidden="true" /></button>
     </div>}
     {error && <p role="alert" className="client-project-error">{error}</p>}
     <section className="client-existing-projects" aria-label="Shared projects">
