@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { apiService, parseApiError, scaffoldedRepositories } from '@/shared/services/apiService';
+import { apiService, parseApiError, scaffoldedRepositories, type GitHubOrgMembership } from '@/shared/services/apiService';
+import { orgBlocksRepoCreation } from './orgRepoPolicy';
 import {
   ProjectResource,
   ScaffoldBackendStack,
@@ -112,7 +113,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   // Repository owner. Organizations only — Alpha creates no personal repos, so
   // there is no empty "personal" option here and the daemon rejects a request
   // without an org regardless of what this form sends.
-  const [ghOrgs, setGhOrgs] = useState<Array<{ login: string; role: string }>>([]);
+  const [ghOrgs, setGhOrgs] = useState<GitHubOrgMembership[]>([]);
   const [ghOwner, setGhOwner] = useState(githubOrg ?? '');
   // New repositories default to a user-facing app so automatic hosting yields
   // a page preview immediately. Backend-only projects remain an explicit choice.
@@ -129,10 +130,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   const orgLocked = Boolean(githubOrg);
   const effectiveOrg = githubOrg ?? ghOwner;
 
-  // Only warn when membership is actually known. A locked org that is missing
-  // from the list (orgs failed to load) is not evidence of a permission problem.
-  const orgMembership = ghOrgs.find(o => o.login === effectiveOrg);
-  const showMemberWarning = Boolean(orgMembership) && orgMembership?.role !== 'admin';
+  const showMemberWarning = orgBlocksRepoCreation(ghOrgs.find(o => o.login === effectiveOrg));
 
   useEffect(() => {
     // The inline variant has no create form, so it also skips the two auth
@@ -548,8 +546,8 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                   visible from the API — warn rather than fail at submit. */}
               {showMemberWarning && (
                 <p className="text-[11px] text-status-warning">
-                  You are a member of {effectiveOrg}, not an owner. Some organizations
-                  only let owners create repositories.
+                  {effectiveOrg} only lets owners create repositories, and you are a member.
+                  Ask an owner to create it, or to change that setting.
                 </p>
               )}
 

@@ -2,6 +2,14 @@ import type { ChatUsageSnapshot } from '@/features/chat/ChatUsage';
 import type { LocalPreview } from '@/shared/types/localPreview';
 import type { OperationsNotification, OperationsSnapshot, OperationsExpense, TicketPriority } from '@/shared/types/operations';
 
+/** An organization the signed-in person belongs to, as `GET /github/orgs` lists it. */
+export interface GitHubOrgMembership {
+  login: string;
+  role: string;
+  /** Whether the org lets plain members create repositories; absent when GitHub does not say. */
+  membersCanCreateRepositories?: boolean;
+}
+
 export const getLocalPreviews = (threadId: string) => fetchJson<LocalPreview[]>(`/chat/threads/${encodeURIComponent(threadId)}/previews`);
 export const startLocalPreview = (threadId: string, repository?: string) => fetchJson<LocalPreview>(`/chat/threads/${encodeURIComponent(threadId)}/previews`, { method: 'POST', body: JSON.stringify({ repository }) });
 export const stopLocalPreview = (threadId: string, id: string) => fetchJson(`/chat/threads/${encodeURIComponent(threadId)}/previews/${encodeURIComponent(id)}/stop`, { method: 'POST' });
@@ -1231,7 +1239,7 @@ export const apiService = {
       body: JSON.stringify(profileLogin ? { profileLogin } : {})
     }),
   githubLogout: () => fetchJson<{ success: boolean }>('/github/auth/logout', { method: 'POST' }),
-  listGitHubOrgs: () => fetchJson<Array<{ login: string; role: string }>>('/github/orgs'),
+  listGitHubOrgs: () => fetchJson<GitHubOrgMembership[]>('/github/orgs'),
 
   createGitHubRepo: (payload: {
     name: string;
