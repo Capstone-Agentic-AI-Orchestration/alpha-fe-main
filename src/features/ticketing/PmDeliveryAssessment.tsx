@@ -148,9 +148,9 @@ export function PmDeliveryAssessment({ ticket, clientAccessActive, disabled, onA
       <button className={`${secondary} shrink-0`} disabled={disabled || downloading !== null} aria-label={`Inspect candidate ${file.filename}`} onClick={() => void download(file)}><Download size={12} />{downloading === file.id ? 'Checking…' : 'Inspect file'}</button>
     </div>)}</div>
     {selected && <div className="mt-3 space-y-3">
-      <label className="flex items-start gap-2 text-[11px] text-content-secondary"><input type="checkbox" checked={acknowledged} disabled={disabled || !inspected || Boolean(error)} onChange={event => setAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I inspected all result files and the summary, and confirm they match the agreed work and are suitable to share with the client.</label>
-      <button className={primary} disabled={disabled || !available || !inspected || !acknowledged || Boolean(error) || downloading !== null} onClick={() => { if (selected && inspected && acknowledged && available && !error) void onAssess(selected.id); }}>Approve result for sharing</button>
-      <p className="text-[10px] text-content-muted">This records PM assessment only. Sharing with the client is a separate action. If work needs fixing, use Return affected tasks above.</p>
+      <label className="flex items-start gap-2 text-[11px] text-content-secondary"><input type="checkbox" checked={acknowledged} disabled={disabled || !inspected || Boolean(error)} onChange={event => setAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I checked all result files and the summary, and they match the agreed plan.</label>
+      <button className={primary} disabled={disabled || !available || !inspected || !acknowledged || Boolean(error) || downloading !== null} onClick={() => { if (selected && inspected && acknowledged && available && !error) void onAssess(selected.id); }}>Approve &amp; share with client</button>
+      <p className="text-[10px] text-content-muted">The client is asked to check the result. If the work needs fixing instead, use Send tasks back.</p>
     </div>}
     {error && <button className={`${secondary} mt-3`} disabled={disabled || downloading !== null || loading} onClick={() => setRetry(value => value + 1)}>Refresh prepared results</button>}
   </section>;

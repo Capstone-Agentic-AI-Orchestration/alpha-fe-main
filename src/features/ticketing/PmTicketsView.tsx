@@ -4,7 +4,7 @@ import { TicketDetailSkeleton, TicketQueueSkeleton } from './TicketingSkeletons'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertCircle, ArrowLeft, ArrowUpRight, Check, ChevronDown, CircleDot, FileText, Info,
-  LockKeyhole, MessageSquare, PanelLeftOpen, Paperclip, RefreshCw, Search, Send, StickyNote,
+  LockKeyhole, MessageSquare, PanelLeftOpen, Paperclip, RefreshCw, Search, Send, StickyNote, X,
   Ticket as TicketIcon, UserRound,
 } from 'lucide-react';
 
@@ -21,6 +21,7 @@ import { PmWorkHandoffForm, type PmWorkHandoffDraft } from './PmWorkHandoffForm'
 import { PmProjectLinkForm, type PmProjectLinkDraft } from './PmProjectLinkForm';
 import { PmTicketQueueList } from './PmTicketQueueList';
 import { pmTicketNextAction } from './pmTicketNextAction';
+import { pmNextStep, type PmStepAction } from './pmNextStep';
 import { canAuthorizeTicketWork } from './pmWorkHandoff';
 import { PmCorrectionForm } from './PmCorrectionForm';
 import { canAssessTicketDelivery, canCloseAcceptedTicket, canShareAssessedDelivery, pmCorrectionCommand, pmCorrectionMode, type PmCorrectionDraft } from './pmReview';
@@ -55,7 +56,7 @@ interface PendingOperation {
 const filters: Array<{ id: Filter; label: string; tone?: PmQueueTone; counter?: 'needsPm' | 'inProgress' | 'waitingClient' | 'closedMonth' }> = [
   { id: 'all', label: 'All tickets' },
   { id: 'open', label: 'Open tickets', tone: 'active' },
-  { id: 'needs_pm', label: 'Needs attention', tone: 'attention', counter: 'needsPm' },
+  { id: 'needs_pm', label: 'Needs you', tone: 'attention', counter: 'needsPm' },
   { id: 'in_progress', label: 'In progress', tone: 'active', counter: 'inProgress' },
   { id: 'waiting_client', label: 'Waiting for client', tone: 'waiting', counter: 'waitingClient' },
   { id: 'closed_month', label: 'Closed this month', tone: 'complete', counter: 'closedMonth' },
@@ -192,7 +193,7 @@ export function PmContactVerification({ verification }: { verification: unknown 
 
 // eslint-disable-next-line sonarjs/cognitive-complexity -- existing view; this change only adds the initialSelectedId prop
 export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false, refreshToken, fixedClientGroupKey, onOpenClient,
-  initialSelectedId = null }: {
+  initialSelectedId = null, initialFilter = 'all' }: {
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   intakeEnabled?: boolean;
@@ -211,9 +212,11 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   onOpenClient?: (clientGroupKey: string) => void;
   /** Open this request once the queue has loaded it, as from a client's Overview. */
   initialSelectedId?: string | null;
+  /** The view to start on; the PM inbox starts on what needs them. */
+  initialFilter?: Filter;
 } = {}) {
   const [queue, setQueue] = useState<PmTicketQueuePage | null>(null);
-  const [filter, setFilter] = useState<Filter>('all');
+  const [filter, setFilter] = useState<Filter>(initialSelectedId ? 'all' : initialFilter);
   const [chosenClientGroupKey, setClientGroupKey] = useState('');
   const clientGroupKey = fixedClientGroupKey ?? chosenClientGroupKey;
   const [clientGroups, setClientGroups] = useState<PmTicketClientGroup[]>([]);
@@ -551,12 +554,31 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     return performWrite({ ticketId, operationId: value.operationId, label: 'result sharing', run: () => api.execute(ticketId, value) });
   }
 
-  async function assessPreparedDelivery(deliveryId: string): Promise<boolean> {
+  /** One PM step: record the check, then share the same result with the client. */
+  async function assessAndShareDelivery(deliveryId: string): Promise<boolean> {
     if (!detail || !selectedQueueItem || pending || writing || !canAssessTicketDelivery(detail, selectedQueueItem.internal.clientAccessActive)) return false;
     const ticketId = detail.id;
     const value: PmTicketCommandInput = { schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
       command: { type: 'assess_delivery', deliveryId } };
-    return performWrite({ ticketId, operationId: value.operationId, label: 'result assessment', run: () => api.execute(ticketId, value) });
+    let checkedVersion = detail.version + 1;
+    const checked = await performWrite({ ticketId, operationId: value.operationId, label: 'result check', refresh: false,
+      run: () => api.execute(ticketId, value), onSuccess: receipt => { checkedVersion = receipt.version; } });
+    if (!checked) return false;
+    // If sharing fails here, the Next step bar offers "Share result" for the same checked result.
+    const share: PmTicketCommandInput = { schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: checkedVersion,
+      command: { type: 'share_delivery', deliveryId } };
+    const shared = await performWrite({ ticketId, operationId: share.operationId, label: 'result sharing', run: () => api.execute(ticketId, share) });
+    if (!shared) refreshAll();
+    else setDeliveryAssessmentOpen(false);
+    return shared;
+  }
+
+  function skipScopeApproval() {
+    if (!detail?.scope || detail.scope.agreed || !detail.writesAvailable || writing || pending) return;
+    const inputValue: PmTicketCommandInput = { schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
+      command: { type: 'skip_scope_approval', scopeVersionId: detail.scope.id } };
+    void performWrite({ ticketId: detail.id, operationId: inputValue.operationId, label: 'start without approval',
+      run: () => api.execute(detail.id, inputValue) });
   }
 
   function submitReply() {
@@ -565,7 +587,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       || (!communicationEnabled && workflowActions === 'triage') || !body.trim() || pending) return;
     const inputValue: PmTicketMessageInput = {
       schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
-      body, action: { type: communicationEnabled ? 'reply' : messageAction },
+      body, action: { type: messageAction },
     };
     const ticketId = detail.id;
     void performWrite({
@@ -574,6 +596,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       run: () => api.reply(ticketId, inputValue),
       onSuccess: receipt => {
         applyLocalPmReceipt(receipt, inputValue.body, 'message', inputValue.action?.type === 'request_details' ? 'reply' : null);
+        setMessageAction('reply');
       },
     }, true);
   }
@@ -594,22 +617,10 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     }, true);
   }
 
-  function markUnderReview() {
-    if (workflowActions === 'none' || !detail || detail.status !== 'received' || !detail.writesAvailable || pending) return;
-    const inputValue: PmTicketCommandInput = {
-      schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version,
-      command: { type: 'review' },
-    };
-    void performWrite({
-      ticketId: detail.id, operationId: inputValue.operationId, label: 'review decision',
-      run: () => api.execute(detail.id, inputValue),
-    });
-  }
-
   async function sendClientInvitationEmail() {
     const invitation = selectedQueueItem?.internal.clientInvitation ?? null;
     const canRetryFailed = invitation?.status === 'pending' && invitation.delivery === 'failed';
-    if (!detail || !selectedQueueItem || detail.status !== 'under_review' || !detail.writesAvailable
+    if (!detail || !selectedQueueItem || !['received', 'under_review'].includes(detail.status) || !detail.writesAvailable
       || selectedQueueItem.internal.clientAccessActive || invitationEmailSending || writing || pending
       || invitation?.status === 'consumed' || (invitation?.status === 'pending' && !canRetryFailed)
       || writeLock.current) return;
@@ -619,6 +630,10 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     setInvitationEmailError('');
     setWriteError('');
     try {
+      // Inviting the client is the PM's review of a new inquiry; record that first.
+      if (detail.status === 'received') {
+        await api.execute(ticketId, { schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version, command: { type: 'review' } });
+      }
       const receipt = await api.sendInvitationEmail(ticketId);
       if (receipt.ticketId !== ticketId || !receipt.invitationId || !Number.isFinite(Date.parse(receipt.expiresAt))
         || receipt.status !== 'pending' || typeof receipt.alreadyPending !== 'boolean') throw new Error('Invalid client invitation receipt.');
@@ -644,7 +659,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
 
   async function submitScopeProposal(draftValue: PmScopeProposalDraft) {
     if (workflowActions === 'none' || !detail || !selectedQueueItem?.internal.clientAccessActive || !detail.writesAvailable || pending
-      || !['under_review', 'awaiting_client'].includes(detail.status)
+      || !['received', 'under_review', 'awaiting_client'].includes(detail.status)
       || detail.internal.authorizedScopeVersionId || detail.internal.requiredIssueIds.length > 0) return;
     const inputValue: PmTicketScopeProposalInput = {
       schemaVersion: 1,
@@ -652,6 +667,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       expectedVersion: detail.version,
       publicSummary: draftValue.publicSummary,
       developerBrief: draftValue.developerBrief,
+      ...(draftValue.clientApproval === 'skipped' ? { clientApproval: 'skipped' as const } : {}),
     };
     const succeeded = await performWrite({
       ticketId: detail.id,
@@ -714,7 +730,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
 
   function openLifecycleAction(action: PmLifecycleAction) {
     const wasOpen = lifecycleAction === action;
-    setTicketSection('details'); setActionMenuOpen(false);
+    setActionMenuOpen(false);
     setDeclineOpen(false); setScopeComposerOpen(false); setHandoffOpen(false); setProjectLinkOpen(false);
     setReviewAction(null); setDeliveryAssessmentOpen(false); setDeliveryReviewOpen(false);
     setLifecycleAction(wasOpen ? null : action);
@@ -772,11 +788,9 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     }
   }
 
-  const canMarkUnderReview = Boolean(detail && workflowActions !== 'none'
-    && detail.status === 'received' && detail.writesAvailable);
   const canInviteClient = Boolean(detail && selectedQueueItem && workflowActions !== 'none'
     && detail.internal.request?.source === 'public_inquiry'
-    && !selectedQueueItem.internal.clientAccessActive && detail.status === 'under_review'
+    && !selectedQueueItem.internal.clientAccessActive && ['received', 'under_review'].includes(detail.status)
     && detail.writesAvailable && selectedInvitation?.status !== 'consumed');
   const canDeclineInquiry = Boolean(detail && workflowActions !== 'none'
     && ['received', 'under_review'].includes(detail.status)
@@ -784,7 +798,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   const canProposeScope = Boolean(detail && selectedQueueItem
     && (workflowActions === 'all' || workflowActions === 'review_scope')
     && detail.writesAvailable && selectedQueueItem.internal.clientAccessActive
-    && ['under_review', 'awaiting_client'].includes(detail.status)
+    && ['received', 'under_review', 'awaiting_client'].includes(detail.status)
     && !detail.internal.authorizedScopeVersionId && detail.internal.requiredIssueIds.length === 0);
   const canLinkAgreedWork = Boolean(detail && selectedQueueItem && workflowActions === 'all'
     && canAuthorizeTicketWork(detail, selectedQueueItem.internal.clientAccessActive));
@@ -799,17 +813,112 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   const canReviewDelivery = Boolean(detail && workflowActions === 'all' && detail.internal.deliveryAssessment);
   const lifecycleActions = detail && selectedQueueItem && workflowActions !== 'none'
     ? pmLifecycleActions(detail, selectedQueueItem.internal.clientAccessActive) : [];
-  const primaryAction = canMarkUnderReview ? 'review'
-    : canInviteClient ? 'invite'
-      : canLinkAgreedWork ? 'authorize'
-        : canCloseTicket ? 'close'
-          : lifecycleActions.includes('resume') ? 'resume' : null;
-  const menuLifecycleActions = lifecycleActions.filter(action => action !== primaryAction);
-  const hasMoreActions = canDeclineInquiry || canProposeScope
-    || (canLinkAgreedWork && primaryAction !== 'authorize') || canManageProjectLink
-    || (canInviteClient && primaryAction !== 'invite') || canReviewCorrection
-    || canAssessDelivery || canReviewDelivery || (canCloseTicket && primaryAction !== 'close')
-    || menuLifecycleActions.length > 0;
+  const step = detail && selectedQueueItem && workflowActions !== 'none' ? pmNextStep(detail, {
+    clientAccessActive: selectedQueueItem.internal.clientAccessActive,
+    canInvite: canInviteClient, canPlan: canProposeScope, canStartWork: canLinkAgreedWork,
+    canCheckAndShare: canAssessDelivery,
+    canShare: canReviewDelivery && canShareAssessedDelivery(detail, selectedQueueItem.internal.clientAccessActive),
+    canClose: canCloseTicket, canCorrect: canReviewCorrection, canResume: lifecycleActions.includes('resume'),
+  }) : null;
+  const stepActions = new Set([step?.primary?.action, step?.alternative?.action]);
+  const inviteBlocked = selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed';
+  const menuLifecycleActions = lifecycleActions.filter(action => !(action === 'resume' && stepActions.has('resume'))
+    && !(action === 'cancel' && stepActions.has('withdrawal')));
+  /** Rare actions, kept out of the way in a small menu. */
+  const moreActions: Array<{ id: string; label: string; run: () => void; disabled?: boolean }> = [
+    ...(detail?.writesAvailable && selectedQueueItem?.internal.clientAccessActive && !stepActions.has('reply')
+      && ['received', 'under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)
+      ? [{ id: 'ask', label: 'Ask the client a question', run: () => focusComposer('request_details') }] : []),
+    ...(canInviteClient && !stepActions.has('invite') ? [{ id: 'invite', label: invitationButtonLabel(selectedInvitation),
+      run: () => void sendClientInvitationEmail(), disabled: invitationEmailSending || inviteBlocked }] : []),
+    ...(canProposeScope && !stepActions.has('plan') ? [{ id: 'plan',
+      label: detail?.scope?.agreed ? 'Replace the plan' : detail?.scope ? 'Revise the plan' : 'Send a plan', run: () => openWorkflowAction('scope') }] : []),
+    ...(canLinkAgreedWork && !stepActions.has('start_work') ? [{ id: 'start', label: 'Start work', run: () => openWorkflowAction('handoff') }] : []),
+    ...(canReviewCorrection && !stepActions.has('correction') ? [{ id: 'correction', label: 'Send tasks back', run: () => openWorkflowAction('correction') }] : []),
+    ...(canReviewDelivery && !stepActions.has('share') ? [{ id: 'result', label: 'View the result', run: () => openWorkflowAction('delivery-review') }] : []),
+    ...(canCloseTicket && !stepActions.has('close') ? [{ id: 'close', label: 'Close request', run: () => openWorkflowAction('close') }] : []),
+    ...(canManageProjectLink ? [{ id: 'project', label: detail?.internal.projectId ? 'Change project' : 'Link to a project', run: () => openWorkflowAction('project') }] : []),
+    ...(canDeclineInquiry ? [{ id: 'decline', label: 'Decline request', run: () => openWorkflowAction('decline') }] : []),
+    ...menuLifecycleActions.map(action => ({ id: action, label: pmLifecycleLabel[action], run: () => openLifecycleAction(action) })),
+  ];
+
+  /** The form for the step the PM chose, shown in the main column under the Next step bar. */
+  function renderStepForms() {
+    if (!detail || !selectedQueueItem || !(projectLinkOpen || declineOpen || deliveryAssessmentOpen || deliveryReviewOpen || scopeComposerOpen || handoffOpen || reviewAction !== null || lifecycleAction !== null)) return null;
+    return <div className="pm-step__panel">
+      <button type="button" className="pm-step__panel-close" aria-label="Close this step" title="Close" onClick={closeStepForms}><X size={16} aria-hidden="true" /></button>
+      {projectLinkOpen && <div className="pm-tickets__action-form">
+        {projectLinkError && <p role="alert" className="mb-3 rounded-lg border border-status-danger-border bg-status-danger-subtle p-2.5 text-[11px] text-status-danger">{projectLinkError}</p>}
+        <PmProjectLinkForm key={`${detail.id}:${detail.version}:${detail.internal.projectId ?? ''}:${detail.internal.projectClientVisible === true}`}
+          initialProjectId={detail.internal.projectId}
+          initialClientVisible={detail.internal.projectClientVisible === true}
+          initialProjectPreview={detail.internal.projectPreview ?? null}
+          projectLocked={Boolean(detail.internal.authorizedScopeVersionId || detail.internal.requiredIssueIds.length)}
+          disabled={writing || projectLinkSaving || Boolean(pending)}
+          onCancel={() => setProjectLinkOpen(false)} onSubmit={value => void saveProjectLink(value)} />
+      </div>}
+
+      {declineOpen && ['received', 'under_review'].includes(detail.status) && <form aria-label="Decline inquiry" className="pm-tickets__action-form pm-tickets__action-form--decline" onSubmit={event => { event.preventDefault(); declineTicket(); }}>
+        <label className="block text-xs text-content-secondary">Reason for declining (required)<textarea required maxLength={4000} value={declineReason} onChange={event => setDeclineReason(event.target.value)} disabled={writing || Boolean(pending)} className={`${input} mt-2`} /></label>
+        <p className="text-xs text-content-muted">Saved in private PM history. No email is sent in this phase.</p>
+        <button type="button" onClick={() => setDeclineOpen(false)} className={secondary}>Cancel</button>
+        <button type="submit" className={primary} disabled={writing || Boolean(pending) || !declineReason.trim()}>Confirm decline</button>
+      </form>}
+
+      {deliveryAssessmentOpen && workflowActions === 'all' && canAssessTicketDelivery(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form"><PmDeliveryAssessment key={JSON.stringify([detail.id, detail.version, detail.scope?.id])}
+      ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onAssess={assessAndShareDelivery} onPrepared={refreshAll} /></div>}
+      {deliveryReviewOpen && workflowActions === 'all' && detail.internal.deliveryAssessment && <div className="pm-tickets__action-form"><PmDeliveryReview key={JSON.stringify([detail.id, detail.version, detail.internal.deliveryAssessment.id, detail.internal.deliveryAssessment.pinnedAssetId])}
+      ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onShare={shareAssessedDelivery} /></div>}
+      {scopeComposerOpen && <div className="pm-tickets__action-form">
+      <PmScopeProposalForm existingScopeAgreed={detail.scope?.agreed === true} disabled={writing || Boolean(pending)} onCancel={() => setScopeComposerOpen(false)} onSubmit={draftValue => void submitScopeProposal(draftValue)} />
+      </div>}
+      {handoffOpen && canAuthorizeTicketWork(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form">
+      <PmWorkHandoffForm key={`${detail.id}:${detail.version}`} linkedProjectId={detail.internal.projectId}
+        linkedProjectName={detail.internal.projectName ?? null} disabled={writing || Boolean(pending)}
+        onCancel={() => setHandoffOpen(false)} onSubmit={value => void submitWorkHandoff(value)} />
+      </div>}
+      {reviewAction === 'correction' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form">
+      <PmCorrectionForm key={`${detail.id}:${detail.version}`} ticket={detail} mode={pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive)!}
+        disabled={writing || Boolean(pending)} onCancel={() => setReviewAction(null)} onSubmit={value => void submitCorrection(value)} />
+      </div>}
+      {reviewAction === 'close' && canCloseAcceptedTicket(detail, selectedQueueItem.internal.clientAccessActive) && <section aria-label="Confirm accepted ticket closure" className="pm-tickets__action-form pm-tickets__action-form--confirm">
+      <h3 className="text-sm font-medium text-content">Close this accepted ticket?</h3>
+      <p className="mt-2 text-[11px] leading-relaxed text-content-secondary">The client accepted this result. Closing makes this ticket read-only; its conversation and delivery history remain available. This does not complete the project or approve a deployment.</p>
+      <div className="mt-3 flex justify-end gap-2"><button className={secondary} disabled={writing || Boolean(pending)} onClick={() => setReviewAction(null)}>Cancel</button>
+        <button className={primary} disabled={writing || Boolean(pending)} onClick={() => void closeAcceptedTicket()}>Confirm ticket closure</button></div>
+      </section>}
+      {lifecycleAction && lifecycleActions.includes(lifecycleAction) && <PmLifecycleForm key={`${detail.id}:${detail.version}:${lifecycleAction}`}
+      action={lifecycleAction} disabled={writing || Boolean(pending)}
+      onCancel={() => setLifecycleAction(null)} onSubmit={text => void submitLifecycle(lifecycleAction, text)} />}
+    </div>;
+  }
+
+  function focusComposer(action: 'reply' | 'request_details' = 'reply') {
+    setMessageAction(action); setActionMenuOpen(false);
+    setPanel('conversation'); setTicketSection('conversation');
+    window.setTimeout(() => document.getElementById('ticket-conversation-draft')?.focus(), 0);
+  }
+
+  function runStep(action: PmStepAction) {
+    switch (action) {
+      case 'invite': void sendClientInvitationEmail(); break;
+      case 'plan': openWorkflowAction('scope'); break;
+      case 'reply': focusComposer('reply'); break;
+      case 'skip_approval': skipScopeApproval(); break;
+      case 'start_work': openWorkflowAction('handoff'); break;
+      case 'check_share': openWorkflowAction('delivery-assess'); break;
+      case 'share': openWorkflowAction('delivery-review'); break;
+      case 'close': openWorkflowAction('close'); break;
+      case 'correction': openWorkflowAction('correction'); break;
+      case 'withdrawal': openLifecycleAction('cancel'); break;
+      case 'resume': openLifecycleAction('resume'); break;
+    }
+  }
+
+  function closeStepForms() {
+    setDeclineOpen(false); setScopeComposerOpen(false); setHandoffOpen(false); setProjectLinkOpen(false);
+    setReviewAction(null); setDeliveryAssessmentOpen(false); setDeliveryReviewOpen(false); setLifecycleAction(null);
+  }
 
   function openWorkflowAction(action: 'decline' | 'scope' | 'handoff' | 'project' | 'correction' | 'close' | 'delivery-assess' | 'delivery-review') {
     const wasOpen = action === 'decline' ? declineOpen
@@ -819,7 +928,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
             : action === 'correction' ? reviewAction === 'correction'
               : action === 'close' ? reviewAction === 'close'
                 : action === 'delivery-assess' ? deliveryAssessmentOpen : deliveryReviewOpen;
-    setTicketSection('details');
     setActionMenuOpen(false);
     setDeclineOpen(false);
     setScopeComposerOpen(false);
@@ -855,11 +963,11 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       ? messages
       : notes.map(note => ({ id: note.id, author: 'note' as const, body: note.body, createdAt: note.createdAt }));
     const composerIsOpen = mode === 'conversation' || (composerOpen && mode === panel);
-    const composerToolbar = mode === 'conversation' && !communicationEnabled ? <div className="ticket-chat__mode-toggle" role="group" aria-label="Reply type">
-      <Button type="button" size="sm" variant={messageAction === 'reply' ? 'outline' : 'ghost'} aria-pressed={messageAction === 'reply'} onClick={() => setMessageAction('reply')}>Send update</Button>
+    const composerToolbar = mode === 'conversation' ? <div className="ticket-chat__mode-toggle" role="group" aria-label="Reply type">
+      <Button type="button" size="sm" variant={messageAction === 'reply' ? 'outline' : 'ghost'} aria-pressed={messageAction === 'reply'} onClick={() => setMessageAction('reply')}>Send</Button>
       <Button type="button" size="sm" variant={messageAction === 'request_details' ? 'outline' : 'ghost'} aria-pressed={messageAction === 'request_details'}
-        onClick={() => setMessageAction('request_details')} disabled={!['under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)}>Request details</Button>
-      {messageAction === 'request_details' && <span>Sets the next action for the client.</span>}
+        onClick={() => setMessageAction('request_details')} disabled={!['received', 'under_review', 'awaiting_client', 'in_progress', 'ready_for_review'].includes(detail.status)}>Ask &amp; wait for reply</Button>
+      {messageAction === 'request_details' && <span>The client sees this as something that needs them.</span>}
     </div> : undefined;
 
     return <TicketChat
@@ -908,51 +1016,34 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     />;
   }
 
-  const workflowToolbar = detail && selectedQueueItem && (primaryAction || hasMoreActions) ? (
-                  <div className="pm-tickets__ticket-toolbar">
-                  <div className="pm-tickets__next-step"><CircleDot size={14} aria-hidden="true" /><p>{selectedNextStep}</p></div>
-                  <div className="pm-tickets__detail-actions">
-                    {primaryAction === 'review' && <button onClick={markUnderReview} disabled={writing || Boolean(pending)} className={primary}><Check size={14} />Mark under review</button>}
-                    {primaryAction === 'invite' && <button onClick={() => void sendClientInvitationEmail()}
-                      disabled={invitationEmailSending || writing || Boolean(pending)
-                        || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')} className={primary}>
-                      <Send size={14} />{invitationEmailSending ? 'Sending invitation…' : invitationButtonLabel(selectedInvitation)}
-                    </button>}
-                    {primaryAction === 'authorize' && <button onClick={() => openWorkflowAction('handoff')}
-                      disabled={writing || Boolean(pending)} className={primary}><Check size={14} />Link agreed work</button>}
-                    {primaryAction === 'close' && <button onClick={() => openWorkflowAction('close')}
-                      disabled={writing || Boolean(pending)} className={primary}>Close accepted ticket</button>}
-                    {primaryAction === 'resume' && <button onClick={() => openLifecycleAction('resume')}
-                      disabled={writing || Boolean(pending)} className={primary}>{pmLifecycleLabel.resume}</button>}
-                    {hasMoreActions && <details key={detail.id} open={actionMenuOpen}
-                      onToggle={event => setActionMenuOpen(event.currentTarget.open)} className="pm-tickets__more-actions">
-                      <summary>More actions<ChevronDown size={14} aria-hidden="true" /></summary>
-                      <div className="pm-tickets__action-menu">
-                        {canInviteClient && primaryAction !== 'invite' && <button type="button" onClick={() => { setActionMenuOpen(false); void sendClientInvitationEmail(); }}
-                          disabled={invitationEmailSending || writing || Boolean(pending)
-                            || (selectedInvitation?.status === 'pending' && selectedInvitation.delivery !== 'failed')}>
-                          <Send size={14} />{invitationEmailSending ? 'Sending invitation…' : invitationButtonLabel(selectedInvitation)}
-                        </button>}
-                        {canDeclineInquiry && <button type="button" onClick={() => openWorkflowAction('decline')}>Decline inquiry</button>}
-                        {canProposeScope && <button type="button" onClick={() => openWorkflowAction('scope')}>
-                          {detail.scope?.agreed ? 'Replace agreed scope' : detail.scope ? 'Revise proposed scope' : 'Propose scope'}
-                        </button>}
-                        {canLinkAgreedWork && primaryAction !== 'authorize' && <button type="button" onClick={() => openWorkflowAction('handoff')}>Link agreed work</button>}
-                        {canManageProjectLink && <button type="button" onClick={() => openWorkflowAction('project')}>
-                          {detail.internal.projectId ? 'Manage project link' : 'Link to project'}
-                        </button>}
-                        {canReviewCorrection && <button type="button" onClick={() => openWorkflowAction('correction')}>
-                          {detail.internal.correctionRequestedFor ? 'Review client correction' : 'Return affected tasks'}
-                        </button>}
-                        {canAssessDelivery && <button type="button" onClick={() => openWorkflowAction('delivery-assess')}>Assess prepared work</button>}
-                        {canReviewDelivery && <button type="button" onClick={() => openWorkflowAction('delivery-review')}>Review client response</button>}
-                        {canCloseTicket && primaryAction !== 'close' && <button type="button" onClick={() => openWorkflowAction('close')}>Close accepted ticket</button>}
-                        {menuLifecycleActions.map(action => <button key={action} type="button" onClick={() => openLifecycleAction(action)}>{pmLifecycleLabel[action]}</button>)}
-                      </div>
-                    </details>}
-                  </div>
-                  </div>
-  ) : null;
+  const busy = writing || Boolean(pending);
+  const stepButtonLabel = (action: PmStepAction, label: string) => action === 'invite'
+    ? invitationEmailSending ? 'Sending invitation…' : selectedInvitation ? invitationButtonLabel(selectedInvitation) : label : label;
+  const stepButtonDisabled = (action: PmStepAction) => busy || (action === 'invite' && (invitationEmailSending || inviteBlocked));
+  const stepBar = detail && step ? <section className="pm-step" aria-label="Next step">
+    <div className="pm-step__copy">
+      {step.owner && <span className={`pm-step__owner pm-step__owner--${step.owner.toLowerCase()}`}>
+        {step.owner === 'You' ? 'Your turn' : step.owner === 'Client' ? 'Waiting on the client' : 'With the developer'}</span>}
+      <h3 className="pm-step__title">{step.title}</h3>
+      {step.detail && <p className="pm-step__detail">{step.detail}</p>}
+    </div>
+    <div className="pm-step__actions">
+      {step.alternative && <button type="button" className={secondary} disabled={stepButtonDisabled(step.alternative.action)}
+        onClick={() => runStep(step.alternative!.action)}>{step.alternative.label}</button>}
+      {step.primary && <button type="button" className={primary} disabled={stepButtonDisabled(step.primary.action)}
+        onClick={() => runStep(step.primary!.action)}>
+        {step.primary.action === 'invite' ? <Send size={14} aria-hidden="true" /> : <Check size={14} aria-hidden="true" />}
+        {stepButtonLabel(step.primary.action, step.primary.label)}</button>}
+      {moreActions.length > 0 && <details key={detail.id} open={actionMenuOpen}
+        onToggle={event => setActionMenuOpen(event.currentTarget.open)} className="pm-tickets__more-actions">
+        <summary>More<ChevronDown size={14} aria-hidden="true" /></summary>
+        <div className="pm-tickets__action-menu">
+          {moreActions.map(item => <button key={item.id} type="button" disabled={busy || item.disabled}
+            onClick={() => { setActionMenuOpen(false); item.run(); }}>{item.label}</button>)}
+        </div>
+      </details>}
+    </div>
+  </section> : null;
 
   // Collapsing narrows the side list of an open ticket. With no ticket open there is
   // no side list, so the remembered preference must not shape the page.
@@ -1038,7 +1129,9 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
             : queue && visibleQueueItems.length > 0 ? <PmTicketQueueList items={visibleQueueItems} selectedId={selectedId}
               disabled={Boolean(pending)}
               onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }} />
-              : queue && <div className="pm-tickets__empty-state"><EmptyPanel title="No tickets in this view" detail={filter === 'all' && !search && !clientGroupKey && dateRange === 'all' ? 'Accepted inquiries will appear here. New inquiries are reviewed in the separate intake inbox.' : 'Try another view or clear your filters.'} />
+              : queue && <div className="pm-tickets__empty-state"><EmptyPanel title={filter === 'needs_pm' && !search ? 'Nothing needs you right now' : 'No tickets in this view'}
+                detail={filter === 'needs_pm' && !search ? 'Requests come back here when a client replies or work is ready for you.'
+                  : filter === 'all' && !search && !clientGroupKey && dateRange === 'all' ? 'Accepted inquiries will appear here.' : 'Try another view or clear your filters.'} />
                 {(search || filter !== 'all' || clientGroupKey || dateRange !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); setClientGroupKey(''); setDateRange('all'); setSortOrder('updated_desc'); activeFilter('all'); }}>Show all tickets</button>}</div>}
         </div>
         {queue && resolvedQueueScope === queueScope && <div className="pm-tickets__queue-footer">
@@ -1087,7 +1180,11 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
 
               {writeError && <div role="alert" className="pm-tickets__error">{writeError}</div>}
               <div className="pm-tickets__chat-layout role-chat-layout">
-                {renderConversation('conversation')}
+                <div className="pm-tickets__main-column">
+                  {stepBar}
+                  {renderStepForms()}
+                  {renderConversation('conversation')}
+                </div>
                 <ChatContextPanel label="Ticket context" className="pm-tickets__context-panel" activeSection={ticketSection} onClose={() => { setTicketSection('conversation'); setPanel('conversation'); setComposerOpen(false); }}>
                 <nav aria-label="Ticket sections" className="pm-tickets__section-tabs role-chat-tools">
                   <button type="button" aria-pressed={ticketSection === 'conversation'} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setPanel('conversation'); setComposerOpen(false); setTicketSection('conversation'); }}
@@ -1100,7 +1197,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                     className={ticketSection === 'documents' ? 'is-active' : ''}><Paperclip size={15} />Documents</button>}
                 </nav>
                 {ticketSection === 'details' && <section ref={detailsElement} aria-label="Request details and workflow" className="pm-tickets__details-view">
-                  {workflowToolbar}
                 <div className="pm-tickets__overview">
                   <div className="pm-tickets__overview-section">
                     <p className="pm-tickets__eyebrow">Request</p>
@@ -1129,49 +1225,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   </div>
                 </div>
 
-                {projectLinkOpen && <div className="pm-tickets__action-form">
-                  {projectLinkError && <p role="alert" className="mb-3 rounded-lg border border-status-danger-border bg-status-danger-subtle p-2.5 text-[11px] text-status-danger">{projectLinkError}</p>}
-                  <PmProjectLinkForm key={`${detail.id}:${detail.version}:${detail.internal.projectId ?? ''}:${detail.internal.projectClientVisible === true}`}
-                    initialProjectId={detail.internal.projectId}
-                    initialClientVisible={detail.internal.projectClientVisible === true}
-                    initialProjectPreview={detail.internal.projectPreview ?? null}
-                    projectLocked={Boolean(detail.internal.authorizedScopeVersionId || detail.internal.requiredIssueIds.length)}
-                    disabled={writing || projectLinkSaving || Boolean(pending)}
-                    onCancel={() => setProjectLinkOpen(false)} onSubmit={value => void saveProjectLink(value)} />
-                </div>}
-
-                {declineOpen && ['received', 'under_review'].includes(detail.status) && <form aria-label="Decline inquiry" className="pm-tickets__action-form pm-tickets__action-form--decline" onSubmit={event => { event.preventDefault(); declineTicket(); }}>
-                  <label className="block text-xs text-content-secondary">Reason for declining (required)<textarea required maxLength={4000} value={declineReason} onChange={event => setDeclineReason(event.target.value)} disabled={writing || Boolean(pending)} className={`${input} mt-2`} /></label>
-                  <p className="text-xs text-content-muted">Saved in private PM history. No email is sent in this phase.</p>
-                  <button type="button" onClick={() => setDeclineOpen(false)} className={secondary}>Cancel</button>
-                  <button type="submit" className={primary} disabled={writing || Boolean(pending) || !declineReason.trim()}>Confirm decline</button>
-                </form>}
-
-              {deliveryAssessmentOpen && workflowActions === 'all' && canAssessTicketDelivery(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form"><PmDeliveryAssessment key={JSON.stringify([detail.id, detail.version, detail.scope?.id])}
-                ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onAssess={assessPreparedDelivery} onPrepared={refreshAll} /></div>}
-              {deliveryReviewOpen && workflowActions === 'all' && detail.internal.deliveryAssessment && <div className="pm-tickets__action-form"><PmDeliveryReview key={JSON.stringify([detail.id, detail.version, detail.internal.deliveryAssessment.id, detail.internal.deliveryAssessment.pinnedAssetId])}
-                ticket={detail} clientAccessActive={selectedQueueItem.internal.clientAccessActive} disabled={writing || Boolean(pending)} onShare={shareAssessedDelivery} /></div>}
-              {scopeComposerOpen && <div className="pm-tickets__action-form">
-                <PmScopeProposalForm existingScopeAgreed={detail.scope?.agreed === true} disabled={writing || Boolean(pending)} onCancel={() => setScopeComposerOpen(false)} onSubmit={draftValue => void submitScopeProposal(draftValue)} />
-              </div>}
-              {handoffOpen && canAuthorizeTicketWork(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form">
-                <PmWorkHandoffForm key={`${detail.id}:${detail.version}`} linkedProjectId={detail.internal.projectId}
-                  linkedProjectName={detail.internal.projectName ?? null} disabled={writing || Boolean(pending)}
-                  onCancel={() => setHandoffOpen(false)} onSubmit={value => void submitWorkHandoff(value)} />
-              </div>}
-              {reviewAction === 'correction' && pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive) && <div className="pm-tickets__action-form">
-                <PmCorrectionForm key={`${detail.id}:${detail.version}`} ticket={detail} mode={pmCorrectionMode(detail, selectedQueueItem.internal.clientAccessActive)!}
-                  disabled={writing || Boolean(pending)} onCancel={() => setReviewAction(null)} onSubmit={value => void submitCorrection(value)} />
-              </div>}
-              {reviewAction === 'close' && canCloseAcceptedTicket(detail, selectedQueueItem.internal.clientAccessActive) && <section aria-label="Confirm accepted ticket closure" className="pm-tickets__action-form pm-tickets__action-form--confirm">
-                <h3 className="text-sm font-medium text-content">Close this accepted ticket?</h3>
-                <p className="mt-2 text-[11px] leading-relaxed text-content-secondary">The client accepted this result. Closing makes this ticket read-only; its conversation and delivery history remain available. This does not complete the project or approve a deployment.</p>
-                <div className="mt-3 flex justify-end gap-2"><button className={secondary} disabled={writing || Boolean(pending)} onClick={() => setReviewAction(null)}>Cancel</button>
-                  <button className={primary} disabled={writing || Boolean(pending)} onClick={() => void closeAcceptedTicket()}>Confirm ticket closure</button></div>
-              </section>}
-              {lifecycleAction && lifecycleActions.includes(lifecycleAction) && <PmLifecycleForm key={`${detail.id}:${detail.version}:${lifecycleAction}`}
-                action={lifecycleAction} disabled={writing || Boolean(pending)}
-                onCancel={() => setLifecycleAction(null)} onSubmit={text => void submitLifecycle(lifecycleAction, text)} />}
               </section>}
 
                 {ticketSection === 'documents' && communicationEnabled && <section aria-label="Ticket documents" className="pm-tickets__documents-view">
@@ -1216,7 +1269,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   <section className="pm-tickets__context-section">
                     <p className="pm-tickets__context-label">Next step</p>
                     <p className="pm-tickets__context-value pm-tickets__context-value--accent"><CircleDot size={14} aria-hidden="true" />{selectedNextStep}</p>
-                    {workflowToolbar}
                   </section>
                   <section className="pm-tickets__context-section pm-tickets__context-section--request">
                     <p className="pm-tickets__context-label">Request summary</p>

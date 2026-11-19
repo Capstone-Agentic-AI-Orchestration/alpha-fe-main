@@ -129,12 +129,58 @@ export function ClientTicketDetail({
   }
 
   const tabs: Array<{ id: ClientTicketTab; label: string; icon: React.ReactNode }> = [
-    { id: 'conversation', label: 'About', icon: <MessageSquare size={14} /> },
+    { id: 'conversation', label: 'Status', icon: <MessageSquare size={14} /> },
     { id: 'details', label: 'Details', icon: <FileText size={14} /> },
     ...(communicationEnabled ? [{ id: 'documents' as const, label: 'Files', icon: <Paperclip size={14} /> }] : []),
   ];
   const panelScroll = 'client-detail-panel';
 
+  // The decision the client is being asked for sits on top of the conversation, not in a side tab.
+  const decisionRef = useRef<HTMLDivElement>(null);
+  const showDecision = () => {
+    setTab('conversation');
+    window.setTimeout(() => decisionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0);
+  };
+  const planCard = !workflowActionsDisabled && ticket.scope ? <InfoCard title="The plan" icon={<ShieldCheck size={14} />}>
+    <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.scope.summary}</p>
+    <p className="mt-2 text-xs text-content-secondary">{ticket.scope.agreed
+      ? ticket.scope.approvedBy === 'pm' ? 'Your project manager approved this plan and is going ahead with it.' : 'You approved this plan.'
+      : 'Waiting for your approval.'}</p>
+    {scopeDecision && canReply && <div className="mt-3 flex flex-wrap gap-2">
+      <button onClick={() => { setScopeChangeOpen(false); setConfirming(scopeDecision); }} disabled={busy} className={`${primary} min-h-[44px]`}><CheckCircle2 size={14} />Approve plan</button>
+      <button onClick={() => { setConfirming(null); setScopeChangeOpen(value => !value); }} disabled={busy} className={`${secondary} min-h-[44px]`}>{scopeChangeOpen ? 'Cancel' : 'Ask for changes'}</button>
+    </div>}
+    {scopeDecision && canReply && scopeChangeOpen && <form className="mt-3 space-y-2" onSubmit={submitScopeChange}>
+      <label htmlFor="client-scope-change" className="block text-xs text-content-secondary">What would you like changed in this plan?</label>
+      <textarea id="client-scope-change" rows={3} maxLength={SCOPE_CHANGE_MAX_LENGTH} disabled={busy} value={scopeChangeBody} onChange={event => setScopeChangeBody(event.target.value)} className={input} />
+      <p className="text-xs leading-relaxed text-content-secondary">This goes to your project manager in the conversation below. They can reply or send you an updated plan.</p>
+      <button type="submit" disabled={busy || !scopeChangeText} className={`${primary} min-h-[44px]`}><Send size={13} />Send to my project manager</button>
+    </form>}
+  </InfoCard> : null;
+  const resultCard = !workflowActionsDisabled && ticket.delivery ? <InfoCard title="Your result" icon={<CheckCircle2 size={14} />}>
+    <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.delivery.summary}</p>
+    <p className="mt-2 text-[10px] text-content-muted">Shared {time(ticket.delivery.sharedAt)}{ticket.delivery.accepted ? ' · accepted' : ''}</p>
+    <ClientDeliveryFiles key={JSON.stringify([workspaceId, ticket.id, ticket.delivery.id, ticket.delivery.scopeVersionId])}
+      workspaceId={workspaceId} ticketId={ticket.id} deliveryId={ticket.delivery.id} scopeVersionId={ticket.delivery.scopeVersionId} onInspectionChange={inspected} api={api} />
+    {ticket.sharedProjectPreviewUrl && !ticket.delivery.accepted && <a href={ticket.sharedProjectPreviewUrl} target="_blank" rel="noreferrer" onClick={() => setPreviewOpenedKey(deliveryKey)}
+      className="mt-2 inline-flex min-h-[44px] items-center gap-1.5 rounded-lg px-2 text-xs font-medium text-link hover:bg-surface-high hover:text-link-hover">Open the project preview <ExternalLink size={12} /></a>}
+    {!ticket.delivery.accepted && !canReview && <p className="mt-3 flex items-start gap-1.5 text-[10px] leading-relaxed text-status-warning"><LockKeyhole size={12} className="mt-0.5 shrink-0" />{clientReviewLockMessage(Boolean(ticket.sharedProjectPreviewUrl))}</p>}
+    {canReview && <div className="mt-3 space-y-3">
+      <label className="flex items-start gap-2 text-[11px] leading-relaxed text-content-secondary"><input type="checkbox" checked={reviewAcknowledged} disabled={busy} onChange={event => setReviewAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I checked the result against the plan.</label>
+      <div className="flex flex-wrap gap-2"><button disabled={busy || !reviewAcknowledged} onClick={() => { setCorrectionOpen(false); setConfirming({ type: 'accept_delivery', deliveryId: ticket.delivery!.id }); }} className={`${primary} min-h-[44px]`}>Accept result</button>
+        <button disabled={busy} onClick={() => { setConfirming(null); setCorrectionOpen(value => !value); }} className={`${secondary} min-h-[44px]`}>{correctionOpen ? 'Cancel' : 'Needs a fix'}</button></div>
+      {correctionOpen && <form className="space-y-2" onSubmit={async event => {
+        event.preventDefault(); if (!canReview || busy || !correctionBody.trim()) return;
+        try { await onCorrection(correctionBody.trim(), ticket.delivery!.id); setCorrectionBody(''); setCorrectionOpen(false); }
+        catch { /* Preserve this draft while the original operation is reconciled. */ }
+      }}><label htmlFor="client-result-feedback" className="block text-[11px] text-content-secondary">What does not match the plan?</label>
+        <textarea id="client-result-feedback" rows={3} maxLength={4000} disabled={busy} value={correctionBody} onChange={event => setCorrectionBody(event.target.value)} className={input} />
+        <p className="text-xs leading-relaxed text-content-secondary">Your project manager will look at your note and tell you the next step.</p>
+        <button type="submit" disabled={busy || !correctionBody.trim()} className={`${primary} min-h-[44px]`}>Send fix request</button></form>}
+    </div>}
+    {ticket.delivery.accepted && <p className="mt-2 text-xs text-content-secondary">{clientAcceptedResultNote(ticket.status === 'closed')}</p>}
+  </InfoCard> : null;
+  const decisionCard = needsAction ? scopeDecision ? planCard : resultCard : null;
   return <section className="client-ticket-detail">
     <header className="client-detail-header">
       <div className="client-detail-heading">
@@ -148,7 +194,7 @@ export function ClientTicketDetail({
           </div>
           <div className="client-detail-heading-actions">
             <Status status={ticket.status} label={progress.statusLabel} />
-            {needsAction && canReply && tab !== 'details' && <button type="button" onClick={() => setTab('details')} className="client-header-review">{scopeDecision ? 'Review proposed work' : 'Review result'}</button>}
+            {needsAction && canReply && tab !== 'details' && <button type="button" onClick={showDecision} className="client-header-review">{scopeDecision ? 'Review plan' : 'Review result'}</button>}
             {!newRequestsDisabled && <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className={`${secondary} min-h-[44px]`}>Request additional work</button>}
           </div>
         </div>
@@ -163,6 +209,7 @@ export function ClientTicketDetail({
 
     <div className="client-detail-content role-chat-layout">
       <div className="client-chat-main">
+      {decisionCard && <div ref={decisionRef} className="client-decision-slot" aria-label="Your decision">{decisionCard}</div>}
       <TicketChat
         role="client"
         messages={messages}
@@ -217,42 +264,8 @@ export function ClientTicketDetail({
                 : <p className="text-xs leading-relaxed text-content-secondary">Your project manager has not shared a project preview for this request yet. They will update you here if that changes.</p>}
               {ticket.relatedTicket && <p className="mt-3 text-xs leading-relaxed text-content-secondary">Related request: {ticket.relatedTicket.reference} · {ticket.relatedTicket.title}</p>}
             </InfoCard>
-            {!workflowActionsDisabled && ticket.scope && <InfoCard title="Agreed work" icon={<ShieldCheck size={14} />}>
-              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.scope.summary}</p>
-              <p className="mt-2 text-xs text-content-secondary">{ticket.scope.agreed ? 'You agreed to this work.' : 'Waiting for your decision.'}</p>
-              {scopeDecision && canReply && <div className="mt-3 flex flex-wrap gap-2">
-                <button onClick={() => { setScopeChangeOpen(false); setConfirming(scopeDecision); }} disabled={busy} className={`${primary} min-h-[44px]`}><CheckCircle2 size={14} />Agree to proposed work</button>
-                <button onClick={() => { setConfirming(null); setScopeChangeOpen(value => !value); }} disabled={busy} className={`${secondary} min-h-[44px]`}>{scopeChangeOpen ? 'Cancel' : 'Request changes'}</button>
-              </div>}
-              {scopeDecision && canReply && scopeChangeOpen && <form className="mt-3 space-y-2" onSubmit={submitScopeChange}>
-                <label htmlFor="client-scope-change" className="block text-xs text-content-secondary">What would you like changed about this proposed work?</label>
-                <textarea id="client-scope-change" rows={3} maxLength={SCOPE_CHANGE_MAX_LENGTH} disabled={busy} value={scopeChangeBody} onChange={event => setScopeChangeBody(event.target.value)} className={input} />
-                <p className="text-xs leading-relaxed text-content-secondary">Sent to your project manager in this request’s conversation. Nothing is agreed yet. They can reply or send you an updated proposal.</p>
-                <button type="submit" disabled={busy || !scopeChangeText} className={`${primary} min-h-[44px]`}><Send size={13} />Send to my project manager</button>
-              </form>}
-            </InfoCard>}
-            {!workflowActionsDisabled && ticket.delivery && <InfoCard title="Result summary" icon={<CheckCircle2 size={14} />}>
-              <p className="whitespace-pre-wrap break-words text-xs leading-relaxed text-content-secondary">{ticket.delivery.summary}</p>
-              <p className="mt-2 text-[10px] text-content-muted">Shared {time(ticket.delivery.sharedAt)}{ticket.delivery.accepted ? ' · accepted' : ''}</p>
-              <ClientDeliveryFiles key={JSON.stringify([workspaceId, ticket.id, ticket.delivery.id, ticket.delivery.scopeVersionId])}
-                workspaceId={workspaceId} ticketId={ticket.id} deliveryId={ticket.delivery.id} scopeVersionId={ticket.delivery.scopeVersionId} onInspectionChange={inspected} api={api} />
-              {!ticket.delivery.accepted && !canReview && <p className="mt-3 flex items-start gap-1.5 text-[10px] leading-relaxed text-status-warning"><LockKeyhole size={12} className="mt-0.5 shrink-0" />{clientReviewLockMessage(Boolean(ticket.sharedProjectPreviewUrl))}</p>}
-              {canReview && <div className="mt-3 space-y-3">
-                <label className="flex items-start gap-2 text-[11px] leading-relaxed text-content-secondary"><input type="checkbox" checked={reviewAcknowledged} disabled={busy} onChange={event => setReviewAcknowledged(event.target.checked)} className="mt-0.5 accent-violet-500" />I reviewed the shared result against the agreed work.</label>
-                <div className="flex flex-wrap gap-2"><button disabled={busy || !reviewAcknowledged} onClick={() => { setCorrectionOpen(false); setConfirming({ type: 'accept_delivery', deliveryId: ticket.delivery!.id }); }} className={`${primary} min-h-[44px]`}>Accept result</button>
-                  <button disabled={busy} onClick={() => { setConfirming(null); setCorrectionOpen(value => !value); }} className={`${secondary} min-h-[44px]`}>{correctionOpen ? 'Cancel feedback' : 'Needs a fix'}</button></div>
-                {correctionOpen && <form className="space-y-2" onSubmit={async event => {
-                  event.preventDefault(); if (!canReview || busy || !correctionBody.trim()) return;
-                  try { await onCorrection(correctionBody.trim(), ticket.delivery!.id); setCorrectionBody(''); setCorrectionOpen(false); }
-                  catch { /* Preserve this draft while the original operation is reconciled. */ }
-                }}><label htmlFor="client-result-feedback" className="block text-[11px] text-content-secondary">What does not match the agreed work?</label>
-                  <textarea id="client-result-feedback" rows={3} maxLength={4000} disabled={busy} value={correctionBody} onChange={event => setCorrectionBody(event.target.value)} className={input} />
-                  <p className="text-xs leading-relaxed text-content-secondary">Your project manager will review your feedback and let you know the next step.</p>
-                  <button type="submit" disabled={busy || !correctionBody.trim()} className={`${primary} min-h-[44px]`}>Send correction feedback</button></form>}
-              </div>}
-              {ticket.delivery.accepted && <p className="mt-2 text-xs text-content-secondary">{clientAcceptedResultNote(ticket.status === 'closed')}</p>}
-              {!ticket.delivery.accepted && <p className="mt-2 text-xs text-content-secondary">Use this request’s conversation to discuss the result with your project manager.</p>}
-            </InfoCard>}
+            {decisionCard !== planCard && planCard}
+            {decisionCard !== resultCard && resultCard}
           </div>
         </section>
 
@@ -269,7 +282,7 @@ export function ClientTicketDetail({
           <div><span className="client-detail-status-eyebrow">Where it stands</span><h2>{needsAction ? `Action needed: ${progress.label}` : progress.label}</h2><p>{progress.description}</p></div>
         </div>
         {needsAction && canReply && tab !== 'details' && <div className="client-detail-status-actions">
-          <button type="button" onClick={() => setTab('details')} className={`${primary} min-h-[44px] client-review-action`}>{scopeDecision ? 'Review proposed work' : 'Review result'}</button>
+          <button type="button" onClick={showDecision} className={`${primary} min-h-[44px] client-review-action`}>{scopeDecision ? 'Review plan' : 'Review result'}</button>
         </div>}
       </div>
     </section>
@@ -280,7 +293,7 @@ export function ClientTicketDetail({
           {ticket.request?.requestedDeadline && <small>Hoped-for date: {ticket.request.requestedDeadline} · not guaranteed</small>}
         </section>
         <section className="role-chat-context__section"><h3>Project</h3><p>{ticket.sharedProjectName ?? 'Your project manager will link this to a project.'}</p>
-          <button type="button" className="role-chat-context__link" onClick={() => setTab('details')}><FolderKanban size={15} />{needsAction ? 'See the proposal and result' : 'See full details'}</button>
+          <button type="button" className="role-chat-context__link" onClick={() => setTab('details')}><FolderKanban size={15} />See full details</button>
         </section>
         {communicationEnabled && <section className="role-chat-context__section"><h3>Files</h3><p>Share or download files for this request.</p><button type="button" className="role-chat-context__link" onClick={() => setTab('documents')}><Paperclip size={15} />Open files</button></section>}
         <section className="role-chat-context__section client-about-reference"><h3>Reference</h3>
@@ -295,13 +308,13 @@ export function ClientTicketDetail({
 
     {!workflowActionsDisabled && confirming && <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setConfirming(null); }}>
       <section role="dialog" aria-modal="true" aria-labelledby="client-ticket-confirm-title" className="w-full max-w-md rounded-xl border border-divider bg-surface p-5 shadow-2xl">
-        <h2 id="client-ticket-confirm-title" className="text-base font-semibold text-content">{confirming.type === 'accept_delivery' ? 'Accept this exact result?' : 'Agree to this proposed work?'}</h2>
-        <p className="mt-2 text-sm leading-relaxed text-content-secondary">{confirming.type === 'accept_delivery' ? 'This records that you accept the shared result. Your project manager will close the request afterwards, and you do not need to do anything else.' : 'This records your agreement to the proposed work. Your project manager still needs to approve and schedule it before work begins.'}</p>
+        <h2 id="client-ticket-confirm-title" className="text-base font-semibold text-content">{confirming.type === 'accept_delivery' ? 'Accept this result?' : 'Approve this plan?'}</h2>
+        <p className="mt-2 text-sm leading-relaxed text-content-secondary">{confirming.type === 'accept_delivery' ? 'This finishes the request. Nothing more is needed from you.' : 'Your project manager will then start the work.'}</p>
         <div className="mt-5 flex justify-end gap-2"><button onClick={() => setConfirming(null)} disabled={busy} className={`${secondary} min-h-[44px]`}>Cancel</button><button onClick={() => {
           if (confirming.type === 'accept_delivery' && (!canReview || !reviewAcknowledged || confirming.deliveryId !== ticket.delivery?.id)) return;
           if (confirming.type === 'agree_scope' && confirming.scopeVersionId !== ticket.scope?.id) return;
           onDecision(confirming); setConfirming(null);
-        }} disabled={busy || (confirming.type === 'accept_delivery' && (!canReview || !reviewAcknowledged))} className={`${primary} min-h-[44px]`}>{confirming.type === 'accept_delivery' ? 'Confirm acceptance' : 'Confirm agreement'}</button></div>
+        }} disabled={busy || (confirming.type === 'accept_delivery' && (!canReview || !reviewAcknowledged))} className={`${primary} min-h-[44px]`}>{confirming.type === 'accept_delivery' ? 'Accept result' : 'Approve plan'}</button></div>
       </section>
     </div>}
   </section>;

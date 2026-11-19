@@ -82,7 +82,8 @@ export interface ClientTicketDetail extends ClientTicketQueueItem {
   sharedProjectName: string | null;
   sharedProjectPreviewUrl?: string | null;
   relatedTicket: { id: string; reference: string; title: string } | null;
-  scope: { id: string; summary: string; proposedAt: string; agreed: boolean } | null;
+  /** approvedBy: the client, or their project manager on their behalf. */
+  scope: { id: string; summary: string; proposedAt: string; agreed: boolean; approvedBy?: 'client' | 'pm' | null } | null;
   delivery: { id: string; scopeVersionId: string; summary: string; sharedAt: string; accepted: boolean } | null;
   request: {
     projectPreference: 'not_sure' | 'new_project' | 'shared_project';

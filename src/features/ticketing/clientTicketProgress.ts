@@ -15,9 +15,9 @@ export function clientTicketProgress(
   requestedAction: ClientTicketRequestedAction,
 ): ClientTicketProgress {
   if (status === 'closed') return {
-    statusLabel: 'Closed',
-    label: 'Request closed',
-    description: 'Your project manager closed this request. Its conversation and history remain available.',
+    statusLabel: 'Done',
+    label: 'Request done',
+    description: 'This request is finished. Its conversation and history stay available.',
     needsClientAction: false,
   };
   if (status === 'declined') return {
@@ -39,15 +39,15 @@ export function clientTicketProgress(
     needsClientAction: true,
   };
   if (requestedAction === 'agree_scope') return {
-    statusLabel: 'Decision needed',
-    label: 'Review the proposed work',
-    description: 'Review the proposed work below. Agree to it or message your project manager with questions. Your project manager will confirm the work is approved before it begins.',
+    statusLabel: 'Approve the plan',
+    label: 'Approve the plan',
+    description: 'Your project manager sent a plan. Approve it, or ask for changes. Work starts once it is approved.',
     needsClientAction: true,
   };
   if (requestedAction === 'review_result') return {
-    statusLabel: 'Result to review',
-    label: 'Your result review is needed',
-    description: 'Open and review the shared result against the agreed work. You can accept it or explain what needs fixing.',
+    statusLabel: 'Ready for you',
+    label: 'Your result is ready to check',
+    description: 'Look over the result. Accept it to finish the request, or tell your project manager what needs fixing.',
     needsClientAction: true,
   };
 
@@ -55,13 +55,13 @@ export function clientTicketProgress(
     case 'received':
       return { statusLabel: 'Received', label: 'Waiting for your project manager to review', description: 'A project manager will review your request. You do not need to do anything right now.', needsClientAction: false };
     case 'under_review':
-      return { statusLabel: 'Under review', label: 'Your project manager is reviewing it', description: 'Your project manager is reviewing your request. Work has not started, and you do not need to do anything right now.', needsClientAction: false };
+      return { statusLabel: 'Planning', label: 'Your project manager is planning the work', description: 'Your project manager is working out the plan. You do not need to do anything right now.', needsClientAction: false };
     case 'awaiting_client':
-      return { statusLabel: 'Awaiting update', label: 'Waiting for your project manager’s update', description: 'Your project manager will contact you here if they need information or a decision. You do not need to do anything right now.', needsClientAction: false };
+      return { statusLabel: 'Planning', label: 'Waiting for your project manager’s update', description: 'Your project manager will contact you here if they need information or a decision. You do not need to do anything right now.', needsClientAction: false };
     case 'in_progress':
-      return { statusLabel: 'Work in progress', label: 'The agreed work is underway', description: 'The agreed work is underway. You do not need to do anything right now; updates and questions stay in this request’s conversation.', needsClientAction: false };
+      return { statusLabel: 'In progress', label: 'The work is underway', description: 'The work is underway. You do not need to do anything right now; updates and questions stay in this request’s conversation.', needsClientAction: false };
     case 'ready_for_review':
-      return { statusLabel: 'Project manager checking work', label: 'Your project manager is checking the work', description: 'Your project manager is checking the work before sharing a result with you. You do not need to do anything right now.', needsClientAction: false };
+      return { statusLabel: 'Ready for you', label: 'Your result has been shared', description: 'Your project manager shared a result. Look over it and let them know in the conversation if anything is wrong.', needsClientAction: false };
     case 'on_hold':
       return { statusLabel: 'Paused', label: 'Your project manager has paused this request', description: 'This request is paused. Message your project manager here if you have a question; otherwise, wait for their update.', needsClientAction: false };
   }

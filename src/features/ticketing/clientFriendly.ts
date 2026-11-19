@@ -24,7 +24,7 @@ export function clientRequestGroup(item: RequestLike): ClientRequestGroup {
 /** What the client is being asked to do, phrased as a prompt and a one-to-three word action. */
 export function clientNextStep(action: ClientProjectRequestItem['requestedAction']): { prompt: string; action: string } | null {
   if (action === 'reply') return { prompt: 'Your project manager has a question', action: 'Reply' };
-  if (action === 'agree_scope') return { prompt: 'A proposal is ready for you', action: 'Review proposal' };
+  if (action === 'agree_scope') return { prompt: 'A plan is ready for you to approve', action: 'Review plan' };
   if (action === 'review_result') return { prompt: 'Your result is ready to check', action: 'Check the result' };
   return null;
 }
@@ -60,11 +60,11 @@ export function relativeTime(value: string, now = Date.now()): string {
 export function listProgressIndex(item: RequestLike): number | null {
   switch (item.status) {
     case 'received': return 0;
-    case 'in_progress': return 3;
-    case 'ready_for_review': return 4;
+    case 'in_progress': return 2;
+    case 'ready_for_review': return 3;
     case 'under_review':
     case 'awaiting_client':
-      return item.requestedAction === 'agree_scope' ? 2 : item.requestedAction === 'review_result' ? 3 : null;
+      return item.requestedAction === 'agree_scope' ? 1 : item.requestedAction === 'review_result' ? 3 : null;
     default: return null;
   }
 }
