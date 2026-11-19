@@ -114,6 +114,22 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toContain('Workspace A');
   });
 
+  it('shows an accepted proposal with the project it became and a link to open it', () => {
+    const project = { workspaceId: 'ws-1', projectId: 'proj-1', name: 'Info site', updatedAt: '2026-11-19T09:00:00.000Z', intakeOptionId: 'opt', preview: null };
+    const html = renderToStaticMarkup(<ClientProjectsPage
+      projects={[project]} loading={false} error="" selectedProjectKey={null}
+      onSelectedProjectKeyChange={() => undefined} onOpenRequest={() => undefined} onNewRequest={() => undefined}
+      inspectionOnly={false} newRequestEnabled={false} newRequestLoading={false} projectFocusVersion={0} refreshToken={0}
+      proposals={[{ id: 'proposal-accepted', title: 'Info site', description: 'An animated site', requestedDeadline: null,
+        submittedAt: '2026-11-19T08:00:00.000Z', status: 'accepted', acceptedAt: '2026-11-19T09:00:00.000Z',
+        project: { workspaceId: 'ws-1', projectId: 'proj-1', name: 'Info site' } }]}
+      proposalsLoading={false} proposalsError="" onRefreshProposals={() => undefined} onProposalSubmitted={() => undefined}
+    />);
+    expect(html).toContain('Accepted · Info site');
+    expect(html).toContain('View project');
+    expect(html).not.toContain('Not moving forward');
+  });
+
   it('keeps client project proposals separate from projects and explains their next step', () => {
     const html = renderToStaticMarkup(<ClientProjectsPage
       projects={[]} loading={false} error="" selectedProjectKey={null}
@@ -130,7 +146,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
       proposalsLoading={false} proposalsError="" onRefreshProposals={() => undefined} onProposalSubmitted={() => undefined}
     />);
     expect(html).toContain('Propose a project');
-    expect(html).toContain('Waiting for PM review');
+    expect(html).toContain('With your project manager');
     expect(html).toContain('Your project manager needs a little more information to review this proposal.');
     expect(html).toContain('Which customer group should we support first?');
     expect(html).toContain('Your reply');

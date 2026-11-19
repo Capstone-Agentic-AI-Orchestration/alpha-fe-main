@@ -13,6 +13,7 @@ import { CLIENT_PROGRESS_LABELS } from './clientProgressSteps';
 import { time } from './ticketUi';
 import { ClientProjectQaStudio } from './ClientProjectQaStudio';
 import { clientProjectKey, projectLoadError, ProjectOverviewTab, ProjectRequestsTab, type ProjectRequestFilter } from './ClientProjectSections';
+import { clientProposalView } from './clientProposalPresentation';
 
 export { clientProjectKey } from './ClientProjectSections';
 
@@ -422,12 +423,13 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
       {proposalsLoading && !proposals.length ? <LoadingRows label="Loading project proposals" rows={2} />
         : proposals.length ? <div className="client-proposal-list">{proposals.map(proposal => {
           const messages = proposal.clarificationMessages ?? [];
+          const view = clientProposalView(proposal, projects);
           return <article key={proposal.id} className="client-proposal-row">
           <div className="client-proposal-content"><strong>{proposal.title}</strong><p>{proposal.description}</p><small>Sent {time(proposal.submittedAt)}{proposal.requestedDeadline ? ` · Target ${proposal.requestedDeadline}` : ''}</small>
-            <small className="client-proposal-next">{proposal.status === 'awaiting_client'
-              ? 'Your project manager needs a little more information to review this proposal.'
-              : proposal.status === 'pending' ? 'Your project manager will review this proposal and update you here.'
-                : 'Your project manager decided not to move forward. No project was created.'}</small>
+            <small className="client-proposal-next">{view.next}</small>
+            {view.project && <button type="button" className="client-proposal-open" onClick={() => { onSelectedProjectKeyChange(clientProjectKey(view.project!)); setTab('overview'); }}>
+              View project <ArrowRight size={13} aria-hidden="true" />
+            </button>}
             {messages.length > 0 && <div className="client-proposal-conversation" aria-label="Conversation with your project manager">
               {messages.map(message => <article key={message.id} className={`client-proposal-message${message.author === 'client' ? ' is-client' : ''}`}>
                 <div><strong>{message.author === 'pm' ? 'Project manager' : 'You'}</strong><time dateTime={message.createdAt}>{time(message.createdAt)}</time></div>
@@ -447,9 +449,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
               </button></div>
             </form>}
           </div>
-          <span className={`client-proposal-status ${proposal.status === 'declined' ? 'is-declined' : 'is-pending'}`}>
-            {proposal.status === 'awaiting_client' ? 'Needs your reply' : proposal.status === 'pending' ? 'Waiting for PM review' : 'Not moving forward'}
-          </span>
+          <span className={`client-proposal-status is-${view.tone}`}>{view.badge}</span>
         </article>;
         })}</div>
           : !proposalsError && <p className="client-section-state">No project proposals yet.</p>}

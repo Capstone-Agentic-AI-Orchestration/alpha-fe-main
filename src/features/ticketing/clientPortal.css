@@ -529,6 +529,10 @@
 .client-proposal-status { padding-top: 2px; color: var(--cp-muted); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); white-space: nowrap; }
 .client-proposal-status.is-pending { color: rgb(var(--ui-link)); }
 .client-proposal-status.is-declined { color: var(--cp-muted); }
+.client-proposal-status.is-accepted { color: rgb(var(--ui-success)); }
+.client-proposal-open { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; padding: 0; border: 0; background: none; color: rgb(var(--ui-link)); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); cursor: pointer; }
+.client-proposal-open:hover { text-decoration: underline; }
+.client-proposal-open:focus-visible { outline: 2px solid rgb(var(--ui-focus)); outline-offset: 2px; border-radius: 4px; }
 .client-proposal-next { display: block; margin-top: 5px; color: var(--cp-muted) !important; }
 .client-proposal-content { min-width: 0; display: grid; align-content: start; gap: 4px; }
 .client-proposal-conversation { display: grid; gap: 8px; margin-top: 12px; padding-left: 12px; border-left: 2px solid rgb(var(--ui-divider)); }

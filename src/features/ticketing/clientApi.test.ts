@@ -205,8 +205,21 @@ describe('client browser transport', () => {
     expect(fetchMock.mock.calls[0]?.[0]).toBe('/api/client/project-proposals');
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ credentials: 'same-origin', cache: 'no-store' });
 
-    fetchMock.mockResolvedValueOnce(jsonResponse(200, { items: [{ ...item, status: 'accepted' }] }));
+    fetchMock.mockResolvedValueOnce(jsonResponse(200, { items: [{ ...item, status: 'archived' }] }));
     await expect(clientTicketApi.listProjectProposals()).rejects.toThrow('project proposals could not be read');
+  });
+
+  it('reads an accepted proposal with the project it became, and drops a malformed project instead of guessing', async () => {
+    browser();
+    const accepted = { id: 'proposal-2', title: 'Info site', description: 'An animated site', requestedDeadline: null,
+      submittedAt: '2026-11-19T08:00:00Z', status: 'accepted', acceptedAt: '2026-11-19T09:00:00Z',
+      project: { workspaceId: 'ws-1', projectId: 'proj-1', name: 'Info site' } };
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse(200, { items: [accepted] }))
+      .mockResolvedValueOnce(jsonResponse(200, { items: [{ ...accepted, project: { workspaceId: 'ws-1' } }] }));
+    vi.stubGlobal('fetch', fetchMock);
+    await expect(clientTicketApi.listProjectProposals()).resolves.toEqual({ items: [expect.objectContaining({
+      status: 'accepted', acceptedAt: accepted.acceptedAt, project: accepted.project })] });
+    await expect(clientTicketApi.listProjectProposals()).resolves.toEqual({ items: [expect.objectContaining({ status: 'accepted', project: null })] });
   });
 
   it('submits a project proposal without client identity or workspace fields', async () => {
