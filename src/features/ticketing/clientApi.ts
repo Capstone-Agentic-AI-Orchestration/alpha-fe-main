@@ -37,8 +37,11 @@ export interface ClientProjectProposal {
   description: string;
   requestedDeadline: string | null;
   submittedAt: string;
-  status: 'pending' | 'awaiting_client' | 'declined';
+  status: 'pending' | 'awaiting_client' | 'declined' | 'accepted';
   clarificationMessages?: ClientProjectProposalMessage[];
+  /** Accepted: when, and the project it became once it is shared with this client (null until then). */
+  acceptedAt?: string | null;
+  project?: { workspaceId: string; projectId: string; name: string } | null;
 }
 export interface ClientProjectProposalMessage { id: string; author: 'pm' | 'client'; body: string; createdAt: string }
 export interface ClientProjectProposalInput {
@@ -309,6 +312,17 @@ export const clientTicketApi = {
     return { items };
   },
   async listProjectProposals(): Promise<{ items: ClientProjectProposal[] }> {
+    /** What an accepted proposal became. A malformed project is dropped, never guessed: the row still shows as accepted. */
+    const acceptedProposal = (row: Record<string, unknown>): Pick<ClientProjectProposal, 'acceptedAt' | 'project'> => {
+      const acceptedAt = typeof row.acceptedAt === 'string' && Number.isFinite(Date.parse(row.acceptedAt)) ? row.acceptedAt : null;
+      const raw = row.project;
+      const text = (value: unknown): value is string => typeof value === 'string' && value.trim().length > 0;
+      const project = raw && typeof raw === 'object' && !Array.isArray(raw)
+        && text((raw as Record<string, unknown>).workspaceId) && text((raw as Record<string, unknown>).projectId) && text((raw as Record<string, unknown>).name)
+        ? { workspaceId: (raw as Record<string, string>).workspaceId, projectId: (raw as Record<string, string>).projectId, name: (raw as Record<string, string>).name }
+        : null;
+      return { acceptedAt, project };
+    };
     const value = await requestJson<unknown>('/project-proposals');
     if (!value || typeof value !== 'object' || Array.isArray(value) || !Array.isArray((value as Record<string, unknown>).items)) {
       throw new ClientTicketApiError(null, 'Your project proposals could not be read. Reload the portal and try again.');
@@ -324,7 +338,7 @@ export const clientTicketApi = {
         || (row.requestedDeadline !== null && (typeof row.requestedDeadline !== 'string'
           || !/^\d{4}-\d{2}-\d{2}$/.test(row.requestedDeadline)))
         || typeof row.submittedAt !== 'string' || !Number.isFinite(Date.parse(row.submittedAt))
-        || (row.status !== 'pending' && row.status !== 'awaiting_client' && row.status !== 'declined')) {
+        || (row.status !== 'pending' && row.status !== 'awaiting_client' && row.status !== 'declined' && row.status !== 'accepted')) {
         throw new ClientTicketApiError(null, 'Your project proposals could not be read. Reload the portal and try again.');
       }
       const rawMessages = row.clarificationMessages ?? [];
@@ -345,7 +359,7 @@ export const clientTicketApi = {
       });
       return { id: row.id, title: row.title, description: row.description,
         requestedDeadline: row.requestedDeadline as string | null, submittedAt: row.submittedAt,
-        status: row.status, clarificationMessages };
+        status: row.status, clarificationMessages, ...(row.status === 'accepted' ? acceptedProposal(row) : {}) };
     });
     return { items };
   },
