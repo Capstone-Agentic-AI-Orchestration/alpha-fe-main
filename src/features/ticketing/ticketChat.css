@@ -109,6 +109,13 @@
 
 .ticket-chat button:focus-visible, .ticket-chat textarea:focus-visible { outline-offset: 2px; }
 
+/* A dated milestone between messages, such as "Plan sent for your approval". */
+.ticket-chat__system { align-self: flex-start; display: flex; max-width: min(100%, 520px); flex-direction: column; gap: 4px; padding: 10px 14px; border: 1px solid rgb(var(--ui-divider)); border-radius: 12px; background: rgb(var(--ui-surface)); }
+.ticket-chat__system-meta { display: flex; align-items: center; gap: 6px; margin: 0; color: rgb(var(--ui-text-secondary)); font-size: 12px; font-weight: 600; }
+.ticket-chat__system-meta svg { color: rgb(var(--ui-link)); }
+.ticket-chat__system-meta time { color: rgb(var(--ui-text-muted)); font-weight: 400; }
+.ticket-chat__system-body { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 13px; line-height: 1.5; }
+
 @media (max-width: 767px) {
   .ticket-chat__header { min-height: 56px; padding-inline: 12px; }
   .ticket-chat__heading-icon { width: 28px; height: 28px; }
