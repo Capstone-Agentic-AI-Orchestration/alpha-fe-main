@@ -30,16 +30,34 @@ describe('project conversation data', () => {
     expect(() => parseConversationRequests({ items: [{ ...openRequest, checklist: 'maybe' }] })).toThrow();
   });
 
-  it('shows requests as cards, tags messages with their request, and events as lines from the reader’s side', () => {
+  it('shows requests as cards, quotes the request a reply is about, and events as lines from the reader’s side', () => {
     const forClient = conversationChatMessages(parseConversation(timeline).items, 'client');
     expect(forClient.map(m => m.kind ?? 'message')).toEqual(['message', 'request', 'message', 'event']);
     expect(forClient[0].tag).toBe('Project proposal');
+    expect(forClient[0].replyTo).toBeUndefined();
     expect(forClient[1]).toMatchObject({ kind: 'request', heading: 'Add a contact form', reference: 'TKT-1' });
-    expect(forClient[2].tag).toBe('Re: Add a contact form');
+    // A reply about a request quotes it, pointing at its card, the way a messaging app quotes the message answered.
+    const quote = { id: 'request:t-1', title: 'Add a contact form', excerpt: 'A form on the About page.' };
+    expect(forClient[2]).toMatchObject({ body: 'On it.', replyTo: quote });
+    expect(forClient[2].tag).toBeUndefined();
     expect(forClient[3].body).toBe('You marked “Add a contact form” done');
     const forPm = conversationChatMessages(parseConversation(timeline).items, 'pm');
+    // Both sides see the same quote, whoever wrote the reply.
+    expect(forPm[2].replyTo).toEqual(quote);
     expect(forPm[3].body).toBe('WEB-4 “Build the form” was linked to “Add a contact form”');
     expect(forPm[4].body).toBe('The client marked “Add a contact form” done');
+  });
+
+  it('shortens a long request to a one-line quote', () => {
+    const long = 'word '.repeat(60);
+    const items = parseConversation({ items: [
+      { ...timeline.items[1], body: long },
+      { ...timeline.items[2], author: 'client' },
+    ] }).items;
+    const excerpt = conversationChatMessages(items, 'pm')[1].replyTo?.excerpt ?? '';
+    expect(excerpt.length).toBeLessThanOrEqual(140);
+    expect(excerpt.endsWith('…')).toBe(true);
+    expect(excerpt).not.toMatch(/\s{2}/);
   });
 
   it('lets a request be ticked unless it was declined or is formally finished', () => {
@@ -97,6 +115,17 @@ describe('ProjectConversationChat', () => {
     expect(html).toContain('data-chat-id="tm:1"');
   });
 
+  it('draws a reply’s quoted request above its bubble, on both sides, as a button back to the request', () => {
+    for (const role of ['pm', 'client'] as const) {
+      const html = chat({ role });
+      const reply = html.slice(html.indexOf('data-chat-id="tm:1"'));
+      expect(reply).toContain('Replied to a request');
+      expect(reply).toMatch(/<button type="button" class="ticket-chat__reply"[^>]*aria-label="Replied to request: Add a contact form. Show the request"/);
+      expect(reply.indexOf('ticket-chat__reply')).toBeLessThan(reply.indexOf('On it.'));
+      expect(reply).not.toContain('Re: Add a contact form');
+    }
+  });
+
   it('offers request actions on request cards only', () => {
     const html = chat({ messageActions: item => item.kind === 'request' ? <button type="button">Create task</button> : null });
     expect(html.match(/Create task/g)).toHaveLength(1);
@@ -106,6 +135,7 @@ describe('ProjectConversationChat', () => {
   it('shows which request a reply goes to, or offers it back when writing to the whole project', () => {
     const about = { ticketId: 't-1', title: 'Add a contact form' };
     expect(chat({ about, onClearAbout: () => undefined })).toContain('Stop replying about Add a contact form');
+    expect(chat({ about, onClearAbout: () => undefined })).toContain('Replying to');
     expect(chat({ restoreAbout: about, onRestoreAbout: () => undefined })).toContain('Reply about “Add a contact form” instead');
   });
 });

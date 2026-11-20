@@ -14,9 +14,10 @@ function hostOf(value: string): string {
 /**
  * A small picture of the project's shared preview with a button to open it. The picture is the
  * live site scaled down and cannot be clicked into; sites that cannot be shown inside the portal
- * get a plain placeholder instead.
+ * get a plain placeholder instead. With `onOpen`, the button opens the preview inside the portal
+ * (the project's Preview view); without it, the site opens in a new tab.
  */
-export function ClientPreviewThumb({ preview, projectName }: { preview: ClientProjectPreview | null; projectName: string }) {
+export function ClientPreviewThumb({ preview, projectName, onOpen }: { preview: ClientProjectPreview | null; projectName: string; onOpen?: () => void }) {
   const screen = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const live = preview !== null && isEmbeddablePreviewUrl(preview.url);
@@ -41,7 +42,9 @@ export function ClientPreviewThumb({ preview, projectName }: { preview: ClientPr
   return <div className="cx-thumb">
     <div className="cx-thumb-bar" aria-hidden="true"><i /><i /><i /><span>{preview ? hostOf(preview.url) : 'Preview'}</span></div>
     <div ref={screen} className="cx-thumb-screen" aria-hidden={live ? true : undefined}>{picture}</div>
-    {preview && <a className="cx-button cx-thumb-open" href={preview.url} target="_blank" rel="noopener noreferrer">
+    {preview && onOpen && <button type="button" className="cx-button cx-thumb-open" onClick={onOpen} aria-label={'Open the preview of ' + projectName}>
+      <Monitor size={14} aria-hidden="true" />Open preview</button>}
+    {preview && !onOpen && <a className="cx-button cx-thumb-open" href={preview.url} target="_blank" rel="noopener noreferrer">
       <ExternalLink size={14} aria-hidden="true" />Open preview</a>}
   </div>;
 }

@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ClientTicketDetail } from './ClientTicketDetail';
 
 describe('client ticket detail layout', () => {
-  it('fills the right side with the conversation and keeps the request details in the left column', () => {
+  it('fills the left side with the conversation and keeps the request details in the panel on the right', () => {
     const html = renderToStaticMarkup(<ClientTicketDetail
       workspaceId="workspace-a"
       communicationEnabled
@@ -31,29 +31,32 @@ describe('client ticket detail layout', () => {
     expect(html).toContain('min-h-[44px]');
     expect(html).not.toContain('Orchestrator');
 
-    const rail = html.indexOf('aria-label="About this request"');
     const chat = html.indexOf('cx-reqchat');
-    expect(rail).toBeGreaterThan(-1);
-    expect(chat).toBeGreaterThan(rail);
-    const side = html.slice(rail, chat);
-    const conversation = html.slice(chat);
-    // The left column leads with the request, a plain sentence on where it stands, and the steps.
+    const rail = html.indexOf('aria-label="About this request"');
+    expect(chat).toBeGreaterThan(-1);
+    expect(rail).toBeGreaterThan(chat);
+    const conversation = html.slice(chat, rail);
+    const side = html.slice(rail);
+    // The panel leads with the request, the decision owed on it, a plain sentence on where it stands, and the steps.
     expect(side).toContain('id="client-request-title"');
     expect(side).toContain('Work starts once it is approved.');
-    expect(side).toContain('aria-label="Request progress"');
+    expect(side.indexOf('client-decision-slot')).toBeGreaterThan(side.indexOf('id="client-request-title"'));
+    expect(side.indexOf('client-decision-slot')).toBeLessThan(side.indexOf('aria-label="Request progress"'));
+    expect(side).toContain('Update the report filters.');
     expect(side).toContain('Approve the plan · you');
     expect(side).toContain('What happens next');
     expect(side).toContain('Once you approve, your project manager starts the work.');
-    // The plan is the pinned decision above the messages, not repeated in the left column.
-    expect(side).not.toContain('Update the report filters.');
-    expect(conversation.indexOf('client-decision-slot')).toBeGreaterThan(-1);
-    expect(conversation.indexOf('client-decision-slot')).toBeLessThan(conversation.indexOf('Hello there'));
+    // The plan is shown once, as the decision, and not repeated as its own section.
+    expect(side.match(/Update the report filters\./g)).toHaveLength(1);
+    expect(conversation).not.toContain('client-decision-slot');
     // Milestones sit in the conversation as updates, in date order with the messages.
+    expect(conversation).toContain('Hello there');
     expect(conversation).toContain('Update at');
     expect(conversation).toContain('Plan sent for your approval');
-    // The left column also holds what was asked, files and the reference with its copy button.
+    // The panel also holds what was asked, files and the reference with its copy button; files and details fold away.
     expect(side).toContain('What you asked for');
-    expect(side).toContain('Request details');
+    expect(side).toMatch(/aria-expanded="true"[^>]*>.*?Files/);
+    expect(side).toMatch(/aria-expanded="true"[^>]*>.*?Request details/);
     expect(side).toContain('TKT-1');
     expect(side).toContain('Copy request reference');
     expect(side).toContain('Your project manager');
@@ -74,7 +77,7 @@ describe('client ticket detail layout', () => {
       onCorrection={async () => undefined}
     />);
     expect(html).not.toContain('client-decision-slot');
-    const side = html.slice(html.indexOf('aria-label="About this request"'), html.indexOf('cx-reqchat'));
+    const side = html.slice(html.indexOf('aria-label="About this request"'));
     expect(side).toContain('The plan');
     expect(side).toContain('You approved this plan.');
     expect(side).toContain('Website');

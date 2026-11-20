@@ -345,12 +345,31 @@ span.cx-button { pointer-events: none; }
 .cx-jstep.is-current.is-action .cx-jstep-icon { background: var(--cx-attention); color: rgb(var(--ui-canvas)); }
 .cx-jstep.is-current.is-action :is(.cx-jstep-label, .cx-jstep-state) { color: var(--cx-attention); }
 
-/* One request, like a messaging app: details in a left column, the conversation filling the right at full height. */
+/* A project's page, like a messaging app: the conversation fills the left at full height, the requests and details sit on the right. */
 .cx-main:has(.cx-reqsplit) { display: flex; flex-direction: column; overflow: hidden; }
 .cx-request-page { display: flex; min-height: 0; flex: 1; flex-direction: column; }
 .cx-request-page > :not(.cx-request) { margin: var(--client-space-4) var(--client-portal-gutter) 0; }
-.cx-reqsplit { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); }
-.cx-reqrail { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--client-space-4); overflow-y: auto; padding: var(--client-space-5); border-right: 1px solid var(--cx-line); background: rgb(var(--ui-shell)); }
+.cx-reqsplit { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 1fr) minmax(340px, 420px); }
+.cx-reqrail { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--client-space-4); overflow-y: auto; padding: var(--client-space-5); border-left: 1px solid var(--cx-line); background: rgb(var(--ui-shell)); }
+.cx-reqrail-hint { padding: var(--client-space-2) var(--client-space-1); }
+/* Folding panel sections: the title row is the toggle. */
+.cx-reqcard.is-collapsible { gap: 0; }
+.cx-reqcard.is-collapsible.is-open { gap: var(--client-space-3); }
+.cx-reqcard-toggle { display: flex; width: 100%; align-items: center; gap: var(--client-space-2); margin: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.cx-reqcard-toggle > span:first-child { display: inline-flex; color: var(--cx-accent); }
+.cx-reqcard-title { min-width: 0; flex: 1; }
+.cx-reqcard-chevron { flex: none; color: var(--cx-muted); }
+.cx-reqcard.is-open .cx-reqcard-chevron { transform: rotate(180deg); }
+.cx-reqcard-toggle:hover .cx-reqcard-chevron { color: var(--cx-ink); }
+.cx-reqcard-body[hidden] { display: none; }
+/* Conversation or shared preview, switched in the page header. */
+.cx-reqchat-head > .cx-view-switch { flex: none; }
+.cx-view-switch { display: inline-flex; flex: none; gap: 2px; padding: 3px; border: 1px solid var(--cx-line); border-radius: var(--client-radius-control); background: var(--cx-raised); }
+.cx-view-switch button { min-height: 32px; padding: 0 var(--client-space-3); border: 0; border-radius: calc(var(--client-radius-control) - 2px); background: none; color: var(--cx-muted); font: inherit; font-size: var(--cx-type-small); font-weight: var(--client-weight-semibold); cursor: pointer; }
+.cx-view-switch button:hover { color: var(--cx-ink); }
+.cx-view-switch button.is-current { background: var(--cx-surface); color: var(--cx-ink); box-shadow: 0 1px 2px rgb(var(--ui-overlay) / .18); }
+.cx-reqchat > .cx-back { align-self: flex-start; margin-bottom: calc(-1 * var(--client-space-2)); }
+.cx-reqchat > .cx-preview-frame { height: auto; min-height: 0; flex: 1; }
 .cx-reqrail-top, .cx-reqrail-more { display: flex; flex-direction: column; gap: var(--client-space-4); }
 .cx-reqcard { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-4) var(--client-space-5); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); outline: none; }
 .cx-reqcard > h2 { display: flex; align-items: center; gap: var(--client-space-2); margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
@@ -385,12 +404,11 @@ span.cx-button { pointer-events: none; }
 .cx-reqchat-head { display: flex; flex: none; align-items: center; gap: var(--client-space-4); padding: var(--client-space-4) var(--client-space-5); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px);
   background: radial-gradient(520px 160px at 100% 0%, color-mix(in srgb, rgb(var(--ui-info)) 14%, transparent), transparent 70%), var(--cx-surface); }
 .cx-reqchat-head > div { min-width: 0; flex: 1; }
-.cx-reqchat-head h2 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-body); font-weight: var(--client-weight-bold); }
+.cx-reqchat-head :is(h1, h2) { margin: 0; color: var(--cx-ink); font-size: var(--client-type-body); font-weight: var(--client-weight-bold); }
 .cx-reqchat-head p { margin: 2px 0 0; color: var(--cx-muted); font-size: var(--client-type-meta); }
 .cx-reqchat-icon { display: grid; width: 36px; height: 36px; flex: none; place-items: center; border-radius: var(--client-radius-surface); background: var(--cx-accent-soft); color: var(--cx-accent); }
 .cx-new-pill { display: inline-flex; flex: none; align-items: center; gap: var(--client-space-2); padding: 4px var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--client-radius-pill); color: var(--cx-accent); font-size: var(--cx-type-small); font-weight: var(--client-weight-semibold); }
 .cx-new-pill::before { width: 8px; height: 8px; border-radius: 50%; background: var(--cx-accent); content: ''; }
-.cx-reqchat > .cx-decision { flex: none; max-height: 46%; overflow-y: auto; }
 .cx-reqchat .ticket-chat { min-height: 0; flex: 1; background: none; }
 .cx-reqchat .ticket-chat__feed { padding: var(--client-space-2) var(--client-space-1); background: none; }
 .cx-reqchat .ticket-chat [data-ticket-chat-composer] { margin-top: var(--client-space-2); padding: var(--client-space-3); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); }
@@ -420,15 +438,16 @@ span.cx-button { pointer-events: none; }
   .cx-split { grid-template-columns: minmax(0, 1fr); }
   .cx-split-preview { height: 62dvh; min-height: 420px; border-right: 0; border-bottom: 1px solid var(--cx-line); }
   .cx-split-side { overflow: visible; padding: var(--client-space-5) var(--client-portal-gutter) var(--client-space-7); }
-  /* Narrow screens: request card and steps, then the conversation, then the other details. */
+  /* Narrow screens: the way back and the conversation first, then the requests and the picked request, then its other details. */
   .cx-main:has(.cx-reqsplit) { display: block; overflow-y: auto; }
   .cx-request-page, .cx-request { display: block; }
   .cx-reqsplit { display: flex; flex-direction: column; gap: var(--client-space-4); padding: var(--client-space-4) var(--client-portal-gutter) var(--client-space-7); }
   .cx-reqrail { display: contents; }
-  .cx-reqrail-top { order: 1; }
-  .cx-reqchat { order: 2; padding: 0; background: none; }
-  .cx-reqchat > .cx-decision { max-height: none; overflow: visible; }
+  .cx-reqchat { order: 1; padding: 0; background: none; }
+  .cx-reqrail-top { order: 2; }
+  .cx-reqrail-hint { order: 2; }
   .cx-reqchat .ticket-chat { height: 72dvh; min-height: 440px; flex: none; }
+  .cx-reqchat > .cx-preview-frame { height: 72dvh; min-height: 440px; flex: none; }
   .cx-reqrail-more { order: 3; }
   .cx-reqrail .cx-jstep-icon svg { display: block; }
 }
@@ -467,6 +486,11 @@ span.cx-button { pointer-events: none; }
   .cx-panel.is-attention .cx-row-copy { flex: 1 1 calc(100% - 32px); }
   .cx-project-wide-head h3 { flex: 1 1 100%; }
   .cx-project-wide-head .cx-link { margin-left: 0; }
+  /* The project header wraps: the Conversation / Preview switch takes its own full-width row. */
+  .cx-reqchat-head { flex-wrap: wrap; }
+  .cx-reqchat-head > div:not(.cx-view-switch) { flex: 1 1 calc(100% - 52px); }
+  .cx-reqchat-head > .cx-view-switch { display: flex; width: 100%; }
+  .cx-view-switch button { flex: 1; }
 }
 
 /* Compact Shadcn top navigation; Overview and Projects stay the two primary routes. */

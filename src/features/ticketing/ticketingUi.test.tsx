@@ -172,9 +172,9 @@ describe('real ticketing interfaces in the Alpha app', () => {
 
   it('keeps the Projects page to projects, pointing to proposals that need a reply', () => {
     const html = renderToStaticMarkup(<ClientProjectsPage
-      projects={[]} loading={false} error="" selectedProjectKey={null}
-      onSelectedProjectKeyChange={() => undefined} onOpenRequest={() => undefined} onNewRequest={() => undefined}
-      inspectionOnly={false} newRequestEnabled={false} newRequestLoading={false} projectFocusVersion={0} refreshToken={0}
+      projects={[]} loading={false} error=""
+      onOpenConversation={() => undefined} onOpenPreview={() => undefined}
+      inspectionOnly={false} refreshToken={0}
       proposalsNeedingReply={1} onOpenProposals={() => undefined} onProposeProject={() => undefined}
     />);
     expect(html).toContain('No projects shared yet');

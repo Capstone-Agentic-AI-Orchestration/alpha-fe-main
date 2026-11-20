@@ -14,6 +14,8 @@ interface Navigation {
   selectedConversationTicketId: string | null;
   /** Opens the conversation's request form after the client chooses a project. */
   startConversationRequest: boolean;
+  /** Whether the open project shows its conversation or its shared preview. */
+  conversationView: 'conversation' | 'preview';
   selectedId: string | null;
   selectedWorkspaceId: string | null;
   selectedItemFallback: ClientProjectRequestItem | null;
@@ -37,7 +39,7 @@ export function initialClientTabs(filter: ClientPortalFilter = 'all'): Tabs {
 }
 function createTab(id: string, page: ClientPage, filter: ClientPortalFilter = 'all'): Tab {
   return { id, navigation: { page, selectedProjectKey: null, selectedProposalId: null, selectedConversationKey: null, selectedId: null, selectedWorkspaceId: null,
-    selectedConversationTicketId: null, startConversationRequest: false,
+    selectedConversationTicketId: null, startConversationRequest: false, conversationView: 'conversation',
     selectedItemFallback: null, filter, searchInput: '', search: '', replyDrafts: {}, returnToProjects: false,
     notificationProjectFocus: 0 } };
 }
@@ -65,8 +67,10 @@ export function useClientWorkspaceTabs(initialFilter: ClientPortalFilter) {
   }
   return { tabs: tabs.items, activeTabId: activeTab.id, tabState,
     selectProject: (id: string, selectedProjectKey: string | null) => dispatch({ type: 'update', id, update: navigation => ({ ...navigation, selectedProjectKey }) }),
-    openProjectConversation: (id: string, selectedConversationKey: string, ticketId: string | null, startRequest: boolean) => dispatch({
-      type: 'update', id, update: navigation => ({ ...navigation, selectedConversationKey, selectedConversationTicketId: ticketId, startConversationRequest: startRequest }),
+    openProjectConversation: (id: string, selectedConversationKey: string, ticketId: string | null, startRequest: boolean,
+      conversationView: Navigation['conversationView'] = 'conversation') => dispatch({
+      type: 'update', id, update: navigation => ({ ...navigation, selectedConversationKey, selectedConversationTicketId: ticketId,
+        startConversationRequest: startRequest, conversationView }),
     }),
     openTab: (page: ClientPage) => dispatch({ type: 'open', id: crypto.randomUUID(), page }),
     activateTab: (id: string) => dispatch({ type: 'activate', id }),

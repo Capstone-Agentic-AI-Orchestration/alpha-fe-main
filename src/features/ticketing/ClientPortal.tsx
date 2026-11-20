@@ -1,6 +1,6 @@
 import { EntrySkeleton, LoadingRows } from '@/shared/components/ui/skeleton';
 import { TicketDetailSkeleton } from './TicketingSkeletons';
-import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertCircle, FolderKanban, House, Lightbulb, ListChecks, LogOut, Plus, RefreshCw, Search, type LucideIcon,
 } from 'lucide-react';
@@ -27,8 +27,7 @@ import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { ClientTopBar } from './ClientTopBar';
 import { CxChips, CxEmpty, CxPageHeader, CxPanel, CxRequestRow, CxSection } from './clientKit';
-import { ClientConversationRequestPage, ClientProjectConversation } from './ClientProjectConversation';
-import type { ConversationRequest } from './projectConversation';
+import { ClientProjectConversation } from './ClientProjectConversation';
 import { useClientWorkspaceTabs, type ClientPage as Page } from './clientWorkspaceTabs';
 import './clientDesignTokens.css';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
@@ -97,7 +96,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   communicationEnabled?: boolean;
 } = {}) {
   // One page at a time: the portal keeps a single workspace tab, so clients never manage browser-style tabs.
-  const { tabs, activeTabId, tabState, resetTabs, selectProject, openProjectConversation } = useClientWorkspaceTabs(
+  const { tabs, activeTabId, tabState, resetTabs, openProjectConversation } = useClientWorkspaceTabs(
     typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash));
   const portalRootRef = useRef<HTMLElement>(null);
   /** The scrolling page area; each new page or opened request starts at the top. */
@@ -123,6 +122,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [selectedConversationKey, setSelectedConversationKey] = tabState('selectedConversationKey');
   const [selectedConversationTicketId, setSelectedConversationTicketId] = tabState('selectedConversationTicketId');
   const [startConversationRequest, setStartConversationRequest] = tabState('startConversationRequest');
+  const [conversationView, setConversationView] = tabState('conversationView');
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
@@ -168,6 +168,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const writeLock = useRef(false);
   const queueSnapshot = useRef(queue);
   queueSnapshot.current = queue;
+  const conversationTicketRef = useRef(selectedConversationTicketId);
+  conversationTicketRef.current = selectedConversationTicketId;
 
   useEffect(() => {
     if (!clientToast) return;
@@ -333,7 +335,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     void api.listRequests({ limit: 50, filter, search }).then(result => {
       if (!current || generation !== queueGeneration.current) return;
       setQueue(result);
-      setSelectedId(existing => existing && (result.items.some(item => item.id === existing)
+      // A request open on a project page stays open even when the list's current page does not include it.
+      setSelectedId(existing => existing && (existing === conversationTicketRef.current || result.items.some(item => item.id === existing)
         || (selectedItemFallback?.id === existing && selectedItemFallback.workspaceId === selectedWorkspaceId)) ? existing : null);
       setSelectedItemFallback(existing => existing && result.items.some(item => item.id === existing.id && item.workspaceId === existing.workspaceId)
         ? null : existing);
@@ -348,7 +351,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   useEffect(() => {
     const activeWorkspaceId = selectedQueueItem?.workspaceId ?? selectedWorkspaceId;
-    if (portalState !== 'ready' || !activeWorkspaceId || !selectedId || !selectedQueueItem) {
+    // A request picked inside a project page may not be in the request list's current filter; its id is enough.
+    if (portalState !== 'ready' || !activeWorkspaceId || !selectedId) {
       setDetail(null); setMessages([]); setMessageCursor(null); setDetailError(''); setDetailLoading(false);
       return;
     }
@@ -372,7 +376,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     refreshVersion, api, workflowActionsDisabled, communicationEnabled, activeTabId]);
 
   useEffect(() => {
-    if (inspectionOnly || portalState !== 'ready' || page === 'projects' || view === 'create'
+    if (inspectionOnly || portalState !== 'ready' || (page === 'projects' && !selectedConversationKey) || view === 'create'
       || writing || pending || signingOut || queueLoading || detailLoading || historyLoading || queueMoreLoading) return;
     let current = true;
     const stop = startClientAutoRefresh(async () => {
@@ -411,7 +415,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       }
     });
     return () => { current = false; stop(); };
-  }, [activeTabId, api, portalState, page, view, selectedWorkspaceId, selectedQueueItem?.workspaceId, selectedId, filter, search,
+  }, [activeTabId, api, portalState, page, selectedConversationKey, view, selectedWorkspaceId, selectedQueueItem?.workspaceId, selectedId, filter, search,
     inspectionOnly, writing, pending, signingOut, queueLoading, detailLoading, historyLoading, queueMoreLoading,
     workflowActionsDisabled, communicationEnabled]);
 
@@ -611,10 +615,24 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }
   }
 
-  /** Opens the project's single shared conversation, with its requests in the side panel. */
-  function openConversation(project: ClientProject, ticketId: string | null = null, startRequest = false) {
+  /** Opens the project's one page: its conversation (or shared preview), with its requests in the side panel. */
+  function openConversation(project: ClientProject, ticketId: string | null = null, startRequest = false,
+    projectView: 'conversation' | 'preview' = 'conversation') {
     navigate('projects');
-    openProjectConversation(activeTabId, clientProjectKey(project), ticketId, startRequest);
+    openProjectConversation(activeTabId, clientProjectKey(project), ticketId, startRequest, projectView);
+    showConversationRequest(project, ticketId);
+  }
+
+  /** Loads a request into the project page's side panel; the page and its conversation stay where they are. */
+  function showConversationRequest(project: ClientProject, ticketId: string | null) {
+    historyGeneration.current += 1; setWriteError('');
+    setSelectedId(ticketId); setSelectedWorkspaceId(ticketId ? project.workspaceId : null);
+    setSelectedItemFallback(ticketId ? queue?.items.find(item => item.id === ticketId && item.workspaceId === project.workspaceId) ?? null : null);
+  }
+
+  function selectConversationRequest(project: ClientProject, ticketId: string) {
+    setSelectedConversationTicketId(ticketId);
+    showConversationRequest(project, ticketId);
   }
 
   /** Project requests always open their project's shared conversation. */
@@ -623,13 +641,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       && candidate.projectId === item.projectId) : null;
     if (project) { openConversation(project, item.id); return; }
     openRequest(item, false, fromHome);
-  }
-
-  /** Request detail is an explicit secondary action; the request itself remains in the project conversation. */
-  function openConversationRequest(request: ConversationRequest) {
-    const item = queue?.items.find(candidate => candidate.id === request.ticketId && candidate.workspaceId === request.workspaceId);
-    if (item) { openRequest(item, true); return; }
-    setQueueNotice('Request details are still loading. Refresh the request list and try again.');
   }
 
   function openPortalUpdate(update: ClientPortalUpdate) {
@@ -656,6 +667,13 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const displayQueue = useMemo(() => workflowActionsDisabled && queue
     ? { ...queue, items: queue.items.map(item => ({ ...item, requestedAction: null })) } : queue, [queue, workflowActionsDisabled]);
 
+  // A request on a shared project lives on that project's page, even when it was opened before projects loaded.
+  const requestProject = selectedQueueItem?.projectId ? (projects ?? []).find(project => project.workspaceId === selectedQueueItem.workspaceId
+    && project.projectId === selectedQueueItem.projectId) ?? null : null;
+  useEffect(() => {
+    if (page === 'requests' && selectedQueueItem && requestProject) openConversation(requestProject, selectedQueueItem.id);
+  }, [page, selectedQueueItem?.id, requestProject?.projectId]);
+
   if (portalState === 'checking') return <EntrySkeleton label="Checking your sign-in" />;
   if (!inspectionOnly && (portalState === 'signed_out' || portalState === 'unavailable')) return <ClientPasswordSignIn
     unavailable={portalState === 'unavailable'} error={pageError}
@@ -664,14 +682,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     unavailable={portalState === 'unavailable'} error={pageError} onRetry={() => setSessionCheckVersion(value => value + 1)} />;
 
   const activeRequest = selectedQueueItem;
-  // A request on a shared project shows inside that project's one conversation.
-  const requestProject = activeRequest?.projectId ? (projects ?? []).find(project => project.workspaceId === activeRequest.workspaceId
-    && project.projectId === activeRequest.projectId) ?? null : null;
-  const requestConversation: RequestConversation | null = requestProject ? {
-    project: requestProject, clientName: session?.fullName?.trim() || 'Client', readOnly: inspectionOnly,
-    canCreateRequests: canStartProjectRequest, onSelectRequest: openConversationRequest,
-    onRequestCreated: ticketId => openConversation(requestProject, ticketId),
-  } : null;
   const conversationProject = (projects ?? []).find(project => clientProjectKey(project) === selectedConversationKey) ?? null;
   const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review';
   const proposalsNeedingReply = (projectProposals ?? []).filter(proposal => proposal.status === 'awaiting_client').length;
@@ -715,6 +725,12 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         </DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu> : null;
+  const newRequestButton = <Button type="button" className="cx-new-request"><Plus size={15} aria-hidden="true" /><span className="cx-new-request-label">{createLoading ? 'Checking access…' : 'New request'}</span></Button>;
+  // On a project's page, New request starts one for that project; elsewhere it asks what the request is for.
+  const newRequest = conversationProject && canStartProjectRequest
+    ? <Button type="button" className="cx-new-request" disabled={createLoading || writing || Boolean(pending)} aria-label={'New request in ' + conversationProject.name}
+      onClick={() => startRequestFor(conversationProject)}><Plus size={15} aria-hidden="true" /><span className="cx-new-request-label">{createLoading ? 'Checking access…' : 'New request'}</span></Button>
+    : newRequestMenu?.(newRequestButton);
   const goTo = (target: Page) => { if (!writing && !pending) navigate(target); };
   /** Requests and project ideas share one header: ideas are one of the Requests views. */
   const requestViews = [
@@ -735,7 +751,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   return <main ref={portalRootRef} className={'client-portal-shell cx-shell' + (inspectionOnly ? ' client-portal-shell--inspection' : '')}>
     <ClientTopBar page={page} onNavigate={goTo}
-      newRequest={newRequestMenu?.(<Button type="button" className="cx-new-request"><Plus size={15} aria-hidden="true" /><span className="cx-new-request-label">{createLoading ? 'Checking access…' : 'New request'}</span></Button>)}
+      newRequest={newRequest}
       actions={<>
         <Button type="button" variant="ghost" size="icon" aria-label="Refresh portal" title="Refresh portal"
           onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
@@ -772,6 +788,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           api={api} refreshToken={refreshVersion}
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
           onOpenRequest={item => openClientRequest(item, true)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
+          onOpenPreview={project => openConversation(project, null, false, 'preview')}
           onGoToRequests={() => navigate('requests')}
           proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')}
           onProposeProject={proposeProject} />}
@@ -779,11 +796,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {page === 'projects' && !conversationProject && tabs.filter(tab => tab.navigation.page === 'projects').map(tab => <div key={tab.id} hidden={tab.id !== activeTabId}>
           {tab.id === activeTabId && createError && <p role="alert" className="cx-error cx-notice">{createError}</p>}
           <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} requests={displayQueue?.items ?? []} loading={!projects && !projectsError} error={projectsError}
-            selectedProjectKey={tab.navigation.selectedProjectKey} onSelectedProjectKeyChange={key => selectProject(tab.id, key)}
-            onOpenRequest={item => openClientRequest(item)} onNewRequest={startRequestFor}
-            onOpenConversation={project => openConversation(project)}
-            inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading}
-            projectFocusVersion={tab.navigation.notificationProjectFocus} refreshToken={refreshVersion}
+            onOpenConversation={project => openConversation(project)} onOpenPreview={project => openConversation(project, null, false, 'preview')}
+            inspectionOnly={inspectionOnly} refreshToken={refreshVersion}
             proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')} onProposeProject={proposeProject} />
         </div>)}
 
@@ -794,10 +808,15 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           onOpenProject={openProject} openForm={proposeRequestTab === activeTabId} onOpenFormHandled={() => setProposeRequestTab(null)} /></div>}
 
         {page === 'projects' && conversationProject && <ClientProjectConversation key={activeTabId + ':' + selectedConversationKey}
-          api={api} project={conversationProject} clientName={clientName} readOnly={inspectionOnly} canCreateRequests={canStartProjectRequest}
-          onBack={() => { setSelectedConversationKey(null); setSelectedConversationTicketId(null); setStartConversationRequest(false); }}
-          focusTicketId={selectedConversationTicketId} showRequestForm={startConversationRequest} requestForm={projectRequestForm}
-          onStartRequest={() => startRequestFor(conversationProject)} onOpenRequestDetails={openConversationRequest} />}
+          api={api} project={conversationProject} clientName={clientName} readOnly={inspectionOnly}
+          onBack={() => { cancelCreateForm(); setSelectedConversationKey(null); setSelectedConversationTicketId(null); showConversationRequest(conversationProject, null); }}
+          selectedTicketId={selectedConversationTicketId} onSelectRequest={ticketId => selectConversationRequest(conversationProject, ticketId)}
+          view={conversationView} onViewChange={setConversationView} requestForm={startConversationRequest ? projectRequestForm : null}
+          request={{ ticket: detail && detail.id === selectedConversationTicketId ? detail : null, loading: detailLoading, error: detailError }}
+          onReplyAbout={sendReply}
+          rail={{ workspaceId: conversationProject.workspaceId, api, busy: writing || Boolean(pending), workflowActionsDisabled,
+            communicationEnabled: communicationEnabled && !inspectionOnly, readOnlyPreview: inspectionOnly,
+            onReply: sendReply, onDecision: makeDecision, onCorrection: sendCorrection, onAdditionalWork: () => undefined }} />}
 
         {page === 'requests' && !selectedId && !conversationProject && <div className="cx-page">
           {requestsHeader}
@@ -831,7 +850,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </aside></div>
         </div>}
 
-        {page === 'requests' && selectedId && <div className="cx-request-page">
+        {page === 'requests' && selectedId && !requestProject && <div className="cx-request-page">
           {queueNotice && <p role="status" className="cx-status-note">{queueNotice}</p>}
           {!activeRequest ? <CxPanel><CxEmpty title="Request not available" body="Refresh and try again. If it is still missing, contact your project manager."
             action={<Button type="button" variant="outline" onClick={closeRequest}>Back to all requests</Button>} /></CxPanel>
@@ -840,7 +859,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                 : detail && <>
                   {showPendingLinkNotice && <p role="status" className="cx-status-note"><strong>Waiting for your project manager</strong>
                     This request is not linked to a project yet. Your project manager will confirm the project before it shows there.</p>}
-                  <PortalRequestPage projectConversation={requestConversation} workspaceId={activeRequest.workspaceId} api={api} key={activeTabId + ':' + activeRequest.workspaceId + ':' + detail.id}
+                  <ClientTicketDetail workspaceId={activeRequest.workspaceId} api={api} key={activeTabId + ':' + activeRequest.workspaceId + ':' + detail.id}
                     replyDraft={replyDrafts[activeRequest.workspaceId + ':' + detail.id] ?? ''}
                     onReplyDraftChange={value => setReplyDrafts(previous => ({ ...previous, [activeRequest.workspaceId + ':' + detail.id]: value }))}
                     ticket={detail} messages={messages} messageCursor={messageCursor} historyLoading={historyLoading} historyError={historyError}
@@ -864,12 +883,4 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     </div>
     </div>
   </main>;
-}
-
-
-type RequestConversation = Omit<ComponentProps<typeof ClientConversationRequestPage>, keyof ComponentProps<typeof ClientTicketDetail>>;
-
-/** A request on a shared project opens inside the project's one conversation; any other request keeps its own messages. */
-function PortalRequestPage({ projectConversation, ...props }: Readonly<ComponentProps<typeof ClientTicketDetail> & { projectConversation: RequestConversation | null }>) {
-  return projectConversation ? <ClientConversationRequestPage {...props} {...projectConversation} /> : <ClientTicketDetail {...props} />;
 }

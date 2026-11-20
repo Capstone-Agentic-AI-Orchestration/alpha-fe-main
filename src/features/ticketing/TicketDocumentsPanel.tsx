@@ -15,7 +15,7 @@ const primary = 'inline-flex items-center gap-1.5 rounded-lg bg-action px-3 py-2
 interface PendingUpload { file: File; replacesDocumentId: string | null; operationId: string }
 
 export function TicketDocumentsPanel({
-  api, scope, ticketId, canUpload, heading = 'Ticket documents', showRefresh = true,
+  api, scope, ticketId, canUpload, heading = 'Ticket documents', showTitle = true, showRefresh = true,
   refreshToken, emptyMessage = 'No documents have been added to this ticket.',
   readOnlyMessage = 'This ticket is closed or document changes are unavailable.',
 }: {
@@ -24,6 +24,8 @@ export function TicketDocumentsPanel({
   ticketId: string;
   canUpload: boolean;
   heading?: string;
+  /** False inside a section that already shows the heading; it still names the panel for screen readers. */
+  showTitle?: boolean;
   showRefresh?: boolean;
   refreshToken?: string | number;
   emptyMessage?: string;
@@ -118,8 +120,8 @@ export function TicketDocumentsPanel({
   }
 
   return <section className="ticket-documents-panel mt-4 min-w-0 max-w-full rounded-xl border border-divider bg-surface" aria-label={heading}>
-    <header className="flex items-center justify-between gap-3 border-b border-divider px-4 py-3">
-      <div className="flex items-center gap-2"><FileText size={15} className="text-link" /><h3 className="text-sm font-medium text-content">{heading}</h3></div>
+    <header className={`flex items-center gap-3 border-b border-divider px-4 py-3 ${showTitle ? 'justify-between' : 'justify-end'}`}>
+      {showTitle && <div className="flex items-center gap-2"><FileText size={15} className="text-link" /><h3 className="text-sm font-medium text-content">{heading}</h3></div>}
       {showRefresh && <button type="button" onClick={() => void refresh()} disabled={loading || busy} className={secondary} aria-label="Refresh ticket documents"><RefreshCw size={12} />Refresh</button>}
     </header>
 

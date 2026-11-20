@@ -4,9 +4,9 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
-import { TicketChat, type TicketChatMessage } from './TicketChat';
+import { TicketChat, type ChatReplyTo, type TicketChatMessage } from './TicketChat';
 import {
-  CHECKLIST_LABEL, canToggleRequest, conversationChatMessages,
+  CHECKLIST_LABEL, canToggleRequest, conversationChatMessages, requestCardId, requestIdOfCard,
   type ConversationItem, type ConversationRequest, type RequestChecklistStatus,
 } from './projectConversation';
 
@@ -30,7 +30,7 @@ export interface ConversationAbout { ticketId: string; title: string }
 /** Scroll the conversation to a message; a new token jumps again to the same one. */
 export interface ConversationJump { id: string; token: number }
 
-const requestMessageId = (ticketId: string) => 'request:' + ticketId;
+const requestMessageId = requestCardId;
 const noCleanup = () => undefined;
 const OPEN_CHECKLIST: ReadonlySet<RequestChecklistStatus> = new Set(['open', 'in_progress', 'ready_to_check']);
 export const openRequestCount = (requests: readonly ConversationRequest[] | null) =>
@@ -67,6 +67,8 @@ export interface ProjectConversationChatProps {
   restoreAbout?: ConversationAbout | null;
   onRestoreAbout?: () => void;
   jump?: ConversationJump | null;
+  /** Called with the request's ticket id when a reply's quoted request is opened. */
+  onOpenQuotedRequest?: (ticketId: string) => void;
   /** More composer controls, such as the PM's "Ask & wait for reply". */
   composerExtra?: ReactNode;
   inputId: string;
@@ -78,9 +80,17 @@ export interface ProjectConversationChatProps {
  */
 export function ProjectConversationChat({ role, items, requests, error = '', actionError = '', clientName = 'Client', clientInitial = 'C',
   draft, onDraftChange, onSend, busy = false, writesAvailable = true, messageActions, about = null, onClearAbout, restoreAbout = null,
-  onRestoreAbout, jump = null, composerExtra, inputId }: Readonly<ProjectConversationChatProps>) {
+  onRestoreAbout, jump: jumpRequest = null, onOpenQuotedRequest, composerExtra, inputId }: Readonly<ProjectConversationChatProps>) {
   const container = useRef<HTMLDivElement>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
+  // A jump comes from the caller (a request picked in a list) or from opening a reply's quoted request.
+  const [jump, setJump] = useState<ConversationJump | null>(jumpRequest);
+  useEffect(() => { if (jumpRequest) setJump(jumpRequest); }, [jumpRequest]);
+  const openQuote = useCallback((reply: ChatReplyTo) => {
+    setJump(previous => ({ id: reply.id, token: (previous?.token ?? 0) + 1 }));
+    const ticketId = requestIdOfCard(reply.id);
+    if (ticketId) onOpenQuotedRequest?.(ticketId);
+  }, [onOpenQuotedRequest]);
   const messages = useMemo((): TicketChatMessage[] => {
     const status = new Map((requests ?? []).map(request => [requestMessageId(request.ticketId), request.checklist]));
     const list = conversationChatMessages(items ?? [], role, messageActions);
@@ -110,7 +120,7 @@ export function ProjectConversationChat({ role, items, requests, error = '', act
 
   let aboutLine: ReactNode = null;
   if (about) {
-    aboutLine = <><span>Replying about</span><span className="ticket-chat__about-chip"><span>{about.title}</span>
+    aboutLine = <><span>Replying to</span><span className="ticket-chat__about-chip"><span>{about.title}</span>
       {onClearAbout && <Button type="button" variant="ghost" size="icon" className="h-[18px] w-[18px] rounded-full p-0"
         onClick={onClearAbout} aria-label={`Stop replying about ${about.title}`}><X size={12} aria-hidden="true" /></Button>}</span></>;
   } else if (restoreAbout && onRestoreAbout) {
@@ -130,6 +140,7 @@ export function ProjectConversationChat({ role, items, requests, error = '', act
       showHeader={false}
       historyLoading={items === null && !error}
       highlightId={highlightId}
+      onOpenReply={openQuote}
       emptyTitle="No messages yet"
       emptyDescription={role === 'client'
         ? 'Ask a question, or make a request. Your project manager sees everything here.'

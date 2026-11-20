@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type FormEvent, type ReactNode } from 'react';
-import { ChevronDown, ClipboardList, LockKeyhole, MessageSquare, Send, StickyNote, UserRound, Zap } from 'lucide-react';
+import { ChevronDown, ClipboardList, CornerUpLeft, LockKeyhole, MessageSquare, Send, StickyNote, UserRound, Zap } from 'lucide-react';
 import { Button, type ButtonVariant } from '@/shared/components/ui/button';
 import { Card } from '@/shared/components/ui/card';
 import { Bubble, BubbleContent } from '@/shared/components/ui/bubble';
@@ -20,8 +20,13 @@ export interface TicketChatMessage {
   createdAt: string;
   /** 'event' renders as one centered line (a task linked, a request ticked done); 'request' as a request card. */
   kind?: 'message' | 'request' | 'event';
-  /** A short label beside the author, such as the request a message is about. */
+  /** A short label beside the author, such as "Project proposal". */
   tag?: string;
+  /**
+   * What this message replies to, drawn above the bubble the way a messaging app quotes the
+   * message being answered. `id` is the chat entry it points at, such as the request card.
+   */
+  replyTo?: ChatReplyTo;
   /** A request card's title. */
   heading?: string;
   /** Buttons under the message, such as "Create task". */
@@ -30,6 +35,8 @@ export interface TicketChatMessage {
   reference?: string;
   badge?: ReactNode;
 }
+
+export interface ChatReplyTo { id: string; title: string; excerpt?: string }
 
 type TicketChatMode = 'conversation' | 'notes';
 
@@ -89,6 +96,8 @@ export interface TicketChatProps {
   className?: string;
   /** A message id to mark, as when a request is picked from a list. */
   highlightId?: string | null;
+  /** Opens what a reply quotes, such as scrolling to the request card it answers. */
+  onOpenReply?: (reply: ChatReplyTo) => void;
 }
 
 function dateKey(value: string): string {
@@ -158,6 +167,17 @@ function RequestCard({ message, author, highlighted }: Readonly<{ message: Ticke
   </article>;
 }
 
+/** The quoted request above a reply, on the same side as the reply; opens the request when it can. */
+function ReplyQuote({ reply, onOpen }: Readonly<{ reply: ChatReplyTo; onOpen?: (reply: ChatReplyTo) => void }>) {
+  const body = <>
+    <span className="ticket-chat__reply-label"><CornerUpLeft size={12} aria-hidden="true" />Replied to a request</span>
+    <span className="ticket-chat__reply-quote"><strong>{reply.title}</strong>{reply.excerpt && <span>{reply.excerpt}</span>}</span>
+  </>;
+  return onOpen
+    ? <button type="button" className="ticket-chat__reply" onClick={() => onOpen(reply)} aria-label={'Replied to request: ' + reply.title + '. Show the request'}>{body}</button>
+    : <div className="ticket-chat__reply">{body}</div>;
+}
+
 function MessageSkeleton({ align = 'start', width = 'w-2/3' }: { align?: 'start' | 'end'; width?: string }) {
   return <div className={`ticket-chat__message-skeleton ${align === 'end' ? 'is-end' : ''}`}>
     <Skeleton className="ticket-chat__message-skeleton-avatar" />
@@ -223,6 +243,7 @@ export function TicketChat({
   readOnlyLabel,
   className = '',
   highlightId = null,
+  onOpenReply,
 }: TicketChatProps) {
   const feed = useRef<HTMLDivElement>(null);
   const previous = useRef<{ first: string; last: string; length: number; scrollHeight: number; scrollTop: number } | null>(null);
@@ -294,6 +315,7 @@ export function TicketChat({
             <MessageAvatar className={`ticket-chat__avatar${mine ? ' ticket-chat__avatar--mine' : ''}${note ? ' ticket-chat__avatar--note' : ''}`} aria-hidden="true">{messageAvatar(message, role, clientInitial)}</MessageAvatar>
             <MessageContent className="ticket-chat__content">
               <MessageHeader className="ticket-chat__message-meta"><span>{groupIndex === 0 || message.tag ? author : <span className="sr-only">{author}</span>}</span>{message.tag && <span className="ticket-chat__tag">{message.tag}</span>}</MessageHeader>
+              {message.replyTo && <ReplyQuote reply={message.replyTo} onOpen={onOpenReply} />}
               <Bubble className="ticket-chat__bubble"><BubbleContent className="ticket-chat__bubble-content">
                 {message.heading && <strong className="ticket-chat__bubble-heading">{message.heading}</strong>}
                 {message.body}

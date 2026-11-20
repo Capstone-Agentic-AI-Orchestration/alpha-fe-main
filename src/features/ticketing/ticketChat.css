@@ -181,3 +181,14 @@
 .ticket-chat__about-chip button { display: grid; width: 18px; height: 18px; flex: none; place-items: center; border-radius: 999px; }
 .ticket-chat__about-chip button:hover { background: rgb(var(--ui-raised)); }
 .ticket-chat__about > button { color: rgb(var(--ui-link)); font-weight: 600; }
+
+/* A reply about a request quotes it above the bubble, on the reply's side, like a messaging app. */
+.ticket-chat__reply { display: flex; max-width: min(420px, 100%); flex-direction: column; gap: 3px; margin: 0 4px 4px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
+.ticket-chat__message--mine .ticket-chat__reply { margin-left: auto; align-items: flex-end; text-align: right; }
+.ticket-chat__reply-label { display: inline-flex; align-items: center; gap: 4px; color: rgb(var(--ui-text-muted)); font-size: 10.5px; font-weight: 600; }
+.ticket-chat__reply-quote { display: flex; max-width: 100%; flex-direction: column; gap: 1px; padding: 7px 11px; border: 1px dashed rgb(var(--ui-divider)); border-radius: 10px; background: rgb(var(--ui-well)); color: rgb(var(--ui-text-secondary)); font-size: 11.5px; line-height: 1.45; }
+.ticket-chat__reply-quote strong { overflow: hidden; color: rgb(var(--ui-text-primary)); font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.ticket-chat__reply-quote span { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+button.ticket-chat__reply { cursor: pointer; }
+button.ticket-chat__reply:hover .ticket-chat__reply-quote { border-color: rgb(var(--ui-control)); color: rgb(var(--ui-text-primary)); }
+button.ticket-chat__reply:focus-visible { outline: 2px solid rgb(var(--ui-focus)); outline-offset: 2px; border-radius: 10px; }
