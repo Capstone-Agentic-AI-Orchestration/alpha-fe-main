@@ -26,7 +26,8 @@ export function usePmRequestDetail(api: typeof pmTicketApi, ticketId: string | n
       .catch(failure => { if (current) { setDetail(null); setError(errorText(failure, 'This request could not be loaded.')); } });
     return () => { current = false; };
   }, [api, ticketId, version]);
-  return { detail: detail?.id === ticketId ? detail : null, error };
+  const current = detail !== null && ticketId !== null && detail.id === ticketId ? detail : null;
+  return { detail: current, error };
 }
 
 function nextStepText(detail: PmTicketDetail): string {

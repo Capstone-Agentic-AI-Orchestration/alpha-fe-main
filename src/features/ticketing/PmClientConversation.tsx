@@ -7,7 +7,7 @@ import {
 } from './ProjectConversationView';
 import { PmRequestContext, type PmRequestContextSection } from './PmRequestContext';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
-import type { ConversationItem, ConversationRequest } from './projectConversation';
+import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
 import { REQUEST_TASK_LINKED_EVENT, linkSavedTaskToRequest } from './requestTaskLink';
 
 const REFRESH_MS = 30_000;
@@ -43,7 +43,8 @@ function usePmProjectConversation(api: typeof pmTicketApi, projectId: string | n
   const loadToken = useRef(0);
   const load = useCallback(async (quiet = false) => {
     if (!clientId || !projectId) return;
-    const token = ++loadToken.current;
+    loadToken.current += 1;
+    const token = loadToken.current;
     if (!quiet) { setItems(null); setRequests(null); setError(''); }
     try {
       const [timeline, list] = await Promise.all([api.getProjectConversation(projectId, clientId), api.getProjectConversationRequests(projectId, clientId)]);
@@ -173,7 +174,7 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const toggle = (request: ConversationRequest, done: boolean) => void run(async () => {
     if (!clientId || !projectId) return;
     const updated = await api.setConversationRequestDone(projectId, clientId, request.ticketId, done);
-    setRequests(previous => previous?.map(item => item.ticketId === updated.ticketId ? updated : item) ?? previous);
+    setRequests(withUpdatedRequest(updated));
     setContextVersion(value => value + 1);
     await load(true);
   }, 'The request was not updated.');

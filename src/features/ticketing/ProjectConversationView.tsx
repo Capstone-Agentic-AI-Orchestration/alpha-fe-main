@@ -27,6 +27,7 @@ export interface ConversationAbout { ticketId: string; title: string }
 export interface ConversationJump { id: string; token: number }
 
 const requestMessageId = (ticketId: string) => 'request:' + ticketId;
+const noCleanup = () => undefined;
 const OPEN_CHECKLIST: ReadonlySet<RequestChecklistStatus> = new Set(['open', 'in_progress', 'ready_to_check']);
 export const openRequestCount = (requests: readonly ConversationRequest[] | null) =>
   (requests ?? []).filter(request => OPEN_CHECKLIST.has(request.checklist)).length;
@@ -78,8 +79,7 @@ export function ProjectConversationChat({ role, items, requests, error = '', act
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const messages = useMemo((): TicketChatMessage[] => {
     const status = new Map((requests ?? []).map(request => [requestMessageId(request.ticketId), request.checklist]));
-    const list = conversationChatMessages(items ?? [], role, messageActions
-      ? item => { const node = messageActions(item); return node ?? undefined; } : undefined);
+    const list = conversationChatMessages(items ?? [], role, messageActions);
     return list.map(message => {
       const checklist = message.kind === 'request' ? status.get(message.id) : undefined;
       return checklist ? { ...message, badge: <ChecklistChip status={checklist} /> } : message;
@@ -89,9 +89,8 @@ export function ProjectConversationChat({ role, items, requests, error = '', act
   // Scroll to the picked request once it is loaded, then let the glow fade.
   const loaded = items !== null;
   useEffect(() => {
-    if (!jump || !loaded) return;
-    const target = container.current?.querySelector<HTMLElement>(`[data-chat-id="${CSS.escape(jump.id)}"]`);
-    if (!target) return;
+    const target = jump && loaded ? container.current?.querySelector<HTMLElement>(`[data-chat-id="${CSS.escape(jump.id)}"]`) : null;
+    if (!jump || !target) return noCleanup;
     // An instant jump, like picking a search result in a chat; smooth scrolling can stall in background tabs.
     target.scrollIntoView({ block: 'center' });
     setHighlightId(jump.id);

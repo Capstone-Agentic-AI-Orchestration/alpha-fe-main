@@ -37,6 +37,11 @@ export const CHECKLIST_LABEL: Record<RequestChecklistStatus, string> = {
   declined: 'Not going ahead', cancelled: 'Cancelled',
 };
 
+/** A state update that swaps in one request's new copy. */
+export function withUpdatedRequest(updated: ConversationRequest) {
+  return (previous: ConversationRequest[] | null) => previous?.map(item => item.ticketId === updated.ticketId ? updated : item) ?? previous;
+}
+
 /** A request can be ticked or reopened unless it was never taken on, or is formally finished. */
 export function canToggleRequest(request: ConversationRequest): boolean {
   if (request.checklist === 'declined' || request.checklist === 'cancelled') return false;

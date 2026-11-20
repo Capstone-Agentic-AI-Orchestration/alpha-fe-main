@@ -5,7 +5,7 @@ import { ClientTicketDetail, ConversationColumn, RailCard } from './ClientTicket
 import {
   ConversationRequestList, ProjectConversationChat, openRequestCount, useConversationJump, type ConversationAbout,
 } from './ProjectConversationView';
-import type { ConversationItem, ConversationRequest } from './projectConversation';
+import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
 
 const REFRESH_MS = 30_000;
 const newOperationId = () => crypto.randomUUID();
@@ -21,7 +21,8 @@ function useClientProjectConversation(api: typeof clientTicketApi, project: Clie
   const token = useRef(0);
   const { workspaceId, projectId } = project;
   const load = useCallback(async (quiet = false) => {
-    const current = ++token.current;
+    token.current += 1;
+    const current = token.current;
     if (!quiet) { setItems(null); setRequests(null); setError(''); }
     try {
       const [timeline, list] = await Promise.all([api.getProjectConversation(workspaceId, projectId), api.getProjectConversationRequests(workspaceId, projectId)]);
@@ -74,7 +75,7 @@ function useConversationActions(api: typeof clientTicketApi, project: ClientProj
   };
   const toggle = (request: ConversationRequest, done: boolean) => void run(async () => {
     const updated = await api.setConversationRequestDone(workspaceId, projectId, request.ticketId, done);
-    conversation.setRequests(previous => previous?.map(item => item.ticketId === updated.ticketId ? updated : item) ?? previous);
+    conversation.setRequests(withUpdatedRequest(updated));
   }, 'That request could not be updated. Try again.');
   // A request made here is an ordinary request on this project, so it keeps the usual plan and result steps.
   const createRequest = (input: { title: string; description: string }) => run(async () => {
@@ -85,7 +86,13 @@ function useConversationActions(api: typeof clientTicketApi, project: ClientProj
   }, 'Your request was not sent. Try again.');
   const sendToProject = (body: string) => run(() => api.sendProjectFeedbackMessage(workspaceId, projectId, { schemaVersion: 1, operationId: newOperationId(), body }),
     'Your message was not sent. Try again.');
-  return { busy, actionError, run, toggle, createRequest, sendToProject };
+  /** Makes a request, then hands its ID on so it can be opened; true when it was made. */
+  const createAndOpen = async (input: { title: string; description: string }, onCreated?: (ticketId: string) => void) => {
+    const receipt = await createRequest(input);
+    if (receipt) onCreated?.(receipt.ticketId);
+    return Boolean(receipt);
+  };
+  return { busy, actionError, run, toggle, createAndOpen, sendToProject };
 }
 
 /**
@@ -108,11 +115,7 @@ export function ClientProjectConversation({ api = clientTicketApi, project, clie
   const conversation = useClientProjectConversation(api, project);
   const actions = useConversationActions(api, project, conversation);
   const [draft, setDraft] = useState('');
-  const create = async (input: { title: string; description: string }) => {
-    const receipt = await actions.createRequest(input);
-    if (receipt) onRequestCreated?.(receipt.ticketId);
-    return Boolean(receipt);
-  };
+  const create = (input: { title: string; description: string }) => actions.createAndOpen(input, onRequestCreated);
 
   return <section className="cx-request" aria-labelledby="client-conversation-project-title">
     <div className="cx-reqsplit">
@@ -185,11 +188,7 @@ export function ClientConversationRequestPage({ project, clientName, readOnly = 
       { schemaVersion: 1, operationId: newOperationId(), body });
     void actions.run(work, 'Your message was not sent. Try again.').then(result => { if (result !== null) setDraft(''); });
   };
-  const create = async (input: { title: string; description: string }) => {
-    const receipt = await actions.createRequest(input);
-    if (receipt) onRequestCreated?.(receipt.ticketId);
-    return Boolean(receipt);
-  };
+  const create = (input: { title: string; description: string }) => actions.createAndOpen(input, onRequestCreated);
 
   return <ClientTicketDetail {...detail}
     railLead={<ConversationRequestsCard project={project} requests={conversation.requests} selectedTicketId={ticketId} busy={actions.busy || detail.busy}
