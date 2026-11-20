@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { FolderKanban, Link2, Plus } from 'lucide-react';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, pmTicketDocumentsApi, type PmClientProjectConversation, type PmClientSummary } from './pmApi';
-import { ProjectConversationView, type ConversationPanelTab } from './ProjectConversationView';
+import {
+  ProjectConversationChat, ProjectConversationView, useConversationJump, type ConversationAbout, type ConversationPanelTab,
+} from './ProjectConversationView';
 import { PmRequestContext, type PmRequestContextSection } from './PmRequestContext';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import type { ConversationItem, ConversationRequest } from './projectConversation';
@@ -26,15 +28,85 @@ export interface ConversationTaskDraft {
 /** A board task that can be linked to a request. */
 export interface ConversationLinkableTask { id: string; identifier: string; title: string }
 
+/** How a PM reply about a request is sent: an ordinary reply, or a question the client must answer. */
+export type PmReplyKind = 'reply' | 'request_details';
+
+/**
+ * Loads one client's conversation about one project, refreshes it every 30
+ * seconds and after a task is linked, and sends the PM's messages: about a
+ * request (to that request) or about the project as a whole.
+ */
+function usePmProjectConversation(api: typeof pmTicketApi, projectId: string | null, clientId: string | null, refreshToken?: unknown) {
+  const [items, setItems] = useState<ConversationItem[] | null>(null);
+  const [requests, setRequests] = useState<ConversationRequest[] | null>(null);
+  const [error, setError] = useState('');
+  const loadToken = useRef(0);
+  const load = useCallback(async (quiet = false) => {
+    if (!clientId || !projectId) return;
+    const token = ++loadToken.current;
+    if (!quiet) { setItems(null); setRequests(null); setError(''); }
+    try {
+      const [timeline, list] = await Promise.all([api.getProjectConversation(projectId, clientId), api.getProjectConversationRequests(projectId, clientId)]);
+      if (token !== loadToken.current) return;
+      setItems(timeline.items); setRequests(list.items); setError('');
+    } catch (failure) {
+      if (token === loadToken.current && !quiet) setError(errorText(failure, 'The conversation could not be loaded. Refresh to try again.'));
+    }
+  }, [api, clientId, projectId]);
+  useEffect(() => { void load(); }, [load, refreshToken]);
+  useEffect(() => {
+    const refresh = () => { if (document.visibilityState === 'visible') void load(true); };
+    const timer = window.setInterval(refresh, REFRESH_MS);
+    const linked = () => void load(true);
+    window.addEventListener(REQUEST_TASK_LINKED_EVENT, linked);
+    return () => { window.clearInterval(timer); window.removeEventListener(REQUEST_TASK_LINKED_EVENT, linked); };
+  }, [load]);
+
+  /** About a request it is that request's message; otherwise a message on the project. */
+  const send = useCallback(async (body: string, about: ConversationAbout | null, kind: PmReplyKind = 'reply') => {
+    if (!clientId || !projectId) return;
+    if (about) {
+      const ticket = await api.get(about.ticketId);
+      await api.reply(about.ticketId, { schemaVersion: 1, operationId: newOperationId(), expectedVersion: ticket.version, body, action: { type: kind } });
+    } else {
+      await api.sendProjectFeedbackMessage(projectId, clientId, { schemaVersion: 1, operationId: newOperationId(), body });
+    }
+    await load(true);
+  }, [api, clientId, projectId, load]);
+
+  return { items, requests, setRequests, error, load, send };
+}
+
+/** Only a client's request gets "Create task"; ordinary messages do not. */
+function requestCardActions(onCreate: ((request: { ticketId: string; title: string }, description: string) => void) | undefined) {
+  if (!onCreate) return undefined;
+  return (item: ConversationItem): ReactNode => item.kind === 'request' && item.request
+    ? <button type="button" onClick={() => onCreate(item.request!, item.body)}><Plus size={12} aria-hidden="true" className="mr-0.5 inline" />Create task</button>
+    : null;
+}
+
+/** The reply target: the selected request, unless the PM chose to write to the whole project. */
+function useAboutTarget(selected: ConversationAbout | null) {
+  const [cleared, setCleared] = useState(false);
+  const selectedId = selected?.ticketId ?? null;
+  useEffect(() => { setCleared(false); }, [selectedId]);
+  return {
+    about: cleared ? null : selected,
+    restoreAbout: cleared ? selected : null,
+    clear: () => setCleared(true),
+    restore: () => setCleared(false),
+  };
+}
+
 /**
  * A client's Conversation tab: one conversation per project the client can see.
  * The side panel keeps the request context tabs (overview, private notes,
  * details, documents) for the selected request and adds a Requests checklist,
- * where the PM creates a task for a request (or links an existing one); the full
- * request page with the plan and result steps opens from each request.
+ * where the PM creates a task for a request (or links an existing one); the
+ * request's plan and result steps open from each request, beside the same conversation.
  */
 export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, client, focus = null, onOpenRequestDetails,
-  onCreateTask, tasksForProject, refreshToken }: {
+  onCreateTask, tasksForProject, refreshToken }: Readonly<{
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   client: PmClientSummary;
@@ -45,21 +117,18 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   /** The project's board tasks, for linking one to a request. */
   tasksForProject?: (projectId: string) => ConversationLinkableTask[];
   refreshToken?: number;
-}) {
+}>) {
   const clientId = clientIdFromKey(client.key);
   const [projects, setProjects] = useState<PmClientProjectConversation[] | null>(null);
   const [projectsError, setProjectsError] = useState('');
   const [projectId, setProjectId] = useState<string | null>(focus?.projectId ?? null);
-  const [items, setItems] = useState<ConversationItem[] | null>(null);
-  const [requests, setRequests] = useState<ConversationRequest[] | null>(null);
-  const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [linking, setLinking] = useState<string | null>(null);
   const [contextTicketId, setContextTicketId] = useState<string | null>(focus?.ticketId ?? null);
   const [contextVersion, setContextVersion] = useState(0);
-  const loadToken = useRef(0);
+  const { items, requests, setRequests, error, load, send } = usePmProjectConversation(api, projectId, clientId, refreshToken);
 
   useEffect(() => { if (focus?.projectId) setProjectId(focus.projectId); }, [focus?.projectId]);
   useEffect(() => { if (focus?.ticketId) setContextTicketId(focus.ticketId); }, [focus?.ticketId]);
@@ -82,79 +151,48 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
     return () => { current = false; };
   }, [api, clientId, refreshToken]);
 
-  const load = useCallback(async (quiet = false) => {
-    if (!clientId || !projectId) return;
-    const token = ++loadToken.current;
-    if (!quiet) { setItems(null); setRequests(null); setError(''); }
-    try {
-      const [timeline, list] = await Promise.all([api.getProjectConversation(projectId, clientId), api.getProjectConversationRequests(projectId, clientId)]);
-      if (token !== loadToken.current) return;
-      setItems(timeline.items); setRequests(list.items); setError('');
-    } catch (failure) {
-      if (token === loadToken.current && !quiet) setError(errorText(failure, 'The conversation could not be loaded. Refresh to try again.'));
-    }
-  }, [api, clientId, projectId]);
-
-  useEffect(() => { void load(); }, [load, refreshToken]);
-  useEffect(() => {
-    const refresh = () => { if (document.visibilityState === 'visible') void load(true); };
-    const timer = window.setInterval(refresh, REFRESH_MS);
-    const linked = () => void load(true);
-    window.addEventListener(REQUEST_TASK_LINKED_EVENT, linked);
-    return () => { window.clearInterval(timer); window.removeEventListener(REQUEST_TASK_LINKED_EVENT, linked); };
-  }, [load]);
-
   const project = projects?.find(item => item.projectId === projectId) ?? null;
   const projectTasks = projectId && tasksForProject ? tasksForProject(projectId) : [];
 
-  /** Open the New task dialog for this project, filled from a request or message and linked to its request. */
-  const createTask = (request: { ticketId: string; title: string } | null, title: string, description: string) => {
+  // The request the context tabs describe and replies go to: the one picked, else the first open one, else the newest.
+  const contextRequest = requests?.find(request => request.ticketId === contextTicketId)
+    ?? requests?.find(request => !['done', 'declined', 'cancelled'].includes(request.checklist)) ?? requests?.[0] ?? null;
+  const target = useAboutTarget(contextRequest ? { ticketId: contextRequest.ticketId, title: contextRequest.title } : null);
+
+  /** Open the New task dialog for this project, filled from a request and linked to it. */
+  const createTask = (request: { ticketId: string; title: string }, description: string) => {
     if (!projectId || !onCreateTask) return;
-    onCreateTask({ projectId, title: title.slice(0, 160), description,
-      request: request ? { ticketId: request.ticketId, title: request.title } : null });
+    onCreateTask({ projectId, title: request.title.slice(0, 160), description, request: { ticketId: request.ticketId, title: request.title } });
   };
 
-  const send = async (body: string) => {
-    if (!clientId || !projectId) return;
+  const run = async (work: () => Promise<unknown>, fallback: string) => {
     setBusy(true); setActionError('');
-    try {
-      await api.sendProjectFeedbackMessage(projectId, clientId, { schemaVersion: 1, operationId: newOperationId(), body });
-      setDraft('');
-      await load(true);
-    } catch (failure) { setActionError(errorText(failure, 'The message was not sent.')); }
-    finally { setBusy(false); }
+    try { await work(); } catch (failure) { setActionError(errorText(failure, fallback)); } finally { setBusy(false); }
   };
 
-  const toggle = async (request: ConversationRequest, done: boolean) => {
+  const toggle = (request: ConversationRequest, done: boolean) => void run(async () => {
     if (!clientId || !projectId) return;
-    setBusy(true); setActionError('');
-    try {
-      const updated = await api.setConversationRequestDone(projectId, clientId, request.ticketId, done);
-      setRequests(previous => previous?.map(item => item.ticketId === updated.ticketId ? updated : item) ?? previous);
-      setContextVersion(value => value + 1);
-      await load(true);
-    } catch (failure) { setActionError(errorText(failure, 'The request was not updated.')); }
-    finally { setBusy(false); }
-  };
+    const updated = await api.setConversationRequestDone(projectId, clientId, request.ticketId, done);
+    setRequests(previous => previous?.map(item => item.ticketId === updated.ticketId ? updated : item) ?? previous);
+    setContextVersion(value => value + 1);
+    await load(true);
+  }, 'The request was not updated.');
 
-  const linkExisting = async (request: ConversationRequest, issueId: string) => {
-    setLinking(null); setBusy(true); setActionError('');
-    try { await linkSavedTaskToRequest(request.ticketId, issueId, 'conversation', api, []); await load(true); }
-    catch (failure) { setActionError(errorText(failure, 'The task was not linked.')); }
-    finally { setBusy(false); }
+  const linkExisting = (request: ConversationRequest, issueId: string) => {
+    setLinking(null);
+    void run(async () => { await linkSavedTaskToRequest(request.ticketId, issueId, 'conversation', api, []); await load(true); }, 'The task was not linked.');
   };
 
   if (!clientId) return <p className="px-6 py-5 text-[13px] text-content-muted">
     This client hasn’t set up a portal account yet, so there is no conversation. Their requests are in Tickets.</p>;
   if (projectsError) return <p role="alert" className="px-6 py-5 text-[13px] text-status-danger">{projectsError}</p>;
-  if (projects && projects.length === 0) return <div className="px-6 py-5 text-[13px] text-content-secondary">
+  if (projects?.length === 0) return <div className="px-6 py-5 text-[13px] text-content-secondary">
     <p className="font-medium text-content">No project conversations yet</p>
     <p className="mt-1 text-content-muted">A conversation starts once one of this client’s requests or proposals is linked to a project and shared with them.</p>
   </div>;
 
-  // The request the context tabs describe: the one picked, else the first open one, else the newest.
-  const contextRequest = requests?.find(request => request.ticketId === contextTicketId)
-    ?? requests?.find(request => !['done', 'declined', 'cancelled'].includes(request.checklist)) ?? requests?.[0] ?? null;
+  const linkedIds = new Set((requests ?? []).flatMap(request => request.linkedTasks.map(task => task.issueId)));
+  const linkable = projectTasks.filter(task => !linkedIds.has(task.id));
   const contextTab = (id: PmRequestContextSection, label: string): ConversationPanelTab => ({ id, label,
     content: <PmRequestContext section={id} api={api} documentsApi={documentsApi} requests={requests} selectedId={contextRequest?.ticketId ?? null}
       onSelect={setContextTicketId} clientName={client.displayName} refreshToken={`${refreshToken ?? 0}:${contextVersion}`}
@@ -162,8 +200,25 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const panelTabs = [contextTab('overview', 'Overview'), contextTab('notes', 'Private notes'),
     contextTab('details', 'Request details'), contextTab('documents', 'Documents')];
 
-  const linkedIds = new Set((requests ?? []).flatMap(request => request.linkedTasks.map(task => task.issueId)));
-  const linkable = projectTasks.filter(task => !linkedIds.has(task.id));
+  const renderRequestActions = (request: ConversationRequest) => {
+    if (request.checklist === 'declined' || request.checklist === 'cancelled') return null;
+    let link: ReactNode = null;
+    if (tasksForProject && linking === request.ticketId) link = <label className="flex items-center gap-1.5">
+      <span className="sr-only">Task to link to {request.title}</span>
+      <select autoFocus defaultValue="" onChange={event => { if (event.target.value) linkExisting(request, event.target.value); }}
+        onBlur={() => setLinking(null)} className="h-7 max-w-[12rem] rounded-md border border-control bg-well px-1.5 text-[12px] text-content">
+        <option value="" disabled>{linkable.length ? 'Choose a task…' : 'No other tasks on this project'}</option>
+        {linkable.map(task => <option key={task.id} value={task.id}>{task.identifier} · {task.title}</option>)}
+      </select>
+    </label>;
+    else if (tasksForProject) link = <button type="button" onClick={() => setLinking(request.ticketId)} disabled={busy}
+      className="inline-flex items-center gap-1 font-semibold text-link hover:text-link-hover"><Link2 size={13} aria-hidden="true" /> Link task</button>;
+    return <>
+      {onCreateTask && <button type="button" onClick={() => createTask(request, request.description)} disabled={busy}
+        className="inline-flex items-center gap-1 font-semibold text-link hover:text-link-hover"><Plus size={13} aria-hidden="true" /> Create task</button>}
+      {link}
+    </>;
+  };
 
   return <div className="flex h-full min-h-0 flex-col md:flex-row">
     {projects && projects.length > 1 && <nav aria-label="Projects" className="shrink-0 border-b border-divider md:w-56 md:border-b-0 md:border-r">
@@ -184,40 +239,76 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
         <h2 className="text-[14px] font-semibold text-content">{project.projectName}</h2>
         <p className="text-[12px] text-content-muted">Conversation with {client.displayName}</p>
       </header>}
-      {!projects ? <p className="px-6 py-5 text-[13px] text-content-muted">Loading conversations…</p>
-        : <ProjectConversationView key={projectId ?? 'none'} role="pm" projectName={project?.projectName ?? 'Project'}
-          items={items} requests={requests} error={error} actionError={actionError}
-          clientName={client.displayName} clientInitial={client.displayName.trim()[0]?.toUpperCase() ?? 'C'}
-          draft={draft} onDraftChange={setDraft} onSend={body => void send(body)} busy={busy}
-          onToggleDone={(request, done) => void toggle(request, done)}
-          onOpenRequest={request => onOpenRequestDetails(request.ticketId)}
-          focusTicketId={focus?.ticketId ?? null}
-          selectedTicketId={contextRequest?.ticketId ?? null}
-          onSelectRequest={request => setContextTicketId(request.ticketId)}
-          panelTabs={panelTabs}
-          inputId={`pm-conversation-${client.key}`}
-          messageActions={item => onCreateTask && item.author === 'client' && (item.kind === 'message' || item.kind === 'request' || item.kind === 'clarification')
-            ? <button type="button" onClick={() => createTask(item.request, item.kind === 'request' ? item.request?.title ?? '' : item.body.split('\n')[0] ?? '',
-              item.body)}>Create task</button> : null}
-          renderRequestActions={request => request.checklist === 'declined' || request.checklist === 'cancelled' ? null : <>
-            {onCreateTask && <button type="button" onClick={() => createTask(request, request.title, request.description)} disabled={busy}
-              className="inline-flex items-center gap-1 font-semibold text-link hover:text-link-hover">
-              <Plus size={13} aria-hidden="true" /> Create task</button>}
-            {!tasksForProject ? null : linking === request.ticketId
-              ? <label className="flex items-center gap-1.5">
-                <span className="sr-only">Task to link to {request.title}</span>
-                <select autoFocus defaultValue="" onChange={event => { if (event.target.value) void linkExisting(request, event.target.value); }}
-                  onBlur={() => setLinking(null)}
-                  className="h-7 max-w-[12rem] rounded-md border border-control bg-well px-1.5 text-[12px] text-content">
-                  <option value="" disabled>{linkable.length ? 'Choose a task…' : 'No other tasks on this project'}</option>
-                  {linkable.map(task => <option key={task.id} value={task.id}>{task.identifier} · {task.title}</option>)}
-                </select>
-              </label>
-              : <button type="button" onClick={() => setLinking(request.ticketId)} disabled={busy}
-                className="inline-flex items-center gap-1 font-semibold text-link hover:text-link-hover">
-                <Link2 size={13} aria-hidden="true" /> Link task</button>}
-          </>}
-        />}
+      {projects ? <ProjectConversationView key={projectId ?? 'none'} role="pm" projectName={project?.projectName ?? 'Project'}
+        items={items} requests={requests} error={error} actionError={actionError}
+        clientName={client.displayName} clientInitial={client.displayName.trim()[0]?.toUpperCase() ?? 'C'}
+        draft={draft} onDraftChange={setDraft} busy={busy}
+        onSend={body => void run(async () => { await send(body, target.about); setDraft(''); }, 'The message was not sent.')}
+        about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore}
+        onToggleDone={toggle}
+        onOpenRequest={request => onOpenRequestDetails(request.ticketId)}
+        focusTicketId={focus?.ticketId ?? null}
+        selectedTicketId={contextRequest?.ticketId ?? null}
+        onSelectRequest={request => setContextTicketId(request.ticketId)}
+        panelTabs={panelTabs}
+        inputId={`pm-conversation-${client.key}`}
+        messageActions={requestCardActions(onCreateTask ? createTask : undefined)}
+        renderRequestActions={renderRequestActions}
+      /> : <p className="px-6 py-5 text-[13px] text-content-muted">Loading conversations…</p>}
     </div>
   </div>;
+}
+
+/**
+ * The conversation beside a request's plan and result steps: the same project
+ * conversation as the Conversation tab, scrolled to this request, with replies
+ * going to this request unless the PM writes to the whole project.
+ */
+export function PmRequestConversation({ api = pmTicketApi, projectId, clientId, ticketId, ticketTitle, clientName, replyKind, onReplyKindChange,
+  onWritten, onCreateTask, writesAvailable = true }: Readonly<{
+  api?: typeof pmTicketApi;
+  projectId: string;
+  clientId: string;
+  ticketId: string;
+  ticketTitle: string;
+  clientName: string;
+  replyKind: PmReplyKind;
+  onReplyKindChange: (kind: PmReplyKind) => void;
+  /** After a reply to this request, so the request page reloads its state. */
+  onWritten: () => void;
+  onCreateTask?: (draft: ConversationTaskDraft) => void;
+  writesAvailable?: boolean;
+}>) {
+  const { items, requests, error, send } = usePmProjectConversation(api, projectId, clientId);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const { jump, toRequest } = useConversationJump();
+  const target = useAboutTarget({ ticketId, title: ticketTitle });
+  // Once loaded, show where this request was made.
+  const loaded = items !== null;
+  useEffect(() => { if (loaded) toRequest(ticketId); }, [loaded, ticketId, toRequest]);
+
+  const submit = (body: string) => {
+    const about = target.about;
+    setBusy(true); setActionError('');
+    void send(body, about, replyKind).then(() => {
+      setDraft('');
+      if (about) { onReplyKindChange('reply'); onWritten(); }
+    }).catch(failure => setActionError(errorText(failure, 'The message was not sent.'))).finally(() => setBusy(false));
+  };
+  const createTask = onCreateTask
+    ? (request: { ticketId: string; title: string }, description: string) => onCreateTask({ projectId, title: request.title.slice(0, 160), description, request })
+    : undefined;
+
+  return <ProjectConversationChat role="pm" items={items} requests={requests} error={error} actionError={actionError}
+    clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'} draft={draft} onDraftChange={setDraft}
+    onSend={submit} busy={busy} writesAvailable={writesAvailable} messageActions={requestCardActions(createTask)}
+    about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore} jump={jump}
+    composerExtra={target.about ? <span className="ml-auto inline-flex items-center gap-1" role="group" aria-label="Reply type">
+      {(['reply', 'request_details'] as const).map(kind => <button key={kind} type="button" aria-pressed={replyKind === kind} onClick={() => onReplyKindChange(kind)}
+        className={`rounded-md px-2 py-0.5 text-[11.5px] font-semibold ${replyKind === kind ? 'bg-selected text-selected-content' : 'text-content-muted hover:text-content'}`}>
+        {kind === 'reply' ? 'Send' : 'Ask & wait for reply'}</button>)}
+    </span> : null}
+    inputId="ticket-conversation-draft" />;
 }

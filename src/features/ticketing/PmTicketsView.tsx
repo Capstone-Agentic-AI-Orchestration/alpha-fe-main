@@ -1,7 +1,7 @@
 import { PmQueueSelect, type PmQueueTone } from './PmQueueSelect';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { TicketDetailSkeleton, TicketQueueSkeleton } from './TicketingSkeletons';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   AlertCircle, ArrowLeft, ArrowUpRight, Check, ChevronDown, CircleDot, FileText, Info,
   LockKeyhole, MessageSquare, PanelLeftOpen, Paperclip, RefreshCw, Search, Send, StickyNote, X,
@@ -196,8 +196,19 @@ export function PmContactVerification({ verification }: { verification: unknown 
 
 // eslint-disable-next-line sonarjs/cognitive-complexity -- existing view; this change only adds the initialSelectedId prop
 export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false, refreshToken, fixedClientGroupKey, onOpenClient,
-  initialSelectedId = null, initialFilter = 'all' }: {
+  initialSelectedId = null, initialFilter = 'all', renderRequestConversation }: {
   api?: typeof pmTicketApi;
+  /**
+   * The conversation shown beside an open request instead of the request's own
+   * chat: on a client's page, the project's one conversation. Null keeps the
+   * request's chat.
+   */
+  renderRequestConversation?: (context: {
+    detail: PmTicketDetail;
+    replyKind: 'reply' | 'request_details';
+    onReplyKindChange: (kind: 'reply' | 'request_details') => void;
+    onWritten: () => void;
+  }) => ReactNode | null;
   documentsApi?: TicketDocumentsReadApi;
   intakeEnabled?: boolean;
   /** Limit actions to the implemented production phase. */
@@ -1186,7 +1197,8 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                 <div className="pm-tickets__main-column">
                   {stepBar}
                   {renderStepForms()}
-                  {renderConversation('conversation')}
+                  {(detail && renderRequestConversation?.({ detail, replyKind: messageAction, onReplyKindChange: setMessageAction,
+                    onWritten: () => setRefreshVersion(version => version + 1) })) ?? renderConversation('conversation')}
                 </div>
                 <ChatContextPanel label="Ticket context" className="pm-tickets__context-panel" activeSection={ticketSection} onClose={() => { setTicketSection('conversation'); setPanel('conversation'); setComposerOpen(false); }}>
                 <nav aria-label="Ticket sections" className="pm-tickets__section-tabs role-chat-tools">

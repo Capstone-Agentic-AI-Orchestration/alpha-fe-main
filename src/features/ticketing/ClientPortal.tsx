@@ -1,6 +1,6 @@
 import { EntrySkeleton, LoadingRows } from '@/shared/components/ui/skeleton';
 import { TicketDetailSkeleton } from './TicketingSkeletons';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ComponentProps, type ReactNode } from 'react';
 import {
   AlertCircle, FolderKanban, House, Lightbulb, ListChecks, LogOut, Plus, RefreshCw, Search, type LucideIcon,
 } from 'lucide-react';
@@ -25,7 +25,7 @@ import { ClientProposalsPage } from './ClientProposalsPage';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
 import { ClientTabBar, ClientTopBar } from './ClientTopBar';
 import { CxChips, CxEmpty, CxPageHeader, CxPanel, CxRequestRow, CxRow, CxSection } from './clientKit';
-import { ClientProjectConversation } from './ClientProjectConversation';
+import { ClientConversationRequestPage, ClientProjectConversation } from './ClientProjectConversation';
 import type { ConversationRequest } from './projectConversation';
 import { useClientWorkspaceTabs, type ClientPage as Page } from './clientWorkspaceTabs';
 import './clientDesignTokens.css';
@@ -119,7 +119,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [selectedProjectKey, setSelectedProjectKey] = tabState('selectedProjectKey');
   const [selectedProposalId, setSelectedProposalId] = tabState('selectedProposalId');
   const [selectedConversationKey, setSelectedConversationKey] = tabState('selectedConversationKey');
-  const [conversationFocusTicket, setConversationFocusTicket] = useState<string | null>(null);
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
@@ -603,23 +602,34 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     // Choosing Requests from the navigation shows the list, not the last request that was open.
     if (nextPage === 'requests') {
       historyGeneration.current += 1; setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null); setReturnToHome(false);
-      setSelectedConversationKey(null); setConversationFocusTicket(null);
+      setSelectedConversationKey(null);
     }
   }
 
   /** A project's one conversation, on the Requests page. */
-  function openConversation(project: ClientProject, ticketId: string | null = null) {
+  /**
+   * A project's one conversation. With an open request it shows beside that request
+   * (the newest open one); without one, on its own with the project's requests.
+   */
+  function openConversation(project: ClientProject) {
+    const onProject = (queue?.items ?? []).filter(item => item.workspaceId === project.workspaceId && item.projectId === project.projectId);
+    const first = onProject.find(item => !['closed', 'declined', 'cancelled'].includes(item.status)) ?? onProject[0];
+    if (first) { setSelectedConversationKey(null); openRequest(first); return; }
     navigate('requests');
-    setSelectedConversationKey(clientProjectKey(project)); setConversationFocusTicket(ticketId);
+    setSelectedConversationKey(clientProjectKey(project));
   }
 
-  /** A request's full page (plan, result, files) from its conversation; Back returns to the conversation. */
-  function openConversationRequest(request: ConversationRequest) {
-    const item = queue?.items.find(entry => entry.id === request.ticketId && entry.workspaceId === request.workspaceId);
+  /** Opens a request by ID, as one just made that is not in the loaded list yet. */
+  function openRequestById(workspaceId: string, ticketId: string) {
+    const item = queue?.items.find(entry => entry.id === ticketId && entry.workspaceId === workspaceId);
     if (item) { openRequest(item); return; }
-    // Made moments ago and not in the loaded list yet: open it by ID and refresh the list.
-    historyGeneration.current += 1; setSelectedId(request.ticketId); setSelectedWorkspaceId(request.workspaceId); setSelectedItemFallback(null);
-    setReturnToProjects(false); setReturnToHome(false); setRefreshVersion(value => value + 1);
+    historyGeneration.current += 1; setSelectedId(ticketId); setSelectedWorkspaceId(workspaceId); setSelectedItemFallback(null);
+    setReturnToProjects(false); setReturnToHome(false); setPage('requests'); setView('portal'); setRefreshVersion(value => value + 1);
+  }
+
+  /** Another request picked in the conversation's Requests list. */
+  function openConversationRequest(request: ConversationRequest) {
+    openRequestById(request.workspaceId, request.ticketId);
   }
 
   function openPortalUpdate(update: ClientPortalUpdate) {
@@ -655,6 +665,14 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     unavailable={portalState === 'unavailable'} error={pageError} onRetry={() => setSessionCheckVersion(value => value + 1)} />;
 
   const activeRequest = selectedQueueItem;
+  // A request on a shared project shows inside that project's one conversation.
+  const requestProject = activeRequest?.projectId ? (projects ?? []).find(project => project.workspaceId === activeRequest.workspaceId
+    && project.projectId === activeRequest.projectId) ?? null : null;
+  const requestConversation: RequestConversation | null = requestProject ? {
+    project: requestProject, clientName: session?.fullName?.trim() || 'Client', readOnly: inspectionOnly,
+    canCreateRequests: canStartProjectRequest, onSelectRequest: openConversationRequest,
+    onRequestCreated: ticketId => openRequestById(requestProject.workspaceId, ticketId),
+  } : null;
   const conversationProject = (projects ?? []).find(project => clientProjectKey(project) === selectedConversationKey) ?? null;
   const openOnProject = (project: ClientProject) => (displayQueue?.items ?? []).filter(item => item.workspaceId === project.workspaceId
     && item.projectId === project.projectId && !['closed', 'declined', 'cancelled'].includes(item.status)).length;
@@ -770,8 +788,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
         {page === 'requests' && !selectedId && conversationProject && <ClientProjectConversation key={activeTabId + ':' + selectedConversationKey}
           api={api} project={conversationProject} clientName={clientName} readOnly={inspectionOnly} canCreateRequests={canStartProjectRequest}
-          focusTicketId={conversationFocusTicket} onBack={() => { setSelectedConversationKey(null); setConversationFocusTicket(null); }}
-          onOpenRequest={openConversationRequest} />}
+          onBack={() => setSelectedConversationKey(null)} onSelectRequest={openConversationRequest}
+          onRequestCreated={ticketId => openRequestById(conversationProject.workspaceId, ticketId)} />}
 
         {page === 'requests' && !selectedId && !conversationProject && <div className="cx-page">
           {requestsHeader}
@@ -822,7 +840,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
                 : detail && <>
                   {showPendingLinkNotice && <p role="status" className="cx-status-note"><strong>Waiting for your project manager</strong>
                     This request is not linked to a project yet. Your project manager will confirm the project before it shows there.</p>}
-                  <ClientTicketDetail workspaceId={activeRequest.workspaceId} api={api} key={activeTabId + ':' + activeRequest.workspaceId + ':' + detail.id}
+                  <PortalRequestPage projectConversation={requestConversation} workspaceId={activeRequest.workspaceId} api={api} key={activeTabId + ':' + activeRequest.workspaceId + ':' + detail.id}
                     replyDraft={replyDrafts[activeRequest.workspaceId + ':' + detail.id] ?? ''}
                     onReplyDraftChange={value => setReplyDrafts(previous => ({ ...previous, [activeRequest.workspaceId + ':' + detail.id]: value }))}
                     ticket={detail} messages={messages} messageCursor={messageCursor} historyLoading={historyLoading} historyError={historyError}
@@ -848,3 +866,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   </main>;
 }
 
+
+type RequestConversation = Omit<ComponentProps<typeof ClientConversationRequestPage>, keyof ComponentProps<typeof ClientTicketDetail>>;
+
+/** A request on a shared project opens inside the project's one conversation; any other request keeps its own messages. */
+function PortalRequestPage({ projectConversation, ...props }: Readonly<ComponentProps<typeof ClientTicketDetail> & { projectConversation: RequestConversation | null }>) {
+  return projectConversation ? <ClientConversationRequestPage {...props} {...projectConversation} /> : <ClientTicketDetail {...props} />;
+}

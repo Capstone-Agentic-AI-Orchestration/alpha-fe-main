@@ -130,8 +130,8 @@ export function conversationChatMessages(items: readonly ConversationItem[], rol
       return { id: item.id, author: item.author, kind: 'event', body: eventLine(item, role), createdAt: item.createdAt };
     }
     if (item.kind === 'request') {
-      return { id: item.id, author: item.author, kind: 'request', heading: item.request?.title ?? 'New request',
-        tag: 'New request', body: item.body, createdAt: item.createdAt, actions };
+      return { id: item.id, author: item.author, kind: 'request', heading: item.request?.title ?? 'New request', reference: item.request?.reference,
+        body: item.body, createdAt: item.createdAt, actions };
     }
     return { id: item.id, author: item.kind === 'note' ? 'note' : item.author, body: item.body, createdAt: item.createdAt,
       tag: messageTag(item), actions };

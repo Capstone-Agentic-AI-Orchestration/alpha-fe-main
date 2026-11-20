@@ -158,7 +158,8 @@ function toTicketDetail(ticket: DemoTicket): PmTicketDetail {
       projectLabel: ticket.projectName, requestedDeadline: ticket.requestedDeadline,
     },
     internal: {
-      updatedAt: ticket.updatedAt, projectId: ticket.projectId, projectName: ticket.projectName, requiredIssueIds: ticket.requiredIssueIds,
+      updatedAt: ticket.updatedAt, projectId: ticket.projectId, projectName: ticket.projectName,
+      projectClientVisible: Boolean(ticket.projectId && ticket.clientAccessActive), requiredIssueIds: ticket.requiredIssueIds,
       actionOwner: ticket.actionOwner, nextAction: ticket.nextAction,
       authorizedScopeVersionId: ticket.scopeAgreed ? scopeId : null,
       correctionRequestedFor: null, withdrawalRequested: false, closureReason: ticket.closureReason,

@@ -32,8 +32,15 @@ export function ClientTicketDetail({
   workspaceId, ticket, messages, messageCursor, historyLoading, historyError, busy, error, replyResetVersion,
   onBack, onLoadMore, onReply, onDecision, onAdditionalWork, onCorrection, api = clientTicketApi,
   documentsApi = clientTicketDocumentsApi, workflowActionsDisabled = false, newRequestsDisabled = true, communicationEnabled = false,
-  readOnlyPreview = false, replyDraft, onReplyDraftChange, backLabel = 'Back to requests',
+  readOnlyPreview = false, replyDraft, onReplyDraftChange, backLabel = 'Back to requests', railLead, conversation,
 }: {
+  /** Shown first in the left column, as the project and its requests. */
+  railLead?: ReactNode;
+  /**
+   * The project's one conversation, shown instead of this request's own messages;
+   * the decision the client owes stays pinned above it.
+   */
+  conversation?: { title: string; description: string; body: ReactNode };
   /** Names where the back link goes, since it is the page's only way back. */
   backLabel?: string;
   workspaceId: string;
@@ -206,17 +213,20 @@ export function ClientTicketDetail({
     <TicketDocumentsPanel api={documentsApi} scope={workspaceId} ticketId={ticket.id} canUpload={!terminal} heading="Files" />
   </div> : null;
 
+  const pinned = decision ? <section className="client-decision-slot cx-panel is-attention cx-decision" aria-labelledby="client-decision-title">
+    <h2 id="client-decision-title">{'Action needed: ' + progress.label}</h2>
+    {decision}
+  </section> : null;
+
   return <section className="cx-request" aria-labelledby="client-request-title">
     <div className="cx-reqsplit">
-      <RequestRail ticket={ticket} backLabel={backLabel} onBack={onBack} busy={busy} statusLabel={progress.statusLabel} description={progress.description}
+      <RequestRail lead={railLead} ticket={ticket} backLabel={backLabel} onBack={onBack} busy={busy} statusLabel={progress.statusLabel} description={progress.description}
         tone={requestTone(ticket.status, requestedAction)} steps={progressSteps} whatNext={whatNext} plan={railPlan} result={railResult} files={files}
         extraAction={newRequestsDisabled ? null : <button onClick={onAdditionalWork} disabled={busy || workflowActionsDisabled} className="cx-button">Request additional work</button>}
         details={<RequestDetails ticket={ticket} copied={copied} onCopy={copyReference} onOpenPreview={() => setPreviewOpenedKey(deliveryKey)} />} />
-      <RequestConversation ticketId={ticket.id} messages={messages} history={history} error={error} chat={chatProps}
-        decision={decision ? <section className="client-decision-slot cx-panel is-attention cx-decision" aria-labelledby="client-decision-title">
-          <h2 id="client-decision-title">{'Action needed: ' + progress.label}</h2>
-          {decision}
-        </section> : null} />
+      {conversation
+        ? <ConversationColumn title={conversation.title} description={conversation.description} error={error} decision={pinned}>{conversation.body}</ConversationColumn>
+        : <RequestConversation ticketId={ticket.id} messages={messages} history={history} error={error} chat={chatProps} decision={pinned} />}
     </div>
 
     {!workflowActionsDisabled && confirming && <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setConfirming(null); }}>
@@ -234,7 +244,8 @@ export function ClientTicketDetail({
 }
 
 /** The left column: the request, where it stands, what comes next, and everything else about it. */
-function RequestRail({ ticket, backLabel, onBack, busy, statusLabel, description, tone, steps, whatNext, plan, result, files, extraAction, details }: Readonly<{
+function RequestRail({ lead, ticket, backLabel, onBack, busy, statusLabel, description, tone, steps, whatNext, plan, result, files, extraAction, details }: Readonly<{
+  lead?: ReactNode;
   ticket: ClientTicketRecord; backLabel: string; onBack: () => void; busy: boolean; statusLabel: string; description: string;
   tone: CxTone; steps: ClientProgressStep[]; whatNext: string | null; plan: ReactNode; result: ReactNode; files: ReactNode;
   extraAction: ReactNode; details: ReactNode;
@@ -242,6 +253,7 @@ function RequestRail({ ticket, backLabel, onBack, busy, statusLabel, description
   return <aside className="cx-reqrail" aria-label="About this request">
     <div className="cx-reqrail-top">
       <button type="button" className="cx-back" onClick={onBack} disabled={busy}><ArrowLeft size={15} aria-hidden="true" />{backLabel}</button>
+      {lead}
       <section className="cx-reqcard cx-reqhead">
         <div className="cx-reqhead-top">
           <span className="cx-reqhead-icon" aria-hidden="true"><FileText size={24} /></span>
@@ -313,7 +325,22 @@ function RequestConversation({ ticketId, messages, history, error, decision, cha
   </section>;
 }
 
-function RailCard({ icon, title, children }: Readonly<{ icon: ReactNode; title: string; children: ReactNode }>) {
+/** The right column with another conversation in it, such as the project's one conversation. */
+export function ConversationColumn({ title, description, error = '', decision = null, children }: Readonly<{
+  title: string; description: string; error?: string; decision?: ReactNode; children: ReactNode;
+}>) {
+  return <section className="cx-reqchat" aria-labelledby="client-conversation-title">
+    <header className="cx-reqchat-head">
+      <span className="cx-reqchat-icon" aria-hidden="true"><MessagesSquare size={22} /></span>
+      <div><h2 id="client-conversation-title">{title}</h2><p>{description}</p></div>
+    </header>
+    {error && <p role="alert" className="cx-error">{error}</p>}
+    {decision}
+    {children}
+  </section>;
+}
+
+export function RailCard({ icon, title, children }: Readonly<{ icon: ReactNode; title: string; children: ReactNode }>) {
   return <section className="cx-reqcard"><h2><span aria-hidden="true">{icon}</span>{title}</h2>{children}</section>;
 }
 
