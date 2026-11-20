@@ -8,6 +8,11 @@ import { CHAT_ORCHESTRATOR_BAR_ENABLED } from '@/config/features';
 import { usePanelPresence } from './usePanelPresence';
 import { ChatConversationLayout } from './ChatConversationLayout';
 import { LocalPreviewTab, WebPreviewCard, useLocalPreviews } from './LocalPreview';
+import { BoardRunCard } from '@/features/board-run/BoardRunCard';
+import { StartBoardRunDialog } from '@/features/board-run/StartBoardRunDialog';
+import { asksForBoardRun, runAnchorId } from '@/features/board-run/boardRunPresentation';
+import { useBoardRuns } from '@/features/board-run/useBoardRuns';
+import type { BoardRun } from '@/shared/types/boardRun';
 import { reconcileCallSnapshot } from './chatCallSnapshot';
 import { WorkUsageRow, useChatUsage, entriesAtMessage } from './ChatUsage';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -759,6 +764,17 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const targetQuota = targetRuntime && !quotaError ? freshQuota(limitForRuntime(targetRuntime, quotaSnapshot), quotaTime) : undefined;
   const project = projects.find(item => item.id === activeThread?.projectId);
   const openPreview = () => openSideTab({ id: 'preview', kind: 'preview' });
+  // Board runs: started from this chat, their builds post here, and their card sits under
+  // the message sent just before the run started, so it scrolls with the conversation.
+  const canBoardRun = !isClient && Boolean(project) && can('run_builds');
+  const [boardRunDialogOpen, setBoardRunDialogOpen] = useState(false);
+  const boardRuns = useBoardRuns(project?.id, canBoardRun && isActiveTab);
+  const boardRunsHere = boardRuns.runs.filter(run => run.threadId === activeThread?.id);
+  const boardRunAnchors = new Map(boardRunsHere.map(run => [run.id,
+    runAnchorId(currentMessages.filter(message => message.senderType !== 'system' && !message.agentCallId), run.createdAt)]));
+  const updateBoardRun = (run: BoardRun) => boardRuns.setRuns(current => [run, ...current.filter(item => item.id !== run.id)]);
+  const boardRunCards = (anchorId: string | null) => boardRunsHere.filter(run => boardRunAnchors.get(run.id) === anchorId)
+    .map(run => <BoardRunCard key={run.id} run={run} onChange={updateBoardRun} onOpenBuild={openSavedBuildReview} />);
   const previews = useLocalPreviews(activeThreadId ?? undefined, `${activeWorkspace?.id}:${currentUser?.id}:${activeThreadId}`, Boolean(project && !isClient && isActiveTab), openPreview);
   // Only a build originating in this conversation can appear or be controlled here.
   const { build: liveBuild, latestBuild, refresh: refreshLiveBuild } = useProjectLiveBuild(
@@ -1880,6 +1896,8 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         </div>
       </aside>}
       </div>
+      {canBoardRun && project && activeThread && boardRunDialogOpen && <StartBoardRunDialog open onClose={() => setBoardRunDialogOpen(false)}
+        projectId={project.id} threadId={activeThread.id} issues={issues} onStarted={updateBoardRun} />}
       <CreateProjectModal isOpen={showCreateProject} onClose={() => setShowCreateProject(false)} onCreated={created => { setExpandedProjectIds(current => current.includes(created.id) ? current : [...current, created.id]); startDraft(created.id); }} />
       </>}
       <ChatThreadDialogs threadPendingDelete={threadPendingDelete} setThreadPendingDelete={setThreadPendingDelete}
@@ -1914,7 +1932,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
   }
   return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <><ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div></div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}</div></div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{boardRunCards(message.id)}</div></div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-5 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-7 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-6xl space-y-2">
@@ -1978,6 +1996,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                   </button>
                   {repositoryMenuOpen && <div role="menu" aria-label="Message tools" className="absolute bottom-full left-0 z-40 mb-3 max-h-[min(72vh,38rem)] w-[min(22rem,calc(100vw-2rem))] animate-slide-up overflow-y-auto rounded-2xl border border-divider bg-surface-high p-1.5 shadow-2xl shadow-black/60">
                     <button type="button" role="menuitem" disabled={Boolean(activeTurnMessageId) || pendingFiles.length >= MAX_CHAT_FILES} onClick={() => { setRepositoryMenuOpen(false); fileInputRef.current?.click(); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-content transition hover:bg-surface-high disabled:cursor-not-allowed disabled:opacity-40"><Paperclip className="h-4 w-4 shrink-0 text-content-secondary" /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">Attach files</span><span className="block text-[10px] text-content-muted">{activeTurnMessageId ? 'Finish this response before attaching files.' : 'Images, documents, or code'}</span></span></button>
+                    {canBoardRun && <button type="button" role="menuitem" disabled={Boolean(boardRuns.active)} onClick={() => { setRepositoryMenuOpen(false); setBoardRunDialogOpen(true); }} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-content transition hover:bg-surface-high disabled:cursor-not-allowed disabled:opacity-40"><ListChecks className="h-4 w-4 shrink-0 text-content-secondary" /><span className="min-w-0 flex-1"><span className="block text-xs font-medium">Start board run</span><span className="block text-[10px] text-content-muted">{boardRuns.active ? 'A board run is already going in this project.' : 'Agents work through chosen tasks one after another'}</span></span></button>}
                     {!isClient && <div className="border-t border-divider px-1.5 py-1.5">
                       <ChatSkillTools inline skills={skills} selectedSkillIds={selectedSkillIds} onSkillIdsChange={setSelectedSkillIds} draft={input} onDraftChange={setInput} onImprove={async (draft, skillIds) => (await apiService.improveChatPrompt({ draft, skillIds })).suggestion} onError={message => showToast('Prompt not improved', message, 'error')} onScan={can('manage_skills') ? scanInstalledSkills : undefined} scanning={isScanningSkills} disabled={Boolean(activeTurnMessageId)} />
                     </div>}

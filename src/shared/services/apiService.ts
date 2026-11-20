@@ -1,5 +1,6 @@
 import type { ChatUsageSnapshot } from '@/features/chat/ChatUsage';
 import type { LocalPreview } from '@/shared/types/localPreview';
+import type { BoardRun, StartBoardRunBody } from '@/shared/types/boardRun';
 import type { OperationsNotification, OperationsSnapshot, OperationsExpense, TicketPriority } from '@/shared/types/operations';
 
 /** An organization the signed-in person belongs to, as `GET /github/orgs` lists it. */
@@ -435,6 +436,12 @@ export const apiService = {
     fetchJson<{ id: string; threadId: string; status: string; reason?: string }>(`/projects/${projectId}/issues/${issueId}/build-request`, { method: 'POST', body: JSON.stringify(body) }),
   cancelBuildRequest: (projectId: string, requestId: string) =>
     fetchJson(`/projects/${projectId}/build-requests/${requestId}/cancel`, { method: 'POST' }),
+  /** This developer's board runs in a project, newest first. */
+  listBoardRuns: (projectId: string) => fetchJson<BoardRun[]>(`/projects/${encodeURIComponent(projectId)}/board-runs`),
+  startBoardRun: (projectId: string, body: StartBoardRunBody) =>
+    fetchJson<BoardRun>(`/projects/${encodeURIComponent(projectId)}/board-runs`, { method: 'POST', body: JSON.stringify(body) }),
+  boardRunAction: (projectId: string, runId: string, action: 'stop' | 'pause' | 'resume', body: { maxTokens?: number | null; maxCostUsd?: number | null } = {}) =>
+    fetchJson<BoardRun>(`/projects/${encodeURIComponent(projectId)}/board-runs/${encodeURIComponent(runId)}/${action}`, { method: 'POST', body: JSON.stringify(body) }),
   /** Internal ticket API path; preserves the existing session, workspace and desktop relay transport. */
   ticketRequest: async <T>(path: string, options?: RequestInit): Promise<T> => {
     if (!validInternalTicketPath(path)) throw new Error('Invalid internal ticket API path.');
