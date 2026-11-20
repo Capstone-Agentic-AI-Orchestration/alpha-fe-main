@@ -59,8 +59,8 @@ describe('Clients list', () => {
 
 describe('A client’s page', () => {
   it('shows the client’s projects and project conversation without a separate Tickets tab', () => {
-    const html = render({ selectedKey: 'client:ana' });
-    for (const shown of ['All clients', 'Ana Cruz', 'Overview', 'Projects', 'Conversation', 'Access', 'Portal access on']) expect(html).toContain(shown);
+    const html = render({ selectedKey: 'client:ana', section: 'conversation' });
+    for (const shown of ['All clients', 'Ana Cruz', 'Projects', 'Conversation', 'Access', 'Portal access on', 'Project conversation']) expect(html).toContain(shown);
     expect(html).not.toContain('>Tickets<');
   });
 

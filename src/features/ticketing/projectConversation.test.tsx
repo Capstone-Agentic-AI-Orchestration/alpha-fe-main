@@ -93,7 +93,7 @@ describe('ProjectConversationChat', () => {
   it('draws a request as its own card with its reference and status, not as a message bubble', () => {
     const html = chat();
     expect(html).toMatch(/<article class="ticket-chat__request"[^>]*data-chat-id="request:t-1"/);
-    for (const shown of ['Request', 'TKT-1', 'In progress', 'Client made a request']) expect(html).toContain(shown);
+    for (const shown of ['Request', 'TKT-1', 'In progress', 'Requested by Client']) expect(html).toContain(shown);
     expect(html).toContain('data-chat-id="tm:1"');
   });
 

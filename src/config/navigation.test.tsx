@@ -21,7 +21,7 @@ const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
-  pm: ['clients', 'issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['clients', 'inquiries', 'projects', 'issues', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
@@ -31,7 +31,7 @@ const existing: Record<UserRole, NavigationTab[]> = {
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
-  pm: ['clients', 'inquiries', 'projects', 'issues', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['clients', 'issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /** PMs start with their clients; the project conversation owns each project's tickets. */
