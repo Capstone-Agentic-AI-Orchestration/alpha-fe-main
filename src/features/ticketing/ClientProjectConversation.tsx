@@ -5,7 +5,7 @@ import { ProjectConversationView } from './ProjectConversationView';
 import type { ConversationItem, ConversationRequest } from './projectConversation';
 
 const REFRESH_MS = 30_000;
-const newOperationId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `op-${Date.now()}-${Math.random()}`);
+const newOperationId = () => crypto.randomUUID();
 const errorText = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback;
 
 /**

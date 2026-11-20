@@ -50,17 +50,25 @@ const text = (value: unknown): value is string => typeof value === 'string';
 const nonEmpty = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 function invalid(): never { throw new Error('Conversation response is invalid.'); }
 
+function parseItemRequest(value: unknown): ConversationItem['request'] {
+  if (value === null || value === undefined) return null;
+  if (!record(value) || !nonEmpty(value.ticketId) || !text(value.reference) || !text(value.title)) invalid();
+  return { ticketId: value.ticketId, reference: value.reference, title: value.title };
+}
+
+function parseItemTask(value: unknown): ConversationItem['task'] {
+  if (value === null || value === undefined) return null;
+  if (!record(value) || !nonEmpty(value.issueId) || !text(value.identifier) || !text(value.title)) invalid();
+  return { issueId: value.issueId, identifier: value.identifier, title: value.title };
+}
+
 export function parseConversation(value: unknown): { items: ConversationItem[]; clientId?: string } {
   if (!record(value) || !Array.isArray(value.items)) invalid();
   const items = value.items.map((raw): ConversationItem => {
     if (!record(raw) || !nonEmpty(raw.id) || !KINDS.has(raw.kind as ConversationItemKind)
       || (raw.author !== 'client' && raw.author !== 'pm') || !text(raw.body) || !nonEmpty(raw.createdAt)) invalid();
-    const request = raw.request === null || raw.request === undefined ? null
-      : record(raw.request) && nonEmpty(raw.request.ticketId) && text(raw.request.reference) && text(raw.request.title)
-        ? { ticketId: raw.request.ticketId, reference: raw.request.reference, title: raw.request.title } : invalid();
-    const task = raw.task === null || raw.task === undefined ? null
-      : record(raw.task) && nonEmpty(raw.task.issueId) && text(raw.task.identifier) && text(raw.task.title)
-        ? { issueId: raw.task.issueId, identifier: raw.task.identifier, title: raw.task.title } : invalid();
+    const request = parseItemRequest(raw.request);
+    const task = parseItemTask(raw.task);
     return { id: raw.id, kind: raw.kind as ConversationItemKind, author: raw.author, body: raw.body, createdAt: raw.createdAt, request, task };
   });
   return nonEmpty(value.clientId) ? { items, clientId: value.clientId } : { items };
@@ -85,17 +93,32 @@ export function parseConversationRequests(value: unknown): { items: Conversation
   return { items: value.items.map(parseConversationRequest) };
 }
 
+/** Who did something, from the reader's side. */
+function actorName(author: ConversationItem['author'], role: 'client' | 'pm'): string {
+  if (author === role) return 'You';
+  if (author === 'client') return 'The client';
+  return role === 'client' ? 'Your project manager' : 'A project manager';
+}
+
+/** The task-linked line: PMs see the task's identifier, clients see what was added. */
+function taskLinkedLine(item: ConversationItem, role: 'client' | 'pm', title: string): string {
+  const taskTitle = item.task?.title ?? '';
+  if (role === 'client') return 'Your project manager added a task for ' + title + (taskTitle ? ': ' + taskTitle : '');
+  const quoted = taskTitle ? '“' + taskTitle + '” ' : '';
+  return (item.task?.identifier ?? 'A task') + ' ' + quoted + 'was linked to ' + title;
+}
+
 /** One line for a checklist or task event, from the reader's side. */
 function eventLine(item: ConversationItem, role: 'client' | 'pm'): string {
-  const title = item.request ? `“${item.request.title}”` : 'a request';
-  const who = item.author === role ? 'You' : item.author === 'pm' ? (role === 'client' ? 'Your project manager' : 'A project manager') : 'The client';
-  if (item.kind === 'task_linked') {
-    return role === 'pm'
-      ? `${item.task?.identifier ?? 'A task'} ${item.task?.title ? `“${item.task.title}” ` : ''}was linked to ${title}`
-      : `Your project manager added a task for ${title}${item.task?.title ? `: ${item.task.title}` : ''}`;
-  }
-  if (item.kind === 'request_done') return `${who} marked ${title} done`;
-  return `${who} reopened ${title}`;
+  const title = item.request ? '“' + item.request.title + '”' : 'a request';
+  if (item.kind === 'task_linked') return taskLinkedLine(item, role, title);
+  const who = actorName(item.author, role);
+  return item.kind === 'request_done' ? who + ' marked ' + title + ' done' : who + ' reopened ' + title;
+}
+
+function messageTag(item: ConversationItem): string | undefined {
+  if (item.kind === 'clarification') return 'Project proposal';
+  return item.request ? 'Re: ' + item.request.title : undefined;
 }
 
 /** The conversation as chat entries; actions are added per entry by the caller. */
@@ -110,8 +133,7 @@ export function conversationChatMessages(items: readonly ConversationItem[], rol
       return { id: item.id, author: item.author, kind: 'request', heading: item.request?.title ?? 'New request',
         tag: 'New request', body: item.body, createdAt: item.createdAt, actions };
     }
-    const tag = item.kind === 'clarification' ? 'Project proposal'
-      : item.request ? `Re: ${item.request.title}` : undefined;
-    return { id: item.id, author: item.kind === 'note' ? 'note' : item.author, body: item.body, createdAt: item.createdAt, tag, actions };
+    return { id: item.id, author: item.kind === 'note' ? 'note' : item.author, body: item.body, createdAt: item.createdAt,
+      tag: messageTag(item), actions };
   });
 }

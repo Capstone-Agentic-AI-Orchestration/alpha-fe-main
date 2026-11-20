@@ -7,7 +7,7 @@ import type { ConversationItem, ConversationRequest } from './projectConversatio
 import { REQUEST_TASK_LINKED_EVENT, linkSavedTaskToRequest } from './requestTaskLink';
 
 const REFRESH_MS = 30_000;
-const newOperationId = () => (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `op-${Date.now()}-${Math.random()}`);
+const newOperationId = () => crypto.randomUUID();
 const errorText = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback;
 
 /** The client account behind a client page's key (`client:<account>`), or null for an unverified inquiry group. */
