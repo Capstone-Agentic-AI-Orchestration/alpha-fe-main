@@ -86,6 +86,27 @@ describe('Task details', () => {
     for (const hidden of ['role="tablist"', '>Build<', 'Build status unavailable', 'Plan build', 'Activity']) expect(html).not.toContain(hidden);
   });
 
+  it('shows only people\'s comments, and counts only those', () => {
+    const html = render('review', false, true, {
+      comments: [
+        { id: 'c-agent', authorType: 'agent', authorName: 'Frontend Agent', content: 'Started autonomous execution for PRO-107.', createdAt: '2026-11-20T11:17:00Z' },
+        { id: 'c-system', authorType: 'system', authorName: 'Alpha Orchestrator', content: 'Task workflow planned by Orchestrator Agent.', createdAt: '2026-11-20T11:16:00Z' },
+        { id: 'c-pm', authorType: 'user', authorName: 'Lloyd', content: 'Please keep the hero short.', createdAt: '2026-11-20T12:00:00Z' },
+      ],
+    });
+    expect(html).toContain('Please keep the hero short.');
+    for (const hidden of ['Started autonomous execution', 'Task workflow planned', 'Frontend Agent', 'Alpha Orchestrator']) expect(html).not.toContain(hidden);
+    expect(html).toMatch(/Comments<span[^>]*>1<\/span>/);
+  });
+
+  it('says there are no comments when agents and Alpha wrote all of them', () => {
+    const html = render('review', false, true, {
+      comments: [{ id: 'c-agent', authorType: 'agent', authorName: 'Frontend Agent', content: 'Run finished.', createdAt: '2026-11-20T11:17:00Z' }],
+    });
+    expect(html).toContain('No comments yet.');
+    expect(html).not.toContain('Run finished.');
+  });
+
   it('hands a task to chat for developers', () => {
     const html = render('todo', true);
     expect(html).toContain('Pick this up in chat');

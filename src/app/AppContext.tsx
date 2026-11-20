@@ -2194,13 +2194,6 @@ ${e.detail}`;
     setPrototypeRuns(prev => [run, ...prev]);
     setIssues(prev => prev.map(issue => issue.id === issueId ? {
       ...issue,
-      comments: [...issue.comments, {
-        id: `comm-${run.id}-started`,
-        authorType: 'system' as const,
-        authorName: 'Alpha',
-        content: `Requested a run from ${assignedAgent.name} for ${targetIssue.identifier}. Waiting for the daemon to confirm it started.`,
-        createdAt: now
-      }],
       updatedAt: now
     } : issue));
     closeRunSetup();
@@ -2302,13 +2295,6 @@ ${e.detail}`;
         ? {
             ...issue,
             status: 'in_progress',
-            comments: [...issue.comments, {
-              id: `comm-${run.id}-failed-to-start`,
-              authorType: 'system' as const,
-              authorName: 'Alpha',
-              content: `Run did not start: ${detail}`,
-              createdAt: new Date().toISOString()
-            }],
             updatedAt: new Date().toISOString()
           }
         : issue
@@ -2347,13 +2333,6 @@ ${e.detail}`;
     setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
       ...issue,
       status: 'in_progress',
-      comments: [...issue.comments, {
-        id: `comm-${run.id}-cancelled`,
-        authorType: 'system' as const,
-        authorName: 'Prototype runner',
-        content: 'Run cancelled. The task remains in progress and can be started again.',
-        createdAt: now
-      }],
       updatedAt: now
     } : issue));
     setAgents(prev => prev.map(agent => agent.id === run.agentId ? {
@@ -2382,13 +2361,6 @@ ${e.detail}`;
       setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
         ...issue,
         status: 'agent_running',
-        comments: [...issue.comments, {
-          id: `comm-${newRun.id}-retry`,
-          authorType: 'system' as const,
-          authorName: 'Prototype runner',
-          content: 'Run restarted with a clean workspace.',
-          createdAt: now
-        }],
         updatedAt: now
       } : issue));
       setAgents(prev => prev.map(agent => agent.id === run.agentId ? {
@@ -2450,17 +2422,6 @@ ${e.detail}`;
         setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
           ...issue,
           status: 'in_progress',
-          comments: issue.comments.some(comment => comment.id === `comm-${run.id}-failed`)
-            ? issue.comments
-            : [...issue.comments, {
-                id: `comm-${run.id}-failed`,
-                authorType: 'agent' as const,
-                authorName: assignedAgent.name,
-                authorAvatar: assignedAgent.avatar,
-                agentId: assignedAgent.id,
-                content: run.testSummary || 'The agent run failed. Review the agent activity and retry when ready.',
-                createdAt: now
-              }],
           updatedAt: now
         } : issue));
         setInbox(prev => prev.some(item => item.id === `notif-${run.id}-failed`) ? prev : [{
@@ -2501,31 +2462,6 @@ ${e.detail}`;
         status: 'review',
         ...(branchName ? { branchName } : {}),
         subtasks: issue.subtasks.map(subtask => ({ ...subtask, completed: true })),
-        comments: issue.comments.some(comment => comment.id === `comm-${run.id}-review`)
-          ? issue.comments
-          : [...issue.comments, {
-              id: `comm-${run.id}-review`,
-              authorType: 'agent' as const,
-              authorName: assignedAgent.name,
-              authorAvatar: assignedAgent.avatar,
-              agentId: assignedAgent.id,
-              /**
-               * The run's own numbers, including none.
-               *
-               * This read `${run.changedFiles || 4} files changed and
-               * ${run.testSummary || 'all tests passed'}` — so a run that
-               * changed nothing announced four files and passing tests, in the
-               * agent's own voice, on the task. The backend verifier now
-               * records the repository checks and their exit status; the
-               * daemon's testSummary is used verbatim when present.
-               */
-              content: run.changedFiles
-                ? `Implementation is ready for review: ${run.changedFiles} file(s) changed.` +
-                  (run.testSummary ? ` ${run.testSummary}` : '')
-                : 'The run finished without changing any files. Check the run log before reviewing.',
-              createdAt: now,
-              isThinking: false
-            }],
         updatedAt: now
       } : issue));
       setInbox(prev => prev.some(item => item.id === `notif-${run.id}-approval`) ? prev : [{
@@ -3155,15 +3091,6 @@ ${e.detail}`;
       setIssues(prev => prev.map(issue => issue.id === run.issueId ? {
         ...issue,
         status: 'todo',
-        comments: issue.comments.some(comment => comment.id === `comm-${run.id}-rejected`)
-          ? issue.comments
-          : [...issue.comments, {
-              id: `comm-${run.id}-rejected`,
-              authorType: 'system' as const,
-              authorName: 'Alpha Execution Engine',
-              content: 'Changes requested. The run stopped at the review gate.',
-              createdAt: now
-            }],
         updatedAt: updatedRun.updatedAt || now
       } : issue));
       showToast('Changes requested', 'The review decision was saved.', 'info');
@@ -3860,15 +3787,7 @@ ${e.detail}`;
         title: c,
         completed: false
       })),
-      comments: [
-        {
-          id: `comm-${Date.now()}-${i}`,
-          authorType: 'system',
-          authorName: 'System',
-          content: `Created from approved specification ${doc.identifier}. Acceptance criteria were fixed at approval and are not editable without a new client sign-off.`,
-          createdAt: now
-        }
-      ],
+      comments: [],
       createdAt: now,
       updatedAt: now
     }));
