@@ -18,7 +18,7 @@ const orchestration = (status: string, over: Record<string, unknown> = {}) => ({
 }) as unknown as ProjectBuildOrchestration;
 
 const render = (value: ProjectBuildOrchestration, canApprove = true) => renderToStaticMarkup(<BuildNextStepCard projectId="p"
-  orchestration={value} canApprove={canApprove} onReview={() => undefined} onAskChanges={() => undefined} />);
+  orchestration={value} canApprove={canApprove} onReview={() => undefined} onAskChanges={() => undefined} onMerge={() => undefined} />);
 
 /** After a build, the conversation says it is done and what to do next. */
 describe('the next step under a finished build', () => {
@@ -47,7 +47,10 @@ describe('the next step under a finished build', () => {
       publications: [{ repository: 'acme/web-fe', pullRequestUrl: 'https://github.com/acme/web-fe/pull/4' }] } }));
     expect(html).toContain('Done · pull request opened');
     expect(html).toContain('https://github.com/acme/web-fe/pull/4');
-    expect(html).toContain('merge it on GitHub');
+    // Merging is asked of the Orchestrator in the chat, never done on GitHub by hand.
+    expect(html).toContain('say &quot;merge it&quot; and the Orchestrator merges it into dev');
+    expect(html).toContain('Merge into dev');
+    expect(html).not.toContain('on GitHub');
   });
 
   it('says an investigation needs no pull request', () => {
