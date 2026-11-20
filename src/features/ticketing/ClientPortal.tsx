@@ -813,7 +813,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </aside></div>
         </div>}
 
-        {page === 'requests' && selectedId && <div className="cx-page">
+        {page === 'requests' && selectedId && <div className="cx-request-page">
           {queueNotice && <p role="status" className="cx-status-note">{queueNotice}</p>}
           {!activeRequest ? <CxPanel><CxEmpty title="Request not available" body="Refresh and try again. If it is still missing, contact your project manager."
             action={<button type="button" className="cx-button" onClick={closeRequest}>Back to requests</button>} /></CxPanel>

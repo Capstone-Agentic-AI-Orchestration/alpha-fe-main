@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { ClientTicketDetail } from './ClientTicketDetail';
 
 describe('client ticket detail layout', () => {
-  it('puts the decision and the conversation first, with request details in a side column', () => {
+  it('fills the right side with the conversation and keeps the request details in the left column', () => {
     const html = renderToStaticMarkup(<ClientTicketDetail
       workspaceId="workspace-a"
       communicationEnabled
@@ -32,30 +32,31 @@ describe('client ticket detail layout', () => {
     expect(html).not.toContain('Orchestrator');
 
     const rail = html.indexOf('aria-label="About this request"');
+    const chat = html.indexOf('cx-reqchat');
     expect(rail).toBeGreaterThan(-1);
-    const header = html.slice(0, html.indexOf('cx-request-layout'));
-    const main = html.slice(html.indexOf('cx-request-layout'), rail);
-    const side = html.slice(rail);
-    // The header leads with a plain sentence and the step path; the ticket code is not there.
-    expect(header).toContain('Work starts once it is approved.');
-    expect(header).toContain('aria-label="Request progress"');
-    expect(header).toContain('Approve the plan · you');
-    expect(header).not.toContain('TKT-1');
-    // The decision sits above the conversation in the main column.
-    expect(main.indexOf('client-decision-slot')).toBeGreaterThan(-1);
-    expect(main.indexOf('client-decision-slot')).toBeLessThan(main.indexOf('Hello there'));
-    // The plan is shown once, as the decision, not repeated in the side column.
+    expect(chat).toBeGreaterThan(rail);
+    const side = html.slice(rail, chat);
+    const conversation = html.slice(chat);
+    // The left column leads with the request, a plain sentence on where it stands, and the steps.
+    expect(side).toContain('id="client-request-title"');
+    expect(side).toContain('Work starts once it is approved.');
+    expect(side).toContain('aria-label="Request progress"');
+    expect(side).toContain('Approve the plan · you');
+    expect(side).toContain('What happens next');
+    expect(side).toContain('Once you approve, your project manager starts the work.');
+    // The plan is the pinned decision above the messages, not repeated in the left column.
     expect(side).not.toContain('Update the report filters.');
-    // The side column holds what was asked, files and the reference with its copy button.
+    expect(conversation.indexOf('client-decision-slot')).toBeGreaterThan(-1);
+    expect(conversation.indexOf('client-decision-slot')).toBeLessThan(conversation.indexOf('Hello there'));
+    // Milestones sit in the conversation as updates, in date order with the messages.
+    expect(conversation).toContain('Update at');
+    expect(conversation).toContain('Plan sent for your approval');
+    // The left column also holds what was asked, files and the reference with its copy button.
     expect(side).toContain('What you asked for');
     expect(side).toContain('Request details');
     expect(side).toContain('TKT-1');
     expect(side).toContain('Copy request reference');
-    // What follows the decision, and the request's dated milestones.
-    expect(main).toContain('What happens next');
-    expect(main).toContain('Once you approve, your project manager starts the work.');
-    expect(side).toContain('History');
-    expect(side.indexOf('You sent the request')).toBeLessThan(side.indexOf('Plan sent for your approval'));
+    expect(side).toContain('Your project manager');
   });
 
   it('keeps an agreed plan in the side column once nothing is asked of the client', () => {
@@ -73,7 +74,7 @@ describe('client ticket detail layout', () => {
       onCorrection={async () => undefined}
     />);
     expect(html).not.toContain('client-decision-slot');
-    const side = html.slice(html.indexOf('aria-label="About this request"'));
+    const side = html.slice(html.indexOf('aria-label="About this request"'), html.indexOf('cx-reqchat'));
     expect(side).toContain('The plan');
     expect(side).toContain('You approved this plan.');
     expect(side).toContain('Website');

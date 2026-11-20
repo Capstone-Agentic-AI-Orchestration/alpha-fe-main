@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClientProjectRequestItem } from './clientApi';
-import { clientGreeting, clientNextLine, clientNextStep, clientRequestGroup, clientWhatNext, dayLabel, listProgressIndex, relativeTime } from './clientFriendly';
+import { clientGreeting, clientNextLine, clientNextStep, clientRequestGroup, clientWhatNext, dayLabel, listProgressIndex, projectProgress, relativeTime } from './clientFriendly';
 
 const item = (overrides: Partial<ClientProjectRequestItem>): ClientProjectRequestItem => ({
   id: 'r1', reference: 'REF-1', title: 'Request', status: 'in_progress', createdAt: '2026-11-01T00:00:00Z',
@@ -67,5 +67,11 @@ describe('client friendly helpers', () => {
     expect(clientWhatNext({ status: 'ready_for_review', requestedAction: 'review_result' })).toMatch(/If you accept, the request is finished/);
     expect(clientWhatNext({ status: 'in_progress', requestedAction: null })).toMatch(/shares the result here/);
     expect(clientWhatNext({ status: 'cancelled', requestedAction: null })).toBeNull();
+  });
+
+  it('averages how far a project\'s requests are along, leaving out ended and unplaceable ones', () => {
+    expect(projectProgress([item({ status: 'closed' }), item({ status: 'in_progress' })])).toBe(75);
+    expect(projectProgress([item({ status: 'received' }), item({ status: 'cancelled' }), item({ status: 'on_hold' })])).toBe(0);
+    expect(projectProgress([item({ status: 'declined' })])).toBeNull();
   });
 });
