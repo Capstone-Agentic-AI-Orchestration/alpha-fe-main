@@ -330,6 +330,14 @@ span.cx-button { pointer-events: none; }
 .cx-split-side { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--client-space-6); overflow-y: auto; padding: var(--client-space-6) var(--client-space-6) var(--client-space-8); }
 .cx-split-side .cx-action-grid { grid-template-columns: minmax(0, 1fr); }
 .cx-split .cx-chat { position: static; max-height: 560px; }
+/* The project conversation on the split page side: a fixed-height chat with its composer. */
+.cx-split-chat { display: flex; height: clamp(440px, 64vh, 720px); flex: none; flex-direction: column; overflow: hidden; padding: var(--client-space-3) var(--client-space-4); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); }
+.cx-split-chat .ticket-chat { min-height: 0; flex: 1; background: none; }
+.cx-split-chat .ticket-chat__feed { padding-inline: 0; background: none; }
+.cx-split-chat .ticket-chat [data-ticket-chat-composer] { padding-inline: 0; }
+.cx-split-chat :is(.ticket-chat__composer-row, .ticket-chat__composer-note) { width: 100%; max-width: none; }
+.cx-split-side { gap: var(--client-space-4); }
+.cx-split-side > .cx-back { align-self: flex-start; }
 
 /* A request's five steps as tiles. */
 .cx-journey { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--client-space-3); margin: 0; padding: 0; list-style: none; }
@@ -362,22 +370,7 @@ span.cx-button { pointer-events: none; }
 .cx-reqcard.is-open .cx-reqcard-chevron { transform: rotate(180deg); }
 .cx-reqcard-toggle:hover .cx-reqcard-chevron { color: var(--cx-ink); }
 .cx-reqcard-body[hidden] { display: none; }
-/* Conversation or shared preview, switched in the page header. */
-.cx-reqchat-head > .cx-view-switch { flex: none; }
-.cx-view-switch { display: inline-flex; flex: none; gap: 2px; padding: 3px; border: 1px solid var(--cx-line); border-radius: var(--client-radius-control); background: var(--cx-raised); }
-.cx-view-switch button { min-height: 32px; padding: 0 var(--client-space-3); border: 0; border-radius: calc(var(--client-radius-control) - 2px); background: none; color: var(--cx-muted); font: inherit; font-size: var(--cx-type-small); font-weight: var(--client-weight-semibold); cursor: pointer; }
-.cx-view-switch button:hover { color: var(--cx-ink); }
-.cx-view-switch button.is-current { background: var(--cx-surface); color: var(--cx-ink); box-shadow: 0 1px 2px rgb(var(--ui-overlay) / .18); }
 .cx-reqchat > .cx-back { align-self: flex-start; margin-bottom: calc(-1 * var(--client-space-2)); }
-.cx-reqchat > .cx-preview-frame { height: auto; min-height: 0; flex: 1; }
-/* Beside the preview, the panel holds the conversation for feedback. */
-.cx-reqrail.is-feedback { overflow: hidden; gap: var(--client-space-3); }
-.cx-reqrail.is-feedback .ticket-chat { min-height: 0; flex: 1; background: none; }
-.cx-reqrail.is-feedback .ticket-chat__feed { padding-inline: 0; background: none; }
-.cx-reqrail.is-feedback .ticket-chat [data-ticket-chat-composer] { padding-inline: 0; }
-.cx-reqrail.is-feedback :is(.ticket-chat__composer-row, .ticket-chat__composer-note) { width: 100%; max-width: none; }
-.cx-feedback-head h2 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
-.cx-feedback-head p { margin: 2px 0 0; color: var(--cx-muted); font-size: var(--client-type-meta); }
 .cx-reqrail-top, .cx-reqrail-more { display: flex; flex-direction: column; gap: var(--client-space-4); }
 .cx-reqcard { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-4) var(--client-space-5); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); outline: none; }
 .cx-reqcard > h2 { display: flex; align-items: center; gap: var(--client-space-2); margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
@@ -389,19 +382,19 @@ span.cx-button { pointer-events: none; }
 .cx-reqhead-copy h1 { margin: 0 0 var(--client-space-1); color: var(--cx-ink); font-size: var(--client-type-subheading); font-weight: var(--client-weight-bold); line-height: 1.25; overflow-wrap: anywhere; }
 .cx-reqhead-copy p { margin: 0; color: var(--cx-muted); font-size: var(--client-type-meta); line-height: 1.6; }
 .cx-reqhead .cx-request-summary { color: var(--cx-muted); font-size: var(--client-type-caption); }
-.cx-reqrail .cx-journey { position: relative; gap: 0; }
-.cx-reqrail .cx-jstep { position: relative; align-items: center; gap: var(--client-space-1); padding: 0 2px; border: 0; background: none; text-align: center; }
-.cx-reqrail .cx-jstep::before { position: absolute; top: 17px; right: 50%; left: -50%; height: 2px; background: var(--cx-line); content: ''; }
-.cx-reqrail .cx-jstep:first-child::before { display: none; }
-.cx-reqrail .cx-jstep.is-done::before, .cx-reqrail .cx-jstep.is-current::before { background: var(--cx-accent); }
-.cx-reqrail .cx-jstep-icon { position: relative; z-index: 1; width: 36px; height: 36px; margin: 0; border-radius: 50%; }
-.cx-reqrail .cx-jstep-icon svg { width: 16px; height: 16px; }
-.cx-reqrail .cx-jstep.is-current .cx-jstep-icon { box-shadow: 0 0 0 3px var(--cx-accent-soft); }
-.cx-reqrail .cx-jstep.is-current.is-action { background: none; }
-.cx-reqrail .cx-jstep.is-current.is-action .cx-jstep-icon { box-shadow: 0 0 0 3px var(--cx-attention-soft); }
-.cx-reqrail .cx-jstep-label { font-size: var(--cx-type-small); }
-.cx-reqrail .cx-jstep-state { font-size: 0.75rem; }
-.cx-reqrail .cx-jstep.is-upcoming .cx-jstep-state { visibility: hidden; }
+:is(.cx-reqrail, .cx-split-side) .cx-journey { position: relative; gap: 0; }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep { position: relative; align-items: center; gap: var(--client-space-1); padding: 0 2px; border: 0; background: none; text-align: center; }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep::before { position: absolute; top: 17px; right: 50%; left: -50%; height: 2px; background: var(--cx-line); content: ''; }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep:first-child::before { display: none; }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-done::before, :is(.cx-reqrail, .cx-split-side) .cx-jstep.is-current::before { background: var(--cx-accent); }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep-icon { position: relative; z-index: 1; width: 36px; height: 36px; margin: 0; border-radius: 50%; }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep-icon svg { width: 16px; height: 16px; }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-current .cx-jstep-icon { box-shadow: 0 0 0 3px var(--cx-accent-soft); }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-current.is-action { background: none; }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-current.is-action .cx-jstep-icon { box-shadow: 0 0 0 3px var(--cx-attention-soft); }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep-label { font-size: var(--cx-type-small); }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep-state { font-size: 0.75rem; }
+:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-upcoming .cx-jstep-state { visibility: hidden; }
 .cx-details { display: flex; flex-direction: column; gap: var(--client-space-3); margin: 0; }
 .cx-details div { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: var(--client-space-3); }
 .cx-details dt { color: var(--cx-muted); font-size: var(--client-type-meta); }
@@ -452,13 +445,12 @@ span.cx-button { pointer-events: none; }
   .cx-reqsplit { display: flex; flex-direction: column; gap: var(--client-space-4); padding: var(--client-space-4) var(--client-portal-gutter) var(--client-space-7); }
   .cx-reqrail { display: contents; }
   .cx-reqchat { order: 1; padding: 0; background: none; }
-  .cx-reqrail-top { order: 2; }
-  .cx-reqrail-hint { order: 2; }
-  .cx-reqrail.is-feedback { display: flex; order: 2; height: 70dvh; min-height: 420px; padding: 0; border: 0; background: none; }
+  .cx-reqsplit :is(.cx-reqrail-top, .cx-reqrail-hint) { order: 2; }
   .cx-reqchat .ticket-chat { height: 72dvh; min-height: 440px; flex: none; }
-  .cx-reqchat > .cx-preview-frame { height: 72dvh; min-height: 440px; flex: none; }
-  .cx-reqrail-more { order: 3; }
-  .cx-reqrail .cx-jstep-icon svg { display: block; }
+  .cx-reqsplit .cx-reqrail-more { order: 3; }
+  /* The split page on phones: the preview, then the project, its requests and the picked request, then the conversation. */
+  .cx-split-chat { height: 72dvh; min-height: 440px; }
+  :is(.cx-reqrail, .cx-split-side) .cx-jstep-icon svg { display: block; }
 }
 
 @media (max-width: 760px) {
@@ -495,11 +487,7 @@ span.cx-button { pointer-events: none; }
   .cx-panel.is-attention .cx-row-copy { flex: 1 1 calc(100% - 32px); }
   .cx-project-wide-head h3 { flex: 1 1 100%; }
   .cx-project-wide-head .cx-link { margin-left: 0; }
-  /* The project header wraps: the Conversation / Preview switch takes its own full-width row. */
   .cx-reqchat-head { flex-wrap: wrap; }
-  .cx-reqchat-head > div:not(.cx-view-switch) { flex: 1 1 calc(100% - 52px); }
-  .cx-reqchat-head > .cx-view-switch { display: flex; width: 100%; }
-  .cx-view-switch button { flex: 1; }
 }
 
 /* Compact Shadcn top navigation; Overview and Projects stay the two primary routes. */

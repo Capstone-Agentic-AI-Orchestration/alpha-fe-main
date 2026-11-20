@@ -15,7 +15,7 @@ const ticket: ClientTicketDetail = { id: 't-1', reference: 'TKT-1', title: 'Samp
 
 function page(props: Partial<ClientProjectConversationProps> = {}) {
   return renderToStaticMarkup(<ClientProjectConversation project={project} clientName="Zane" onBack={() => undefined}
-    selectedTicketId={null} onSelectRequest={() => undefined} view="conversation" onViewChange={() => undefined}
+    selectedTicketId={null} onSelectRequest={() => undefined}
     request={{ ticket: null, loading: false, error: '' }} onReplyAbout={async () => undefined}
     rail={{ workspaceId: 'w1', busy: false, communicationEnabled: true, onReply: async () => undefined, onDecision: () => undefined,
       onCorrection: async () => undefined, onAdditionalWork: () => undefined }} {...props} />);
@@ -57,21 +57,30 @@ describe('client project page', () => {
     expect(html).toContain('Loading request');
   });
 
-  it('offers the shared preview beside the conversation when the project has one', () => {
-    expect(page()).not.toContain('aria-label="Project view"');
+  it('opens a project with a shared preview as a split page: the preview on the left, everything else beside it', () => {
     const shared = { ...project, preview: { branch: 'uat' as const, url: 'https://resort-uat.vercel.app' } };
-    const conversation = page({ project: shared });
-    expect(conversation).toContain('aria-label="Project view"');
-    expect(conversation).toMatch(/aria-selected="true"[^>]*>Conversation/);
-    const preview = page({ project: shared, view: 'preview' });
-    expect(preview).toMatch(/aria-selected="true"[^>]*>Preview/);
-    // The preview fills the left; the conversation sits beside it for feedback, as one chat on the page.
-    const frame = preview.indexOf('cx-preview-frame');
-    const feedback = preview.indexOf('id="client-preview-feedback-title"');
-    expect(frame).toBeGreaterThan(-1);
-    expect(feedback).toBeGreaterThan(frame);
-    expect(preview.slice(feedback)).toContain('Message your project manager');
-    expect(preview.match(/Message your project manager/g)).toHaveLength(1);
-    expect(preview).not.toContain('aria-label="Requests and details for Resort Website"');
+    const html = page({ project: shared, selectedTicketId: 't-1', request: { ticket, loading: false, error: '' } });
+    expect(html).toMatch(/^<section class="cx-split"/);
+    const preview = html.indexOf('class="cx-split-preview"');
+    const side = html.indexOf('class="cx-split-side"');
+    expect(preview).toBeGreaterThan(-1);
+    expect(side).toBeGreaterThan(preview);
+    expect(html.slice(preview, side)).toContain('cx-preview-frame');
+    // The side scrolls: the project, its requests and the picked request, then the conversation with its composer.
+    const rest = html.slice(side);
+    const order = ['All projects', 'id="client-conversation-project-title"', 'class="cx-reqcard-title">Requests',
+      'id="client-request-title"', 'class="cx-split-chat"', 'Message your project manager'].map(part => rest.indexOf(part));
+    expect(order.every(index => index > -1)).toBe(true);
+    expect([...order].sort((a, b) => a - b)).toEqual(order);
+    // One chat, no view switch and no second layout.
+    expect(html.match(/Message your project manager/g)).toHaveLength(1);
+    expect(html).not.toContain('aria-label="Project view"');
+    expect(html).not.toContain('class="cx-reqsplit"');
+  });
+
+  it('keeps the conversation page for a project without a preview', () => {
+    const html = page();
+    expect(html).toContain('class="cx-reqsplit"');
+    expect(html).not.toContain('cx-split-preview');
   });
 });
