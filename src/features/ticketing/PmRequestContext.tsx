@@ -20,8 +20,8 @@ export function usePmRequestDetail(api: typeof pmTicketApi, ticketId: string | n
   const [error, setError] = useState('');
   useEffect(() => {
     setError('');
-    if (!ticketId) { setDetail(null); return; }
     let current = true;
+    if (!ticketId) { setDetail(null); return () => { current = false; }; }
     void api.get(ticketId).then(value => { if (current) setDetail(value); })
       .catch(failure => { if (current) { setDetail(null); setError(errorText(failure, 'This request could not be loaded.')); } });
     return () => { current = false; };

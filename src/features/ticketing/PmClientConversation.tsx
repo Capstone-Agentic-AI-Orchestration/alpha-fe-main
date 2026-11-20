@@ -306,10 +306,11 @@ export function PmRequestConversation({ api = pmTicketApi, projectId, clientId, 
     clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'} draft={draft} onDraftChange={setDraft}
     onSend={submit} busy={busy} writesAvailable={writesAvailable} messageActions={requestCardActions(createTask)}
     about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore} jump={jump}
-    composerExtra={target.about ? <span className="ml-auto inline-flex items-center gap-1" role="group" aria-label="Reply type">
+    composerExtra={target.about ? <fieldset className="m-0 ml-auto inline-flex items-center gap-1 border-0 p-0">
+      <legend className="sr-only">Reply type</legend>
       {(['reply', 'request_details'] as const).map(kind => <button key={kind} type="button" aria-pressed={replyKind === kind} onClick={() => onReplyKindChange(kind)}
         className={`rounded-md px-2 py-0.5 text-[11.5px] font-semibold ${replyKind === kind ? 'bg-selected text-selected-content' : 'text-content-muted hover:text-content'}`}>
         {kind === 'reply' ? 'Send' : 'Ask & wait for reply'}</button>)}
-    </span> : null}
+    </fieldset> : null}
     inputId="ticket-conversation-draft" />;
 }
