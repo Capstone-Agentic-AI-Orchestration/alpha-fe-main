@@ -122,7 +122,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [selectedConversationKey, setSelectedConversationKey] = tabState('selectedConversationKey');
   const [selectedConversationTicketId, setSelectedConversationTicketId] = tabState('selectedConversationTicketId');
   const [startConversationRequest, setStartConversationRequest] = tabState('startConversationRequest');
-  const [conversationView, setConversationView] = tabState('conversationView');
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
@@ -615,11 +614,10 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     }
   }
 
-  /** Opens the project's one page: its conversation (or shared preview), with its requests in the side panel. */
-  function openConversation(project: ClientProject, ticketId: string | null = null, startRequest = false,
-    projectView: 'conversation' | 'preview' = 'conversation') {
+  /** Opens the project's one page: its shared preview when there is one, its requests and its conversation. */
+  function openConversation(project: ClientProject, ticketId: string | null = null, startRequest = false) {
     navigate('projects');
-    openProjectConversation(activeTabId, clientProjectKey(project), ticketId, startRequest, projectView);
+    openProjectConversation(activeTabId, clientProjectKey(project), ticketId, startRequest);
     showConversationRequest(project, ticketId);
   }
 
@@ -788,7 +786,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           api={api} refreshToken={refreshVersion}
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
           onOpenRequest={item => openClientRequest(item, true)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
-          onOpenPreview={project => openConversation(project, null, false, 'preview')}
+          onOpenPreview={project => openConversation(project)}
           onGoToRequests={() => navigate('requests')}
           proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')}
           onProposeProject={proposeProject} />}
@@ -796,7 +794,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {page === 'projects' && !conversationProject && tabs.filter(tab => tab.navigation.page === 'projects').map(tab => <div key={tab.id} hidden={tab.id !== activeTabId}>
           {tab.id === activeTabId && createError && <p role="alert" className="cx-error cx-notice">{createError}</p>}
           <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} requests={displayQueue?.items ?? []} loading={!projects && !projectsError} error={projectsError}
-            onOpenConversation={project => openConversation(project)} onOpenPreview={project => openConversation(project, null, false, 'preview')}
+            onOpenConversation={project => openConversation(project)} onOpenPreview={project => openConversation(project)}
             inspectionOnly={inspectionOnly} refreshToken={refreshVersion}
             proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')} onProposeProject={proposeProject} />
         </div>)}
@@ -811,7 +809,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           api={api} project={conversationProject} clientName={clientName} readOnly={inspectionOnly}
           onBack={() => { cancelCreateForm(); setSelectedConversationKey(null); setSelectedConversationTicketId(null); showConversationRequest(conversationProject, null); }}
           selectedTicketId={selectedConversationTicketId} onSelectRequest={ticketId => selectConversationRequest(conversationProject, ticketId)}
-          view={conversationView} onViewChange={setConversationView} requestForm={startConversationRequest ? projectRequestForm : null}
+          requestForm={startConversationRequest ? projectRequestForm : null}
           request={{ ticket: detail && detail.id === selectedConversationTicketId ? detail : null, loading: detailLoading, error: detailError }}
           onReplyAbout={sendReply}
           rail={{ workspaceId: conversationProject.workspaceId, api, busy: writing || Boolean(pending), workflowActionsDisabled,

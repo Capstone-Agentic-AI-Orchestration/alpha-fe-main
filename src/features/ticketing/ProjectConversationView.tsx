@@ -36,6 +36,17 @@ const OPEN_CHECKLIST: ReadonlySet<RequestChecklistStatus> = new Set(['open', 'in
 export const openRequestCount = (requests: readonly ConversationRequest[] | null) =>
   (requests ?? []).filter(request => OPEN_CHECKLIST.has(request.checklist)).length;
 
+/**
+ * Centers a message in the chat's own message list. Only that list scrolls, so the page or a side
+ * panel around the chat (such as the request just picked) stays where it is.
+ */
+function centerInFeed(target: HTMLElement) {
+  const feed = target.closest<HTMLElement>('.ticket-chat__feed');
+  if (!feed) { target.scrollIntoView({ block: 'center' }); return; }
+  const offset = target.getBoundingClientRect().top - feed.getBoundingClientRect().top;
+  feed.scrollTop += offset - (feed.clientHeight - target.offsetHeight) / 2;
+}
+
 /** Jumps to a request's card, as picking a message in a search result would. */
 export function useConversationJump() {
   const [jump, setJump] = useState<ConversationJump | null>(null);
@@ -106,7 +117,7 @@ export function ProjectConversationChat({ role, items, requests, error = '', act
     const target = jump && loaded ? container.current?.querySelector<HTMLElement>(`[data-chat-id="${CSS.escape(jump.id)}"]`) : null;
     if (!jump || !target) return noCleanup;
     // An instant jump, like picking a search result in a chat; smooth scrolling can stall in background tabs.
-    target.scrollIntoView({ block: 'center' });
+    centerInFeed(target);
     setHighlightId(jump.id);
     const timer = window.setTimeout(() => setHighlightId(current => current === jump.id ? null : current), 2600);
     return () => window.clearTimeout(timer);
