@@ -798,3 +798,9 @@
   .pm-step__panel { max-height: none; margin: 10px 12px 0; }
 }
 
+
+/* The request context beside a client's project conversation reuses the ticket context styles. */
+.pm-request-context {
+  --pm-line: rgb(var(--ui-divider)); --pm-text: rgb(var(--ui-text-primary)); --pm-muted: rgb(var(--ui-text-secondary));
+  --pm-faint: rgb(var(--ui-text-muted)); --pm-accent: rgb(var(--ui-link));
+}

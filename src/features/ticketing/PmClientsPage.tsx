@@ -11,7 +11,7 @@ import { pmTicketsIntakeEnabled, usePmWorkflowActions } from './PmTicketsPage';
 import { ClientConversations, ClientDocuments, ClientOverview, ClientProjects, ClientProposals, loadClientProjects, loadClientRequests, type ClientProjectDetail } from './PmClientSections';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { OPEN_INQUIRY_KEY, type OpenInquiry } from './PmInquiriesPage';
-import { PmClientConversationTab, type ConversationLinkableTask, type ConversationTaskDraft, type PmConversationFocus } from './PmClientConversation';
+import { PmClientConversationTab, PmRequestConversation, clientIdFromKey, type ConversationLinkableTask, type ConversationTaskDraft, type PmConversationFocus } from './PmClientConversation';
 import { LINKED_REQUEST_KEY, type LinkedRequestDraft } from './requestTaskLink';
 import { CLIENTS_CONVERSATION_FOCUS_KEY } from './TaskClientRequest';
 
@@ -230,10 +230,19 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
       <div className="pm-ticket-page__content">
         <PmTicketsView key={`${workspaceKey}:${key}:${openRequestId ?? 'list'}`} api={api} documentsApi={documentsApi}
           fixedClientGroupKey={key} initialSelectedId={openRequestId}
-          intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled />
+          intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled
+          renderRequestConversation={({ detail, replyKind, onReplyKindChange, onWritten }) => {
+            // A request the client sees on a project lives in that project's one conversation.
+            const clientId = clientIdFromKey(key);
+            if (!clientId || !detail.internal.projectId || !detail.internal.projectClientVisible) return null;
+            return <PmRequestConversation key={detail.id} api={api} projectId={detail.internal.projectId} clientId={clientId}
+              ticketId={detail.id} ticketTitle={detail.title} clientName={detail.internal.request?.contact?.fullName ?? detail.companyLabel}
+              replyKind={replyKind} onReplyKindChange={onReplyKindChange} onWritten={onWritten} onCreateTask={onCreateTask}
+              writesAvailable={detail.writesAvailable} />;
+          }} />
       </div>
     </div>}
-    renderConversation={client => <PmClientConversationTab api={api} client={client} focus={conversationFocus}
+    renderConversation={client => <PmClientConversationTab api={api} documentsApi={documentsApi} client={client} focus={conversationFocus}
       onOpenRequestDetails={openRequestDetails} onCreateTask={onCreateTask} tasksForProject={tasksForProject} refreshToken={refreshToken} />}
     renderOverview={client => <ClientOverview client={client} requests={requests} conversations={conversations} onOpenRequest={openRequest} />}
     renderConversations={client => <ClientConversations client={client} requests={requests} conversations={conversations}

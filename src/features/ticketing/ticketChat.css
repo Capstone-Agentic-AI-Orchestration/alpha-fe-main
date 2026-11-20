@@ -153,3 +153,31 @@
 .ticket-chat__actions button:hover { text-decoration: underline; }
 .ticket-chat__event { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: center; gap: 8px; width: min(100%, 800px); margin: 4px auto; color: rgb(var(--ui-text-muted)); font-size: 11.5px; text-align: center; }
 .ticket-chat__event time { font-size: 10px; font-variant-numeric: tabular-nums; }
+
+/* A request made in the conversation: a full-width card, unlike an ordinary message bubble. */
+.ticket-chat__request { width: min(100%, 680px); margin: 10px auto; padding: 14px 16px 12px; border: 1px solid rgb(var(--ui-action) / .45);
+  border-left: 4px solid rgb(var(--ui-action)); border-radius: 12px; background: rgb(var(--ui-selected) / .35); scroll-margin: 96px; }
+.ticket-chat__request-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: rgb(var(--ui-text-secondary)); font-size: 11px; }
+.ticket-chat__request-icon { display: grid; width: 24px; height: 24px; flex: none; place-items: center; border-radius: 7px; background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); }
+.ticket-chat__request-label { color: rgb(var(--ui-text-primary)); font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.ticket-chat__request-ref { color: rgb(var(--ui-text-muted)); font-size: 10.5px; }
+.ticket-chat__request-badge { margin-left: auto; }
+.ticket-chat__request-title { margin: 10px 0 0; color: rgb(var(--ui-text-primary)); font-size: 15px; font-weight: 650; line-height: 1.35; overflow-wrap: anywhere; }
+.ticket-chat__request-body { margin: 6px 0 0; color: rgb(var(--ui-text-secondary)); font-size: 13px; line-height: 1.6; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ticket-chat__request-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 12px;
+  padding-top: 10px; border-top: 1px solid rgb(var(--ui-divider)); color: rgb(var(--ui-text-muted)); font-size: 11px; }
+.ticket-chat__request-foot .ticket-chat__actions { margin-left: 0; font-size: 12px; }
+.ticket-chat__message, .ticket-chat__event { scroll-margin: 96px; }
+
+/* Jumped to from a list: a short glow so the eye finds it. */
+@keyframes ticket-chat-found { 0%, 35% { box-shadow: 0 0 0 3px rgb(var(--ui-link) / .6); } 100% { box-shadow: 0 0 0 0 transparent; } }
+.ticket-chat__request.is-highlighted, .ticket-chat__message.is-highlighted .ticket-chat__bubble, .ticket-chat__event.is-highlighted { animation: ticket-chat-found 2.4s ease-out; }
+
+/* What a reply is about, above the composer. */
+.ticket-chat__about { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: rgb(var(--ui-text-muted)); font-size: 11.5px; }
+.ticket-chat__about-chip { display: inline-flex; min-width: 0; max-width: 100%; align-items: center; gap: 6px; padding: 3px 4px 3px 9px; border-radius: 999px;
+  background: rgb(var(--ui-selected)); color: rgb(var(--ui-selected-content)); font-weight: 600; }
+.ticket-chat__about-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ticket-chat__about-chip button { display: grid; width: 18px; height: 18px; flex: none; place-items: center; border-radius: 999px; }
+.ticket-chat__about-chip button:hover { background: rgb(var(--ui-raised)); }
+.ticket-chat__about > button { color: rgb(var(--ui-link)); font-weight: 600; }

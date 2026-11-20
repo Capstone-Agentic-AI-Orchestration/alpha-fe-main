@@ -4,7 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 vi.hoisted(() => { (globalThis as { window?: unknown }).window ??= globalThis; });
 
 import { canToggleRequest, conversationChatMessages, parseConversation, parseConversationRequests, type ConversationRequest } from './projectConversation';
-import { ProjectConversationView } from './ProjectConversationView';
+import { ProjectConversationChat, ProjectConversationView } from './ProjectConversationView';
 import { PmClientsView } from './PmClientsPage';
 import type { PmClientSummary } from './pmApi';
 import { clientIdFromKey } from './PmClientConversation';
@@ -34,7 +34,7 @@ describe('project conversation data', () => {
     const forClient = conversationChatMessages(parseConversation(timeline).items, 'client');
     expect(forClient.map(m => m.kind ?? 'message')).toEqual(['message', 'request', 'message', 'event', 'event']);
     expect(forClient[0].tag).toBe('Project proposal');
-    expect(forClient[1]).toMatchObject({ heading: 'Add a contact form', tag: 'New request' });
+    expect(forClient[1]).toMatchObject({ kind: 'request', heading: 'Add a contact form', reference: 'TKT-1' });
     expect(forClient[2].tag).toBe('Re: Add a contact form');
     expect(forClient[3].body).toBe('Your project manager added a task for “Add a contact form”: Build the form');
     expect(forClient[4].body).toBe('You marked “Add a contact form” done');
@@ -74,6 +74,39 @@ describe('ProjectConversationView', () => {
     expect(html).toContain('WEB-4');
     expect(html).toContain('Create task');
     expect(html).not.toContain('New request</button>');
+  });
+
+  it('keeps the PM request context tabs beside Requests instead of the About tab', () => {
+    const tabs = ['Overview', 'Private notes', 'Request details', 'Documents'].map(label => ({ id: label, label, content: null }));
+    const html = view({ role: 'pm', panelTabs: tabs });
+    for (const label of ['Requests · 1 open', ...tabs.map(tab => tab.label)]) expect(html).toContain(`>${label}</button>`);
+    expect(html).not.toContain('>About</button>');
+    expect(view()).toContain('>About</button>');
+  });
+});
+
+describe('ProjectConversationChat', () => {
+  const chat = (props: Partial<Parameters<typeof ProjectConversationChat>[0]> = {}) => renderToStaticMarkup(<ProjectConversationChat
+    role="pm" items={parseConversation(timeline).items} requests={[openRequest]} draft="" onDraftChange={() => undefined}
+    onSend={() => undefined} inputId="test" {...props} />);
+
+  it('draws a request as its own card with its reference and status, not as a message bubble', () => {
+    const html = chat();
+    expect(html).toMatch(/<article class="ticket-chat__request"[^>]*data-chat-id="request:t-1"/);
+    for (const shown of ['New request', 'TKT-1', 'In progress', 'Client made a request']) expect(html).toContain(shown);
+    expect(html).toContain('data-chat-id="tm:1"');
+  });
+
+  it('offers request actions on request cards only', () => {
+    const html = chat({ messageActions: item => item.kind === 'request' ? <button type="button">Create task</button> : null });
+    expect(html.match(/Create task/g)).toHaveLength(1);
+    expect(html).toMatch(/ticket-chat__request-foot[\s\S]*Create task/);
+  });
+
+  it('shows which request a reply goes to, or offers it back when writing to the whole project', () => {
+    const about = { ticketId: 't-1', title: 'Add a contact form' };
+    expect(chat({ about, onClearAbout: () => undefined })).toContain('Stop replying about Add a contact form');
+    expect(chat({ restoreAbout: about, onRestoreAbout: () => undefined })).toContain('Reply about “Add a contact form” instead');
   });
 });
 
