@@ -83,9 +83,12 @@ function usePmProjectConversation(api: typeof pmTicketApi, projectId: string | n
 /** Only a client's request gets "Create task"; ordinary messages do not. */
 function requestCardActions(onCreate: ((request: { ticketId: string; title: string }, description: string) => void) | undefined) {
   if (!onCreate) return undefined;
-  return (item: ConversationItem): ReactNode => item.kind === 'request' && item.request
-    ? <button type="button" onClick={() => onCreate(item.request!, item.body)}><Plus size={12} aria-hidden="true" className="mr-0.5 inline" />Create task</button>
-    : null;
+  return (item: ConversationItem): ReactNode => {
+    const request = item.kind === 'request' ? item.request : null;
+    return request
+      ? <button type="button" onClick={() => onCreate(request, item.body)}><Plus size={12} aria-hidden="true" className="mr-0.5 inline" />Create task</button>
+      : null;
+  };
 }
 
 /** The reply target: the selected request, unless the PM chose to write to the whole project. */

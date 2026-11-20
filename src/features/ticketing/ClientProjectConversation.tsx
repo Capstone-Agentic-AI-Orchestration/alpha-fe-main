@@ -17,7 +17,6 @@ function useClientProjectConversation(api: typeof clientTicketApi, project: Clie
   const [items, setItems] = useState<ConversationItem[] | null>(null);
   const [requests, setRequests] = useState<ConversationRequest[] | null>(null);
   const [error, setError] = useState('');
-  const [unavailable, setUnavailable] = useState(false);
   const token = useRef(0);
   const { workspaceId, projectId } = project;
   const load = useCallback(async (quiet = false) => {
@@ -27,12 +26,13 @@ function useClientProjectConversation(api: typeof clientTicketApi, project: Clie
     try {
       const [timeline, list] = await Promise.all([api.getProjectConversation(workspaceId, projectId), api.getProjectConversationRequests(workspaceId, projectId)]);
       if (current !== token.current) return;
-      setItems(timeline.items); setRequests(list.items); setError(''); setUnavailable(false);
+      setItems(timeline.items); setRequests(list.items); setError('');
     } catch (error_) {
       if (current !== token.current || quiet) return;
-      // An older server has no conversation routes; the request keeps its own messages then.
-      if (error_ instanceof ClientTicketApiError && error_.status === 404) setUnavailable(true);
-      setError(errorText(error_, 'The conversation could not be loaded. Refresh to try again.'));
+      // A request never falls back to a chat of its own; the project's one conversation says what went wrong.
+      setError(error_ instanceof ClientTicketApiError && error_.status === 404
+        ? 'This project’s conversation isn’t available yet. Refresh in a moment.'
+        : errorText(error_, 'The conversation could not be loaded. Refresh to try again.'));
     }
   }, [api, workspaceId, projectId]);
   useEffect(() => { void load(); }, [load]);
@@ -40,7 +40,7 @@ function useClientProjectConversation(api: typeof clientTicketApi, project: Clie
     const timer = window.setInterval(() => { if (document.visibilityState === 'visible') void load(true); }, REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [load]);
-  return { items, requests, setRequests, error, unavailable, load };
+  return { items, requests, setRequests, error, load };
 }
 
 /** Rail card: the project and the requests made in its conversation, as a checklist. */
@@ -176,9 +176,6 @@ export function ClientConversationRequestPage({ project, clientName, readOnly = 
   const [cleared, setCleared] = useState(false);
   const loaded = conversation.items !== null;
   useEffect(() => { if (loaded) toRequest(ticketId); }, [loaded, ticketId, toRequest]);
-
-  // An older server without conversations: the request keeps its own messages.
-  if (conversation.unavailable) return <ClientTicketDetail {...detail} />;
 
   const selected: ConversationAbout = { ticketId, title: detail.ticket.title };
   const canReply = !readOnly && !['closed', 'declined', 'cancelled'].includes(detail.ticket.status);
