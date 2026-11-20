@@ -38,7 +38,7 @@ export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId,
       <p className="mt-2 text-[11px] text-content"><span className="font-semibold">Next:</span> review the changes, then approve to push them and open the pull request.</p>
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <button type="button" onClick={onReview} className={secondary}><ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />Review changes</button>
-        {!blocker && <button type="button" onClick={() => void approve()} disabled={busy} className={primary}>
+        {!blocker && <button type="button" onClick={() => { approve().catch(() => undefined); }} disabled={busy} className={primary}>
           {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}{busy ? 'Approving…' : 'Approve and open pull request'}
         </button>}
         <button type="button" onClick={onAskChanges} className={secondary}><MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />Ask for changes</button>
@@ -51,7 +51,7 @@ export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId,
   }
 
   if (status === 'publishing') {
-    return <section aria-label="Next step" role="status" className="mt-2 flex items-center gap-2 rounded-xl border border-divider bg-surface-raised px-3.5 py-3 text-[11px] text-link">
+    return <section aria-label="Next step" aria-live="polite" className="mt-2 flex items-center gap-2 rounded-xl border border-divider bg-surface-raised px-3.5 py-3 text-[11px] text-link">
       <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />Opening the pull request…
     </section>;
   }
@@ -69,7 +69,7 @@ export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId,
 
   return <section aria-label="Next step" className="mt-2 rounded-xl border border-status-success-border bg-surface-raised px-3.5 py-3 text-left">
     <div className="flex items-center gap-2 text-xs font-semibold text-content"><CheckCircle2 className="h-4 w-4 shrink-0 text-status-success" aria-hidden="true" />Done · {outcome}</div>
-    {publications.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{publications.map(publication => <a key={publication.pullRequestUrl} href={publication.pullRequestUrl} target="_blank" rel="noreferrer" className={secondary}>
+    {publications.length > 0 && <div className="mt-2 flex flex-wrap gap-2">{publications.map(publication => <a key={publication.pullRequestUrl} href={publication.pullRequestUrl} target="_blank" rel="noopener noreferrer" className={secondary}>
       <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />{publications.length > 1 ? `${publication.repository ?? 'Repository'} pull request` : 'Open the pull request'}
     </a>)}</div>}
     <p className="mt-2 text-[11px] text-content"><span className="font-semibold">Next:</span> {publications.length

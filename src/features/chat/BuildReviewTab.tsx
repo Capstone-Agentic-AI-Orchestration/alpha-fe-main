@@ -74,13 +74,13 @@ function ReviewDecisionBar({ approval, busy, error, onAskChanges }: {
     {approval.blocker
       ? <p className="text-[11px] text-status-warning">{approval.blocker}</p>
       : <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => void approval.approve()} disabled={approval.busy || busy} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-action px-3.5 text-xs font-semibold text-on-action hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-50">
+        <button type="button" onClick={() => { approval.approve().catch(() => undefined); }} disabled={approval.busy || busy} className="inline-flex min-h-9 items-center gap-1.5 rounded-lg bg-action px-3.5 text-xs font-semibold text-on-action hover:bg-action-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-50">
           {approval.busy && <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />}{approval.busy ? 'Approving…' : 'Approve and open pull request'}
         </button>
         {onAskChanges && <button type="button" onClick={onAskChanges} className="inline-flex min-h-9 items-center rounded-lg border border-divider px-3.5 text-xs font-medium text-content hover:bg-surface-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus">Ask for changes</button>}
       </div>}
     <p className="text-[10px] text-content-muted">You can also tell Alpha in the main chat whether to push this revision and open its pull request.</p>
-    {busy && <p role="status" className="text-xs text-content-secondary">Processing the main-chat decision…</p>}
+    {busy && <p aria-live="polite" className="text-xs text-content-secondary">Processing the main-chat decision…</p>}
     {(approval.error || error) && <p role="alert" className="text-xs text-status-danger">{approval.error || error}</p>}
   </div>;
 }
@@ -123,7 +123,7 @@ export const BuildReviewTab: React.FC<BuildReviewTabProps> = ({ projectId, build
       </div>}
       {publications.length > 0 && <div className="space-y-1.5 rounded-lg border border-status-success-border bg-status-success-subtle px-3 py-2.5">
         <div className="text-xs font-semibold text-status-success">{publications.length === 1 ? 'Pull request opened' : 'Pull requests opened'}</div>
-        {publications.map(publication => <a key={publication.pullRequestUrl} href={publication.pullRequestUrl} target="_blank" rel="noreferrer" className="block text-xs text-link underline">{publication.repository ?? build.repository} · Open pull request</a>)}
+        {publications.map(publication => <a key={publication.pullRequestUrl} href={publication.pullRequestUrl} target="_blank" rel="noopener noreferrer" className="block text-xs text-link underline">{publication.repository ?? build.repository} · Open pull request</a>)}
       </div>}
       <ReviewSection title="Plan"><OrchestrationPlanPreview projectId={projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={false} /></ReviewSection>
       {build.orchestration.run.stoppedReason && <p role="alert" className="whitespace-pre-wrap rounded-lg border border-status-warning-border bg-status-warning-subtle p-3 text-xs leading-5 text-status-warning">{build.orchestration.run.stoppedReason}</p>}
@@ -148,10 +148,10 @@ export const BuildReviewTab: React.FC<BuildReviewTabProps> = ({ projectId, build
         ? 'Read the plan here, then tell Alpha in the main chat whether to start it. You can use your own words.'
         : 'Tell Alpha in the main chat if you want to retry the previously approved publication.'}</p>
       {planning && !canStart && <p className="text-[11px] text-status-warning">Your workspace role cannot start builds.</p>}
-      {busy && <p role="status" className="text-xs text-content-secondary">Processing the main-chat decision…</p>}
+      {busy && <p aria-live="polite" className="text-xs text-content-secondary">Processing the main-chat decision…</p>}
       {error && <p role="alert" className="text-xs text-status-danger">{error}</p>}
     </div>}
     {reviewing && <ReviewDecisionBar approval={approval} busy={busy} error={error} onAskChanges={onAskChanges} />}
-    {build.status === 'publishing' && !retrying && <p role="status" className="border-t border-divider p-4 text-xs text-link">Publishing the approved revision…</p>}
+    {build.status === 'publishing' && !retrying && <p aria-live="polite" className="border-t border-divider p-4 text-xs text-link">Publishing the approved revision…</p>}
   </section>;
 };
