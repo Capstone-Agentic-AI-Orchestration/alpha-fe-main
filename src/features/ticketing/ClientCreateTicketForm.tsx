@@ -2,7 +2,10 @@ import { useRef, useState } from 'react';
 import { ArrowLeft, Plus, ShieldCheck, Ticket } from 'lucide-react';
 
 import type { ClientTicketCreateInput, ClientTicketIntakeContext } from './clientApi';
-import { input, primary, secondary } from './ticketUi';
+import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
+import { Select } from '@/shared/components/ui/select';
+import { Textarea } from '@/shared/components/ui/textarea';
 import { DatePicker } from '@/shared/components/ui/date-picker';
 
 type ProjectPreference = 'not_sure' | 'new_project' | 'shared_project';
@@ -40,7 +43,7 @@ export function ClientCreateTicketForm({
   }
 
   if (!context.canCreate) return <section className="mx-auto w-full max-w-2xl p-5 md:p-10">
-    <button onClick={onCancel} className="mb-6 inline-flex items-center gap-2 text-xs text-content-secondary hover:text-content"><ArrowLeft size={14} />My Tickets</button>
+    <Button type="button" variant="ghost" onClick={onCancel} className="mb-6 px-0 text-xs"><ArrowLeft size={14} />My Projects</Button>
     <div className="rounded-xl border border-divider bg-surface p-6">
       <h1 className="text-lg font-semibold text-content">New request unavailable</h1>
       <p className="mt-2 text-sm text-content-secondary">You cannot submit a new request in this workspace right now. Contact your project manager if you think this is a mistake.</p>
@@ -48,7 +51,7 @@ export function ClientCreateTicketForm({
   </section>;
 
   return <section className={embedded ? 'w-full max-w-2xl' : 'mx-auto w-full max-w-2xl p-5 md:p-10'}>
-    {!embedded && <button onClick={onCancel} disabled={busy} className="mb-6 inline-flex items-center gap-2 text-xs text-content-secondary hover:text-content disabled:opacity-50"><ArrowLeft size={14} />My Tickets</button>}
+    {!embedded && <Button type="button" variant="ghost" onClick={onCancel} disabled={busy} className="mb-6 px-0 text-xs"><ArrowLeft size={14} />My Projects</Button>}
     {!embedded && <div className="mb-7 flex items-start gap-3">
       <span className="rounded-xl border border-divider bg-selected p-3 text-selected-content"><Ticket size={22} /></span>
       <div><h1 className="text-2xl font-semibold text-content">{relatedTicket ? 'Request additional work' : 'New request'}</h1>
@@ -75,9 +78,9 @@ export function ClientCreateTicketForm({
     }}>
       {relatedTicket && <p className="rounded-lg border border-divider bg-selected p-3 text-xs text-selected-content">This will be a separate request, linked to {relatedTicket.reference} · {relatedTicket.title}. The existing work stays unchanged.</p>}
       <label className="block space-y-2"><span className="text-xs font-medium text-content-secondary">Title <span className="text-content-muted">(required)</span></span>
-        <input className={input} required maxLength={160} value={title} disabled={busy} onChange={event => { edited(); setTitle(event.target.value); }} placeholder="What do you need?" /></label>
+        <Input required maxLength={160} value={title} disabled={busy} onChange={event => { edited(); setTitle(event.target.value); }} placeholder="What do you need?" /></label>
       <label className="block space-y-2"><span className="text-xs font-medium text-content-secondary">Details <span className="text-content-muted">(required)</span></span>
-        <textarea className={`${input} min-h-36 resize-y`} required maxLength={6000} value={description} disabled={busy} onChange={event => { edited(); setDescription(event.target.value); }} placeholder="Describe the outcome you need and any useful context." /></label>
+        <Textarea className="min-h-36" required maxLength={6000} value={description} disabled={busy} onChange={event => { edited(); setDescription(event.target.value); }} placeholder="Describe the outcome you need and any useful context." /></label>
       <fieldset className="space-y-2">
         <legend className="text-xs font-medium text-content-secondary">Which project is this for?</legend>
         {selectedProjectOptionId ? <>
@@ -87,20 +90,20 @@ export function ClientCreateTicketForm({
           <label className="flex items-center gap-2 text-xs text-content-secondary"><input type="radio" name="project-preference" checked={projectPreference === 'not_sure'} disabled={busy} onChange={() => { edited(); setProjectPreference('not_sure'); }} />I’m not sure yet</label>
           <label className="flex items-center gap-2 text-xs text-content-secondary"><input type="radio" name="project-preference" checked={projectPreference === 'new_project'} disabled={busy} onChange={() => { edited(); setProjectPreference('new_project'); }} />This may need a new project</label>
           {context.sharedProjects.length > 0 && <label className="flex items-center gap-2 text-xs text-content-secondary"><input type="radio" name="project-preference" checked={projectPreference === 'shared_project'} disabled={busy} onChange={() => { edited(); setProjectPreference('shared_project'); setProjectOptionId(current => current || context.sharedProjects[0].optionId); }} />This request is for a project my PM shared</label>}
-          {projectPreference === 'shared_project' && context.sharedProjects.length > 0 && <select className={input} value={projectOptionId} disabled={busy} onChange={event => { edited(); setProjectOptionId(event.target.value); }}>
+          {projectPreference === 'shared_project' && context.sharedProjects.length > 0 && <Select value={projectOptionId} disabled={busy} onChange={event => { edited(); setProjectOptionId(event.target.value); }}>
             {context.sharedProjects.map(project => <option key={project.optionId} value={project.optionId}>{project.displayName}</option>)}
-          </select>}
+          </Select>}
         </>}
         <p className="text-xs text-content-muted">Choosing a shared project links this request to it. “Not sure” and “new project” requests stay unlinked for PM review.</p>
       </fieldset>
       <label className="block max-w-xs space-y-2"><span className="text-xs font-medium text-content-secondary">Requested date <span className="text-content-muted">(optional, not guaranteed)</span></span>
-        <DatePicker className="w-full" buttonClassName={`${input} h-10 w-full justify-start text-left`} value={deadline} disabled={busy} onChange={value => { edited(); setDeadline(value); }} /></label>
+        <DatePicker className="w-full" buttonClassName="h-10 w-full justify-start text-left" value={deadline} disabled={busy} onChange={value => { edited(); setDeadline(value); }} /></label>
       <div className="flex items-start gap-2 rounded-lg bg-surface-raised p-3 text-xs leading-relaxed text-content-secondary"><ShieldCheck size={16} className="mt-0.5 shrink-0 text-content-muted" />
         <p>Submitting asks the PM to review the request. It does not automatically create a project, assign a developer, or start AI work.</p></div>
       {error && <p role="alert" className="text-sm text-status-danger">{error}</p>}
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-divider pt-5">
         <p className="max-w-xs text-xs text-content-muted">{submissionEnabled ? 'Only share information needed to describe the request. Documents are handled separately.' : 'UI inspection only. You can fill this form, but submission and document uploads are not enabled.'}</p>
-        <div className="flex gap-2"><button type="button" onClick={onCancel} disabled={busy} className={secondary}>Cancel</button><button className={primary} type="submit" disabled={!submissionEnabled || busy || !pinnedProjectValid || (effectiveProjectPreference === 'shared_project' && !effectiveProjectOptionId)}><Plus size={15} />{busy ? 'Submitting…' : 'Submit request'}</button></div>
+      <div className="flex gap-2"><Button type="button" variant="outline" onClick={onCancel} disabled={busy}>Cancel</Button><Button type="submit" disabled={!submissionEnabled || busy || !pinnedProjectValid || (effectiveProjectPreference === 'shared_project' && !effectiveProjectOptionId)}><Plus size={15} />{busy ? 'Submitting…' : 'Submit request'}</Button></div>
       </div>
     </form>
   </section>;

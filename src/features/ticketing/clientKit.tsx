@@ -1,5 +1,8 @@
 import type { ReactNode } from 'react';
 import { ArrowLeft, ChevronRight, FolderKanban } from 'lucide-react';
+import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
+import { Card } from '@/shared/components/ui/card';
 import type { ClientProjectRequestItem } from './clientApi';
 import { clientTicketProgress } from './clientTicketProgress';
 import { clientNextLine, listProgressIndex, relativeTime, shortReference } from './clientFriendly';
@@ -22,7 +25,7 @@ export function requestTone(status: ClientProjectRequestItem['status'], requeste
 }
 
 export function CxBadge({ tone = 'neutral', children }: { tone?: CxTone; children: ReactNode }) {
-  return <span className={'cx-badge is-' + tone}>{children}</span>;
+  return <Badge variant="secondary" className={'cx-badge is-' + tone}>{children}</Badge>;
 }
 
 /** A request's status badge: plain words from clientTicketProgress, coloured by requestTone. */
@@ -42,7 +45,7 @@ export function CxPageHeader({ titleId, title, description, back, actions, eyebr
   back?: { label: string; onClick: () => void; disabled?: boolean }; actions?: ReactNode;
 }) {
   return <header className="cx-page-header">
-    {back && <button type="button" className="cx-back" onClick={back.onClick} disabled={back.disabled}><ArrowLeft size={15} aria-hidden="true" />{back.label}</button>}
+    {back && <Button type="button" variant="ghost" className="cx-back" onClick={back.onClick} disabled={back.disabled}><ArrowLeft size={15} aria-hidden="true" />{back.label}</Button>}
     <div className="cx-page-header-row">
       <div className="cx-page-header-copy">
         {eyebrow && <p className="cx-eyebrow">{eyebrow}</p>}
@@ -67,7 +70,7 @@ export function CxSection({ titleId, title, count, action, children, className =
 }
 
 export function CxPanel({ tone, children, className = '' }: { tone?: 'attention'; children: ReactNode; className?: string }) {
-  return <div className={'cx-panel' + (tone ? ' is-' + tone : '') + (className ? ' ' + className : '')}>{children}</div>;
+  return <Card className={'cx-panel' + (tone ? ' is-' + tone : '') + (className ? ' ' + className : '')}>{children}</Card>;
 }
 
 /** One line in a list: what it is, one line of context, and what to do or where it stands. */
@@ -79,7 +82,7 @@ export function CxRow({ title, meta, trailing, onClick, disabled, current, child
     {trailing && <span className="cx-row-trailing">{trailing}</span>}
   </>;
   return onClick
-    ? <button type="button" className="cx-row is-interactive" onClick={onClick} disabled={disabled} aria-current={current ? 'true' : undefined}>{body}<ChevronRight size={16} className="cx-row-chevron" aria-hidden="true" /></button>
+    ? <Button type="button" variant="ghost" className="cx-row is-interactive" onClick={onClick} disabled={disabled} aria-current={current ? 'true' : undefined}>{body}<ChevronRight size={16} className="cx-row-chevron" aria-hidden="true" /></Button>
     : <div className="cx-row">{body}</div>;
 }
 
@@ -89,10 +92,11 @@ export function CxChips<T extends string>({ label, value, options, onChange, dis
   options: Array<{ id: T; label: string; count?: number | null; tone?: 'attention' }>; onChange: (value: T) => void;
 }) {
   return <div className="cx-chips" role="group" aria-label={label}>
-    {options.map(option => <button key={option.id} type="button" aria-pressed={value === option.id} disabled={disabled}
-      className={option.tone === 'attention' && option.count ? 'is-attention' : undefined} onClick={() => onChange(option.id)}>
+    {options.map(option => <Button key={option.id} type="button" variant={value === option.id ? 'default' : 'outline'} size="sm"
+      aria-pressed={value === option.id} disabled={disabled}
+      className={`${option.tone === 'attention' && option.count ? 'is-attention ' : ''}${value === option.id ? 'is-selected' : ''}`} onClick={() => onChange(option.id)}>
       {option.label}{option.count !== undefined && option.count !== null && <span>{option.count}</span>}
-    </button>)}
+    </Button>)}
   </div>;
 }
 
@@ -151,7 +155,7 @@ export function CxHero({ children, className = '' }: { children: ReactNode; clas
 }
 
 /** A round progress meter, 0 to 100, with the number in the middle. */
-export function CxRing({ value, size = 68, label }: { value: number; size?: number; label: string }) {
+export function CxRing({ value, size = 56, label }: { value: number; size?: number; label: string }) {
   const stroke = 7;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
@@ -170,7 +174,7 @@ export function CxRing({ value, size = 68, label }: { value: number; size?: numb
 export function CxActionCard({ icon, title, meta, index, action, onClick, disabled }: {
   icon: ReactNode; title: ReactNode; meta?: ReactNode; index?: number | null; action: string; onClick: () => void; disabled?: boolean;
 }) {
-  return <button type="button" className="cx-action-card" onClick={onClick} disabled={disabled}>
+  return <Button type="button" variant="outline" className="cx-action-card" onClick={onClick} disabled={disabled}>
     <span className="cx-action-icon" aria-hidden="true">{icon}</span>
     <strong>{title}</strong>
     {meta && <small>{meta}</small>}
@@ -178,5 +182,5 @@ export function CxActionCard({ icon, title, meta, index, action, onClick, disabl
       {index !== undefined && index !== null ? <CxTrack index={index} label={'Step ' + (index + 1) + ' of 5'} /> : <span className="cx-action-spacer" />}
       <span className="cx-button is-primary">{action}</span>
     </span>
-  </button>;
+  </Button>;
 }

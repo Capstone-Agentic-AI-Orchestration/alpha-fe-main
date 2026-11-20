@@ -67,7 +67,7 @@ export const NAV_SECTIONS: NavSection[] = [
   { id: 'build', label: 'Build' },
   { id: 'portal', label: 'Portal', labels: { pm: 'Overview', admin: 'Overview' } },
   { id: 'my_work', label: 'My Work' },
-  { id: 'requests', label: 'Requests' },
+  { id: 'requests', label: 'Requests', labels: { pm: 'Intake' } },
   { id: 'projects', label: 'Projects' },
   { id: 'clients', label: 'Clients' },
   { id: 'delivery', label: 'Delivery' },
@@ -86,7 +86,8 @@ export const NAV_SECTIONS: NavSection[] = [
 const ROLE_SECTION_ORDER: Record<UserRole, SectionId[]> = {
   client: ['portal', 'requests', 'communication', 'documents', 'settings'],
   dev: ['build', 'my_work', 'automation', 'resources', 'communication', 'insights', 'settings'],
-  pm: ['build', 'portal', 'clients', 'projects', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'workspace'],
+  // The PM sees the people and projects first, with incoming inquiries and project requests grouped separately.
+  pm: ['build', 'portal', 'clients', 'projects', 'requests', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'workspace'],
   admin: ['build', 'portal', 'projects', 'delivery', 'collaboration', 'automation', 'resources', 'operations', 'insights', 'administration']
 };
 
@@ -137,9 +138,9 @@ export const NAV_ITEMS: NavItem[] = [
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
 
-  // Client work sits together: who the clients are, every open request across them, and new inquiries.
-  { id: 'tickets', label: 'Tickets', title: 'Tickets', subtitle: 'Review client requests, communicate, and track delivery', group: 'workspace', section: 'clients', icon: Ticket },
-  { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review and clarify new client inquiries', group: 'workspace', section: 'clients', icon: Inbox },
+  // Inquiries are pre-project intake; tickets are requests that belong to a client's project conversation.
+  { id: 'tickets', label: 'Tickets', title: 'Tickets', subtitle: 'Review client requests, respond in the project conversation, and track delivery', group: 'workspace', section: 'requests', icon: Ticket },
+  { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review requests that have not yet become a client project', group: 'workspace', section: 'requests', icon: Inbox },
   { id: 'clients', label: 'Clients', title: 'Clients', subtitle: 'Clients, their projects and requests', group: 'workspace', section: 'clients', icon: Users },
   { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: CheckSquare },
   { id: 'projects', label: 'Projects', labels: { dev: 'Projects', pm: 'All Projects', admin: 'All Projects' }, title: 'Projects & Milestones', subtitle: 'Project roadmap & deliverable progress', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: FolderKanban },
@@ -203,9 +204,9 @@ export function navIcon(id: NavigationTab, className = 'w-4 h-4'): React.ReactNo
 const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
-  // A PM starts on Tickets, which opens on what needs them.
+  // Client work starts with the client and project conversation; inquiries remain separate pre-project intake.
   pm: [
-    'tickets', 'inquiries', 'clients', 'issues', 'projects',
+    'clients', 'inquiries', 'projects', 'issues',
     'agents', 'skills', 'analytics', 'settings'
   ],
   admin: [

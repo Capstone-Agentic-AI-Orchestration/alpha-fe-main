@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { ArrowUpRight, Download, ExternalLink, FileText, FolderKanban, Lightbulb, MessageSquare, Paperclip } from 'lucide-react';
 
 import { Skeleton, SkeletonList, SkeletonRegion } from '@/shared/components/ui/skeleton';
+import { Button } from '@/shared/components/ui/button';
 import type { pmTicketApi, PmCentralIntakeItem, PmClientConversation, PmClientSummary, PmProjectFeedbackMessage, PmTicketQueueItem, PmTicketQueueOptions, PmTicketQueuePage } from './pmApi';
 import { pmTicketNextAction } from './pmTicketNextAction';
 import { downloadTicketDocument, type TicketDocument, type TicketDocumentsReadApi } from './ticketDocuments';
@@ -345,11 +346,11 @@ function ClientProjectCard({ client, project, canOpen, onOpenProject }: {
         <h3 className="truncate text-[13px] font-semibold text-content" title={project.name}>{project.name}</h3>
         <p className="text-[11.5px] text-content-muted">{previewState(project.previewPublished, Boolean(url))}</p>
       </div>
-      {/* Only link to a project this PM's project list has; never a dead link. */}
-      {canOpen && <button type="button" onClick={() => onOpenProject(project.projectId)}
-        className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-link hover:text-link-hover">
-        Open project <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
-      </button>}
+      {/* Enter the project's conversation without routing through the internal project board. */}
+      {canOpen && <Button type="button" variant="ghost" size="sm" onClick={() => onOpenProject(project.projectId)}
+        className="h-auto shrink-0 px-0 text-xs font-semibold text-link hover:bg-transparent hover:text-link-hover">
+        Open conversation <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+      </Button>}
     </div>
     {url && <a href={url} target="_blank" rel="noreferrer noopener"
       className="mb-2 inline-flex items-center gap-1 text-xs font-medium text-link hover:text-link-hover">

@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { CheckCircle2, Circle, ListChecks, LockKeyhole, Plus, X } from 'lucide-react';
+import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
+import { Textarea } from '@/shared/components/ui/textarea';
 import { TicketChat, type TicketChatMessage } from './TicketChat';
 import {
   CHECKLIST_LABEL, canToggleRequest, conversationChatMessages,
@@ -16,9 +20,9 @@ const CHIP_TONE: Record<RequestChecklistStatus, string> = {
 };
 
 export function ChecklistChip({ status }: Readonly<{ status: RequestChecklistStatus }>) {
-  return <span className={`inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${CHIP_TONE[status]}`}>
+  return <Badge variant="secondary" className={`shrink-0 rounded-full border-0 text-[11px] ${CHIP_TONE[status]}`}>
     {CHECKLIST_LABEL[status]}
-  </span>;
+  </Badge>;
 }
 
 /** The request a reply is about; without one, a message goes to the project as a whole. */
@@ -107,10 +111,12 @@ export function ProjectConversationChat({ role, items, requests, error = '', act
   let aboutLine: ReactNode = null;
   if (about) {
     aboutLine = <><span>Replying about</span><span className="ticket-chat__about-chip"><span>{about.title}</span>
-      {onClearAbout && <button type="button" onClick={onClearAbout} aria-label={`Stop replying about ${about.title}`}><X size={12} aria-hidden="true" /></button>}</span></>;
+      {onClearAbout && <Button type="button" variant="ghost" size="icon" className="h-[18px] w-[18px] rounded-full p-0"
+        onClick={onClearAbout} aria-label={`Stop replying about ${about.title}`}><X size={12} aria-hidden="true" /></Button>}</span></>;
   } else if (restoreAbout && onRestoreAbout) {
     aboutLine = <><span>Message about the whole project.</span>
-      <button type="button" onClick={onRestoreAbout}>Reply about “{restoreAbout.title}” instead</button></>;
+      <Button type="button" variant="ghost" size="sm" className="h-auto px-0 py-0 text-[11.5px] font-semibold text-link hover:bg-transparent"
+        onClick={onRestoreAbout}>Reply about “{restoreAbout.title}” instead</Button></>;
   }
   const toolbar = aboutLine || composerExtra ? <div className="ticket-chat__about">{aboutLine}{composerExtra}</div> : undefined;
 
@@ -167,6 +173,10 @@ export interface ProjectConversationViewProps extends Omit<ProjectConversationCh
   onSelectRequest?: (request: ConversationRequest) => void;
   /** Tabs after Requests; an About tab when none are given. */
   panelTabs?: ConversationPanelTab[];
+  /** Existing full request form, shown as a tab inside the project conversation. */
+  requestForm?: ReactNode;
+  /** Select a conversation panel after entering a workflow. */
+  initialPanelId?: string;
 }
 
 /**
@@ -175,8 +185,9 @@ export interface ProjectConversationViewProps extends Omit<ProjectConversationCh
  */
 export function ProjectConversationView(props: Readonly<ProjectConversationViewProps>) {
   const { role, projectName, requests, busy = false, writesAvailable = true, onToggleDone, onCreateRequest, onOpenRequest,
-    renderRequestActions, focusTicketId = null, selectedTicketId = null, onSelectRequest, panelTabs } = props;
-  const [panel, setPanel] = useState('requests');
+    renderRequestActions, focusTicketId = null, selectedTicketId = null, onSelectRequest, panelTabs, requestForm, initialPanelId = 'requests' } = props;
+  const [panel, setPanel] = useState(initialPanelId);
+  useEffect(() => { setPanel(initialPanelId); }, [initialPanelId]);
   const tabsId = useId();
   const { jump, toRequest } = useConversationJump();
   const focusJumped = useRef<string | null>(null);
@@ -195,21 +206,23 @@ export function ProjectConversationView(props: Readonly<ProjectConversationViewP
       This is your one conversation about this project. Ask questions here, make new requests, and tick requests off when they are done.
     </p>
   </div> };
-  const tabs: ConversationPanelTab[] = [{ id: 'requests', label: requests ? `Requests · ${openRequestCount(requests)} open` : 'Requests', content: null },
-    ...(panelTabs ?? [about])];
+  const requestLabel = role === 'pm' ? 'Tickets' : 'Requests';
+  const tabs: ConversationPanelTab[] = [{ id: 'requests', label: requests ? `${requestLabel} · ${openRequestCount(requests)} open` : requestLabel, content: null },
+    ...(panelTabs ?? [about]), ...(requestForm ? [{ id: 'new-request', label: 'New request', content: requestForm }] : [])];
 
   return <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)]">
     <section className="flex h-[70dvh] min-h-[420px] min-w-0 flex-col lg:h-auto lg:min-h-0" aria-label={`Conversation about ${projectName}`}>
       <ProjectConversationChat {...props} jump={jump} />
     </section>
 
-    <aside className="flex min-h-0 flex-col border-t border-divider lg:border-l lg:border-t-0" aria-label="About this conversation">
+    <aside className="flex min-h-0 flex-col border-t border-divider lg:border-l lg:border-t-0"
+      aria-label={role === 'pm' ? `Project tickets and details for ${projectName}` : `Requests and details for ${projectName}`}>
       <div role="tablist" aria-label="Conversation details" className="flex shrink-0 flex-wrap gap-x-5 border-b border-divider px-5">
         {tabs.map(({ id, label }) =>
-          <button key={id} type="button" role="tab" id={`${tabsId}-${id}`} aria-selected={panel === id} onClick={() => setPanel(id)}
-            className={`relative h-11 text-[13px] font-medium ${panel === id
+          <Button key={id} type="button" variant="ghost" size="default" role="tab" id={`${tabsId}-${id}`} aria-selected={panel === id} onClick={() => setPanel(id)}
+            className={`relative h-11 rounded-none px-0 text-[13px] font-medium ${panel === id
               ? 'text-content after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-link'
-              : 'text-content-muted hover:text-content-secondary'}`}>{label}</button>)}
+              : 'text-content-muted hover:text-content-secondary'}`}>{label}</Button>)}
       </div>
       <div role="tabpanel" aria-labelledby={`${tabsId}-${panel}`} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {panel === 'requests'
@@ -285,27 +298,25 @@ export function ConversationRequestList({ role, requests, busy, writesAvailable,
       const titleClass = `text-left text-[13px] font-medium ${done ? 'text-content-secondary line-through decoration-content-muted' : 'text-content'}`;
       return <li key={request.ticketId} className={`py-3 ${highlighted ? 'rounded-md bg-selected/40 px-2' : ''}`}>
         <div className="flex items-start gap-2.5">
-          {/* A real checkbox, drawn as a circle that fills in when the request is done. */}
-          <label title={toggleTitle(request, done)}
-            className={`relative mt-0.5 shrink-0 text-content-muted ${!toggleable || busy ? 'cursor-default' : 'cursor-pointer hover:text-content'}`}>
-            <input type="checkbox" checked={done} disabled={!toggleable || busy} onChange={() => onToggleDone(request, !done)}
-              aria-label={`${done ? 'Reopen' : 'Mark done'}: ${request.title}`} className="peer sr-only" />
-            <span className="block rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-focus">
-              {done ? <CheckCircle2 size={17} className="text-status-success" aria-hidden="true" /> : <Circle size={17} aria-hidden="true" />}
-            </span>
-          </label>
+          {/* A toggle button, drawn as a circle that fills in when the request is done. */}
+          <Button type="button" variant="ghost" size="icon" title={toggleTitle(request, done)}
+            disabled={!toggleable || busy} onClick={() => onToggleDone(request, !done)} aria-pressed={done}
+            aria-label={`${done ? 'Reopen' : 'Mark done'}: ${request.title}`}
+            className="mt-0.5 h-6 w-6 shrink-0 rounded-full p-0 text-content-muted hover:text-content">
+            {done ? <CheckCircle2 size={17} className="text-status-success" aria-hidden="true" /> : <Circle size={17} aria-hidden="true" />}
+          </Button>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               {onSelectRequest
-                ? <button type="button" onClick={() => onSelectRequest(request)} aria-pressed={highlighted}
-                  title="Show where this request was made" className={titleClass + ' hover:underline'}>{request.title}</button>
+                ? <Button type="button" variant="ghost" size="default" onClick={() => onSelectRequest(request)} aria-pressed={highlighted}
+                  title="Show where this request was made" className={`h-auto justify-start rounded-none p-0 text-left text-[13px] font-medium hover:bg-transparent hover:underline ${done ? 'text-content-secondary line-through decoration-content-muted' : 'text-content'}`}>{request.title}</Button>
                 : <p className={titleClass}>{request.title}</p>}
               <ChecklistChip status={request.checklist} />
             </div>
             {request.checklist === 'ready_to_check' && role === 'client' && <p className="mt-1 text-[12px] text-content-secondary">
               The work for this is finished. Check it, then tick it done.</p>}
             {request.doneBy && done && <p className="mt-1 text-[11.5px] text-content-muted">Marked done by {doneByText(request.doneBy, role)}</p>}
-            {request.linkedTasks.length > 0 && <ul className="mt-2 space-y-1">
+            {role === 'pm' && request.linkedTasks.length > 0 && <ul className="mt-2 space-y-1">
               {request.linkedTasks.map(task => <li key={task.issueId} className="flex items-center gap-2 text-[12px] text-content-secondary">
                 <span aria-hidden="true" className={`h-1.5 w-1.5 shrink-0 rounded-full ${task.status === 'done' ? 'bg-status-success' : 'bg-content-muted'}`} />
                 {role === 'pm' && <span className="font-mono text-[11px] text-content-muted">{task.identifier}</span>}
@@ -315,8 +326,9 @@ export function ConversationRequestList({ role, requests, busy, writesAvailable,
             </ul>}
             {(renderRequestActions || onOpenRequest) && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
               {renderRequestActions?.(request)}
-              {onOpenRequest && <button type="button" onClick={() => onOpenRequest(request)} className="font-semibold text-link hover:text-link-hover">
-                Open details</button>}
+              {onOpenRequest && <Button type="button" variant="ghost" size="sm" onClick={() => onOpenRequest(request)}
+                className="h-auto justify-start px-0 py-0 text-[12px] font-semibold text-link hover:bg-transparent hover:text-link-hover">
+                Open details</Button>}
             </div>}
           </div>
         </div>
@@ -328,21 +340,20 @@ export function ConversationRequestList({ role, requests, busy, writesAvailable,
     {onCreateRequest && (formOpen
       ? <form onSubmit={event => void create(event)} className="space-y-2.5 border-b border-divider pb-4">
         <label htmlFor={`${ids}-title`} className="block text-[12px] font-medium text-content-secondary">What do you need?</label>
-        <input id={`${ids}-title`} value={title} onChange={event => setTitle(event.target.value)} maxLength={160} disabled={busy}
-          placeholder="For example: Add a contact form" className="h-9 w-full rounded-md border border-control bg-well px-2.5 text-[13px] text-content placeholder-content-muted focus:outline-none focus:ring-2 focus:ring-focus" />
+        <Input id={`${ids}-title`} value={title} onChange={event => setTitle(event.target.value)} maxLength={160} disabled={busy}
+          placeholder="For example: Add a contact form" className="h-9 bg-well text-[13px]" />
         <label htmlFor={`${ids}-details`} className="block text-[12px] font-medium text-content-secondary">Details</label>
-        <textarea id={`${ids}-details`} value={description} onChange={event => setDescription(event.target.value)} maxLength={6000} rows={4} disabled={busy}
-          placeholder="What should it do, and how will you know it is right?" className="w-full rounded-md border border-control bg-well px-2.5 py-2 text-[13px] text-content placeholder-content-muted focus:outline-none focus:ring-2 focus:ring-focus" />
+        <Textarea id={`${ids}-details`} value={description} onChange={event => setDescription(event.target.value)} maxLength={6000} rows={4} disabled={busy}
+          placeholder="What should it do, and how will you know it is right?" className="min-h-20 text-[13px]" />
         <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => setFormOpen(false)} disabled={busy} className="h-8 rounded-md px-3 text-[12.5px] font-medium text-content-secondary hover:bg-surface-high">Cancel</button>
-          <button type="submit" disabled={busy || !title.trim() || !description.trim() || !writesAvailable}
-            className="h-8 rounded-md bg-action px-3 text-[12.5px] font-semibold text-on-action disabled:opacity-50">Send request</button>
+          <Button type="button" variant="ghost" size="sm" onClick={() => setFormOpen(false)} disabled={busy}>Cancel</Button>
+          <Button type="submit" size="sm" disabled={busy || !title.trim() || !description.trim() || !writesAvailable}>Send request</Button>
         </div>
       </form>
-      : <button type="button" onClick={() => setFormOpen(true)} disabled={busy || !writesAvailable}
-        className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-link hover:text-link-hover disabled:opacity-50">
+      : <Button type="button" variant="ghost" size="sm" onClick={() => setFormOpen(true)} disabled={busy || !writesAvailable}
+        className="h-8 justify-start px-0 text-[12.5px] font-semibold text-link hover:bg-transparent hover:text-link-hover">
         <Plus size={14} aria-hidden="true" /> New request
-      </button>)}
+      </Button>)}
     {list}
   </div>;
 }

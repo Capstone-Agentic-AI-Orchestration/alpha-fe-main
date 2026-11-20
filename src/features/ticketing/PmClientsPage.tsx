@@ -18,12 +18,12 @@ import { CLIENTS_CONVERSATION_FOCUS_KEY } from './TaskClientRequest';
 export type ClientSection = 'overview' | 'conversation' | 'tickets' | 'conversations' | 'documents' | 'proposals' | 'projects' | 'access';
 const SECTIONS: Array<{ id: ClientSection; label: string }> = [
   { id: 'overview', label: 'Overview' },
+  { id: 'projects', label: 'Projects' },
   { id: 'conversation', label: 'Conversation' },
   { id: 'tickets', label: 'Tickets' },
   { id: 'conversations', label: 'Conversations' },
   { id: 'documents', label: 'Documents' },
   { id: 'proposals', label: 'Proposals' },
-  { id: 'projects', label: 'Projects' },
   { id: 'access', label: 'Access' },
 ];
 
@@ -89,7 +89,6 @@ export function PmClientsPage() {
   // Tab session state, so "View client" on a ticket can open a client here.
   const [selectedKey, setSelectedKey] = useTabSessionState<string | null>('clients.selected', null);
   const [section, setSection] = useTabSessionState<ClientSection>('clients.section', 'overview');
-  const [, setSelectedProject] = useTabSessionState<string | null>('projects.selectedProject', null);
   const [, setOpenInquiry] = useTabSessionState<OpenInquiry | null>(OPEN_INQUIRY_KEY, null);
   // Set by a task's "Client request" link: open that project's conversation on that request.
   const [conversationFocus, setConversationFocus] = useTabSessionState<PmConversationFocus | null>(CLIENTS_CONVERSATION_FOCUS_KEY, null);
@@ -98,7 +97,7 @@ export function PmClientsPage() {
 
   return <PmClientsWorkspace workspaceKey={activeWorkspace?.id ?? 'none'} intakeEnabled={pmTicketsIntakeEnabled}
     workflowActions={workflowActions} selectedKey={selectedKey} onSelectKey={setSelectedKey} section={section} onSection={setSection}
-    knownProjectIds={knownProjectIds} onOpenProject={projectId => { setSelectedProject(projectId); setActiveTab('projects'); }}
+    knownProjectIds={knownProjectIds} onOpenProject={projectId => { setConversationFocus({ projectId }); setSection('conversation'); }}
     onOpenInquiries={inquiry => { setOpenInquiry(inquiry ?? null); setActiveTab('inquiries'); }}
     conversationFocus={conversationFocus} onConversationFocusHandled={() => setConversationFocus(null)}
     onCreateTask={draft => {
@@ -243,7 +242,8 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
       </div>
     </div>}
     renderConversation={client => <PmClientConversationTab api={api} documentsApi={documentsApi} client={client} focus={conversationFocus}
-      onOpenRequestDetails={openRequestDetails} onCreateTask={onCreateTask} tasksForProject={tasksForProject} refreshToken={refreshToken} />}
+      onBackToProjects={() => onSection('projects')} onOpenRequestDetails={openRequestDetails} onCreateTask={onCreateTask}
+      tasksForProject={tasksForProject} refreshToken={refreshToken} />}
     renderOverview={client => <ClientOverview client={client} requests={requests} conversations={conversations} onOpenRequest={openRequest} />}
     renderConversations={client => <ClientConversations client={client} requests={requests} conversations={conversations}
       error={conversationsError} onOpenRequest={openRequest} />}
@@ -363,7 +363,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
                 {knownProjectIds.has(project.projectId) && <button type="button"
                   onClick={() => onOpenProject(project.projectId)}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-link hover:text-link-hover">
-                  Open project <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  Open conversation <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>}
               </li>)}
             </ul>}

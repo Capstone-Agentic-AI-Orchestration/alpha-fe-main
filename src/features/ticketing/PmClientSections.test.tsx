@@ -93,7 +93,7 @@ describe('Client projects', () => {
     expect(html).toContain('Ana Cruz');
     expect(html).toContain('Newer');
     expect(html).toContain('Project feedback could not be loaded.');
-    expect(html.match(/Open project/g)).toHaveLength(1);
+    expect(html.match(/Open conversation/g)).toHaveLength(1);
   });
 
   it('never links a preview address that is not a web page', () => {

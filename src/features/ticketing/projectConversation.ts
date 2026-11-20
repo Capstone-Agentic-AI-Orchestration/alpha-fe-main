@@ -105,10 +105,10 @@ function actorName(author: ConversationItem['author'], role: 'client' | 'pm'): s
   return role === 'client' ? 'Your project manager' : 'A project manager';
 }
 
-/** The task-linked line: PMs see the task's identifier, clients see what was added. */
+/** Task-link events are internal to the PM; only PMs see linked task details. */
 function taskLinkedLine(item: ConversationItem, role: 'client' | 'pm', title: string): string {
   const taskTitle = item.task?.title ?? '';
-  if (role === 'client') return 'Your project manager added a task for ' + title + (taskTitle ? ': ' + taskTitle : '');
+  if (role === 'client') return '';
   const quoted = taskTitle ? '“' + taskTitle + '” ' : '';
   return (item.task?.identifier ?? 'A task') + ' ' + quoted + 'was linked to ' + title;
 }
@@ -129,7 +129,7 @@ function messageTag(item: ConversationItem): string | undefined {
 /** The conversation as chat entries; actions are added per entry by the caller. */
 export function conversationChatMessages(items: readonly ConversationItem[], role: 'client' | 'pm',
   actionsFor?: (item: ConversationItem) => TicketChatMessage['actions']): TicketChatMessage[] {
-  return items.map(item => {
+  return items.filter(item => role === 'pm' || item.kind !== 'task_linked').map(item => {
     const actions = actionsFor?.(item);
     if (item.kind === 'task_linked' || item.kind === 'request_done' || item.kind === 'request_reopened') {
       return { id: item.id, author: item.author, kind: 'event', body: eventLine(item, role), createdAt: item.createdAt };

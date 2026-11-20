@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, type FormEvent, type ReactNode } from 'react';
 import { ChevronDown, ClipboardList, LockKeyhole, MessageSquare, Send, StickyNote, UserRound, Zap } from 'lucide-react';
 import { Button, type ButtonVariant } from '@/shared/components/ui/button';
+import { Card } from '@/shared/components/ui/card';
 import { Bubble, BubbleContent } from '@/shared/components/ui/bubble';
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageGroup, MessageHeader, MessageScroller } from '@/shared/components/ui/message';
 import { Skeleton } from '@/shared/components/ui/skeleton';
@@ -137,21 +138,23 @@ function SystemUpdates({ group, showDay }: Readonly<{ group: TicketChatMessage[]
 
 /** A request made in the conversation: a card across the conversation, set apart from ordinary messages. */
 function RequestCard({ message, author, highlighted }: Readonly<{ message: TicketChatMessage; author: string; highlighted: boolean }>) {
-  const label = author === 'You' ? 'You made a request' : author + ' made a request';
+  const label = author === 'You' ? 'you' : author;
   return <article className={`ticket-chat__request${highlighted ? ' is-highlighted' : ''}`} data-chat-id={message.id} data-message-kind="request"
     aria-label={label + ': ' + (message.heading ?? 'request') + ' at ' + clockTime(message.createdAt)}>
-    <header className="ticket-chat__request-head">
-      <span className="ticket-chat__request-icon" aria-hidden="true"><ClipboardList size={15} /></span>
-      <span className="ticket-chat__request-label">New request</span>
-      {message.reference && <code className="ticket-chat__request-ref">{message.reference}</code>}
-      {message.badge && <span className="ticket-chat__request-badge">{message.badge}</span>}
-    </header>
-    {message.heading && <h3 className="ticket-chat__request-title">{message.heading}</h3>}
-    {message.body && <p className="ticket-chat__request-body">{message.body}</p>}
-    <footer className="ticket-chat__request-foot">
-      <span>{label} · <time dateTime={message.createdAt}>{clockTime(message.createdAt)}</time></span>
-      {message.actions && <span className="ticket-chat__actions">{message.actions}</span>}
-    </footer>
+    <Card className="ticket-chat__request-surface">
+      <header className="ticket-chat__request-head">
+        <span className="ticket-chat__request-icon" aria-hidden="true"><ClipboardList size={15} /></span>
+        <span className="ticket-chat__request-label">Request</span>
+        {message.reference && <code className="ticket-chat__request-ref">{message.reference}</code>}
+        {message.badge && <span className="ticket-chat__request-badge">{message.badge}</span>}
+      </header>
+      {message.heading && <h3 className="ticket-chat__request-title">{message.heading}</h3>}
+      {message.body && <p className="ticket-chat__request-body">{message.body}</p>}
+      <footer className="ticket-chat__request-foot">
+        <span>Requested by {label} · <time dateTime={message.createdAt}>{clockTime(message.createdAt)}</time></span>
+        {message.actions && <span className="ticket-chat__actions">{message.actions}</span>}
+      </footer>
+    </Card>
   </article>;
 }
 
