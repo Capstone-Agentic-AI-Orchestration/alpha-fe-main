@@ -1,4 +1,5 @@
 import { ApiRequestError, apiService } from '@/shared/services/apiService';
+import { parseConversation, parseConversationRequest, parseConversationRequests } from './projectConversation';
 import { parseClientDeliveryFile, parseClientDeliveryManifest, readPmDeliveryFile, type ClientDeliveryFile } from './clientDelivery';
 import { parsePmDeliveryCandidates } from './pmDeliveryCandidates';
 import { parseTicketDocumentList, type TicketDocumentsReadApi } from './ticketDocuments';
@@ -63,6 +64,15 @@ export interface PmClientSummary {
 const boundedText = (value: unknown, allowEmpty = false): value is string => typeof value === 'string'
   && value.length <= 200 && value.trim() === value && (allowEmpty || value.length > 0);
 const countValue = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
+
+/** A project a client can talk about, for the client's Conversation tab. */
+export interface PmClientProjectConversation {
+  workspaceId: string; projectId: string; projectName: string; openRequests: number; lastActivityAt: string;
+}
+/** An open client request on a project, for linking a new task to it. */
+export interface PmOpenRequest { ticketId: string; reference: string; title: string; clientId: string; clientName: string | null }
+/** The client request a task belongs to. */
+export interface PmTaskRequestLink { issueId: string; ticketId: string; reference: string; title: string; clientId: string | null }
 
 /** One request on a client's page, with its newest client-visible message (never an internal note). */
 export interface PmClientConversation {
@@ -631,6 +641,48 @@ export const pmTicketApi = {
       ),
       () => pmTicketApi.getProjectFeedbackOperation(projectId, clientId, input.operationId),
     );
+  },
+  /** The projects a client can talk about, newest activity first. */
+  async listClientProjectConversations(clientId: string): Promise<PmClientProjectConversation[]> {
+    const value = await apiService.ticketRequest<unknown>(`/tickets/clients/${encodeId(clientId)}/project-conversations`);
+    const items = value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>).items : null;
+    if (!Array.isArray(items)) throw new Error('Client project list is invalid.');
+    return items.map(item => {
+      const row = item as Record<string, unknown>;
+      if (!row || typeof row.projectId !== 'string' || typeof row.projectName !== 'string' || typeof row.workspaceId !== 'string'
+        || !Number.isSafeInteger(row.openRequests) || typeof row.lastActivityAt !== 'string') throw new Error('Client project list is invalid.');
+      return { workspaceId: row.workspaceId, projectId: row.projectId, projectName: row.projectName,
+        openRequests: row.openRequests as number, lastActivityAt: row.lastActivityAt };
+    });
+  },
+  async getProjectConversation(projectId: string, clientId: string) {
+    return parseConversation(await apiService.ticketRequest<unknown>(
+      `/tickets/projects/${encodeId(projectId)}/conversation${query({ clientId })}`));
+  },
+  async getProjectConversationRequests(projectId: string, clientId: string) {
+    return parseConversationRequests(await apiService.ticketRequest<unknown>(
+      `/tickets/projects/${encodeId(projectId)}/conversation/requests${query({ clientId })}`));
+  },
+  async setConversationRequestDone(projectId: string, clientId: string, ticketId: string, done: boolean) {
+    return parseConversationRequest(await apiService.ticketRequest<unknown>(
+      `/tickets/projects/${encodeId(projectId)}/conversation/requests/${encodeId(ticketId)}/check${query({ clientId })}`,
+      { method: 'POST', body: JSON.stringify({ done }) }));
+  },
+  /** Open client requests on a project, for the New task dialog. */
+  listOpenRequests(projectId: string) {
+    return apiService.ticketRequest<{ items: PmOpenRequest[] }>(`/tickets/projects/${encodeId(projectId)}/open-requests`);
+  },
+  /** Which client request each task on a project belongs to. */
+  listTaskRequestLinks(projectId: string) {
+    return apiService.ticketRequest<{ items: PmTaskRequestLink[] }>(`/tickets/projects/${encodeId(projectId)}/request-links`);
+  },
+  linkTaskToRequest(ticketId: string, issueId: string, source: 'conversation' | 'task_dialog' = 'conversation') {
+    return apiService.ticketRequest<{ ticketId: string; issueId: string }>(`/tickets/requests/${encodeId(ticketId)}/task-links`,
+      { method: 'POST', body: JSON.stringify({ issueId, source }) });
+  },
+  unlinkTaskFromRequest(ticketId: string, issueId: string) {
+    return apiService.ticketRequest<{ ticketId: string; issueId: string }>(
+      `/tickets/requests/${encodeId(ticketId)}/task-links/${encodeId(issueId)}`, { method: 'DELETE' });
   },
   getProjectFeedbackOperation(projectId: string, clientId: string, operationId: string) {
     return apiService.ticketRequest<PmProjectFeedbackReceipt>(

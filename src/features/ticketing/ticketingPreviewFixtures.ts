@@ -1,4 +1,5 @@
 import { createTicketPreview, type PreviewSeedTicket } from './previewModel';
+import { PREVIEW_CONVERSATION_ITEMS, PREVIEW_CONVERSATION_PROJECT, PREVIEW_CONVERSATION_REQUESTS } from './conversationPreviewFixtures';
 import { previewDelay, withPreviewLatency } from './previewLatency';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import {
@@ -209,6 +210,16 @@ const queueCounters = {
 };
 
 const localMethods: Partial<typeof pmTicketApi> = {
+  async listClientProjectConversations() {
+    return [{ ...PREVIEW_CONVERSATION_PROJECT, openRequests: 2, lastActivityAt: '2026-10-06T08:40:00+08:00' }];
+  },
+  async getProjectConversation() { return { items: PREVIEW_CONVERSATION_ITEMS, clientId: 'preview-northstar' }; },
+  async getProjectConversationRequests() { return { items: PREVIEW_CONVERSATION_REQUESTS }; },
+  async listOpenRequests() {
+    return { items: PREVIEW_CONVERSATION_REQUESTS.map(request => ({ ticketId: request.ticketId, reference: request.reference,
+      title: request.title, clientId: 'preview-northstar', clientName: 'Northstar Demo Co.' })) };
+  },
+  async listTaskRequestLinks() { return { items: [] }; },
   async listClientGroups() {
     const groups = new Map<string, string>();
     for (const ticket of DEMO_TICKETS) {

@@ -8,6 +8,8 @@ interface Navigation {
   page: ClientPage;
   selectedProjectKey: string | null;
   selectedProposalId: string | null;
+  /** The project whose conversation is open on the Requests page. */
+  selectedConversationKey: string | null;
   selectedId: string | null;
   selectedWorkspaceId: string | null;
   selectedItemFallback: ClientProjectRequestItem | null;
@@ -30,7 +32,7 @@ export function initialClientTabs(filter: ClientPortalFilter = 'all'): Tabs {
   return { items: [createTab('client-tab-default', 'overview', filter)], activeId: 'client-tab-default' };
 }
 function createTab(id: string, page: ClientPage, filter: ClientPortalFilter = 'all'): Tab {
-  return { id, navigation: { page, selectedProjectKey: null, selectedProposalId: null, selectedId: null, selectedWorkspaceId: null,
+  return { id, navigation: { page, selectedProjectKey: null, selectedProposalId: null, selectedConversationKey: null, selectedId: null, selectedWorkspaceId: null,
     selectedItemFallback: null, filter, searchInput: '', search: '', replyDrafts: {}, returnToProjects: false,
     notificationProjectFocus: 0 } };
 }

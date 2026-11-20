@@ -17,6 +17,14 @@ export interface TicketChatMessage {
   author: TicketChatAuthor;
   body: string;
   createdAt: string;
+  /** 'event' renders as one centered line (a task linked, a request ticked done); 'request' as a request card. */
+  kind?: 'message' | 'request' | 'event';
+  /** A short label beside the author, such as the request a message is about. */
+  tag?: string;
+  /** A request card's title. */
+  heading?: string;
+  /** Buttons under the message, such as "Create task". */
+  actions?: ReactNode;
 }
 
 type TicketChatMode = 'conversation' | 'notes';
@@ -214,14 +222,26 @@ export function TicketChat({
   const messageGroups: TicketChatMessage[][] = [];
   messages.forEach(message => {
     const group = messageGroups[messageGroups.length - 1];
-    if (group && group[0].author === message.author && dateKey(group[0].createdAt) === dateKey(message.createdAt)) group.push(message);
+    // Events and request cards stand alone; ordinary messages group by author and day.
+    const groupable = (item: TicketChatMessage) => (item.kind ?? 'message') === 'message';
+    if (group && groupable(message) && groupable(group[0]) && group[0].author === message.author
+      && dateKey(group[0].createdAt) === dateKey(message.createdAt)) group.push(message);
     else messageGroups.push([message]);
   });
 
   const renderMessageGroup = (group: TicketChatMessage[], groupIndex: number) => {
     const firstMessage = group[0];
+    const day = (groupIndex === 0 || dateKey(messageGroups[groupIndex - 1][0].createdAt) !== dateKey(firstMessage.createdAt)) && <div className="ticket-chat__day" aria-label={`Messages from ${dateLabel(firstMessage.createdAt)}`}><span><time dateTime={firstMessage.createdAt}>{dateLabel(firstMessage.createdAt)}</time></span></div>;
+    if (firstMessage.kind === 'event') {
+      return <Fragment key={firstMessage.id}>
+        {day}
+        <p className="ticket-chat__event" data-message-kind="event">
+          <span>{firstMessage.body}</span><time dateTime={firstMessage.createdAt}>{clockTime(firstMessage.createdAt)}</time>
+        </p>
+      </Fragment>;
+    }
     return <Fragment key={firstMessage.id}>
-      {(groupIndex === 0 || dateKey(messageGroups[groupIndex - 1][0].createdAt) !== dateKey(firstMessage.createdAt)) && <div className="ticket-chat__day" aria-label={`Messages from ${dateLabel(firstMessage.createdAt)}`}><span><time dateTime={firstMessage.createdAt}>{dateLabel(firstMessage.createdAt)}</time></span></div>}
+      {day}
       <MessageGroup className="ticket-chat__group">
         {group.map((message, groupIndex) => {
           const note = mode === 'notes' || message.author === 'note';
@@ -232,13 +252,17 @@ export function TicketChat({
             align={mine ? 'end' : 'start'}
             data-message-author={message.author}
             aria-label={`${author} message at ${clockTime(message.createdAt)}`}
-            className={`ticket-chat__message${mine ? ' ticket-chat__message--mine' : ''}${note ? ' ticket-chat__message--note' : ''}`}
+            data-message-kind={message.kind ?? 'message'}
+            className={`ticket-chat__message${mine ? ' ticket-chat__message--mine' : ''}${note ? ' ticket-chat__message--note' : ''}${message.kind === 'request' ? ' ticket-chat__message--request' : ''}`}
           >
             <MessageAvatar className={`ticket-chat__avatar${mine ? ' ticket-chat__avatar--mine' : ''}${note ? ' ticket-chat__avatar--note' : ''}`} aria-hidden="true">{messageAvatar(message, role, clientInitial)}</MessageAvatar>
             <MessageContent className="ticket-chat__content">
-              <MessageHeader className="ticket-chat__message-meta"><span>{groupIndex === 0 ? author : <span className="sr-only">{author}</span>}</span></MessageHeader>
-              <Bubble className="ticket-chat__bubble"><BubbleContent className="ticket-chat__bubble-content">{message.body}</BubbleContent></Bubble>
-              <MessageFooter className="ticket-chat__message-footer"><time dateTime={message.createdAt}>{clockTime(message.createdAt)}</time></MessageFooter>
+              <MessageHeader className="ticket-chat__message-meta"><span>{groupIndex === 0 || message.tag ? author : <span className="sr-only">{author}</span>}</span>{message.tag && <span className="ticket-chat__tag">{message.tag}</span>}</MessageHeader>
+              <Bubble className="ticket-chat__bubble"><BubbleContent className="ticket-chat__bubble-content">
+                {message.heading && <strong className="ticket-chat__bubble-heading">{message.heading}</strong>}
+                {message.body}
+              </BubbleContent></Bubble>
+              <MessageFooter className="ticket-chat__message-footer"><time dateTime={message.createdAt}>{clockTime(message.createdAt)}</time>{message.actions && <span className="ticket-chat__actions">{message.actions}</span>}</MessageFooter>
             </MessageContent>
           </Message>;
         })}

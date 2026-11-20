@@ -1,4 +1,5 @@
 import { ClientTicketApiError, clientTicketApi } from './clientApi';
+import { PREVIEW_CONVERSATION_ITEMS, PREVIEW_CONVERSATION_REQUESTS } from './conversationPreviewFixtures';
 import type {
   ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue,
   ClientTicketDetail, ClientTicketQueue, ClientTicketQueueOptions,
@@ -66,6 +67,10 @@ const sampleProject: ClientProject = {
 };
 
 const methods: Partial<typeof clientTicketApi> = {
+  async getProjectConversation() { return { items: PREVIEW_CONVERSATION_ITEMS }; },
+  async getProjectConversationRequests() {
+    return { items: PREVIEW_CONVERSATION_REQUESTS.map(request => ({ ...request, workspaceId: workspace })) };
+  },
   async getWorkflowCapabilities() { return { phaseWorkflowEnabled: false }; },
   async getSession() { return { authenticated: true, fullName: 'Alex Morgan', email: 'alex.morgan@example.test' }; },
   async listWorkspaces() { return { items: [{ workspaceId: workspace, displayName: 'Northstar Demo Co. · fictional samples' }] }; },

@@ -5,14 +5,18 @@ import { renderToStaticMarkup } from 'react-dom/server';
 vi.hoisted(() => { (globalThis as { window?: unknown }).window ??= globalThis; });
 
 let canRunBuilds = true;
+let visibleTabs = ['clients'];
+let sessionValues: Record<string, unknown> = {};
 vi.mock('@/app/AppContext', () => ({
   useApp: () => ({
     createIssue: vi.fn(),
+    showToast: vi.fn(),
     projects: [{ id: 'p1', name: 'Website refresh', key: 'WEB' }],
     identity: { login: 'maya-reyes', name: 'Maya Reyes' },
+    visibleTabs,
     can: (capability: string) => capability !== 'run_builds' || canRunBuilds
   }),
-  useTabSessionState: <T,>(_key: string, initial: T) => [initial, () => undefined]
+  useTabSessionState: <T,>(key: string, initial: T) => [key in sessionValues ? sessionValues[key] : initial, () => undefined]
 }));
 vi.mock('@/shared/desktop', async () => ({
   ...(await vi.importActual<typeof import('@/shared/desktop')>('@/shared/desktop')),
@@ -26,10 +30,10 @@ const render = () => renderToStaticMarkup(<CreateIssueModal isOpen onClose={() =
 describe('New task dialog', () => {
   it('is one form, with no agent mode and no create-another toggle', () => {
     const html = render();
-    for (const shown of ['New task', 'Task title', 'What needs to happen?', 'Description', 'Due date', 'More options', 'Status', 'Priority', 'Assignee', 'Labels', 'Suggest steps with Alpha', 'Create task']) {
+    for (const shown of ['New task', 'Task title', 'What needs to happen?', 'Description', 'Due date', 'Status', 'Priority', 'Assignee', 'Labels', 'Checklist items', 'Suggest steps with Alpha', 'Create task']) {
       expect(html).toContain(shown);
     }
-    for (const gone of ['Create another', 'Switch to', 'Create with agent', 'Deconstruct user prompt', 'Suggest from description', 'Plan a build when it’s created']) {
+    for (const gone of ['More options', '<details', 'Create another', 'Switch to', 'Create with agent', 'Deconstruct user prompt', 'Suggest from description', 'Plan a build when it’s created']) {
       expect(html).not.toContain(gone);
     }
   });
@@ -40,6 +44,18 @@ describe('New task dialog', () => {
     canRunBuilds = false;
     expect(render()).not.toContain('Suggest steps with Alpha');
     canRunBuilds = true;
+  });
+
+  it('shows the client request a task is for, only to those who see clients', () => {
+    sessionValues = { 'issueModal.linkedRequest': { ticketId: 't-1', title: 'Add a contact form', source: 'conversation' } };
+    const html = render();
+    expect(html).toContain('Client request');
+    expect(html).toContain('Add a contact form');
+    visibleTabs = [];
+    expect(render()).not.toContain('Client request');
+    visibleTabs = ['clients'];
+    sessionValues = {};
+    expect(render()).not.toContain('Client request');
   });
 
   it('explains why creation is disabled until the required title is present', () => {

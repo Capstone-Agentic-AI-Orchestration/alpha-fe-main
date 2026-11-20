@@ -11,10 +11,14 @@ import { pmTicketsIntakeEnabled, usePmWorkflowActions } from './PmTicketsPage';
 import { ClientConversations, ClientDocuments, ClientOverview, ClientProjects, ClientProposals, loadClientProjects, loadClientRequests, type ClientProjectDetail } from './PmClientSections';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { OPEN_INQUIRY_KEY, type OpenInquiry } from './PmInquiriesPage';
+import { PmClientConversationTab, type ConversationLinkableTask, type ConversationTaskDraft, type PmConversationFocus } from './PmClientConversation';
+import { LINKED_REQUEST_KEY, type LinkedRequestDraft } from './requestTaskLink';
+import { CLIENTS_CONVERSATION_FOCUS_KEY } from './TaskClientRequest';
 
-export type ClientSection = 'overview' | 'tickets' | 'conversations' | 'documents' | 'proposals' | 'projects' | 'access';
+export type ClientSection = 'overview' | 'conversation' | 'tickets' | 'conversations' | 'documents' | 'proposals' | 'projects' | 'access';
 const SECTIONS: Array<{ id: ClientSection; label: string }> = [
   { id: 'overview', label: 'Overview' },
+  { id: 'conversation', label: 'Conversation' },
   { id: 'tickets', label: 'Tickets' },
   { id: 'conversations', label: 'Conversations' },
   { id: 'documents', label: 'Documents' },
@@ -81,19 +85,33 @@ export function clientsSummary(clients: readonly PmClientSummary[]): string {
  * The Tickets page remains the queue across all clients.
  */
 export function PmClientsPage() {
-  const { activeWorkspace, projects, setActiveTab } = useApp();
+  const { activeWorkspace, projects, setActiveTab, issues, activeTabId, setTabSessionState } = useApp();
   // Tab session state, so "View client" on a ticket can open a client here.
   const [selectedKey, setSelectedKey] = useTabSessionState<string | null>('clients.selected', null);
   const [section, setSection] = useTabSessionState<ClientSection>('clients.section', 'overview');
   const [, setSelectedProject] = useTabSessionState<string | null>('projects.selectedProject', null);
   const [, setOpenInquiry] = useTabSessionState<OpenInquiry | null>(OPEN_INQUIRY_KEY, null);
+  // Set by a task's "Client request" link: open that project's conversation on that request.
+  const [conversationFocus, setConversationFocus] = useTabSessionState<PmConversationFocus | null>(CLIENTS_CONVERSATION_FOCUS_KEY, null);
   const workflowActions = usePmWorkflowActions();
   const knownProjectIds = useMemo(() => new Set(projects.map(project => project.id)), [projects]);
 
   return <PmClientsWorkspace workspaceKey={activeWorkspace?.id ?? 'none'} intakeEnabled={pmTicketsIntakeEnabled}
     workflowActions={workflowActions} selectedKey={selectedKey} onSelectKey={setSelectedKey} section={section} onSection={setSection}
     knownProjectIds={knownProjectIds} onOpenProject={projectId => { setSelectedProject(projectId); setActiveTab('projects'); }}
-    onOpenInquiries={inquiry => { setOpenInquiry(inquiry ?? null); setActiveTab('inquiries'); }} />;
+    onOpenInquiries={inquiry => { setOpenInquiry(inquiry ?? null); setActiveTab('inquiries'); }}
+    conversationFocus={conversationFocus} onConversationFocusHandled={() => setConversationFocus(null)}
+    onCreateTask={draft => {
+      // Fill the New task dialog for this project and remember which request the task is for.
+      const linked: LinkedRequestDraft | null = draft.request ? { ...draft.request, source: 'conversation' } : null;
+      setTabSessionState(activeTabId, 'issueModal.project', draft.projectId);
+      setTabSessionState(activeTabId, 'issueModal.title', draft.title);
+      setTabSessionState(activeTabId, 'issueModal.description', draft.description);
+      setTabSessionState(activeTabId, LINKED_REQUEST_KEY, linked);
+      setTabSessionState(activeTabId, 'issueModal.open', true);
+    }}
+    tasksForProject={projectId => issues.filter(issue => issue.projectId === projectId && !issue.archivedAt)
+      .map(issue => ({ id: issue.id, identifier: issue.identifier, title: issue.title }))} />;
 }
 
 /**
@@ -102,7 +120,8 @@ export function PmClientsPage() {
  * development preview, which supplies sample APIs and its own selection state.
  */
 export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, workspaceKey, intakeEnabled = true,
-  workflowActions = 'all', selectedKey, onSelectKey, section, onSection, knownProjectIds, onOpenProject, onOpenInquiries, refreshToken }: {
+  workflowActions = 'all', selectedKey, onSelectKey, section, onSection, knownProjectIds, onOpenProject, onOpenInquiries, refreshToken,
+  conversationFocus: externalFocus = null, onConversationFocusHandled, onCreateTask, tasksForProject }: {
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   workspaceKey: string;
@@ -117,6 +136,12 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
   onOpenInquiries: (inquiry?: OpenInquiry) => void;
   /** Parent-owned refresh, as in the preview toolbar. */
   refreshToken?: number;
+  /** A project and request to open the Conversation tab on, from elsewhere in the app. */
+  conversationFocus?: PmConversationFocus | null;
+  onConversationFocusHandled?: () => void;
+  /** Opens the New task dialog from the conversation; absent in the UI preview. */
+  onCreateTask?: (draft: ConversationTaskDraft) => void;
+  tasksForProject?: (projectId: string) => ConversationLinkableTask[];
 }) {
   const [clients, setClients] = useState<PmClientSummary[] | null>(null);
   const [error, setError] = useState('');
@@ -132,6 +157,8 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
   const [proposalsError, setProposalsError] = useState('');
   // A request picked on Overview, Conversations or Documents, opened in the Tickets tab.
   const [openRequestId, setOpenRequestId] = useState<string | null>(null);
+  // The project and request the Conversation tab opens on, when picked elsewhere.
+  const [conversationFocus, setConversationFocus] = useState<PmConversationFocus | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -158,6 +185,7 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
   // The open client's requests and latest messages, for Overview, Conversations and Documents.
   useEffect(() => {
     setRequests(null); setConversations(null); setConversationsError(''); setProposals(null); setProposalsError(''); setOpenRequestId(null);
+    setConversationFocus(null);
     if (!selectedKey || !intakeEnabled) return;
     let current = true;
     void loadClientRequests(options => api.list(options), selectedKey).then(result => { if (current) setRequests(result.items); })
@@ -169,6 +197,13 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
     return () => { current = false; };
   }, [api, selectedKey, intakeEnabled, refreshVersion, refreshToken]);
 
+  // After the per-client reset above, so a focus that arrives with a new client survives it.
+  useEffect(() => {
+    if (!externalFocus) return;
+    setConversationFocus(externalFocus);
+    onConversationFocusHandled?.();
+  }, [externalFocus, onConversationFocusHandled]);
+
   // The open client's projects, with preview links and feedback, once its summary is loaded.
   useEffect(() => {
     setProjectDetails(null);
@@ -178,7 +213,13 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
     return () => { current = false; };
   }, [api, selected, intakeEnabled]);
 
-  const openRequest = (requestId: string) => { setOpenRequestId(requestId); onSection('tickets'); };
+  /** A request opens in its project's conversation; one not on a project yet opens its full page. */
+  const openRequest = (requestId: string) => {
+    const projectId = requests?.find(item => item.id === requestId)?.internal.projectId ?? null;
+    if (projectId) { setConversationFocus({ projectId, ticketId: requestId }); onSection('conversation'); return; }
+    setOpenRequestId(requestId); onSection('tickets');
+  };
+  const openRequestDetails = (requestId: string) => { setOpenRequestId(requestId); onSection('tickets'); };
 
   return <PmClientsView clients={clients} error={error} loading={loading} search={search} onSearch={setSearch}
     needsYouOnly={needsYouOnly} onNeedsYouOnly={setNeedsYouOnly}
@@ -192,6 +233,8 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
           intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled />
       </div>
     </div>}
+    renderConversation={client => <PmClientConversationTab api={api} client={client} focus={conversationFocus}
+      onOpenRequestDetails={openRequestDetails} onCreateTask={onCreateTask} tasksForProject={tasksForProject} refreshToken={refreshToken} />}
     renderOverview={client => <ClientOverview client={client} requests={requests} conversations={conversations} onOpenRequest={openRequest} />}
     renderConversations={client => <ClientConversations client={client} requests={requests} conversations={conversations}
       error={conversationsError} onOpenRequest={openRequest} />}
@@ -223,6 +266,11 @@ export interface PmClientsViewProps {
   renderTickets: (clientKey: string) => ReactNode;
   /** Optional tabs; each appears only when given. */
   renderOverview?: (client: PmClientSummary) => ReactNode;
+  /**
+   * One conversation per project. When given, it replaces the Tickets and
+   * Conversations tabs; a request's full page (Tickets) opens from it.
+   */
+  renderConversation?: (client: PmClientSummary) => ReactNode;
   renderConversations?: (client: PmClientSummary) => ReactNode;
   renderDocuments?: (client: PmClientSummary) => ReactNode;
   renderProposals?: (client: PmClientSummary) => ReactNode;
@@ -233,17 +281,24 @@ export interface PmClientsViewProps {
 /** The Clients list and a client's page, from props alone. */
 export function PmClientsView({ clients, error, loading, search, onSearch, selectedKey, onSelect, section, onSection,
   needsYouOnly = false, onNeedsYouOnly, renderProjects, renderProposals,
-  knownProjectIds, onRefresh, onOpenProject, onOpenInquiries, renderTickets, renderOverview, renderConversations, renderDocuments }: PmClientsViewProps) {
+  knownProjectIds, onRefresh, onOpenProject, onOpenInquiries, renderTickets, renderOverview, renderConversation, renderConversations, renderDocuments }: PmClientsViewProps) {
   const selected = clients?.find(client => client.key === selectedKey) ?? null;
   const visible = useMemo(() => filterClients(clients ?? [], search, needsYouOnly), [clients, search, needsYouOnly]);
   const summary = useMemo(() => clientsSummary(clients ?? []), [clients]);
 
   if (selected) {
+    const unified = Boolean(renderConversation);
     const optional: Partial<Record<ClientSection, ((client: PmClientSummary) => ReactNode) | undefined>> = {
-      overview: renderOverview, conversations: renderConversations, documents: renderDocuments, proposals: renderProposals,
+      overview: renderOverview, conversation: renderConversation, conversations: unified ? undefined : renderConversations,
+      documents: renderDocuments, proposals: renderProposals,
     };
-    const sections = SECTIONS.filter(item => !(item.id in optional) || optional[item.id]);
-    const openSection: ClientSection = sections.some(item => item.id === section) ? section : 'tickets';
+    // With one conversation per project, a request's full page is reached from it, not from a tab.
+    const sections = SECTIONS.filter(item => (!(item.id in optional) || optional[item.id]) && !(unified && item.id === 'tickets'));
+    const requested: ClientSection = unified && section === 'conversations' ? 'conversation' : section;
+    const openSection: ClientSection = unified && requested === 'tickets' ? 'tickets'
+      : sections.some(item => item.id === requested) ? requested : unified ? 'conversation' : 'tickets';
+    const highlighted: ClientSection = unified && openSection === 'tickets' ? 'conversation' : openSection;
+    const badgeSection: ClientSection = unified ? 'conversation' : 'tickets';
     return <div className="flex h-full min-h-0 flex-col bg-canvas">
       <header className="shrink-0 border-b border-divider px-6 pb-0 pt-4">
         <button type="button" onClick={() => onSelect(null)} className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-content-muted hover:text-content">
@@ -259,20 +314,28 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
           <AccessBadge access={selected.access} />
         </div>
         <div role="tablist" aria-label="Client sections" className="mt-4 flex gap-5">
-          {sections.map(item => <button key={item.id} type="button" role="tab" aria-selected={openSection === item.id}
+          {sections.map(item => <button key={item.id} type="button" role="tab" aria-selected={highlighted === item.id}
             onClick={() => onSection(item.id)}
-            className={`relative inline-flex h-9 items-center gap-1.5 text-[13px] font-medium ${openSection === item.id
+            className={`relative inline-flex h-9 items-center gap-1.5 text-[13px] font-medium ${highlighted === item.id
               ? 'text-content after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-link'
               : 'text-content-muted hover:text-content-secondary'}`}>
             {item.label}
-            {item.id === 'tickets' && selected.tickets.needsPm > 0 && <span className="rounded-full bg-selected px-1.5 text-[10.5px] font-semibold text-selected-content">{selected.tickets.needsPm}</span>}
+            {item.id === badgeSection && selected.tickets.needsPm > 0 && <span className="rounded-full bg-selected px-1.5 text-[10.5px] font-semibold text-selected-content">{selected.tickets.needsPm}</span>}
           </button>)}
         </div>
       </header>
 
-      <div role="tabpanel" aria-label={SECTIONS.find(item => item.id === openSection)?.label} className="min-h-0 flex-1">
+      <div role="tabpanel" aria-label={SECTIONS.find(item => item.id === highlighted)?.label} className="min-h-0 flex-1">
         {openSection === 'overview' && renderOverview?.(selected)}
-        {openSection === 'tickets' && renderTickets(selected.key)}
+        {openSection === 'conversation' && renderConversation?.(selected)}
+        {openSection === 'tickets' && (unified ? <div className="flex h-full min-h-0 flex-col">
+          <div className="shrink-0 border-b border-divider px-6 py-2">
+            <button type="button" onClick={() => onSection('conversation')} className="inline-flex items-center gap-1.5 text-xs font-medium text-content-muted hover:text-content">
+              <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> Back to conversation
+            </button>
+          </div>
+          <div className="min-h-0 flex-1">{renderTickets(selected.key)}</div>
+        </div> : renderTickets(selected.key))}
         {openSection === 'conversations' && renderConversations?.(selected)}
         {openSection === 'documents' && renderDocuments?.(selected)}
         {openSection === 'proposals' && renderProposals?.(selected)}
@@ -297,7 +360,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
             </ul>}
           {selected.tickets.unlinkedOpen > 0 && <p className="mt-4 text-[12.5px] text-content-secondary">
             {plural(selected.tickets.unlinkedOpen, 'open request isn’t', 'open requests aren’t')} linked to a project yet.{' '}
-            <button type="button" onClick={() => onSection('tickets')} className="font-semibold text-link hover:text-link-hover">Review in Tickets</button>
+            <button type="button" onClick={() => onSection('tickets')} className="font-semibold text-link hover:text-link-hover">{unified ? 'Review requests' : 'Review in Tickets'}</button>
           </p>}
         </div>}
 
@@ -311,7 +374,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
           {selected.tickets.accessRevoked > 0 && <p className="rounded-md border border-status-warning-border bg-status-warning-subtle px-3 py-2 text-status-warning">
             Access was removed on {plural(selected.tickets.accessRevoked, 'request')}. The client can’t open {selected.tickets.accessRevoked === 1 ? 'it' : 'them'}.
           </p>}
-          <p className="text-xs text-content-muted">Invitations and access are managed on each request in the Tickets tab.</p>
+          <p className="text-xs text-content-muted">{unified ? 'Invitations and access are managed on each request’s page (Conversation, then Open details).' : 'Invitations and access are managed on each request in the Tickets tab.'}</p>
         </div>}
       </div>
     </div>;

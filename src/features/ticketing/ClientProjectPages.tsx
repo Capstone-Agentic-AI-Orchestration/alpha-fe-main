@@ -1,6 +1,6 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { ArrowRight, BellRing, Check, ClipboardCheck, FolderKanban, Lightbulb, Maximize2, MessageSquare, Minimize2, Plus, RefreshCw, Send, Sparkles } from 'lucide-react';
+import { ArrowRight, BellRing, Check, ClipboardCheck, FolderKanban, Lightbulb, Maximize2, MessageSquare, MessagesSquare, Minimize2, Plus, RefreshCw, Send, Sparkles } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
@@ -217,7 +217,7 @@ function UpdateRow({ item, onOpen }: { item: ClientProjectRequestItem; onOpen: (
 }
 
 export function ClientProjectsPage({ api = clientTicketApi, projects, loading, error, selectedProjectKey,
-  onSelectedProjectKeyChange, onOpenRequest, onNewRequest, inspectionOnly, newRequestEnabled, newRequestLoading, projectFocusVersion, refreshToken,
+  onSelectedProjectKeyChange, onOpenRequest, onNewRequest, onOpenConversation, inspectionOnly, newRequestEnabled, newRequestLoading, projectFocusVersion, refreshToken,
   proposalsNeedingReply = 0, onOpenProposals, onProposeProject, idPrefix = 'client', requests = [] }: {
   idPrefix?: string;
   /** Proposals the project manager is waiting on the client for; they live on their own page. */
@@ -235,6 +235,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   onSelectedProjectKeyChange: (key: string | null) => void;
   onOpenRequest: (request: ClientProjectRequestItem) => void;
   onNewRequest: (project: ClientProject) => void;
+  /** Opens the project's one conversation with the project manager. */
+  onOpenConversation?: (project: ClientProject) => void;
   inspectionOnly: boolean;
   newRequestEnabled: boolean;
   newRequestLoading: boolean;
@@ -254,8 +256,12 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
     const titleId = idPrefix + '-project-title';
     const header = <CxPageHeader titleId={titleId} title={selectedProject.name} back={{ label: 'Projects', onClick: () => onSelectedProjectKeyChange(null) }}
       description={'Updated ' + relativeTime(selectedProject.updatedAt) + ' · ' + open + ' open ' + (open === 1 ? 'request' : 'requests')}
-      actions={newRequestEnabled ? <button type="button" className="cx-button is-primary" disabled={newRequestLoading} onClick={() => onNewRequest(selectedProject)}>
-        <Plus size={15} aria-hidden="true" />{newRequestLoading ? 'Checking access…' : 'New request'}</button> : undefined} />;
+      actions={onOpenConversation || newRequestEnabled ? <>
+        {onOpenConversation && <button type="button" className="cx-button" onClick={() => onOpenConversation(selectedProject)}>
+          <MessagesSquare size={15} aria-hidden="true" />Conversation</button>}
+        {newRequestEnabled && <button type="button" className="cx-button is-primary" disabled={newRequestLoading} onClick={() => onNewRequest(selectedProject)}>
+          <Plus size={15} aria-hidden="true" />{newRequestLoading ? 'Checking access…' : 'New request'}</button>}
+      </> : undefined} />;
     const actionCards = attention.length > 0 && <div className="cx-action-grid">{attention.map(item => {
       const step = clientNextStep(item.requestedAction);
       const Icon = item.requestedAction ? ACTION_ICONS[item.requestedAction] : MessageSquare;
