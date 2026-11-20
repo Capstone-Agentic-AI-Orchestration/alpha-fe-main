@@ -293,6 +293,15 @@ export function nextStepFor(input: NextStepInput): NextStep {
   }
 }
 
+/**
+ * The comments to show on a task: people's only (the project manager, the
+ * client, developers). Agents and Alpha no longer comment on cards; anything
+ * they wrote before stays out of sight, and out of the count.
+ */
+export function peopleComments<T extends Pick<Issue['comments'][number], 'authorType'>>(comments: readonly T[] | undefined): T[] {
+  return (comments ?? []).filter(comment => comment.authorType === 'user');
+}
+
 /** Two-letter initials for a person's avatar. */
 export function initialsOf(name: string): string {
   return name.replace(/[^a-zA-Z0-9 ]/g, ' ').split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || '?';

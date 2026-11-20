@@ -1,5 +1,5 @@
 import React, { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
-import { Archive, Bot, ChevronDown, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react';
+import { Archive, ChevronDown, ExternalLink, GitBranch, GitPullRequest, MessageSquare, Plus, Send, Sparkles, X } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import type { BoardAgentChange, Issue, IssuePriority, IssueStatus } from '@/shared/types';
 import { AgentChangesList } from '@/features/board-agent/AgentChangesList';
@@ -11,7 +11,7 @@ import { FeatureSpecPanel } from '@/features/board-build/FeatureSpecPanel';
 import { TaskBuildPanel, type SpecState } from '@/features/board-build/TaskBuildPanel';
 import { useFeatureSpec } from '@/features/board-build/useTaskBuild';
 import { isDesktop } from '@/shared/desktop';
-import { TASK_PRIORITIES, TASK_STATUSES, nextStepFor, statusLabel, taskStage, visibleLabels, type NextStepAction } from './taskFlow';
+import { TASK_PRIORITIES, TASK_STATUSES, nextStepFor, peopleComments, statusLabel, taskStage, visibleLabels, type NextStepAction } from './taskFlow';
 import { DatePicker } from '@/shared/components/ui/date-picker';
 import { githubLink } from '@/shared/lib/githubLink';
 import { TaskClientRequest } from '@/features/ticketing/TaskClientRequest';
@@ -114,6 +114,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const descriptionRef = useRef<HTMLTextAreaElement>(null);
   const canManageIssues = can('manage_issues');
+  /** People's comments only: older notes from agents or Alpha stay hidden. */
+  const comments = peopleComments(issue.comments);
   const [savedTab, setTab] = useTabSessionState<DrawerTab>(`${sessionPrefix}.drawerTab`, 'overview');
   const buildsHere = isDesktop;
   // A tab saved before Activity was removed, or Build on the web, opens the overview.
@@ -551,7 +553,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
               </section>
               <section aria-labelledby={`${ids}-comments-title`} className="border-t border-divider pt-4">
                 <h3 id={`${ids}-comments-title`} className="mb-3 text-[12.5px] font-semibold text-content-secondary">
-                  Comments{issue.comments.length > 0 && <span className="ml-1.5 font-normal tabular-nums text-content-muted">{issue.comments.length}</span>}
+                  Comments{comments.length > 0 && <span className="ml-1.5 font-normal tabular-nums text-content-muted">{comments.length}</span>}
                 </h3>
                 {agentChanges.length > 0 && (
                   <section aria-label="Agent changes" className="mb-4 rounded-lg border border-divider">
@@ -559,14 +561,14 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
                     <AgentChangesList changes={agentChanges} login={identity?.login} busyId={agentDecidingId} onDecide={onAgentDecide} showDetails />
                   </section>
                 )}
-                {issue.comments.length === 0
+                {comments.length === 0
                   ? <p className="text-[13px] text-content-muted">No comments yet.</p>
                   : (
                     <ol className="space-y-4">
-                      {issue.comments.map(entry => (
+                      {comments.map(entry => (
                         <li key={entry.id} className="flex gap-3">
                           <span aria-hidden="true" className="mt-0.5 grid h-5 w-5 shrink-0 place-items-center rounded-full bg-surface-high text-content-muted">
-                            {entry.authorType === 'agent' ? <Bot className="h-3 w-3 text-status-info" /> : entry.authorType === 'system' ? <Sparkles className="h-3 w-3" /> : <span className="text-[9px] font-semibold text-content-secondary">{entry.authorName.slice(0, 1).toUpperCase()}</span>}
+                            <span className="text-[9px] font-semibold text-content-secondary">{entry.authorName.slice(0, 1).toUpperCase()}</span>
                           </span>
                           <div className="min-w-0 flex-1">
                             <p className="text-[12.5px] text-content-muted">
