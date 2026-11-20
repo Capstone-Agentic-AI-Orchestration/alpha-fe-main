@@ -241,6 +241,73 @@ function HandoffTimeline({ workflow }: { workflow: ProjectBuildOrchestration }) 
   </section>;
 }
 
+/** A unified diff split per file, keyed by the file's new path, in diff order. */
+export function splitDiffByFile(diff: string): Map<string, string> {
+  const files = new Map<string, string>();
+  let current: string | null = null;
+  let lines: string[] = [];
+  const flush = () => { if (current !== null) files.set(current, lines.join('\n')); };
+  for (const line of diff.split('\n')) {
+    const header = /^diff --git a\/.+ b\/(.+)$/.exec(line);
+    if (header) { flush(); current = header[1]; lines = [line]; } else if (current !== null) lines.push(line);
+  }
+  flush();
+  return files;
+}
+
+function diffLineClass(line: string): string {
+  if (line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git')) return 'text-content-secondary';
+  if (line.startsWith('+')) return 'bg-diff-added text-diff-added-content';
+  if (line.startsWith('-')) return 'bg-diff-removed text-diff-removed-content';
+  if (line.startsWith('@@')) return 'text-diff-hunk';
+  return 'text-content-secondary';
+}
+
+interface RepositoryDiff {
+  repository: string;
+  branchName: string;
+  resultCommit: string;
+  reviewType?: string;
+  changedPaths: string[];
+  pathsTruncated?: boolean;
+  diff?: string;
+  truncated?: boolean;
+}
+
+/**
+ * One codebase's changes: a header line, the changed files as tabs that switch the
+ * diff to that file, and the diff in a box of its own. A codebase with nothing changed
+ * is one quiet line, not an empty panel.
+ */
+function RepositoryChanges({ repository }: { repository: RepositoryDiff }) {
+  const [selected, setSelected] = useState<string | null>(null);
+  const perFile = repository.diff ? splitDiffByFile(repository.diff) : new Map<string, string>();
+  const shown = selected && perFile.has(selected) ? perFile.get(selected)! : repository.diff ?? '';
+  const saved = repository.reviewType === 'saved_checkpoint';
+  const name = repository.repository.split('/').pop() || repository.repository;
+  const where = repository.repository ? ` in ${repository.repository}` : '';
+  const filesLabel = (saved ? 'Saved checkpoint files' : 'Changed files') + where;
+  const diffLabel = (saved ? 'Saved checkpoint' : 'Validated') + ' code changes' + where;
+  const tab = (active: boolean) => `max-w-full truncate rounded-md border px-2 py-1 font-mono text-[10px] ${active ? 'border-focus bg-selected text-selected-content' : 'border-divider bg-well text-content-secondary hover:bg-surface-high'}`;
+  return <div className="rounded-lg border border-divider bg-surface-raised">
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 px-3 py-2">
+      {repository.repository && <span className="text-xs font-semibold text-content" title={repository.repository}>{name}</span>}
+      <span className="text-[10px] text-content-muted">branch <code className="text-content-secondary">{repository.branchName}</code> · {saved ? 'saved checkpoint' : 'checked change'} <code className="text-content-secondary">{repository.resultCommit.slice(0, 7)}</code></span>
+    </div>
+    {!repository.diff ? <p className="border-t border-divider px-3 py-2 text-[11px] text-content-muted">No file changes{repository.repository ? ` in ${name}` : ''}.</p> : <div className="border-t border-divider px-3 py-2.5">
+      <div role="tablist" aria-label={filesLabel} className="flex flex-wrap gap-1.5">
+        {repository.changedPaths.length > 1 && <button type="button" role="tab" aria-selected={!selected} onClick={() => setSelected(null)} className={tab(!selected)}>All files</button>}
+        {repository.changedPaths.map(file => <button key={file} type="button" role="tab" aria-selected={selected === file} title={file} onClick={() => setSelected(file)} className={tab(selected === file)}>{file.split('/').pop()}</button>)}
+        {repository.pathsTruncated && <span className="self-center text-[10px] text-content-muted">More changed files are omitted.</span>}
+      </div>
+      <div className="mt-2.5 max-h-[24rem] overflow-auto rounded-md border border-divider bg-code p-3 font-mono text-[10px] leading-[1.65]" aria-label={diffLabel}>
+        {shown.split('\n').map((line, index) => <div key={index} className={`min-w-max whitespace-pre ${diffLineClass(line)}`}>{line || ' '}</div>)}
+      </div>
+      {repository.truncated && <p role="status" className="mt-2 text-[10px] leading-4 text-status-warning">This preview was shortened. Inspect the full branch diff before approving.</p>}
+    </div>}
+  </div>;
+}
+
 export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string; savedCheckpoint?: boolean; expanded?: boolean; onReady?: () => void }> = ({ projectId, runId, branchName, savedCheckpoint = false, expanded = false, onReady }) => {
   const [open, setOpen] = useState(expanded);
   const [preview, setPreview] = useState<ProjectBuildDiffPreview | null>(null);
@@ -282,27 +349,13 @@ export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName
     {open && <div className="border-t border-divider px-4 py-3">
       {loading && <LoadingRows label={savedCheckpoint ? 'Loading the saved checkpoint' : 'Loading the validated patch'} layout="code" rows={6} className="py-2" />}
       {error && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-status-danger-border bg-status-danger-subtle p-3" role="alert"><p className="text-xs leading-5 text-status-danger">{error}</p><button type="button" onClick={() => void loadPreview()} disabled={loading} className="min-h-8 rounded-md border border-status-danger-border px-2.5 text-[10px] font-semibold text-status-danger hover:bg-status-danger-subtle disabled:opacity-50">Retry</button></div>}
-      {preview?.repositories && preview.repositories.length > 1 ? preview.repositories.map(repository => <div key={repository.repository} className="border-t border-divider py-4 first:border-0 first:pt-0 last:pb-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-content-muted"><span className="font-semibold text-content">{repository.repository}</span><span>Branch <code className="ml-1 text-content-secondary">{repository.branchName}</code></span><span>{repository.reviewType === 'saved_checkpoint' ? 'Saved checkpoint' : 'Checked change'} <code className="ml-1 text-content-secondary">{repository.resultCommit.slice(0, 7)}</code></span></div>
-        <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`${repository.reviewType === 'saved_checkpoint' ? 'Saved checkpoint files' : 'Changed files'} in ${repository.repository}`}>
-          {repository.changedPaths.map(file => <code key={file} className="max-w-full truncate rounded-md border border-divider bg-well px-2 py-1 text-[10px] text-content-secondary">{file}</code>)}
-          {repository.pathsTruncated && <span className="text-[10px] text-content-muted">More changed files are omitted.</span>}
-        </div>
-        {repository.diff ? <div className="mt-3 max-h-[30rem] overflow-auto rounded-lg border border-divider bg-code p-3 font-mono text-[10px] leading-[1.65]" aria-label={`${repository.reviewType === 'saved_checkpoint' ? 'Saved checkpoint' : 'Validated'} code changes in ${repository.repository}`}>
-          {repository.diff.split('\n').map((line, index) => <div key={index} className={`min-w-max whitespace-pre ${line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git') ? 'text-content-secondary' : line.startsWith('+') ? 'bg-diff-added text-diff-added-content' : line.startsWith('-') ? 'bg-diff-removed text-diff-removed-content' : line.startsWith('@@') ? 'text-diff-hunk' : 'text-content-secondary'}`}>{line || ' '}</div>)}
-        </div> : <p className="mt-3 rounded-lg border border-divider bg-well px-3 py-3 text-xs text-content-secondary">No file changes in this codebase.</p>}
-        {repository.truncated && <p role="status" className="mt-2 text-[10px] leading-4 text-status-warning">This preview was shortened. Inspect the full branch diff before approving.</p>}
-      </div>) : preview && <>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] text-content-muted"><span>Branch <code className="ml-1 text-content-secondary">{preview.branchName || branchName}</code></span><span>{preview.reviewType === 'saved_checkpoint' ? 'Saved checkpoint' : 'Checked change'} <code className="ml-1 text-content-secondary">{preview.resultCommit.slice(0, 7)}</code></span></div>
-        <div className="mt-3 flex flex-wrap gap-1.5" aria-label={`Changed files in the ${preview.reviewType === 'saved_checkpoint' ? 'saved checkpoint' : 'validated commit'}`}>
-          {preview.changedPaths.map(file => <code key={file} className="max-w-full truncate rounded-md border border-divider bg-well px-2 py-1 text-[10px] text-content-secondary">{file}</code>)}
-          {preview.pathsTruncated && <span className="text-[10px] text-content-muted">More changed files are omitted.</span>}
-        </div>
-        {preview.diff ? <div className="mt-3 max-h-[30rem] overflow-auto rounded-lg border border-divider bg-code p-3 font-mono text-[10px] leading-[1.65]" aria-label={`${preview.reviewType === 'saved_checkpoint' ? 'Saved checkpoint' : 'Validated'} code diff`}>
-          {preview.diff.split('\n').map((line, index) => <div key={index} className={`min-w-max whitespace-pre ${line.startsWith('+++') || line.startsWith('---') || line.startsWith('diff --git') ? 'text-content-secondary' : line.startsWith('+') ? 'bg-diff-added text-diff-added-content' : line.startsWith('-') ? 'bg-diff-removed text-diff-removed-content' : line.startsWith('@@') ? 'text-diff-hunk' : 'text-content-secondary'}`}>{line || ' '}</div>)}
-        </div> : <p className="mt-3 rounded-lg border border-divider bg-well px-3 py-3 text-xs text-content-secondary">The validated commit contains no file changes.</p>}
-        {preview.truncated && <p role="status" className="mt-2 text-[10px] leading-4 text-status-warning">The preview was shortened to keep this page responsive. Inspect the full branch diff in the local repository before approving.</p>}
-      </>}
+      {preview && <div className="space-y-4">
+        {(preview.repositories && preview.repositories.length > 1
+          ? preview.repositories
+          : [{ repository: '', branchName: preview.branchName || branchName || '', resultCommit: preview.resultCommit, reviewType: preview.reviewType,
+            changedPaths: preview.changedPaths, pathsTruncated: preview.pathsTruncated, diff: preview.diff, truncated: preview.truncated }]
+        ).map(repository => <RepositoryChanges key={repository.repository || 'single'} repository={repository} />)}
+      </div>}
     </div>}
   </section>;
 };
