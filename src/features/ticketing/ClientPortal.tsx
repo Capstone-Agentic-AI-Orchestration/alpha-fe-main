@@ -24,7 +24,9 @@ import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './Clie
 import { ClientProposalsPage } from './ClientProposalsPage';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
 import { ClientTabBar, ClientTopBar } from './ClientTopBar';
-import { CxChips, CxEmpty, CxPageHeader, CxPanel, CxRequestRow, CxSection } from './clientKit';
+import { CxChips, CxEmpty, CxPageHeader, CxPanel, CxRequestRow, CxRow, CxSection } from './clientKit';
+import { ClientProjectConversation } from './ClientProjectConversation';
+import type { ConversationRequest } from './projectConversation';
 import { useClientWorkspaceTabs, type ClientPage as Page } from './clientWorkspaceTabs';
 import './clientDesignTokens.css';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
@@ -116,6 +118,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [page, setPage] = tabState('page');
   const [selectedProjectKey, setSelectedProjectKey] = tabState('selectedProjectKey');
   const [selectedProposalId, setSelectedProposalId] = tabState('selectedProposalId');
+  const [selectedConversationKey, setSelectedConversationKey] = tabState('selectedConversationKey');
+  const [conversationFocusTicket, setConversationFocusTicket] = useState<string | null>(null);
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
@@ -599,7 +603,23 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     // Choosing Requests from the navigation shows the list, not the last request that was open.
     if (nextPage === 'requests') {
       historyGeneration.current += 1; setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null); setReturnToHome(false);
+      setSelectedConversationKey(null); setConversationFocusTicket(null);
     }
+  }
+
+  /** A project's one conversation, on the Requests page. */
+  function openConversation(project: ClientProject, ticketId: string | null = null) {
+    navigate('requests');
+    setSelectedConversationKey(clientProjectKey(project)); setConversationFocusTicket(ticketId);
+  }
+
+  /** A request's full page (plan, result, files) from its conversation; Back returns to the conversation. */
+  function openConversationRequest(request: ConversationRequest) {
+    const item = queue?.items.find(entry => entry.id === request.ticketId && entry.workspaceId === request.workspaceId);
+    if (item) { openRequest(item); return; }
+    // Made moments ago and not in the loaded list yet: open it by ID and refresh the list.
+    historyGeneration.current += 1; setSelectedId(request.ticketId); setSelectedWorkspaceId(request.workspaceId); setSelectedItemFallback(null);
+    setReturnToProjects(false); setReturnToHome(false); setRefreshVersion(value => value + 1);
   }
 
   function openPortalUpdate(update: ClientPortalUpdate) {
@@ -635,6 +655,9 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     unavailable={portalState === 'unavailable'} error={pageError} onRetry={() => setSessionCheckVersion(value => value + 1)} />;
 
   const activeRequest = selectedQueueItem;
+  const conversationProject = (projects ?? []).find(project => clientProjectKey(project) === selectedConversationKey) ?? null;
+  const openOnProject = (project: ClientProject) => (displayQueue?.items ?? []).filter(item => item.workspaceId === project.workspaceId
+    && item.projectId === project.projectId && !['closed', 'declined', 'cancelled'].includes(item.status)).length;
   const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review';
   const proposalsNeedingReply = (projectProposals ?? []).filter(proposal => proposal.status === 'awaiting_client').length;
   const proposeProject = inspectionOnly ? undefined : () => { setProposeRequestTab(activeTabId); navigate('proposals'); };
@@ -733,6 +756,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} requests={displayQueue?.items ?? []} loading={!projects && !projectsError} error={projectsError}
             selectedProjectKey={tab.navigation.selectedProjectKey} onSelectedProjectKeyChange={key => selectProject(tab.id, key)}
             onOpenRequest={item => openRequest(item, true)} onNewRequest={project => void openCreateForm(project)}
+            onOpenConversation={project => openConversation(project)}
             inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading}
             projectFocusVersion={tab.navigation.notificationProjectFocus} refreshToken={refreshVersion}
             proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')} onProposeProject={proposeProject} />
@@ -744,8 +768,21 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           onRefresh={() => setRefreshVersion(value => value + 1)} onSubmitted={() => setRefreshVersion(value => value + 1)}
           onOpenProject={openProject} openForm={proposeRequestTab === activeTabId} onOpenFormHandled={() => setProposeRequestTab(null)} /></div>}
 
-        {page === 'requests' && !selectedId && <div className="cx-page">
+        {page === 'requests' && !selectedId && conversationProject && <ClientProjectConversation key={activeTabId + ':' + selectedConversationKey}
+          api={api} project={conversationProject} clientName={clientName} readOnly={inspectionOnly} canCreateRequests={canStartProjectRequest}
+          focusTicketId={conversationFocusTicket} onBack={() => { setSelectedConversationKey(null); setConversationFocusTicket(null); }}
+          onOpenRequest={openConversationRequest} />}
+
+        {page === 'requests' && !selectedId && !conversationProject && <div className="cx-page">
           {requestsHeader}
+          {(projects ?? []).length > 0 && <CxSection titleId={activeTabId + '-conversations'} title="Conversations" count={(projects ?? []).length}>
+            <p className="cx-page-description">One conversation per project with your project manager. Make new requests there and tick them off when they are done.</p>
+            <CxPanel>{(projects ?? []).map(project => {
+              const open = openOnProject(project);
+              return <CxRow key={clientProjectKey(project)} title={project.name} disabled={Boolean(pending)}
+                meta={open ? `${open} open ${open === 1 ? 'request' : 'requests'}` : 'No open requests'} onClick={() => openConversation(project)} />;
+            })}</CxPanel>
+          </CxSection>}
           <div className="cx-toolbar">
             <label className="cx-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search requests</span>
               <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search requests" /></label>

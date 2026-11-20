@@ -7,6 +7,8 @@ import { isDesktop } from '@/shared/desktop';
 import { Modal } from '@/shared/components/Modal';
 import { TASK_PRIORITIES, TASK_STATUSES } from './taskFlow';
 import { DatePicker } from '@/shared/components/ui/date-picker';
+import { pmTicketApi, type PmOpenRequest } from '@/features/ticketing/pmApi';
+import { LINKED_REQUEST_KEY, linkSavedTaskToRequest, type LinkedRequestDraft } from '@/features/ticketing/requestTaskLink';
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -38,7 +40,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   initialTitle,
   initialDescription
 }) => {
-  const { createIssue, projects, identity, can } = useApp();
+  const { createIssue, projects, identity, can, visibleTabs, showToast } = useApp();
   const ids = useId();
   const canRunBuilds = can('run_builds');
   const canSuggestSteps = isDesktop && canRunBuilds && can('manage_chat');
@@ -53,6 +55,10 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   const [labels, setLabels] = useTabSessionState<string[]>('issueModal.labels', []);
   const [subtasks, setSubtasks] = useTabSessionState<DraftSubtask[]>('issueModal.subtasks', []);
   const [newSubtask, setNewSubtask] = useTabSessionState<string>('issueModal.newSubtask', '');
+  // The client request this task is for, chosen here or set by "Create task" in a client conversation.
+  const [linkedRequest, setLinkedRequest] = useTabSessionState<LinkedRequestDraft | null>(LINKED_REQUEST_KEY, null);
+  const [openRequests, setOpenRequests] = useState<PmOpenRequest[] | null>(null);
+  const canLinkRequests = (visibleTabs ?? []).includes('clients');
   const [suggestingSteps, setSuggestingSteps] = useState(false);
   const [stepSuggestionError, setStepSuggestionError] = useState('');
   const [stepProposal, setStepProposal] = useState<SystemProposal | null>(null);
@@ -88,6 +94,17 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     setSelectedSteps(new Set());
   }, [isOpen]);
 
+  const requestProjectId = (projects.find(project => project.id === selectedProjectId) || projects[0])?.id ?? '';
+  useEffect(() => {
+    setOpenRequests(null);
+    if (!isOpen || !canLinkRequests || !requestProjectId) return;
+    let current = true;
+    // Ticketing may be off or unreachable; then the picker simply does not show.
+    void pmTicketApi.listOpenRequests(requestProjectId).then(result => { if (current) setOpenRequests(result.items); })
+      .catch(() => { if (current) setOpenRequests(null); });
+    return () => { current = false; };
+  }, [isOpen, canLinkRequests, requestProjectId]);
+
   if (!isOpen) return null;
 
   const activeProject = projects.find(project => project.id === selectedProjectId) || projects[0];
@@ -104,6 +121,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       : 'Create task (Ctrl or Cmd + Enter)';
 
   const reset = () => {
+    setLinkedRequest(null);
     setTitle('');
     setDescription('');
     setDueDate('');
@@ -159,6 +177,14 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   const handleSubmit = () => {
     if (!canSubmit || !activeProject || suggestingSteps) return;
     const stepsToCreate = stepProposal?.epics.filter((_epic, index) => selectedSteps.has(index)) ?? [];
+    const request = linkedRequest;
+    const linkToRequest = (saved: { id: string }) => {
+      if (!request) return;
+      void linkSavedTaskToRequest(request.ticketId, saved.id, request.source)
+        .then(() => showToast('Task linked', `Linked to the client request “${request.title}”.`, 'success'))
+        .catch(error => showToast('The task was created but not linked',
+          `${error instanceof Error ? error.message : 'Try linking it from the client conversation.'}`, 'error'));
+    };
     const created = createIssue(
       {
         title: title.trim(),
@@ -171,9 +197,10 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         assignedHuman: assignee || undefined,
         subtasks: kept.map(subtask => subtask.title)
       },
-      stepsToCreate.length > 0
+      stepsToCreate.length > 0 || request
         ? {
             onSaved: savedParent => {
+              linkToRequest(savedParent);
               stepsToCreate.forEach(step => {
                 createIssue({
                   title: step.title,
@@ -195,6 +222,9 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     onClose();
   };
 
+  // A request link is for this one task: closing without creating forgets it.
+  const dismiss = () => { setLinkedRequest(null); onClose(); };
+
   const onKeyDown = (event: React.KeyboardEvent) => {
     if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
       event.preventDefault();
@@ -206,7 +236,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     <div className="flex flex-wrap items-center justify-between gap-3">
       {!canSubmit && <p id={`${ids}-submit-hint`} className="text-xs text-content-muted" role="status">{submitHint}</p>}
       <div className="ml-auto flex items-center justify-end gap-2">
-        <button type="button" onClick={onClose} className="h-9 rounded-md border border-divider px-3 text-[13px] font-medium text-content-secondary hover:bg-surface-high hover:text-content">
+        <button type="button" onClick={dismiss} className="h-9 rounded-md border border-divider px-3 text-[13px] font-medium text-content-secondary hover:bg-surface-high hover:text-content">
           Cancel
         </button>
         <button
@@ -226,7 +256,7 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={dismiss}
       title="New task"
       subtitle={activeProject ? `In ${activeProject.name}` : 'Create a project first'}
       maxWidth="max-w-xl"
@@ -356,6 +386,23 @@ export const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                 </select>
               </label>
             </div>
+
+            {canLinkRequests && (linkedRequest || (openRequests && openRequests.length > 0)) && <label className="block space-y-1.5">
+              <span className="block text-[11.5px] text-content-muted">Client request <span className="text-content-muted">Optional</span></span>
+              <select value={linkedRequest?.ticketId ?? ''} className={fieldClass}
+                onChange={event => {
+                  const picked = openRequests?.find(item => item.ticketId === event.target.value);
+                  setLinkedRequest(picked ? { ticketId: picked.ticketId, title: picked.title, source: 'task_dialog' } : null);
+                }}>
+                <option value="">Not for a client request</option>
+                {linkedRequest && !openRequests?.some(item => item.ticketId === linkedRequest.ticketId)
+                  && <option value={linkedRequest.ticketId}>{linkedRequest.title}</option>}
+                {(openRequests ?? []).map(item => <option key={item.ticketId} value={item.ticketId}>
+                  {item.title}{item.clientName ? ` · ${item.clientName}` : ''}
+                </option>)}
+              </select>
+              <span className="block text-[11.5px] text-content-muted">The client sees this task’s progress on their request.</span>
+            </label>}
 
             <fieldset>
               <legend className="mb-1.5 text-[11.5px] text-content-muted">Labels</legend>

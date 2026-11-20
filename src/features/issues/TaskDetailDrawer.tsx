@@ -14,6 +14,7 @@ import { isDesktop } from '@/shared/desktop';
 import { TASK_PRIORITIES, TASK_STATUSES, nextStepFor, statusLabel, taskStage, visibleLabels, type NextStepAction } from './taskFlow';
 import { DatePicker } from '@/shared/components/ui/date-picker';
 import { githubLink } from '@/shared/lib/githubLink';
+import { TaskClientRequest } from '@/features/ticketing/TaskClientRequest';
 
 interface TaskDetailDrawerProps {
   onOpenTask?: (id: string, projectId: string) => void;
@@ -465,6 +466,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
         <div id={`${ids}-panel`} role={buildsHere ? 'tabpanel' : undefined} aria-labelledby={buildsHere ? `${ids}-tab-${tab}` : undefined}>
           {tab === 'overview' && (
             <div className="space-y-5">
+              <TaskClientRequest issueId={issue.id} projectId={issue.projectId} />
               {(parentTask || childTasks.length > 0) && (
                 <section aria-label="Related tasks" className="space-y-2 border-b border-divider pb-4">
                   {parentTask && (

@@ -1,4 +1,5 @@
 import { parseClientDeliveryFile, parseClientDeliveryManifest, readClientDeliveryFile, type ClientDeliveryFile } from './clientDelivery';
+import { parseConversation, parseConversationRequest, parseConversationRequests } from './projectConversation';
 import { ClientTicketApiError } from './clientApiError';
 import { parseTicketDocument, parseTicketDocumentList, type TicketDocumentsApi } from './ticketDocuments';
 export { ClientTicketApiError } from './clientApiError';
@@ -412,6 +413,19 @@ export const clientTicketApi = {
     return requestJson<ClientProjectFeedbackReceipt>(
       `/projects/${pathId(workspaceId)}/${pathId(projectId)}/preview/messages/operations/${pathId(operationId)}`,
     );
+  },
+  /** The project's one conversation: its thread, requests, their messages and checklist events. */
+  async getProjectConversation(workspaceId: string, projectId: string) {
+    return parseConversation(await requestJson<unknown>(`/projects/${pathId(workspaceId)}/${pathId(projectId)}/conversation`));
+  },
+  async getProjectConversationRequests(workspaceId: string, projectId: string) {
+    return parseConversationRequests(await requestJson<unknown>(`/projects/${pathId(workspaceId)}/${pathId(projectId)}/conversation/requests`));
+  },
+  /** Tick a request done, or reopen it. */
+  async setConversationRequestDone(workspaceId: string, projectId: string, ticketId: string, done: boolean) {
+    return parseConversationRequest(await requestJson<unknown>(
+      `/projects/${pathId(workspaceId)}/${pathId(projectId)}/conversation/requests/${pathId(ticketId)}/check`,
+      { method: 'POST', body: JSON.stringify({ done }) }));
   },
   getIntakeContext(workspaceId: string) {
     return requestJson<ClientTicketIntakeContext>(`/workspaces/${pathId(workspaceId)}/intake-context`);

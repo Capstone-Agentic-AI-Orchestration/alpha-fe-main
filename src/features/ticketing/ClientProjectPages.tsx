@@ -1,6 +1,6 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { ArrowRight, Check, ExternalLink, FolderKanban, Lightbulb, Maximize2, Minimize2, RefreshCw, Send, Plus } from 'lucide-react';
+import { ArrowRight, Check, ExternalLink, FolderKanban, Lightbulb, Maximize2, Minimize2, RefreshCw, Send, Plus, MessagesSquare } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
@@ -194,7 +194,7 @@ function UpdateRow({ item, onOpen }: { item: ClientProjectRequestItem; onOpen: (
 }
 
 export function ClientProjectsPage({ api = clientTicketApi, projects, loading, error, selectedProjectKey,
-  onSelectedProjectKeyChange, onOpenRequest, onNewRequest, inspectionOnly, newRequestEnabled, newRequestLoading, projectFocusVersion, refreshToken,
+  onSelectedProjectKeyChange, onOpenRequest, onNewRequest, onOpenConversation, inspectionOnly, newRequestEnabled, newRequestLoading, projectFocusVersion, refreshToken,
   proposalsNeedingReply = 0, onOpenProposals, onProposeProject, idPrefix = 'client', requests = [] }: {
   idPrefix?: string;
   /** Proposals the project manager is waiting on the client for; they live on their own page. */
@@ -212,6 +212,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   onSelectedProjectKeyChange: (key: string | null) => void;
   onOpenRequest: (request: ClientProjectRequestItem) => void;
   onNewRequest: (project: ClientProject) => void;
+  /** Opens the project's one conversation with the project manager. */
+  onOpenConversation?: (project: ClientProject) => void;
   inspectionOnly: boolean;
   newRequestEnabled: boolean;
   newRequestLoading: boolean;
@@ -235,6 +237,8 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
         actions={<>
           {selectedProject.preview && <a className="cx-button" href={selectedProject.preview.url} target="_blank" rel="noopener noreferrer">
             <ExternalLink size={15} aria-hidden="true" />Open preview</a>}
+          {onOpenConversation && <button type="button" className="cx-button" onClick={() => onOpenConversation(selectedProject)}>
+            <MessagesSquare size={15} aria-hidden="true" />Conversation</button>}
           {newRequestEnabled && <button type="button" className="cx-button is-primary" disabled={newRequestLoading} onClick={() => onNewRequest(selectedProject)}>
             <Plus size={15} aria-hidden="true" />{newRequestLoading ? 'Checking access…' : 'New request'}</button>}
         </>} />
