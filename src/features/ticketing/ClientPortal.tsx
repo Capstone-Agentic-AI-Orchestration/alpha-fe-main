@@ -23,8 +23,10 @@ import { effectivePortalFilter, portalFilterFromHash } from './clientPortalLink'
 import { ClientOverviewPage, ClientProjectsPage, clientProjectKey } from './ClientProjectPages';
 import { ClientProposalsPage } from './ClientProposalsPage';
 import { Toast, type ToastTone } from '@/shared/components/ui/toast';
-import { ClientTabBar, ClientTopBar } from './ClientTopBar';
-import { CxChips, CxEmpty, CxPageHeader, CxPanel, CxRequestRow, CxRow, CxSection } from './clientKit';
+import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
+import { ClientTopBar } from './ClientTopBar';
+import { CxChips, CxEmpty, CxPageHeader, CxPanel, CxRequestRow, CxSection } from './clientKit';
 import { ClientConversationRequestPage, ClientProjectConversation } from './ClientProjectConversation';
 import type { ConversationRequest } from './projectConversation';
 import { useClientWorkspaceTabs, type ClientPage as Page } from './clientWorkspaceTabs';
@@ -79,7 +81,7 @@ const CLIENT_PAGES: Record<Page, { label: string; subtitle: string; Icon: Lucide
   overview: { label: 'Home', subtitle: 'What needs you and your latest updates', Icon: House },
   projects: { label: 'Projects', subtitle: 'Projects shared by your project manager', Icon: FolderKanban },
   proposals: { label: 'Project ideas', subtitle: 'New project ideas you have sent to your project manager', Icon: Lightbulb },
-  requests: { label: 'Requests', subtitle: 'Follow requests and message your project manager', Icon: ListChecks },
+  requests: { label: 'All requests', subtitle: 'A cross-project summary of request status', Icon: ListChecks },
 };
 
 export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false,
@@ -95,7 +97,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   communicationEnabled?: boolean;
 } = {}) {
   // One page at a time: the portal keeps a single workspace tab, so clients never manage browser-style tabs.
-  const { tabs, activeTabId, tabState, resetTabs, selectProject } = useClientWorkspaceTabs(
+  const { tabs, activeTabId, tabState, resetTabs, selectProject, openProjectConversation } = useClientWorkspaceTabs(
     typeof window === 'undefined' ? 'all' : portalFilterFromHash(window.location.hash));
   const portalRootRef = useRef<HTMLElement>(null);
   /** The scrolling page area; each new page or opened request starts at the top. */
@@ -119,6 +121,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [selectedProjectKey, setSelectedProjectKey] = tabState('selectedProjectKey');
   const [selectedProposalId, setSelectedProposalId] = tabState('selectedProposalId');
   const [selectedConversationKey, setSelectedConversationKey] = tabState('selectedConversationKey');
+  const [selectedConversationTicketId, setSelectedConversationTicketId] = tabState('selectedConversationTicketId');
+  const [startConversationRequest, setStartConversationRequest] = tabState('startConversationRequest');
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
@@ -509,7 +513,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   function cancelCreateForm() {
     if (pending) return;
-    setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError(''); setWriteError('');
+    setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError(''); setWriteError(''); setStartConversationRequest(false);
   }
 
   function submitNewTicket(value: ClientTicketCreateInput) {
@@ -522,8 +526,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       onSuccess: receipt => {
         setQueueNotice(`Request sent for PM review and linked under ${target.name}.`);
         setClientToast({ title: 'Request submitted', description: `Your request is waiting for ${target.name} to review it.`, tone: 'success' });
-        setPage('requests'); setView('portal'); setFilter('all'); setSearchInput(''); setSearch('');
-        setSelectedId(receipt.ticketId); setSelectedWorkspaceId(target.workspaceId); setSelectedItemFallback(null);
+        openConversation(target, receipt.ticketId);
         setCreateContext(null); setCreateProject(null);
       },
     }).catch(() => undefined);
@@ -545,7 +548,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   /** "New request": a project the client already has, or a new project idea. */
   function startRequestFor(project: ClientProject) {
-    navigate('projects'); setSelectedProjectKey(clientProjectKey(project));
+    openConversation(project, null, true);
     void openCreateForm(project, true);
   }
 
@@ -597,45 +600,42 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   function navigate(nextPage: Page) {
     setPage(nextPage); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
     if (nextPage !== 'requests') { setReturnToProjects(false); setQueueNotice(''); }
-    if (nextPage === 'projects') setSelectedProjectKey(null);
+    if (nextPage === 'projects') {
+      setSelectedProjectKey(null); setSelectedConversationKey(null); setSelectedConversationTicketId(null); setStartConversationRequest(false);
+    }
     if (nextPage === 'proposals') setSelectedProposalId(null);
     // Choosing Requests from the navigation shows the list, not the last request that was open.
     if (nextPage === 'requests') {
       historyGeneration.current += 1; setSelectedId(null); setSelectedWorkspaceId(null); setSelectedItemFallback(null); setReturnToHome(false);
-      setSelectedConversationKey(null);
+      setSelectedConversationKey(null); setSelectedConversationTicketId(null); setStartConversationRequest(false);
     }
   }
 
-  /** A project's one conversation, on the Requests page. */
-  /**
-   * A project's one conversation. With an open request it shows beside that request
-   * (the newest open one); without one, on its own with the project's requests.
-   */
-  function openConversation(project: ClientProject) {
-    const onProject = (queue?.items ?? []).filter(item => item.workspaceId === project.workspaceId && item.projectId === project.projectId);
-    const first = onProject.find(item => !['closed', 'declined', 'cancelled'].includes(item.status)) ?? onProject[0];
-    if (first) { setSelectedConversationKey(null); openRequest(first); return; }
-    navigate('requests');
-    setSelectedConversationKey(clientProjectKey(project));
+  /** Opens the project's single shared conversation, with its requests in the side panel. */
+  function openConversation(project: ClientProject, ticketId: string | null = null, startRequest = false) {
+    navigate('projects');
+    openProjectConversation(activeTabId, clientProjectKey(project), ticketId, startRequest);
   }
 
-  /** Opens a request by ID, as one just made that is not in the loaded list yet. */
-  function openRequestById(workspaceId: string, ticketId: string) {
-    const item = queue?.items.find(entry => entry.id === ticketId && entry.workspaceId === workspaceId);
-    if (item) { openRequest(item); return; }
-    historyGeneration.current += 1; setSelectedId(ticketId); setSelectedWorkspaceId(workspaceId); setSelectedItemFallback(null);
-    setReturnToProjects(false); setReturnToHome(false); setPage('requests'); setView('portal'); setRefreshVersion(value => value + 1);
+  /** Project requests always open their project's shared conversation. */
+  function openClientRequest(item: ClientProjectRequestItem, fromHome = false) {
+    const project = item.projectId ? (projects ?? []).find(candidate => candidate.workspaceId === item.workspaceId
+      && candidate.projectId === item.projectId) : null;
+    if (project) { openConversation(project, item.id); return; }
+    openRequest(item, false, fromHome);
   }
 
-  /** Another request picked in the conversation's Requests list. */
+  /** Request detail is an explicit secondary action; the request itself remains in the project conversation. */
   function openConversationRequest(request: ConversationRequest) {
-    openRequestById(request.workspaceId, request.ticketId);
+    const item = queue?.items.find(candidate => candidate.id === request.ticketId && candidate.workspaceId === request.workspaceId);
+    if (item) { openRequest(item, true); return; }
+    setQueueNotice('Request details are still loading. Refresh the request list and try again.');
   }
 
   function openPortalUpdate(update: ClientPortalUpdate) {
     if (update.target.kind === 'request') {
       setFilter('all'); setSearchInput(''); setSearch('');
-      openRequest(update.target.item);
+      openClientRequest(update.target.item);
       return;
     }
     if (update.target.kind === 'proposal') {
@@ -648,8 +648,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   }
 
   function openProject(project: ClientProject) {
-    setPage('projects'); setView('portal'); setCreateContext(null); setCreateProject(null); setCreateError('');
-    setSelectedProjectKey(clientProjectKey(project));
+    openConversation(project);
     setNotificationProjectFocus(value => value + 1);
   }
 
@@ -671,17 +670,26 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const requestConversation: RequestConversation | null = requestProject ? {
     project: requestProject, clientName: session?.fullName?.trim() || 'Client', readOnly: inspectionOnly,
     canCreateRequests: canStartProjectRequest, onSelectRequest: openConversationRequest,
-    onRequestCreated: ticketId => openRequestById(requestProject.workspaceId, ticketId),
+    onRequestCreated: ticketId => openConversation(requestProject, ticketId),
   } : null;
   const conversationProject = (projects ?? []).find(project => clientProjectKey(project) === selectedConversationKey) ?? null;
-  const openOnProject = (project: ClientProject) => (displayQueue?.items ?? []).filter(item => item.workspaceId === project.workspaceId
-    && item.projectId === project.projectId && !['closed', 'declined', 'cancelled'].includes(item.status)).length;
   const showPendingLinkNotice = activeRequest?.projectLinkStatus === 'pending_review';
   const proposalsNeedingReply = (projectProposals ?? []).filter(proposal => proposal.status === 'awaiting_client').length;
   const proposeProject = inspectionOnly ? undefined : () => { setProposeRequestTab(activeTabId); navigate('proposals'); };
   const clientEmail = session?.email?.trim() ?? '';
   const clientName = session?.fullName?.trim() || 'Client';
   const clientInitials = clientName.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+  const projectRequestForm = startConversationRequest && conversationProject
+    ? createContext && createProject && clientProjectKey(createProject) === clientProjectKey(conversationProject)
+      ? <ClientCreateTicketForm embedded context={createContext} submissionEnabled={!inspectionOnly && createContext.canCreate}
+        relatedTicket={null} busy={writing || createLoading || Boolean(pending)} error={writeError || createError} onCreate={submitNewTicket}
+        onCancel={cancelCreateForm} selectedProjectOptionId={conversationProject.intakeOptionId} selectedProjectName={conversationProject.name} />
+      : createLoading ? <p className="rounded-lg border border-divider bg-surface p-4 text-sm text-content-secondary">Preparing the request form…</p>
+        : createError ? <div role="alert" className="space-y-3 rounded-lg border border-status-danger/30 bg-surface p-4 text-sm text-content-secondary">
+          <p>{createError}</p><div className="flex gap-2"><Button type="button" size="sm" onClick={() => void openCreateForm(conversationProject, true)}>Try again</Button>
+            <Button type="button" variant="ghost" size="sm" onClick={cancelCreateForm}>Cancel</Button></div>
+        </div> : <p className="text-sm text-content-muted">Choose New request to prepare the request form.</p>
+    : undefined;
 
   const newRequestMenu = !inspectionOnly && (canStartProjectRequest || proposeProject)
     ? (trigger: ReactNode) => <DropdownMenu modal={false}>
@@ -699,7 +707,6 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         </DropdownMenuItem>}
       </DropdownMenuContent>
     </DropdownMenu> : null;
-  const needsYouCount = (workflowActionsDisabled ? 0 : queue?.counters.needsClient ?? 0) + proposalsNeedingReply;
   const goTo = (target: Page) => { if (!writing && !pending) navigate(target); };
   /** Requests and project ideas share one header: ideas are one of the Requests views. */
   const requestViews = [
@@ -711,29 +718,29 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       tone: proposalsNeedingReply ? 'attention' as const : undefined },
   ];
   const requestsHeader = <>
-    <CxPageHeader titleId={activeTabId + '-requests-title'} title="Requests"
-      description="Everything you’ve asked for, including new project ideas, and where each one stands." />
+    <CxPageHeader titleId={activeTabId + '-requests-title'} title="All requests"
+      description="A cross-project list for finding requests and checking their status. Open project requests in their project conversation." />
     <CxChips label="Show" value={page === 'proposals' ? 'ideas' : filter as string} options={requestViews} disabled={Boolean(pending)}
       onChange={(value: string) => { if (value === 'ideas') { goTo('proposals'); return; } if (page !== 'requests') goTo('requests');
         setFilter(value as NonNullable<Filter>); setSearchInput(''); setSearch(''); }} />
   </>;
 
   return <main ref={portalRootRef} className={'client-portal-shell cx-shell' + (inspectionOnly ? ' client-portal-shell--inspection' : '')}>
-    <ClientTopBar page={page} onNavigate={goTo} needsYou={needsYouCount}
-      newRequest={newRequestMenu?.(<button type="button" className="cx-button is-primary cx-new-request"><Plus size={15} aria-hidden="true" />{createLoading ? 'Checking access…' : 'New request'}</button>)}
+    <ClientTopBar page={page} onNavigate={goTo}
+      newRequest={newRequestMenu?.(<Button type="button" className="cx-new-request"><Plus size={15} aria-hidden="true" /><span className="cx-new-request-label">{createLoading ? 'Checking access…' : 'New request'}</span></Button>)}
       actions={<>
-        <button type="button" aria-label="Refresh portal" title="Refresh portal"
+        <Button type="button" variant="ghost" size="icon" aria-label="Refresh portal" title="Refresh portal"
           onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
           disabled={queueLoading || projectsLoading || notificationsLoading || Boolean(pending)} className="cx-icon-button">
           <RefreshCw size={16} className={queueLoading || projectsLoading || notificationsLoading ? 'animate-spin' : ''} />
-        </button>
+        </Button>
         <ClientNotificationBell email={clientEmail} updates={portalUpdates} ready={notificationsLoaded && !projectsLoading}
           loading={notificationsLoading} error={notificationsError}
           onRefresh={() => setRefreshVersion(value => value + 1)} onOpen={openPortalUpdate} />
       </>}
       account={<DropdownMenu modal={false}>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="cx-avatar" aria-label={'Account menu for ' + clientName}>{clientInitials}</button>
+          <Button type="button" variant="outline" size="icon" className="cx-avatar" aria-label={'Account menu for ' + clientName}>{clientInitials}</Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" sideOffset={6} className="w-[min(15rem,calc(100vw-1rem))] rounded-xl p-1.5">
           <div className="min-w-0 px-2 py-2">
@@ -747,6 +754,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>} />
+    <div className="cx-workspace">
     <div ref={pageScrollRef} id="client-portal-page" aria-label={CLIENT_PAGES[page].label} className="cx-main">
         {inspectionOnly && <p role="status" className="cx-status-note cx-notice">Read-only inspection. Sign-in, messages, decisions, uploads, downloads, and requests are disabled.</p>}
         {pageError && <p role="alert" className="cx-error cx-notice"><AlertCircle size={14} aria-hidden="true" /> {pageError}</p>}
@@ -755,25 +763,16 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {page === 'overview' && <ClientOverviewPage clientName={session?.fullName ?? ''} requests={displayQueue} projects={projects ?? []}
           api={api} refreshToken={refreshVersion}
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
-          onOpenRequest={item => openRequest(item, false, true)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
+          onOpenRequest={item => openClientRequest(item, true)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
           onGoToRequests={() => navigate('requests')}
           proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')}
           onProposeProject={proposeProject} />}
 
-        {page === 'projects' && view === 'create' && createContext && createProject && <div className="cx-page cx-form-page">
-          <CxPageHeader titleId={activeTabId + '-new-request-title'} title="New request"
-            back={{ label: 'Back to ' + createProject.name, onClick: cancelCreateForm, disabled: Boolean(pending) }}
-            description={'For ' + createProject.name + '. Your project manager will review it before any work is scheduled.'} />
-          {createError && <p role="alert" className="cx-error">{createError}</p>}
-          <ClientCreateTicketForm key={clientProjectKey(createProject)} embedded context={createContext} submissionEnabled={!inspectionOnly && createContext.canCreate}
-            relatedTicket={null} busy={writing || Boolean(pending)} error={writeError} onCreate={submitNewTicket} onCancel={cancelCreateForm}
-            selectedProjectOptionId={createProject.intakeOptionId} selectedProjectName={createProject.name} />
-        </div>}
-        {tabs.filter(tab => tab.navigation.page === 'projects').map(tab => <div key={tab.id} hidden={tab.id !== activeTabId || view === 'create'}>
+        {page === 'projects' && !conversationProject && tabs.filter(tab => tab.navigation.page === 'projects').map(tab => <div key={tab.id} hidden={tab.id !== activeTabId}>
           {tab.id === activeTabId && createError && <p role="alert" className="cx-error cx-notice">{createError}</p>}
           <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} requests={displayQueue?.items ?? []} loading={!projects && !projectsError} error={projectsError}
             selectedProjectKey={tab.navigation.selectedProjectKey} onSelectedProjectKeyChange={key => selectProject(tab.id, key)}
-            onOpenRequest={item => openRequest(item, true)} onNewRequest={project => void openCreateForm(project)}
+            onOpenRequest={item => openClientRequest(item)} onNewRequest={startRequestFor}
             onOpenConversation={project => openConversation(project)}
             inspectionOnly={inspectionOnly} newRequestEnabled={canStartProjectRequest} newRequestLoading={createLoading}
             projectFocusVersion={tab.navigation.notificationProjectFocus} refreshToken={refreshVersion}
@@ -786,24 +785,17 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           onRefresh={() => setRefreshVersion(value => value + 1)} onSubmitted={() => setRefreshVersion(value => value + 1)}
           onOpenProject={openProject} openForm={proposeRequestTab === activeTabId} onOpenFormHandled={() => setProposeRequestTab(null)} /></div>}
 
-        {page === 'requests' && !selectedId && conversationProject && <ClientProjectConversation key={activeTabId + ':' + selectedConversationKey}
+        {page === 'projects' && conversationProject && <ClientProjectConversation key={activeTabId + ':' + selectedConversationKey}
           api={api} project={conversationProject} clientName={clientName} readOnly={inspectionOnly} canCreateRequests={canStartProjectRequest}
-          onBack={() => setSelectedConversationKey(null)} onSelectRequest={openConversationRequest}
-          onRequestCreated={ticketId => openRequestById(conversationProject.workspaceId, ticketId)} />}
+          onBack={() => { setSelectedConversationKey(null); setSelectedConversationTicketId(null); setStartConversationRequest(false); }}
+          focusTicketId={selectedConversationTicketId} showRequestForm={startConversationRequest} requestForm={projectRequestForm}
+          onStartRequest={() => startRequestFor(conversationProject)} onOpenRequestDetails={openConversationRequest} />}
 
         {page === 'requests' && !selectedId && !conversationProject && <div className="cx-page">
           {requestsHeader}
-          {(projects ?? []).length > 0 && <CxSection titleId={activeTabId + '-conversations'} title="Conversations" count={(projects ?? []).length}>
-            <p className="cx-page-description">One conversation per project with your project manager. Make new requests there and tick them off when they are done.</p>
-            <CxPanel>{(projects ?? []).map(project => {
-              const open = openOnProject(project);
-              return <CxRow key={clientProjectKey(project)} title={project.name} disabled={Boolean(pending)}
-                meta={open ? `${open} open ${open === 1 ? 'request' : 'requests'}` : 'No open requests'} onClick={() => openConversation(project)} />;
-            })}</CxPanel>
-          </CxSection>}
           <div className="cx-toolbar">
             <label className="cx-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search requests</span>
-              <input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search requests" /></label>
+              <Input value={searchInput} onChange={event => setSearchInput(event.target.value)} disabled={Boolean(pending)} placeholder="Search requests" /></label>
           </div>
           {queueNotice && <p role="status" className="cx-status-note">{queueNotice}</p>}
           {queueError && <p role="alert" className="cx-error">{queueError}</p>}
@@ -815,14 +807,14 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
               if (!rows.length) return null;
               return <CxSection key={group.id} titleId={activeTabId + '-requests-' + group.id} title={group.label} count={rows.length}>
                 <CxPanel tone={group.id === 'needs_you' ? 'attention' : undefined}>
-                  {rows.map(item => <CxRequestRow key={rowKey(item)} item={item} disabled={Boolean(pending)} onOpen={openRequest} />)}
+                  {rows.map(item => <CxRequestRow key={rowKey(item)} item={item} disabled={Boolean(pending)} onOpen={openClientRequest} />)}
                 </CxPanel>
               </CxSection>;
             })}</div>
               : !queueError && <CxPanel><CxEmpty title={search ? 'No requests match your search' : 'No requests here yet'}
                 body={search ? 'Try a shorter search or clear the search field.' : 'Requests you send, and the ones your project manager opens for you, appear here.'} /></CxPanel>}
-          {queue && <div className="cx-list-footer"><span>{queue.items.length} shown</span>{queue.nextCursor && <button type="button" className="cx-button" onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading}>
-            {queueMoreLoading ? 'Loading…' : 'Load more'}</button>}</div>}
+          {queue && <div className="cx-list-footer"><span>{queue.items.length} shown</span>{queue.nextCursor && <Button type="button" variant="outline" size="sm" onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading}>
+            {queueMoreLoading ? 'Loading…' : 'Load more'}</Button>}</div>}
           </div>
           <aside className="cx-guide" aria-labelledby={activeTabId + '-guide-title'}>
             <h2 id={activeTabId + '-guide-title'}>How a request moves</h2>
@@ -834,7 +826,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {page === 'requests' && selectedId && <div className="cx-request-page">
           {queueNotice && <p role="status" className="cx-status-note">{queueNotice}</p>}
           {!activeRequest ? <CxPanel><CxEmpty title="Request not available" body="Refresh and try again. If it is still missing, contact your project manager."
-            action={<button type="button" className="cx-button" onClick={closeRequest}>Back to requests</button>} /></CxPanel>
+            action={<Button type="button" variant="outline" onClick={closeRequest}>Back to all requests</Button>} /></CxPanel>
             : (detailLoading || (!detail && !detailError)) ? <TicketDetailSkeleton label="Loading request" stepper />
               : detailError ? <p role="alert" className="cx-error">{detailError}</p>
                 : detail && <>
@@ -855,14 +847,14 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         </div>}
         {pending && <div role="status" className="cx-status-note cx-notice cx-pending">
           <span>We’re checking whether your update was saved. Please don’t send it again yet.</span>
-          <button onClick={() => void performWrite(pending).catch(() => undefined)} disabled={writing} className="cx-button">{writing ? 'Checking…' : 'Check update status'}</button>
+          <Button type="button" variant="outline" size="sm" onClick={() => void performWrite(pending).catch(() => undefined)} disabled={writing}>{writing ? 'Checking…' : 'Check update status'}</Button>
         </div>}
         {clientToast && <div className="pointer-events-none fixed right-5 top-5 z-[80] w-[calc(100%-2.5rem)] max-w-sm" aria-live="polite" aria-atomic="true">
           <Toast {...clientToast} onDismiss={() => setClientToast(null)} className="pointer-events-auto" />
         </div>}
         {session?.expiresAt && <span className="sr-only">Session expires {session.expiresAt}</span>}
     </div>
-    <ClientTabBar page={page} onNavigate={goTo} needsYou={needsYouCount} newRequest={newRequestMenu} />
+    </div>
   </main>;
 }
 

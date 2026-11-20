@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { FolderKanban, Link2, Plus } from 'lucide-react';
+import { ChevronRight, FolderKanban, Link2, Plus } from 'lucide-react';
+import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
+import { Select } from '@/shared/components/ui/select';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, pmTicketDocumentsApi, type PmClientProjectConversation, type PmClientSummary } from './pmApi';
 import {
@@ -86,7 +89,10 @@ function requestCardActions(onCreate: ((request: { ticketId: string; title: stri
   return (item: ConversationItem): ReactNode => {
     const request = item.kind === 'request' ? item.request : null;
     return request
-      ? <button type="button" onClick={() => onCreate(request, item.body)}><Plus size={12} aria-hidden="true" className="mr-0.5 inline" />Create task</button>
+      ? <Button type="button" variant="ghost" size="sm" onClick={() => onCreate(request, item.body)}
+          className="h-7 px-2 text-[12px] text-link hover:text-link-hover">
+          <Plus size={12} aria-hidden="true" />Create task
+        </Button>
       : null;
   };
 }
@@ -112,12 +118,13 @@ function useAboutTarget(selected: ConversationAbout | null) {
  * request's plan and result steps open from each request, beside the same conversation.
  */
 export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, client, focus = null, onOpenRequestDetails,
-  onCreateTask, tasksForProject, refreshToken }: Readonly<{
+  onBackToProjects, onCreateTask, tasksForProject, refreshToken }: Readonly<{
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   client: PmClientSummary;
   focus?: PmConversationFocus | null;
   onOpenRequestDetails: (ticketId: string) => void;
+  onBackToProjects?: () => void;
   /** Opens the New task dialog; absent where tasks cannot be made, as in the UI preview. */
   onCreateTask?: (draft: ConversationTaskDraft) => void;
   /** The project's board tasks, for linking one to a request. */
@@ -211,17 +218,21 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
     let link: ReactNode = null;
     if (tasksForProject && linking === request.ticketId) link = <label className="flex items-center gap-1.5">
       <span className="sr-only">Task to link to {request.title}</span>
-      <select ref={focusWhenShown} defaultValue="" onChange={event => { if (event.target.value) linkExisting(request, event.target.value); }}
-        onBlur={() => setLinking(null)} className="h-7 max-w-[12rem] rounded-md border border-control bg-well px-1.5 text-[12px] text-content">
+      <Select ref={focusWhenShown} defaultValue="" onChange={event => { if (event.target.value) linkExisting(request, event.target.value); }}
+        onBlur={() => setLinking(null)} className="h-8 max-w-[12rem] px-2 text-xs">
         <option value="" disabled>{linkable.length ? 'Choose a task…' : 'No other tasks on this project'}</option>
         {linkable.map(task => <option key={task.id} value={task.id}>{task.identifier} · {task.title}</option>)}
-      </select>
+      </Select>
     </label>;
-    else if (tasksForProject) link = <button type="button" onClick={() => setLinking(request.ticketId)} disabled={busy}
-      className="inline-flex items-center gap-1 font-semibold text-link hover:text-link-hover"><Link2 size={13} aria-hidden="true" /> Link task</button>;
+    else if (tasksForProject) link = <Button type="button" variant="ghost" size="sm" onClick={() => setLinking(request.ticketId)} disabled={busy}
+      className="h-auto justify-start px-0 py-0 text-[12px] font-semibold text-link hover:bg-transparent hover:text-link-hover">
+      <Link2 size={13} aria-hidden="true" /> Link task
+    </Button>;
     return <>
-      {onCreateTask && <button type="button" onClick={() => createTask(request, request.description)} disabled={busy}
-        className="inline-flex items-center gap-1 font-semibold text-link hover:text-link-hover"><Plus size={13} aria-hidden="true" /> Create task</button>}
+      {onCreateTask && <Button type="button" variant="ghost" size="sm" onClick={() => createTask(request, request.description)} disabled={busy}
+        className="h-auto justify-start px-0 py-0 text-[12px] font-semibold text-link hover:bg-transparent hover:text-link-hover">
+        <Plus size={13} aria-hidden="true" /> Create task
+      </Button>}
       {link}
     </>;
   };
@@ -230,20 +241,40 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
     {projects && projects.length > 1 && <nav aria-label="Projects" className="shrink-0 border-b border-divider md:w-56 md:border-b-0 md:border-r">
       <ul className="flex gap-1 overflow-x-auto px-3 py-2 md:flex-col md:px-2 md:py-3">
         {projects.map(item => <li key={item.projectId}>
-          <button type="button" onClick={() => setProjectId(item.projectId)} aria-current={item.projectId === projectId ? 'page' : undefined}
-            className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-[13px] ${item.projectId === projectId
-              ? 'bg-selected text-selected-content' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>
+          <Button type="button" variant="ghost" onClick={() => setProjectId(item.projectId)} aria-current={item.projectId === projectId ? 'page' : undefined}
+            className={`h-auto w-full justify-start rounded-md px-2.5 py-2 text-left text-[13px] ${item.projectId === projectId
+              ? 'bg-selected text-selected-content hover:bg-selected' : 'text-content-secondary hover:bg-surface-high hover:text-content'}`}>
             <FolderKanban className="h-4 w-4 shrink-0" aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate">{item.projectName}</span>
             {item.openRequests > 0 && <span className="text-[11px] tabular-nums text-content-muted">{item.openRequests}</span>}
-          </button>
+          </Button>
         </li>)}
       </ul>
     </nav>}
     <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      {project && <header className="shrink-0 border-b border-divider px-6 py-3">
-        <h2 className="text-[14px] font-semibold text-content">{project.projectName}</h2>
-        <p className="text-[12px] text-content-muted">Conversation with {client.displayName}</p>
+      {project && <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-divider px-6 py-3">
+        <div className="min-w-0">
+          <nav aria-label="Breadcrumb" className="mb-1 flex min-w-0 flex-wrap items-center gap-1 text-[11.5px] text-content-muted">
+            <span>Clients</span><ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span className="max-w-40 truncate">{client.displayName}</span><ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+            {onBackToProjects ? <Button type="button" variant="ghost" size="sm" onClick={onBackToProjects}
+              className="h-auto px-0 py-0 text-[11.5px] font-normal text-content-muted hover:bg-transparent hover:text-content">Projects</Button>
+              : <span>Projects</span>}
+            <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+            <span aria-current="page" className="max-w-48 truncate font-medium text-content">{project.projectName}</span>
+          </nav>
+          <h2 className="truncate text-[14px] font-semibold text-content">{project.projectName}</h2>
+          <p className="text-[12px] text-content-muted">Project conversation</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {onCreateTask && <>
+            <Badge variant="outline" className="hidden sm:inline-flex">Internal</Badge>
+            <Button type="button" variant="outline" size="sm" disabled={busy}
+              onClick={() => onCreateTask({ projectId: project.projectId, title: '', description: '', request: null })}>
+              <Plus size={14} aria-hidden="true" />New task
+            </Button>
+          </>}
+        </div>
       </header>}
       {projects ? <ProjectConversationView key={projectId ?? 'none'} role="pm" projectName={project?.projectName ?? 'Project'}
         items={items} requests={requests} error={error} actionError={actionError}
@@ -313,9 +344,9 @@ export function PmRequestConversation({ api = pmTicketApi, projectId, clientId, 
     about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore} jump={jump}
     composerExtra={target.about ? <fieldset className="m-0 ml-auto inline-flex items-center gap-1 border-0 p-0">
       <legend className="sr-only">Reply type</legend>
-      {(['reply', 'request_details'] as const).map(kind => <button key={kind} type="button" aria-pressed={replyKind === kind} onClick={() => onReplyKindChange(kind)}
-        className={`rounded-md px-2 py-0.5 text-[11.5px] font-semibold ${replyKind === kind ? 'bg-selected text-selected-content' : 'text-content-muted hover:text-content'}`}>
-        {kind === 'reply' ? 'Send' : 'Ask & wait for reply'}</button>)}
+      {(['reply', 'request_details'] as const).map(kind => <Button key={kind} type="button" variant="ghost" size="sm" aria-pressed={replyKind === kind} onClick={() => onReplyKindChange(kind)}
+        className={`h-7 px-2 text-[11.5px] font-semibold ${replyKind === kind ? 'bg-selected text-selected-content hover:bg-selected' : 'text-content-muted hover:text-content'}`}>
+        {kind === 'reply' ? 'Send' : 'Ask & wait for reply'}</Button>)}
     </fieldset> : null}
     inputId="ticket-conversation-draft" />;
 }

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { ArrowRight, RefreshCw, Search } from 'lucide-react';
+import { Button } from '@/shared/components/ui/button';
+import { Input } from '@/shared/components/ui/input';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import type { ClientProject, ClientProjectRequestItem, ClientProjectRequestQueue, ClientTicketQueueOptions } from './clientApi';
 import { clientTicketApi, ClientTicketApiError } from './clientApi';
@@ -121,7 +123,7 @@ export function ProjectRequestsTab({ api, project, refreshToken, filter, onFilte
   const error = first.error ? projectLoadError(first.error, 'requests') : moreError;
   return <CxSection titleId={idPrefix + '-project-requests-title'} title="Requests"
     action={<div className="cx-page-actions">
-      <button type="button" className="cx-icon-button" aria-label="Refresh project requests" onClick={first.reload}><RefreshCw size={15} /></button>
+      <Button type="button" variant="ghost" size="icon" className="cx-icon-button" aria-label="Refresh project requests" onClick={first.reload}><RefreshCw size={15} /></Button>
       {newRequest}
     </div>}>
     <div className="cx-toolbar">
@@ -129,9 +131,9 @@ export function ProjectRequestsTab({ api, project, refreshToken, filter, onFilte
         id: option.id, label: option.label, tone: option.id === 'needs_client' ? 'attention' as const : undefined,
         count: option.counter && counts ? counts[option.counter] : undefined }))} />
       <label className="cx-search"><Search size={15} aria-hidden /><span className="sr-only">Search project requests</span>
-        <input value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search requests" /></label>
+        <Input value={searchInput} onChange={event => setSearchInput(event.target.value)} placeholder="Search requests" className="h-9 border-0 bg-transparent px-0 shadow-none focus-visible:ring-0" /></label>
     </div>
-    {error && <p role="alert" className="cx-error">{error} <button type="button" onClick={first.reload}>Try again</button></p>}
+    {error && <p role="alert" className="cx-error">{error} <Button type="button" variant="ghost" size="sm" onClick={first.reload}>Try again</Button></p>}
     <CxPanel>
       {first.pending ? <LoadingRows label="Loading project requests" layout="table" rows={4} className="p-4" />
         : !items.length ? !first.error && <CxEmpty title={search ? 'No requests match “' + search + '”.' : EMPTY[filter]} />
@@ -142,7 +144,7 @@ export function ProjectRequestsTab({ api, project, refreshToken, filter, onFilte
             {rest.map(item => <ProjectRequestRow key={item.id} item={item} onOpen={onOpenRequest} />)}
           </>}
     </CxPanel>
-    {cursor && <button type="button" className="cx-link" disabled={moreLoading} onClick={() => void loadMore()}>
-      {moreLoading ? 'Loading…' : 'Load more requests'} <ArrowRight size={14} aria-hidden="true" /></button>}
+    {cursor && <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" disabled={moreLoading} onClick={() => void loadMore()}>
+      {moreLoading ? 'Loading…' : 'Load more requests'} <ArrowRight size={14} aria-hidden="true" /></Button>}
   </CxSection>;
 }

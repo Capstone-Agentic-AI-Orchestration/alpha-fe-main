@@ -1,9 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type ComponentProps } from 'react';
-import { ArrowLeft, FolderKanban, ListChecks } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
+import { ArrowLeft, FolderKanban, ListChecks, Plus } from 'lucide-react';
+import { Badge } from '@/shared/components/ui/badge';
+import { Button } from '@/shared/components/ui/button';
 import { ClientTicketApiError, clientTicketApi, type ClientProject } from './clientApi';
-import { ClientTicketDetail, ConversationColumn, RailCard } from './ClientTicketDetail';
+import { ClientTicketDetail, RailCard } from './ClientTicketDetail';
 import {
-  ConversationRequestList, ProjectConversationChat, openRequestCount, useConversationJump, type ConversationAbout,
+  ConversationRequestList, ProjectConversationChat, ProjectConversationView, openRequestCount, useConversationJump, type ConversationAbout,
 } from './ProjectConversationView';
 import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
 
@@ -101,49 +103,56 @@ function useConversationActions(api: typeof clientTicketApi, project: ClientProj
  * the left and the one conversation on the right.
  */
 export function ClientProjectConversation({ api = clientTicketApi, project, clientName, readOnly = false, canCreateRequests = true,
-  onBack, onSelectRequest, onRequestCreated }: Readonly<{
+  onBack, focusTicketId = null, showRequestForm = false, requestForm, onStartRequest, onOpenRequestDetails }: Readonly<{
   api?: typeof clientTicketApi;
   project: ClientProject;
   clientName: string;
   readOnly?: boolean;
   canCreateRequests?: boolean;
   onBack: () => void;
-  /** Opens a request beside this conversation. */
-  onSelectRequest: (request: ConversationRequest) => void;
-  onRequestCreated?: (ticketId: string) => void;
+  /** Request from another project surface that should be focused here. */
+  focusTicketId?: string | null;
+  showRequestForm?: boolean;
+  requestForm?: ReactNode;
+  onStartRequest?: () => void;
+  onOpenRequestDetails?: (request: ConversationRequest) => void;
 }>) {
   const conversation = useClientProjectConversation(api, project);
   const actions = useConversationActions(api, project, conversation);
   const [draft, setDraft] = useState('');
-  const create = (input: { title: string; description: string }) => actions.createAndOpen(input, onRequestCreated);
-
-  return <section className="cx-request" aria-labelledby="client-conversation-project-title">
-    <div className="cx-reqsplit">
-      <aside className="cx-reqrail" aria-label="About this project">
-        <div className="cx-reqrail-top">
-          <button type="button" className="cx-back" onClick={onBack} disabled={actions.busy}><ArrowLeft size={15} aria-hidden="true" />Back to requests</button>
-          <section className="cx-reqcard cx-reqhead">
-            <div className="cx-reqhead-top">
-              <span className="cx-reqhead-icon" aria-hidden="true"><FolderKanban size={24} /></span>
-              <div className="cx-reqhead-copy">
-                <h1 id="client-conversation-project-title">{project.name}</h1>
-                <p>Your conversation with your project manager</p>
-              </div>
-            </div>
-            <p className="cx-request-summary">Make new requests here and tick them off when they are done.</p>
-          </section>
-          <ConversationRequestsCard project={project} requests={conversation.requests} selectedTicketId={null} busy={actions.busy}
-            writesAvailable={!readOnly} onSelect={onSelectRequest} onToggleDone={actions.toggle}
-            onCreateRequest={readOnly || !canCreateRequests ? undefined : create} />
+  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(focusTicketId);
+  useEffect(() => setSelectedTicketId(focusTicketId), [focusTicketId]);
+  return <section className="cx-request flex min-h-0 flex-col" aria-labelledby="client-conversation-project-title">
+    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-divider px-5 py-3 sm:px-6">
+      <div className="flex min-w-0 items-start gap-3">
+        <Button type="button" variant="ghost" size="sm" onClick={onBack} disabled={actions.busy} className="mt-0.5 shrink-0 px-2">
+          <ArrowLeft size={15} aria-hidden="true" />All projects
+        </Button>
+        <div className="min-w-0">
+          <h1 id="client-conversation-project-title" className="truncate text-[15px] font-semibold text-content">{project.name}</h1>
+          <p className="mt-0.5 text-[12px] text-content-muted">One shared conversation for this project</p>
         </div>
-      </aside>
-      <ConversationColumn title="Project conversation" description={CONVERSATION_DESCRIPTION}>
-        <ProjectConversationChat role="client" items={conversation.items} requests={conversation.requests} error={conversation.error}
-          actionError={actions.actionError} clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'}
-          draft={draft} onDraftChange={setDraft} busy={actions.busy} writesAvailable={!readOnly}
-          onSend={body => void actions.sendToProject(body).then(result => { if (result !== null) setDraft(''); })}
-          inputId={`client-conversation-${project.projectId}`} />
-      </ConversationColumn>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {!readOnly && canCreateRequests && <Button type="button" size="sm" onClick={onStartRequest} disabled={actions.busy}>
+          <Plus size={14} aria-hidden="true" />New request
+        </Button>}
+        <Badge variant="secondary" className="hidden gap-1.5 sm:inline-flex">
+          <FolderKanban size={12} aria-hidden="true" />Project conversation
+        </Badge>
+      </div>
+    </header>
+    <div className="flex min-h-0 flex-1">
+      <ProjectConversationView role="client" projectName={project.name}
+        items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
+        clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'}
+        draft={draft} onDraftChange={setDraft} busy={actions.busy} writesAvailable={!readOnly}
+        onSend={body => void actions.sendToProject(body).then(result => { if (result !== null) setDraft(''); })}
+        onToggleDone={actions.toggle} focusTicketId={focusTicketId} selectedTicketId={selectedTicketId}
+        requestForm={requestForm} initialPanelId={showRequestForm ? 'new-request' : 'requests'}
+        onOpenRequest={onOpenRequestDetails}
+        onSelectRequest={request => setSelectedTicketId(request.ticketId)}
+        inputId={`client-conversation-${project.projectId}`} />
     </div>
   </section>;
 }

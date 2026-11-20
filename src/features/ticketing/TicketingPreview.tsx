@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ChevronDown, Edit3, FlaskConical, HelpCircle, Inbox, Pin, PinOff, Plus, RefreshCw, Search, Ticket as TicketIcon, Trash2, Users } from 'lucide-react';
+import { ChevronDown, Edit3, FlaskConical, HelpCircle, Pin, PinOff, Plus, RefreshCw, Search, Trash2 } from 'lucide-react';
 import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { Button } from '@/shared/components/ui/button';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
@@ -7,19 +7,17 @@ import type { PreviewRole } from './previewModel';
 import { pmPreviewApi, pmPreviewDocumentsApi, pmPreviewIntakeApi } from './ticketingPreviewFixtures';
 import { clientPreviewApi } from './clientPreviewApi';
 import ClientPortal from './ClientPortal';
-import { PmTicketsView } from './PmTicketsView';
 import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
 import { PmClientsWorkspace, type ClientSection } from './PmClientsPage';
 
-const NO_PROJECTS: ReadonlySet<string> = new Set();
-const PREVIEW_PANEL = { tickets: 'ticket', clients: 'client', inquiries: 'inquiry' } as const;
+const PREVIEW_PROJECT_IDS: ReadonlySet<string> = new Set(['preview-project-ops']);
 
 function isPmPreviewRole(value: PreviewRole): boolean {
   return value === 'pm';
 }
 
 /**
- * Development-only Alpha chrome around the real PM Tickets page. This keeps
+ * Development-only Alpha chrome around the real PM Clients and Inquiries pages. This keeps
  * the preview visually in Alpha without mounting AppProvider (which would
  * load workspace data and call the real API).
  */
@@ -27,9 +25,10 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
   const [pinnedOpen, setPinnedOpen] = useState(false);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
-  const [previewSection, setPreviewSection] = useState<'tickets' | 'clients' | 'inquiries'>('tickets');
+  const [previewSection, setPreviewSection] = useState<'clients' | 'inquiries'>('clients');
   const [previewClientKey, setPreviewClientKey] = useState<string | null>(null);
   const [previewClientSection, setPreviewClientSection] = useState<ClientSection>('overview');
+  const [previewConversationFocus, setPreviewConversationFocus] = useState<{ projectId: string } | null>(null);
   const [previewRefreshToken, setPreviewRefreshToken] = useState(0);
   const expanded = pinnedOpen || hovered || focused;
   const sections = useMemo(() => sectionsFor('pm'), []);
@@ -71,8 +70,9 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
               <span>{section.label}</span><span className="h-px flex-1 bg-surface-raised" aria-hidden="true" />
             </div>
             {items.map(item => {
-              const active = item.id === 'tickets';
-              return <button key={item.id} type="button" disabled={!active} aria-current={active ? 'page' : undefined}
+              const active = item.id === previewSection;
+              const available = item.id === 'clients' || item.id === 'inquiries';
+              return <button key={item.id} type="button" disabled={!available} onClick={() => available && setPreviewSection(item.id as 'clients' | 'inquiries')} aria-current={active ? 'page' : undefined}
                 title={expanded ? undefined : navLabel(item.id, 'pm')}
                 className={`group relative flex w-full items-center rounded-lg transition-colors ${expanded ? 'justify-between px-3 py-2' : 'justify-center px-0 py-2.5'} ${active ? 'bg-selected font-semibold text-selected-content ring-1 ring-inset ring-content/[0.06]' : 'cursor-not-allowed text-content-muted opacity-70'}`}>
                 <span className={`flex items-center ${expanded ? 'gap-3' : 'justify-center'} ${active ? 'text-link' : 'text-content-muted'}`}>
@@ -97,10 +97,10 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
       <div className="pointer-events-none absolute inset-x-0 top-0 z-30 px-3 pt-3 sm:px-4 sm:pt-4">
         <div className="pointer-events-auto mx-auto flex w-full max-w-[1800px] flex-wrap items-center gap-1.5 rounded-2xl border border-divider bg-surface/80 p-1.5 shadow-2xl backdrop-blur-xl ring-1 ring-black/5">
           <div role="tablist" aria-label="Open workspace tabs" className="workspace-tab-strip flex min-w-0 items-center gap-1 overflow-x-auto no-scrollbar">
-            {(['tickets'] as const).map(section => <button key={section} type="button" role="tab" aria-selected={true}
+            {([previewSection] as const).map(section => <button key={section} type="button" role="tab" aria-selected={true}
               onClick={() => setPreviewSection(section)}
               className={`flex h-9 min-w-[112px] max-w-[220px] items-center gap-2 rounded-xl border px-3 text-xs font-medium shadow-sm ${previewSection === section ? 'border-divider bg-selected text-selected-content' : 'border-transparent text-content-muted hover:bg-surface-high hover:text-content'}`}>
-              <span className="text-link">{navIcon('tickets', 'h-3.5 w-3.5')}</span><span className="truncate">Tickets</span>
+              <span className="text-link">{navIcon(section, 'h-3.5 w-3.5')}</span><span className="truncate">{navLabel(section, 'pm')}</span>
             </button>)}
           </div>
           <button type="button" disabled title="Opening other Alpha pages is outside this preview" aria-label="Open new tab" className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl text-content-muted"><Plus className="h-4 w-4" /></button>
@@ -112,36 +112,25 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
         </div>
       </div>
       <main className="relative h-full overflow-hidden pt-16 sm:pt-20">
-        <div className="h-full min-h-0">{/** The page body is the same PmTicketsView used by Alpha. */}
+        <div className="h-full min-h-0">
           {/* Kept visible so sample content cannot be mistaken for live records. */}
           <div className="flex h-full min-h-0 flex-col">
-            <div className="pm-ticket-preview__notice"><FlaskConical size={12} />Design preview · fictional tickets · changes are disabled</div>
-            <div className="pm-ticket-page pm-ticket-page--nested"><nav aria-label="Ticket work queues" className="pm-ticket-page__tabs">
-              <div role="tablist" className="pm-ticket-page__tab-list">
-                <button id="preview-pm-ticket-tab" type="button" role="tab" aria-selected={previewSection === 'tickets'} aria-pressed={previewSection === 'tickets'} aria-controls="preview-pm-ticket-panel"
-                  onClick={() => setPreviewSection('tickets')} className={`pm-ticket-page__tab${previewSection === 'tickets' ? ' is-active' : ''}`}>
-                  <TicketIcon size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Tickets</span>
-                </button>
-                <button id="preview-pm-client-tab" type="button" role="tab" aria-selected={previewSection === 'clients'} aria-pressed={previewSection === 'clients'} aria-controls="preview-pm-client-panel"
-                  onClick={() => setPreviewSection('clients')} className={`pm-ticket-page__tab${previewSection === 'clients' ? ' is-active' : ''}`}>
-                  <Users size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Clients</span>
-                </button>
-                <button id="preview-pm-inquiry-tab" type="button" role="tab" aria-selected={previewSection === 'inquiries'} aria-pressed={previewSection === 'inquiries'} aria-controls="preview-pm-inquiry-panel"
-                  onClick={() => setPreviewSection('inquiries')} className={`pm-ticket-page__tab${previewSection === 'inquiries' ? ' is-active' : ''}`}>
-                  <Inbox size={15} aria-hidden="true" /><span className="pm-ticket-page__tab-label">Inquiries</span>
-                </button>
-              </div>
-              <div className="pm-ticket-page__tab-actions">
+            <div className="pm-ticket-preview__notice"><FlaskConical size={12} />Design preview · fictional records · changes are disabled</div>
+            <div className="pm-ticket-page pm-ticket-page--nested flex min-h-0 flex-1 flex-col">
+              <div className="flex shrink-0 justify-end border-b border-divider px-4 py-1">
                 <Button variant="ghost" size="sm" onClick={() => setPreviewRefreshToken(value => value + 1)} aria-label={`Refresh ${previewSection}`} title={`Refresh ${previewSection}`}>
-                  <RefreshCw size={14} aria-hidden="true" /><span>Refresh</span>
+                  <RefreshCw size={14} aria-hidden="true" /><span>Refresh {navLabel(previewSection, 'pm').toLowerCase()}</span>
                 </Button>
               </div>
-            </nav><div id={`preview-pm-${PREVIEW_PANEL[previewSection]}-panel`} role="tabpanel"
-              aria-labelledby={`preview-pm-${PREVIEW_PANEL[previewSection]}-tab`} className="pm-ticket-page__content">{previewSection === 'tickets' ? <PmTicketsView api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} communicationEnabled refreshToken={previewRefreshToken} />
-              : previewSection === 'clients' ? <PmClientsWorkspace api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} workspaceKey="preview"
+              <div role="tabpanel" aria-label={navLabel(previewSection, 'pm')} className="pm-ticket-page__content min-h-0 flex-1">
+                {previewSection === 'clients' ? <PmClientsWorkspace api={pmPreviewApi} documentsApi={pmPreviewDocumentsApi} workspaceKey="preview"
                 selectedKey={previewClientKey} onSelectKey={setPreviewClientKey} section={previewClientSection} onSection={setPreviewClientSection}
-                knownProjectIds={NO_PROJECTS} onOpenProject={() => undefined} onOpenInquiries={() => setPreviewSection('inquiries')} refreshToken={previewRefreshToken} />
-              : <PmCentralIntakeInbox workspaceId="preview-workspace" workspaceName="Northstar Demo" workspaceCanReview onAccepted={() => setPreviewSection('tickets')} api={pmPreviewIntakeApi} refreshToken={previewRefreshToken} />}</div></div>
+                knownProjectIds={PREVIEW_PROJECT_IDS} onOpenProject={projectId => { setPreviewConversationFocus({ projectId }); setPreviewClientSection('conversation'); }}
+                conversationFocus={previewConversationFocus} onConversationFocusHandled={() => setPreviewConversationFocus(null)}
+                onOpenInquiries={() => setPreviewSection('inquiries')} refreshToken={previewRefreshToken} />
+                : <PmCentralIntakeInbox workspaceId="preview-workspace" workspaceName="Northstar Demo" workspaceCanReview onAccepted={() => setPreviewSection('clients')} api={pmPreviewIntakeApi} refreshToken={previewRefreshToken} />}
+              </div>
+            </div>
           </div>
         </div>
       </main>

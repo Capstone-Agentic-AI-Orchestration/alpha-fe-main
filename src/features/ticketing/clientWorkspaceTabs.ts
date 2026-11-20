@@ -10,6 +10,10 @@ interface Navigation {
   selectedProposalId: string | null;
   /** The project whose conversation is open on the Requests page. */
   selectedConversationKey: string | null;
+  /** Request to focus when a queue or activity item opens its project's conversation. */
+  selectedConversationTicketId: string | null;
+  /** Opens the conversation's request form after the client chooses a project. */
+  startConversationRequest: boolean;
   selectedId: string | null;
   selectedWorkspaceId: string | null;
   selectedItemFallback: ClientProjectRequestItem | null;
@@ -33,6 +37,7 @@ export function initialClientTabs(filter: ClientPortalFilter = 'all'): Tabs {
 }
 function createTab(id: string, page: ClientPage, filter: ClientPortalFilter = 'all'): Tab {
   return { id, navigation: { page, selectedProjectKey: null, selectedProposalId: null, selectedConversationKey: null, selectedId: null, selectedWorkspaceId: null,
+    selectedConversationTicketId: null, startConversationRequest: false,
     selectedItemFallback: null, filter, searchInput: '', search: '', replyDrafts: {}, returnToProjects: false,
     notificationProjectFocus: 0 } };
 }
@@ -60,6 +65,9 @@ export function useClientWorkspaceTabs(initialFilter: ClientPortalFilter) {
   }
   return { tabs: tabs.items, activeTabId: activeTab.id, tabState,
     selectProject: (id: string, selectedProjectKey: string | null) => dispatch({ type: 'update', id, update: navigation => ({ ...navigation, selectedProjectKey }) }),
+    openProjectConversation: (id: string, selectedConversationKey: string, ticketId: string | null, startRequest: boolean) => dispatch({
+      type: 'update', id, update: navigation => ({ ...navigation, selectedConversationKey, selectedConversationTicketId: ticketId, startConversationRequest: startRequest }),
+    }),
     openTab: (page: ClientPage) => dispatch({ type: 'open', id: crypto.randomUUID(), page }),
     activateTab: (id: string) => dispatch({ type: 'activate', id }),
     closeTab: (id: string) => dispatch({ type: 'close', id, fallbackId: crypto.randomUUID() }),
