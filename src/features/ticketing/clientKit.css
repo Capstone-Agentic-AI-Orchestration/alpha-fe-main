@@ -370,6 +370,14 @@ span.cx-button { pointer-events: none; }
 .cx-view-switch button.is-current { background: var(--cx-surface); color: var(--cx-ink); box-shadow: 0 1px 2px rgb(var(--ui-overlay) / .18); }
 .cx-reqchat > .cx-back { align-self: flex-start; margin-bottom: calc(-1 * var(--client-space-2)); }
 .cx-reqchat > .cx-preview-frame { height: auto; min-height: 0; flex: 1; }
+/* Beside the preview, the panel holds the conversation for feedback. */
+.cx-reqrail.is-feedback { overflow: hidden; gap: var(--client-space-3); }
+.cx-reqrail.is-feedback .ticket-chat { min-height: 0; flex: 1; background: none; }
+.cx-reqrail.is-feedback .ticket-chat__feed { padding-inline: 0; background: none; }
+.cx-reqrail.is-feedback .ticket-chat [data-ticket-chat-composer] { padding-inline: 0; }
+.cx-reqrail.is-feedback :is(.ticket-chat__composer-row, .ticket-chat__composer-note) { width: 100%; max-width: none; }
+.cx-feedback-head h2 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
+.cx-feedback-head p { margin: 2px 0 0; color: var(--cx-muted); font-size: var(--client-type-meta); }
 .cx-reqrail-top, .cx-reqrail-more { display: flex; flex-direction: column; gap: var(--client-space-4); }
 .cx-reqcard { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-4) var(--client-space-5); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); outline: none; }
 .cx-reqcard > h2 { display: flex; align-items: center; gap: var(--client-space-2); margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
@@ -446,6 +454,7 @@ span.cx-button { pointer-events: none; }
   .cx-reqchat { order: 1; padding: 0; background: none; }
   .cx-reqrail-top { order: 2; }
   .cx-reqrail-hint { order: 2; }
+  .cx-reqrail.is-feedback { display: flex; order: 2; height: 70dvh; min-height: 420px; padding: 0; border: 0; background: none; }
   .cx-reqchat .ticket-chat { height: 72dvh; min-height: 440px; flex: none; }
   .cx-reqchat > .cx-preview-frame { height: 72dvh; min-height: 440px; flex: none; }
   .cx-reqrail-more { order: 3; }

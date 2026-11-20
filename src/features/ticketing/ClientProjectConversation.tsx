@@ -125,18 +125,24 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
   };
   const pick = (ticketId: string) => { if (ticketId === selectedTicketId) toRequest(ticketId); else onSelectRequest(ticketId); };
   const showPreview = view === 'preview' && Boolean(project.preview);
+  const chat = <ProjectConversationChat role="client"
+    items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
+    clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'} draft={draft} onDraftChange={setDraft}
+    busy={busy} writesAvailable={!readOnly} onSend={send} jump={jump} onOpenQuotedRequest={pick}
+    about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore}
+    inputId={`client-conversation-${project.projectId}`} />;
   return <section className="cx-request" aria-labelledby="client-conversation-project-title">
     <div className="cx-reqsplit">
       <section className="cx-reqchat" aria-labelledby="client-conversation-project-title">
         <ConversationHead project={project} view={showPreview ? 'preview' : 'conversation'} onViewChange={props.onViewChange} onBack={props.onBack} busy={busy} />
-        {showPreview ? <ProjectPreviewFrame project={project} /> : <ProjectConversationChat role="client"
-          items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
-          clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'} draft={draft} onDraftChange={setDraft}
-          busy={busy} writesAvailable={!readOnly} onSend={send} jump={jump} onOpenQuotedRequest={pick}
-          about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore}
-          inputId={`client-conversation-${project.projectId}`} />}
+        {showPreview ? <ProjectPreviewFrame project={project} /> : chat}
       </section>
-      <aside className="cx-reqrail" aria-label={`Requests and details for ${project.name}`}>
+      {/* While the client tries the preview, the conversation sits beside it, so feedback goes straight to the project manager. */}
+      {showPreview ? <aside className="cx-reqrail is-feedback" aria-labelledby="client-preview-feedback-title">
+        <header className="cx-feedback-head"><h2 id="client-preview-feedback-title">Feedback</h2>
+          <p>Tell your project manager what you notice. It goes into this project’s conversation.</p></header>
+        {chat}
+      </aside> : <aside className="cx-reqrail" aria-label={`Requests and details for ${project.name}`}>
         <div className="cx-reqrail-top">
           {props.requestForm && <RailCard icon={<Plus size={16} />} title="New request">{props.requestForm}</RailCard>}
           <CollapsibleRailCard id="requests" icon={<ListChecks size={16} />}
@@ -146,7 +152,7 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
           </CollapsibleRailCard>
         </div>
         <PickedRequest selectedTicketId={selectedTicketId} request={request} rail={props.rail} />
-      </aside>
+      </aside>}
     </div>
   </section>;
 }

@@ -65,9 +65,13 @@ describe('client project page', () => {
     expect(conversation).toMatch(/aria-selected="true"[^>]*>Conversation/);
     const preview = page({ project: shared, view: 'preview' });
     expect(preview).toMatch(/aria-selected="true"[^>]*>Preview/);
-    expect(preview).toContain('cx-preview-frame');
-    expect(preview).not.toContain('Message your project manager');
-    // The requests panel stays beside the preview.
-    expect(preview).toContain('aria-label="Requests and details for Resort Website"');
+    // The preview fills the left; the conversation sits beside it for feedback, as one chat on the page.
+    const frame = preview.indexOf('cx-preview-frame');
+    const feedback = preview.indexOf('id="client-preview-feedback-title"');
+    expect(frame).toBeGreaterThan(-1);
+    expect(feedback).toBeGreaterThan(frame);
+    expect(preview.slice(feedback)).toContain('Message your project manager');
+    expect(preview.match(/Message your project manager/g)).toHaveLength(1);
+    expect(preview).not.toContain('aria-label="Requests and details for Resort Website"');
   });
 });

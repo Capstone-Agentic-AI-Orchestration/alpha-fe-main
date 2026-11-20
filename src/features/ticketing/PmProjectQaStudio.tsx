@@ -44,7 +44,8 @@ export function PmProjectQaStudio({projectId,projectName,feedback}:{projectId:st
   async function save(next:PmProjectClientPreview|null){
     if(busy)return;setBusy(true);setError('');
     try{const result=await pmTicketApi.setProjectClientPreview(projectId,next);setShared(result.preview);setAck(false);}
-    catch(cause){setError(qaError(cause));}finally{setBusy(false);}
+    // A refused share usually means a newer build replaced the one on screen: load the current one to test and share.
+    catch(cause){setError(qaError(cause));setAck(false);setRefresh(value=>value+1);}finally{setBusy(false);}
   }
   const state=sharedBuildState(build,shared);
   const buildPending=Boolean(repository&&buildFor!==repository);
