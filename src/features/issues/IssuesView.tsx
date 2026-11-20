@@ -9,6 +9,8 @@ import { apiService, type IssueBuildStatus } from '@/shared/services/apiService'
 import { isDesktop } from '@/shared/desktop';
 import { ACTIVE_BUILD_STATUSES, BuildChip } from './BuildChip';
 import { BoardAttentionBanner, boardAttention } from './BoardAttentionBanner';
+import { BoardRunBanner } from '@/features/board-run/BoardRunBanner';
+import { useBoardRuns } from '@/features/board-run/useBoardRuns';
 import { ArchivedCardsPanel } from './ArchivedCardsPanel';
 import { useBoardAgentChanges } from '@/features/board-agent/useBoardAgentChanges';
 import { cardMarks, ghostCards } from '@/features/board-agent/agentChanges';
@@ -136,6 +138,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   );
   const [searchQuery, setSearchQuery] = useTabSessionState<string>(`${sessionPrefix}.search`, '');
   const [selectedProject, setSelectedProject] = useTabSessionState<string>(`${sessionPrefix}.project`, lockedProjectId ?? 'all');
+  // A board run started from this project's chat, shown here with a way back to it.
+  const { active: boardRun } = useBoardRuns(selectedProject === 'all' ? undefined : selectedProject, can('run_builds'));
 
   /**
    * Follow the lock when the page switches projects.
@@ -771,6 +775,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
         {/* Collapsible Filter Toolbar */}
         {showFilterBar && renderFilterToolbar()}
 
+        <BoardRunBanner run={boardRun} onOpenChat={threadId => { setActiveThreadId(threadId); setActiveTab('chat'); }} />
         <BoardAttentionBanner
           items={attention}
           canManageIssues={canManageIssues}
