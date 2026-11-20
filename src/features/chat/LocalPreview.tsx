@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Globe, ExternalLink, RotateCw, Square } from 'lucide-react';
+import { Globe } from 'lucide-react';
 import { desktop, isDesktop } from '@/shared/desktop';
 import { getLocalPreviews, stopLocalPreview } from '@/shared/services/apiService';
 import type { LocalPreview } from '@/shared/types/localPreview';
@@ -100,24 +100,22 @@ function NativePreview({ record, blocked }: { record: LocalPreview; blocked: boo
   return <div ref={container} aria-label="Local website preview" className="relative min-h-40 flex-1 bg-white">{error && <p role="alert" className="p-4 text-xs text-status-danger">{error}</p>}{blocked && <p className="p-4 text-xs text-content-muted">Preview hidden while a dialog is open.</p>}</div>;
 }
 
-export function LocalPreviewTab({ record, error, onStop, blocked = false }: {
-  record?: LocalPreview; error: string;
-  onStop: () => void; blocked?: boolean;
+/**
+ * The running website, read only: the side panel has no controls. Opening it in a
+ * browser stays on the chat's preview card; stopping it is asked for in the chat.
+ */
+export function LocalPreviewTab({ record, error, blocked = false }: {
+  record?: LocalPreview; error: string; blocked?: boolean;
 }) {
-  const [mobile, setMobile] = useState(false);
-  const [surfaceError, setSurfaceError] = useState('');
-  const control = (action: 'reload' | 'external') => { if (record) void desktop?.localPreview?.(action, surfaceValue(record)).catch(error => setSurfaceError(error.message)); };
   const bridge = Boolean(desktop?.localPreview);
-  const active = record && ['starting', 'ready', 'stopping'].includes(record.state);
   return <section className="flex min-h-0 flex-1 flex-col" aria-label="Web preview">
     <div className="space-y-3 border-b border-divider p-4"><h2 className="flex items-center gap-2 text-sm font-semibold"><Globe className="h-4 w-4 text-status-info" />Web preview <span className="ml-auto text-[10px] font-normal text-content-secondary">Local · {record?.state ?? 'stopped'}</span></h2>
       {record && <p className="break-all text-[10px] text-content-secondary">{record.repository} · {record.branch || 'detached'} · {record.commit.slice(0, 8)}<br />{record.source === 'saved-build' ? 'Saved build checkpoint' : 'Saved checkout commit'} · Later uncommitted edits are excluded.</p>}
-      {active && <div className="flex flex-wrap gap-2 text-[11px]"><button type="button" disabled={record.state !== 'ready'} onClick={() => control('reload')} className="inline-flex items-center gap-1 disabled:opacity-40"><RotateCw className="h-3 w-3" />Reload</button><button type="button" aria-pressed={mobile} onClick={() => setMobile(value => !value)}>{mobile ? 'Full width' : 'Mobile width'}</button><button type="button" disabled={record.state !== 'ready'} onClick={() => control('external')} className="inline-flex items-center gap-1 disabled:opacity-40"><ExternalLink className="h-3 w-3" />Browser</button><button type="button" onClick={onStop} className="ml-auto inline-flex items-center gap-1"><Square className="h-3 w-3" />Stop</button></div>}
       {!bridge && <p className="text-xs text-status-warning">{isDesktop ? 'Update the desktop bridge to use embedded previews.' : 'Local previews are available in Alpha desktop.'}</p>}
-      {(error || record?.error || surfaceError) && <p role="alert" className="break-words text-xs text-status-warning">{error || record?.error || surfaceError}</p>}
+      {(error || record?.error) && <p role="alert" className="break-words text-xs text-status-warning">{error || record?.error}</p>}
       {record?.logs && <details><summary className="cursor-pointer text-[11px] text-content-secondary">Startup output</summary><pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-all text-[10px] text-content-secondary">{record.logs}</pre></details>}
       {Boolean(record?.browserDiagnostics?.length) && <details><summary className="cursor-pointer text-[11px] text-status-warning">Browser diagnostics · {record!.browserDiagnostics!.length}</summary><p className="mt-2 text-[10px] text-content-secondary">Captured warnings, errors and failed resources. Blocked resources reflect preview isolation. Agents can inspect this evidence when you ask about the local website.</p><ul className="mt-2 max-h-40 space-y-2 overflow-auto text-[10px] text-content-secondary">{record!.browserDiagnostics!.map((entry, index) => <li key={entry.timestamp + index}><span className="text-content-muted">{entry.kind} · {new Date(entry.timestamp).toLocaleTimeString()}</span><pre className="whitespace-pre-wrap break-all">{entry.message}</pre></li>)}</ul></details>}
     </div>
-    {record?.state === 'ready' && bridge ? <div className={'mx-auto flex min-h-0 w-full flex-1 flex-col ' + (mobile ? 'max-w-[390px]' : '')}><NativePreview record={record} blocked={blocked} /></div> : <div className="p-5 text-xs leading-6 text-content-secondary">{record?.state === 'starting' ? 'Preparing dependencies and waiting for the local server…' : 'Ask the Orchestrator in the main chat to show the website. Agents prepare its preview from a saved checkpoint.'}</div>}
+    {record?.state === 'ready' && bridge ? <div className="mx-auto flex min-h-0 w-full flex-1 flex-col"><NativePreview record={record} blocked={blocked} /></div> : <div className="p-5 text-xs leading-6 text-content-secondary">{record?.state === 'starting' ? 'Preparing dependencies and waiting for the local server…' : 'Ask the Orchestrator in the main chat to show the website. Agents prepare its preview from a saved checkpoint.'}</div>}
   </section>;
 }

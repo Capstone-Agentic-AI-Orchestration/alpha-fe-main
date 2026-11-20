@@ -1,5 +1,5 @@
 import React from 'react';
-import { CheckCircle2, ExternalLink, Loader2, MessageSquare, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, MessageSquare, RotateCw, ShieldCheck } from 'lucide-react';
 
 import type { ProjectBuildOrchestration } from '@/shared/types';
 import { buildChangesCode, buildPublications, buildReviewSummary, buildReviewSummaryText } from './ChatBuildBodies';
@@ -51,8 +51,23 @@ export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId,
   }
 
   if (status === 'publishing') {
-    return <section aria-label="Next step" aria-live="polite" className="mt-2 flex items-center gap-2 rounded-xl border border-divider bg-surface-raised px-3.5 py-3 text-[11px] text-link">
+    const reason = orchestration.run.stoppedReason;
+    if (!reason) return <section aria-label="Next step" aria-live="polite" className="mt-2 flex items-center gap-2 rounded-xl border border-divider bg-surface-raised px-3.5 py-3 text-[11px] text-link">
       <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />Opening the pull request…
+    </section>;
+    // Publishing stopped. Approving the same revision again is how a publication is retried:
+    // it continues the unfinished steps without opening duplicate pull requests.
+    return <section aria-label="Next step" className="mt-2 rounded-xl border border-status-warning-border bg-surface-raised px-3.5 py-3 text-left">
+      <div className="flex items-center gap-2 text-xs font-semibold text-content"><AlertTriangle className="h-4 w-4 shrink-0 text-status-warning" aria-hidden="true" />The pull request was not opened</div>
+      <p role="alert" className="mt-1 whitespace-pre-wrap text-[11px] leading-5 text-status-warning">{reason}</p>
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        {!blocker && <button type="button" onClick={() => { approve().catch(() => undefined); }} disabled={busy} className={primary}>
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <RotateCw className="h-3.5 w-3.5" aria-hidden="true" />}{busy ? 'Retrying…' : 'Retry'}
+        </button>}
+        <span className="text-[10px] text-content-muted">or reply 'retry' in the chat</span>
+      </div>
+      {blocker && <p className="mt-2 text-[10px] text-status-warning">{blocker}</p>}
+      {error && <p role="alert" className="mt-2 text-[10px] text-status-danger">{error}</p>}
     </section>;
   }
 

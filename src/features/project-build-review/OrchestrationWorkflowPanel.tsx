@@ -263,7 +263,7 @@ function diffLineClass(line: string): string {
   return 'text-content-secondary';
 }
 
-interface RepositoryDiff {
+export interface RepositoryDiff {
   repository: string;
   branchName: string;
   resultCommit: string;
@@ -272,6 +272,35 @@ interface RepositoryDiff {
   pathsTruncated?: boolean;
   diff?: string;
   truncated?: boolean;
+}
+
+function DiffLines({ diff }: { diff: string }) {
+  return <>{diff.split('\n').map((line, index) => <div key={index} className={`min-w-max whitespace-pre ${diffLineClass(line)}`}>{line || ' '}</div>)}</>;
+}
+
+/**
+ * One codebase's changes, read only: every file's diff in turn under a small heading,
+ * with nothing to click. A codebase with nothing changed is one muted line.
+ */
+export function ReadOnlyRepositoryChanges({ repository }: { repository: RepositoryDiff }) {
+  const name = repository.repository.split('/').pop() || repository.repository;
+  const where = repository.repository ? ` in ${repository.repository}` : '';
+  const saved = repository.reviewType === 'saved_checkpoint';
+  if (!repository.diff) return <p className="text-[11px] text-content-muted">No file changes{repository.repository ? ` in ${name}` : ''}.</p>;
+  const perFile = [...splitDiffByFile(repository.diff)];
+  const files: Array<readonly [string, string]> = perFile.length ? perFile : [['', repository.diff]];
+  return <div className="space-y-2">
+    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+      {repository.repository && <span className="text-xs font-semibold text-content" title={repository.repository}>{name}</span>}
+      <span className="text-[10px] text-content-muted">branch <code className="text-content-secondary">{repository.branchName}</code> · {saved ? 'saved checkpoint' : 'checked change'} <code className="text-content-secondary">{repository.resultCommit.slice(0, 7)}</code></span>
+    </div>
+    {files.map(([file, diff]) => <div key={file || 'diff'} className="space-y-1">
+      {file && <h4 className="truncate font-mono text-[10px] font-semibold text-content-secondary" title={file}>{file}</h4>}
+      <div className="max-h-[24rem] overflow-auto rounded-md border border-divider bg-code p-3 font-mono text-[10px] leading-[1.65]" aria-label={(file || 'Code changes') + where}><DiffLines diff={diff} /></div>
+    </div>)}
+    {repository.pathsTruncated && <p className="text-[10px] text-content-muted">More changed files are omitted.</p>}
+    {repository.truncated && <p role="status" className="text-[10px] leading-4 text-status-warning">This preview was shortened.</p>}
+  </div>;
 }
 
 /**
@@ -301,14 +330,28 @@ function RepositoryChanges({ repository }: { repository: RepositoryDiff }) {
         {repository.pathsTruncated && <span className="self-center text-[10px] text-content-muted">More changed files are omitted.</span>}
       </div>
       <div className="mt-2.5 max-h-[24rem] overflow-auto rounded-md border border-divider bg-code p-3 font-mono text-[10px] leading-[1.65]" aria-label={diffLabel}>
-        {shown.split('\n').map((line, index) => <div key={index} className={`min-w-max whitespace-pre ${diffLineClass(line)}`}>{line || ' '}</div>)}
+        <DiffLines diff={shown} />
       </div>
       {repository.truncated && <p role="status" className="mt-2 text-[10px] leading-4 text-status-warning">This preview was shortened. Inspect the full branch diff before approving.</p>}
     </div>}
   </div>;
 }
 
-export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string; savedCheckpoint?: boolean; expanded?: boolean; onReady?: () => void }> = ({ projectId, runId, branchName, savedCheckpoint = false, expanded = false, onReady }) => {
+/** A loaded preview as one entry per codebase; a single-codebase build is one unnamed entry. */
+function previewRepositories(preview: ProjectBuildDiffPreview | null, branchName?: string): RepositoryDiff[] {
+  if (!preview) return [];
+  if (preview.repositories && preview.repositories.length > 1) return preview.repositories;
+  return [{ repository: '', branchName: preview.branchName || branchName || '', resultCommit: preview.resultCommit, reviewType: preview.reviewType,
+    changedPaths: preview.changedPaths, pathsTruncated: preview.pathsTruncated, diff: preview.diff, truncated: preview.truncated }];
+}
+
+/**
+ * The validated (or saved) changes of a build. Interactive by default: a toggle and
+ * per-file tabs. `readOnly` is for the chat's side panel, where nothing is decided:
+ * the diff loads straight away and shows every file, with no toggle or tabs.
+ */
+export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName?: string; savedCheckpoint?: boolean; expanded?: boolean; readOnly?: boolean; onReady?: () => void }> = ({ projectId, runId, branchName, savedCheckpoint = false, expanded: expandedProp = false, readOnly = false, onReady }) => {
+  const expanded = expandedProp || readOnly;
   const [open, setOpen] = useState(expanded);
   const [preview, setPreview] = useState<ProjectBuildDiffPreview | null>(null);
   const [loading, setLoading] = useState(false);
@@ -341,20 +384,25 @@ export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName
     if (expanded) void loadPreview();
   }, [projectId, runId, expanded]);
 
+  const repositories = previewRepositories(preview, branchName);
+  const loadingLabel = savedCheckpoint ? 'Loading the saved checkpoint' : 'Loading the validated patch';
+
+  if (readOnly) return <div className="space-y-4">
+    {loading && <LoadingRows label={loadingLabel} layout="code" rows={6} className="py-2" />}
+    {error && <p role="alert" className="text-xs leading-5 text-status-danger">{error}</p>}
+    {repositories.map(repository => <ReadOnlyRepositoryChanges key={repository.repository || 'single'} repository={repository} />)}
+  </div>;
+
   return <section className="overflow-hidden rounded-xl border border-divider bg-selected">
     <button type="button" onClick={toggle} aria-expanded={open} className="flex min-h-12 w-full items-center justify-between gap-3 px-4 py-3 text-left transition hover:bg-surface-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-focus">
       <span className="flex min-w-0 items-center gap-2.5"><Code2 className="h-4 w-4 shrink-0 text-link" /><span className="min-w-0"><span className="block text-xs font-semibold text-content">{savedCheckpoint ? 'Review saved changes' : 'Review code changes'}</span><span className="mt-0.5 block text-[10px] leading-4 text-content-secondary">{savedCheckpoint ? 'Inspect the latest committed agent checkpoint and changed files while Alpha keeps the failure details in chat.' : 'Inspect the exact commit that passed final validation before approving.'}</span></span></span>
       <span className="shrink-0 text-[10px] font-medium text-link">{open ? 'Hide changes' : savedCheckpoint ? 'Review checkpoint' : 'Open review'}</span>
     </button>
     {open && <div className="border-t border-divider px-4 py-3">
-      {loading && <LoadingRows label={savedCheckpoint ? 'Loading the saved checkpoint' : 'Loading the validated patch'} layout="code" rows={6} className="py-2" />}
+      {loading && <LoadingRows label={loadingLabel} layout="code" rows={6} className="py-2" />}
       {error && <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-status-danger-border bg-status-danger-subtle p-3" role="alert"><p className="text-xs leading-5 text-status-danger">{error}</p><button type="button" onClick={() => void loadPreview()} disabled={loading} className="min-h-8 rounded-md border border-status-danger-border px-2.5 text-[10px] font-semibold text-status-danger hover:bg-status-danger-subtle disabled:opacity-50">Retry</button></div>}
       {preview && <div className="space-y-4">
-        {(preview.repositories && preview.repositories.length > 1
-          ? preview.repositories
-          : [{ repository: '', branchName: preview.branchName || branchName || '', resultCommit: preview.resultCommit, reviewType: preview.reviewType,
-            changedPaths: preview.changedPaths, pathsTruncated: preview.pathsTruncated, diff: preview.diff, truncated: preview.truncated }]
-        ).map(repository => <RepositoryChanges key={repository.repository || 'single'} repository={repository} />)}
+        {repositories.map(repository => <RepositoryChanges key={repository.repository || 'single'} repository={repository} />)}
       </div>}
     </div>}
   </section>;

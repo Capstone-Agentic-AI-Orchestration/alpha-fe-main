@@ -1814,10 +1814,10 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   };
   const renderSideTab = (tab: SideTab): React.ReactNode => {
     switch (tab.kind) {
-      case 'preview': return <LocalPreviewTab record={previews.record} error={previews.error} onStop={() => void previews.stop()} blocked={Boolean(!isActiveTab || memoryThreadId || threadPendingDelete || showCreateProject || repositoryMenuOpen)} />;
+      case 'preview': return <LocalPreviewTab record={previews.record} error={previews.error} blocked={Boolean(!isActiveTab || memoryThreadId || threadPendingDelete || showCreateProject || repositoryMenuOpen)} />;
       case 'plan': return <PlanDocumentTab key={tab.id + ':' + tab.planVersion} projectId={tab.projectId} runId={tab.runId} planVersion={tab.planVersion} />;
       case 'review': return latestBuild?.runId === tab.runId
-        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('publish_build')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} />
+        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('publish_build')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} />
         : activeThreadId ? <SavedBuildReviewTab key={tab.id} projectId={tab.projectId} runId={tab.runId} threadId={activeThreadId} /> : null;
       case 'changes': return <div key={tab.id} className="min-h-0 flex-1 overflow-y-auto p-4"><LiveChangesView projectId={tab.projectId} runId={tab.runId} live={Boolean(liveBuild?.running && liveBuild.runId === tab.runId)} /></div>;
       case 'agent': {
@@ -1836,6 +1836,13 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         return <AgentActivityPanel key={tab.id} call={call} agent={agentForCall(call)} name={isOrchestratorCall(call) ? 'Orchestrator' : undefined} subtitle={isOrchestratorCall(call) ? (project?.name ?? 'Alpha') + ' · Alpha' : undefined} usage={<WorkUsageRow entries={(usage.snapshot?.entries ?? []).filter(entry => entry.callId === call.id)} now={usage.now} names={usageNames} />} />;
       }
     }
+  };
+
+  /** The panel only shows; decisions are made in the chat. With a build and no tab open, it shows the build's review. */
+  const sidePanelBody = (): React.ReactNode => {
+    if (activeSideTab) return renderSideTab(activeSideTab);
+    if (latestBuild && project) return renderSideTab({ id: 'review:' + latestBuild.runId, kind: 'review', projectId: project.id, runId: latestBuild.runId });
+    return <section className="p-5"><p className="text-xs text-content-secondary">Plans, progress and changes appear here during a build.</p></section>;
   };
 
   const projectSummaryId = `chat-project-summary-${activeTabId}`;
@@ -2086,7 +2093,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
             />}
       </main>
       {!isClient && sidePanelPresence.mounted && <ChatSidePanel variant="inset" widthStorageKey="alpha.chatSidePanelWidth.inset" defaultWidth={300} minWidth={260} motion={sidePanelPresence.closing ? 'closing' : 'opening'} tabs={sideTabs.map(sideTabMeta)} activeId={activeSideTabId} onSelect={setActiveSideTabId} onClose={closeSideTab} onCloseAll={() => { setPanelVisible(false); document.getElementById('chat-panel-toggle')?.focus(); }}>
-        {activeSideTab ? renderSideTab(activeSideTab) : <section className="space-y-4 p-5"><h2 className="text-sm font-semibold">Side panel</h2><p className="text-xs text-content-secondary">Keep previews, plans, agents and changes beside your conversation.</p>{latestBuild && project && <><button type="button" onClick={() => openPlanTab({ projectId: project.id, runId: latestBuild.runId, planVersion: latestBuild.orchestration.run.planVersion, auto: false })} className="block text-xs text-link">Open saved plan</button><button type="button" onClick={() => openSavedBuildReview(latestBuild.runId)} className="block text-xs text-link">Build review</button><button type="button" onClick={openBuildChanges} className="block text-xs text-link">Code changes</button></>}</section>}
+        {sidePanelBody()}
       </ChatSidePanel>}
     </div>
     </PlanPanelContext.Provider>

@@ -56,6 +56,24 @@ describe('the next step under a finished build', () => {
     expect(html).not.toContain('pull request opened');
   });
 
+  it('says why publishing stopped and offers Retry, or a reply in the chat', () => {
+    const html = render(orchestration('publishing', { run: { id: 'run-1', status: 'publishing', revision: 13,
+      stoppedReason: 'GitHub refused the push to acme/web-fe.' } }));
+    expect(html).toContain('GitHub refused the push to acme/web-fe.');
+    expect(html).toContain('>Retry</button>');
+    expect(html).toContain('or reply &#x27;retry&#x27; in the chat');
+    expect(html).not.toContain('Opening the pull request');
+    const noRole = render(orchestration('publishing', { run: { id: 'run-1', status: 'publishing', revision: 13, stoppedReason: 'Stopped.' } }), false);
+    expect(noRole).not.toContain('>Retry</button>');
+    expect(noRole).toContain('must approve publication');
+  });
+
+  it('says it is opening the pull request while publishing goes well', () => {
+    const html = render(orchestration('publishing'));
+    expect(html).toContain('Opening the pull request…');
+    expect(html).not.toContain('Retry');
+  });
+
   it('shows nothing while the build is still running', () => {
     expect(render(orchestration('executing'))).toBe('');
   });
