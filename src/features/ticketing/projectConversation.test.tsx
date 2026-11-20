@@ -75,6 +75,14 @@ describe('ProjectConversationView', () => {
     expect(html).toContain('Create task');
     expect(html).not.toContain('New request</button>');
   });
+
+  it('keeps the PM request context tabs beside Requests instead of the About tab', () => {
+    const tabs = ['Overview', 'Private notes', 'Request details', 'Documents'].map(label => ({ id: label, label, content: null }));
+    const html = view({ role: 'pm', panelTabs: tabs });
+    for (const label of ['Requests · 1 open', ...tabs.map(tab => tab.label)]) expect(html).toContain(`>${label}</button>`);
+    expect(html).not.toContain('>About</button>');
+    expect(view()).toContain('>About</button>');
+  });
 });
 
 describe('client page with one conversation per project', () => {

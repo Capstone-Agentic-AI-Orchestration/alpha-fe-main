@@ -103,6 +103,9 @@ function statusStyle(status: TicketStatus): string {
   return 'pm-status--review';
 }
 
+/** Shared with the request context beside the project conversation. */
+export { statusLabel as pmStatusLabel, statusStyle as pmStatusStyle };
+
 function appendPmMessage(messages: PmTicketMessage[], message: PmTicketMessage): PmTicketMessage[] {
   return messages.some(current => current.id === message.id) ? messages : [...messages, message];
 }

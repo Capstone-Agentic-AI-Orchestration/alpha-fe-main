@@ -47,9 +47,16 @@ export interface ProjectConversationViewProps {
   messageActions?: (item: ConversationItem) => ReactNode;
   /** A request to show first in the panel, as when opened from elsewhere. */
   focusTicketId?: string | null;
-  about?: ReactNode;
+  /** The request the other panel tabs describe; highlighted in the list. */
+  selectedTicketId?: string | null;
+  /** PM: pick a request for the panel's other tabs. */
+  onSelectRequest?: (request: ConversationRequest) => void;
+  /** Tabs after Requests; the client sees an About tab when none are given. */
+  panelTabs?: ConversationPanelTab[];
   inputId: string;
 }
+
+export interface ConversationPanelTab { id: string; label: string; content: ReactNode }
 
 /**
  * One conversation per client and project, for the client portal and the PM's
@@ -58,12 +65,24 @@ export interface ProjectConversationViewProps {
  */
 export function ProjectConversationView({ role, projectName, items, requests, error = '', actionError = '', clientName = 'Client',
   clientInitial = 'C', draft, onDraftChange, onSend, busy = false, writesAvailable = true, onToggleDone, onCreateRequest,
-  onOpenRequest, renderRequestActions, messageActions, focusTicketId = null, about, inputId }: ProjectConversationViewProps) {
-  const [panel, setPanel] = useState<'requests' | 'about'>('requests');
+  onOpenRequest, renderRequestActions, messageActions, focusTicketId = null, selectedTicketId = null, onSelectRequest, panelTabs,
+  inputId }: ProjectConversationViewProps) {
+  const [panel, setPanel] = useState('requests');
   const messages = useMemo(() => conversationChatMessages(items ?? [], role, messageActions
     ? item => { const node = messageActions(item); return node ?? undefined; } : undefined), [items, role, messageActions]);
   const open = (requests ?? []).filter(request => request.checklist !== 'done' && request.checklist !== 'declined' && request.checklist !== 'cancelled').length;
   const tabsId = useId();
+  const about: ConversationPanelTab = { id: 'about', label: 'About', content: <div className="space-y-4 text-[13px]">
+    <div>
+      <p className="text-[11.5px] text-content-muted">Project</p>
+      <p className="font-medium text-content">{projectName}</p>
+    </div>
+    <p className="text-[12px] leading-relaxed text-content-secondary">
+      This is your one conversation about this project. Ask questions here, make new requests, and tick requests off when they are done.
+    </p>
+  </div> };
+  const tabs: ConversationPanelTab[] = [{ id: 'requests', label: requests ? `Requests · ${open} open` : 'Requests', content: null },
+    ...(panelTabs ?? [about])];
 
   const submit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -103,8 +122,8 @@ export function ProjectConversationView({ role, projectName, items, requests, er
     </section>
 
     <aside className="flex min-h-0 flex-col border-t border-divider lg:border-l lg:border-t-0" aria-label="About this conversation">
-      <div role="tablist" aria-label="Conversation details" className="flex shrink-0 gap-5 border-b border-divider px-5">
-        {([['requests', `Requests${requests ? ` · ${open} open` : ''}`], ['about', 'About']] as const).map(([id, label]) =>
+      <div role="tablist" aria-label="Conversation details" className="flex shrink-0 flex-wrap gap-x-5 border-b border-divider px-5">
+        {tabs.map(({ id, label }) =>
           <button key={id} type="button" role="tab" id={`${tabsId}-${id}`} aria-selected={panel === id} onClick={() => setPanel(id)}
             className={`relative h-11 text-[13px] font-medium ${panel === id
               ? 'text-content after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-link'
@@ -113,29 +132,22 @@ export function ProjectConversationView({ role, projectName, items, requests, er
       <div role="tabpanel" aria-labelledby={`${tabsId}-${panel}`} className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
         {panel === 'requests'
           ? <RequestsPanel role={role} requests={requests} busy={busy} writesAvailable={writesAvailable} onToggleDone={onToggleDone}
-            onCreateRequest={onCreateRequest} onOpenRequest={onOpenRequest} renderRequestActions={renderRequestActions} focusTicketId={focusTicketId} />
-          : <div className="space-y-4 text-[13px]">
-            <div>
-              <p className="text-[11.5px] text-content-muted">Project</p>
-              <p className="font-medium text-content">{projectName}</p>
-            </div>
-            {about}
-            <p className="text-[12px] leading-relaxed text-content-secondary">
-              {role === 'client'
-                ? 'This is your one conversation about this project. Ask questions here, make new requests, and tick requests off when they are done.'
-                : 'One conversation per client and project. Requests made here are tracked in the Requests tab; create or link tasks from each request.'}
-            </p>
-          </div>}
+            onCreateRequest={onCreateRequest} onOpenRequest={onOpenRequest} renderRequestActions={renderRequestActions} focusTicketId={focusTicketId}
+            selectedTicketId={selectedTicketId} onSelectRequest={onSelectRequest} />
+          : tabs.find(tab => tab.id === panel)?.content}
       </div>
     </aside>
   </div>;
 }
 
-function RequestsPanel({ role, requests, busy, writesAvailable, onToggleDone, onCreateRequest, onOpenRequest, renderRequestActions, focusTicketId }: {
+function RequestsPanel({ role, requests, busy, writesAvailable, onToggleDone, onCreateRequest, onOpenRequest, renderRequestActions, focusTicketId,
+  selectedTicketId, onSelectRequest }: {
   role: 'client' | 'pm'; requests: ConversationRequest[] | null; busy: boolean; writesAvailable: boolean;
   onToggleDone: ProjectConversationViewProps['onToggleDone']; onCreateRequest?: ProjectConversationViewProps['onCreateRequest'];
   onOpenRequest?: ProjectConversationViewProps['onOpenRequest']; renderRequestActions?: ProjectConversationViewProps['renderRequestActions'];
   focusTicketId: string | null;
+  selectedTicketId: string | null;
+  onSelectRequest?: ProjectConversationViewProps['onSelectRequest'];
 }) {
   const [formOpen, setFormOpen] = useState(false);
   const [title, setTitle] = useState('');
@@ -185,7 +197,8 @@ function RequestsPanel({ role, requests, busy, writesAvailable, onToggleDone, on
         {ordered.map(request => {
           const done = request.checklist === 'done';
           const toggleable = canToggleRequest(request) && writesAvailable;
-          return <li key={request.ticketId} className={`py-3 ${request.ticketId === focusTicketId ? 'rounded-md bg-selected/40 px-2' : ''}`}>
+          const highlighted = request.ticketId === (selectedTicketId ?? focusTicketId);
+          return <li key={request.ticketId} className={`py-3 ${highlighted ? 'rounded-md bg-selected/40 px-2' : ''}`}>
             <div className="flex items-start gap-2.5">
               <button type="button" role="checkbox" aria-checked={done} disabled={!toggleable || busy}
                 aria-label={`${done ? 'Reopen' : 'Mark done'}: ${request.title}`}
@@ -197,7 +210,10 @@ function RequestsPanel({ role, requests, busy, writesAvailable, onToggleDone, on
               </button>
               <div className="min-w-0 flex-1">
                 <div className="flex items-start justify-between gap-2">
-                  <p className={`text-[13px] font-medium ${done ? 'text-content-secondary line-through decoration-content-muted' : 'text-content'}`}>{request.title}</p>
+                  {onSelectRequest
+                    ? <button type="button" onClick={() => onSelectRequest(request)} aria-pressed={highlighted}
+                      className={`text-left text-[13px] font-medium hover:underline ${done ? 'text-content-secondary line-through decoration-content-muted' : 'text-content'}`}>{request.title}</button>
+                    : <p className={`text-[13px] font-medium ${done ? 'text-content-secondary line-through decoration-content-muted' : 'text-content'}`}>{request.title}</p>}
                   <ChecklistChip status={request.checklist} />
                 </div>
                 {request.checklist === 'ready_to_check' && role === 'client' && <p className="mt-1 text-[12px] text-content-secondary">

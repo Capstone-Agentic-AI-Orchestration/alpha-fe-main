@@ -233,7 +233,7 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
           intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled />
       </div>
     </div>}
-    renderConversation={client => <PmClientConversationTab api={api} client={client} focus={conversationFocus}
+    renderConversation={client => <PmClientConversationTab api={api} documentsApi={documentsApi} client={client} focus={conversationFocus}
       onOpenRequestDetails={openRequestDetails} onCreateTask={onCreateTask} tasksForProject={tasksForProject} refreshToken={refreshToken} />}
     renderOverview={client => <ClientOverview client={client} requests={requests} conversations={conversations} onOpenRequest={openRequest} />}
     renderConversations={client => <ClientConversations client={client} requests={requests} conversations={conversations}

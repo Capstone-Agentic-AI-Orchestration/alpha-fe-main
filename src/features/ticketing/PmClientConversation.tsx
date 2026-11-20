@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FolderKanban, Link2, Plus } from 'lucide-react';
 import { ApiRequestError } from '@/shared/services/apiService';
-import { pmTicketApi, type PmClientProjectConversation, type PmClientSummary } from './pmApi';
-import { ProjectConversationView } from './ProjectConversationView';
+import { pmTicketApi, pmTicketDocumentsApi, type PmClientProjectConversation, type PmClientSummary } from './pmApi';
+import { ProjectConversationView, type ConversationPanelTab } from './ProjectConversationView';
+import { PmRequestContext, type PmRequestContextSection } from './PmRequestContext';
+import type { TicketDocumentsReadApi } from './ticketDocuments';
 import type { ConversationItem, ConversationRequest } from './projectConversation';
 import { REQUEST_TASK_LINKED_EVENT, linkSavedTaskToRequest } from './requestTaskLink';
 
@@ -26,12 +28,15 @@ export interface ConversationLinkableTask { id: string; identifier: string; titl
 
 /**
  * A client's Conversation tab: one conversation per project the client can see.
- * Requests made there are a checklist in the side panel, where the PM creates a
- * task for a request (or links an existing one); the full request page with the
- * plan and result steps opens from each request.
+ * The side panel keeps the request context tabs (overview, private notes,
+ * details, documents) for the selected request and adds a Requests checklist,
+ * where the PM creates a task for a request (or links an existing one); the full
+ * request page with the plan and result steps opens from each request.
  */
-export function PmClientConversationTab({ api = pmTicketApi, client, focus = null, onOpenRequestDetails, onCreateTask, tasksForProject, refreshToken }: {
+export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, client, focus = null, onOpenRequestDetails,
+  onCreateTask, tasksForProject, refreshToken }: {
   api?: typeof pmTicketApi;
+  documentsApi?: TicketDocumentsReadApi;
   client: PmClientSummary;
   focus?: PmConversationFocus | null;
   onOpenRequestDetails: (ticketId: string) => void;
@@ -52,9 +57,12 @@ export function PmClientConversationTab({ api = pmTicketApi, client, focus = nul
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [linking, setLinking] = useState<string | null>(null);
+  const [contextTicketId, setContextTicketId] = useState<string | null>(focus?.ticketId ?? null);
+  const [contextVersion, setContextVersion] = useState(0);
   const loadToken = useRef(0);
 
   useEffect(() => { if (focus?.projectId) setProjectId(focus.projectId); }, [focus?.projectId]);
+  useEffect(() => { if (focus?.ticketId) setContextTicketId(focus.ticketId); }, [focus?.ticketId]);
 
   useEffect(() => {
     setProjects(null); setProjectsError('');
@@ -123,6 +131,7 @@ export function PmClientConversationTab({ api = pmTicketApi, client, focus = nul
     try {
       const updated = await api.setConversationRequestDone(projectId, clientId, request.ticketId, done);
       setRequests(previous => previous?.map(item => item.ticketId === updated.ticketId ? updated : item) ?? previous);
+      setContextVersion(value => value + 1);
       await load(true);
     } catch (failure) { setActionError(errorText(failure, 'The request was not updated.')); }
     finally { setBusy(false); }
@@ -142,6 +151,16 @@ export function PmClientConversationTab({ api = pmTicketApi, client, focus = nul
     <p className="font-medium text-content">No project conversations yet</p>
     <p className="mt-1 text-content-muted">A conversation starts once one of this client’s requests or proposals is linked to a project and shared with them.</p>
   </div>;
+
+  // The request the context tabs describe: the one picked, else the first open one, else the newest.
+  const contextRequest = requests?.find(request => request.ticketId === contextTicketId)
+    ?? requests?.find(request => !['done', 'declined', 'cancelled'].includes(request.checklist)) ?? requests?.[0] ?? null;
+  const contextTab = (id: PmRequestContextSection, label: string): ConversationPanelTab => ({ id, label,
+    content: <PmRequestContext section={id} api={api} documentsApi={documentsApi} requests={requests} selectedId={contextRequest?.ticketId ?? null}
+      onSelect={setContextTicketId} clientName={client.displayName} refreshToken={`${String(refreshToken ?? '')}:${contextVersion}`}
+      onChanged={() => void load(true)} /> });
+  const panelTabs = [contextTab('overview', 'Overview'), contextTab('notes', 'Private notes'),
+    contextTab('details', 'Request details'), contextTab('documents', 'Documents')];
 
   const linkedIds = new Set((requests ?? []).flatMap(request => request.linkedTasks.map(task => task.issueId)));
   const linkable = projectTasks.filter(task => !linkedIds.has(task.id));
@@ -173,6 +192,9 @@ export function PmClientConversationTab({ api = pmTicketApi, client, focus = nul
           onToggleDone={(request, done) => void toggle(request, done)}
           onOpenRequest={request => onOpenRequestDetails(request.ticketId)}
           focusTicketId={focus?.ticketId ?? null}
+          selectedTicketId={contextRequest?.ticketId ?? null}
+          onSelectRequest={request => setContextTicketId(request.ticketId)}
+          panelTabs={panelTabs}
           inputId={`pm-conversation-${client.key}`}
           messageActions={item => onCreateTask && item.author === 'client' && (item.kind === 'message' || item.kind === 'request' || item.kind === 'clarification')
             ? <button type="button" onClick={() => createTask(item.request, item.kind === 'request' ? item.request?.title ?? '' : item.body.split('\n')[0] ?? '',
