@@ -13,6 +13,8 @@ import { REQUEST_TASK_LINKED_EVENT, linkSavedTaskToRequest } from './requestTask
 const REFRESH_MS = 30_000;
 const newOperationId = () => crypto.randomUUID();
 const errorText = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback;
+/** Focuses the task picker when "Link task" opens it; a stable ref so it runs once, not on every render. */
+const focusWhenShown = (element: HTMLSelectElement | null) => { element?.focus(); };
 
 /** The client account behind a client page's key (`client:<account>`), or null for an unverified inquiry group. */
 export function clientIdFromKey(key: string): string | null {
@@ -206,7 +208,7 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
     let link: ReactNode = null;
     if (tasksForProject && linking === request.ticketId) link = <label className="flex items-center gap-1.5">
       <span className="sr-only">Task to link to {request.title}</span>
-      <select autoFocus defaultValue="" onChange={event => { if (event.target.value) linkExisting(request, event.target.value); }}
+      <select ref={focusWhenShown} defaultValue="" onChange={event => { if (event.target.value) linkExisting(request, event.target.value); }}
         onBlur={() => setLinking(null)} className="h-7 max-w-[12rem] rounded-md border border-control bg-well px-1.5 text-[12px] text-content">
         <option value="" disabled>{linkable.length ? 'Choose a task…' : 'No other tasks on this project'}</option>
         {linkable.map(task => <option key={task.id} value={task.id}>{task.identifier} · {task.title}</option>)}
