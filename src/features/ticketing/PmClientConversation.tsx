@@ -50,8 +50,8 @@ function usePmProjectConversation(api: typeof pmTicketApi, projectId: string | n
       const [timeline, list] = await Promise.all([api.getProjectConversation(projectId, clientId), api.getProjectConversationRequests(projectId, clientId)]);
       if (token !== loadToken.current) return;
       setItems(timeline.items); setRequests(list.items); setError('');
-    } catch (failure) {
-      if (token === loadToken.current && !quiet) setError(errorText(failure, 'The conversation could not be loaded. Refresh to try again.'));
+    } catch (error_) {
+      if (token === loadToken.current && !quiet) setError(errorText(error_, 'The conversation could not be loaded. Refresh to try again.'));
     }
   }, [api, clientId, projectId]);
   useEffect(() => { void load(); }, [load, refreshToken]);
@@ -142,12 +142,12 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
       if (!current) return;
       setProjects(list);
       setProjectId(previous => previous && list.some(item => item.projectId === previous) ? previous : list[0]?.projectId ?? null);
-    }).catch(failure => {
+    }).catch(error_ => {
       if (!current) return;
       // An older server has no conversation routes yet.
-      setProjectsError(failure instanceof ApiRequestError && failure.status === 404
+      setProjectsError(error_ instanceof ApiRequestError && error_.status === 404
         ? 'Conversations aren’t available on the server yet. They appear once the server is updated; until then use Tickets.'
-        : errorText(failure, 'This client’s projects could not be loaded.'));
+        : errorText(error_, 'This client’s projects could not be loaded.'));
     });
     return () => { current = false; };
   }, [api, clientId, refreshToken]);
@@ -168,7 +168,7 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
 
   const run = async (work: () => Promise<unknown>, fallback: string) => {
     setBusy(true); setActionError('');
-    try { await work(); } catch (failure) { setActionError(errorText(failure, fallback)); } finally { setBusy(false); }
+    try { await work(); } catch (error_) { setActionError(errorText(error_, fallback)); } finally { setBusy(false); }
   };
 
   const toggle = (request: ConversationRequest, done: boolean) => void run(async () => {
@@ -296,7 +296,7 @@ export function PmRequestConversation({ api = pmTicketApi, projectId, clientId, 
     void send(body, about, replyKind).then(() => {
       setDraft('');
       if (about) { onReplyKindChange('reply'); onWritten(); }
-    }).catch(failure => setActionError(errorText(failure, 'The message was not sent.'))).finally(() => setBusy(false));
+    }).catch(error_ => setActionError(errorText(error_, 'The message was not sent.'))).finally(() => setBusy(false));
   };
   const createTask = onCreateTask
     ? (request: { ticketId: string; title: string }, description: string) => onCreateTask({ projectId, title: request.title.slice(0, 160), description, request })

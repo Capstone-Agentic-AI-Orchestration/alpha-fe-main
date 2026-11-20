@@ -28,11 +28,11 @@ function useClientProjectConversation(api: typeof clientTicketApi, project: Clie
       const [timeline, list] = await Promise.all([api.getProjectConversation(workspaceId, projectId), api.getProjectConversationRequests(workspaceId, projectId)]);
       if (current !== token.current) return;
       setItems(timeline.items); setRequests(list.items); setError(''); setUnavailable(false);
-    } catch (failure) {
+    } catch (error_) {
       if (current !== token.current || quiet) return;
       // An older server has no conversation routes; the request keeps its own messages then.
-      if (failure instanceof ClientTicketApiError && failure.status === 404) setUnavailable(true);
-      setError(errorText(failure, 'The conversation could not be loaded. Refresh to try again.'));
+      if (error_ instanceof ClientTicketApiError && error_.status === 404) setUnavailable(true);
+      setError(errorText(error_, 'The conversation could not be loaded. Refresh to try again.'));
     }
   }, [api, workspaceId, projectId]);
   useEffect(() => { void load(); }, [load]);
@@ -70,7 +70,7 @@ function useConversationActions(api: typeof clientTicketApi, project: ClientProj
   const run = async <T,>(work: () => Promise<T>, fallback: string): Promise<T | null> => {
     setBusy(true); setActionError('');
     try { const result = await work(); await conversation.load(true); return result; }
-    catch (failure) { setActionError(errorText(failure, fallback)); return null; }
+    catch (error_) { setActionError(errorText(error_, fallback)); return null; }
     finally { setBusy(false); }
   };
   const toggle = (request: ConversationRequest, done: boolean) => void run(async () => {

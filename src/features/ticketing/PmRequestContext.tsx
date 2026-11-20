@@ -23,7 +23,7 @@ export function usePmRequestDetail(api: typeof pmTicketApi, ticketId: string | n
     let current = true;
     if (!ticketId) { setDetail(null); return () => { current = false; }; }
     void api.get(ticketId).then(value => { if (current) setDetail(value); })
-      .catch(failure => { if (current) { setDetail(null); setError(errorText(failure, 'This request could not be loaded.')); } });
+      .catch(error_ => { if (current) { setDetail(null); setError(errorText(error_, 'This request could not be loaded.')); } });
     return () => { current = false; };
   }, [api, ticketId, version]);
   const current = detail !== null && ticketId !== null && detail.id === ticketId ? detail : null;
@@ -136,7 +136,7 @@ function Notes({ api, detail, onSaved }: Readonly<{ api: typeof pmTicketApi; det
   const ticketId = detail.id;
   const load = useCallback(async () => {
     try { setNotes((await api.getNotes(ticketId)).items); setError(''); }
-    catch (failure) { setError(errorText(failure, 'Private notes could not be loaded.')); }
+    catch (error_) { setError(errorText(error_, 'Private notes could not be loaded.')); }
   }, [api, ticketId]);
   useEffect(() => { setNotes(null); void load(); }, [load]);
 
@@ -150,7 +150,7 @@ function Notes({ api, detail, onSaved }: Readonly<{ api: typeof pmTicketApi; det
       setDraft('');
       await load();
       onSaved();
-    } catch (failure) { setError(errorText(failure, 'The note was not saved. Try again.')); }
+    } catch (error_) { setError(errorText(error_, 'The note was not saved. Try again.')); }
     finally { setSaving(false); }
   };
 

@@ -285,12 +285,15 @@ export function ConversationRequestList({ role, requests, busy, writesAvailable,
       const titleClass = `text-left text-[13px] font-medium ${done ? 'text-content-secondary line-through decoration-content-muted' : 'text-content'}`;
       return <li key={request.ticketId} className={`py-3 ${highlighted ? 'rounded-md bg-selected/40 px-2' : ''}`}>
         <div className="flex items-start gap-2.5">
-          <button type="button" role="checkbox" aria-checked={done} disabled={!toggleable || busy}
-            aria-label={`${done ? 'Reopen' : 'Mark done'}: ${request.title}`} title={toggleTitle(request, done)}
-            onClick={() => onToggleDone(request, !done)}
-            className="mt-0.5 shrink-0 text-content-muted hover:text-content disabled:cursor-default disabled:hover:text-content-muted">
-            {done ? <CheckCircle2 size={17} className="text-status-success" aria-hidden="true" /> : <Circle size={17} aria-hidden="true" />}
-          </button>
+          {/* A real checkbox, drawn as a circle that fills in when the request is done. */}
+          <label title={toggleTitle(request, done)}
+            className={`relative mt-0.5 shrink-0 text-content-muted ${!toggleable || busy ? 'cursor-default' : 'cursor-pointer hover:text-content'}`}>
+            <input type="checkbox" checked={done} disabled={!toggleable || busy} onChange={() => onToggleDone(request, !done)}
+              aria-label={`${done ? 'Reopen' : 'Mark done'}: ${request.title}`} className="peer sr-only" />
+            <span className="block rounded-full peer-focus-visible:ring-2 peer-focus-visible:ring-focus">
+              {done ? <CheckCircle2 size={17} className="text-status-success" aria-hidden="true" /> : <Circle size={17} aria-hidden="true" />}
+            </span>
+          </label>
           <div className="min-w-0 flex-1">
             <div className="flex items-start justify-between gap-2">
               {onSelectRequest
