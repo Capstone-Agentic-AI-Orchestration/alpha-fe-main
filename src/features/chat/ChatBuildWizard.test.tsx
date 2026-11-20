@@ -61,12 +61,10 @@ describe('the build panel above the message box', () => {
     expect(html).not.toContain('aria-label="Build steps"');
   });
 
-  it('shows review status without combined approval or navigation choices', () => {
-    const html = render({ build: build('awaiting_approval') });
-    expect(html).toContain('Build review tab');
-    expect(html).not.toContain('Approve and open the pull request');
-    expect(html).not.toContain('Open the full review');
-    expect(html).not.toContain('Ask for changes');
+  // A finished build's next step is a card under its message, not a panel over the message box.
+  it('stays out of the way once the build is ready for review or publishing', () => {
+    expect(render({ build: build('awaiting_approval') })).toBe('');
+    expect(render({ build: build('publishing') })).toBe('');
   });
 
   it('offers milestone planning retry without treating it as final validation', () => {

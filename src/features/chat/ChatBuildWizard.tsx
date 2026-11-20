@@ -227,6 +227,9 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   const needsYou = failed || attention;
   const [collapsed, setCollapsed] = useState(!needsYou);
   useEffect(() => { if (needsYou) setCollapsed(false); }, [needsYou, build?.status]);
+  // A finished build's next step is a card under its message in the conversation, with
+  // its own buttons; repeating it over the message box only covered the chat.
+  if (build && (build.status === 'awaiting_approval' || build.status === 'publishing')) return null;
 
   let title: string;
   let subtitle: string;
