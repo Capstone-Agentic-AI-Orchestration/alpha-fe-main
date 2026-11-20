@@ -19,9 +19,11 @@ describe('client ticket detail', () => {
     />);
     expect(html).toContain('Approve the plan');
     expect(html).toContain('Work starts once it is approved.');
-    // The decision sits above the conversation, not behind a side tab.
+    // The decision leads the request's side panel, right under the request, not behind a tab.
     expect(html.indexOf('Approve plan')).toBeGreaterThan(-1);
-    expect(html.indexOf('client-decision-slot')).toBeLessThan(html.indexOf('Message your project manager…'));
+    const panel = html.slice(html.indexOf('aria-label="About this request"'));
+    expect(panel.indexOf('client-decision-slot')).toBeGreaterThan(panel.indexOf('id="client-request-title"'));
+    expect(panel.indexOf('client-decision-slot')).toBeLessThan(panel.indexOf('Request progress'));
     expect(html).toContain('Ask for changes');
   });
 

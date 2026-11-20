@@ -121,14 +121,31 @@ function eventLine(item: ConversationItem, role: 'client' | 'pm'): string {
   return item.kind === 'request_done' ? who + ' marked ' + title + ' done' : who + ' reopened ' + title;
 }
 
-function messageTag(item: ConversationItem): string | undefined {
-  if (item.kind === 'clarification') return 'Project proposal';
-  return item.request ? 'Re: ' + item.request.title : undefined;
+/** The chat entry id of a request's card, which replies about the request point back to. */
+const REQUEST_CARD_PREFIX = 'request:';
+export const requestCardId = (ticketId: string) => REQUEST_CARD_PREFIX + ticketId;
+/** The ticket id a request card's chat id points at, or null for any other entry. */
+export const requestIdOfCard = (id: string): string | null =>
+  id.startsWith(REQUEST_CARD_PREFIX) && id.length > REQUEST_CARD_PREFIX.length ? id.slice(REQUEST_CARD_PREFIX.length) : null;
+const EXCERPT_LENGTH = 140;
+
+function excerpt(text: string): string | undefined {
+  const line = text.split(/\s+/).filter(Boolean).join(' ');
+  if (!line) return undefined;
+  return line.length > EXCERPT_LENGTH ? line.slice(0, EXCERPT_LENGTH - 1).trimEnd() + '…' : line;
+}
+
+/** A reply about a request quotes that request, with what was asked, the way a messaging app quotes a message. */
+function replyQuote(item: ConversationItem, asked: ReadonlyMap<string, string>): TicketChatMessage['replyTo'] {
+  if (item.kind === 'clarification' || !item.request) return undefined;
+  const { ticketId, title } = item.request;
+  return { id: requestCardId(ticketId), title, excerpt: excerpt(asked.get(ticketId) ?? '') };
 }
 
 /** The conversation as chat entries; actions are added per entry by the caller. */
 export function conversationChatMessages(items: readonly ConversationItem[], role: 'client' | 'pm',
   actionsFor?: (item: ConversationItem) => TicketChatMessage['actions']): TicketChatMessage[] {
+  const asked = new Map(items.flatMap(item => item.kind === 'request' && item.request ? [[item.request.ticketId, item.body] as const] : []));
   return items.filter(item => role === 'pm' || item.kind !== 'task_linked').map(item => {
     const actions = actionsFor?.(item);
     if (item.kind === 'task_linked' || item.kind === 'request_done' || item.kind === 'request_reopened') {
@@ -139,6 +156,6 @@ export function conversationChatMessages(items: readonly ConversationItem[], rol
         body: item.body, createdAt: item.createdAt, actions };
     }
     return { id: item.id, author: item.kind === 'note' ? 'note' : item.author, body: item.body, createdAt: item.createdAt,
-      tag: messageTag(item), actions };
+      tag: item.kind === 'clarification' ? 'Project proposal' : undefined, replyTo: replyQuote(item, asked), actions };
   });
 }

@@ -34,7 +34,7 @@ export async function recover(submit:()=>Promise<QaReceipt>,lookup:()=>Promise<Q
 export function qaError(error:unknown):string {
   const code=isTransportError(error)?error.code:null;
   const messages:Record<string,string>={
-    uat_build_changed:'UAT has changed. Your project manager must review the new build and share a new round.',
+    uat_build_changed:'That is no longer the verified UAT build. The latest build is loaded below: test it, then share it with the client.',
     uat_pm_review_required:'Review the UAT preview and mark it ready before handing it to the client.',
     uat_version_conflict:'This review changed in another session. Reload it before saving.',
     uat_incomplete:'Test every required check before submitting.',

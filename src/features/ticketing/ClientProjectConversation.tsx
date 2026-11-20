@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useRef, useState, type ComponentProps, type ReactNode } from 'react';
-import { ArrowLeft, FolderKanban, ListChecks, Plus } from 'lucide-react';
-import { Badge } from '@/shared/components/ui/badge';
-import { Button } from '@/shared/components/ui/button';
-import { ClientTicketApiError, clientTicketApi, type ClientProject } from './clientApi';
-import { ClientTicketDetail, RailCard } from './ClientTicketDetail';
-import {
-  ConversationRequestList, ProjectConversationChat, ProjectConversationView, openRequestCount, useConversationJump, type ConversationAbout,
-} from './ProjectConversationView';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowLeft, ListChecks, MessagesSquare, Monitor, Plus } from 'lucide-react';
+import { LoadingRows } from '@/shared/components/ui/skeleton';
+import { ClientTicketApiError, clientTicketApi, type ClientProject, type ClientTicketDetail as ClientTicketRecord } from './clientApi';
+import { ClientRequestRail, CollapsibleRailCard, RailCard, type ClientRequestRailProps } from './ClientTicketDetail';
+import { ProjectPreviewFrame } from './ClientProjectPreview';
+import { ConversationRequestList, ProjectConversationChat, openRequestCount, useConversationJump, type ConversationAbout } from './ProjectConversationView';
 import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
 
 const REFRESH_MS = 30_000;
+const TERMINAL = new Set(['closed', 'declined', 'cancelled']);
 const newOperationId = () => crypto.randomUUID();
 const errorText = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback;
-const CONVERSATION_DESCRIPTION = 'Everything about this project with your project manager: questions, your requests and their progress.';
+const CONVERSATION_DESCRIPTION = 'One conversation with your project manager: questions, your requests and their progress.';
+const PREVIEW_DESCRIPTION = 'The latest version your project manager shared for you to try.';
+
+export type ClientProjectView = 'conversation' | 'preview';
 
 /** The project's one conversation and its requests, refreshed every 30 seconds while the page is visible. */
 function useClientProjectConversation(api: typeof clientTicketApi, project: ClientProject) {
@@ -45,26 +47,7 @@ function useClientProjectConversation(api: typeof clientTicketApi, project: Clie
   return { items, requests, setRequests, error, load };
 }
 
-/** Rail card: the project and the requests made in its conversation, as a checklist. */
-function ConversationRequestsCard({ project, requests, selectedTicketId, busy, writesAvailable, onSelect, onToggleDone, onCreateRequest }: Readonly<{
-  project: ClientProject;
-  requests: ConversationRequest[] | null;
-  selectedTicketId: string | null;
-  busy: boolean;
-  writesAvailable: boolean;
-  onSelect: (request: ConversationRequest) => void;
-  onToggleDone: (request: ConversationRequest, done: boolean) => void;
-  onCreateRequest?: (input: { title: string; description: string }) => Promise<boolean>;
-}>) {
-  const open = openRequestCount(requests);
-  return <RailCard icon={<ListChecks size={16} />} title={requests ? `Requests · ${open} open` : 'Requests'}>
-    <p className="cx-request-note"><FolderKanban size={12} aria-hidden="true" className="mr-1 inline" />{project.name}. Pick a request to see where you made it and how it is going.</p>
-    <ConversationRequestList role="client" requests={requests} busy={busy} writesAvailable={writesAvailable} onToggleDone={onToggleDone}
-      onCreateRequest={onCreateRequest} selectedTicketId={selectedTicketId} onSelectRequest={onSelect} />
-  </RailCard>;
-}
-
-/** Everything the client does in the conversation: messages, ticks and new requests. */
+/** What the client does in the conversation itself: send messages and tick requests done. */
 function useConversationActions(api: typeof clientTicketApi, project: ClientProject, conversation: ReturnType<typeof useClientProjectConversation>) {
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState('');
@@ -79,132 +62,121 @@ function useConversationActions(api: typeof clientTicketApi, project: ClientProj
     const updated = await api.setConversationRequestDone(workspaceId, projectId, request.ticketId, done);
     conversation.setRequests(withUpdatedRequest(updated));
   }, 'That request could not be updated. Try again.');
-  // A request made here is an ordinary request on this project, so it keeps the usual plan and result steps.
-  const createRequest = (input: { title: string; description: string }) => run(async () => {
-    const context = await api.getIntakeContext(workspaceId);
-    if (!context.canCreate) throw new Error('New requests are not available for this project right now.');
-    return api.createTicket({ intakeContextId: context.intakeContextId, schemaVersion: 1, operationId: newOperationId(),
-      title: input.title, description: input.description, projectPreference: { kind: 'shared_project', optionId: project.intakeOptionId } });
-  }, 'Your request was not sent. Try again.');
-  const sendToProject = (body: string) => run(() => api.sendProjectFeedbackMessage(workspaceId, projectId, { schemaVersion: 1, operationId: newOperationId(), body }),
-    'Your message was not sent. Try again.');
-  /** Makes a request, then hands its ID on so it can be opened; true when it was made. */
-  const createAndOpen = async (input: { title: string; description: string }, onCreated?: (ticketId: string) => void) => {
-    const receipt = await createRequest(input);
-    if (receipt) onCreated?.(receipt.ticketId);
-    return Boolean(receipt);
-  };
-  return { busy, actionError, run, toggle, createAndOpen, sendToProject };
+  const sendToProject = (body: string) => api.sendProjectFeedbackMessage(workspaceId, projectId, { schemaVersion: 1, operationId: newOperationId(), body });
+  return { busy, actionError, run, toggle, sendToProject };
 }
 
 /**
- * The project's conversation before any request is picked (or when there is
- * none yet): the request page's layout, with the project and its requests on
- * the left and the one conversation on the right.
+ * Who a message goes to: the picked request, unless the client chose to write to the whole
+ * project instead. A finished request takes no replies.
  */
-export function ClientProjectConversation({ api = clientTicketApi, project, clientName, readOnly = false, canCreateRequests = true,
-  onBack, focusTicketId = null, showRequestForm = false, requestForm, onStartRequest, onOpenRequestDetails }: Readonly<{
+function useReplyTarget(ticket: ClientTicketRecord | null, selectedTicketId: string | null, readOnly: boolean) {
+  const [cleared, setCleared] = useState(false);
+  useEffect(() => { setCleared(false); }, [selectedTicketId]);
+  const selected: ConversationAbout | null = ticket && ticket.id === selectedTicketId && !readOnly && !TERMINAL.has(ticket.status)
+    ? { ticketId: ticket.id, title: ticket.title } : null;
+  return {
+    about: cleared ? null : selected,
+    restoreAbout: cleared ? selected : null,
+    clear: () => setCleared(true),
+    restore: () => setCleared(false),
+  };
+}
+
+export interface ClientProjectConversationProps {
   api?: typeof clientTicketApi;
   project: ClientProject;
   clientName: string;
   readOnly?: boolean;
-  canCreateRequests?: boolean;
   onBack: () => void;
-  /** Request from another project surface that should be focused here. */
-  focusTicketId?: string | null;
-  showRequestForm?: boolean;
+  /** The request open in the side panel; picking another one keeps this page and its conversation in place. */
+  selectedTicketId: string | null;
+  onSelectRequest: (ticketId: string) => void;
+  /** The conversation, or the project's shared preview when there is one. */
+  view: ClientProjectView;
+  onViewChange: (view: ClientProjectView) => void;
+  /** The new request form, shown at the top of the side panel while the client writes one. */
   requestForm?: ReactNode;
-  onStartRequest?: () => void;
-  onOpenRequestDetails?: (request: ConversationRequest) => void;
-}>) {
+  /** The picked request's details, loaded by the portal. */
+  request: { ticket: ClientTicketRecord | null; loading: boolean; error: string };
+  /** What the picked request's panel needs to act on it. */
+  rail: Omit<ClientRequestRailProps, 'ticket' | 'lead' | 'revealFiles'>;
+  /** Sends a reply about the picked request. */
+  onReplyAbout: (body: string) => Promise<void>;
+}
+
+/**
+ * A project's one page: the conversation (or its shared preview) on the left, and on the right the
+ * project's requests with the picked request's progress, plan or result, files and details.
+ */
+export function ClientProjectConversation(props: Readonly<ClientProjectConversationProps>) {
+  const { api = clientTicketApi, project, clientName, readOnly = false, selectedTicketId, onSelectRequest, view, request } = props;
   const conversation = useClientProjectConversation(api, project);
   const actions = useConversationActions(api, project, conversation);
   const [draft, setDraft] = useState('');
-  const [selectedTicketId, setSelectedTicketId] = useState<string | null>(focusTicketId);
-  useEffect(() => setSelectedTicketId(focusTicketId), [focusTicketId]);
-  return <section className="cx-request flex min-h-0 flex-col" aria-labelledby="client-conversation-project-title">
-    <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-divider px-5 py-3 sm:px-6">
-      <div className="flex min-w-0 items-start gap-3">
-        <Button type="button" variant="ghost" size="sm" onClick={onBack} disabled={actions.busy} className="mt-0.5 shrink-0 px-2">
-          <ArrowLeft size={15} aria-hidden="true" />All projects
-        </Button>
-        <div className="min-w-0">
-          <h1 id="client-conversation-project-title" className="truncate text-[15px] font-semibold text-content">{project.name}</h1>
-          <p className="mt-0.5 text-[12px] text-content-muted">One shared conversation for this project</p>
+  const { jump, toRequest } = useConversationJump();
+  const target = useReplyTarget(request.ticket, selectedTicketId, readOnly);
+  const loaded = conversation.items !== null;
+  useEffect(() => { if (loaded && selectedTicketId) toRequest(selectedTicketId); }, [loaded, selectedTicketId, toRequest]);
+  const busy = actions.busy || props.rail.busy;
+  const send = (body: string) => {
+    const work: () => Promise<unknown> = target.about ? () => props.onReplyAbout(body) : () => actions.sendToProject(body);
+    void actions.run(work, 'Your message was not sent. Try again.').then(result => { if (result !== null) setDraft(''); });
+  };
+  const pick = (ticketId: string) => { if (ticketId === selectedTicketId) toRequest(ticketId); else onSelectRequest(ticketId); };
+  const showPreview = view === 'preview' && Boolean(project.preview);
+  const chat = <ProjectConversationChat role="client"
+    items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
+    clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'} draft={draft} onDraftChange={setDraft}
+    busy={busy} writesAvailable={!readOnly} onSend={send} jump={jump} onOpenQuotedRequest={pick}
+    about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore}
+    inputId={`client-conversation-${project.projectId}`} />;
+  return <section className="cx-request" aria-labelledby="client-conversation-project-title">
+    <div className="cx-reqsplit">
+      <section className="cx-reqchat" aria-labelledby="client-conversation-project-title">
+        <ConversationHead project={project} view={showPreview ? 'preview' : 'conversation'} onViewChange={props.onViewChange} onBack={props.onBack} busy={busy} />
+        {showPreview ? <ProjectPreviewFrame project={project} /> : chat}
+      </section>
+      {/* While the client tries the preview, the conversation sits beside it, so feedback goes straight to the project manager. */}
+      {showPreview ? <aside className="cx-reqrail is-feedback" aria-labelledby="client-preview-feedback-title">
+        <header className="cx-feedback-head"><h2 id="client-preview-feedback-title">Feedback</h2>
+          <p>Tell your project manager what you notice. It goes into this project’s conversation.</p></header>
+        {chat}
+      </aside> : <aside className="cx-reqrail" aria-label={`Requests and details for ${project.name}`}>
+        <div className="cx-reqrail-top">
+          {props.requestForm && <RailCard icon={<Plus size={16} />} title="New request">{props.requestForm}</RailCard>}
+          <CollapsibleRailCard id="requests" icon={<ListChecks size={16} />}
+            title={conversation.requests ? `Requests · ${openRequestCount(conversation.requests)} open` : 'Requests'}>
+            <ConversationRequestList role="client" requests={conversation.requests} busy={busy} writesAvailable={!readOnly}
+              onToggleDone={actions.toggle} selectedTicketId={selectedTicketId} onSelectRequest={item => pick(item.ticketId)} />
+          </CollapsibleRailCard>
         </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        {!readOnly && canCreateRequests && <Button type="button" size="sm" onClick={onStartRequest} disabled={actions.busy}>
-          <Plus size={14} aria-hidden="true" />New request
-        </Button>}
-        <Badge variant="secondary" className="hidden gap-1.5 sm:inline-flex">
-          <FolderKanban size={12} aria-hidden="true" />Project conversation
-        </Badge>
-      </div>
-    </header>
-    <div className="flex min-h-0 flex-1">
-      <ProjectConversationView role="client" projectName={project.name}
-        items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
-        clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'}
-        draft={draft} onDraftChange={setDraft} busy={actions.busy} writesAvailable={!readOnly}
-        onSend={body => void actions.sendToProject(body).then(result => { if (result !== null) setDraft(''); })}
-        onToggleDone={actions.toggle} focusTicketId={focusTicketId} selectedTicketId={selectedTicketId}
-        requestForm={requestForm} initialPanelId={showRequestForm ? 'new-request' : 'requests'}
-        onOpenRequest={onOpenRequestDetails}
-        onSelectRequest={request => setSelectedTicketId(request.ticketId)}
-        inputId={`client-conversation-${project.projectId}`} />
+        <PickedRequest selectedTicketId={selectedTicketId} request={request} rail={props.rail} />
+      </aside>}
     </div>
   </section>;
 }
 
-type RequestPageProps = ComponentProps<typeof ClientTicketDetail>;
+/** The picked request's panel, a loading state while it arrives, or a hint to pick one. */
+function PickedRequest({ selectedTicketId, request, rail }: Readonly<Pick<ClientProjectConversationProps, 'selectedTicketId' | 'request' | 'rail'>>) {
+  if (request.ticket && request.ticket.id === selectedTicketId) return <ClientRequestRail {...rail} ticket={request.ticket} />;
+  if (!selectedTicketId) return <p className="cx-request-note cx-reqrail-hint">Pick a request to see its progress, plan or result, files and details.</p>;
+  if (request.error) return <p role="alert" className="cx-error">{request.error}</p>;
+  return <section className="cx-reqcard" aria-busy="true"><LoadingRows label="Loading request" layout="detail" rows={3} /></section>;
+}
 
-/**
- * A request on a shared project, in the request page's layout: the project's
- * requests and this request's progress on the left, and on the right the
- * project's one conversation, scrolled to where this request was made. Replies
- * go to this request unless the client writes to the whole project.
- */
-export function ClientConversationRequestPage({ project, clientName, readOnly = false, canCreateRequests = true, onSelectRequest,
-  onRequestCreated, ...detail }: Readonly<RequestPageProps & {
-  project: ClientProject;
-  clientName: string;
-  readOnly?: boolean;
-  canCreateRequests?: boolean;
-  onSelectRequest: (request: ConversationRequest) => void;
-  onRequestCreated?: (ticketId: string) => void;
+function ConversationHead({ project, view, onViewChange, onBack, busy }: Readonly<{
+  project: ClientProject; view: ClientProjectView; onViewChange: (view: ClientProjectView) => void; onBack: () => void; busy: boolean;
 }>) {
-  const api = detail.api ?? clientTicketApi;
-  const conversation = useClientProjectConversation(api, project);
-  const actions = useConversationActions(api, project, conversation);
-  const [localDraft, setLocalDraft] = useState('');
-  const draft = detail.replyDraft ?? localDraft;
-  const setDraft = (value: string) => { setLocalDraft(value); detail.onReplyDraftChange?.(value); };
-  const { jump, toRequest } = useConversationJump();
-  const ticketId = detail.ticket.id;
-  const [cleared, setCleared] = useState(false);
-  const loaded = conversation.items !== null;
-  useEffect(() => { if (loaded) toRequest(ticketId); }, [loaded, ticketId, toRequest]);
-
-  const selected: ConversationAbout = { ticketId, title: detail.ticket.title };
-  const canReply = !readOnly && !['closed', 'declined', 'cancelled'].includes(detail.ticket.status);
-  const about = canReply && !cleared ? selected : null;
-  const send = (body: string) => {
-    const work: () => Promise<unknown> = about ? () => detail.onReply(body) : () => api.sendProjectFeedbackMessage(project.workspaceId, project.projectId,
-      { schemaVersion: 1, operationId: newOperationId(), body });
-    void actions.run(work, 'Your message was not sent. Try again.').then(result => { if (result !== null) setDraft(''); });
-  };
-  const create = (input: { title: string; description: string }) => actions.createAndOpen(input, onRequestCreated);
-
-  return <ClientTicketDetail {...detail}
-    railLead={<ConversationRequestsCard project={project} requests={conversation.requests} selectedTicketId={ticketId} busy={actions.busy || detail.busy}
-      writesAvailable={!readOnly} onToggleDone={actions.toggle} onCreateRequest={readOnly || !canCreateRequests ? undefined : create}
-      onSelect={request => { if (request.ticketId === ticketId) toRequest(ticketId); else onSelectRequest(request); }} />}
-    conversation={{ title: 'Project conversation', description: CONVERSATION_DESCRIPTION, body: <ProjectConversationChat role="client"
-      items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
-      clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'} draft={draft} onDraftChange={setDraft}
-      busy={actions.busy || detail.busy} writesAvailable={!readOnly} onSend={send} jump={jump}
-      about={about} onClearAbout={() => setCleared(true)}
-      restoreAbout={canReply && cleared ? selected : null} onRestoreAbout={() => setCleared(false)}
-      inputId="client-ticket-reply" /> }} />;
+  return <>
+    <button type="button" className="cx-back" onClick={onBack} disabled={busy}><ArrowLeft size={15} aria-hidden="true" />All projects</button>
+    <header className="cx-reqchat-head">
+      <span className="cx-reqchat-icon" aria-hidden="true">{view === 'preview' ? <Monitor size={22} /> : <MessagesSquare size={22} />}</span>
+      <div><h1 id="client-conversation-project-title">{project.name}</h1><p>{view === 'preview' ? PREVIEW_DESCRIPTION : CONVERSATION_DESCRIPTION}</p></div>
+      {project.preview && <div role="tablist" aria-label="Project view" className="cx-view-switch">
+        {(['conversation', 'preview'] as const).map(id => <button key={id} type="button" role="tab" aria-selected={view === id}
+          className={view === id ? 'is-current' : undefined} onClick={() => onViewChange(id)}>{id === 'preview' ? 'Preview' : 'Conversation'}</button>)}
+      </div>}
+    </header>
+  </>;
 }

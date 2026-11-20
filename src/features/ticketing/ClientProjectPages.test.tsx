@@ -21,7 +21,7 @@ describe('client overview loading', () => {
     expect(ready).not.toContain('Loading recent request updates');
   });
 
-  it('leads with what needs the client, then each project with its open requests on the five steps', () => {
+  it('leads with what needs the client, then each project as a fixed-size cover with its counts, not its request list', () => {
     const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
     const base = { reference: 'REF-1', createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z', closedAt: null,
       readOnly: false, writesAvailable: true, workspaceId: 'w1', projectId: 'p1', projectName: 'Shop', projectLinkStatus: 'linked' as const,
@@ -38,8 +38,13 @@ describe('client overview loading', () => {
     expect(html).toContain('Review plan');
     expect(html).not.toContain('all caught up');
     expect(html).toContain('2 open requests');
-    expect(html).toContain('Step 3 of 5');
+    // The waiting request shows its step on its action card; the project cover only counts requests.
     expect(html).toContain('Step 2 of 5');
+    expect(html).not.toContain('Step 3 of 5');
+    expect(html).not.toContain('more in this project');
+    const cover = html.slice(html.indexOf('cx-cover'), html.indexOf('client-recent-title'));
+    expect(cover).toContain('aria-label="Requests in Shop"');
+    expect(cover).not.toContain('Add a gift message field');
     expect(html).toContain('Propose a project');
     expect(html).not.toContain('REF-1');
   });

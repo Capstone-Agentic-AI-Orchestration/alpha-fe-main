@@ -24,7 +24,10 @@ describe('QA uncertain-operation recovery',()=>{
     await expect(recover(()=>Promise.reject(new ClientTicketApiError(409,'Changed','uat_version_conflict')),lookup)).rejects.toMatchObject({status:409});
     expect(lookup).not.toHaveBeenCalled();
   });
-  it('explains stale UAT builds without claiming a client-approved delivery',()=>{
-    expect(qaError(new ClientTicketApiError(409,'Changed','uat_build_changed'))).toContain('project manager must review the new build');
+  it('tells the PM a refused share was not the verified build, without claiming a client-approved delivery',()=>{
+    const message=qaError(new ClientTicketApiError(409,'Changed','uat_build_changed'));
+    expect(message).toContain('no longer the verified UAT build');
+    expect(message).toContain('test it, then share it');
+    expect(message).not.toMatch(/approved|accepted/i);
   });
 });
