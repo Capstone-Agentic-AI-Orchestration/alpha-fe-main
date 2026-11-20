@@ -43,9 +43,9 @@ function projectNote(detail: PmTicketDetail): string {
 }
 
 /** Which request the context tabs describe. */
-function RequestPicker({ requests, selectedId, onSelect, id }: {
+function RequestPicker({ requests, selectedId, onSelect, id }: Readonly<{
   requests: readonly ConversationRequest[]; selectedId: string | null; onSelect: (ticketId: string) => void; id: string;
-}) {
+}>) {
   if (requests.length < 2) return null;
   return <div className="mb-4 flex items-center gap-2 text-[12px]">
     <label htmlFor={id} className="shrink-0 text-content-muted">Request</label>
@@ -56,7 +56,7 @@ function RequestPicker({ requests, selectedId, onSelect, id }: {
   </div>;
 }
 
-function Overview({ detail, clientName }: { detail: PmTicketDetail; clientName: string }) {
+function Overview({ detail, clientName }: Readonly<{ detail: PmTicketDetail; clientName: string }>) {
   const contact = detail.internal.request?.contact ?? null;
   const name = contact?.fullName ?? clientName;
   return <div>
@@ -98,7 +98,7 @@ function Overview({ detail, clientName }: { detail: PmTicketDetail; clientName: 
   </div>;
 }
 
-function Details({ detail, clientName }: { detail: PmTicketDetail; clientName: string }) {
+function Details({ detail, clientName }: Readonly<{ detail: PmTicketDetail; clientName: string }>) {
   const contact = detail.internal.request?.contact ?? null;
   return <div className="space-y-6">
     <section>
@@ -127,7 +127,7 @@ function Details({ detail, clientName }: { detail: PmTicketDetail; clientName: s
   </div>;
 }
 
-function Notes({ api, detail, onSaved }: { api: typeof pmTicketApi; detail: PmTicketDetail; onSaved: () => void }) {
+function Notes({ api, detail, onSaved }: Readonly<{ api: typeof pmTicketApi; detail: PmTicketDetail; onSaved: () => void }>) {
   const [notes, setNotes] = useState<PmTicketNote[] | null>(null);
   const [error, setError] = useState('');
   const [draft, setDraft] = useState('');
@@ -181,7 +181,7 @@ function Notes({ api, detail, onSaved }: { api: typeof pmTicketApi; detail: PmTi
  * One tab of the request context beside the conversation: the request picker,
  * then that request's overview, private notes, details or documents.
  */
-export function PmRequestContext({ section, api = pmTicketApi, documentsApi, requests, selectedId, onSelect, clientName, refreshToken, onChanged }: {
+export function PmRequestContext({ section, api = pmTicketApi, documentsApi, requests, selectedId, onSelect, clientName, refreshToken = '', onChanged }: Readonly<{
   section: PmRequestContextSection;
   api?: typeof pmTicketApi;
   documentsApi: TicketDocumentsReadApi;
@@ -189,12 +189,12 @@ export function PmRequestContext({ section, api = pmTicketApi, documentsApi, req
   selectedId: string | null;
   onSelect: (ticketId: string) => void;
   clientName: string;
-  refreshToken?: unknown;
+  refreshToken?: string;
   /** After a private note is saved, so the conversation shows it too. */
   onChanged?: () => void;
-}) {
+}>) {
   const [version, setVersion] = useState(0);
-  const { detail, error } = usePmRequestDetail(api, selectedId, `${version}:${String(refreshToken ?? '')}`);
+  const { detail, error } = usePmRequestDetail(api, selectedId, `${version}:${refreshToken}`);
   let body: ReactNode;
   if (requests !== null && requests.length === 0) body = <p className="text-[12.5px] text-content-muted">No requests from this client on this project yet.</p>;
   else if (error) body = <p role="alert" className="text-[12.5px] text-status-danger">{error}</p>;
@@ -203,7 +203,7 @@ export function PmRequestContext({ section, api = pmTicketApi, documentsApi, req
   else if (section === 'details') body = <Details detail={detail} clientName={clientName} />;
   else if (section === 'notes') body = <Notes api={api} detail={detail} onSaved={() => { setVersion(value => value + 1); onChanged?.(); }} />;
   else body = <TicketDocumentsPanel api={documentsApi} ticketId={detail.id} heading="Shared files" canUpload={false} showRefresh={false}
-    refreshToken={String(refreshToken ?? '')} emptyMessage="No client files have been uploaded to this request yet."
+    refreshToken={refreshToken} emptyMessage="No client files have been uploaded to this request yet."
     readOnlyMessage="Only the client can upload files. You can download the files they share here." />;
   return <div className="pm-request-context">
     <RequestPicker requests={requests ?? []} selectedId={selectedId} onSelect={onSelect} id={`pm-request-context-${section}`} />

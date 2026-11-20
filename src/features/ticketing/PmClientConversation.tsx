@@ -157,7 +157,7 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
     ?? requests?.find(request => !['done', 'declined', 'cancelled'].includes(request.checklist)) ?? requests?.[0] ?? null;
   const contextTab = (id: PmRequestContextSection, label: string): ConversationPanelTab => ({ id, label,
     content: <PmRequestContext section={id} api={api} documentsApi={documentsApi} requests={requests} selectedId={contextRequest?.ticketId ?? null}
-      onSelect={setContextTicketId} clientName={client.displayName} refreshToken={`${String(refreshToken ?? '')}:${contextVersion}`}
+      onSelect={setContextTicketId} clientName={client.displayName} refreshToken={`${refreshToken ?? 0}:${contextVersion}`}
       onChanged={() => void load(true)} /> });
   const panelTabs = [contextTab('overview', 'Overview'), contextTab('notes', 'Private notes'),
     contextTab('details', 'Request details'), contextTab('documents', 'Documents')];
