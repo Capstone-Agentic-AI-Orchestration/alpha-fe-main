@@ -99,7 +99,8 @@ export const PlanBody: React.FC<{ orchestration: ProjectBuildOrchestration }> = 
   </>;
 };
 
-export const ReviewBody: React.FC<{ projectId: string; orchestration: ProjectBuildOrchestration; expandedDiff?: boolean; onDiffReady?: () => void }> = ({ projectId, orchestration, expandedDiff, onDiffReady }) => {
+/** `readOnly` shows the code changes in full with nothing to click, for the chat's side panel. */
+export const ReviewBody: React.FC<{ projectId: string; orchestration: ProjectBuildOrchestration; expandedDiff?: boolean; readOnly?: boolean; onDiffReady?: () => void }> = ({ projectId, orchestration, expandedDiff, readOnly, onDiffReady }) => {
   const checks = finalChecks(orchestration);
   const openFindings = orchestration.findings.filter(finding => finding.status === 'open');
   const reportFor = (taskId: string) => {
@@ -140,7 +141,7 @@ export const ReviewBody: React.FC<{ projectId: string; orchestration: ProjectBui
       <ul className="mt-1 list-disc space-y-0.5 pl-5 text-status-warning">{openFindings.map(finding => <li key={finding.id}>{finding.title ?? finding.instruction ?? finding.severity}{finding.path ? ' · ' + finding.path : ''}</li>)}</ul>
     </div>}
     <ReviewSection title="Code changes">
-      <ReviewDiff projectId={projectId} runId={orchestration.run.id} branchName={orchestration.run.branchName} expanded={expandedDiff} onReady={onDiffReady} />
+      <ReviewDiff projectId={projectId} runId={orchestration.run.id} branchName={orchestration.run.branchName} expanded={expandedDiff} readOnly={readOnly} onReady={onDiffReady} />
     </ReviewSection>
   </>;
 };
