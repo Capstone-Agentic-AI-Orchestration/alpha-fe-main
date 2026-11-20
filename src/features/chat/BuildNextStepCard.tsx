@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, CheckCircle2, ExternalLink, Loader2, MessageSquare, RotateCw, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, GitMerge, Loader2, MessageSquare, RotateCw, ShieldCheck } from 'lucide-react';
 
 import type { ProjectBuildOrchestration } from '@/shared/types';
 import { buildChangesCode, buildPublications, buildReviewSummary, buildReviewSummaryText } from './ChatBuildBodies';
@@ -13,6 +13,8 @@ export interface BuildNextStepCardProps {
   onReview: () => void;
   /** Put a change request in the message box. */
   onAskChanges: () => void;
+  /** Ask the Orchestrator, in the chat, to merge the pull request into dev ("merge it"). */
+  onMerge?: () => void;
   /** Refresh the build after it was approved. */
   onApproved?: () => void | Promise<void>;
 }
@@ -25,7 +27,7 @@ const secondary = 'inline-flex min-h-8 items-center gap-1.5 rounded-lg border bo
  * so it scrolls with the conversation instead of sitting over the message box.
  * Shown once the work is finished; a running build has its activity row above.
  */
-export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId, orchestration, canApprove, onReview, onAskChanges, onApproved }) => {
+export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId, orchestration, canApprove, onReview, onAskChanges, onApproved, onMerge }) => {
   const { approve, busy, error, blocker } = useBuildApproval(projectId, orchestration, canApprove, onApproved);
   const status = orchestration.run.status;
   const publications = buildPublications(orchestration);
@@ -72,6 +74,15 @@ export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId,
   }
 
   if (status !== 'completed') return null;
+  return <CompletedNextStep orchestration={orchestration} publications={publications} onMerge={onMerge} />;
+};
+
+/** A finished build: what it opened, and the next step, which is to ask for the merge in the chat. */
+function CompletedNextStep({ orchestration, publications, onMerge }: {
+  orchestration: ProjectBuildOrchestration;
+  publications: ReturnType<typeof buildPublications>;
+  onMerge?: () => void;
+}) {
   let outcome = 'build complete';
   if (publications.length) outcome = publications.length === 1 ? 'pull request opened' : 'pull requests opened';
 
@@ -88,7 +99,8 @@ export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId,
       <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />{publications.length > 1 ? `${publication.repository ?? 'Repository'} pull request` : 'Open the pull request'}
     </a>)}</div>}
     <p className="mt-2 text-[11px] text-content"><span className="font-semibold">Next:</span> {publications.length
-      ? 'merge it on GitHub when you are happy with it. Open the web preview to see the result.'
+      ? 'say "merge it" and the Orchestrator merges it into dev once its checks pass. Open the web preview to see the result.'
       : 'open the Build review tab for the report.'}</p>
+    {publications.length > 0 && onMerge && <div className="mt-2.5"><button type="button" onClick={onMerge} className={primary}><GitMerge className="h-3.5 w-3.5" aria-hidden="true" />Merge into dev</button></div>}
   </section>;
-};
+}

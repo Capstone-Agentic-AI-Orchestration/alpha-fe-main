@@ -259,7 +259,8 @@ function OrchestratorBuildActivityRow({
   withdrawing = false,
   canApprove = false,
   onAskChanges,
-  onApproved
+  onApproved,
+  onMerge
 }: {
   projectId: string;
   runId: string;
@@ -271,6 +272,8 @@ function OrchestratorBuildActivityRow({
   onAskChanges?: () => void;
   /** After a button approval, so the rest of the chat catches up. */
   onApproved?: () => void | Promise<void>;
+  /** Send "merge it" in this chat, so the Orchestrator merges the pull request into dev. */
+  onMerge?: () => void;
   /** Open this build's code changes in the side panel. */
   onViewChanges: () => void;
   /** Turn an unstarted plan back into a question for Alpha to answer. */
@@ -487,7 +490,7 @@ function OrchestratorBuildActivityRow({
   </div>
   <ChangedFilesCard files={countedFiles?.length ? countedFiles : changedFiles.map(path => ({ path }))} onView={onViewChanges} />
   {orchestration && orchestration.run.id === runId && <BuildNextStepCard projectId={projectId} orchestration={orchestration} canApprove={canApprove}
-    onReview={onOpenReview} onAskChanges={onAskChanges ?? onOpenReview}
+    onReview={onOpenReview} onAskChanges={onAskChanges ?? onOpenReview} onMerge={onMerge}
     onApproved={async () => { await refreshAfterRecovery(); await onApproved?.(); }} />}
   </>;
 }
@@ -1433,6 +1436,12 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const dismissBuildFailure = () => {
     if (buildFailure) setDismissedBuildFailures(previous => [...previous.slice(-19), buildFailure.messageId]);
   };
+  /** Send a short message in this conversation as the person, as if typed (the Merge into dev button). */
+  const sendInChat = (text: string) => {
+    if (!activeThread || activeTurnMessageId) return;
+    followNextMessage();
+    void sendChatMessage(text, activeThread.id, undefined, 'auto', [], { approvalMode });
+  };
   const replyInComposer = (prefill?: string) => {
     if (prefill) setInput(prefill);
     window.requestAnimationFrame(() => messageInputRef.current?.focus());
@@ -1954,7 +1963,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
   }
   return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>; })}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} onMerge={() => sendInChat('merge it')} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>; })}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-5 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-7 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-6xl space-y-2">
