@@ -19,9 +19,28 @@ describe('build review tab', () => {
   it('explains publication permissions instead of showing a disabled approval choice', () => {
     const html = render('awaiting_approval', false);
     expect(html).toContain('A developer, PM, or admin must approve publication.');
-    expect(html).toContain('authorize pushing this revision');
+    expect(html).not.toContain('Approve and open pull request');
+    expect(html).toContain('tell Alpha in the main chat whether to push this revision');
     expect(html).not.toContain('<input');
-    expect(html).not.toContain('Open the full review');
+  });
+  it('offers the decision as buttons, with a summary of the build at the top', () => {
+    const build = fixture('awaiting_approval');
+    build.orchestration.tasks = [{ id: 't', title: 'Landing page', ownerName: 'Frontend Agent', status: 'accepted', required: true, kind: 'frontend' }] as any;
+    build.orchestration.finalValidation = { status: 'passed', missingScripts: [], commands: [{ script: 'test', exitCode: 0, signal: null }, { script: 'lint', exitCode: 0, signal: null }] } as any;
+    const html = renderToStaticMarkup(<BuildReviewTab projectId="p" build={build} canStart canApprove busy={false} error={null} onAskChanges={() => undefined} />);
+    expect(html).toContain('Ready for your review');
+    expect(html).toContain('Approve and open pull request');
+    expect(html).toContain('Ask for changes');
+    expect(html).toContain('1/1');
+    expect(html).toContain('2/2');
+    expect(html).toContain('checks passed');
+  });
+  it('does not offer approval while a blocking finding is open', () => {
+    const build = fixture('awaiting_approval');
+    build.orchestration.findings = [{ id: 'f', status: 'open', severity: 'blocking', title: 'Secret in code' }] as any;
+    const html = renderToStaticMarkup(<BuildReviewTab projectId="p" build={build} canStart canApprove busy={false} error={null} />);
+    expect(html).toContain('Blocking findings must be resolved before approval.');
+    expect(html).not.toContain('Approve and open pull request');
   });
   it('shows completed read-only results without a publication approval input', () => {
     const html = render('completed');
@@ -35,5 +54,7 @@ describe('build review tab', () => {
     const html = renderToStaticMarkup(<BuildReviewTab projectId="p" build={build} canStart canApprove busy={false} error={null} />);
     expect(html).toContain('https://github.com/acme/web/pull/1');
     expect(html).toContain('Open pull request'); expect(html).not.toContain('<input');
+    expect(html).toContain('Pull request opened');
+    expect(html).toContain('>Done<');
   });
 });

@@ -7,7 +7,7 @@ import { buildDecisionContext } from './chatBuildDecision';
 import { CHAT_ORCHESTRATOR_BAR_ENABLED } from '@/config/features';
 import { usePanelPresence } from './usePanelPresence';
 import { ChatConversationLayout } from './ChatConversationLayout';
-import { LocalPreviewTab, WebPreviewCard, useLocalPreviews } from './LocalPreview';
+import { LocalPreviewTab, WebPreviewCard, previewAnchorId, useLocalPreviews } from './LocalPreview';
 import { BoardRunCard } from '@/features/board-run/BoardRunCard';
 import { StartBoardRunDialog } from '@/features/board-run/StartBoardRunDialog';
 import { asksForBoardRun, runAnchorId } from '@/features/board-run/boardRunPresentation';
@@ -86,6 +86,7 @@ import { ChatSidePanel, type SidePanelTab } from './ChatSidePanel';
 import { BuildReviewTab, SavedBuildReviewTab } from './BuildReviewTab';
 import { LiveChangesView } from './LiveChangesView';
 import { ChatBuildWizard, planningFailureReason, type BuildPlanningFailure } from './ChatBuildWizard';
+import { BuildNextStepCard } from './BuildNextStepCard';
 import { buildHandoffs, buildStatusLabel, needsSecurityAuditPlan, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { OrchestrationDeliveryPanel } from './OrchestrationDeliveryPanel';
@@ -255,12 +256,21 @@ function OrchestratorBuildActivityRow({
   onOpenReview,
   onViewChanges,
   onWithdraw,
-  withdrawing = false
+  withdrawing = false,
+  canApprove = false,
+  onAskChanges,
+  onApproved
 }: {
   projectId: string;
   runId: string;
   threadId: string;
   onOpenReview: () => void;
+  /** Whether this person may approve the finished build from its next-step card. */
+  canApprove?: boolean;
+  /** Put a change request in the message box. */
+  onAskChanges?: () => void;
+  /** After a button approval, so the rest of the chat catches up. */
+  onApproved?: () => void | Promise<void>;
   /** Open this build's code changes in the side panel. */
   onViewChanges: () => void;
   /** Turn an unstarted plan back into a question for Alpha to answer. */
@@ -476,6 +486,9 @@ function OrchestratorBuildActivityRow({
     </div>}
   </div>
   <ChangedFilesCard files={countedFiles?.length ? countedFiles : changedFiles.map(path => ({ path }))} onView={onViewChanges} />
+  {orchestration && orchestration.run.id === runId && <BuildNextStepCard projectId={projectId} orchestration={orchestration} canApprove={canApprove}
+    onReview={onOpenReview} onAskChanges={onAskChanges ?? onOpenReview}
+    onApproved={async () => { await refreshAfterRecovery(); await onApproved?.(); }} />}
   </>;
 }
 
@@ -653,7 +666,6 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const [buildDecisionError, setBuildDecisionError] = useState<string | null>(null);
   /** Planning failures someone closed in the build panel, by message id. */
   const [dismissedBuildFailures, setDismissedBuildFailures] = useTabSessionState<string[]>(sessionStateKey('dismissedBuildFailures'), []);
-  const [publishedBuild, setPublishedBuild] = useTabSessionState<{ projectId: string; links: Array<{ repository: string; url: string }> } | null>(sessionStateKey('publishedBuild'), null);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
       const [chatSyncStatus, setChatSyncStatus] = useState<ChatSyncStatus | null>(null);
   const [syncRetrying, setSyncRetrying] = useState(false);
@@ -776,6 +788,11 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const boardRunCards = (anchorId: string | null) => boardRunsHere.filter(run => boardRunAnchors.get(run.id) === anchorId)
     .map(run => <BoardRunCard key={run.id} run={run} onChange={updateBoardRun} onOpenBuild={openSavedBuildReview} />);
   const previews = useLocalPreviews(activeThreadId ?? undefined, `${activeWorkspace?.id}:${currentUser?.id}:${activeThreadId}`, Boolean(project && !isClient && isActiveTab), openPreview);
+  // The preview card stays under the reply that started it, not pinned below the newest message.
+  // Only ordinary replies are eligible: agent-call and system rows are drawn without it.
+  const previewAnchor = previews.record
+    ? previewAnchorId(currentMessages.filter(message => message.senderType !== 'system' && !message.agentCallId), previews.record)
+    : null;
   // Only a build originating in this conversation can appear or be controlled here.
   const { build: liveBuild, latestBuild, refresh: refreshLiveBuild } = useProjectLiveBuild(
     project?.id,
@@ -785,8 +802,6 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const inspectedBuildAgent = latestBuild?.agents.find(agent => agent.agentId === inspectedBuildAgentId) ?? null;
   const buildIsOpen = Boolean(liveBuild);
   const canStopBuild = !isClient && can('run_builds') && buildIsOpen && liveBuild?.status !== 'cancelling' && liveBuild?.status !== 'publishing';
-  // Plan approval and final review are answered in the chat itself.
-  const buildDecision = !isClient && liveBuild && ['awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(liveBuild.status) ? liveBuild : null;
   const buildDecisionKey = liveBuild ? liveBuild.runId + ':' + liveBuild.status : '';
   const openBuildReview = () => {
     if (latestBuild && project) openSideTab({ id: 'review:' + latestBuild.runId, kind: 'review', projectId: project.id, runId: latestBuild.runId });
@@ -1802,7 +1817,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       case 'preview': return <LocalPreviewTab record={previews.record} error={previews.error} onStop={() => void previews.stop()} blocked={Boolean(!isActiveTab || memoryThreadId || threadPendingDelete || showCreateProject || repositoryMenuOpen)} />;
       case 'plan': return <PlanDocumentTab key={tab.id + ':' + tab.planVersion} projectId={tab.projectId} runId={tab.runId} planVersion={tab.planVersion} />;
       case 'review': return latestBuild?.runId === tab.runId
-        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('publish_build')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} />
+        ? <BuildReviewTab key={tab.id + ':' + latestBuild.revision} projectId={tab.projectId} build={latestBuild} canStart={Boolean(liveBuild?.canControl) && can('run_builds')} canApprove={Boolean(liveBuild) && can('publish_build')} busy={Boolean(buildDecisionBusy)} error={buildDecisionError} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} />
         : activeThreadId ? <SavedBuildReviewTab key={tab.id} projectId={tab.projectId} runId={tab.runId} threadId={activeThreadId} /> : null;
       case 'changes': return <div key={tab.id} className="min-h-0 flex-1 overflow-y-auto p-4"><LiveChangesView projectId={tab.projectId} runId={tab.runId} live={Boolean(liveBuild?.running && liveBuild.runId === tab.runId)} /></div>;
       case 'agent': {
@@ -1932,17 +1947,11 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
   }
   return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{boardRunCards(message.id)}</div></div>; })}{previews.record && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>; })}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-5 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-7 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-6xl space-y-2">
               {showLatest && <div className="flex justify-center"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-divider bg-surface-raised px-4 py-2 text-xs font-medium text-selected-content shadow-lg shadow-black/40 hover:bg-selected">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
-              {publishedBuild && publishedBuild.projectId === project?.id && !buildDecision && <div role="status" className="flex items-center gap-3 rounded-2xl border border-status-success-border bg-surface-raised/95 px-4 py-2.5 text-[11px] text-status-success shadow-lg shadow-black/40">
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-status-success" aria-hidden="true" />
-                <span className="min-w-0 flex-1 font-semibold">Pull request opened</span>
-                {publishedBuild.links.map(link => <a key={link.url} href={link.url} target="_blank" rel="noreferrer" className="inline-flex shrink-0 items-center gap-1 rounded-full border border-status-success-border px-3 py-1 font-medium text-status-success hover:bg-status-success-subtle">{publishedBuild.links.length > 1 ? link.repository : 'Open on GitHub'}</a>)}
-                <button type="button" onClick={() => setPublishedBuild(null)} aria-label="Dismiss" className="rounded-full p-1 text-status-success hover:bg-surface-high hover:text-content"><X className="h-3.5 w-3.5" /></button>
-              </div>}
               {/* The build, step by step, with the choices it is waiting on. */}
               {!isClient && project && (liveBuild || buildFailure) && <ChatBuildWizard
                 key={liveBuild ? liveBuild.runId : buildFailure?.messageId}

@@ -5,6 +5,28 @@ import { getLocalPreviews, stopLocalPreview } from '@/shared/services/apiService
 import type { LocalPreview } from '@/shared/types/localPreview';
 
 const surfaceValue = (record: LocalPreview) => ({ id: record.id, capability: record.capability });
+
+/**
+ * The message a preview card belongs under, so it stays in place in the conversation.
+ * It was drawn after every message and so stayed at the bottom however long the chat
+ * went on. The request that started the preview names its message; the card goes under
+ * the reply to it, since a request is drawn on the right. Without that message, the last
+ * reply sent before the preview started. Null when there is nothing to anchor to.
+ */
+export function previewAnchorId(
+  messages: ReadonlyArray<{ id: string; senderType: string; timestamp: string }>,
+  record: Pick<LocalPreview, 'messageId' | 'createdAt'>
+): string | null {
+  const index = record.messageId ? messages.findIndex(message => message.id === record.messageId) : -1;
+  if (index >= 0) {
+    if (messages[index].senderType !== 'user') return messages[index].id;
+    const reply = messages.slice(index + 1).find(message => message.senderType !== 'user');
+    return reply?.id ?? messages[index].id;
+  }
+  const started = Date.parse(record.createdAt);
+  const earlier = messages.filter(message => message.senderType !== 'user' && Date.parse(message.timestamp) <= started);
+  return earlier.at(-1)?.id ?? null;
+}
 export function useLocalPreviews(threadId: string | undefined, scope: string, enabled: boolean, onRequested: () => void) {
   const [data, setData] = useState<{ scope: string; records: LocalPreview[] }>({ scope, records: [] });
   const [error, setError] = useState('');
