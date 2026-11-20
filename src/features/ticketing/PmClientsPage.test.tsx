@@ -29,7 +29,8 @@ const render = (props: Partial<PmClientsViewProps> = {}) => renderToStaticMarkup
   clients={[ana, ben]} error="" loading={false} search="" onSearch={() => undefined}
   selectedKey={null} onSelect={() => undefined} section="tickets" onSection={() => undefined}
   knownProjectIds={new Set(['gh-repo-1'])} onRefresh={() => undefined} onOpenProject={() => undefined}
-  onOpenInquiries={() => undefined} renderTickets={key => <p>Tickets for {key}</p>} {...props} />);
+  onOpenInquiries={() => undefined} renderTickets={key => <p>Tickets for {key}</p>}
+  renderConversation={() => <p>Project conversation</p>} {...props} />);
 
 describe('Clients list', () => {
   it('lists each client with company, what needs the PM, and access', () => {
@@ -57,16 +58,17 @@ describe('Clients list', () => {
 });
 
 describe('A client’s page', () => {
-  it('shows Tickets locked to this client', () => {
+  it('shows the client’s projects and project conversation without a separate Tickets tab', () => {
     const html = render({ selectedKey: 'client:ana' });
-    for (const shown of ['All clients', 'Ana Cruz', 'Tickets', 'Projects', 'Access', 'Tickets for client:ana', 'Portal access on']) expect(html).toContain(shown);
+    for (const shown of ['All clients', 'Ana Cruz', 'Overview', 'Projects', 'Conversation', 'Access', 'Portal access on']) expect(html).toContain(shown);
+    expect(html).not.toContain('>Tickets<');
   });
 
   it('links only to projects in the PM’s project list, and notes unlinked requests', () => {
     const html = render({ selectedKey: 'client:ana', section: 'projects' });
     expect(html).toContain('Resort Website');
     expect(html).toContain('Hidden Project');
-    expect(html.match(/Open project/g)).toHaveLength(1);
+    expect(html.match(/Open conversation/g)).toHaveLength(1);
     expect(html).toContain('Preview shared with the client');
     expect(html).toContain('1 open request isn’t linked to a project yet.');
   });
@@ -103,20 +105,20 @@ describe('A client’s added tabs', () => {
     renderConversations: () => <p>Conversations body</p>,
     renderDocuments: () => <p>Documents body</p>,
   };
-  it('lists Overview first and Conversations and Documents after Tickets', () => {
+  it('lists Overview, Projects, Conversation, Documents, and Access in order', () => {
     const html = render({ selectedKey: 'client:ana', section: 'overview', ...tabs });
-    const order = ['Overview', '>Tickets<', 'Conversations', 'Documents', '>Projects<', '>Access<'].map(label => html.indexOf(label));
+    const order = ['Overview', '>Projects<', '>Conversation<', 'Documents', '>Access<'].map(label => html.indexOf(label));
     expect(order.every(index => index >= 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     expect(html).toContain('Overview body');
   });
-  it.each([['conversations', 'Conversations body'], ['documents', 'Documents body']] as const)('renders the %s tab', (section, body) => {
+  it.each([['conversation', 'Project conversation'], ['documents', 'Documents body']] as const)('renders the %s tab', (section, body) => {
     expect(render({ selectedKey: 'client:ana', section, ...tabs })).toContain(body);
   });
-  it('hides tabs that are not provided and falls back to Tickets', () => {
+  it('hides conversation history and request tabs in the project-scoped view', () => {
     const html = render({ selectedKey: 'client:ana', section: 'overview' });
-    expect(html).not.toContain('Conversations');
-    expect(html).toContain('Tickets for client:ana');
+    expect(html).not.toContain('>Conversations<');
+    expect(html).not.toContain('>Tickets<');
   });
 });
 

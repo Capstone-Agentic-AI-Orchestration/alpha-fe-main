@@ -21,7 +21,7 @@ const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
-  pm: ['inquiries', 'clients', 'issues', 'projects', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['clients', 'issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
@@ -31,11 +31,11 @@ const existing: Record<UserRole, NavigationTab[]> = {
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
-  pm: ['inquiries', 'clients', 'issues', 'projects', 'agents', 'skills', 'analytics', 'settings'],
+  pm: ['clients', 'inquiries', 'projects', 'issues', 'agents', 'skills', 'analytics', 'settings'],
   admin: ['issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
-/** A PM starts on Tickets, which opens on what needs them; every other role is unchanged. */
-const landing = (role: UserRole) => role === 'pm' ? 'tickets' : withoutHiddenChat(existing[role])[0];
+/** PMs start with their clients; the project conversation owns each project's tickets. */
+const landing = (role: UserRole) => withoutHiddenChat(existing[role])[0];
 describe('existing navigation compatibility', () => {
   it('shows Tasks while preserving the existing issues route identifier', () => {
     const tasks = NAV_ITEMS.find(item => item.id === 'issues');
@@ -57,10 +57,12 @@ describe('existing navigation compatibility', () => {
     expect(visible.every(tab => ROLE_NAV[role].includes(tab))).toBe(true);
     expect(visible.length).toBe(new Set(visible).size);
   });
-  it('adds Tickets and Inquiries only to PM navigation without replacing Tasks', () => {
-    expect(ROLE_NAV.pm).toContain('tickets');
+  it('keeps Inquiries in PM navigation and scopes tickets to project conversations', () => {
+    expect(ROLE_NAV.pm).not.toContain('tickets');
     expect(ROLE_NAV.pm).toContain('inquiries');
-    expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('tickets');
+    expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).not.toContain('tickets');
+    expect(sectionsFor('pm').find(group => group.section.id === 'clients')?.items.map(item => item.id)).toEqual(['clients']);
+    expect(sectionsFor('pm').find(group => group.section.id === 'requests')?.items.map(item => item.id)).toEqual(['inquiries']);
     expect(sectionsFor('pm').flatMap(group => group.items.map(item => item.id))).toContain('inquiries');
     for (const role of ['client', 'dev', 'admin'] as const) {
       expect(ROLE_NAV[role]).not.toContain('tickets');
@@ -163,8 +165,9 @@ describe('AI tooling for project managers is desktop-only', () => {
 
 describe('Clients section for project managers', () => {
   const ids = (role: UserRole, section: string) => sectionsFor(role).find(group => group.section.id === section)?.items.map(item => item.id) ?? [];
-  it('groups Tickets, Inquiries and Clients, then All Tasks and All Projects', () => {
-    expect(ids('pm', 'clients')).toEqual(['tickets', 'inquiries', 'clients']);
+  it('keeps clients, inquiries, tasks, and projects in their own navigation groups', () => {
+    expect(ids('pm', 'clients')).toEqual(['clients']);
+    expect(ids('pm', 'requests')).toEqual(['inquiries']);
     expect(ids('pm', 'projects')).toEqual(['issues', 'projects']);
     expect(sectionsFor('pm').map(group => group.section.id)).not.toContain('delivery');
   });

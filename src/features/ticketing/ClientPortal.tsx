@@ -679,17 +679,25 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const clientEmail = session?.email?.trim() ?? '';
   const clientName = session?.fullName?.trim() || 'Client';
   const clientInitials = clientName.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
-  const projectRequestForm = startConversationRequest && conversationProject
-    ? createContext && createProject && clientProjectKey(createProject) === clientProjectKey(conversationProject)
-      ? <ClientCreateTicketForm embedded context={createContext} submissionEnabled={!inspectionOnly && createContext.canCreate}
+  let projectRequestForm: ReactNode;
+  if (startConversationRequest && conversationProject) {
+    const formMatchesProject = createContext && createProject
+      && clientProjectKey(createProject) === clientProjectKey(conversationProject);
+    if (formMatchesProject && createContext) {
+      projectRequestForm = <ClientCreateTicketForm embedded context={createContext} submissionEnabled={!inspectionOnly && createContext.canCreate}
         relatedTicket={null} busy={writing || createLoading || Boolean(pending)} error={writeError || createError} onCreate={submitNewTicket}
-        onCancel={cancelCreateForm} selectedProjectOptionId={conversationProject.intakeOptionId} selectedProjectName={conversationProject.name} />
-      : createLoading ? <p className="rounded-lg border border-divider bg-surface p-4 text-sm text-content-secondary">Preparing the request form…</p>
-        : createError ? <div role="alert" className="space-y-3 rounded-lg border border-status-danger/30 bg-surface p-4 text-sm text-content-secondary">
-          <p>{createError}</p><div className="flex gap-2"><Button type="button" size="sm" onClick={() => void openCreateForm(conversationProject, true)}>Try again</Button>
-            <Button type="button" variant="ghost" size="sm" onClick={cancelCreateForm}>Cancel</Button></div>
-        </div> : <p className="text-sm text-content-muted">Choose New request to prepare the request form.</p>
-    : undefined;
+        onCancel={cancelCreateForm} selectedProjectOptionId={conversationProject.intakeOptionId} selectedProjectName={conversationProject.name} />;
+    } else if (createLoading) {
+      projectRequestForm = <p className="rounded-lg border border-divider bg-surface p-4 text-sm text-content-secondary">Preparing the request form…</p>;
+    } else if (createError) {
+      projectRequestForm = <div role="alert" className="space-y-3 rounded-lg border border-status-danger/30 bg-surface p-4 text-sm text-content-secondary">
+        <p>{createError}</p><div className="flex gap-2"><Button type="button" size="sm" onClick={() => void openCreateForm(conversationProject, true)}>Try again</Button>
+          <Button type="button" variant="ghost" size="sm" onClick={cancelCreateForm}>Cancel</Button></div>
+      </div>;
+    } else {
+      projectRequestForm = <p className="text-sm text-content-muted">Choose New request to prepare the request form.</p>;
+    }
+  }
 
   const newRequestMenu = !inspectionOnly && (canStartProjectRequest || proposeProject)
     ? (trigger: ReactNode) => <DropdownMenu modal={false}>

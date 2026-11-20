@@ -19,7 +19,7 @@ export type ClientSection = 'overview' | 'conversation' | 'tickets' | 'conversat
 const SECTIONS: Array<{ id: ClientSection; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'projects', label: 'Projects' },
-  { id: 'conversation', label: 'Project conversations' },
+  { id: 'conversation', label: 'Conversation' },
   { id: 'tickets', label: 'Tickets' },
   { id: 'conversations', label: 'Conversations' },
   { id: 'documents', label: 'Documents' },
@@ -363,7 +363,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
                 {knownProjectIds.has(project.projectId) && <button type="button"
                   onClick={() => onOpenProject(project.projectId)}
                   className="inline-flex items-center gap-1 text-xs font-semibold text-link hover:text-link-hover">
-                  Open project <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+                  Open conversation <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>}
               </li>)}
             </ul>}
