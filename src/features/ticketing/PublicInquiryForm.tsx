@@ -5,7 +5,10 @@ import type { PublicTicketInquiryPayload, PublicTicketInquiryResponse } from './
 import { PublicTicketIntakeApiError } from './publicIntakeApi';
 import { composeInquiryDescription, INQUIRY_DETAILS_MAX_LENGTH, INQUIRY_LINKS_MAX_LENGTH } from './inquiryDetails';
 import { useClientPageMotion } from './publicClient/useClientPageMotion';
-import { DatePicker } from '@/shared/components/ui/date-picker';
+
+/** The backend stores one `fullName` (max 160), so the two parts plus a space must fit. */
+const FIRST_NAME_MAX_LENGTH = 80;
+const LAST_NAME_MAX_LENGTH = 79;
 
 export type InquiryNavigationState = { dirty: boolean; locked: boolean };
 
@@ -23,13 +26,13 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
   const retryPayload = useRef<PublicTicketInquiryPayload | null>(null);
   const submissionInFlight = useRef(false);
   const exitApproved = useRef(false);
-  const [fullName, setFullName] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [company, setCompany] = useState('');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [links, setLinks] = useState('');
-  const [requestedDeadline, setRequestedDeadline] = useState('');
   const [error, setError] = useState('');
   const [validationError, setValidationError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -39,7 +42,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
   const motionRef = useClientPageMotion();
   const locked = isSubmitting || outcomeUnknown;
   const fieldsDisabled = locked || submitted;
-  const dirty = !submitted && Boolean(fullName || email || company || title || description || links || requestedDeadline);
+  const dirty = !submitted && Boolean(firstName || lastName || email || company || title || description || links);
   useEffect(() => {
     onNavigationStateChange?.({ dirty, locked });
   }, [dirty, locked, onNavigationStateChange]);
@@ -74,12 +77,12 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
       const payload = retryPayload.current ?? {
           schemaVersion: PUBLIC_TICKET_INQUIRY_SCHEMA_VERSION,
           operationId: operationId.current,
-          fullName,
+          fullName: `${firstName.trim()} ${lastName.trim()}`,
           email,
           company: company.trim() || null,
           title,
           description: composeInquiryDescription(description, links),
-          requestedDeadline: requestedDeadline || null,
+          requestedDeadline: null,
         };
       retryPayload.current = payload;
       void Promise.resolve().then(() => onSubmit(payload)).then(result => {
@@ -98,14 +101,14 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
           setIsSubmitting(false);
         });
     }}>
-      <label className="ca-field"><span>Your name</span>
-        <input required maxLength={160} autoComplete="name" disabled={fieldsDisabled} value={fullName} onChange={event => { setFullName(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
-      <label className="ca-field"><span>Email</span>
-        <input type="email" required maxLength={254} autoComplete="email" disabled={fieldsDisabled} value={email} onChange={event => { setEmail(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+      <label className="ca-field"><span>First name</span>
+        <input required maxLength={FIRST_NAME_MAX_LENGTH} autoComplete="given-name" disabled={fieldsDisabled} value={firstName} onChange={event => { setFirstName(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
+      <label className="ca-field"><span>Last name</span>
+        <input required maxLength={LAST_NAME_MAX_LENGTH} autoComplete="family-name" disabled={fieldsDisabled} value={lastName} onChange={event => { setLastName(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
       <label className="ca-field"><span>Company <span>(optional)</span></span>
         <input maxLength={160} autoComplete="organization" disabled={fieldsDisabled} value={company} onChange={event => { setCompany(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
-      <label className="ca-field"><span>Target date <span>(optional)</span></span>
-        <DatePicker className="ca-date-picker" buttonClassName="h-11 w-full justify-start rounded-none border-0 bg-transparent px-0 text-left text-content shadow-none hover:bg-transparent" disabled={fieldsDisabled} value={requestedDeadline} onChange={value => { setRequestedDeadline(value); operationId.current = crypto.randomUUID(); }} /></label>
+      <label className="ca-field"><span>Email</span>
+        <input type="email" required maxLength={254} autoComplete="email" disabled={fieldsDisabled} value={email} onChange={event => { setEmail(event.target.value); operationId.current = crypto.randomUUID(); }} /></label>
       <label className="ca-field iq-wide"><span>What do you need?</span>
         <input required maxLength={160} disabled={fieldsDisabled} value={title} onChange={event => { setTitle(event.target.value); operationId.current = crypto.randomUUID(); }} placeholder="A short summary" /></label>
       <label className="ca-field iq-wide iq-details"><span>Details</span>

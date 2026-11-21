@@ -205,6 +205,16 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toContain('Submission is unavailable.');
   });
 
+  it('asks for first and last name, then company and email, with no target date', () => {
+    const html = renderToStaticMarkup(<PublicInquiryForm onSubmit={() => undefined} onCancel={() => undefined} />);
+    const labels = [...html.matchAll(/<label class="ca-field[^"]*"><span>([^<]+)/g)].map(match => match[1]);
+    expect(labels.slice(0, 4)).toEqual(['First name', 'Last name', 'Company ', 'Email']);
+    expect(html).toMatch(/<input\b[^>]*required=""[^>]*autoComplete="given-name"/);
+    expect(html).toMatch(/<input\b[^>]*required=""[^>]*autoComplete="family-name"/);
+    expect(html).not.toContain('Target date');
+    expect(html).not.toContain('Pick a date');
+  });
+
   it('requires an email address on the actual public inquiry form', () => {
     const html = renderToStaticMarkup(<PublicInquiryForm onSubmit={() => undefined} onCancel={() => undefined} />);
     const emailInput = html.match(/<input\b[^>]*type="email"[^>]*>/)?.[0];
