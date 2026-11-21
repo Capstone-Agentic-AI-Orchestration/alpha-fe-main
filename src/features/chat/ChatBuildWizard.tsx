@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { OrchestrationPlanPreview } from '../project-build-review/OrchestrationPlanPreview';
-import { AlertTriangle, ChevronDown, ExternalLink, LoaderCircle } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ExternalLink, LoaderCircle, X } from 'lucide-react';
 
 import { buildStepFor, type WizardStep } from './buildSteps';
 import { needsSecurityAuditPlan, type ProjectLiveBuild } from './useProjectLiveBuild';
-import type { LiveBuildRecoveryAction } from '@/shared/types';
+import type { ChatBuildBlocker, LiveBuildRecoveryAction } from '@/shared/types';
 
 export type { WizardStep };
 
@@ -16,6 +16,8 @@ export interface BuildPlanningFailure {
   request?: string;
   /** Codebases that planning attempt covered. */
   repositories?: string[];
+  /** Another build holding a codebase this request needs. */
+  blocker?: ChatBuildBlocker;
 }
 
 /** Which step a build is on, and whether that step needs the person. */
@@ -200,6 +202,8 @@ export interface ChatBuildWizardProps {
   canStart: boolean;
   canApprove: boolean;
   canStop: boolean;
+  /** The stop button was clicked once; the next click stops. */
+  stopArmed?: boolean;
   busy: 'start' | 'approve' | 'stop' | 'continue' | 'retry' | null;
   error: string | null;
   onStop: () => void;
@@ -210,6 +214,9 @@ export interface ChatBuildWizardProps {
   onReply: (prefill?: string) => void;
   onRetry: () => void;
   onDismiss: () => void;
+  /** Stop the build in the way, then plan this request again. */
+  onStopBlocker?: () => void;
+  onOpenBlocker?: () => void;
   onOpenReview?: () => void;
 }
 
@@ -227,6 +234,10 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   const needsYou = failed || attention;
   const [collapsed, setCollapsed] = useState(!needsYou);
   useEffect(() => { if (needsYou) setCollapsed(false); }, [needsYou, build?.status]);
+  // Stopping takes two clicks; the second label says so.
+  const stopOption = (label: string, hint: string): Option => props.stopArmed
+    ? { label: 'Click again to stop', hint: 'Work saved on the build branch stays available.', onSelect: props.onStop, tone: 'danger', busy: busy === 'stop' }
+    : { label, hint, onSelect: props.onStop, tone: 'danger', busy: busy === 'stop' };
   // A finished build's next step is a card under its message in the conversation, with
   // its own buttons; repeating it over the message box only covered the chat.
   if (build && (build.status === 'awaiting_approval' || build.status === 'publishing')) return null;
@@ -236,14 +247,22 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   let body: React.ReactNode = null;
   let options: Option[] = [];
 
-  if (!build && failure) {
+  if (!build && failure?.blocker) {
+    const name = failure.blocker.issueIdentifier ?? 'Another build';
+    title = `${name} is using ${failure.blocker.repository ?? 'this codebase'}`;
+    subtitle = 'Only one build can work in a codebase at a time. Nothing was started for this request.';
+    options = [
+      ...(props.onStopBlocker && failure.request ? [{ label: `Stop ${failure.blocker.issueIdentifier ?? 'it'} and plan this`, hint: 'Its saved work stays on its build branch.', onSelect: props.onStopBlocker, tone: 'primary' as const, busy: busy === 'stop' || busy === 'retry' }] : []),
+      ...(props.onOpenBlocker ? [{ label: `Open ${failure.blocker.issueIdentifier ?? 'that build'}`, hint: 'See what it is waiting for.', onSelect: props.onOpenBlocker }] : []),
+      { label: 'Keep waiting', hint: 'Plan this later, after it finishes.', onSelect: props.onDismiss }
+    ];
+  } else if (!build && failure) {
     title = 'Build not started';
     subtitle = 'Planning stopped before any agent changed code.';
     body = <p className="whitespace-pre-wrap rounded-xl border border-status-danger-border bg-status-danger-subtle px-3 py-2.5 text-[11px] leading-5 text-status-danger">{failure.reason}</p>;
     options = [
       ...(failure.request ? [{ label: 'Try again', hint: 'Plan the same request again.', onSelect: props.onRetry, tone: 'primary' as const, busy: busy === 'retry' }] : []),
-      { label: 'Change the request', hint: 'Describe what you want in the message box.', onSelect: () => props.onReply() },
-      { label: 'Dismiss', onSelect: props.onDismiss }
+      { label: 'Change the request', hint: 'Describe what you want in the message box.', onSelect: () => props.onReply() }
     ];
   } else if (build) {
     const reason = build.orchestration.run.stoppedReason;
@@ -251,7 +270,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'planning':
         title = 'Planning the build';
         subtitle = 'The Orchestrator is reading the codebases and splitting the work. No code changes until you approve.';
-        options = props.canStop ? [{ label: 'Stop planning', onSelect: props.onStop, tone: 'danger', busy: busy === 'stop' }] : [];
+        options = props.canStop ? [stopOption('Stop planning', 'No code has changed.')] : [];
         break;
       case 'awaiting_plan_approval':
         title = 'Plan ready for your approval';
@@ -281,7 +300,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
           ...(auditPlan ? [{ label: 'Plan with Security', hint: 'The Orchestrator prepares a revised audit-and-fix plan for your review.', onSelect: auditPlan, tone: 'primary' as const, busy: busy === 'continue', disabled: !props.canStart }] : []),
           ...(choice ? [{ label: choice.label, hint: choice.hint, onSelect: () => props.onContinue(choice.action), tone: 'primary' as const, busy: busy === 'continue' }] : []),
           { label: 'Tell the Orchestrator what to do', hint: 'Answer in the message box.', onSelect: () => props.onReply(), tone: choice ? undefined : 'primary' as const },
-          ...(props.canStop ? [{ label: 'Stop the build', hint: 'Work saved on the build branch stays available.', onSelect: props.onStop, tone: 'danger' as const, busy: busy === 'stop' }] : [])
+          ...(props.canStop ? [stopOption('Stop the build', 'Work saved on the build branch stays available.')] : [])
         ];
         break;
       }
@@ -299,7 +318,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
         subtitle = (working?.currentTaskTitle ?? build.goal) + ' · ' + currentRepositoryLabel(build, working?.currentTaskTitle);
         body = <Progress build={build} />;
         options = [
-          ...(props.canStop && build.status !== 'cancelling' ? [{ label: 'Stop the build', hint: 'Agents stop at the next safe point.', onSelect: props.onStop, tone: 'danger' as const, busy: busy === 'stop' }] : [])
+          ...(props.canStop && build.status !== 'cancelling' ? [stopOption('Stop the build', 'Agents stop at the next safe point.')] : [])
         ];
       }
     }
@@ -320,6 +339,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       <span className="flex shrink-0 items-center gap-1">
         {build && <button type="button" onClick={props.onOpenReview} aria-label="Show Build review tab" title="Show Build review tab" className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ExternalLink className="h-3.5 w-3.5" /></button>}
         {hasDetails && <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? 'Show build details' : 'Hide build details'} className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ChevronDown className={'h-4 w-4 transition-transform ' + (collapsed ? '' : 'rotate-180')} /></button>}
+        {failed && <button type="button" onClick={props.onDismiss} aria-label="Dismiss" title="Dismiss" className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><X className="h-3.5 w-3.5" /></button>}
       </span>
     </div>
     {details && <>

@@ -1087,6 +1087,12 @@ export const apiService = {
   steerChatTurn: (threadId: string, messageId: string, instruction: string) =>
     fetchJson<{ status: 'queued'; position: number }>(`/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/steer`, { method: 'POST', body: JSON.stringify({ instruction }) }),
   /** Plan a user message as a build, or have Alpha answer it instead. */
+  /** Answer a question the Orchestrator asked before planning; Alpha then plans the request with it. */
+  answerChatDecision: (threadId: string, messageId: string, answer: string, senderName?: string) =>
+    fetchJson<{ userMessage: ChatMessage; agentMessage: ChatMessage; agentMessages: ChatMessage[] }>(
+      `/chat/threads/${encodeURIComponent(threadId)}/decisions/${encodeURIComponent(messageId)}/answer`,
+      { method: 'POST', body: JSON.stringify({ answer, senderName }) }
+    ),
   routeChatMessage: (threadId: string, messageId: string, payload: { action: 'build' | 'answer'; repositories?: string[]; projectId?: string }) =>
     fetchJson<{ userMessage: ChatMessage; agentMessage: ChatMessage; agentMessages: ChatMessage[] }>(
       `/chat/threads/${encodeURIComponent(threadId)}/messages/${encodeURIComponent(messageId)}/route`,

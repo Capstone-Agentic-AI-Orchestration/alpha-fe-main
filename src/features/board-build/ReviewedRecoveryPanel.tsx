@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { apiService } from '@/shared/services/apiService';
+import { useInAppDialog } from '@/shared/components/InAppDialog';
 
 export function ReviewedRecoveryPanel({ projectId, runId, canControl, onChanged }: { projectId: string; runId: string; canControl: boolean; onChanged: () => void }) {
+  const { confirm, dialog } = useInAppDialog();
   const [candidate, setCandidate] = useState<Awaited<ReturnType<typeof apiService.getRecoveryCandidate>> | null>(null);
   const [guidance, setGuidance] = useState('');
   const [reviewed, setReviewed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   return <section aria-label="Saved work" className="space-y-2 text-[12.5px] text-content-secondary">
+    {dialog}
     <button type="button" disabled={busy} className="text-link" onClick={async () => {
       setBusy(true); setError(''); setReviewed(false);
       try { setCandidate(await apiService.getRecoveryCandidate(projectId, runId)); }
@@ -23,7 +26,7 @@ export function ReviewedRecoveryPanel({ projectId, runId, canControl, onChanged 
         <pre className="max-h-60 overflow-auto whitespace-pre-wrap text-[11px]">{archive.patch}{archive.patchTruncated ? '\nPreview truncated; inspect the full local archive before restoring.' : ''}</pre>
         {(archive.untracked ?? []).map(file => <details key={file.path}><summary>{file.path}{file.truncated ? ' (truncated)' : ''}</summary><pre className="max-h-52 overflow-auto whitespace-pre-wrap text-[11px]">{file.content}</pre></details>)}
         {canControl && !archive.patchTruncated && !archive.untracked?.some(file => file.truncated) && <button type="button" disabled={busy} className="mt-2 text-link" onClick={async () => {
-          if (!window.confirm('Restore this inspected archive into the unchanged, clean candidate? It remains unverified and will not start an agent.')) return;
+          if (!await confirm('Restore this archive?', 'It is restored into the unchanged, clean candidate. It remains unverified and will not start an agent.', 'Restore')) return;
           setBusy(true); setError(''); setReviewed(false);
           try { await apiService.restoreRecoveryArchive(projectId, runId, { expectedRevision: candidate.runRevision, taskId: candidate.taskId, archiveId: archive.id, archiveHash: archive.hash, candidateHash: candidate.candidateHash }); setCandidate(await apiService.getRecoveryCandidate(projectId, runId)); onChanged(); }
           catch (failure) { setError(failure instanceof Error ? failure.message : 'Archive restoration failed. Review the candidate before continuing.'); }
