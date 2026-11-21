@@ -3426,6 +3426,9 @@ ${e.detail}`;
           messageType: reply.messageType,
           orchestrationRunId: reply.orchestrationRunId,
           routeProposal: reply.routeProposal,
+          // Without these the question card and the blocked-build actions never appeared for a fresh reply.
+          decision: reply.decision,
+          buildBlocker: reply.buildBlocker,
           isStreaming: false,
           thinkingProcess: reply.thinkingProcess,
           toolsExecuted: (reply.toolsExecuted || []).map((t: any) => ({
