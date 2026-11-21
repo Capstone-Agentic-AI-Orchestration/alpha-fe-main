@@ -51,6 +51,23 @@ describe('the build panel above the message box', () => {
     expect(html).toContain('Dismiss');
   });
 
+  it('lets the person stop a plan waiting for approval, not only start it', () => {
+    const html = render({ build: build('awaiting_plan_approval'), onStartPlan: noop });
+    expect(html).toContain('>Stop plan<');
+    expect(html).toContain('No code has changed. The plan is dropped.');
+    expect(render({ build: build('awaiting_plan_approval'), onStartPlan: noop, canStop: false })).not.toContain('>Stop plan<');
+  });
+
+  it('folds a running build to its header, and keeps its stop button there', () => {
+    const html = render({ build: build('executing') });
+    expect(html).toContain('Build in progress');
+    expect(html).toContain('aria-expanded="false"');
+    expect(html).toContain('Stop the build</button>');
+    expect(html).not.toContain('Agents stop at the next safe point.</');
+    expect(render({ build: build('executing'), stopArmed: true })).toContain('Click again to stop</button>');
+    expect(render({ build: build('executing'), canStop: false })).not.toContain('Stop the build');
+  });
+
   it('offers Start plan and Ask for changes on a plan waiting for approval', () => {
     const html = render({ build: build('awaiting_plan_approval'), onStartPlan: noop });
     expect(html).toContain('Plan ready for your approval');

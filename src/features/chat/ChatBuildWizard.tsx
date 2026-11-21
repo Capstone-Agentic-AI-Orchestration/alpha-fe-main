@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { OrchestrationPlanPreview } from '../project-build-review/OrchestrationPlanPreview';
-import { AlertTriangle, ChevronDown, ExternalLink, LoaderCircle, X } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ExternalLink, LoaderCircle, Square, X } from 'lucide-react';
 
 import { buildStepFor, type WizardStep } from './buildSteps';
 import { needsSecurityAuditPlan, type ProjectLiveBuild } from './useProjectLiveBuild';
@@ -235,7 +235,9 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   // Only a step that needs the person opens by itself; a working build is just its one-line header.
   const needsYou = failed || attention;
   const [collapsed, setCollapsed] = useState(!needsYou);
-  useEffect(() => { if (needsYou) setCollapsed(false); }, [needsYou, build?.status]);
+  // Opens when a step needs the person, and folds back to its header once it no longer does
+  // (a started plan): the work then shows in the conversation, not in this pinned card.
+  useEffect(() => { setCollapsed(!needsYou); }, [needsYou]);
   // Stopping takes two clicks; the second label says so.
   const stopOption = (label: string, hint: string): Option => props.stopArmed
     ? { label: 'Click again to stop', hint: 'Work saved on the build branch stays available.', onSelect: props.onStop, tone: 'danger', busy: busy === 'stop' }
@@ -280,7 +282,8 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
         body = <p className="text-xs text-content-secondary">{props.canStart ? 'Read the saved plan on the right, then start it, or say what to change.' : 'Your workspace role cannot start builds.'}</p>;
         options = [
           ...(props.canStart && props.onStartPlan ? [{ label: 'Start plan', hint: 'The agents begin the planned work.', onSelect: props.onStartPlan, tone: 'primary' as const, busy: busy === 'start' }] : []),
-          { label: 'Ask for changes', hint: 'Say what to change in the message box.', onSelect: () => props.onReply('Please change: ') }
+          { label: 'Ask for changes', hint: 'Say what to change in the message box.', onSelect: () => props.onReply('Please change: ') },
+          ...(props.canStop ? [stopOption('Stop plan', 'No code has changed. The plan is dropped.')] : [])
         ];
         break;
       case 'paused':
@@ -335,6 +338,8 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   const showsPlan = Boolean(build && !['planning', 'awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(build.status));
   const hasDetails = showsPlan || Boolean(body || options.length || props.error);
   const details = !collapsed && hasDetails;
+  // Stopping never hides behind the fold: a folded card keeps its stop button in the header.
+  const headerStop = collapsed ? options.find(option => option.tone === 'danger') : undefined;
   return <section aria-label={title} className={'overflow-hidden rounded-2xl border bg-surface-raised/95 shadow-xl shadow-black/50 backdrop-blur ' + border}>
     <div className="flex items-center gap-3 px-4 py-2.5">
       <div className="min-w-0 flex-1">
@@ -342,6 +347,10 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
         {needsYou && <div className="truncate text-[11px] text-content-secondary">{subtitle}</div>}
       </div>
       <span className="flex shrink-0 items-center gap-1">
+        {headerStop && <button type="button" onClick={headerStop.onSelect} disabled={headerStop.busy} title={headerStop.hint}
+          className="inline-flex items-center gap-1 rounded-lg border border-status-danger-border px-2 py-1 text-[11px] font-medium text-status-danger hover:bg-status-danger-subtle disabled:opacity-50">
+          {headerStop.busy ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <Square className="h-3 w-3 fill-current" />}{headerStop.label}
+        </button>}
         {build && <button type="button" onClick={props.onOpenReview} aria-label="Show Build review tab" title="Show Build review tab" className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ExternalLink className="h-3.5 w-3.5" /></button>}
         {hasDetails && <button type="button" onClick={() => setCollapsed(value => !value)} aria-expanded={!collapsed} aria-label={collapsed ? 'Show build details' : 'Hide build details'} className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><ChevronDown className={'h-4 w-4 transition-transform ' + (collapsed ? '' : 'rotate-180')} /></button>}
         {failed && <button type="button" onClick={props.onDismiss} aria-label="Dismiss" title="Dismiss" className="rounded-lg p-1 text-content-secondary hover:bg-surface-high hover:text-content"><X className="h-3.5 w-3.5" /></button>}
