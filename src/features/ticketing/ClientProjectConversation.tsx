@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ListChecks, MessagesSquare, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ListChecks, MessagesSquare, Monitor, PanelRightClose, PanelRightOpen, Plus } from 'lucide-react';
+import { Button } from '@/shared/components/ui/button';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { ClientTicketApiError, clientTicketApi, type ClientProject, type ClientTicketDetail as ClientTicketRecord } from './clientApi';
 import { ClientRequestRail, CollapsibleRailCard, RailCard, type ClientRequestRailProps } from './ClientTicketDetail';
@@ -13,6 +14,7 @@ const newOperationId = () => crypto.randomUUID();
 const errorText = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback;
 const CONVERSATION_DESCRIPTION = 'One conversation with your project manager: questions, your requests and their progress.';
 const PREVIEW_DESCRIPTION = 'Try the latest version your project manager shared, and tell them what you notice in the conversation below.';
+const PREVIEW_QUESTION = 'Is there a preview I can try yet?';
 
 /** The project's one conversation and its requests, refreshed every 30 seconds while the page is visible. */
 function useClientProjectConversation(api: typeof clientTicketApi, project: ClientProject) {
@@ -98,6 +100,10 @@ export interface ClientProjectConversationProps {
   rail: Omit<ClientRequestRailProps, 'ticket' | 'lead' | 'revealFiles'>;
   /** Sends a reply about the picked request. */
   onReplyAbout: (body: string) => Promise<void>;
+  /** With a shared preview: whether the preview fills the page with the conversation folded away. */
+  previewFocused?: boolean;
+  /** Folds the conversation away or brings it back beside the preview. */
+  onPreviewFocusChange?: (focused: boolean) => void;
 }
 
 /**
@@ -120,16 +126,24 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
     void actions.run(work, 'Your message was not sent. Try again.').then(result => { if (result !== null) setDraft(''); });
   };
   const pick = (ticketId: string) => { if (ticketId === selectedTicketId) toRequest(ticketId); else onSelectRequest(ticketId); };
+  const inputId = `client-conversation-${project.projectId}`;
+  // Asking about a preview is about the whole project, so it never goes to the picked request.
+  const askAboutPreview = readOnly ? undefined : () => {
+    target.clear();
+    setDraft(current => current.trim() ? current : PREVIEW_QUESTION);
+    window.requestAnimationFrame(() => document.getElementById(inputId)?.focus());
+  };
   const head = <ConversationHead project={project} onBack={props.onBack} busy={busy} />;
   const chat = <ProjectConversationChat role="client"
     items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
     clientName={clientName} clientInitial={clientName.trim()[0]?.toUpperCase() ?? 'C'} draft={draft} onDraftChange={setDraft}
     busy={busy} writesAvailable={!readOnly} onSend={send} jump={jump} onOpenQuotedRequest={pick}
     about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore}
-    inputId={`client-conversation-${project.projectId}`} />;
+    inputId={inputId} />;
   const requests = <>
     <div className="cx-reqrail-top">
       {props.requestForm && <RailCard icon={<Plus size={16} />} title="New request">{props.requestForm}</RailCard>}
+      {!project.preview && <PreviewNotShared onAsk={askAboutPreview} />}
       <CollapsibleRailCard id="requests" icon={<ListChecks size={16} />}
         title={conversation.requests ? `Requests · ${openRequestCount(conversation.requests)} open` : 'Requests'}>
         <ConversationRequestList role="client" requests={conversation.requests} busy={busy} writesAvailable={!readOnly}
@@ -139,20 +153,48 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
     <PickedRequest selectedTicketId={selectedTicketId} request={request} rail={props.rail} />
   </>;
 
-  if (project.preview) return <section className="cx-split" aria-labelledby="client-conversation-project-title">
-    <div className="cx-split-preview"><ProjectPreviewFrame project={project} /></div>
-    <div className="cx-split-side">
-      {head}
-      {requests}
-      <section className="cx-split-chat" aria-label={`Conversation about ${project.name}`}>{chat}</section>
-    </div>
-  </section>;
+  if (project.preview) {
+    const focused = Boolean(props.previewFocused);
+    const toggle = props.onPreviewFocusChange && <FocusToggle focused={focused} onChange={props.onPreviewFocusChange} />;
+    return <section className={'cx-split' + (focused ? ' is-focus' : '')} aria-labelledby="client-conversation-project-title">
+      <div className="cx-split-preview">
+        {focused && <div className="cx-focusbar">
+          <button type="button" className="cx-back" onClick={props.onBack} disabled={busy}><ArrowLeft size={15} aria-hidden="true" />All projects</button>
+          <h1 id="client-conversation-project-title">{project.name}</h1>
+          {toggle}
+        </div>}
+        <ProjectPreviewFrame project={project} toolbarExtra={focused ? undefined : toggle} />
+      </div>
+      {!focused && <div className="cx-split-side">
+        {head}
+        {requests}
+        <section className="cx-split-chat" aria-label={`Conversation about ${project.name}`}>{chat}</section>
+      </div>}
+    </section>;
+  }
   return <section className="cx-request" aria-labelledby="client-conversation-project-title">
     <div className="cx-reqsplit">
       <section className="cx-reqchat" aria-labelledby="client-conversation-project-title">{head}{chat}</section>
       <aside className="cx-reqrail" aria-label={`Requests and details for ${project.name}`}>{requests}</aside>
     </div>
   </section>;
+}
+
+/** Folds the conversation away so the preview fills the page, or brings it back beside the preview. */
+function FocusToggle({ focused, onChange }: Readonly<{ focused: boolean; onChange: (focused: boolean) => void }>) {
+  return <Button type="button" variant="outline" size="sm" onClick={() => onChange(!focused)}>
+    {focused ? <PanelRightOpen size={15} aria-hidden="true" /> : <PanelRightClose size={15} aria-hidden="true" />}
+    {focused ? 'Show conversation' : 'Hide conversation'}
+  </Button>;
+}
+
+/** Where the shared preview will be, while the project manager hasn't shared one yet. */
+function PreviewNotShared({ onAsk }: Readonly<{ onAsk?: () => void }>) {
+  return <RailCard icon={<Monitor size={16} />} title="Preview">
+    <p className="cx-request-note"><strong className="cx-preview-pending">Not shared yet.</strong> When your project manager
+      shares a version to try, it opens on this page, beside your conversation.</p>
+    {onAsk && <button type="button" className="cx-link" onClick={onAsk}>Ask about a preview <ArrowRight size={14} aria-hidden="true" /></button>}
+  </RailCard>;
 }
 
 /** The picked request's panel, a loading state while it arrives, or a hint to pick one. */
