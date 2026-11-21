@@ -142,6 +142,32 @@ describe('the build panel above the message box', () => {
   });
 });
 
+describe('a build kept from starting', () => {
+  const failure = { messageId: 'm1', reason: 'Waiting for the existing blocked build using acme/shop-be.', request: 'Build the expense tasks' };
+
+  it('names the build in the way and offers to stop it and plan this request', () => {
+    const html = render({ failure: { ...failure, blocker: { runId: 'run-old', status: 'blocked', repository: 'acme/shop-be', issueIdentifier: 'PRO-108' } }, onStopBlocker: noop, onOpenBlocker: noop });
+    expect(html).toContain('PRO-108 is using acme/shop-be');
+    expect(html).toContain('Stop PRO-108 and plan this');
+    expect(html).toContain('Open PRO-108');
+    expect(html).toContain('Keep waiting');
+    expect(html).not.toContain('Try again');
+  });
+
+  it('puts Dismiss in the header instead of among the choices', () => {
+    const html = render({ failure });
+    expect(html).toContain('aria-label="Dismiss"');
+    expect(html).toContain('Try again');
+    expect(html).not.toContain('>Dismiss<');
+  });
+
+  it('asks for a second click before stopping', () => {
+    expect(render({ build: build('blocked', 'Waiting for you.') })).toContain('Stop the build');
+    expect(render({ build: build('blocked', 'Waiting for you.'), stopArmed: true })).toContain('Click again to stop');
+  });
+});
+
+
 describe('agents handing work to each other', () => {
   it('links each dependency owned by another agent, and marks the one being worked on', () => {
     const task = (id: string, ownerAgentId: string, status: string, dependsOn: string[] = []) => ({ id, ownerAgentId, status, dependsOn });

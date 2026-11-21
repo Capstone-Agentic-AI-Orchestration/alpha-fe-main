@@ -26,6 +26,16 @@ export default [
       'sonarjs/no-identical-conditions': 'error',
       'sonarjs/no-identical-expressions': 'error',
       'sonarjs/no-all-duplicated-branches': 'error',
+      // Native dialogs leave text fields unable to take typing in the Windows desktop app.
+      // Use useInAppDialog (src/shared/components/InAppDialog.tsx) or an inline confirm step.
+      'no-restricted-globals': ['error',
+        { name: 'confirm', message: 'Use useInAppDialog; native dialogs freeze typing in the desktop app.' },
+        { name: 'alert', message: 'Use a toast or useInAppDialog; native dialogs freeze typing in the desktop app.' },
+        { name: 'prompt', message: 'Use useInAppDialog; native dialogs freeze typing in the desktop app.' }],
+      'no-restricted-properties': ['error',
+        { object: 'window', property: 'confirm', message: 'Use useInAppDialog; native dialogs freeze typing in the desktop app.' },
+        { object: 'window', property: 'alert', message: 'Use a toast or useInAppDialog; native dialogs freeze typing in the desktop app.' },
+        { object: 'window', property: 'prompt', message: 'Use useInAppDialog; native dialogs freeze typing in the desktop app.' }],
       // Reported, not blocking.
       'sonarjs/no-nested-conditional': 'warn',
       'sonarjs/no-nested-template-literals': 'warn',

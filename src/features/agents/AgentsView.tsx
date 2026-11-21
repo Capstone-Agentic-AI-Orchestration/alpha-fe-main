@@ -68,7 +68,8 @@ export const AgentsView: React.FC = () => {
     setActiveTab,
     importAgent,
     setActiveChatAgentId,
-    can
+    can,
+    showToast
   } = useApp();
 
   const canManageAgents = can('manage_agents');
@@ -118,7 +119,7 @@ export const AgentsView: React.FC = () => {
       setSelectedAgentId(agent.id);
       setProfileTab(warnings.length ? 'persona' : 'instructions');
     } catch (err: any) {
-      window.alert(err?.message ?? 'Could not import that persona file.');
+      showToast('Persona not imported', err?.message ?? 'Could not import that persona file.', 'error');
     } finally {
       setImporting(false);
       // Reset so importing the same file twice still fires a change event.

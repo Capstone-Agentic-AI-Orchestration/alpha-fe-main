@@ -97,6 +97,9 @@ import { Button } from '@/shared/components/ui/button';
 import { Card } from '@/shared/components/ui/card';
 import { Badge } from '@/shared/components/ui/badge';
 import { ChatSkillTools } from './ChatSkillTools';
+import { ChatDecisionCard } from './ChatDecisionCard';
+import { useBufferedTabSessionState } from './useBufferedTabSessionState';
+import { useInAppDialog } from '@/shared/components/InAppDialog';
 import { ChatSkillCommandSuggestions, getChatSkillCommandAtCursor, matchChatSkills, MAX_SELECTED_SKILLS, type ChatSkillCommandQuery } from './ChatSkillCommand';
 
 const MODE_META: Record<AgentCallMode, {
@@ -606,7 +609,9 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   } = useApp();
 
   const sessionStateKey = (key: string, threadId = activeThreadId) => `chat.session.${threadId ?? 'draft'}.${key}`;
-  const [input, setInput] = useTabSessionState<string>(sessionStateKey('draft'), '');
+  // The draft is saved to the tab after a pause, not per keystroke (that re-rendered the whole app while typing).
+  const [input, setInput] = useBufferedTabSessionState(sessionStateKey('draft'));
+  const { confirm: confirmDialog, prompt: promptDialog, dialog: inAppDialog } = useInAppDialog();
   const { data: quotaSnapshot, error: quotaError, now: quotaTime } = useProviderUsage();
 
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
@@ -717,6 +722,15 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const [calls, setCalls] = useState<Record<string, AgentCall>>({});
   const [busyCallId, setBusyCallId] = useState<string | null>(null);
   const [stoppingProjectRunId, setStoppingProjectRunId] = useState<string | null>(null);
+  // "Stop" takes a second click within a few seconds instead of a native confirm, which froze typing on Windows.
+  const [stopArmed, setStopArmed] = useState(false);
+  useEffect(() => {
+    if (!stopArmed) return undefined;
+    const timer = window.setTimeout(() => setStopArmed(false), 4000);
+    return () => window.clearTimeout(timer);
+  }, [stopArmed]);
+  const [answeringDecisionId, setAnsweringDecisionId] = useState<string | null>(null);
+  const [hiddenDecisionId, setHiddenDecisionId] = useState<string | null>(null);
   const [repositoryMenuOpen, setRepositoryMenuOpen] = useState(false);
   const repositoryMenuRef = useRef<HTMLDivElement>(null);
   const [expandedDiffs, setExpandedDiffs] = useState<Record<string, boolean>>({});
@@ -1085,7 +1099,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
 
   const applyPatch = async (call: AgentCall) => {
     const patch = call.artifacts.find(artifact => artifact.artifactType === 'patch')?.content;
-    if (!patch || !window.confirm('Apply this proposed patch to the project working copy? Review the diff first.')) return;
+    if (!patch || !await confirmDialog('Apply this patch?', 'It changes the project working copy. Review the diff first.', 'Apply patch')) return;
     setBusyCallId(call.id);
     try {
       const result = await apiService.applyAgentCallPatch(call.id);
@@ -1113,7 +1127,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   };
 
   const followUpCall = async (call: AgentCall) => {
-    const instruction = window.prompt('Follow up with this agent:', 'Please go deeper on the highest-priority finding.')?.trim();
+    const instruction = (await promptDialog('Follow up with this agent', 'Please go deeper on the highest-priority finding.'))?.trim();
     if (!instruction) return;
     setBusyCallId(call.id);
     try {
@@ -1294,6 +1308,12 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     }
     if (isAgentTyping) return;
     const sendsBuild = /^\/build(?:\s|$)/i.test(typedMessage);
+    // While the Orchestrator waits on a question, a typed message is the answer ("Something else").
+    if (openDecision && typedMessage && !sendsBuild && !pendingFiles.length) {
+      setInput('');
+      try { await answerDecision(typedMessage); } catch { setInput(typedMessage); }
+      return;
+    }
     const message = typedMessage || (pendingFiles.length && !sendsBuild
       ? 'Please inspect the attached files and summarize the relevant information.'
       : '');
@@ -1388,9 +1408,9 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const stopProjectBuild = async () => {
     const orchestrationRunId = liveBuild && liveBuild.status !== 'cancelling' ? liveBuild.runId : null;
     if (!orchestrationRunId || stoppingProjectRunId || !project?.id) return;
-    if (!window.confirm(liveBuild?.status === 'awaiting_plan_approval'
-      ? 'Stop this build plan? No agents have started, and the plan will not run.'
-      : 'Stop the current build? Running agents stop at the next safe point. Work already saved on the build branch stays available.')) return;
+    // First click arms the button; the second, within four seconds, stops.
+    if (!stopArmed) { setStopArmed(true); return; }
+    setStopArmed(false);
     setStoppingProjectRunId('all');
     try {
       const results = await Promise.allSettled([
@@ -1428,13 +1448,64 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         item.routeProposal?.status === 'accepted' && item.routeProposal.goal &&
         earlier.find(source => source.id === item.routeProposal!.sourceMessageId)?.content === words)?.routeProposal;
       const request = accepted?.goal || words;
-      return { messageId: message.id, reason: planningFailureReason(message.content), request, repositories: accepted?.repositories };
+      return { messageId: message.id, reason: planningFailureReason(message.content), request, repositories: accepted?.repositories, blocker: message.buildBlocker };
     }
     return null;
   }, [currentMessages, dismissedBuildFailures, isClient, liveBuild]);
 
   const dismissBuildFailure = () => {
     if (buildFailure) setDismissedBuildFailures(previous => [...previous.slice(-19), buildFailure.messageId]);
+  };
+
+  /** The Orchestrator's open question, unless the person has since said something else. */
+  const openDecision = useMemo(() => {
+    if (isClient) return null;
+    for (let index = currentMessages.length - 1; index >= 0; index -= 1) {
+      const message = currentMessages[index];
+      if (message.senderType === 'user') return null;
+      if (message.decision) return message.decision.status === 'open' ? message : null;
+    }
+    return null;
+  }, [currentMessages, isClient]);
+
+  const answerDecision = async (answer: string) => {
+    if (!activeThread || !openDecision || answeringDecisionId) return;
+    setAnsweringDecisionId(openDecision.id);
+    followNextMessage();
+    try {
+      await apiService.answerChatDecision(activeThread.id, openDecision.id, answer, currentUser?.name);
+      await refreshChatThread(activeThread.id);
+    } catch (error: any) {
+      showToast('Answer not sent', error?.message ?? 'Alpha could not record that answer. Try again.', 'error');
+      throw error;
+    } finally {
+      setAnsweringDecisionId(null);
+    }
+  };
+
+  /** Stop the build that kept this request from starting, then plan this request again. */
+  const stopBlockerAndRetry = async () => {
+    const blocker = buildFailure?.blocker;
+    if (!blocker || !project?.id || buildDecisionBusy) return;
+    setBuildDecisionBusy('stop');
+    try {
+      let { status } = await apiService.cancelOrchestration(project.id, blocker.runId);
+      // A build with agents still running stops at the next safe point; give it a moment.
+      for (let attempt = 0; status === 'cancelling' && attempt < 8; attempt += 1) {
+        await new Promise(resolve => window.setTimeout(resolve, 1500));
+        status = (await apiService.cancelOrchestration(project.id, blocker.runId).catch(() => ({ status: 'cancelled' }))).status;
+      }
+    } catch (error: any) {
+      showToast('Could not stop ' + (blocker.issueIdentifier ?? 'that build'), error?.message ?? 'Open it and stop it from its build controls.', 'error');
+      setBuildDecisionBusy(null);
+      return;
+    }
+    setBuildDecisionBusy(null);
+    await retryPlanning();
+  };
+  const openBlocker = () => {
+    const blocker = buildFailure?.blocker;
+    if (blocker) openSavedBuildReview(blocker.runId);
   };
   /** Send a short message in this conversation as the person, as if typed (the Merge into dev button). */
   const sendInChat = (text: string) => {
@@ -1796,6 +1867,13 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   else stopBuildLabel = liveBuild?.status === 'awaiting_plan_approval' ? 'Stop plan' : 'Stop build';
   const composerHasContent = Boolean(input.trim()) || pendingFiles.length > 0;
   const composerStop: 'turn' | 'build' | null = composerHasContent ? null : activeTurnMessageId ? 'turn' : canStopBuild ? 'build' : null;
+  let stopButton = { label: stopBuildLabel, title: stopBuildLabel + ' · work already on the build branch stays available. Type to send a message instead.' };
+  if (composerStop === 'turn') stopButton = { label: 'Stop this response', title: 'Stop this response. Type to queue a direction instead.' };
+  else if (stopArmed) stopButton = { label: 'Click again to stop the build', title: 'Click again to stop. Work already on the build branch stays available.' };
+  let composerPlaceholder = 'Ask Alpha anything, type @ for agents or / for skills…';
+  if (activeTurnMessageId) composerPlaceholder = 'Add a direction for the current agent…';
+  else if (openDecision) composerPlaceholder = 'Type your answer, or choose one above…';
+  else if (isClient) composerPlaceholder = `Write a message to ${pmName}…`;
 
   const buildChangedFiles = liveBuild ? [...new Set(liveBuild.agents.flatMap(agent => agent.changedFiles))] : [];
   const openBuildChanges = () => { if (liveBuild && project) openSideTab({ id: 'changes:' + liveBuild.runId, kind: 'changes', projectId: project.id, runId: liveBuild.runId }); };
@@ -1891,6 +1969,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
 
   return (
     <PlanPanelContext.Provider value={isClient ? null : openPlanTab}>
+    {inAppDialog}
     <div className="relative h-full min-h-0 flex overflow-hidden bg-shell text-sm text-content">
       {!unifiedNavigation && <>
       {/* The width animates; the list keeps its full width inside and is clipped while it slides. */}
@@ -1969,7 +2048,15 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
             <div className="pointer-events-auto mx-auto w-full max-w-6xl space-y-2">
               {showLatest && <div className="flex justify-center"><button type="button" onClick={jumpToLatest} className="inline-flex items-center gap-2 rounded-full border border-divider bg-surface-raised px-4 py-2 text-xs font-medium text-selected-content shadow-lg shadow-black/40 hover:bg-selected">Jump to latest <ChevronDown className="h-3.5 w-3.5" /></button></div>}
               {/* The build, step by step, with the choices it is waiting on. */}
-              {!isClient && project && (liveBuild || buildFailure) && <ChatBuildWizard
+              {/* The Orchestrator's question takes the build card's place until it is answered. */}
+              {openDecision?.decision && hiddenDecisionId !== openDecision.id && <ChatDecisionCard
+                key={openDecision.id}
+                decision={openDecision.decision}
+                busy={answeringDecisionId === openDecision.id}
+                onAnswer={answer => { void answerDecision(answer).catch(() => undefined); }}
+                onClose={() => setHiddenDecisionId(openDecision.id)}
+              />}
+              {!isClient && project && !openDecision && (liveBuild || buildFailure) && <ChatBuildWizard
                 key={liveBuild ? liveBuild.runId : buildFailure?.messageId}
                 projectId={project.id}
                 build={liveBuild}
@@ -1977,6 +2064,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 canStart={Boolean(liveBuild?.canControl) && can('run_builds')}
                 canApprove={can('publish_build')}
                 canStop={canStopBuild}
+                stopArmed={stopArmed}
                 busy={stoppingProjectRunId ? 'stop' : buildDecisionBusy}
                 error={buildDecisionError}
                 onStop={() => void stopProjectBuild()}
@@ -1985,6 +2073,8 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 onReply={replyInComposer}
                 onRetry={() => void retryPlanning()}
                 onDismiss={dismissBuildFailure}
+                onStopBlocker={() => void stopBlockerAndRetry()}
+                onOpenBlocker={openBlocker}
                 onOpenReview={openBuildReview}
                 />}
               {forcedBuild && !isClient && <div className={`px-4 text-[10px] ${requiresRepositorySelection ? 'text-status-warning' : 'text-content-muted'}`}>{repositorySelectionMessage}</div>}
@@ -2056,7 +2146,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                   <div className="border-t border-divider px-2.5 py-2 text-[10px] text-content-muted">Use ↑ and ↓ to choose, Enter to add, or Esc to close.</div>
                 </div>}
                 {!mentionQuery && skillCommandQuery && !isClient && !activeTurnMessageId && <ChatSkillCommandSuggestions id="chat-skill-command-suggestions" query={skillCommandQuery} skills={skills} selectedSkillIds={selectedSkillIds} activeIndex={activeSkillCommandIndex} onActiveIndexChange={setActiveSkillCommandIndex} onSelect={insertSkillCommand} onScan={can('manage_skills') ? scanInstalledSkills : undefined} scanning={isScanningSkills} className="left-12" />}
-                <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length || skillCommandQuery)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : skillCommandQuery ? 'chat-skill-command-suggestions' : undefined} rows={1} placeholder={activeTurnMessageId ? 'Add a direction for the current agent…' : isClient ? `Write a message to ${pmName}…` : 'Ask Alpha anything, type @ for agents or / for skills…'} className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-content placeholder-content-muted outline-none" />
+                <textarea ref={messageInputRef} value={input} onChange={updateMessageInput} onPaste={event => { if (!activeTurnMessageId && event.clipboardData.files.length) { event.preventDefault(); addFiles(event.clipboardData.files); } }} onKeyDown={handleMessageInputKeyDown} aria-autocomplete="list" aria-expanded={Boolean(mentionQuery && mentionSuggestions.length || skillCommandQuery)} aria-controls={mentionQuery ? 'chat-mention-suggestions' : skillCommandQuery ? 'chat-skill-command-suggestions' : undefined} rows={1} placeholder={composerPlaceholder} className="max-h-40 min-h-10 flex-1 resize-none bg-transparent px-2 py-2.5 text-sm text-content placeholder-content-muted outline-none" />
                 <div className="flex shrink-0 items-center gap-1">
                 {!isClient && !activeTurnMessageId && <span className="relative flex items-center">
                   <select aria-label="Model access" title="Choose how much access the selected model has for this chat" value={approvalMode} onChange={event => setApprovalMode(event.target.value as 'ask' | 'approve' | 'full')} className="max-w-36 cursor-pointer appearance-none rounded-md bg-transparent py-1.5 pl-2 pr-5 text-[11px] text-content-secondary outline-none hover:text-content focus-visible:text-content focus-visible:ring-2 focus-visible:ring-focus [&>option]:bg-surface-high [&>option]:text-content">
@@ -2067,10 +2157,11 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 {/* One button: it stops the running response or build while the box is empty, and sends as soon as you type. */}
                 {composerStop ? <button type="button" onClick={() => void (composerStop === 'turn' ? stopChatTurn() : stopProjectBuild())}
                   disabled={composerStop === 'turn' ? Boolean(chatTurnActionBusy) : Boolean(stoppingProjectRunId)}
-                  aria-label={composerStop === 'turn' ? 'Stop this response' : stopBuildLabel}
-                  title={composerStop === 'turn' ? 'Stop this response. Type to queue a direction instead.' : stopBuildLabel + ' · work already on the build branch stays available. Type to send a message instead.'}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-action text-on-action hover:bg-action-hover disabled:opacity-40">
+                  aria-label={stopButton.label}
+                  title={stopButton.title}
+                  className={'flex h-10 shrink-0 items-center justify-center gap-1.5 rounded-full bg-action text-on-action hover:bg-action-hover disabled:opacity-40 ' + (composerStop === 'build' && stopArmed ? 'px-3.5 text-xs font-semibold ring-2 ring-status-danger-border' : 'w-10')}>
                   <Square className={(composerStop === 'turn' ? chatTurnActionBusy : stoppingProjectRunId) ? 'h-3.5 w-3.5 animate-pulse fill-current' : 'h-3.5 w-3.5 fill-current'} />
+                  {composerStop === 'build' && stopArmed && <span>Stop?</span>}
                 </button>
                 : <button type="submit" aria-label={activeTurnMessageId ? 'Queue direction for current agent' : forcedBuild ? 'Start Orchestrator build' : 'Send message'} disabled={(!input.trim() && (!pendingFiles.length || Boolean(activeTurnMessageId) || forcedBuild)) || Boolean(chatTurnActionBusy) || isAgentTyping && !activeTurnMessageId || !activeTurnMessageId && forcedBuild && (!can('run_agents') || buildIsOpen || requiresRepositorySelection)} title={activeTurnMessageId ? 'Queue this direction for the current response.' : forcedBuild && !can('run_agents') ? 'Your workspace role cannot start product builds.' : forcedBuild && buildIsOpen ? 'Stop the earlier build before starting another.' : forcedBuild && projectRepositories.length === 0 ? 'Connect a codebase before building.' : forcedBuild && requiresRepositorySelection ? 'Select at least one codebase to build.' : undefined} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-action text-on-action hover:bg-action-hover disabled:opacity-30"><Send className="h-4 w-4" /></button>}
                 </div>

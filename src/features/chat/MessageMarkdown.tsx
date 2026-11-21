@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { memo, useState, type ReactNode } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Check, Copy } from 'lucide-react';
@@ -111,7 +111,7 @@ interface Props {
   content: string;
 }
 
-export function MessageMarkdown({ content }: Readonly<Props>) {
+function MessageMarkdownView({ content }: Readonly<Props>) {
   return (
     /*
      * `break-words` is not decoration. The longest line in the measured reply
@@ -204,3 +204,6 @@ export function MessageMarkdown({ content }: Readonly<Props>) {
     </div>
   );
 }
+
+/** Parsing Markdown is the slow part of a chat render; a message whose text has not changed keeps its output while the person types. */
+export const MessageMarkdown = memo(MessageMarkdownView);

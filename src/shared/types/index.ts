@@ -1699,11 +1699,15 @@ export interface ChatMessage {
   thinkingProcess?: string;
   toolsExecuted?: ToolExecutionRecord[];
   isStreaming?: boolean;
-  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build' | 'build_milestone' | 'build_proposal' | 'project_needed';
+  messageType?: 'user' | 'assistant' | 'agent' | 'system' | 'agent_call' | 'build' | 'build_milestone' | 'build_proposal' | 'project_needed' | 'build_decision';
   agentCallId?: string;
   orchestrationRunId?: string;
   /** A build Alpha proposed instead of starting, awaiting the user's answer. */
   routeProposal?: ChatRouteProposal;
+  /** A question the Orchestrator asked before planning. */
+  decision?: ChatDecision;
+  /** The build that kept this one from starting. */
+  buildBlocker?: ChatBuildBlocker;
   operationMode?: AgentCallMode;
   agentCallStatus?: AgentCallStatus;
   revisionTarget?: AgentCallTarget;
@@ -1714,6 +1718,22 @@ export interface ChatMessage {
 }
 
 /** A build Alpha proposed in chat. */
+export interface ChatDecision {
+  question: string;
+  options: Array<{ label: string; description?: string }>;
+  status: 'open' | 'answered' | 'superseded';
+  answer?: string;
+}
+
+export interface ChatBuildBlocker {
+  runId: string;
+  status: string;
+  repository?: string;
+  issueId?: string;
+  issueIdentifier?: string;
+  threadId?: string;
+}
+
 export interface ChatRouteProposal {
   sourceMessageId: string;
   goal: string;
