@@ -4,6 +4,13 @@ import type { ClientProjectRequestItem, ClientTicketQueueOptions } from './clien
 type ClientPortalFilter = NonNullable<ClientTicketQueueOptions['filter']>;
 
 export type ClientPage = 'overview' | 'projects' | 'proposals' | 'requests';
+/**
+ * Which layout a project page shows.
+ * - `auto`: the preview beside the conversation once one is shared, otherwise the conversation page.
+ * - `preview`: the preview beside the conversation even before one is shared; the preview then says so.
+ * - `focus`: the preview alone, with the conversation folded away.
+ */
+export type ClientProjectView = 'auto' | 'preview' | 'focus';
 interface Navigation {
   page: ClientPage;
   selectedProjectKey: string | null;
@@ -14,8 +21,8 @@ interface Navigation {
   selectedConversationTicketId: string | null;
   /** Opens the conversation's request form after the client chooses a project. */
   startConversationRequest: boolean;
-  /** The project page shows only its shared preview, with the conversation folded away. */
-  previewFocus: boolean;
+  /** Which layout the open project page shows. */
+  projectView: ClientProjectView;
   selectedId: string | null;
   selectedWorkspaceId: string | null;
   selectedItemFallback: ClientProjectRequestItem | null;
@@ -39,7 +46,7 @@ export function initialClientTabs(filter: ClientPortalFilter = 'all'): Tabs {
 }
 function createTab(id: string, page: ClientPage, filter: ClientPortalFilter = 'all'): Tab {
   return { id, navigation: { page, selectedProjectKey: null, selectedProposalId: null, selectedConversationKey: null, selectedId: null, selectedWorkspaceId: null,
-    selectedConversationTicketId: null, startConversationRequest: false, previewFocus: false,
+    selectedConversationTicketId: null, startConversationRequest: false, projectView: 'auto',
     selectedItemFallback: null, filter, searchInput: '', search: '', replyDrafts: {}, returnToProjects: false,
     notificationProjectFocus: 0 } };
 }
@@ -67,9 +74,9 @@ export function useClientWorkspaceTabs(initialFilter: ClientPortalFilter) {
   }
   return { tabs: tabs.items, activeTabId: activeTab.id, tabState,
     selectProject: (id: string, selectedProjectKey: string | null) => dispatch({ type: 'update', id, update: navigation => ({ ...navigation, selectedProjectKey }) }),
-    openProjectConversation: (id: string, selectedConversationKey: string, ticketId: string | null, startRequest: boolean, previewFocus = false) => dispatch({
+    openProjectConversation: (id: string, selectedConversationKey: string, ticketId: string | null, startRequest: boolean, projectView: ClientProjectView = 'auto') => dispatch({
       type: 'update', id, update: navigation => ({ ...navigation, selectedConversationKey, selectedConversationTicketId: ticketId,
-        startConversationRequest: startRequest, previewFocus }),
+        startConversationRequest: startRequest, projectView }),
     }),
     openTab: (page: ClientPage) => dispatch({ type: 'open', id: crypto.randomUUID(), page }),
     activateTab: (id: string) => dispatch({ type: 'activate', id }),

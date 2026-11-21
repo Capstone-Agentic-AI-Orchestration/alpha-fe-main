@@ -535,3 +535,19 @@ span.cx-button { pointer-events: none; }
   .cx-topbar-actions .cx-icon-button { display: none; }
   .cx-topbar-actions .cx-avatar { width: 32px; height: 32px; }
 }
+
+/* The preview page before anything is shared: the frame keeps its place and says so, with a way to ask. */
+.cx-reqchat-head > .cx-preview-open { flex: none; display: inline-flex; align-items: center; gap: var(--client-space-2); }
+.cx-preview-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-2) var(--client-space-5); }
+.cx-link.is-quiet { color: var(--cx-muted); }
+.cx-link.is-quiet:hover { color: var(--cx-ink); }
+.cx-preview-frame.is-empty .pqa-stage { align-items: center; background: none; }
+.cx-preview-frame.is-empty .pqa-empty { gap: var(--client-space-3); color: var(--cx-muted); }
+.cx-preview-frame.is-empty .pqa-empty > svg { color: var(--cx-accent); opacity: .8; }
+.cx-preview-frame.is-empty .pqa-empty h3 { color: var(--cx-ink); font-size: var(--client-type-body); }
+.cx-preview-frame.is-empty .pqa-empty .cx-link { margin-top: var(--client-space-1); font-size: var(--client-type-compact); }
+@media (max-width: 1000px) {
+  /* Stacked on narrow screens, an empty preview only needs room for its message. */
+  .cx-split.is-empty .cx-split-preview { height: auto; min-height: 0; }
+  .cx-split.is-empty .cx-split-preview .cx-preview-frame { height: auto; min-height: 280px; flex: none; }
+}

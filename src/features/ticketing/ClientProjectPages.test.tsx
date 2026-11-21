@@ -49,7 +49,7 @@ describe('client overview loading', () => {
     expect(html).not.toContain('REF-1');
   });
 
-  it('offers Open preview on a project cover only once a preview is shared', () => {
+  it('always offers Open preview on a project cover, with a picture once a preview is shared', () => {
     const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onOpenPreview: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
     const loaded = { items: [], nextCursor: null, counters: { kind: 'client' as const, open: 0, needsClient: 0 } };
     const shop = { workspaceId: 'w1', projectId: 'p1', name: 'Shop', updatedAt: '2026-11-01T00:00:00Z', intakeOptionId: 'o1', preview: null };
@@ -57,8 +57,10 @@ describe('client overview loading', () => {
       requestsLoading={false} requestsError="" projects={[{ ...shop, preview }]} projectsLoading={false} projectsError="" {...callbacks} />);
     const waiting = render(null);
     expect(waiting).toContain('no preview yet');
-    expect(waiting).not.toContain('aria-label="Open preview for Shop"');
+    // The preview page opens before anything is shared and says so there; only the picture waits.
+    expect(waiting).toContain('aria-label="Open preview for Shop"');
     expect(waiting).toContain('aria-label="Open conversation for Shop"');
+    expect(waiting).not.toContain('cx-cover-shot');
     const ready = render({ branch: 'uat', url: 'https://shop-uat.vercel.app' });
     expect(ready).toContain('preview ready');
     const links = ready.slice(ready.indexOf('class="cx-card-links"'));
