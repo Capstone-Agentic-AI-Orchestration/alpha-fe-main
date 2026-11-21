@@ -83,4 +83,38 @@ describe('client project page', () => {
     expect(html).toContain('class="cx-reqsplit"');
     expect(html).not.toContain('cx-split-preview');
   });
+
+  it('says in the panel that no preview is shared yet, above the requests, with a way to ask about one', () => {
+    const html = page();
+    const rail = html.slice(html.indexOf('aria-label="Requests and details for Resort Website"'));
+    const preview = rail.indexOf('</span>Preview</h2>');
+    expect(preview).toBeGreaterThan(-1);
+    expect(rail.indexOf('class="cx-reqcard-title">Requests')).toBeGreaterThan(preview);
+    expect(rail).toContain('Not shared yet.');
+    expect(rail).toContain('Ask about a preview');
+    // A read-only inspection still says so, but cannot write to the project manager.
+    const readOnly = page({ readOnly: true });
+    expect(readOnly).toContain('Not shared yet.');
+    expect(readOnly).not.toContain('Ask about a preview');
+  });
+
+  const shared = { ...project, preview: { branch: 'uat' as const, url: 'https://resort-uat.vercel.app' } };
+
+  it('drops the not-shared card once a preview is shared, and offers to hide the conversation beside it', () => {
+    const html = page({ project: shared, previewFocused: false, onPreviewFocusChange: () => undefined });
+    expect(html).not.toContain('Not shared yet.');
+    const preview = html.slice(html.indexOf('class="cx-split-preview"'), html.indexOf('class="cx-split-side"'));
+    expect(preview).toContain('Hide conversation');
+    expect(html).not.toContain('cx-focusbar');
+  });
+
+  it('opens on the preview alone when focused, with the way back and the conversation one click away', () => {
+    const html = page({ project: shared, previewFocused: true, onPreviewFocusChange: () => undefined });
+    expect(html).toMatch(/^<section class="cx-split is-focus"/);
+    expect(html).not.toContain('cx-split-side');
+    expect(html).not.toContain('Message your project manager');
+    const bar = html.slice(html.indexOf('class="cx-focusbar"'), html.indexOf('cx-preview-frame'));
+    for (const part of ['All projects', 'id="client-conversation-project-title"', 'Resort Website', 'Show conversation']) expect(bar).toContain(part);
+    expect(html.match(/Show conversation|Hide conversation/g)).toHaveLength(1);
+  });
 });

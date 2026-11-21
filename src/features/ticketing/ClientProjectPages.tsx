@@ -2,7 +2,7 @@ import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { Button } from '@/shared/components/ui/button';
 import { Card } from '@/shared/components/ui/card';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight, BellRing, Check, ClipboardCheck, FolderKanban, Lightbulb, MessageSquare, Plus, Sparkles } from 'lucide-react';
+import { ArrowRight, BellRing, Check, ClipboardCheck, FolderKanban, Lightbulb, MessageSquare, Monitor, Plus, Sparkles } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
@@ -179,9 +179,9 @@ export function ClientProjectSpotlight({ project, requests, onOpenProject, onOpe
       <div className="cx-cover-body">
         <header className="cx-cover-head">
           <h3>{project.name}</h3>
-          <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenProject} aria-label={'Open conversation for ' + project.name}>Open conversation <ArrowRight size={14} aria-hidden="true" /></Button>
+          <ProjectLinks project={project} onOpenProject={onOpenProject} onOpenPreview={onOpenPreview} />
         </header>
-        <p className="cx-cover-meta">{openCount(open.length)} · updated {relativeTime(project.updatedAt)}{project.preview ? ' · preview ready' : ''}</p>
+        <p className="cx-cover-meta">{openCount(open.length)} · updated {relativeTime(project.updatedAt)} · {project.preview ? 'preview ready' : 'no preview yet'}</p>
         <CxStats label={'Requests in ' + project.name} items={[
           { label: 'Needs you', value: needsYou, tone: 'attention' },
           { label: 'Open', value: open.length },
@@ -192,6 +192,16 @@ export function ClientProjectSpotlight({ project, requests, onOpenProject, onOpe
       </div>
     </div>
   </Card>;
+}
+
+/** A project card's two ways in: straight to its shared preview (once there is one), or to its conversation. */
+function ProjectLinks({ project, onOpenProject, onOpenPreview }: { project: ClientProject; onOpenProject: () => void; onOpenPreview?: () => void }) {
+  return <div className="cx-card-links">
+    {project.preview && onOpenPreview && <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenPreview}
+      aria-label={'Open preview for ' + project.name}><Monitor size={14} aria-hidden="true" />Open preview</Button>}
+    <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenProject}
+      aria-label={'Open conversation for ' + project.name}>Open conversation <ArrowRight size={14} aria-hidden="true" /></Button>
+  </div>;
 }
 
 function openCount(count: number): string {
@@ -277,7 +287,7 @@ function ClientProjectOverviewCard({ project, requests, latest, onOpenProject, o
       <header className="cx-project-wide-head">
         <h3 id={titleId}>{project.name}</h3>
         {needsYou > 0 && <CxBadge tone="attention">{needsYou} {needsYou === 1 ? 'needs' : 'need'} you</CxBadge>}
-        <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenProject} aria-label={'Open conversation for ' + project.name}>Open conversation <ArrowRight size={14} aria-hidden="true" /></Button>
+        <ProjectLinks project={project} onOpenProject={onOpenProject} onOpenPreview={onOpenPreview} />
       </header>
       <p className="cx-project-wide-meta">Updated {relativeTime(project.updatedAt)} · {project.preview ? 'preview shared' : 'no preview yet'}</p>
       <CxStats label={'Requests in ' + project.name} items={[

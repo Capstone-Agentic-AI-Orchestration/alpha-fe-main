@@ -253,7 +253,9 @@ span.cx-button { pointer-events: none; }
 .cx-project-wide-body { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); }
 .cx-project-wide-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-3); }
 .cx-project-wide-head h3 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-body); font-weight: var(--client-weight-bold); }
-.cx-project-wide-head .cx-link { margin-left: auto; }
+.cx-project-wide-head .cx-card-links { margin-left: auto; }
+/* A project card's ways in: Open preview (once shared) beside Open conversation. */
+.cx-card-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-4); }
 .cx-project-wide-meta { margin: 0; color: var(--cx-muted); font-size: var(--client-type-meta); }
 .cx-project-wide .cx-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .cx-project-wide .cx-stat { padding: var(--client-space-2) var(--client-space-3); }
@@ -324,8 +326,15 @@ span.cx-button { pointer-events: none; }
 /* The page area stops scrolling and hands the full height to the split; only the right side scrolls. */
 .cx-main:has(.cx-split) { display: flex; flex-direction: column; overflow: hidden; }
 .cx-main:has(.cx-split) > :has(> .cx-split) { display: flex; min-height: 0; flex: 1; flex-direction: column; }
-.cx-split { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 56fr) minmax(400px, 44fr); }
-.cx-split-preview { display: flex; min-width: 0; min-height: 0; padding: var(--client-space-4); border-right: 1px solid var(--cx-line); background: var(--cx-raised); }
+.cx-split { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 62fr) minmax(400px, 38fr); }
+.cx-split-preview { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-4); border-right: 1px solid var(--cx-line); background: var(--cx-raised); }
+/* Preview focus: the preview takes the whole page; a slim bar leads back or brings the conversation back. */
+.cx-split.is-focus { grid-template-columns: minmax(0, 1fr); }
+.cx-split.is-focus .cx-split-preview { border-right: 0; }
+.cx-focusbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-3) var(--client-space-4); }
+.cx-focusbar > .cx-back { align-self: center; }
+.cx-focusbar h1 { min-width: 0; flex: 1; margin: 0; overflow: hidden; color: var(--cx-ink); font-size: var(--client-type-body); font-weight: var(--client-weight-bold); text-overflow: ellipsis; white-space: nowrap; }
+.cx-preview-pending { color: var(--cx-ink); font-weight: var(--client-weight-semibold); }
 .cx-split-preview .cx-preview-frame { height: auto; min-height: 0; flex: 1; }
 .cx-split-side { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--client-space-6); overflow-y: auto; padding: var(--client-space-6) var(--client-space-6) var(--client-space-8); }
 .cx-split-side .cx-action-grid { grid-template-columns: minmax(0, 1fr); }
@@ -438,6 +447,7 @@ span.cx-button { pointer-events: none; }
   .cx-main:has(.cx-split) > :has(> .cx-split) { display: block; }
   .cx-split { grid-template-columns: minmax(0, 1fr); }
   .cx-split-preview { height: 62dvh; min-height: 420px; border-right: 0; border-bottom: 1px solid var(--cx-line); }
+  .cx-split.is-focus .cx-split-preview { height: calc(100dvh - 72px); padding-inline: var(--client-portal-gutter); border-bottom: 0; }
   .cx-split-side { overflow: visible; padding: var(--client-space-5) var(--client-portal-gutter) var(--client-space-7); }
   /* Narrow screens: the way back and the conversation first, then the requests and the picked request, then its other details. */
   .cx-main:has(.cx-reqsplit) { display: block; overflow-y: auto; }
@@ -486,7 +496,10 @@ span.cx-button { pointer-events: none; }
   /* Rows that ask for something: the words get the full width, the button goes underneath. */
   .cx-panel.is-attention .cx-row-copy { flex: 1 1 calc(100% - 32px); }
   .cx-project-wide-head h3 { flex: 1 1 100%; }
-  .cx-project-wide-head .cx-link { margin-left: 0; }
+  .cx-project-wide-head .cx-card-links { margin-left: 0; }
+  /* Preview focus on phones: the way back and Show conversation share a row, the project name gets its own. */
+  .cx-focusbar { justify-content: space-between; }
+  .cx-focusbar h1 { order: 3; flex-basis: 100%; white-space: normal; }
   .cx-reqchat-head { flex-wrap: wrap; }
 }
 

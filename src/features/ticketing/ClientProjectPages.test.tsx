@@ -48,6 +48,23 @@ describe('client overview loading', () => {
     expect(html).toContain('Propose a project');
     expect(html).not.toContain('REF-1');
   });
+
+  it('offers Open preview on a project cover only once a preview is shared', () => {
+    const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onOpenPreview: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
+    const loaded = { items: [], nextCursor: null, counters: { kind: 'client' as const, open: 0, needsClient: 0 } };
+    const shop = { workspaceId: 'w1', projectId: 'p1', name: 'Shop', updatedAt: '2026-11-01T00:00:00Z', intakeOptionId: 'o1', preview: null };
+    const render = (preview: typeof shop.preview | { branch: 'uat'; url: string }) => renderToStaticMarkup(<ClientOverviewPage requests={loaded}
+      requestsLoading={false} requestsError="" projects={[{ ...shop, preview }]} projectsLoading={false} projectsError="" {...callbacks} />);
+    const waiting = render(null);
+    expect(waiting).toContain('no preview yet');
+    expect(waiting).not.toContain('aria-label="Open preview for Shop"');
+    expect(waiting).toContain('aria-label="Open conversation for Shop"');
+    const ready = render({ branch: 'uat', url: 'https://shop-uat.vercel.app' });
+    expect(ready).toContain('preview ready');
+    const links = ready.slice(ready.indexOf('class="cx-card-links"'));
+    expect(links.indexOf('aria-label="Open preview for Shop"')).toBeGreaterThan(-1);
+    expect(links.indexOf('aria-label="Open conversation for Shop"')).toBeGreaterThan(links.indexOf('aria-label="Open preview for Shop"'));
+  });
 });
 
 describe('client project review presentation', () => {
