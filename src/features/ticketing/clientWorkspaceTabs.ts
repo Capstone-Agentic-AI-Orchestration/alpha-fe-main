@@ -5,12 +5,13 @@ type ClientPortalFilter = NonNullable<ClientTicketQueueOptions['filter']>;
 
 export type ClientPage = 'overview' | 'projects' | 'proposals' | 'requests';
 /**
- * Which layout a project page shows.
- * - `auto`: the preview beside the conversation once one is shared, otherwise the conversation page.
- * - `preview`: the preview beside the conversation even before one is shared; the preview then says so.
- * - `focus`: the preview alone, with the conversation folded away.
+ * Which view a project page shows (its Conversation | Preview switch).
+ * - `auto`: the preview view once one is shared, otherwise the conversation view.
+ * - `conversation`: the conversation in the main area, even with a shared preview.
+ * - `preview`: the preview in the main area, even before one is shared (it then says so), with the conversation beside it.
+ * - `focus`: the shared preview alone, with the conversation folded away.
  */
-export type ClientProjectView = 'auto' | 'preview' | 'focus';
+export type ClientProjectView = 'auto' | 'conversation' | 'preview' | 'focus';
 interface Navigation {
   page: ClientPage;
   selectedProjectKey: string | null;

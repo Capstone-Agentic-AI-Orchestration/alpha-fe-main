@@ -322,31 +322,7 @@ span.cx-button { pointer-events: none; }
 .cx-cover .cx-quote { padding: var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--client-radius-surface); }
 .cx-cover > .cx-row { border-top: 1px solid var(--cx-line); }
 
-/* Project page with a shared preview: the preview fills the left half, everything else scrolls beside it. */
-/* The page area stops scrolling and hands the full height to the split; only the right side scrolls. */
-.cx-main:has(.cx-split) { display: flex; flex-direction: column; overflow: hidden; }
-.cx-main:has(.cx-split) > :has(> .cx-split) { display: flex; min-height: 0; flex: 1; flex-direction: column; }
-.cx-split { display: grid; min-height: 0; flex: 1; grid-template-columns: minmax(0, 62fr) minmax(400px, 38fr); }
-.cx-split-preview { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-4); border-right: 1px solid var(--cx-line); background: var(--cx-raised); }
-/* Preview focus: the preview takes the whole page; a slim bar leads back or brings the conversation back. */
-.cx-split.is-focus { grid-template-columns: minmax(0, 1fr); }
-.cx-split.is-focus .cx-split-preview { border-right: 0; }
-.cx-focusbar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-3) var(--client-space-4); }
-.cx-focusbar > .cx-back { align-self: center; }
-.cx-focusbar h1 { min-width: 0; flex: 1; margin: 0; overflow: hidden; color: var(--cx-ink); font-size: var(--client-type-body); font-weight: var(--client-weight-bold); text-overflow: ellipsis; white-space: nowrap; }
 .cx-preview-pending { color: var(--cx-ink); font-weight: var(--client-weight-semibold); }
-.cx-split-preview .cx-preview-frame { height: auto; min-height: 0; flex: 1; }
-.cx-split-side { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--client-space-6); overflow-y: auto; padding: var(--client-space-6) var(--client-space-6) var(--client-space-8); }
-.cx-split-side .cx-action-grid { grid-template-columns: minmax(0, 1fr); }
-.cx-split .cx-chat { position: static; max-height: 560px; }
-/* The project conversation on the split page side: a fixed-height chat with its composer. */
-.cx-split-chat { display: flex; height: clamp(440px, 64vh, 720px); flex: none; flex-direction: column; overflow: hidden; padding: var(--client-space-3) var(--client-space-4); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); }
-.cx-split-chat .ticket-chat { min-height: 0; flex: 1; background: none; }
-.cx-split-chat .ticket-chat__feed { padding-inline: 0; background: none; }
-.cx-split-chat .ticket-chat [data-ticket-chat-composer] { padding-inline: 0; }
-.cx-split-chat :is(.ticket-chat__composer-row, .ticket-chat__composer-note) { width: 100%; max-width: none; }
-.cx-split-side { gap: var(--client-space-4); }
-.cx-split-side > .cx-back { align-self: flex-start; }
 
 /* A request's five steps as tiles. */
 .cx-journey { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--client-space-3); margin: 0; padding: 0; list-style: none; }
@@ -391,19 +367,19 @@ span.cx-button { pointer-events: none; }
 .cx-reqhead-copy h1 { margin: 0 0 var(--client-space-1); color: var(--cx-ink); font-size: var(--client-type-subheading); font-weight: var(--client-weight-bold); line-height: 1.25; overflow-wrap: anywhere; }
 .cx-reqhead-copy p { margin: 0; color: var(--cx-muted); font-size: var(--client-type-meta); line-height: 1.6; }
 .cx-reqhead .cx-request-summary { color: var(--cx-muted); font-size: var(--client-type-caption); }
-:is(.cx-reqrail, .cx-split-side) .cx-journey { position: relative; gap: 0; }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep { position: relative; align-items: center; gap: var(--client-space-1); padding: 0 2px; border: 0; background: none; text-align: center; }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep::before { position: absolute; top: 17px; right: 50%; left: -50%; height: 2px; background: var(--cx-line); content: ''; }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep:first-child::before { display: none; }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-done::before, :is(.cx-reqrail, .cx-split-side) .cx-jstep.is-current::before { background: var(--cx-accent); }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep-icon { position: relative; z-index: 1; width: 36px; height: 36px; margin: 0; border-radius: 50%; }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep-icon svg { width: 16px; height: 16px; }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-current .cx-jstep-icon { box-shadow: 0 0 0 3px var(--cx-accent-soft); }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-current.is-action { background: none; }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-current.is-action .cx-jstep-icon { box-shadow: 0 0 0 3px var(--cx-attention-soft); }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep-label { font-size: var(--cx-type-small); }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep-state { font-size: 0.75rem; }
-:is(.cx-reqrail, .cx-split-side) .cx-jstep.is-upcoming .cx-jstep-state { visibility: hidden; }
+.cx-reqrail .cx-journey { position: relative; gap: 0; }
+.cx-reqrail .cx-jstep { position: relative; align-items: center; gap: var(--client-space-1); padding: 0 2px; border: 0; background: none; text-align: center; }
+.cx-reqrail .cx-jstep::before { position: absolute; top: 17px; right: 50%; left: -50%; height: 2px; background: var(--cx-line); content: ''; }
+.cx-reqrail .cx-jstep:first-child::before { display: none; }
+.cx-reqrail .cx-jstep.is-done::before, .cx-reqrail .cx-jstep.is-current::before { background: var(--cx-accent); }
+.cx-reqrail .cx-jstep-icon { position: relative; z-index: 1; width: 36px; height: 36px; margin: 0; border-radius: 50%; }
+.cx-reqrail .cx-jstep-icon svg { width: 16px; height: 16px; }
+.cx-reqrail .cx-jstep.is-current .cx-jstep-icon { box-shadow: 0 0 0 3px var(--cx-accent-soft); }
+.cx-reqrail .cx-jstep.is-current.is-action { background: none; }
+.cx-reqrail .cx-jstep.is-current.is-action .cx-jstep-icon { box-shadow: 0 0 0 3px var(--cx-attention-soft); }
+.cx-reqrail .cx-jstep-label { font-size: var(--cx-type-small); }
+.cx-reqrail .cx-jstep-state { font-size: 0.75rem; }
+.cx-reqrail .cx-jstep.is-upcoming .cx-jstep-state { visibility: hidden; }
 .cx-details { display: flex; flex-direction: column; gap: var(--client-space-3); margin: 0; }
 .cx-details div { display: grid; grid-template-columns: 120px minmax(0, 1fr); align-items: center; gap: var(--client-space-3); }
 .cx-details dt { color: var(--cx-muted); font-size: var(--client-type-meta); }
@@ -443,12 +419,6 @@ span.cx-button { pointer-events: none; }
   .cx-project-wide { grid-template-columns: minmax(0, 1fr); }
   .cx-cover-top { grid-template-columns: minmax(0, 1fr); }
   .cx-cover-shot { border-right: 0; border-bottom: 1px solid var(--cx-line); }
-  .cx-main:has(.cx-split) { display: block; overflow-y: auto; }
-  .cx-main:has(.cx-split) > :has(> .cx-split) { display: block; }
-  .cx-split { grid-template-columns: minmax(0, 1fr); }
-  .cx-split-preview { height: 62dvh; min-height: 420px; border-right: 0; border-bottom: 1px solid var(--cx-line); }
-  .cx-split.is-focus .cx-split-preview { height: calc(100dvh - 72px); padding-inline: var(--client-portal-gutter); border-bottom: 0; }
-  .cx-split-side { overflow: visible; padding: var(--client-space-5) var(--client-portal-gutter) var(--client-space-7); }
   /* Narrow screens: the way back and the conversation first, then the requests and the picked request, then its other details. */
   .cx-main:has(.cx-reqsplit) { display: block; overflow-y: auto; }
   .cx-request-page, .cx-request { display: block; }
@@ -458,9 +428,7 @@ span.cx-button { pointer-events: none; }
   .cx-reqsplit :is(.cx-reqrail-top, .cx-reqrail-hint) { order: 2; }
   .cx-reqchat .ticket-chat { height: 72dvh; min-height: 440px; flex: none; }
   .cx-reqsplit .cx-reqrail-more { order: 3; }
-  /* The split page on phones: the preview, then the project, its requests and the picked request, then the conversation. */
-  .cx-split-chat { height: 72dvh; min-height: 440px; }
-  :is(.cx-reqrail, .cx-split-side) .cx-jstep-icon svg { display: block; }
+  .cx-reqrail .cx-jstep-icon svg { display: block; }
 }
 
 @media (max-width: 760px) {
@@ -497,10 +465,6 @@ span.cx-button { pointer-events: none; }
   .cx-panel.is-attention .cx-row-copy { flex: 1 1 calc(100% - 32px); }
   .cx-project-wide-head h3 { flex: 1 1 100%; }
   .cx-project-wide-head .cx-card-links { margin-left: 0; }
-  /* Preview focus on phones: the way back and Show conversation share a row, the project name gets its own. */
-  .cx-focusbar { justify-content: space-between; }
-  .cx-focusbar h1 { order: 3; flex-basis: 100%; white-space: normal; }
-  .cx-reqchat-head { flex-wrap: wrap; }
 }
 
 /* Compact Shadcn top navigation; Overview and Projects stay the two primary routes. */
@@ -536,18 +500,47 @@ span.cx-button { pointer-events: none; }
   .cx-topbar-actions .cx-avatar { width: 32px; height: 32px; }
 }
 
-/* The preview page before anything is shared: the frame keeps its place and says so, with a way to ask. */
-.cx-reqchat-head > .cx-preview-open { flex: none; display: inline-flex; align-items: center; gap: var(--client-space-2); }
-.cx-preview-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-2) var(--client-space-5); }
-.cx-link.is-quiet { color: var(--cx-muted); }
-.cx-link.is-quiet:hover { color: var(--cx-ink); }
+/* One project frame for both views: the header (with its Conversation | Preview switch) tops the main area,
+   the rail stays on the right. In the preview view the rail holds the same conversation, beside a Requests tab. */
+.cx-reqchat-head { flex-wrap: wrap; }
+.cx-reqchat-head > .cx-reqchat-controls { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: var(--client-space-2); margin-left: auto; }
+.cx-viewswitch { display: inline-flex; padding: 3px; border: 1px solid var(--cx-line); border-radius: calc(var(--client-radius-control) + 3px); background: var(--cx-surface); }
+.cx-viewswitch button { display: inline-flex; min-height: 32px; align-items: center; gap: var(--client-space-2); padding: 0 var(--client-space-3); border: 0; border-radius: var(--client-radius-control); background: none; color: var(--cx-muted); font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); cursor: pointer; }
+.cx-viewswitch button:hover { color: var(--cx-ink); }
+.cx-viewswitch button[aria-pressed="true"] { background: var(--cx-accent-soft); color: var(--cx-accent); }
+.cx-focus-toggle { display: inline-flex; align-items: center; gap: var(--client-space-2); }
+.cx-reqsplit.is-focus { grid-template-columns: minmax(0, 1fr); }
+.cx-reqpreview .cx-preview-frame { height: auto; min-height: 0; flex: 1; }
+.cx-reqrail.is-tabs { gap: 0; overflow: hidden; padding: 0; }
+.cx-railtabs { display: flex; flex: none; gap: var(--client-space-1); padding: var(--client-space-3) var(--client-space-4) 0; border-bottom: 1px solid var(--cx-line); }
+.cx-railtabs button { display: inline-flex; min-height: 40px; align-items: center; gap: var(--client-space-2); margin-bottom: -1px; padding: 0 var(--client-space-3); border: 0; border-bottom: 2px solid transparent; background: none; color: var(--cx-muted); font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); white-space: nowrap; cursor: pointer; }
+.cx-railtabs button:hover { color: var(--cx-ink); }
+.cx-railtabs button[aria-selected="true"] { border-bottom-color: var(--cx-accent); color: var(--cx-ink); }
+.cx-railchat { display: flex; min-height: 0; flex: 1; flex-direction: column; padding: var(--client-space-3) var(--client-space-4) var(--client-space-4); }
+.cx-railchat[hidden], .cx-railrequests[hidden] { display: none; }
+.cx-railchat .ticket-chat { min-height: 0; flex: 1; background: none; }
+.cx-railchat .ticket-chat__feed { padding: var(--client-space-2) 0; background: none; }
+.cx-railchat .ticket-chat [data-ticket-chat-composer] { margin-top: var(--client-space-2); padding: var(--client-space-3); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); }
+.cx-railchat :is(.ticket-chat__composer-row, .ticket-chat__composer-note) { width: 100%; max-width: none; }
+.cx-railchat .ticket-chat__bubble-content { font-size: var(--client-type-compact); }
+.cx-railrequests { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: var(--client-space-4); overflow-y: auto; padding: var(--client-space-4) var(--client-space-5) var(--client-space-5); }
+/* Before anything is shared the frame keeps its place and says so, with a way to ask. */
 .cx-preview-frame.is-empty .pqa-stage { align-items: center; background: none; }
 .cx-preview-frame.is-empty .pqa-empty { gap: var(--client-space-3); color: var(--cx-muted); }
 .cx-preview-frame.is-empty .pqa-empty > svg { color: var(--cx-accent); opacity: .8; }
 .cx-preview-frame.is-empty .pqa-empty h3 { color: var(--cx-ink); font-size: var(--client-type-body); }
 .cx-preview-frame.is-empty .pqa-empty .cx-link { margin-top: var(--client-space-1); font-size: var(--client-type-compact); }
 @media (max-width: 1000px) {
-  /* Stacked on narrow screens, an empty preview only needs room for its message. */
-  .cx-split.is-empty .cx-split-preview { height: auto; min-height: 0; }
-  .cx-split.is-empty .cx-split-preview .cx-preview-frame { height: auto; min-height: 280px; flex: none; }
+  /* Stacked: the header and preview first, then the conversation and requests tabs. */
+  .cx-reqrail.is-tabs { display: flex; order: 2; overflow: visible; border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); }
+  .cx-railchat { height: 72dvh; min-height: 440px; flex: none; }
+  .cx-railrequests { overflow: visible; }
+  .cx-reqpreview .cx-preview-frame { height: 62dvh; min-height: 420px; flex: none; }
+  .cx-reqsplit.is-focus .cx-reqpreview .cx-preview-frame { height: calc(100dvh - 200px); }
+  .cx-reqsplit.is-empty .cx-reqpreview .cx-preview-frame { height: auto; min-height: 280px; }
+}
+@media (max-width: 760px) {
+  .cx-reqchat-head > .cx-reqchat-controls { flex: 1 1 100%; margin-left: 0; }
+  .cx-viewswitch { flex: 1; }
+  .cx-viewswitch button { flex: 1; justify-content: center; }
 }
