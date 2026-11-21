@@ -1,0 +1,16 @@
+{
+  "viewBox": [297, 332],
+  "strokeWidth": 13,
+  "strokes": [
+    { "id": "left", "layer": "letter", "draw": [0.06, 0.39], "line": [[53, 242], [151, 34]] },
+    { "id": "right", "layer": "letter", "draw": [0.2, 0.53], "line": [[151, 34], [248, 242]] },
+    { "id": "base", "layer": "letter", "draw": [0.39, 0.66], "line": [[248, 242], [151, 193], [53, 242]] },
+    { "id": "inner", "layer": "letter", "draw": [0.48, 0.75], "line": [[105, 188], [151, 91], [196, 188], [151, 165], [105, 188]] },
+    { "id": "orbitLeft", "layer": "orbit", "draw": [0.58, 0.91], "cubic": [[39, 195], [8, 112], [46, 42], [120, 22]] },
+    { "id": "orbitRight", "layer": "orbit", "draw": [0.58, 0.91], "cubic": [[182, 22], [256, 42], [294, 112], [263, 195]] },
+    { "id": "orbitBottom", "layer": "orbit", "draw": [0.58, 0.91], "cubic": [[202, 255], [178, 267], [151, 270], [125, 263]] },
+    { "id": "trail1", "layer": "trail", "draw": [0.72, 0.92], "line": [[117, 229], [93, 279]] },
+    { "id": "trail2", "layer": "trail", "draw": [0.74, 0.96], "line": [[81, 247], [56, 296]] },
+    { "id": "trail3", "layer": "trail", "draw": [0.76, 1], "line": [[47, 260], [22, 309]] }
+  ]
+}

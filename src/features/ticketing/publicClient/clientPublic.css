@@ -258,14 +258,15 @@
   .alpha-public *, .alpha-public *::before, .alpha-public *::after { scroll-behavior: auto !important; transition-duration: 0s !important; animation: none !important; }
 }
 
-/* Cosmo brand and space: the header logo on every public page, and the
-   landing's starfield + spiral backdrop on the client access pages. */
-.public-brand-cosmo img { width: auto; height: 44px; }
-.public-cosmo-canvas { position: fixed; inset: 0; z-index: 0; display: block; width: 100vw; height: 100vh; pointer-events: none; }
-.alpha-public.public-cosmo .public-header { border-bottom-color: transparent; }
-.alpha-public.public-cosmo :is(.public-header, .public-main, .public-footer) { position: relative; z-index: 1; }
+/* Alphaexplora brand and space: the header logo on every public page, and the
+   landing's starfield + brand mark backdrop on the client access pages. */
+.public-brand-logo picture { display: contents; }
+.public-brand-logo img { width: auto; height: 44px; }
+.public-brand-canvas { position: fixed; inset: 0; z-index: 0; display: block; width: 100vw; height: 100vh; pointer-events: none; }
+.alpha-public.public-brand-space .public-header { border-bottom-color: transparent; }
+.alpha-public.public-brand-space :is(.public-header, .public-main, .public-footer) { position: relative; z-index: 1; }
 @media (max-width: 640px) {
-  .public-brand-cosmo img { width: auto; height: 38px; }
+  .public-brand-logo img { width: auto; height: 38px; }
 }
 
 /* One screen, no page scroll: on desktop and laptop windows the header, the

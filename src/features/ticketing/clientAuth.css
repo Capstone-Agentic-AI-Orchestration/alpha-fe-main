@@ -1,4 +1,4 @@
-/* Client access pages: open layout on the Cosmo backdrop. No cards or boxes;
+/* Client access pages: open layout on the brand backdrop. No cards or boxes;
    structure comes from alignment, type and hairlines, as on the landing page. */
 .ca-auth-layout {
   --ca-gap: clamp(48px, 8vw, 128px);
@@ -12,14 +12,12 @@
   row-gap: clamp(var(--client-space-5), 4.5vh, 52px);
   padding-block: clamp(6px, 1.6vh, 56px);
 }
-.ca-mono, .ca-eyebrow, .ca-field > span:first-child, .ca-path-rail { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: var(--client-type-meta); font-weight: var(--client-weight-medium); letter-spacing: .08em; text-transform: uppercase; }
+.ca-mono, .ca-field > span:first-child, .ca-path-rail { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: var(--client-type-meta); font-weight: var(--client-weight-medium); letter-spacing: .08em; text-transform: uppercase; }
 
 /* story */
 .ca-brand-copy { grid-area: copy; align-self: end; min-width: 0; max-width: 560px; }
-.ca-eyebrow { margin: 0 0 clamp(10px, 2.2vh, 22px); color: var(--public-muted); }
 .ca-brand-copy h1 { margin: 0 0 clamp(10px, 2.2vh, 22px); color: var(--public-ink); font-size: clamp(38px, min(5.6vw, 8.6vh), 80px); font-weight: var(--client-weight-medium); letter-spacing: -.05em; line-height: 1.02; text-wrap: balance; text-shadow: 0 2px 30px color-mix(in srgb, var(--public-bg) 90%, transparent); }
 .ca-brand-copy h1 span { color: var(--public-accent); }
-.ca-brand-copy > p:last-child { max-width: 440px; margin: 0; color: var(--public-muted); font-size: var(--client-type-body); line-height: var(--client-line-copy); }
 
 /* access path, modelled on the landing's "How it works" rail */
 .ca-path { grid-area: path; align-self: start; min-width: 0; max-width: 460px; }
@@ -29,11 +27,6 @@
 .ca-path-rail i { position: relative; width: 11px; height: 11px; border: 2px solid color-mix(in srgb, var(--public-accent) 70%, transparent); border-radius: var(--client-radius-pill); background: var(--public-bg); }
 .ca-path-rail .is-here { color: var(--public-ink); }
 .ca-path-rail .is-here i { border-color: var(--public-accent); background: var(--public-accent); box-shadow: 0 0 0 5px color-mix(in srgb, var(--public-accent) 18%, transparent); }
-.ca-path-lines { display: grid; gap: clamp(var(--client-space-1), 1vh, 10px); margin: 0; padding: 0; list-style: none; color: var(--public-muted); font-size: var(--client-type-compact); line-height: var(--client-line-body); }
-.ca-path-lines li { display: flex; align-items: flex-start; gap: 11px; }
-.ca-path-lines li::before { content: ''; flex: 0 0 auto; width: 5px; height: 5px; margin-top: var(--client-space-2); border-radius: var(--client-radius-pill); background: var(--public-accent); }
-.ca-path-note { display: flex; align-items: center; gap: var(--client-space-2); margin: clamp(var(--client-space-2), 1.8vh, 18px) 0 0; color: var(--public-faint); font-size: var(--client-type-caption); }
-.ca-path-note svg { color: var(--public-accent); }
 
 /* form side: a fading hairline anchors the split instead of a card */
 .ca-form-side { grid-area: form; position: relative; min-width: 0; }
@@ -92,24 +85,14 @@
 /* project inquiry: the same open style, intro and guide on the left, the form on the right */
 .iq-layout { --ca-gap: clamp(48px, 7vw, 112px); --ca-ease: cubic-bezier(.2, .7, .2, 1); display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); align-items: center; column-gap: var(--ca-gap); padding-block: clamp(var(--client-space-1), 1.2vh, var(--client-space-8)); }
 .iq-copy { min-width: 0; max-width: 480px; }
-.iq-back { margin-bottom: clamp(2px, 1vh, var(--client-space-3)); color: var(--public-muted); font-size: var(--client-type-compact); }
 .iq-copy .public-inquiry-intro { margin: 0; }
-.iq-copy .public-inquiry-intro > .ca-eyebrow { margin: 0 0 clamp(var(--client-space-2), 1.6vh, 18px); font-size: var(--client-type-meta); line-height: var(--client-line-copy); }
 .iq-copy .public-inquiry-intro h1 { margin: 0 0 clamp(var(--client-space-2), 1.6vh, var(--client-space-4)); color: var(--public-ink); font-size: clamp(34px, min(4.2vw, 7vh), 60px); font-weight: var(--client-weight-medium); letter-spacing: -.045em; line-height: 1.04; text-wrap: balance; }
-.iq-copy .public-inquiry-intro > p:last-child { margin: 0; max-width: 440px; color: var(--public-muted); font-size: var(--client-type-compact); line-height: var(--client-line-copy); }
 .iq-status { display: grid; gap: clamp(var(--client-space-1), .8vh, var(--client-space-2)); margin-top: clamp(var(--client-space-3), 2.4vh, var(--client-space-6)); }
 .iq-status-line { display: flex; align-items: flex-start; gap: 10px; margin: 0; color: var(--public-muted); font-size: var(--client-type-compact); line-height: var(--client-line-body); }
 .iq-status-line::before { content: ''; flex: 0 0 auto; width: 6px; height: 6px; margin-top: 7px; border-radius: var(--client-radius-pill); background: var(--public-accent); }
 .iq-status-line.is-warning { color: var(--public-ink); }
 .iq-status-line.is-warning::before { background: rgb(var(--ui-status-warning)); box-shadow: 0 0 0 4px rgb(var(--ui-status-warning) / .16); }
 .iq-status .ca-link { justify-self: start; min-height: var(--client-control-compact); font-size: var(--client-type-compact); }
-.iq-guide { margin-top: clamp(var(--client-space-3), 2.6vh, 28px); padding-top: clamp(10px, 2vh, var(--client-space-5)); border-top: 1px solid var(--public-line); }
-.iq-guide h2 { margin: 0 0 clamp(6px, 1.2vh, var(--client-space-3)); color: var(--public-ink); font-size: var(--client-type-subheading); font-weight: var(--client-weight-medium); letter-spacing: -.02em; }
-.iq-guide ol { display: grid; gap: clamp(3px, .7vh, var(--client-space-2)); margin: 0; padding: 0; list-style: none; color: var(--public-muted); font-size: var(--client-type-compact); line-height: var(--client-line-body); }
-.iq-guide li { display: flex; gap: var(--client-space-3); }
-.iq-guide li > span { flex: 0 0 auto; color: var(--public-accent); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: var(--client-type-meta); line-height: var(--client-line-copy); }
-.iq-guide > p { margin: clamp(var(--client-space-2), 1.6vh, var(--client-space-4)) 0 0; color: var(--public-faint); font-size: var(--client-type-caption); line-height: var(--client-line-copy); }
-.iq-guide a { color: var(--public-ink); text-decoration: underline; text-decoration-color: color-mix(in srgb, var(--public-accent) 60%, transparent); text-underline-offset: 3px; }
 
 .iq-form { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: clamp(var(--client-space-5), 2.4vw, 36px); align-content: center; min-width: 0; }
 .iq-form::before { content: ''; position: absolute; top: 0; bottom: 0; left: calc(var(--ca-gap) / -2); width: 1px; background: linear-gradient(transparent, var(--public-line) 20%, var(--public-line) 80%, transparent); pointer-events: none; }
@@ -119,12 +102,6 @@
 .iq-details textarea { height: clamp(64px, calc(50dvh - 300px), 240px); }
 .iq-form textarea.iq-links { height: clamp(36px, 4.4vh, 56px); }
 .iq-hint { margin: calc(clamp(10px, 2vh, 26px) * -.6) 0 clamp(var(--client-space-2), 1.8vh, var(--client-space-5)); color: var(--public-faint); font-size: var(--client-type-caption); line-height: var(--client-line-body); }
-.iq-prompts > span { margin-left: var(--client-space-2); }
-.iq-prompts > span::before { content: '·'; margin-right: 6px; color: var(--public-accent); }
-/* On shorter windows the header's Client sign in link covers the guide's closing lines. */
-@media (min-width: 901px) and (max-height: 820px) {
-  .iq-guide h2, .iq-guide > p { display: none; }
-}
 .iq-notice { display: flex; align-items: flex-start; gap: var(--client-space-2); margin-top: 0; }
 .iq-notice svg { flex: 0 0 auto; margin-top: 2px; color: var(--public-accent); }
 .iq-form .ca-error { margin: 0 0 clamp(var(--client-space-2), 1.6vh, var(--client-space-4)); }
@@ -154,9 +131,7 @@
 }
 @media (max-width: 560px) {
   .ca-auth-layout { row-gap: 36px; padding-block: 28px 48px; }
-  .ca-eyebrow { margin-bottom: 14px; }
   .ca-brand-copy h1 { margin-bottom: 14px; font-size: clamp(36px, 11vw, 46px); }
-  .ca-brand-copy > p:last-child { font-size: var(--client-type-compact); }
   .ca-path-rail { font-size: var(--client-type-meta); letter-spacing: .05em; }
   .ca-footer { font-size: var(--client-type-caption); }
   .iq-form { grid-template-columns: minmax(0, 1fr); }

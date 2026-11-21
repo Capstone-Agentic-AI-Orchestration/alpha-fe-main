@@ -2,6 +2,27 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 import fs from 'node:fs';
+import { buildSync } from 'esbuild';
+
+/**
+ * The public pages' loading screen as one inline script. It shares the brand
+ * mark's geometry with the app (src/brand/markParticles.ts), so it is bundled
+ * from TypeScript here rather than kept as a hand-copied file in public/.
+ */
+function buildLoadingScreen(): string {
+  const result = buildSync({
+    entryPoints: [path.resolve(__dirname, 'src/brand/enteringLoader.ts')],
+    bundle: true,
+    write: false,
+    format: 'iife',
+    minify: true,
+    target: 'es2019',
+    logLevel: 'silent',
+  });
+  const code = result.outputFiles[0]?.text ?? '';
+  if (!code.trim() || /<\/script/i.test(code)) throw new Error('The loading screen bundle is empty or would close its inline <script> early.');
+  return code;
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
@@ -36,11 +57,11 @@ export default defineConfig(({ mode }) => {
         name: 'alpha-theme-first-paint',
         transformIndexHtml(html: string) {
           const startup = fs.readFileSync(path.resolve(__dirname, 'public/theme-startup.js'), 'utf8');
-          // The Cosmo loading screen must run before the bundle, so it is inlined too.
-          const loader = fs.readFileSync(path.resolve(__dirname, 'public/cosmo-loader.js'), 'utf8');
+          // The loading screen must run before the bundle, so it is bundled on its own and inlined too.
+          const loader = buildLoadingScreen();
           return html
             .replace('<!-- alpha:theme-startup -->', `<script>${startup}</script>`)
-            .replace('<!-- alpha:cosmo-loader -->', `<script>${loader}</script>`);
+            .replace('<!-- alpha:ax-loader -->', () => `<script>${loader}</script>`);
         },
       },
       react(),

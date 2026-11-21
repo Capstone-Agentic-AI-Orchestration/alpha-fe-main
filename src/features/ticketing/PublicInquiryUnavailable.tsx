@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { PublicInquiryForm, type InquiryNavigationState } from './PublicInquiryForm';
-import { clientLandingHref, clientPortalHref, publicInquiryContext, publicTicketIntakeApi } from './publicIntakeApi';
+import { clientLandingHref, publicInquiryContext, publicTicketIntakeApi } from './publicIntakeApi';
 import { ClientPublicShell } from './publicClient/ClientPublicShell';
 import './clientAuth.css';
 
@@ -55,16 +55,13 @@ export default function PublicInquiryUnavailable() {
     setNavigation({ dirty: false, locked: false });
   }, [configurationKey]);
 
-  const clientHref = clientPortalHref(slug);
   const message = configuration === 'enabled'
-    ? context.kind === 'workspace'
-      ? 'Your request will go to the project manager for the team that shared this link.'
-      : 'Your request will go to a project manager for review.'
+    ? ''
     : configuration === 'checking'
-      ? 'Checking whether you can send this inquiry…'
+      ? 'Checking this link…'
       : context.kind === 'invalid'
-        ? 'This inquiry link is incomplete or invalid. Nothing has been sent. Ask your project manager for a new link.'
-        : 'This inquiry link is unavailable or could not be checked. Nothing has been submitted. Try again or contact your project manager.';
+        ? 'This link is invalid. Ask your project manager for a new one.'
+        : 'This link isn’t available right now. Nothing was sent.';
 
   const unavailable = configuration === 'unavailable';
   return <ClientPublicShell page="inquiry" slug={slug} navigationLocked={navigation.locked} hasDraft={navigation.dirty}>
@@ -72,9 +69,8 @@ export default function PublicInquiryUnavailable() {
       <PublicInquiryForm
         key={configurationKey}
         submissionEnabled={configuration === 'enabled'}
-        unavailableMessage={configuration === 'checking'
-          ? 'Checking inquiry availability. Nothing has been submitted.'
-          : 'Inquiry submission is currently unavailable for this link. Nothing has been submitted.'}
+        // The status line beside the heading already says why the form is off.
+        unavailableMessage=""
         onNavigationStateChange={setNavigation}
         onSubmit={async inquiry => {
           const request = { inquiry };
@@ -84,19 +80,9 @@ export default function PublicInquiryUnavailable() {
         }}
         onCancel={() => { window.location.href = clientLandingHref(slug); }}
         status={<div className="iq-status">
-          <p role="status" aria-live="polite" className={unavailable ? 'iq-status-line is-warning' : 'iq-status-line'}>{message}</p>
-          {context.kind === 'central' && <p className="iq-status-line">No account or team selection is needed to send this inquiry. A project manager will review it and let you know what happens next.</p>}
-          {unavailable && <button type="button" className="ca-link" onClick={() => setRetryVersion(value => value + 1)}><RefreshCw size={13} aria-hidden="true" />Check inquiry availability again</button>}
+          <p role="status" aria-live="polite" className={unavailable ? 'iq-status-line is-warning' : 'iq-status-line'} hidden={!message}>{message}</p>
+          {unavailable && <button type="button" className="ca-link" onClick={() => setRetryVersion(value => value + 1)}><RefreshCw size={13} aria-hidden="true" />Check again</button>}
         </div>}
-        guide={<aside className="iq-guide" aria-label="What happens next">
-          <h2>{context.kind === 'workspace' ? 'Your request reaches the right team.' : 'A real person reviews your request.'}</h2>
-          <ol>
-            <li><span>01</span>You send your inquiry using this form.</li>
-            <li><span>02</span>A project manager reviews your request.</li>
-            <li><span>03</span>If they accept it and invite you, follow the email to access your account and updates.</li>
-          </ol>
-          <p>Already have client access? <a href={clientHref}>Sign in to your client portal</a>. This inquiry will be reviewed separately from requests already shared with you.</p>
-        </aside>}
       />
     </section>
   </ClientPublicShell>;

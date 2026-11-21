@@ -66,6 +66,7 @@
 .client-landing .cl-header { transition: transform 450ms var(--cl-ease), opacity 300ms ease; }
 .client-landing .cl-header.is-hidden:not(:focus-within):not(:has(.cl-menu.is-open)) { opacity: 0; transform: translateY(-110%); }
 .client-landing .cl-header.is-hidden:not(:focus-within):not(:has(.cl-menu.is-open)) > * { pointer-events: none; }
+.client-landing .cl-brand picture { display: contents; }
 .client-landing .cl-brand img { width: auto; height: clamp(56px, 8vh, 72px); }
 .client-landing .cl-menu { position: relative; }
 .client-landing .cl-menu-bar { display: flex; align-items: center; gap: 10px; }
@@ -229,7 +230,7 @@
 }
 
 /* While the loading screen is up, hold the hero's entrance animations so they play on reveal. */
-html.cosmo-loading .client-landing * { animation-play-state: paused !important; }
+html.ax-loading .client-landing * { animation-play-state: paused !important; }
 @media (prefers-reduced-motion: reduce) {
   .client-landing :is(.cl-header, .cl-menu-panels, .cl-pill-dots, .cl-menu-card-arrow, .cl-index, .cl-index button::after) { transition: none; }
   .client-landing.is-leaving-public-page :is(.cl-layer, .cl-header, .cl-canvas, .cl-index, .cl-progress, .cl-recap) { transition: none; }

@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type MouseEvent } from 'react';
 import { ArrowDown, ArrowRight, ArrowUpRight } from 'lucide-react';
-import cosmoLogoUrl from '@/assets/cosmo-logo.png';
-import cosmoWordmarkUrl from '@/assets/cosmo-wordmark.png';
+import { BrandLogo } from '@/brand/BrandLogo';
+import { BRAND_WORDMARK } from '@/brand/brand';
 import { clientLandingHref, clientPortalHref, publicInquiryHref, publicInquirySlug } from '@/features/ticketing/publicIntakeApi';
 import '@/features/ticketing/clientDesignTokens.css';
 import '@/features/ticketing/publicClient/clientPublic.css';
-import { GALAXY_BEATS, journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
+import { PROJECT_BEATS, journeyStep, ZoomScene, type JourneyProgress } from './zoomScene';
 import { LandingMenu } from './LandingMenu';
 import './clientLanding.css';
 
@@ -70,10 +70,10 @@ const recap = [
   { text: <>starts with <b>one message.</b></>, range: [0.76, 0.86] },
 ];
 
-/** Caption in focus, matching the galaxy's beats: lighting up, the message, then the face-on reveal. */
+/** Caption in focus, matching the project mark's beats: lighting up, the message, then the face-on reveal. */
 function captionIndex(pp: number): number {
-  if (pp < GALAXY_BEATS.ask) return 0;
-  return pp < GALAXY_BEATS.reveal ? 1 : 2;
+  if (pp < PROJECT_BEATS.ask) return 0;
+  return pp < PROJECT_BEATS.reveal ? 1 : 2;
 }
 
 function recapClass(pp: number, [from, to]: number[]): string {
@@ -189,7 +189,7 @@ export default function ClientLandingPage() {
     const page = document.scrollingElement ?? document.documentElement;
     const next: Journey = {
       hp: track('hero'), ip: track('idea'), wp: track('how'), pp: track('project'),
-      // How far the closing section has risen into view; the Cosmo lockup recedes behind it.
+      // How far the closing section has risen into view; the brand lockup recedes behind it.
       cp: clamp((vh - (sectionElement('client-start')?.getBoundingClientRect().top ?? vh)) / vh),
       flat: isFlat(), page: clamp(page.scrollTop / Math.max(1, page.scrollHeight - vh)), active,
     };
@@ -204,7 +204,7 @@ export default function ClientLandingPage() {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const scene = new ZoomScene(canvas, cosmoWordmarkUrl);
+    const scene = new ZoomScene(canvas, BRAND_WORDMARK.url);
     const start = performance.now();
     let frame = 0, pending = 0;
     const drawStill = () => scene.draw(0, true, journeyRef.current, pointerRef.current);
@@ -260,7 +260,7 @@ export default function ClientLandingPage() {
     <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
     <header ref={headerRef} className="cl-header">
       <a className="public-brand cl-brand" href={home}>
-        <img src={cosmoLogoUrl} alt="Cosmo home" width="155" height="60" />
+        <BrandLogo height={60} />
       </a>
       <LandingMenu home={home} inquiry={inquiry} clientSignIn={clientSignIn} onHowItWorks={() => scrollToSection(HOW_IT_WORKS)} />
     </header>
@@ -328,7 +328,7 @@ export default function ClientLandingPage() {
         </section>
 
         <section id="client-project" className={sectionClass('cl-project', 'client-project')} data-track="project" aria-labelledby="client-project-heading">
-          <div className="cl-stick" style={fadeOut(GALAXY_BEATS.pull + 0.02, 0.04, pp)}>
+          <div className="cl-stick" style={fadeOut(PROJECT_BEATS.pull + 0.02, 0.04, pp)}>
             <div className="cl-shade" aria-hidden="true" />
             <div className="cl-project-in public-container">
               <h2 id="client-project-heading" className="sr-only">Then see your project come together</h2>
