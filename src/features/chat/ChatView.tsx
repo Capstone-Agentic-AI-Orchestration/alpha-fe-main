@@ -93,6 +93,7 @@ import { OrchestrationDeliveryPanel } from './OrchestrationDeliveryPanel';
 import { inferRecoveryAction, isBuildDirection, isContinueRequest, isExplicitBuildRetry, isRetryRequest } from './chatRecoveryIntent';
 import { composerSendMode, composerSubmitState, queueChatMessage, selectRecovery, type QueuedChatMessage } from './chatComposer';
 import { ChatQueuedMessage } from './ChatQueuedMessage';
+import { RepositoryScopeSummary, repositoryScope } from './RepositoryScopeSummary';
 import { ChatHome } from './ChatHome';
 import { useTranscriptScroll } from './useTranscriptScroll';
 import { Button } from '@/shared/components/ui/button';
@@ -884,10 +885,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const projectRepositories = snapshot?.project.repositories ?? [];
   const repositorySignature = projectRepositories.map(item => `${item.repo}:${item.connected ? '1' : '0'}`).join('|');
   const validBuildRepositories = selectedBuildRepositories.filter(repo => projectRepositories.some(item => item.repo === repo));
-  const selectedBuildRepositoryLabel = validBuildRepositories.length === projectRepositories.length && projectRepositories.length > 1
-    ? `All ${validBuildRepositories.length} codebases`
-    : validBuildRepositories.length > 1 ? `${validBuildRepositories.length} codebases selected`
-      : validBuildRepositories[0];
+  const buildRepositoryScope = repositoryScope(projectRepositories.map(item => item.repo), validBuildRepositories);
   const forcedBuild = /^\/build(?:\s|$)/i.test(input.trim());
   const requiresRepositorySelection = projectRepositories.length === 0 || validBuildRepositories.length === 0;
   const repositorySelectionMessage = projectRepositories.length === 0
@@ -2154,11 +2152,11 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                     </div>}
                     {!isClient && project && <div className="mt-1 border-t border-divider pt-1.5">
                       {projectRepositories.length > 1 ? <>
-                        <div className="flex items-center justify-between px-3 py-1.5">
-                          <span className="flex items-center gap-2 text-[11px] font-semibold text-content"><FolderGit2 className="h-3.5 w-3.5 text-link" />Codebases<span className="font-normal text-content-muted">{selectedBuildRepositoryLabel ?? 'none selected'}</span></span>
-                          <span className="flex items-center gap-2 text-[10px]"><button type="button" onClick={() => setSelectedBuildRepositories(projectRepositories.map(item => item.repo))} className="text-link hover:text-content">All</button><button type="button" onClick={() => setSelectedBuildRepositories([])} className="text-content-secondary hover:text-content">Clear</button></span>
+                        <div className="flex items-start justify-between gap-3 px-3 py-1.5">
+                          <RepositoryScopeSummary scope={buildRepositoryScope} />
+                          <span className="flex shrink-0 items-center gap-2 text-[10px]"><button type="button" onClick={() => setSelectedBuildRepositories(projectRepositories.map(item => item.repo))} className="text-link hover:text-content">All</button><button type="button" onClick={() => setSelectedBuildRepositories([])} className="text-content-secondary hover:text-content">Clear</button></span>
                         </div>
-                        <div className="max-h-48 overflow-y-auto" role="group" aria-label="Select product codebases">
+                        <div className="max-h-48 overflow-y-auto" role="group" aria-label="Limit builds to repositories">
                           {projectRepositories.map(item => {
                             const selected = selectedBuildRepositories.includes(item.repo);
                             return <button key={item.repo} type="button" aria-pressed={selected} onClick={() => setSelectedBuildRepositories(current => current.includes(item.repo) ? current.filter(repo => repo !== item.repo) : [...current, item.repo])} className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left transition hover:bg-surface-high focus:bg-surface-raised focus:outline-none">
