@@ -1,8 +1,9 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { BuildNextStepCard } from './BuildNextStepCard';
 import { approvalBlocker } from './useBuildApproval';
+import { mergeIntoDev } from './useDevMerge';
 import type { ProjectBuildOrchestration } from '@/shared/types';
 
 const orchestration = (status: string, over: Record<string, unknown> = {}) => ({
@@ -18,7 +19,7 @@ const orchestration = (status: string, over: Record<string, unknown> = {}) => ({
 }) as unknown as ProjectBuildOrchestration;
 
 const render = (value: ProjectBuildOrchestration, canApprove = true) => renderToStaticMarkup(<BuildNextStepCard projectId="p"
-  orchestration={value} canApprove={canApprove} onReview={() => undefined} onAskChanges={() => undefined} onMerge={() => undefined} />);
+  orchestration={value} canApprove={canApprove} onReview={() => undefined} onAskChanges={() => undefined} />);
 
 /** After a build, the conversation says it is done and what to do next. */
 describe('the next step under a finished build', () => {
@@ -47,9 +48,9 @@ describe('the next step under a finished build', () => {
       publications: [{ repository: 'acme/web-fe', pullRequestUrl: 'https://github.com/acme/web-fe/pull/4' }] } }));
     expect(html).toContain('Done · pull request opened');
     expect(html).toContain('https://github.com/acme/web-fe/pull/4');
-    // Merging is asked of the Orchestrator in the chat, never done on GitHub by hand.
-    expect(html).toContain('say &quot;merge it&quot; and the Orchestrator merges it into dev');
-    expect(html).toContain('Merge into dev');
+    // Merging is a typed delivery action (or "merge it" in the chat), never done on GitHub by hand.
+    expect(html).toContain('merge it into dev once its checks pass');
+    expect(html).toMatch(/<button type="button"[^>]*>(?:(?!<\/button>).)*Merge into dev<\/button>/);
     expect(html).not.toContain('on GitHub');
   });
 
@@ -89,5 +90,41 @@ describe('when approval is offered', () => {
     expect(approvalBlocker(orchestration('awaiting_approval', { findings: [{ id: 'f', status: 'open', severity: 'blocking' }] }), true)).toMatch(/Blocking findings/);
     expect(approvalBlocker(orchestration('awaiting_approval', { findings: [{ id: 'f', status: 'resolved', severity: 'blocking' }] }), true)).toBeNull();
     expect(approvalBlocker(orchestration('awaiting_approval', { findings: [{ id: 'f', status: 'open', severity: 'minor' }] }), true)).toBeNull();
+  });
+});
+
+/** Merge into dev is the typed delivery action, at the revision just read, never chat text. */
+describe('merging a finished build into dev', () => {
+  const delivery = (stage: string, over: Record<string, unknown> = {}) => ({
+    runId: 'run-1', projectId: 'p', revision: 7, stage, reason: 'Waiting for the required checks.', repairAttempts: 0,
+    repositories: [{ repository: 'acme/web-fe', head: 'h', prUrl: 'https://github.com/acme/web-fe/pull/4', requiredChecks: [], checks: [] }],
+    history: [], ...over
+  });
+  const api = (response: unknown, action = vi.fn(async () => delivery('dev_checks'))) => ({
+    getOrchestrationDelivery: vi.fn(async () => response),
+    orchestrationDeliveryAction: action
+  }) as any;
+
+  it('sends merge_dev with the current delivery revision and the idempotency key', async () => {
+    const fake = api({ delivery: delivery('dev_approval'), canControl: true, canPromote: true });
+    const outcome = await mergeIntoDev('p', 'run-1', 'key-1', fake);
+    expect(fake.orchestrationDeliveryAction).toHaveBeenCalledWith('p', 'run-1', 'merge_dev', 7, 'key-1');
+    expect(outcome).toEqual({ merged: true, message: 'Merged web-fe into dev. CI runs on dev next; promotion to UAT is a separate step.' });
+  });
+
+  it('says why it did not merge, and sends nothing, when the delivery is not ready', async () => {
+    const fake = api({ delivery: delivery('pr_checks'), canControl: true, canPromote: true });
+    expect(await mergeIntoDev('p', 'run-1', 'k', fake)).toEqual({ merged: false, message: 'Not ready to merge into dev: Waiting for the required checks.' });
+    expect(fake.orchestrationDeliveryAction).not.toHaveBeenCalled();
+  });
+
+  it('says so when the role cannot merge or there is nothing to merge', async () => {
+    expect((await mergeIntoDev('p', 'r', 'k', api({ delivery: delivery('dev_approval'), canControl: true, canPromote: false }))).message).toMatch(/role cannot merge/);
+    expect((await mergeIntoDev('p', 'r', 'k', api({ delivery: null, canControl: true, canPromote: true }))).message).toBe('This build has no pull request to merge yet.');
+  });
+
+  it('turns a server refusal into the reason shown next to the button', async () => {
+    const fake = api({ delivery: delivery('dev_approval'), canControl: true, canPromote: true }, vi.fn(async () => { throw new Error('The pull request head changed since review.'); }));
+    expect(await mergeIntoDev('p', 'run-1', 'k', fake)).toEqual({ merged: false, message: 'Not merged: The pull request head changed since review.' });
   });
 });

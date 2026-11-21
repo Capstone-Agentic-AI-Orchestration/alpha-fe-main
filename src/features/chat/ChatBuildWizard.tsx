@@ -210,6 +210,8 @@ export interface ChatBuildWizardProps {
   /** Resume a paused build, or take the recovery action the server offers for a stopped one. */
   onContinue: (action?: LiveBuildRecoveryAction) => void;
   onAuditPlan?: () => void;
+  /** Start the plan awaiting approval, at the revision the person is looking at. */
+  onStartPlan?: () => void;
   /** Put the cursor in the message box, for a reply in the person's own words. */
   onReply: (prefill?: string) => void;
   onRetry: () => void;
@@ -275,8 +277,11 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'awaiting_plan_approval':
         title = 'Plan ready for your approval';
         subtitle = build.orchestration.tasks.length + (build.orchestration.tasks.length === 1 ? ' task' : ' tasks') + ' · ' + buildRepositoriesLabel(build) + '. No code has changed yet.';
-        body = <p className="text-xs text-content-secondary">{props.canStart ? 'Read the saved plan on the right, then tell Alpha in the main chat whether to start it.' : 'Your workspace role cannot start builds.'}</p>;
-        options = [];
+        body = <p className="text-xs text-content-secondary">{props.canStart ? 'Read the saved plan on the right, then start it, or say what to change.' : 'Your workspace role cannot start builds.'}</p>;
+        options = [
+          ...(props.canStart && props.onStartPlan ? [{ label: 'Start plan', hint: 'The agents begin the planned work.', onSelect: props.onStartPlan, tone: 'primary' as const, busy: busy === 'start' }] : []),
+          { label: 'Ask for changes', hint: 'Say what to change in the message box.', onSelect: () => props.onReply('Please change: ') }
+        ];
         break;
       case 'paused':
       case 'blocked':

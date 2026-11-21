@@ -4,6 +4,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, GitMerge, Loader2, MessageSq
 import type { ProjectBuildOrchestration } from '@/shared/types';
 import { buildChangesCode, buildPublications, buildReviewSummary, buildReviewSummaryText } from './ChatBuildBodies';
 import { useBuildApproval } from './useBuildApproval';
+import { useDevMerge } from './useDevMerge';
 
 export interface BuildNextStepCardProps {
   projectId: string;
@@ -13,8 +14,6 @@ export interface BuildNextStepCardProps {
   onReview: () => void;
   /** Put a change request in the message box. */
   onAskChanges: () => void;
-  /** Ask the Orchestrator, in the chat, to merge the pull request into dev ("merge it"). */
-  onMerge?: () => void;
   /** Refresh the build after it was approved. */
   onApproved?: () => void | Promise<void>;
 }
@@ -27,7 +26,7 @@ const secondary = 'inline-flex min-h-8 items-center gap-1.5 rounded-lg border bo
  * so it scrolls with the conversation instead of sitting over the message box.
  * Shown once the work is finished; a running build has its activity row above.
  */
-export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId, orchestration, canApprove, onReview, onAskChanges, onApproved, onMerge }) => {
+export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId, orchestration, canApprove, onReview, onAskChanges, onApproved }) => {
   const { approve, busy, error, blocker } = useBuildApproval(projectId, orchestration, canApprove, onApproved);
   const status = orchestration.run.status;
   const publications = buildPublications(orchestration);
@@ -74,15 +73,16 @@ export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId,
   }
 
   if (status !== 'completed') return null;
-  return <CompletedNextStep orchestration={orchestration} publications={publications} onMerge={onMerge} />;
+  return <CompletedNextStep projectId={projectId} orchestration={orchestration} publications={publications} />;
 };
 
-/** A finished build: what it opened, and the next step, which is to ask for the merge in the chat. */
-function CompletedNextStep({ orchestration, publications, onMerge }: {
+/** A finished build: what it opened, and the next step, which is to merge it into dev. */
+function CompletedNextStep({ projectId, orchestration, publications }: {
+  projectId: string;
   orchestration: ProjectBuildOrchestration;
   publications: ReturnType<typeof buildPublications>;
-  onMerge?: () => void;
 }) {
+  const { merge, busy, outcome: mergeResult } = useDevMerge(projectId, orchestration.run.id);
   let outcome = 'build complete';
   if (publications.length) outcome = publications.length === 1 ? 'pull request opened' : 'pull requests opened';
 
@@ -99,8 +99,12 @@ function CompletedNextStep({ orchestration, publications, onMerge }: {
       <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />{publications.length > 1 ? `${publication.repository ?? 'Repository'} pull request` : 'Open the pull request'}
     </a>)}</div>}
     <p className="mt-2 text-[11px] text-content"><span className="font-semibold">Next:</span> {publications.length
-      ? 'say "merge it" and the Orchestrator merges it into dev once its checks pass. Open the web preview to see the result.'
+      ? 'merge it into dev once its checks pass, here or by saying "merge it" in the chat. Open the web preview to see the result.'
       : 'open the Build review tab for the report.'}</p>
-    {publications.length > 0 && onMerge && <div className="mt-2.5"><button type="button" onClick={onMerge} className={primary}><GitMerge className="h-3.5 w-3.5" aria-hidden="true" />Merge into dev</button></div>}
+    {publications.length > 0 && !mergeResult?.merged && <div className="mt-2.5"><button type="button" onClick={() => void merge()} disabled={busy} className={primary}>
+      {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <GitMerge className="h-3.5 w-3.5" aria-hidden="true" />}{busy ? 'Merging…' : 'Merge into dev'}
+    </button></div>}
+    {/* The result, or the server's reason it did not merge, stays next to the button. */}
+    {mergeResult && <p role={mergeResult.merged ? 'status' : 'alert'} className={'mt-2 text-[10px] ' + (mergeResult.merged ? 'text-status-success' : 'text-status-danger')}>{mergeResult.message}</p>}
   </section>;
 }
