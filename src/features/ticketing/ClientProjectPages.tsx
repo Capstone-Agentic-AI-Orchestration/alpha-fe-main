@@ -166,7 +166,7 @@ export function ClientProjectSpotlight({ project, requests, onOpenProject, onOpe
   project: ClientProject;
   requests: ClientProjectRequestItem[];
   onOpenProject: () => void;
-  /** Opens the project's page on its shared preview. */
+  /** Opens the project's preview page (which says so when nothing is shared yet). */
   onOpenPreview?: () => void;
   latest?: ClientProjectFeedbackMessage | null;
 }) {
@@ -194,10 +194,13 @@ export function ClientProjectSpotlight({ project, requests, onOpenProject, onOpe
   </Card>;
 }
 
-/** A project card's two ways in: straight to its shared preview (once there is one), or to its conversation. */
+/**
+ * A project card's two ways in: straight to its preview page, or to its conversation. The preview page
+ * opens even before anything is shared; it then says so beside the conversation.
+ */
 function ProjectLinks({ project, onOpenProject, onOpenPreview }: { project: ClientProject; onOpenProject: () => void; onOpenPreview?: () => void }) {
   return <div className="cx-card-links">
-    {project.preview && onOpenPreview && <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenPreview}
+    {onOpenPreview && <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenPreview}
       aria-label={'Open preview for ' + project.name}><Monitor size={14} aria-hidden="true" />Open preview</Button>}
     <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenProject}
       aria-label={'Open conversation for ' + project.name}>Open conversation <ArrowRight size={14} aria-hidden="true" /></Button>
@@ -234,7 +237,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   error: string;
   /** Opens the project's page: its conversation, requests and details. */
   onOpenConversation: (project: ClientProject) => void;
-  /** Opens the project's page on its shared preview. */
+  /** Opens the project's preview page (which says so when nothing is shared yet). */
   onOpenPreview: (project: ClientProject) => void;
   inspectionOnly: boolean;
   refreshToken: number;

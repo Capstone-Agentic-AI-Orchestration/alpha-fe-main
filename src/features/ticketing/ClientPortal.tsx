@@ -28,7 +28,7 @@ import { Input } from '@/shared/components/ui/input';
 import { ClientTopBar } from './ClientTopBar';
 import { CxChips, CxEmpty, CxPageHeader, CxPanel, CxRequestRow, CxSection } from './clientKit';
 import { ClientProjectConversation } from './ClientProjectConversation';
-import { useClientWorkspaceTabs, type ClientPage as Page } from './clientWorkspaceTabs';
+import { useClientWorkspaceTabs, type ClientPage as Page, type ClientProjectView } from './clientWorkspaceTabs';
 import './clientDesignTokens.css';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
 
@@ -122,7 +122,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   const [selectedConversationKey, setSelectedConversationKey] = tabState('selectedConversationKey');
   const [selectedConversationTicketId, setSelectedConversationTicketId] = tabState('selectedConversationTicketId');
   const [startConversationRequest, setStartConversationRequest] = tabState('startConversationRequest');
-  const [previewFocus, setPreviewFocus] = tabState('previewFocus');
+  const [projectView, setProjectView] = tabState('projectView');
   const [queue, setQueue] = useState<ClientProjectRequestQueue | null>(null);
   const [notificationRequests, setNotificationRequests] = useState<ClientProjectRequestItem[] | null>(null);
   const [notificationsLoading, setNotificationsLoading] = useState(true);
@@ -617,12 +617,20 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
   /**
    * Opens the project's one page: its shared preview when there is one, its requests and its conversation.
-   * `focusPreview` opens it on the preview alone, with the conversation folded away until the client asks for it.
+   * `view` picks the layout; see {@link ClientProjectView}.
    */
-  function openConversation(project: ClientProject, ticketId: string | null = null, startRequest = false, focusPreview = false) {
+  function openConversation(project: ClientProject, ticketId: string | null = null, startRequest = false, view: ClientProjectView = 'auto') {
     navigate('projects');
-    openProjectConversation(activeTabId, clientProjectKey(project), ticketId, startRequest, focusPreview && Boolean(project.preview));
+    openProjectConversation(activeTabId, clientProjectKey(project), ticketId, startRequest, view);
     showConversationRequest(project, ticketId);
+  }
+
+  /**
+   * Opens the project's preview page: the preview alone once one is shared, or, before that, the
+   * preview area (which says nothing is shared yet) beside the conversation, so the client can ask about it.
+   */
+  function openPreview(project: ClientProject) {
+    openConversation(project, null, false, project.preview ? 'focus' : 'preview');
   }
 
   /** Loads a request into the project page's side panel; the page and its conversation stay where they are. */
@@ -790,7 +798,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           api={api} refreshToken={refreshVersion}
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
           onOpenRequest={item => openClientRequest(item, true)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
-          onOpenPreview={project => openConversation(project, null, false, true)}
+          onOpenPreview={openPreview}
           onGoToRequests={() => navigate('requests')}
           proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')}
           onProposeProject={proposeProject} />}
@@ -798,7 +806,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {page === 'projects' && !conversationProject && tabs.filter(tab => tab.navigation.page === 'projects').map(tab => <div key={tab.id} hidden={tab.id !== activeTabId}>
           {tab.id === activeTabId && createError && <p role="alert" className="cx-error cx-notice">{createError}</p>}
           <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} requests={displayQueue?.items ?? []} loading={!projects && !projectsError} error={projectsError}
-            onOpenConversation={project => openConversation(project)} onOpenPreview={project => openConversation(project, null, false, true)}
+            onOpenConversation={project => openConversation(project)} onOpenPreview={openPreview}
             inspectionOnly={inspectionOnly} refreshToken={refreshVersion}
             proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')} onProposeProject={proposeProject} />
         </div>)}
@@ -816,7 +824,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           requestForm={startConversationRequest ? projectRequestForm : null}
           request={{ ticket: detail && detail.id === selectedConversationTicketId ? detail : null, loading: detailLoading, error: detailError }}
           onReplyAbout={sendReply}
-          previewFocused={previewFocus} onPreviewFocusChange={setPreviewFocus}
+          projectView={projectView} onProjectViewChange={setProjectView}
           rail={{ workspaceId: conversationProject.workspaceId, api, busy: writing || Boolean(pending), workflowActionsDisabled,
             communicationEnabled: communicationEnabled && !inspectionOnly, readOnlyPreview: inspectionOnly,
             onReply: sendReply, onDecision: makeDecision, onCorrection: sendCorrection, onAdditionalWork: () => undefined }} />}

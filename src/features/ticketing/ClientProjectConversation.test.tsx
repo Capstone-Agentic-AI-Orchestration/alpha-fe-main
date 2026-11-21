@@ -84,24 +84,58 @@ describe('client project page', () => {
     expect(html).not.toContain('cx-split-preview');
   });
 
-  it('says in the panel that no preview is shared yet, above the requests, with a way to ask about one', () => {
-    const html = page();
+  it('says in the panel that no preview is shared yet, above the requests, with ways to open the preview page and ask about one', () => {
+    const html = page({ onProjectViewChange: () => undefined });
     const rail = html.slice(html.indexOf('aria-label="Requests and details for Resort Website"'));
     const preview = rail.indexOf('</span>Preview</h2>');
     expect(preview).toBeGreaterThan(-1);
     expect(rail.indexOf('class="cx-reqcard-title">Requests')).toBeGreaterThan(preview);
     expect(rail).toContain('Not shared yet.');
+    expect(rail).toContain('Open preview page');
     expect(rail).toContain('Ask about a preview');
-    // A read-only inspection still says so, but cannot write to the project manager.
-    const readOnly = page({ readOnly: true });
+    // A read-only inspection still says so and can look at the preview page, but cannot write to the project manager.
+    const readOnly = page({ readOnly: true, onProjectViewChange: () => undefined });
     expect(readOnly).toContain('Not shared yet.');
+    expect(readOnly).toContain('Open preview page');
     expect(readOnly).not.toContain('Ask about a preview');
+  });
+
+  it('always offers a Preview button in the project header while the conversation page shows', () => {
+    const head = (html: string) => html.slice(html.indexOf('class="cx-reqchat-head"'), html.indexOf('</header>'));
+    expect(head(page({ onProjectViewChange: () => undefined }))).toMatch(/cx-preview-open[^>]*>.*Preview<\/button>/);
+    // Without a way to change the view there is nothing to open.
+    expect(head(page())).not.toContain('cx-preview-open');
+  });
+
+  it('opens the preview page before anything is shared: it says so, beside the conversation, with a way to ask and to close it', () => {
+    const html = page({ projectView: 'preview', onProjectViewChange: () => undefined });
+    expect(html).toMatch(/^<section class="cx-split is-empty"/);
+    const preview = html.slice(html.indexOf('class="cx-split-preview"'), html.indexOf('class="cx-split-side"'));
+    expect(preview).toContain('cx-preview-frame is-empty');
+    expect(preview).toContain('No preview shared yet');
+    expect(preview).toContain('Ask about a preview');
+    expect(preview).toContain('Close preview');
+    // Nothing to fold away or show full screen yet, and the side no longer repeats that nothing is shared.
+    expect(preview).not.toContain('Hide conversation');
+    expect(preview).not.toContain('Full screen');
+    const side = html.slice(html.indexOf('class="cx-split-side"'));
+    expect(side).not.toContain('Not shared yet.');
+    expect(side).toContain('Message your project manager');
+    expect(page({ projectView: 'preview', readOnly: true, onProjectViewChange: () => undefined })).not.toContain('Ask about a preview');
+  });
+
+  it('keeps the conversation page by default for a project without a preview', () => {
+    const html = page({ projectView: 'auto', onProjectViewChange: () => undefined });
+    expect(html).toContain('class="cx-reqsplit"');
+    expect(html).not.toContain('cx-split-preview');
   });
 
   const shared = { ...project, preview: { branch: 'uat' as const, url: 'https://resort-uat.vercel.app' } };
 
   it('drops the not-shared card once a preview is shared, and offers to hide the conversation beside it', () => {
-    const html = page({ project: shared, previewFocused: false, onPreviewFocusChange: () => undefined });
+    const html = page({ project: shared, projectView: 'auto', onProjectViewChange: () => undefined });
+    expect(html).not.toContain('is-empty');
+    expect(html).not.toContain('cx-preview-open');
     expect(html).not.toContain('Not shared yet.');
     const preview = html.slice(html.indexOf('class="cx-split-preview"'), html.indexOf('class="cx-split-side"'));
     expect(preview).toContain('Hide conversation');
@@ -109,7 +143,7 @@ describe('client project page', () => {
   });
 
   it('opens on the preview alone when focused, with the way back and the conversation one click away', () => {
-    const html = page({ project: shared, previewFocused: true, onPreviewFocusChange: () => undefined });
+    const html = page({ project: shared, projectView: 'focus', onProjectViewChange: () => undefined });
     expect(html).toMatch(/^<section class="cx-split is-focus"/);
     expect(html).not.toContain('cx-split-side');
     expect(html).not.toContain('Message your project manager');

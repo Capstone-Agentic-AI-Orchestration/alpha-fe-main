@@ -36,7 +36,8 @@ const PREVIEW_TEXT={
 } as const;
 type PreviewText=typeof PREVIEW_TEXT[keyof typeof PREVIEW_TEXT];
 
-export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=false}:{preview:Preview|null;version?:string;audience?:'pm'|'client';toolbarEnd?:ReactNode;pending?:boolean}) {
+/** `emptyAction` shows beneath the "nothing shared yet" message, such as a way to ask for a preview. */
+export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=false,emptyAction}:{preview:Preview|null;version?:string;audience?:'pm'|'client';toolbarEnd?:ReactNode;pending?:boolean;emptyAction?:ReactNode}) {
   const client=audience==='client';
   const text=client?PREVIEW_TEXT.client:PREVIEW_TEXT.pm;
   const [device,setDevice]=useState<Device>(()=>initialDevice(client));
@@ -50,7 +51,7 @@ export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=fals
   return <section className="pqa-preview" aria-label={text.section}>
     <div className="pqa-toolbar">{!client&&<><span className="pqa-env">{text.label}</span>{version&&<span>{version}</span>}</>}
       <div className="pqa-devices" role="group" aria-label="Preview device">
-        {DEVICES.map(([value,Icon])=><button key={value} type="button"
+        {DEVICES.map(([value,Icon])=><button key={value} type="button" disabled={!safe}
           aria-label={label(value)+' preview'} aria-pressed={device===value} onClick={()=>setDevice(value)}><Icon size={15}/></button>)}
       </div>
       <button type="button" disabled={!safe} aria-label={text.reload} onClick={()=>setReload(value=>value+1)}><RefreshCw size={15}/></button>
@@ -59,7 +60,7 @@ export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=fals
       {toolbarEnd&&<div className="pqa-toolbar-end">{toolbarEnd}</div>}
     </div>
     <div ref={stage} className="pqa-stage" data-device={device}>
-      <PreviewStage pending={pending} screen={screen} device={device} safe={safe} text={text}/>
+      <PreviewStage pending={pending} screen={screen} device={device} safe={safe} text={text} emptyAction={emptyAction}/>
     </div>
   </section>;
 }
@@ -94,10 +95,10 @@ function PreviewFrame({url,title,viewport}:{url:string;title:string;viewport:Pre
     {!loaded&&<LoadingRows label="Loading embedded preview" layout="detail" className="pointer-events-none absolute inset-0 bg-canvas px-5" />}</div>;
 }
 
-function PreviewStage({pending,screen,device,safe,text}:{pending:boolean;screen:ReactNode;device:Device;safe:Preview|null;text:PreviewText}) {
+function PreviewStage({pending,screen,device,safe,text,emptyAction}:{pending:boolean;screen:ReactNode;device:Device;safe:Preview|null;text:PreviewText;emptyAction?:ReactNode}) {
   if(pending)return <LoadingRows label="Loading project preview" layout="detail" className="w-full px-5" />;
   if(screen)return device==='desktop'?<>{screen}</>:<div className="pqa-device">{screen}</div>;
-  if(!safe)return <div className="pqa-empty"><Monitor size={30}/><h3>{text.none}</h3><p>{text.noneDetail}</p></div>;
+  if(!safe)return <div className="pqa-empty"><Monitor size={30}/><h3>{text.none}</h3><p>{text.noneDetail}</p>{emptyAction}</div>;
   return <div className="pqa-empty"><Monitor size={30}/><h3>{'Open the '+text.name+' preview in a new tab'}</h3>
     <p>{safe.reason||'This site does not allow an embedded preview. Open it in a new tab to test it.'}</p>
     <a href={safe.url} target="_blank" rel="noopener noreferrer">Open {text.name} preview <ExternalLink size={14}/></a></div>;
