@@ -20,7 +20,7 @@ describe('client landing and password entry', () => {
     expect(html).toContain('A clear start for');
     expect(html).toContain('Three steps.');
     expect(html).toContain('Alphaexplora');
-    expect(html).toContain('alt="Cosmo home"');
+    expect(html).toContain('alt="Alphaexplora home"');
     expect(html).not.toContain('Client home');
     expect(html).not.toContain('Invite only');
     expect(html).toContain('Then see it come together.');
@@ -34,24 +34,26 @@ describe('client landing and password entry', () => {
   });
   it('shows password sign-in and existing-account migration without open signup or client GitHub login', () => {
     browser(); const html = renderToStaticMarkup(<ClientPasswordSignIn unavailable={false} error="" onRetry={() => {}} onSignedIn={() => {}} />);
-    expect(html).toContain('class="alpha-public public-cosmo public-fit"');
-    expect(html).toContain('alt="Cosmo home"');
+    expect(html).toContain('class="alpha-public public-brand-space public-fit"');
+    expect(html).toContain('alt="Alphaexplora home"');
     expect(html).toContain('aria-current="step"');
     expect(html).toContain('Alphaexplora');
     expect(html).toContain('aria-current="page">Client sign in</span>');
     expect(html).toContain('type="password"');
     expect(html).toContain('autoComplete="current-password"');
     expect(html).toContain('/#/client/forgot');
-    expect(html).toContain('use password recovery to set one');
+    expect(html).toContain('href="/#/client/forgot">Forgot or need a password?</a>');
+    expect(html).not.toContain('First time here?');
+    expect(html).not.toContain('Check access again');
     expect(html).not.toContain('Continue with GitHub');
     expect(html).not.toContain('30 days');
     expect(html).not.toContain('/sign-up');
   });
-  it('explains password recovery without sending another inquiry or promising account existence', () => {
+  it('offers password recovery without promising the account exists', () => {
     const html = renderToStaticMarkup(<ClientPasswordRecovery />);
-    expect(html).toContain('Your account and existing requests will stay together');
-    expect(html).toContain('Your project manager must first invite you');
     expect(html).toContain('Reset your password');
+    expect(html).toContain('Back to sign in');
+    expect(html).not.toContain('An inquiry alone does not activate access');
   });
   it('recognizes recovery links and removes credentials before navigation', () => {
     const location = { pathname: '/', search: '', hash: `#/client/activate?providerTokenHash=${'a'.repeat(32)}&providerTokenType=recovery` };

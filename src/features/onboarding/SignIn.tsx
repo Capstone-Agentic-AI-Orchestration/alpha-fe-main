@@ -32,17 +32,12 @@ interface Props {
 
 const ERROR_COPY: Record<SignInError, { title: string; detail: string }> = {
   no_team: {
-    title: 'Your GitHub account has no Alpha role',
-    detail:
-      'Alpha takes your role from your team in the workspace organisation. ' +
-      'Your account signed in, but it belongs to no team that grants one. ' +
-      'Ask an organisation owner to add you to a team, then sign in again.'
+    title: 'No Alpha role yet',
+    detail: 'Ask an organisation owner to add you to a team, then sign in again.'
   },
   oauth_failed: {
-    title: 'Sign-in did not complete',
-    detail:
-      'GitHub did not return a usable response. This is usually an expired ' +
-      'attempt, and starting again normally resolves it.'
+    title: 'Sign-in didn’t finish',
+    detail: 'Try again.'
   }
 };
 
@@ -57,21 +52,6 @@ const ROSTER: { name: string; does: string; Icon: LucideIcon }[] = [
 
 /** Five roles advance every 1.2s, keeping the handoff loop on a six-second cycle. */
 const HANDOFF_STEP_MS = 1200;
-
-const NEXT_STEPS: { title: string; detail: string }[] = [
-  {
-    title: 'GitHub confirms it is you',
-    detail: 'The first time, it asks you to authorise Alpha.'
-  },
-  {
-    title: 'Your team sets your role',
-    detail: 'Project managers, clients and admins work on the board, here.'
-  },
-  {
-    title: 'Developers continue on the desktop',
-    detail: 'Agents run on your own machine, so the web app points you to the installer.'
-  }
-];
 
 const DOT_GRID: React.CSSProperties = {
   backgroundImage: 'radial-gradient(rgb(var(--c-white) / 0.055) 1px, transparent 1.5px)',
@@ -174,13 +154,6 @@ const Showcase: React.FC = () => {
       >
         AI work, <span className="text-link">orchestrated.</span>
       </h2>
-      <p
-        className="mt-4 max-w-md text-sm leading-relaxed text-content-secondary motion-safe:animate-signin-rise"
-        style={{ animationDelay: '120ms' }}
-      >
-        One shared board for the people who plan the work and the AI agents that
-        carry it out on developers&apos; own machines.
-      </p>
 
       <div className="mt-8 max-w-md motion-safe:animate-signin-rise" style={{ animationDelay: '180ms' }}>
         <div className="flex items-center justify-between gap-3">
@@ -283,33 +256,6 @@ const Showcase: React.FC = () => {
   );
 };
 
-const NextSteps: React.FC = () => (
-  <div className="mt-5 border-t border-divider pt-4">
-    <h2 className="font-mono text-[10px] font-normal uppercase tracking-[0.17em] text-content-muted">
-      What happens next
-    </h2>
-    <ol className="mt-3 space-y-3">
-      {NEXT_STEPS.map((step, i) => (
-        <li key={step.title} className="relative grid grid-cols-[1.25rem_minmax(0,1fr)] gap-2.5">
-          {i < NEXT_STEPS.length - 1 && (
-            <span aria-hidden="true" className="absolute bottom-[-0.75rem] left-[0.6rem] top-6 w-px bg-divider" />
-          )}
-          <span
-            aria-hidden="true"
-            className="flex h-5 w-5 items-center justify-center rounded-md border border-divider bg-well font-mono text-[10px] text-content-muted"
-          >
-            {i + 1}
-          </span>
-          <div className="min-w-0 pt-px">
-            <p className="text-[12px] font-medium leading-snug text-content">{step.title}</p>
-            <p className="mt-0.5 text-[12px] leading-snug text-content-muted">{step.detail}</p>
-          </div>
-        </li>
-      ))}
-    </ol>
-  </div>
-);
-
 export const SignIn: React.FC<Props> = ({ identity, error }) => {
   const problem = error ? ERROR_COPY[error] : undefined;
 
@@ -335,13 +281,10 @@ export const SignIn: React.FC<Props> = ({ identity, error }) => {
                 </span>
               </div>
 
-              <div className="mt-6 space-y-1.5">
+              <div className="mt-6">
                 <h1 id="sign-in-heading" className="text-xl font-semibold leading-tight tracking-tight text-content">
                   Sign in to Alpha
                 </h1>
-                <p className="text-[13px] leading-relaxed text-content-secondary">
-                  The board where your team plans the work and AI agents carry it out.
-                </p>
               </div>
 
               {problem && (
@@ -379,9 +322,6 @@ export const SignIn: React.FC<Props> = ({ identity, error }) => {
                         <code className="rounded bg-code px-1.5 py-0.5 font-mono text-[11px] text-code-content">GITHUB_CLIENT_SECRET</code>
                         {' '}in the server environment, then restart the server.
                       </p>
-                      <p className="text-[12px] leading-relaxed text-content-muted">
-                        This is a deployment setting. Nothing on your GitHub account needs to change.
-                      </p>
                     </div>
                   </div>
                 )}
@@ -389,13 +329,9 @@ export const SignIn: React.FC<Props> = ({ identity, error }) => {
 
               <p id="sign-in-trust" className="mt-3 flex items-start gap-2 text-[12px] leading-relaxed text-content-secondary">
                 <ShieldCheck aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-status-success" />
-                <span>
-                  Alpha reads your organisation team membership to decide what you can
-                  see. It never stores a password.
-                </span>
+                <span>Your GitHub team sets your role.</span>
               </p>
 
-              {identity.signInUrl && <NextSteps />}
             </div>
           </section>
 

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 
-import { seeded } from '@/features/landing/cosmoSpiral';
+import { MARK_APEX, MARK_STROKES, markPoint, sampleMark, seeded } from '@/brand/markParticles';
 import type { ScenePalette } from '@/shared/theme';
 import type { LiveBuildOrchestrationStatus } from '@/shared/types';
 
@@ -13,21 +13,17 @@ import type { LiveBuildOrchestrationStatus } from '@/shared/types';
  * slowly and eases between speeds.
  */
 
+/** Half the unfurled mark's height. */
 const RADIUS = 1.15;
 /** Resting sphere radius: the size of the old Orchestrator orb, without its large glow. */
 const SPHERE_RADIUS = 0.62;
-const ARM_GRAINS = 8200;
-const DUST_GRAINS = 1500;
+const MARK_GRAINS = 9700;
 const CORE_GRAINS = 480;
 // Keep the resting shell airy; the remaining grains appear as it unfurls.
 const SPHERE_STRIDE = 5;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
-/** Radians an arm winds from the core to the rim: about one and a quarter turns. */
-const WIND = 7.6;
-const armAngle = (arm: number, r: number) => arm * Math.PI + WIND * Math.pow(r, 0.9);
-const armWidth = (r: number) => 0.026 + 0.125 * r;
 
-/** The galaxy's resting tilt: leaned back and turned a little. */
+/** The resting tilt: leaned back and turned a little. */
 const TILT_X = -0.62;
 const TILT_Z = 0.28;
 
@@ -73,7 +69,7 @@ uniform vec3 uTint;
 varying vec3 vColor;
 varying float vAlpha;
 void main() {
-  // The core unfurls first and the rim follows, so the galaxy grows out of the sphere.
+  // Strokes unfurl in the brand's drawing order, so the mark grows out of the sphere.
   float local = clamp(uMorph * 1.45 - aDelay * 0.45, 0.0, 1.0);
   float e = local * local * (3.0 - 2.0 * local);
   vec3 p = mix(aSphere, position, e);
@@ -126,21 +122,16 @@ function gauss(rnd: () => number): number {
   return (rnd() + rnd() + rnd() - 1.5) / 1.5;
 }
 
-/** Wider than `gauss`, so an arm has a dense spine and a soft, stippled skirt. */
-function soft(rnd: () => number): number {
-  return (rnd() + rnd() + rnd() + rnd() - 2) / 1.1;
-}
-
-function buildGalaxy() {
+function buildMark() {
   const rnd = seeded(23);
   const position: number[] = [], sphere: number[] = [], sphereVisible: number[] = [], delay: number[] = [];
   const size: number[] = [], bright: number[] = [], hue: number[] = [], phase: number[] = [];
-  const shellCount = Math.ceil((ARM_GRAINS + DUST_GRAINS + CORE_GRAINS) / SPHERE_STRIDE);
-  const add = (x: number, y: number, z: number, s: number, b: number, h: number) => {
+  const shellCount = Math.ceil((MARK_GRAINS + CORE_GRAINS) / SPHERE_STRIDE);
+  const add = (x: number, y: number, z: number, wait: number, s: number, b: number, h: number) => {
     position.push(x * RADIUS, y * RADIUS, z * RADIUS);
     // Interleaved golden-angle shells distribute the visible dots evenly,
     // avoiding random clusters. Hidden grains have distinct homes too, ready
-    // to fade in along their existing sphere-to-galaxy morph.
+    // to fade in along their existing sphere-to-mark morph.
     const index = size.length;
     const layer = index % SPHERE_STRIDE;
     const slot = Math.floor(index / SPHERE_STRIDE);
@@ -148,37 +139,23 @@ function buildGalaxy() {
     const polar = Math.acos(1 - 2 * (slot + 0.5) / shellCount);
     sphere.push(Math.cos(heading) * Math.sin(polar) * SPHERE_RADIUS, Math.sin(heading) * Math.sin(polar) * SPHERE_RADIUS, Math.cos(polar) * SPHERE_RADIUS);
     sphereVisible.push(layer === 0 ? 1 : 0);
-    delay.push(Math.min(1, Math.hypot(x, y)));
+    delay.push(wait);
     size.push(s); bright.push(b); hue.push(h); phase.push(rnd() * 6.2832);
   };
 
-  for (let i = 0; i < ARM_GRAINS; i++) {
-    const arm = i % 2;
-    const r = 0.04 + 0.96 * Math.pow(rnd(), 0.95);
-    const skirt = rnd() < 0.08;
-    const across = soft(rnd) * (skirt ? 1.7 : 1);
-    const a = armAngle(arm, r) + (rnd() - 0.5) * 0.06;
-    const rr = r + across * armWidth(r);
-    const z = gauss(rnd) * (0.012 + 0.045 * Math.pow(1 - r, 2));
-    const spine = Math.exp(-across * across * 0.9);
-    const sparkle = rnd() > 0.93;
-    add(Math.cos(a) * rr, Math.sin(a) * rr, z, sparkle ? 0.032 : 0.018, (0.12 + 0.72 * spine) * (1 - 0.38 * r), sparkle ? 0.5 : 0.05);
-  }
+  // The mark's strokes; y flips because the canvas's y runs down and the scene's runs up.
+  sampleMark(rnd, MARK_GRAINS).forEach(particle => {
+    const [x, y] = markPoint(particle);
+    const [from, to] = MARK_STROKES[particle[0]].draw;
+    const sparkle = particle[3] > 0.93;
+    add(x, -y, particle[4] * 0.025, from + (to - from) * particle[1], sparkle ? 0.032 : 0.018, 0.2 + 0.6 * particle[3], sparkle ? 0.5 : 0.05);
+  });
 
-  // Sparse dust drifting off the arms' outer edges.
-  for (let i = 0; i < DUST_GRAINS; i++) {
-    const arm = i % 2;
-    const r = 0.4 + 0.92 * Math.sqrt(rnd());
-    const a = armAngle(arm, Math.min(1, r) * 0.96) + gauss(rnd) * 0.5;
-    const z = gauss(rnd) * 0.03;
-    add(Math.cos(a) * r, Math.sin(a) * r, z, rnd() > 0.8 ? 0.022 : 0.014, (0.08 + 0.22 * rnd()) * Math.max(0.15, 1.35 - r), rnd() > 0.85 ? 0.6 : 0.12);
-  }
-
-  // A small bright bulge, so the core has depth from the side.
+  // A small bright cluster at the apex, where the mark ignites.
   for (let i = 0; i < CORE_GRAINS; i++) {
-    const r = Math.abs(gauss(rnd)) * 0.07;
+    const r = Math.abs(gauss(rnd)) * 0.05;
     const a = rnd() * 6.2832;
-    add(Math.cos(a) * r, Math.sin(a) * r, gauss(rnd) * 0.035, 0.03, 0.75, 0);
+    add(MARK_APEX[0] + Math.cos(a) * r, -MARK_APEX[1] + Math.sin(a) * r, gauss(rnd) * 0.035, 0, 0.03, 0.75, 0);
   }
 
   const grains = new THREE.BufferGeometry();
@@ -213,7 +190,7 @@ export function OrchestratorParticleSphere({ palette, status, working, selected,
   const tint = visual ? palette[visual.color] : palette.hub;
   const targetSpin = visual?.spin ?? (working ? WORKING_SPIN : IDLE_SPIN);
 
-  const grains = useMemo(buildGalaxy, []);
+  const grains = useMemo(buildMark, []);
   const material = useMemo(() => new THREE.ShaderMaterial({
     vertexShader: VERTEX,
     fragmentShader: FRAGMENT,

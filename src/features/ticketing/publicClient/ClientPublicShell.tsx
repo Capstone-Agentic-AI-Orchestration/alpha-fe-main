@@ -1,8 +1,8 @@
 import { useRef, type ReactNode } from 'react';
 import { ArrowUpRight } from 'lucide-react';
-import cosmoLogoUrl from '@/assets/cosmo-logo.png';
+import { BrandLogo } from '@/brand/BrandLogo';
 import { clientLandingHref, clientPortalHref, publicInquiryHref } from '../publicIntakeApi';
-import { CosmoBackdrop } from './CosmoBackdrop';
+import { BrandBackdrop } from './BrandBackdrop';
 import { InteractiveBackdrop } from './InteractiveBackdrop';
 import '../clientDesignTokens.css';
 import './clientPublic.css';
@@ -18,9 +18,9 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
   const homeHref = clientLandingHref(slug);
   const clientHref = clientPortalHref(slug);
   // Access pages (sign in, recovery, invitation setup) and the inquiry share the landing's
-  // Cosmo space and fit one screen on desktop.
-  const cosmo = page !== 'landing';
-  return <div className={`alpha-public${cosmo ? ' public-cosmo public-fit' : ''}`} onClickCapture={event => {
+  // starfield and brand mark, and fit one screen on desktop.
+  const space = page !== 'landing';
+  return <div className={`alpha-public${space ? ' public-brand-space public-fit' : ''}`} onClickCapture={event => {
     if (!(event.target instanceof Element)) return;
     const anchor = event.target.closest<HTMLAnchorElement>('a[href]');
     if (!anchor) return;
@@ -33,11 +33,11 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
       event.stopPropagation();
     }
   }}>
-    {cosmo ? <CosmoBackdrop /> : <InteractiveBackdrop />}
+    {space ? <BrandBackdrop /> : <InteractiveBackdrop />}
     <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
     <header className="public-header public-container">
-      <a className="public-brand public-brand-cosmo" href={homeHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>
-        <img src={cosmoLogoUrl} alt="Cosmo home" width="114" height="44" />
+      <a className="public-brand public-brand-logo" href={homeHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>
+        <BrandLogo height={44} />
       </a>
       <nav className={`public-header-nav public-header-nav-${page}`} aria-label="Client navigation">
         {page === 'landing' ? <>
@@ -59,7 +59,6 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
     <main ref={mainRef} tabIndex={-1} className="public-main">{children}</main>
     <footer className="public-footer public-container">
       <span className="public-footer-brand">Alphaexplora <span>AI work, orchestrated.</span></span>
-      <p>Only requests your project manager shares with you appear in your account.</p>
     </footer>
   </div>;
 }

@@ -12,7 +12,7 @@ import type { BuildAgentNode, BuildAgentState, BuildHandoff } from './useProject
 import type { SceneAgent, SceneLink } from './OrchestratorScene3D';
 import { supportsWebGL } from './orchestratorSceneLayout';
 import { runningFlowAgentCount } from './flowExecution';
-import { drawCosmoMark } from './cosmoMark2d';
+import { drawOrchestratorMark } from './orchestratorMark2d';
 import { BUILD_STEPS, buildStepFor } from './buildSteps';
 import { RestingWave } from './RestingWave';
 
@@ -177,7 +177,7 @@ function buildTone(state: BuildAgentState, palette: ScenePalette): string {
   return rgbChannels(state === 'failed' ? palette.danger : state === 'completed' ? palette.success : state === 'review' ? palette.warning : state === 'waiting' ? palette.info : palette.hub);
 }
 
-/** Subtle spatial harmonic tint per specialist role so idle nodes are visually distinct while matching the Cosmo palette. */
+/** Subtle spatial harmonic tint per specialist role so idle nodes are visually distinct while matching the brand palette. */
 function roleIdleTone(roleOrName: string, palette: ScenePalette): string {
   const base = rgbChannels(palette.idle);
   const text = roleOrName.toLowerCase();
@@ -258,7 +258,7 @@ export function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: n
     // Collapsed: only the Orchestrator, centred. Fewer, distinct dots snapped to
     // device pixels keep a mark this small sharp.
     const radius = height * 0.46;
-    drawCosmoMark(ctx, width / 2, height / 2, radius, 0, seconds, rgbChannels(palette.highlight), { pixelRatio: dpr, dot: 0.5, sphereScale: 0.72, intensity: 1.2 });
+    drawOrchestratorMark(ctx, width / 2, height / 2, radius, 0, seconds, rgbChannels(palette.highlight), { pixelRatio: dpr, dot: 0.5, sphereScale: 0.72, intensity: 1.2 });
     return [];
   }
   const t = seconds * (working ? 1.5 : 0.65);
@@ -353,7 +353,7 @@ export function drawWave(canvas: HTMLCanvasElement, state: WaveState, seconds: n
   const markRadius = core * 1.7;
   drawGlow(ctx, hub.x, hub.y, markRadius * 1.3, hubGlow, (working ? 0.16 : 0.1) + flashAmount * 0.15 + (selectedId === hubId ? 0.08 : 0));
   const grain = rgbChannels(palette.highlight);
-  drawCosmoMark(ctx, hub.x, hub.y, markRadius, 0, seconds, grain);
+  drawOrchestratorMark(ctx, hub.x, hub.y, markRadius, 0, seconds, grain);
   drawGlow(ctx, hub.x, hub.y, core * 0.6, grain, working ? 0.85 : 0.65);
   positions.push({ id: hubId, x: hub.x, y: hub.y, r: core });
   return positions;

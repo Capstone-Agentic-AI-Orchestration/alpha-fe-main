@@ -1,13 +1,13 @@
-import { buildSpiral, seeded, spiralAngle, TWIST } from './cosmoSpiral';
+import { MARK_APEX, MARK_ASPECT, MARK_STROKES, MARK_TRAIL_DIRECTION, markPoint, particleDrawn, sampleMark, seeded, type MarkParticle } from '@/brand/markParticles';
 
 /**
  * Canvas "camera" for the client landing zoom journey. Five nested worlds
- * (cosmos → thread → nebula → planets → galaxy); each world sits 40× inside
- * the previous one, and scroll progress drives a single camera through them.
- * The last world is the client's project as a 3D Cosmo galaxy: light runs out
- * along its arms, work items ignite, a message comets out to the item waiting
- * on the client, the disk turns face-on into the Cosmo mark, and the camera
- * pulls all the way back out through every world.
+ * (deep space → thread → nebula → planets → project); each world sits 40×
+ * inside the previous one, and scroll progress drives a single camera through
+ * them. The last world is the client's project as the Alphaexplora mark in 3D:
+ * light draws its strokes, work items ignite, a message runs from the apex to
+ * the item waiting on the client, the mark turns face-on, and the camera pulls
+ * all the way back out through every world.
  * Decorative only: every word the canvas shows is also in the DOM.
  */
 
@@ -20,9 +20,9 @@ type World = {
   core: [number, number, number][];
   sphere: [number, number, number][];
   dust2: [number, number, number][];
-  /** Galaxy particles: [arm, radius, angular jitter, brightness, disk thickness]. */
-  spiral: [number, number, number, number, number][];
-  /** Finale start for each galaxy particle: [distance from the lockup, as a share of the half‑diagonal; delay 0–0.55; extra swirl]. */
+  /** The mark's particles, shared by the project world and the finale. */
+  mark: MarkParticle[];
+  /** Finale start for each mark particle: [distance from the lockup, as a share of the half‑diagonal; delay 0–0.55; extra swirl]. */
   gather: [number, number, number][];
 };
 type Frame = { U: number; time: number; still: boolean; mx: number; my: number; wp: number; pu: number; finale: number };
@@ -30,9 +30,11 @@ type WorldPainter = (ctx: CanvasRenderingContext2D, T: Transform, k: number, C: 
 type WarpStreak = { a: number; r0: number; sp: number; len: number; hot: number };
 type Kind = 'done' | 'waiting' | 'progress';
 type Label = { x: number; y: number; text: string; col: string; a: number; r: number; up?: boolean };
+/** Mark point (mark units, with depth −1…1) → screen [x, y, depth] in the project world. */
+type Place = (point: Vec, depth?: number) => [number, number, number];
 /** Finale amounts, each 0–1: particles gathered, wordmark written, core flash, warp curl, recede behind the close, wordmark left. */
 type Finale = { gather: number; word: number; flash: number; curl: number; recede: number; wordLeft: number };
-/** Where the Cosmo lockup sits at rest: spiral centre and radius, and the wordmark box. */
+/** Where the brand lockup sits at rest: the mark's centre and half-height, and the wordmark box. */
 type Lockup = { R: number; x: number; y: number; wordX: number; wordY: number; wordW: number; wordH: number; stacked: boolean };
 
 /** Scroll progress per sticky section, each 0–1, plus `cp`: how far the closing section has risen into view. */
@@ -67,11 +69,11 @@ function buildWorld(): World {
   for (let i = 0; i < n; i++) { const y = 1 - (i / (n - 1)) * 2, rr = Math.sqrt(1 - y * y), th = i * 2.39996; sphere.push([Math.cos(th) * rr, y, Math.sin(th) * rr]); }
   const dust2: World['dust2'] = [];
   for (let i = 0; i < 260; i++) dust2.push([(rnd() - 0.5) * 4, (rnd() - 0.5) * 2.6, rnd()]);
-  const spiral = buildSpiral(rnd);
+  const mark = sampleMark(rnd);
   // Separate stream so the finale's start positions don't reshuffle the other worlds.
   const gatherRnd = seeded(77);
-  const gather: World['gather'] = spiral.map(() => [0.9 + gatherRnd() * 0.9, gatherRnd() * 0.55, (gatherRnd() - 0.5) * 0.8]);
-  return { stars, neb, core, sphere, dust2, spiral, gather };
+  const gather: World['gather'] = mark.map(() => [0.9 + gatherRnd() * 0.9, gatherRnd() * 0.55, (gatherRnd() - 0.5) * 0.8]);
+  return { stars, neb, core, sphere, dust2, mark, gather };
 }
 
 /** Where each world's child portal sits, in that world's own units. */
@@ -115,21 +117,21 @@ function planetsCamera(u: number): Camera {
 /** Where the closing section rests: the opening starfield. */
 const REST_LEVEL = -0.75;
 /**
- * Project-world beats in project progress (0–1): the light reaches the rim by
- * `lit`, the message beat runs `ask`–`reveal`, the disk turns face-on by
- * `revealEnd`, and the camera pulls back out from `pull`.
+ * Project-world beats in project progress (0–1): the light has drawn the whole
+ * mark by `lit`, the message beat runs `ask`–`reveal`, the mark turns face-on
+ * by `revealEnd`, and the camera pulls back out from `pull`.
  */
-export const GALAXY_BEATS = { lit: 0.13, ask: 0.15, reveal: 0.3, revealEnd: 0.41, pull: 0.45 } as const;
+export const PROJECT_BEATS = { lit: 0.13, ask: 0.15, reveal: 0.3, revealEnd: 0.41, pull: 0.45 } as const;
 /**
- * Finale beats in project progress: the warp curls from `curl`, the camera
+ * Finale beats in project progress: the warp lines up with the trails from `curl`, the camera
  * rests at `rest`, particles gather `gather`–`gatherEnd`, the core flashes at
  * `ignite`, and the wordmark writes in from `word` to the end of the section.
  */
 export const FINALE_BEATS = { curl: 0.8, rest: 0.88, gather: 0.86, gatherEnd: 0.95, ignite: 0.935, word: 0.95 } as const;
 
-/** Project: a slow push into the galaxy while the captions play, then pull all the way back out. */
+/** Project: a slow push into the mark while the captions play, then pull all the way back out. */
 function projectCamera(u: number): Camera {
-  const { pull } = GALAXY_BEATS;
+  const { pull } = PROJECT_BEATS;
   return pureCamera(u < pull ? 3 + 0.06 * smooth(u / pull) : 3.06 - (3.06 - REST_LEVEL) * smooth((u - pull) / (FINALE_BEATS.rest - pull)));
 }
 
@@ -154,10 +156,10 @@ function projectProgress(g: number): number {
   return g >= 3 ? g - 3 : 0;
 }
 
-/** 0–1 share of the side shift that keeps the galaxy clear of the captions on the left. */
-function galaxyShift(g: number): number {
+/** 0–1 share of the side shift that keeps the project mark clear of the captions on the left. */
+function projectShift(g: number): number {
   if (g < 3) return 0;
-  return smooth((g - 3) / 0.05) * (1 - smooth((g - 3 - GALAXY_BEATS.pull) / 0.1));
+  return smooth((g - 3) / 0.05) * (1 - smooth((g - 3 - PROJECT_BEATS.pull) / 0.1));
 }
 
 /** Finale amounts for global progress g. Reduced motion shows the finished lockup once the close is in view. */
@@ -177,16 +179,23 @@ function finaleState(g: number, cp: number, still: boolean): Finale {
   };
 }
 
-/** The lockup as in the logo: spiral, gap 0.3R, wordmark 3.07R × 0.52R set 0.1R low; stacked when it can't fit across. */
-function lockupLayout(w: number, h: number): Lockup {
-  const R = Math.min(Math.min(w, h) * 0.23, 210);
-  const wordW = R * 3.07, wordH = R * 0.52, gap = R * 0.3;
-  if (2 * R + gap + wordW > w * 0.9) {
-    const y = h / 2 - (wordH + gap) / 2;
+/**
+ * The lockup as in the logo: the mark (R is half its height), a gap of 0.34R,
+ * and the wordmark with a cap height of 0.4R, centred a little above the
+ * mark's middle on the A's body. `wordAspect` is the wordmark's width over
+ * height. Stacked, with the wordmark under the mark, when it can't fit across.
+ */
+export function lockupLayout(w: number, h: number, wordAspect: number): Lockup {
+  const R = Math.min(Math.min(w, h) * 0.2, 190);
+  const halfW = R * MARK_ASPECT, gap = R * 0.34;
+  let wordH = R * 0.4, wordW = wordH * wordAspect;
+  if (2 * halfW + gap + wordW > w * 0.9) {
+    wordW = Math.min(wordW, w * 0.84); wordH = wordW / wordAspect;
+    const y = h / 2 - (2 * R + gap + wordH) / 2 + R;
     return { R, x: w / 2, y, wordX: w / 2 - wordW / 2, wordY: y + R + gap, wordW, wordH, stacked: true };
   }
-  const x = w / 2 - (2 * R + gap + wordW) / 2 + R;
-  return { R, x, y: h / 2, wordX: x + R + gap, wordY: h / 2 + 0.1 * R - wordH / 2, wordW, wordH, stacked: false };
+  const x = w / 2 - (2 * halfW + gap + wordW) / 2 + halfW;
+  return { R, x, y: h / 2, wordX: x + halfW + gap, wordY: h / 2 - 0.06 * R - wordH / 2, wordW, wordH, stacked: false };
 }
 
 function buildWarp(): WarpStreak[] {
@@ -194,17 +203,30 @@ function buildWarp(): WarpStreak[] {
   return Array.from({ length: 180 }, () => ({ a: rnd() * 6.2832, r0: rnd(), sp: 0.5 + rnd() * 0.9, len: 0.04 + rnd() * 0.1, hot: rnd() }));
 }
 
-/** Work items on the galaxy arms: arm index and radius along the spiral. */
-const WORKS: { name: string; kind: Kind; arm: number; r: number }[] = [
-  { name: 'Brand assets', kind: 'done', arm: 1, r: 0.26 },
-  { name: 'Homepage', kind: 'done', arm: 0, r: 0.42 },
-  { name: 'Contact page', kind: 'waiting', arm: 1, r: 0.62 },
-  { name: 'Booking flow', kind: 'progress', arm: 0, r: 0.84 },
+const strokeIndex = (id: string) => {
+  const index = MARK_STROKES.findIndex(stroke => stroke.id === id);
+  if (index < 0) throw new Error(`The brand mark has no stroke "${id}".`);
+  return index;
+};
+/** Work items on the mark: the stroke each sits on and how far along it. */
+const WORKS: { name: string; kind: Kind; stroke: number; t: number }[] = [
+  { name: 'Brand assets', kind: 'done', stroke: strokeIndex('left'), t: 0.78 },
+  { name: 'Homepage', kind: 'done', stroke: strokeIndex('right'), t: 0.42 },
+  { name: 'Contact page', kind: 'waiting', stroke: strokeIndex('base'), t: 0.5 },
+  { name: 'Booking flow', kind: 'progress', stroke: strokeIndex('orbitRight'), t: 0.55 },
 ];
+/** The message's route from the apex to the waiting item: down the right leg, then along the base. */
+const MESSAGE_ROUTE = (() => {
+  const right = MARK_STROKES[strokeIndex('right')], base = MARK_STROKES[strokeIndex('base')];
+  const split = right.length / (right.length + base.length * 0.5);
+  return (along: number) => (along < split ? right.at(along / split) : base.at((along - split) / (1 - split) * 0.5));
+})();
 const KIND_RGB: Record<Kind, string> = { done: '52,211,153', waiting: '251,191,36', progress: '167,139,250' };
 const KIND_LABEL: Record<Kind, string> = { done: 'Done', waiting: 'Awaiting you', progress: 'In progress' };
-/** Galaxy disk radius in world units. */
-const DISK = 0.82;
+/** Half the project mark's height in world units. */
+const MARK_SIZE = 0.8;
+/** How far the project mark leans back before it turns face-on, in radians. */
+const LEAN = 0.95;
 
 function nebulaColor(r: number, hot: number): string {
   if (r < 0.35) return INK;
@@ -268,7 +290,7 @@ export class ZoomScene {
 
   private drawWorld(ctx: CanvasRenderingContext2D, i: number, T: Transform, k: number, alpha: number, frame: Frame, w: number, h: number) {
     if (alpha <= 0.01) return;
-    const worlds: Record<number, WorldPainter> = { [-1]: this.cosmos, 0: this.thread, 1: this.nebula, 2: this.planets, 3: this.galaxy };
+    const worlds: Record<number, WorldPainter> = { [-1]: this.deepSpace, 0: this.thread, 1: this.nebula, 2: this.planets, 3: this.project };
     ctx.save();
     ctx.globalAlpha = alpha;
     worlds[i]?.call(this, ctx, T, k, frame, w, h);
@@ -287,6 +309,12 @@ export class ZoomScene {
     }
   }
 
+  /** Width over height of the wordmark image, with a fallback while it loads. */
+  private wordAspect(): number {
+    const img = this.wordmark;
+    return img?.complete && img.naturalWidth ? img.naturalWidth / img.naturalHeight : 15;
+  }
+
   draw(time: number, still: boolean, progress: JourneyProgress, pointer: Vec) {
     const surface = this.prepare();
     if (!surface) return;
@@ -296,75 +324,86 @@ export class ZoomScene {
     const finale = finaleState(g, progress.cp, still);
     const frame: Frame = { U: Math.min(w, h) * 0.42, time, still, mx, my, wp: stepsProgress(g), pu: projectProgress(g), finale: finale.gather };
     const side = w >= 900 ? Math.min(w * 0.18, 260) : 0;
-    const centre: Vec = [w / 2 + mx * 18 + side * galaxyShift(g), h / 2 + my * 12];
+    const centre: Vec = [w / 2 + mx * 18 + side * projectShift(g), h / 2 + my * 12];
     this.drawCamera(ctx, camera(g), centre, frame, w, h);
-    const lockup = lockupLayout(w, h);
-    const warpFrom = 3 + GALAXY_BEATS.pull + 0.05, warpTo = 3 + FINALE_BEATS.gatherEnd - 0.03;
+    const lockup = lockupLayout(w, h, this.wordAspect());
+    const warpFrom = 3 + PROJECT_BEATS.pull + 0.05, warpTo = 3 + FINALE_BEATS.gatherEnd - 0.03;
     if (!still && g > warpFrom && g < warpTo) {
-      // As the streaks curl, their vanishing point slides over to the forming spiral.
+      // As the streaks line up, their vanishing point slides over to the forming mark.
       const at: Vec = [w / 2 + (lockup.x - w / 2) * finale.curl, h / 2 + (lockup.y - h / 2) * finale.curl];
       this.warp(ctx, w, h, Math.sin(Math.PI * clamp((g - warpFrom) / (warpTo - warpFrom))), time, finale.curl, at);
     }
     if (finale.gather > 0) this.lockup(ctx, lockup, finale, w, h, time, still);
   }
 
-  /** Speed lines rushing to the centre; `curl` (0–1) bends them into the spiral's arms. */
+  /**
+   * Speed lines rushing to the centre; as `curl` (0–1) rises each one turns to
+   * run parallel to the mark's speed trails, so the warp you flew through
+   * becomes the trails of the logo that forms.
+   */
   private warp(ctx: CanvasRenderingContext2D, w: number, h: number, intensity: number, time: number, curl: number, [cx, cy]: Vec) {
     if (intensity <= 0.01) return;
     const R = Math.hypot(w, h) / 2;
-    const bend = curl * 1.6;
+    const trail = Math.atan2(MARK_TRAIL_DIRECTION[1], MARK_TRAIL_DIRECTION[0]);
+    const align = smooth(curl);
     ctx.lineWidth = 1.2;
     this.warpStreaks.forEach(s => {
       let r = (s.r0 - time * s.sp) % 1;
       if (r < 0) r += 1;
-      const r1 = (0.06 + r * 0.98) * R, r2 = r1 + s.len * (0.3 + r * 1.4) * R;
+      const r1 = (0.06 + r * 0.98) * R, len = s.len * (0.3 + r * 1.4) * R;
       const a = intensity * Math.min(1, r * 1.6) * (s.hot > 0.85 ? 0.9 : 0.45);
-      const a1 = s.a + bend * (1 - r1 / R), a2 = s.a + bend * (1 - r2 / R), am = (a1 + a2) / 2, rm = (r1 + r2) / 2;
+      // Trails run both ways along one line, so each streak turns to whichever end is nearer.
+      let towards = trail - s.a;
+      towards = Math.atan2(Math.sin(towards), Math.cos(towards));
+      if (Math.abs(towards) > Math.PI / 2) towards -= Math.sign(towards) * Math.PI;
+      const heading = s.a + towards * align;
+      const x1 = cx + Math.cos(s.a) * r1, y1 = cy + Math.sin(s.a) * r1;
       ctx.strokeStyle = rgba(s.hot > 0.85 ? INK : VIOLET, a.toFixed(3));
       ctx.beginPath();
-      ctx.moveTo(cx + Math.cos(a1) * r1, cy + Math.sin(a1) * r1);
-      ctx.quadraticCurveTo(cx + Math.cos(am) * rm, cy + Math.sin(am) * rm, cx + Math.cos(a2) * r2, cy + Math.sin(a2) * r2);
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 + Math.cos(heading) * len, y1 + Math.sin(heading) * len);
       ctx.stroke();
     });
     ctx.lineWidth = 1;
   }
 
   /**
-   * The finale: galaxy particles spiral in from across the screen to form the
-   * Cosmo mark, the core flashes, and the wordmark writes in beside it. As the
-   * closing section rises, the wordmark leaves and the mark recedes behind it.
+   * The finale: the mark's particles swirl in from across the screen and lock
+   * onto its strokes, the apex flashes, and the wordmark writes in beside it.
+   * As the closing section rises, the wordmark leaves and the mark recedes
+   * behind it. The A holds still; only its orbit turns.
    */
   private lockup(ctx: CanvasRenderingContext2D, L: Lockup, F: Finale, w: number, h: number, time: number, still: boolean) {
     const x = L.x + (w / 2 - L.x) * F.recede, y = L.y + (h * 0.4 - L.y) * F.recede;
     const R = L.R * (1 - 0.3 * F.recede);
     const reach = Math.hypot(w, h) / 2;
-    const spin = still ? 0 : -time * 0.03;
+    const orbitSpin = still ? 0 : -time * 0.06;
     const appear = clamp(F.gather * 4);
     ctx.save();
     ctx.globalAlpha = 1 - 0.86 * F.recede;
 
-    ctx.strokeStyle = rgba(MIST, (0.08 * F.gather).toFixed(3));
-    [0.36, 0.72, 1.08].forEach(f => { ctx.beginPath(); ctx.arc(x, y, f * R, 0, 6.2832); ctx.stroke(); });
-
-    const { spiral, gather } = this.world;
-    spiral.forEach(([arm, r, jitter, glow], i) => {
+    const { mark, gather } = this.world;
+    mark.forEach((particle, i) => {
       const [dist, delay, swirl] = gather[i];
       const local = clamp((F.gather - delay) / 0.45);
       const e = 1 - Math.pow(1 - local, 3);
-      const target = spiralAngle(spin, arm, r, jitter);
-      const angle = target + (1 - e) * (2.4 + swirl);
-      const radius = (r / 1.15) * R + (dist * reach - (r / 1.15) * R) * (1 - e);
-      const fade = 1 - r / 1.3;
-      this.dot(ctx, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius, r < 0.2 ? 1.25 : 0.95, glow > 0.88 ? LILAC : INK, (0.14 + 0.66 * fade) * (0.3 + 0.7 * e) * appear, w, h);
+      const [px, py] = markPoint(particle, orbitSpin);
+      // Arrive along a closing swirl about the mark's centre, ending exactly on the stroke.
+      const home = Math.hypot(px, py) * R;
+      const angle = Math.atan2(py, px) + (1 - e) * (2.4 + swirl);
+      const radius = home + (dist * reach - home) * (1 - e);
+      const glow = particle[3];
+      this.dot(ctx, x + Math.cos(angle) * radius, y + Math.sin(angle) * radius, glow > 0.92 ? 1.25 : 0.95, glow > 0.88 ? LILAC : INK, (0.3 + 0.55 * glow) * (0.3 + 0.7 * e) * appear, w, h);
     });
 
+    const apexX = x + MARK_APEX[0] * R, apexY = y + MARK_APEX[1] * R;
     const coreR = Math.max(2.5, R * 0.025);
-    this.dot(ctx, x, y, coreR, '255,255,255', F.gather, w, h);
+    this.dot(ctx, apexX, apexY, coreR, '255,255,255', F.gather, w, h);
     if (F.flash > 0 && F.flash < 1) {
-      this.dot(ctx, x, y, coreR * (1 + 3 * (1 - F.flash)), '255,255,255', 0.35 * (1 - F.flash), w, h);
+      this.dot(ctx, apexX, apexY, coreR * (1 + 3 * (1 - F.flash)), '255,255,255', 0.35 * (1 - F.flash), w, h);
       ctx.lineWidth = 1.5;
       ctx.strokeStyle = rgba(MIST, (0.6 * (1 - F.flash)).toFixed(3));
-      ctx.beginPath(); ctx.arc(x, y, R * (0.08 + 1.1 * F.flash), 0, 6.2832); ctx.stroke();
+      ctx.beginPath(); ctx.arc(apexX, apexY, R * (0.08 + 1.1 * F.flash), 0, 6.2832); ctx.stroke();
       ctx.lineWidth = 1;
     }
     ctx.restore();
@@ -390,7 +429,7 @@ export class ZoomScene {
     else { ctx.beginPath(); ctx.arc(x, y, r, 0, 6.2832); ctx.fill(); }
   }
 
-  private cosmos(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
+  private deepSpace(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
     this.world.stars.forEach(s => {
       const p = T(s[0], s[1]);
       const tw = C.still ? 0.7 : 0.5 + 0.5 * Math.sin(C.time * (0.6 + s[2]) + s[3]);
@@ -552,47 +591,34 @@ export class ZoomScene {
   }
 
   /**
-   * The project as a 3D Cosmo galaxy. A tilted two-arm disk turns in depth;
-   * light runs from the core out along the arms and each work item ignites as
-   * it passes; a message comets out to the item waiting on the client; then
-   * the disk swings face-on into the Cosmo mark before the camera pulls away.
+   * The project as the Alphaexplora mark in 3D. The mark leans back and sways
+   * a little while light draws its strokes in order, and each work item
+   * ignites as the light reaches it; a message runs from the apex down to the
+   * item waiting on the client; then the mark turns face-on before the camera
+   * pulls away. The A never spins; only its orbit turns.
    */
-  private galaxy(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
-    const t = C.time, u = C.pu, B = GALAXY_BEATS;
-    const spin = C.still ? 0.4 : -t * 0.07;
-    const pitch = 0.55 + 0.97 * smooth((u - B.reveal) / (B.revealEnd - B.reveal)) + C.my * 0.12;
-    const roll = -0.18 + C.mx * 0.25;
-    const cp = Math.cos(pitch), sp = Math.sin(pitch), cr = Math.cos(roll), sr = Math.sin(roll);
-    /** Disk point (angle, radius, height) → screen [x, y, depth]; depth > 0 is toward the viewer. */
-    const place = (a: number, r: number, y = 0): [number, number, number] => {
-      const x = Math.cos(a) * r * DISK, z = Math.sin(a) * r * DISK;
-      const y1 = y * cp - z * sp, z1 = y * sp + z * cp;
-      const f = 3 / (3 - z1 * 0.9);
-      const sx = x * f, sy = y1 * f;
-      const q = T(sx * cr - sy * sr, sx * sr + sy * cr);
-      return [q[0], q[1], z1];
+  private project(ctx: CanvasRenderingContext2D, T: Transform, k: number, C: Frame, w: number, h: number) {
+    const t = C.time, u = C.pu, B = PROJECT_BEATS;
+    const facing = smooth((u - B.reveal) / (B.revealEnd - B.reveal));
+    const lean = LEAN * (1 - facing) + C.my * 0.12;
+    const yaw = (C.still ? 0 : 0.22 * Math.sin(t * 0.25)) * (1 - facing) + C.mx * 0.25;
+    const orbitSpin = C.still ? 0.4 : -t * 0.07;
+    const cl = Math.cos(lean), sl = Math.sin(lean), cy = Math.cos(yaw), sy = Math.sin(yaw);
+    /** Mark point (mark units, with depth −1…1) → screen [x, y, depth]; depth > 0 is toward the viewer. */
+    const place: Place = ([mx, my], depth = 0) => {
+      const x = mx * MARK_SIZE, y = my * MARK_SIZE, z = depth * 0.03;
+      // Lean back about the horizontal axis through the centre, then turn about the vertical.
+      const y1 = y * cl - z * sl, z1 = y * sl + z * cl;
+      const x2 = x * cy + z1 * sy, z2 = -x * sy + z1 * cy;
+      const f = 3 / (3 - z2 * 0.9);
+      const q = T(x2 * f, y1 * f);
+      return [q[0], q[1], z2];
     };
-    const armAngle = (arm: number, r: number) => spin + arm * Math.PI + r * TWIST;
-    const reach = clamp(u / B.lit) * 1.2;
+    const formed = clamp(u / B.lit);
 
-    ctx.strokeStyle = rgba(MIST, 0.07);
-    [0.36, 0.72, 1.08].forEach(r => {
-      ctx.beginPath();
-      for (let j = 0; j <= 72; j++) { const p = place(j / 72 * 6.2832, r); if (j) ctx.lineTo(p[0], p[1]); else ctx.moveTo(p[0], p[1]); }
-      ctx.stroke();
-    });
+    this.markDots(ctx, place, C, formed, orbitSpin, w, h);
 
-    this.world.spiral.forEach(([arm, r, jitter, glow, height]) => {
-      const p = place(armAngle(arm, r) + jitter * (0.25 + r * 0.6), r, height);
-      const lit = r < reach;
-      const near = 0.7 + 0.3 * clamp((p[2] + 0.8) / 1.6);
-      const tw = C.still ? 1 : 0.75 + 0.25 * Math.sin(t * 1.1 + glow * 9);
-      const alpha = lit ? 0.22 + 0.62 * (1 - r / 1.3) : 0.1;
-      const col = lit ? (glow > 0.88 ? LILAC : INK) : VIOLET;
-      this.dot(ctx, p[0], p[1], r < 0.2 ? 1.3 : 0.95, col, alpha * tw * near, w, h);
-    });
-
-    const core = place(0, 0);
+    const core = place(MARK_APEX);
     this.dot(ctx, core[0], core[1], Math.max(3, k * 0.016), '255,255,255', 0.95, w, h);
     for (let j = 0; j < 3; j++) {
       const ph = C.still ? 0.3 : ((t * 0.35 + j / 3) % 1);
@@ -604,8 +630,9 @@ export class ZoomScene {
     const labelFade = 1 - clamp((u - (B.pull - 0.05)) / 0.04);
     const labels: Label[] = [];
     WORKS.forEach(work => {
-      const p = place(armAngle(work.arm, work.r), work.r);
-      const on = clamp((reach - work.r) / 0.15);
+      const spot: MarkParticle = [work.stroke, work.t, 0, 1, 0];
+      const p = place(markPoint(spot, orbitSpin));
+      const on = particleDrawn(spot, formed);
       const col = KIND_RGB[work.kind];
       const focus = asking && work.kind === 'waiting';
       const dim = asking && !focus ? 0.45 : 1;
@@ -621,22 +648,37 @@ export class ZoomScene {
       if (focus) labels.push({ x: p[0], y: p[1], text: 'New message from your project manager', col: VIOLET, a: clamp((u - B.ask) / 0.03) * labelFade, r: size, up: true });
     });
 
-    if (asking) {
-      // The message: a comet that leaves the core and runs out along the arm to the waiting item.
-      const target = WORKS.find(work => work.kind === 'waiting') ?? WORKS[0];
-      const env = clamp((u - B.ask) / 0.02) * (1 - clamp((u - (B.reveal - 0.02)) / 0.02));
-      const head = C.still ? 0.8 : (t * 0.4) % 1;
-      for (let j = 0; j < 10; j++) {
-        const along = head - j * 0.022;
-        if (along < 0) break;
-        const p = place(armAngle(target.arm, along * target.r), along * target.r);
-        this.dot(ctx, p[0], p[1], 2.6 - j * 0.2, j ? LILAC : '255,255,255', env * (1 - j / 10), w, h);
-      }
-    }
+    if (asking) this.message(ctx, place, C, w, h);
     if (k >= 120) this.labels(ctx, labels, w);
   }
 
-  /** Status pills beside the galaxy's work items; flipped to the left when they would leave the screen. */
+  /** The mark's dots: dim violet until the drawing light reaches them, then lit. */
+  private markDots(ctx: CanvasRenderingContext2D, place: Place, C: Frame, formed: number, orbitSpin: number, w: number, h: number) {
+    this.world.mark.forEach(particle => {
+      const glow = particle[3];
+      const p = place(markPoint(particle, orbitSpin), particle[4]);
+      const lit = particleDrawn(particle, formed);
+      const near = 0.7 + 0.3 * clamp((p[2] + 0.8) / 1.6);
+      const tw = C.still ? 1 : 0.75 + 0.25 * Math.sin(C.time * 1.1 + glow * 9);
+      const litColour = glow > 0.88 ? LILAC : INK;
+      this.dot(ctx, p[0], p[1], glow > 0.92 ? 1.3 : 0.95, lit > 0.5 ? litColour : VIOLET, (0.1 + lit * (0.25 + 0.55 * glow)) * tw * near, w, h);
+    });
+  }
+
+  /** The message: a comet that leaves the apex and runs down the right leg and along the base to the waiting item. */
+  private message(ctx: CanvasRenderingContext2D, place: Place, C: Frame, w: number, h: number) {
+    const u = C.pu, B = PROJECT_BEATS;
+    const env = clamp((u - B.ask) / 0.02) * (1 - clamp((u - (B.reveal - 0.02)) / 0.02));
+    const head = C.still ? 0.8 : (C.time * 0.4) % 1;
+    for (let j = 0; j < 10; j++) {
+      const along = head - j * 0.022;
+      if (along < 0) break;
+      const p = place(MESSAGE_ROUTE(along));
+      this.dot(ctx, p[0], p[1], 2.6 - j * 0.2, j ? LILAC : '255,255,255', env * (1 - j / 10), w, h);
+    }
+  }
+
+  /** Status pills beside the project mark's work items; flipped to the left when they would leave the screen. */
   private labels(ctx: CanvasRenderingContext2D, labels: Label[], w: number) {
     ctx.font = '500 12px "DM Sans", sans-serif';
     ctx.textBaseline = 'middle';

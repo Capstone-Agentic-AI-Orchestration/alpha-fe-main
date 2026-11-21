@@ -1,15 +1,15 @@
 import { useEffect, useRef } from 'react';
-import { COSMO_IGNITE_EVENT, CosmoBackdropScene } from './cosmoBackdropScene';
+import { BRAND_IGNITE_EVENT, BrandBackdropScene } from './brandBackdropScene';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
-/** Decorative Cosmo spiral behind the client access pages. Pointer input is read, never captured. */
-export function CosmoBackdrop() {
+/** Decorative Alphaexplora mark behind the client access pages. Pointer input is read, never captured. */
+export function BrandBackdrop() {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
     if (!canvas) return;
-    const scene = new CosmoBackdropScene(canvas);
+    const scene = new BrandBackdropScene(canvas);
     const motion = globalThis.matchMedia(REDUCED_MOTION);
     const start = performance.now();
     const now = () => (performance.now() - start) / 1000;
@@ -39,15 +39,15 @@ export function CosmoBackdrop() {
     restart();
     globalThis.addEventListener('pointermove', move, { passive: true });
     globalThis.addEventListener('resize', resize);
-    globalThis.addEventListener(COSMO_IGNITE_EVENT, ignite);
+    globalThis.addEventListener(BRAND_IGNITE_EVENT, ignite);
     motion.addEventListener('change', restart);
     return () => {
       cancelAnimationFrame(frame);
       globalThis.removeEventListener('pointermove', move);
       globalThis.removeEventListener('resize', resize);
-      globalThis.removeEventListener(COSMO_IGNITE_EVENT, ignite);
+      globalThis.removeEventListener(BRAND_IGNITE_EVENT, ignite);
       motion.removeEventListener('change', restart);
     };
   }, []);
-  return <canvas ref={ref} className="public-cosmo-canvas" aria-hidden="true" />;
+  return <canvas ref={ref} className="public-brand-canvas" aria-hidden="true" />;
 }

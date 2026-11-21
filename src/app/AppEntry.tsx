@@ -15,7 +15,7 @@ const TicketingPreview = import.meta.env.DEV ? lazy(() => import('@/features/tic
 /** Tells the index.html loading screen (public pages only) that the page is on screen. */
 function LoaderDone() {
   useEffect(() => {
-    (globalThis as { cosmoLoader?: { done: () => void } }).cosmoLoader?.done();
+    (globalThis as { axLoader?: { done: () => void } }).axLoader?.done();
   }, []);
   return null;
 }
@@ -33,7 +33,7 @@ export default function AppEntry({ entry }: { entry: Entry }) {
       </section>
     </main>
   );
-  // Public pages sit under the Cosmo loading screen until LoaderDone mounts.
+  // Public pages sit under the Alphaexplora loading screen until LoaderDone mounts.
   const fallback = entry === 'internal'
     ? <AlphaStartupLoader label="Loading Alpha" />
     : <EntrySkeleton label="Loading page" />;

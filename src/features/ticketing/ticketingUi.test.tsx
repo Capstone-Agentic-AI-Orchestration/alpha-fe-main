@@ -70,7 +70,9 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).not.toContain('UI-only');
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*>.*Submit inquiry/);
     expect(html).toContain('min-h-[44px]');
-    expect(html).toContain('This sends your request for review. It does not start work or create an account.');
+    expect(html).toContain('Don’t include passwords or sensitive files.');
+    expect(html).not.toContain('A good project starts');
+    expect(html).not.toContain('Not sure what to write?');
   });
   it('marks the inquiry page and provides clear links back home and to client sign-in', () => {
     const html = renderToStaticMarkup(<ClientPublicShell page="inquiry"><h1>Tell us what you need</h1></ClientPublicShell>);
@@ -99,7 +101,8 @@ describe('real ticketing interfaces in the Alpha app', () => {
   it('opens the shared inquiry form directly without workspace selection or New Request', () => {
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
     expect(html).toContain('Tell us what you need');
-    expect(html).toContain('A project manager will review it and let you know what happens next.');
+    expect(html).not.toContain('What happens next');
+    expect(html).not.toContain('No account or team selection');
     expect(html).not.toContain('Inquiry code from your project manager');
     expect(html).not.toContain('New request');
     expect(html).toContain('href="/#/client"');
@@ -189,7 +192,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
     vi.stubGlobal('window', { location: { hash: '#/request?intake=workspace-a', search: '' } });
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);
     expect(html).toContain('Tell us what you need');
-    expect(html).toContain('Checking whether you can send this inquiry');
+    expect(html).toContain('Checking this link…');
     expect(html).toContain('href="/#/client?intake=workspace-a"');
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
     expect(html).not.toContain('UI-only');
@@ -199,7 +202,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
   it('keeps direct inquiry form use fail-closed unless a submit handler is explicitly enabled', () => {
     const html = renderToStaticMarkup(<PublicInquiryForm onSubmit={() => undefined} onCancel={() => undefined} />);
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
-    expect(html).toContain('Nothing is sent or saved');
+    expect(html).toContain('Submission is unavailable.');
   });
 
   it('requires an email address on the actual public inquiry form', () => {
@@ -209,7 +212,9 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(emailInput).toMatch(/\brequired=""/);
     expect(emailInput).toContain('autoComplete="email"');
     expect(emailInput).toContain('maxLength="254"');
-    expect(html).toMatch(/Email <span[^>]*>\(required\)<\/span>/);
+    // Required fields carry no marker; only optional ones are labelled.
+    expect(html).not.toContain('(required)');
+    expect(html).toMatch(/Company <span[^>]*>\(optional\)<\/span>/);
     expect(html).toMatch(/<button[^>]*type="submit"[^>]*disabled=""/);
   });
 
@@ -238,11 +243,11 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toContain('href="/#/request"');
   });
 
-  it('explains how an invited client signs in with their chosen password', () => {
+  it('keeps client sign-in to the form and a way to set or reset a password', () => {
     const html = renderToStaticMarkup(<ClientPasswordSignIn unavailable={false} error="" onRetry={() => undefined} onSignedIn={() => undefined} />);
-    expect(html).toContain('Sign in to your requests');
-    expect(html).toContain('Use the email your project manager invited');
-    expect(html).toContain('Forgot password?');
+    expect(html).toContain('<h2>Sign in</h2>');
+    expect(html).toContain('Forgot or need a password?');
+    expect(html).not.toContain('Use the email your project manager invited');
   });
 
   it('parses invitation links but rejects standalone passwordless sign-in links', () => {
