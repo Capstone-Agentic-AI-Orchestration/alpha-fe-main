@@ -51,14 +51,26 @@ describe('the build panel above the message box', () => {
     expect(html).toContain('Dismiss');
   });
 
-  it('directs plan approval to its tab without numbered approval questions', () => {
-    const html = render({ build: build('awaiting_plan_approval') });
+  it('offers Start plan and Ask for changes on a plan waiting for approval', () => {
+    const html = render({ build: build('awaiting_plan_approval'), onStartPlan: noop });
     expect(html).toContain('Plan ready for your approval');
-    expect(html).toContain('tell Alpha in the main chat whether to start it');
-    expect(html).not.toContain('Start planned work');
+    expect(html).toContain('>Start plan<');
+    expect(html).toContain('>Ask for changes<');
+    expect(html).not.toContain('tell Alpha in the main chat whether to start it');
     expect(html).not.toContain('Open the full plan');
     // The step track is on the Orchestrator bar now, not above the message box.
     expect(html).not.toContain('aria-label="Build steps"');
+  });
+
+  it('shows why a plan did not start, inline, next to its buttons', () => {
+    const html = render({ build: build('awaiting_plan_approval'), onStartPlan: noop, error: 'The plan changed since you opened it. Refresh and try again.' });
+    expect(html).toMatch(/role="alert"[^>]*>The plan changed since you opened it\. Refresh and try again\.</);
+    expect(html).toContain('>Start plan<');
+  });
+
+  it('marks Start plan busy while it starts', () => {
+    const html = render({ build: build('awaiting_plan_approval'), onStartPlan: noop, busy: 'start' });
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>(?:(?!<\/button>).)*Start plan/);
   });
 
   // A finished build's next step is a card under its message, not a panel over the message box.
@@ -93,8 +105,11 @@ describe('the build panel above the message box', () => {
   });
 
   it('does not offer to start a plan to a role that cannot', () => {
-    const html = render({ build: build('awaiting_plan_approval'), canStart: false });
+    const html = render({ build: build('awaiting_plan_approval'), canStart: false, onStartPlan: noop });
     expect(html).toContain('Your workspace role cannot start builds.');
+    expect(html).not.toContain('>Start plan<');
+    // Asking for changes is still a message, which the Orchestrator answers.
+    expect(html).toContain('>Ask for changes<');
   });
 
   it('shows a working build as a one-line header, and labels every repository it touches', () => {

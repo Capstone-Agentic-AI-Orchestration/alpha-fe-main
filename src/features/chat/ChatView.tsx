@@ -90,7 +90,9 @@ import { BuildNextStepCard } from './BuildNextStepCard';
 import { buildHandoffs, buildStatusLabel, needsSecurityAuditPlan, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { OrchestrationDeliveryPanel } from './OrchestrationDeliveryPanel';
-import { inferRecoveryAction, isBuildDirection, isContinueRequest, isExplicitBuildRetry, isRetryRequest, resolveRecoveryAction } from './chatRecoveryIntent';
+import { inferRecoveryAction, isBuildDirection, isContinueRequest, isExplicitBuildRetry, isRetryRequest } from './chatRecoveryIntent';
+import { composerSendMode, composerSubmitState, queueChatMessage, selectRecovery, type QueuedChatMessage } from './chatComposer';
+import { ChatQueuedMessage } from './ChatQueuedMessage';
 import { ChatHome } from './ChatHome';
 import { useTranscriptScroll } from './useTranscriptScroll';
 import { Button } from '@/shared/components/ui/button';
@@ -262,8 +264,7 @@ function OrchestratorBuildActivityRow({
   withdrawing = false,
   canApprove = false,
   onAskChanges,
-  onApproved,
-  onMerge
+  onApproved
 }: {
   projectId: string;
   runId: string;
@@ -275,8 +276,6 @@ function OrchestratorBuildActivityRow({
   onAskChanges?: () => void;
   /** After a button approval, so the rest of the chat catches up. */
   onApproved?: () => void | Promise<void>;
-  /** Send "merge it" in this chat, so the Orchestrator merges the pull request into dev. */
-  onMerge?: () => void;
   /** Open this build's code changes in the side panel. */
   onViewChanges: () => void;
   /** Turn an unstarted plan back into a question for Alpha to answer. */
@@ -493,7 +492,7 @@ function OrchestratorBuildActivityRow({
   </div>
   <ChangedFilesCard files={countedFiles?.length ? countedFiles : changedFiles.map(path => ({ path }))} onView={onViewChanges} />
   {orchestration && orchestration.run.id === runId && <BuildNextStepCard projectId={projectId} orchestration={orchestration} canApprove={canApprove}
-    onReview={onOpenReview} onAskChanges={onAskChanges ?? onOpenReview} onMerge={onMerge}
+    onReview={onOpenReview} onAskChanges={onAskChanges ?? onOpenReview}
     onApproved={async () => { await refreshAfterRecovery(); await onApproved?.(); }} />}
   </>;
 }
@@ -620,6 +619,8 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const [taskRefId, setTaskRefId] = useTabSessionState<string | null>(sessionStateKey('taskRef'), null);
   const taskRef = taskRefId ? issues.find(issue => issue.id === taskRefId) : undefined;
   const [pendingFiles, setPendingFiles] = useState<File[]>([]);
+  /** Messages sent while a reply with no live turn was running, per conversation, sent when it ends. */
+  const [queuedMessages, setQueuedMessages] = useState<Record<string, QueuedChatMessage>>({});
   const [pendingFileViews, setPendingFileViews] = useState<Array<{ file: File; previewUrl?: string }>>([]);
   const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [chatTurnActionBusy, setChatTurnActionBusy] = useState(false);
@@ -1198,69 +1199,46 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     return true;
   };
 
-  const dispatchRecoveryFollowUp = async (message: string, requestedAction: LiveBuildRecoveryAction, optional = false): Promise<boolean> => {
+  /** Start the plan waiting for approval, at the revision on screen; a refusal shows on the plan card. */
+  const startPlan = async () => {
+    if (!liveBuild || !project || liveBuild.status !== 'awaiting_plan_approval' || buildDecisionBusy) return;
+    setBuildDecisionBusy('start'); setBuildDecisionError(null);
+    try {
+      await apiService.startPlannedOrchestration(project.id, liveBuild.runId, liveBuild.revision);
+      await refreshLiveBuild();
+    } catch (error) {
+      setBuildDecisionError(error instanceof Error ? error.message : 'The plan could not be started. Refresh and try again.');
+    } finally { setBuildDecisionBusy(null); }
+  };
+
+  const queuedMessage = activeThread?.id ? queuedMessages[activeThread.id] : undefined;
+
+  /**
+   * Take a recovery action the message asks for. Returns true when it was handled here;
+   * otherwise false, or the reason it could not be, and the caller sends the message to the
+   * chat so the Orchestrator answers it instead of the message being refused.
+   */
+  const dispatchRecoveryFollowUp = async (message: string, requestedAction: LiveBuildRecoveryAction, optional = false): Promise<boolean | string> => {
     if (needsSecurityAuditPlan(liveBuild) && requestedAction === 'repair_and_continue' && isExplicitBuildRetry(message)) return proposeSecurityAuditPlan();
     if (!activeThread?.id || !activeThread.projectId) return false;
-    const explicitBuildRetry = isExplicitBuildRetry(message);
+    const projectId = activeThread.projectId;
     // This conversation's build messages and the live build filtered to this thread.
     const runIds = [...new Set([
       ...currentMessages.filter(item => item.messageType === 'build' && item.orchestrationRunId).map(item => item.orchestrationRunId!),
       ...(liveBuild ? [liveBuild.runId] : [])
     ])];
-    if (!runIds.length) {
-      const requestedRetry = explicitBuildRetry || requestedAction === 'retry_report_format';
-      if (requestedRetry) showToast('No build to retry', 'Start a build with Build with Orchestrator, or open the build you want to continue.', 'info');
-      return requestedRetry;
-    }
-
     const states = await Promise.all(runIds.map(async runId => {
       try {
-        return { runId, state: await apiService.getOrchestrationRecovery(activeThread.projectId!, runId) };
+        return { runId, state: await apiService.getOrchestrationRecovery(projectId, runId) };
       } catch {
         return { runId, state: undefined };
       }
     }));
-    const activeStates = states.filter(item => item.state?.recovery);
-    if (activeStates.length > 1) {
-      showToast('Choose a build first', 'More than one build is waiting for a decision. Use the recovery controls under the build you mean.', 'info');
-      return true;
-    }
-    const selected = activeStates[0] ?? (runIds.length === 1
-      ? states.find(item => item.state?.history.length)
-      : undefined);
-    if (!selected?.state) {
-      if (states.some(item => !item.state)) {
-        showToast('Recovery details unavailable', 'Refresh the Build review tab to load this build’s recovery controls.', 'error');
-        return true;
-      }
-      if (explicitBuildRetry && runIds.length > 1) {
-        showToast('Choose a build first', 'This conversation has more than one saved build. Open the one you want to retry so Alpha uses the right work and history.', 'info');
-        return true;
-      }
-      return false;
-    }
-    const recovery = selected.state.recovery ?? (requestedAction === 'explain_failure' || requestedAction === 'review_saved_changes'
-      ? selected.state.history[0]
-      : undefined);
-    if (!recovery) {
-      if (optional) return false;
-      showToast('No open recovery', 'This build has no saved recovery waiting for an action. Open the Build review tab to review its current status.', 'info');
-      return true;
-    }
-
-    const action = resolveRecoveryAction(requestedAction, recovery);
-    if (!recovery.availableActions.includes(action)) {
-      if (optional) return false;
-      const reason = recovery.actionReasons[action]
-        ?? recovery.actionReasons.provide_guidance
-        ?? Object.values(recovery.actionReasons).find(value => typeof value === 'string' && value.trim())
-        ?? 'This build has no eligible retry in its current state. Review the recovery panel for the saved failure and next available action.';
-      showToast('That recovery action is unavailable', reason, 'info');
-      return true;
-    }
-
+    const selected = selectRecovery({ runIds, states, requestedAction, explicitBuildRetry: isExplicitBuildRetry(message), optional });
+    if (selected.kind === 'chat') return selected.reason ?? false;
+    const { runId, recovery, action } = selected;
     try {
-      const result = await apiService.performOrchestrationRecoveryAction(activeThread.projectId, selected.runId, {
+      const result = await apiService.performOrchestrationRecoveryAction(projectId, runId, {
         recoveryId: recovery.id,
         expectedRunRevision: selected.state.runRevision,
         expectedRecoveryRevision: recovery.revision,
@@ -1272,12 +1250,13 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         // in another chat of this project the server attributes the action without a thread,
         // as other project build actions do. Naming this chat made every action fail as "not
         // attached to your project conversation".
-        threadId: currentMessages.some(item => item.orchestrationRunId === selected.runId) ? activeThread.id : undefined
+        threadId: currentMessages.some(item => item.orchestrationRunId === runId) ? activeThread.id : undefined
       });
-      setInput('');
-      if (activeThread.id) await refreshChatThread(activeThread.id);
+      // Clear the message box only while it still holds this message: a queued send must not wipe a new draft.
+      setInput(current => current.trim() === message.trim() ? '' : current);
+      await refreshChatThread(activeThread.id);
       followNextMessage();
-      if (action === 'review_saved_changes') openSavedBuildReview(selected.runId);
+      if (action === 'review_saved_changes') openSavedBuildReview(runId);
       showToast(action === 'explain_failure' ? 'Build explanation' : 'Build recovery updated',
         result.explanation ?? result.message ?? 'Alpha saved the recovery action.',
         action === 'explain_failure' ? 'info' : 'success');
@@ -1290,112 +1269,160 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
 
   const handleSend = async (event: React.FormEvent) => {
     event.preventDefault();
-    const messageSkillIds = [...selectedSkillIds];
     const typedMessage = input.trim();
-    if (activeTurnMessageId) {
-      if (!typedMessage || !activeThread?.id || chatTurnActionBusy) return;
-      setChatTurnActionBusy(true);
-      try {
-        const result = await apiService.steerChatTurn(activeThread.id, activeTurnMessageId, typedMessage);
-        setInput('');
-        showToast('Direction queued', `Alpha will apply it at the next safe point in this turn (direction ${result.position}).`, 'success');
-      } catch (error: any) {
-        showToast('Direction not queued', error?.message ?? 'Alpha could not accept this direction.', 'error');
-      } finally {
-        setChatTurnActionBusy(false);
-      }
-      return;
-    }
-    if (isAgentTyping) return;
-    const sendsBuild = /^\/build(?:\s|$)/i.test(typedMessage);
-    // While the Orchestrator waits on a question, a typed message is the answer ("Something else").
-    if (openDecision && typedMessage && !sendsBuild && !pendingFiles.length) {
+    if (composerSendMode({ isAgentTyping, activeTurnMessageId }) === 'queue') {
+      // A reply with no live turn to steer (a /build turn, say) is still running: keep the
+      // message and send it as soon as that reply ends, instead of dropping it.
+      const threadId = activeThread?.id;
+      if (!threadId || (!typedMessage && !pendingFiles.length)) return;
+      setQueuedMessages(current => ({ ...current, [threadId]: queueChatMessage(current[threadId], { threadId, text: typedMessage, files: pendingFiles, skillIds: selectedSkillIds }) }));
       setInput('');
-      try { await answerDecision(typedMessage); } catch { setInput(typedMessage); }
+      setPendingFiles([]);
+      setSelectedSkillIds([]);
       return;
     }
-    const message = typedMessage || (pendingFiles.length && !sendsBuild
-      ? 'Please inspect the attached files and summarize the relevant information.'
-      : '');
-    if (!message) return;
+    await submitMessage(typedMessage, pendingFiles, [...selectedSkillIds]);
+  };
+
+  const dropQueuedMessage = (threadId: string) => setQueuedMessages(current => {
+    const next = { ...current };
+    delete next[threadId];
+    return next;
+  });
+
+  /** Edit a queued message: it goes back into the message box, ahead of anything typed since. */
+  const editQueuedMessage = () => {
+    if (!queuedMessage) return;
+    dropQueuedMessage(queuedMessage.threadId);
+    setInput(current => [queuedMessage.text, current.trim()].filter(Boolean).join('\n\n'));
+    if (queuedMessage.files.length) setPendingFiles(current => [...queuedMessage.files, ...current]);
+    if (queuedMessage.skillIds.length) setSelectedSkillIds(current => [...new Set([...queuedMessage.skillIds, ...current])]);
+    window.requestAnimationFrame(() => messageInputRef.current?.focus());
+  };
+
+  /** Put a message that could not be sent back in the message box, so nothing typed is lost. */
+  const restoreToComposer = (text: string, files: File[], fromQueue: boolean) => {
+    if (!fromQueue) { setInput(text); return; }
+    // A queued message goes back ahead of whatever was typed since, to edit and resend.
+    setInput(current => [text, current.trim()].filter(Boolean).join('\n\n'));
+    if (files.length) setPendingFiles(current => [...files, ...current]);
+  };
+
+  /** A direction for the live turn, applied at its next safe point. */
+  const steerTurn = async (typedMessage: string, files: File[], fromQueue: boolean) => {
+    if (!typedMessage || !activeThread?.id || !activeTurnMessageId || chatTurnActionBusy) {
+      if (fromQueue) restoreToComposer(typedMessage, files, true);
+      return;
+    }
+    setChatTurnActionBusy(true);
+    try {
+      const result = await apiService.steerChatTurn(activeThread.id, activeTurnMessageId, typedMessage);
+      if (!fromQueue) setInput('');
+      showToast('Direction queued', `Alpha will apply it at the next safe point in this turn (direction ${result.position}).`, 'success');
+    } catch (error: any) {
+      showToast('Direction not queued', error?.message ?? 'Alpha could not accept this direction.', 'error');
+      if (fromQueue) restoreToComposer(typedMessage, files, true);
+    } finally {
+      setChatTurnActionBusy(false);
+    }
+  };
+
+  /** The build decision a message answers, unless it starts a new build or the person reads another build. */
+  const messageBuildDecision = (sendsBuild: boolean) => {
+    const readingAnotherBuild = liveBuild && (activeSideTab?.kind === 'review' || activeSideTab?.kind === 'plan' || activeSideTab?.kind === 'changes') && activeSideTab.runId !== liveBuild.runId;
+    return sendsBuild ? undefined : buildDecisionContext(liveBuild, Boolean(readingAnotherBuild));
+  };
+
+  /**
+   * Answer the message here when it is a typed build action this screen can take safely:
+   * resuming a paused build or a recovery step. Returns false to send it to the chat.
+   */
+  const takeBuildActionHere = async (message: string, sendsBuild: boolean, fromQueue: boolean): Promise<boolean> => {
     // "Continue", "go ahead", "keep going": carry the open build to its next step.
     const continueRequest = !sendsBuild && Boolean(liveBuild) && isContinueRequest(message);
-    const readingAnotherBuild = liveBuild && (activeSideTab?.kind === 'review' || activeSideTab?.kind === 'plan' || activeSideTab?.kind === 'changes') && activeSideTab.runId !== liveBuild.runId;
-    const buildDecision = !sendsBuild ? buildDecisionContext(liveBuild, Boolean(readingAnotherBuild)) : undefined;
     if (continueRequest && liveBuild?.status === 'paused') {
-      setInput('');
+      if (!fromQueue) setInput('');
       await resumePausedBuild();
-      return;
+      return true;
     }
-    const requestedRecoveryAction = inferRecoveryAction(message)
-      ?? ((continueRequest || isRetryRequest(message)) && !sendsBuild && liveBuild && ['blocked', 'recovery_required'].includes(liveBuild.status) ? 'repair_and_continue' : undefined);
-    if (!buildDecision && requestedRecoveryAction && await dispatchRecoveryFollowUp(message, requestedRecoveryAction)) return;
+    if (messageBuildDecision(sendsBuild)) return false;
+    const waitingForDirection = !sendsBuild && ['blocked', 'recovery_required'].includes(liveBuild?.status ?? '');
+    const requested = inferRecoveryAction(message) ?? ((continueRequest || isRetryRequest(message)) && waitingForDirection ? 'repair_and_continue' : undefined);
+    // A recovery the message asks for is taken here; anything it cannot take goes to the chat.
+    if (requested) return await dispatchRecoveryFollowUp(message, requested) === true;
     // A build waiting for direction takes an instruction typed here as its answer.
-    if (!buildDecision && !requestedRecoveryAction && !sendsBuild && liveBuild && ['blocked', 'recovery_required'].includes(liveBuild.status) &&
-        isBuildDirection(message) && await dispatchRecoveryFollowUp(message, 'repair_and_continue', true)) return;
-    if (sendsBuild && !can('run_agents')) {
-      showToast('Build access needed', 'Your workspace role cannot start Orchestrator builds.', 'info');
-      return;
-    }
-    if (sendsBuild && projectRepositories.length === 0) {
-      showToast('Connect a repository', 'Attach a repository to this project before starting an Orchestrator build.', 'info');
-      return;
-    }
-    if (sendsBuild && requiresRepositorySelection) {
-      setRepositoryMenuOpen(true);
-      showToast('Choose a codebase', 'Select at least one project codebase for the Orchestrator to build.', 'info');
-      return;
-    }
-    if (sendsBuild && buildIsOpen) {
-      showToast('Build already open', liveBuild?.status === 'awaiting_plan_approval'
-        ? 'A build plan is waiting for your approval. Review it, or stop it before starting another build.'
-        : 'Stop the current build or wait for it to finish before starting another one.', 'info');
-      return;
-    }
-    followNextMessage();
-    setInput('');
-    setMentionQuery(null);
-    setSkillCommandQuery(null);
-    const buildRepositories = validBuildRepositories;
-    const uploadedAttachments: ChatAttachmentReference[] = [];
+    return waitingForDirection && isBuildDirection(message) && await dispatchRecoveryFollowUp(message, 'repair_and_continue', true) === true;
+  };
+
+  /** Upload the message's files; on failure nothing stays uploaded and the reason is shown. */
+  const uploadMessageFiles = async (files: File[]): Promise<ChatAttachmentReference[] | null> => {
+    const uploaded: ChatAttachmentReference[] = [];
     try {
-      if (pendingFiles.length && !activeThread?.id) throw new Error('Open or create a conversation before attaching files.');
-      for (const file of pendingFiles) {
-        const result = await apiService.uploadChatAttachment(activeThread!.id, file);
-        uploadedAttachments.push(result.attachment);
-      }
+      if (files.length && !activeThread?.id) throw new Error('Open or create a conversation before attaching files.');
+      for (const file of files) uploaded.push((await apiService.uploadChatAttachment(activeThread!.id, file)).attachment);
+      return uploaded;
     } catch (error: any) {
-      if (activeThread?.id && uploadedAttachments.length) {
-        await Promise.allSettled(uploadedAttachments.map(item => apiService.deleteChatAttachment(activeThread.id, item.id)));
+      if (activeThread?.id && uploaded.length) {
+        await Promise.allSettled(uploaded.map(item => apiService.deleteChatAttachment(activeThread.id, item.id)));
       }
       showToast('Attachments not sent', error?.message ?? 'Alpha could not save the selected files locally.', 'error');
-      setInput(typedMessage);
-      return;
+      return null;
     }
-    setPendingFiles([]);
+  };
+
+  /** Load evidence for this exact decision even when its review tab is hidden or a Markdown tab survived reload. */
+  const confirmDecisionEvidence = async (buildDecision: ReturnType<typeof messageBuildDecision>) => {
+    if (!buildDecision?.evidenceReady || !project) return;
+    try {
+      const plans = await apiService.getOrchestrationPlans(project.id, buildDecision.runId);
+      buildDecision.evidenceReady = plans.documents.some(document => document.version === buildDecision.planVersion);
+      if (buildDecision.evidenceReady && liveBuild?.status !== 'awaiting_plan_approval') {
+        const diff = await apiService.getOrchestrationDiffPreview(project.id, buildDecision.runId);
+        buildDecision.evidenceReady = diff.reviewType === 'validated';
+      }
+    } catch { buildDecision.evidenceReady = false; }
+  };
+
+  /** While the Orchestrator waits on a question, a typed message is the answer ("Something else"). */
+  const answerOpenDecision = async (typedMessage: string, files: File[], sendsBuild: boolean, fromQueue: boolean): Promise<boolean> => {
+    if (!openDecision || !typedMessage || sendsBuild || files.length) return false;
+    if (!fromQueue) setInput('');
+    try { await answerDecision(typedMessage); } catch { restoreToComposer(typedMessage, files, fromQueue); }
+    return true;
+  };
+
+  /**
+   * Send one message the way the person typed it: the composer's text, files and skills, or a
+   * queued message (`fromQueue`), which leaves whatever is in the composer now untouched.
+   * A /build the project cannot start yet (role, codebase, a build already open) is still
+   * sent: the Orchestrator answers in the chat with the reason and what to do.
+   */
+  const submitMessage = async (typedMessage: string, files: File[], messageSkillIds: string[], fromQueue = false) => {
+    if (activeTurnMessageId) { await steerTurn(typedMessage, files, fromQueue); return; }
+    const sendsBuild = /^\/build(?:\s|$)/i.test(typedMessage);
+    if (await answerOpenDecision(typedMessage, files, sendsBuild, fromQueue)) return;
+    const message = typedMessage || (files.length && !sendsBuild ? 'Please inspect the attached files and summarize the relevant information.' : '');
+    if (!message || await takeBuildActionHere(message, sendsBuild, fromQueue)) return;
+    followNextMessage();
+    if (!fromQueue) setInput('');
+    setMentionQuery(null);
+    setSkillCommandQuery(null);
+    const uploadedAttachments = await uploadMessageFiles(files);
+    if (!uploadedAttachments) { restoreToComposer(typedMessage, files, fromQueue); return; }
+    if (!fromQueue) { setPendingFiles([]); setSelectedSkillIds([]); }
     // A handed-off task travels with the message: the agent gets its details, and the
     // issue id links any build back to this task instead of filing a new one.
     const handedOff = taskRef;
     if (handedOff) setTaskRefId(null);
-    // Load evidence for this exact decision even when its review tab is hidden or a Markdown tab survived reload.
-    if (buildDecision?.evidenceReady && project) {
-      try {
-        const plans = await apiService.getOrchestrationPlans(project.id, buildDecision.runId);
-        buildDecision.evidenceReady = plans.documents.some(document => document.version === buildDecision.planVersion);
-        if (buildDecision.evidenceReady && liveBuild?.status !== 'awaiting_plan_approval') {
-          const diff = await apiService.getOrchestrationDiffPreview(project.id, buildDecision.runId);
-          buildDecision.evidenceReady = diff.reviewType === 'validated';
-        }
-      } catch { buildDecision.evidenceReady = false; }
-    }
+    const buildDecision = messageBuildDecision(sendsBuild);
+    await confirmDecisionEvidence(buildDecision);
     const sendOptions = handedOff
       ? { approvalMode, issueId: handedOff.id, projectId: handedOff.projectId }
       : { approvalMode, buildDecision };
-    setSelectedSkillIds([]);
     await sendChatMessage(
       handedOff ? `${message}\n\n${taskHandoffContext(handedOff)}` : message,
       activeThread?.id,
-      buildRepositories,
+      validBuildRepositories,
       'auto',
       uploadedAttachments,
       { ...sendOptions, skillIds: messageSkillIds }
@@ -1404,6 +1431,13 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       void apiService.getChatSyncStatus(activeThread.id).then(setChatSyncStatus).catch(() => undefined);
     }
   };
+
+  // A queued message goes as soon as the reply it waited for ends in its conversation.
+  useEffect(() => {
+    if (!queuedMessage || isAgentTyping) return;
+    dropQueuedMessage(queuedMessage.threadId);
+    void submitMessage(queuedMessage.text, queuedMessage.files, queuedMessage.skillIds, true);
+  }, [queuedMessage, isAgentTyping]);
 
   const stopProjectBuild = async () => {
     const orchestrationRunId = liveBuild && liveBuild.status !== 'cancelling' ? liveBuild.runId : null;
@@ -1507,12 +1541,6 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     const blocker = buildFailure?.blocker;
     if (blocker) openSavedBuildReview(blocker.runId);
   };
-  /** Send a short message in this conversation as the person, as if typed (the Merge into dev button). */
-  const sendInChat = (text: string) => {
-    if (!activeThread || activeTurnMessageId) return;
-    followNextMessage();
-    void sendChatMessage(text, activeThread.id, undefined, 'auto', [], { approvalMode });
-  };
   const replyInComposer = (prefill?: string) => {
     if (prefill) setInput(prefill);
     window.requestAnimationFrame(() => messageInputRef.current?.focus());
@@ -1525,11 +1553,10 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       try { await resumePausedBuild(); } finally { setBuildDecisionBusy(null); }
       return;
     }
-    setBuildDecisionBusy('continue');
+    setBuildDecisionBusy('continue'); setBuildDecisionError(null);
     try {
-      if (!await dispatchRecoveryFollowUp('continue', action)) {
-        showToast('Nothing to continue', 'Open the build to see what it is waiting for.', 'info');
-      }
+      const outcome = await dispatchRecoveryFollowUp('continue', action);
+      if (outcome !== true) setBuildDecisionError(typeof outcome === 'string' ? outcome : 'Nothing to continue. Open the build to see what it is waiting for.');
     } finally {
       setBuildDecisionBusy(null);
       void refreshLiveBuild();
@@ -1866,6 +1893,14 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   if (stoppingProjectRunId) stopBuildLabel = 'Stopping…';
   else stopBuildLabel = liveBuild?.status === 'awaiting_plan_approval' ? 'Stop plan' : 'Stop build';
   const composerHasContent = Boolean(input.trim()) || pendingFiles.length > 0;
+  const submitState = composerSubmitState({
+    hasText: Boolean(input.trim()),
+    hasFiles: pendingFiles.length > 0,
+    steering: Boolean(activeTurnMessageId),
+    forcedBuild,
+    busy: Boolean(chatTurnActionBusy),
+    queues: composerSendMode({ isAgentTyping, activeTurnMessageId }) === 'queue'
+  });
   const composerStop: 'turn' | 'build' | null = composerHasContent ? null : activeTurnMessageId ? 'turn' : canStopBuild ? 'build' : null;
   let stopButton = { label: stopBuildLabel, title: stopBuildLabel + ' · work already on the build branch stays available. Type to send a message instead.' };
   if (composerStop === 'turn') stopButton = { label: 'Stop this response', title: 'Stop this response. Type to queue a direction instead.' };
@@ -2042,7 +2077,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
   }
   return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} onMerge={() => sendInChat('merge it')} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>; })}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>; })}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-5 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-7 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-6xl space-y-2">
@@ -2070,6 +2105,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 onStop={() => void stopProjectBuild()}
                 onContinue={action => void continueBuild(action)}
                 onAuditPlan={() => void proposeSecurityAuditPlan()}
+                onStartPlan={() => void startPlan()}
                 onReply={replyInComposer}
                 onRetry={() => void retryPlanning()}
                 onDismiss={dismissBuildFailure}
@@ -2078,6 +2114,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 onOpenReview={openBuildReview}
                 />}
               {forcedBuild && !isClient && <div className={`px-4 text-[10px] ${requiresRepositorySelection ? 'text-status-warning' : 'text-content-muted'}`}>{repositorySelectionMessage}</div>}
+              {queuedMessage && <ChatQueuedMessage message={queuedMessage} onEdit={editQueuedMessage} onCancel={() => dropQueuedMessage(queuedMessage.threadId)} />}
               {pendingFileViews.length > 0 && <div className="flex flex-wrap gap-2 px-2">{pendingFileViews.map(({ file, previewUrl }, index) => <div key={`${file.name}-${file.lastModified}-${index}`} className="flex max-w-full items-center gap-2 rounded-xl border border-divider bg-surface-raised px-2 py-1.5 text-[10px] text-content-secondary shadow-lg shadow-black/30">
                 {previewUrl ? <img src={previewUrl} alt={`Preview of ${file.name}`} className="h-8 w-8 rounded-md object-cover" /> : <FileText className="ml-1 h-4 w-4 shrink-0 text-link" />}
                 <span className="max-w-48 truncate">{file.name}</span><span className="shrink-0 text-content-muted">{formatFileSize(file.size)}</span>
@@ -2163,7 +2200,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                   <Square className={(composerStop === 'turn' ? chatTurnActionBusy : stoppingProjectRunId) ? 'h-3.5 w-3.5 animate-pulse fill-current' : 'h-3.5 w-3.5 fill-current'} />
                   {composerStop === 'build' && stopArmed && <span>Stop?</span>}
                 </button>
-                : <button type="submit" aria-label={activeTurnMessageId ? 'Queue direction for current agent' : forcedBuild ? 'Start Orchestrator build' : 'Send message'} disabled={(!input.trim() && (!pendingFiles.length || Boolean(activeTurnMessageId) || forcedBuild)) || Boolean(chatTurnActionBusy) || isAgentTyping && !activeTurnMessageId || !activeTurnMessageId && forcedBuild && (!can('run_agents') || buildIsOpen || requiresRepositorySelection)} title={activeTurnMessageId ? 'Queue this direction for the current response.' : forcedBuild && !can('run_agents') ? 'Your workspace role cannot start product builds.' : forcedBuild && buildIsOpen ? 'Stop the earlier build before starting another.' : forcedBuild && projectRepositories.length === 0 ? 'Connect a codebase before building.' : forcedBuild && requiresRepositorySelection ? 'Select at least one codebase to build.' : undefined} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-action text-on-action hover:bg-action-hover disabled:opacity-30"><Send className="h-4 w-4" /></button>}
+                : <button type="submit" aria-label={submitState.label} disabled={submitState.disabled} title={submitState.title} className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-action text-on-action hover:bg-action-hover disabled:opacity-30"><Send className="h-4 w-4" /></button>}
                 </div>
               </form>
               {(pendingFiles.length > 0 || Boolean(activeTurnMessageId)) && <div className="px-4 text-center text-[10px] text-content-muted">{pendingFiles.length ? `Files stay in this device’s private Alpha storage. ${forcedBuild ? 'Project builds store attachments but do not inspect them yet.' : 'Unsupported file types are marked as not analyzed.'}` : 'Directions are queued and picked up at the next safe point.'}</div>}
