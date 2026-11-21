@@ -1,4 +1,4 @@
-/* Client access pages: open layout on the brand backdrop. No cards or boxes;
+/* Client access pages: open layout on the brand backdrop. No cards around the form;
    structure comes from alignment, type and hairlines, as on the landing page. */
 .ca-auth-layout {
   --ca-gap: clamp(48px, 8vw, 128px);
@@ -37,25 +37,21 @@
 .ca-form form { display: flex; flex-direction: column; align-items: flex-start; }
 .ca-form form > :is(.ca-field, .ca-notice) { align-self: stretch; }
 
-/* open fields: label, text, one hairline that fills violet on focus */
-.ca-field { position: relative; display: block; margin-bottom: clamp(10px, 2vh, 26px); }
-.ca-field > span:first-child { display: block; margin-bottom: 2px; color: var(--public-faint); transition: color 200ms; }
+/* contained fields: a quiet frosted box over the starfield that rims violet on focus */
+.ca-field { position: relative; display: block; margin-bottom: clamp(12px, 2.2vh, 26px); }
+.ca-field > span:first-child { display: block; margin-bottom: 8px; color: var(--public-faint); transition: color 200ms; }
 .ca-field:focus-within > span:first-child { color: var(--public-accent); }
-.ca-field::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--public-accent); transform: scaleX(0); transform-origin: left; transition: transform 420ms var(--ca-ease); pointer-events: none; }
-.ca-field:focus-within::after { transform: scaleX(1); }
-.ca-form :is(input, textarea) { width: 100%; min-height: clamp(44px, 5vh, 48px); padding: 0 0 2px; border: 0; border-bottom: 1px solid var(--public-faint); border-radius: 0; outline: none; background: transparent; color: var(--public-ink); font: inherit; font-size: var(--client-type-body); }
-.ca-form :is(input, textarea):focus-visible { outline: none; }
-.ca-form textarea { display: block; padding-top: 10px; line-height: var(--client-line-body); resize: none; }
-.ca-form .ca-date-picker { width: 100%; }
-.ca-form .ca-date-picker button { width: 100%; min-height: clamp(44px, 5vh, 48px); justify-content: flex-start; padding-inline: 0; border: 0; border-radius: 0; background: transparent; color: var(--public-ink); box-shadow: none; font: inherit; font-size: var(--client-type-body); }
-.ca-form .ca-date-picker button:hover { background: transparent; color: var(--public-ink); }
-.ca-form :is(input, textarea)::placeholder { color: color-mix(in srgb, var(--public-faint) 70%, transparent); opacity: 1; }
+.ca-form :is(input, textarea) { width: 100%; min-height: clamp(44px, 5vh, 48px); padding: 0 14px; border: 1px solid color-mix(in srgb, var(--public-ink) 13%, transparent); border-radius: var(--client-radius-surface); outline: none; background: color-mix(in srgb, var(--public-ink) 4%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); color: var(--public-ink); box-shadow: none; font: inherit; font-size: var(--client-type-body); transition: border-color 160ms, background-color 160ms, box-shadow 160ms; }
+.ca-form :is(input, textarea):hover:not(:disabled):not(:focus) { border-color: color-mix(in srgb, var(--public-ink) 24%, transparent); background: color-mix(in srgb, var(--public-ink) 5.5%, transparent); }
+.ca-form :is(input, textarea):focus { border-color: var(--public-accent); background: color-mix(in srgb, var(--public-ink) 6%, transparent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--public-accent) 20%, transparent); outline: none; }
+.ca-form textarea { display: block; padding-block: 11px; line-height: var(--client-line-body); resize: none; }
+.ca-form :is(input, textarea)::placeholder { color: color-mix(in srgb, var(--public-faint) 80%, transparent); opacity: 1; }
 .ca-form :is(input, textarea):disabled { cursor: not-allowed; opacity: .55; }
 .ca-form input:-webkit-autofill, .ca-form input:-webkit-autofill:hover, .ca-form input:-webkit-autofill:focus { -webkit-text-fill-color: var(--public-ink); caret-color: var(--public-ink); transition: background-color 600000s 0s, color 600000s 0s; }
-.ca-form input.ca-readonly { border-bottom-style: dashed; color: var(--public-muted); }
+.ca-form input.ca-readonly { border-style: dashed; background: transparent; color: var(--public-muted); }
 .ca-password { position: relative; }
-.ca-password input { padding-right: 48px; }
-.ca-password button { position: absolute; top: 50%; right: -8px; display: grid; width: 44px; height: 44px; place-items: center; transform: translateY(-50%); border: 0; border-radius: var(--client-radius-pill); background: transparent; color: var(--public-muted); cursor: pointer; transition: color 160ms, background-color 160ms; }
+.ca-password input { padding-right: 50px; }
+.ca-password button { position: absolute; top: 50%; right: 3px; display: grid; width: 40px; height: 40px; place-items: center; transform: translateY(-50%); border: 0; border-radius: calc(var(--client-radius-surface) - 3px); background: transparent; color: var(--public-muted); cursor: pointer; transition: color 160ms, background-color 160ms; }
 .ca-password button:hover { background: color-mix(in srgb, var(--public-accent) 12%, transparent); color: var(--public-ink); }
 
 /* links and the landing's pill button */
@@ -100,8 +96,8 @@
 .iq-form .ca-field > span:first-child > span { color: color-mix(in srgb, var(--public-faint) 75%, transparent); letter-spacing: .02em; text-transform: none; }
 /* Details takes whatever height the window leaves, so the whole form fits one screen. */
 .iq-details textarea { height: clamp(64px, calc(50dvh - 300px), 240px); }
-.iq-form textarea.iq-links { height: clamp(36px, 4.4vh, 56px); }
-.iq-hint { margin: calc(clamp(10px, 2vh, 26px) * -.6) 0 clamp(var(--client-space-2), 1.8vh, var(--client-space-5)); color: var(--public-faint); font-size: var(--client-type-caption); line-height: var(--client-line-body); }
+.iq-form textarea.iq-links { height: clamp(48px, 5.4vh, 60px); }
+.iq-hint { margin: calc(clamp(12px, 2.2vh, 26px) * -.5) 0 clamp(var(--client-space-2), 1.8vh, var(--client-space-5)); color: var(--public-faint); font-size: var(--client-type-caption); line-height: var(--client-line-body); }
 .iq-notice { display: flex; align-items: flex-start; gap: var(--client-space-2); margin-top: 0; }
 .iq-notice svg { flex: 0 0 auto; margin-top: 2px; color: var(--public-accent); }
 .iq-form .ca-error { margin: 0 0 clamp(var(--client-space-2), 1.6vh, var(--client-space-4)); }
