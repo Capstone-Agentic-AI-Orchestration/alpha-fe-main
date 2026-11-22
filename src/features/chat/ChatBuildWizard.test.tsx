@@ -4,7 +4,8 @@ import { renderToStaticMarkup } from 'react-dom/server';
 vi.hoisted(() => { (globalThis as { window?: unknown }).window ??= globalThis; });
 vi.mock('@/features/project-build-review/OrchestrationWorkflowPanel', () => ({ ReviewDiff: () => null }));
 
-import { ChatBuildWizard, buildRepositoriesLabel, continueChoice, planningFailureReason, wizardStepFor, type ChatBuildWizardProps } from './ChatBuildWizard';
+import { ChatBuildWizard, buildRefusalFrom, buildRepositoriesLabel, continueChoice, planningFailureReason, wizardStepFor, type ChatBuildWizardProps } from './ChatBuildWizard';
+import { ApiRequestError } from '@/shared/services/apiService';
 import { buildHandoffs, type ProjectLiveBuild } from './useProjectLiveBuild';
 
 const build = (status: ProjectLiveBuild['status'], stoppedReason?: string): ProjectLiveBuild => ({
@@ -49,6 +50,31 @@ describe('the build panel above the message box', () => {
     expect(html).toContain('Try again');
     expect(html).toContain('Change the request');
     expect(html).toContain('Dismiss');
+  });
+
+  it('shows a refused start as its reason and buttons, never a raw API error', () => {
+    const html = render({ build: build('awaiting_plan_approval'), onStartPlan: noop, error: 'API Error [409]: raw',
+      refusal: { message: 'This plan cannot start yet: No task is assigned to selected repository acme/api.', actions: ['ask_orchestrator', 'open_plan', 'stop_plan'] } });
+    expect(html).toContain('This plan cannot start yet: No task is assigned to selected repository acme/api.');
+    expect(html).toContain('>Tell the Orchestrator what to do<');
+    expect(html).toContain('>Open the plan<');
+    expect(html.match(/>Stop plan</g)).toHaveLength(1);
+    expect(html).not.toContain('API Error');
+  });
+
+  it('says what the Orchestrator changed when it fixed the plan before starting', () => {
+    const html = render({ build: build('awaiting_plan_approval'), onStartPlan: noop,
+      correction: { runId: 'run-1', planVersion: 2, changes: ['Removed "Check the API".', 'Added "Session check" in web.'] } });
+    expect(html.replace(/<!-- -->/g, '')).toContain('The Orchestrator fixed the plan before it could start (v2). What changed:');
+    expect(html).toContain('Removed &quot;Check the API&quot;.');
+    expect(html).toContain('>Start plan<');
+  });
+
+  it('turns only a failed request with next steps into a refusal', () => {
+    expect(buildRefusalFrom(new ApiRequestError(409, 'API Error [409]: This plan cannot start yet.', 'plan_needs_you', false, null, ['stop_plan'])))
+      .toEqual({ message: 'This plan cannot start yet.', actions: ['stop_plan'] });
+    expect(buildRefusalFrom(new ApiRequestError(500, 'API Error [500]: boom'))).toBeNull();
+    expect(buildRefusalFrom(new Error('offline'))).toBeNull();
   });
 
   it('lets the person stop a plan waiting for approval, not only start it', () => {

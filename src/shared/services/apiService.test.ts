@@ -24,6 +24,15 @@ describe('project Actions transport', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ error: 'Rate limit', retryAfterSeconds: 90 }, 403)));
     await expect(apiService.getActionsRuns('p1', 'acme/shop', {})).rejects.toMatchObject({ status: 403, retryAfterSeconds: 90 });
   });
+  it('keeps a refusal\'s next steps and issues, dropping steps it does not know', async () => {
+    const issue = { code: 'unassigned_repository', detail: 'No task is assigned to selected repository acme/api.' };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(json({ error: 'This plan cannot start yet.', code: 'plan_needs_you',
+      actions: ['ask_orchestrator', 'delete_everything', 'stop_plan'], issues: [issue, 'not an issue'] }, 409)));
+    const error = await apiService.startPlannedOrchestration('p1', 'run-1', 3).catch(value => value);
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status: 409, code: 'plan_needs_you', actions: ['ask_orchestrator', 'stop_plan'], issues: [issue] });
+    expect(parseApiError(error).message).toBe('This plan cannot start yet.');
+  });
   it('downloads binary artifacts with the workspace and credentials, without accepting redirects', async () => {
     const fetchMock = vi.fn().mockResolvedValue(new Response('PK fixture', { headers: { 'Content-Type': 'application/zip' } }));
     vi.stubGlobal('fetch', fetchMock); setActiveWorkspaceId('workspace-actions');

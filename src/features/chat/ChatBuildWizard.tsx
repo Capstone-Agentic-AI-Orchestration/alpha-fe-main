@@ -5,6 +5,19 @@ import { AlertTriangle, ChevronDown, ExternalLink, LoaderCircle, Square, X } fro
 import { buildStepFor, type WizardStep } from './buildSteps';
 import { needsSecurityAuditPlan, type ProjectLiveBuild } from './useProjectLiveBuild';
 import type { ChatBuildBlocker, LiveBuildRecoveryAction } from '@/shared/types';
+import { ApiRequestError, parseApiError, type RefusalAction } from '@/shared/services/apiService';
+
+/** A refusal the server explained: the reason in words and the next steps that fit. */
+export interface BuildRefusal { message: string; actions: RefusalAction[] }
+
+/** A plan the Orchestrator corrected before it could start, waiting for the person to start it. */
+export interface PlanCorrection { runId: string; planVersion: number; changes: string[] }
+
+/** A failed request that carries next steps becomes a reason with buttons; anything else stays an error. */
+export function buildRefusalFrom(error: unknown): BuildRefusal | null {
+  if (!(error instanceof ApiRequestError) || !error.actions.length) return null;
+  return { message: parseApiError(error).message, actions: error.actions };
+}
 
 export type { WizardStep };
 
@@ -207,6 +220,10 @@ export interface ChatBuildWizardProps {
   busy: 'start' | 'approve' | 'stop' | 'continue' | 'retry' | null;
   error: string | null;
   onStop: () => void;
+  /** A refusal with next steps, shown as buttons in place of a red error line. */
+  refusal?: BuildRefusal | null;
+  /** The plan the Orchestrator corrected before it could start, shown with what changed. */
+  correction?: PlanCorrection | null;
   /** Resume a paused build, or take the recovery action the server offers for a stopped one. */
   onContinue: (action?: LiveBuildRecoveryAction) => void;
   onAuditPlan?: () => void;
@@ -228,6 +245,18 @@ export interface ChatBuildWizardProps {
  * without leaving the chat. The step track lives in the Orchestrator bar at
  * the top of the chat, so this card does not repeat it.
  */
+/** The buttons for a refusal's next steps, in the order the server gave them. */
+function refusalOptions(actions: readonly RefusalAction[], props: ChatBuildWizardProps, stopOption: (label: string, hint: string) => Option): Option[] {
+  return actions.flatMap((action): Option[] => {
+    switch (action) {
+      case 'ask_orchestrator': return [{ label: 'Tell the Orchestrator what to do', hint: 'Answer in the message box.', onSelect: () => props.onReply(), tone: 'primary' }];
+      case 'open_plan': return props.onOpenReview ? [{ label: 'Open the plan', hint: 'Read it in the Build review tab.', onSelect: props.onOpenReview }] : [];
+      case 'retry': return props.onStartPlan ? [{ label: 'Try again', hint: 'Start the plan again.', onSelect: props.onStartPlan }] : [];
+      case 'stop_plan': return props.canStop ? [stopOption('Stop plan', 'No code has changed. The plan is dropped.')] : [];
+    }
+  });
+}
+
 export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   const { build, failure, busy } = props;
   const failed = !build && Boolean(failure);
@@ -279,7 +308,13 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'awaiting_plan_approval':
         title = 'Plan ready for your approval';
         subtitle = build.orchestration.tasks.length + (build.orchestration.tasks.length === 1 ? ' task' : ' tasks') + ' · ' + buildRepositoriesLabel(build) + '. No code has changed yet.';
-        body = <p className="text-xs text-content-secondary">{props.canStart ? 'Read the saved plan on the right, then start it, or say what to change.' : 'Your workspace role cannot start builds.'}</p>;
+        body = <>
+          {props.correction && <div className="space-y-1.5 rounded-xl border border-divider bg-selected px-3 py-2.5 text-[11px] leading-5 text-content">
+            <p className="font-medium">The Orchestrator fixed the plan before it could start (v{props.correction.planVersion}). What changed:</p>
+            <ul className="list-disc space-y-0.5 pl-4 text-content-secondary">{props.correction.changes.map(line => <li key={line}>{line}</li>)}</ul>
+          </div>}
+          <p className="text-xs text-content-secondary">{props.canStart ? 'Read the saved plan on the right, then start it, or say what to change.' : 'Your workspace role cannot start builds.'}</p>
+        </>;
         options = [
           ...(props.canStart && props.onStartPlan ? [{ label: 'Start plan', hint: 'The agents begin the planned work.', onSelect: props.onStartPlan, tone: 'primary' as const, busy: busy === 'start' }] : []),
           { label: 'Ask for changes', hint: 'Say what to change in the message box.', onSelect: () => props.onReply('Please change: ') },
@@ -334,6 +369,15 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
     return null;
   }
 
+  // A refusal with next steps leads the card: its reason, then its buttons, before the usual options.
+  if (props.refusal && build) {
+    body = <>
+      <p className="whitespace-pre-wrap rounded-xl border border-status-warning-border bg-status-warning-subtle px-3 py-2.5 text-[11px] leading-5 text-status-warning">{props.refusal.message}</p>
+      {body}
+    </>;
+    const labels = options.map(option => option.label);
+    options = [...refusalOptions(props.refusal.actions, props, stopOption).filter(option => !labels.includes(option.label)), ...options];
+  }
   const border = failed ? 'border-status-danger-border' : attention ? 'border-status-warning-border' : 'border-divider';
   const showsPlan = Boolean(build && !['planning', 'awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(build.status));
   const hasDetails = showsPlan || Boolean(body || options.length || props.error);
@@ -360,7 +404,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       {showsPlan && build && <div className="border-t border-divider px-4 py-3"><OrchestrationPlanPreview key={build.runId} projectId={props.projectId} runId={build.runId} planVersion={build.orchestration.run.planVersion} autoShow={build.status === 'executing'} /></div>}
       {body && <div className="max-h-[22vh] space-y-3 overflow-y-auto border-t border-divider px-4 py-3">{body}</div>}
       {options.length > 0 && <div className="border-t border-divider px-3 py-2.5"><Options options={options} /></div>}
-      {props.error && <p role="alert" className="border-t border-status-danger-border bg-status-danger-subtle px-4 py-2 text-[11px] text-status-danger">{props.error}</p>}
+      {props.error && !props.refusal && <p role="alert" className="border-t border-status-danger-border bg-status-danger-subtle px-4 py-2 text-[11px] text-status-danger">{props.error}</p>}
     </>}
   </section>;
 };

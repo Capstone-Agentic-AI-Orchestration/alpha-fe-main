@@ -86,7 +86,7 @@ import { ChatSidePanel, type SidePanelTab } from './ChatSidePanel';
 import { BuildReviewTab, SavedBuildReviewTab } from './BuildReviewTab';
 import { LiveChangesView } from './LiveChangesView';
 import { buildActivityAnchors } from './buildActivityAnchor';
-import { ChatBuildWizard, planningFailureReason, type BuildPlanningFailure } from './ChatBuildWizard';
+import { ChatBuildWizard, buildRefusalFrom, planningFailureReason, type BuildPlanningFailure, type BuildRefusal, type PlanCorrection } from './ChatBuildWizard';
 import { BuildNextStepCard } from './BuildNextStepCard';
 import { buildHandoffs, buildStatusLabel, needsSecurityAuditPlan, useProjectLiveBuild } from './useProjectLiveBuild';
 import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
@@ -682,6 +682,9 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   };
   const [buildDecisionBusy, setBuildDecisionBusy] = useState<'start' | 'approve' | 'stop' | 'continue' | 'retry' | null>(null);
   const [buildDecisionError, setBuildDecisionError] = useState<string | null>(null);
+  // A refusal the server explained with next steps, and a plan the Orchestrator corrected before it could start.
+  const [buildRefusal, setBuildRefusal] = useState<BuildRefusal | null>(null);
+  const [planCorrection, setPlanCorrection] = useState<PlanCorrection | null>(null);
   /** Planning failures someone closed in the build panel, by message id. */
   const [dismissedBuildFailures, setDismissedBuildFailures] = useTabSessionState<string[]>(sessionStateKey('dismissedBuildFailures'), []);
   const [snapshot, setSnapshot] = useState<ProjectChatSnapshot | null>(null);
@@ -840,7 +843,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     setOpenedReviewDecisions(current => [...current, key]);
     openBuildReview();
   }, [activeThreadId, isClient, latestBuild?.runId, latestBuild?.status, latestBuild?.orchestration.run.planVersion, openedReviewDecisions]);
-  useEffect(() => { setBuildDecisionError(null); }, [buildDecisionKey]);
+  useEffect(() => { setBuildDecisionError(null); setBuildRefusal(null); }, [buildDecisionKey]);
   const resumePausedBuild = async () => {
     if (!liveBuild || !project?.id) return;
     try {
@@ -1208,12 +1211,16 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   /** Start the plan waiting for approval, at the revision on screen; a refusal shows on the plan card. */
   const startPlan = async () => {
     if (!liveBuild || !project || liveBuild.status !== 'awaiting_plan_approval' || buildDecisionBusy) return;
-    setBuildDecisionBusy('start'); setBuildDecisionError(null);
+    setBuildDecisionBusy('start'); setBuildDecisionError(null); setBuildRefusal(null);
     try {
-      await apiService.startPlannedOrchestration(project.id, liveBuild.runId, liveBuild.revision);
+      const result = await apiService.startPlannedOrchestration(project.id, liveBuild.runId, liveBuild.revision);
+      // A plan that failed its start check comes back corrected, as the next version, for one more Start.
+      if (result.corrected) setPlanCorrection({ runId: liveBuild.runId, planVersion: result.corrected.planVersion, changes: result.corrected.changes });
       await refreshLiveBuild();
     } catch (error) {
-      setBuildDecisionError(error instanceof Error ? error.message : 'The plan could not be started. Refresh and try again.');
+      const refusal = buildRefusalFrom(error);
+      if (refusal) setBuildRefusal(refusal);
+      else setBuildDecisionError(error instanceof Error ? error.message : 'The plan could not be started. Refresh and try again.');
     } finally { setBuildDecisionBusy(null); }
   };
 
@@ -2109,6 +2116,8 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 stopArmed={stopArmed}
                 busy={stoppingProjectRunId ? 'stop' : buildDecisionBusy}
                 error={buildDecisionError}
+                refusal={buildRefusal}
+                correction={planCorrection && liveBuild?.runId === planCorrection.runId && liveBuild.orchestration.run.planVersion === planCorrection.planVersion ? planCorrection : null}
                 onStop={() => void stopProjectBuild()}
                 onContinue={action => void continueBuild(action)}
                 onAuditPlan={() => void proposeSecurityAuditPlan()}
