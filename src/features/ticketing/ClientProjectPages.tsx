@@ -44,11 +44,10 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
   const recent = [...items].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 6);
   const firstName = clientName?.trim().split(/\s+/)[0] ?? '';
   const shownProjects = [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 4);
-  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   const latestByProject = useLatestManagerMessages(api, shownProjects, refreshToken);
   const replyIdeas = onOpenProposals ? proposalsNeedingReply : 0;
   return <section className="cx-page" aria-labelledby="client-overview-title">
-    <HomeHero greeting={clientGreeting()} firstName={firstName} today={today} requests={requests ? items : null}
+    <HomeHero greeting={clientGreeting()} firstName={firstName} requests={requests ? items : null}
       waiting={attention.length + (replyIdeas > 0 ? 1 : 0)} onProposeProject={onProposeProject} />
 
     <section className="cx-section" aria-labelledby="client-attention-title" aria-busy={requestsLoading && !requests}>
@@ -72,11 +71,11 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
 }
 
 /**
- * Home's opening band: the date, the greeting with the client's name in the accent colour, the one main
+ * Home's opening band: the greeting with the client's name in the accent colour, the one main
  * action (proposing a project) and one line on where things stand.
  */
-function HomeHero({ greeting, firstName, today, requests, waiting, onProposeProject }: {
-  greeting: string; firstName: string; today: string; requests: ClientProjectRequestItem[] | null; waiting: number;
+function HomeHero({ greeting, firstName, requests, waiting, onProposeProject }: {
+  greeting: string; firstName: string; requests: ClientProjectRequestItem[] | null; waiting: number;
   onProposeProject?: () => void;
 }) {
   const inProgress = requests?.filter(item => clientRequestGroup(item) === 'in_progress').length ?? 0;
@@ -88,7 +87,6 @@ function HomeHero({ greeting, firstName, today, requests, waiting, onProposeProj
     : <>Nothing needs you right now · {rest}</>;
   return <CxHero>
     <div className="cx-hero-copy">
-      <p className="cx-hero-pill">{today}</p>
       <h1 id="client-overview-title">{greeting}{firstName && <>, <span className="cx-accent-word">{firstName}</span></>}</h1>
       <p className="cx-hero-tagline">Build, explore, and collaborate with Alphaexplora.</p>
       <div className="cx-hero-actions">

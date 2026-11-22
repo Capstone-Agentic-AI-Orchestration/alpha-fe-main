@@ -324,7 +324,6 @@ span.cx-button { pointer-events: none; }
 .cx-hero { position: relative; display: flex; min-height: 248px; align-items: center; justify-content: space-between; gap: var(--client-space-6); padding: var(--client-space-4) 0 var(--client-space-2); }
 .cx-hero-art { position: absolute; top: -48px; right: -56px; width: min(600px, 52%); height: auto; pointer-events: none; }
 .cx-hero-copy { position: relative; min-width: 0; max-width: 640px; }
-.cx-hero-pill { display: inline-flex; margin: 0 0 var(--client-space-3); padding: 6px 14px; border: 1px solid color-mix(in srgb, var(--cx-accent) 30%, transparent); border-radius: var(--client-radius-pill); background: color-mix(in srgb, var(--cx-accent) 14%, transparent); color: var(--cx-ink); font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); }
 .cx-hero h1 { margin: 0; color: var(--cx-ink); font-size: clamp(2.25rem, 4.2vw, 3.5rem); font-weight: var(--client-weight-bold); letter-spacing: -.035em; line-height: 1.05; }
 .cx-hero-tagline { margin: var(--client-space-3) 0 0; color: var(--cx-muted); font-size: var(--client-type-subheading); }
 .cx-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-3) var(--client-space-5); margin-top: var(--client-space-6); }
