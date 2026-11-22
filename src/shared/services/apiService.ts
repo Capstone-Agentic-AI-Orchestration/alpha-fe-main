@@ -247,6 +247,22 @@ export function parseApiError(err: unknown): { status: number | null; message: s
   return { status: Number(code), message: text.slice(end + 2).trim() || `Request failed (${code})` };
 }
 
+/** Next steps the server says fit a refusal; the app shows them as buttons. */
+export type RefusalAction = 'ask_orchestrator' | 'stop_plan' | 'open_plan' | 'retry';
+const REFUSAL_ACTIONS = new Set<RefusalAction>(['ask_orchestrator', 'stop_plan', 'open_plan', 'retry']);
+
+/** The refusal details a 409 can carry: the next steps that fit, and what failed. */
+function refusalDetails(payload: Record<string, unknown>): { actions: RefusalAction[]; issues: Array<{ code: string; detail: string }> } {
+  const actions = Array.isArray(payload.actions)
+    ? payload.actions.filter((item): item is RefusalAction => typeof item === 'string' && REFUSAL_ACTIONS.has(item as RefusalAction))
+    : [];
+  const issues = Array.isArray(payload.issues)
+    ? payload.issues.flatMap(item => item && typeof item === 'object' && typeof (item as { detail?: unknown }).detail === 'string'
+      ? [{ code: String((item as { code?: unknown }).code ?? ''), detail: (item as { detail: string }).detail }] : []).slice(0, 20)
+    : [];
+  return { actions: [...new Set(actions)], issues };
+}
+
 /** Structured metadata for ticket operation reconciliation; message format stays compatible with existing callers. */
 export class ApiRequestError extends Error {
   constructor(
@@ -255,6 +271,9 @@ export class ApiRequestError extends Error {
     readonly code: string | null = null,
     readonly reconciliationRequired = false,
     readonly retryAfterSeconds: number | null = null,
+    /** For an expected refusal: the next steps that fit, shown as buttons instead of a raw error. */
+    readonly actions: RefusalAction[] = [],
+    readonly issues: Array<{ code: string; detail: string }> = [],
   ) {
     super(message);
     this.name = 'ApiRequestError';
@@ -296,6 +315,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     let code: string | null = null;
     let reconciliationRequired = false;
     let providerRetryAfter: number | null = null;
+    let refusal: ReturnType<typeof refusalDetails> = { actions: [], issues: [] };
     try {
       const parsed: unknown = JSON.parse(errorText);
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
@@ -304,6 +324,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
         if (typeof payload.code === 'string' && /^[a-z][a-z0-9_]{0,79}$/.test(payload.code)) code = payload.code;
         reconciliationRequired = payload.reconciliationRequired === true || code?.endsWith('_outcome_unknown') === true;
         if (Number.isSafeInteger(payload.retryAfterSeconds) && Number(payload.retryAfterSeconds) > 0 && Number(payload.retryAfterSeconds) <= 86400) providerRetryAfter = Number(payload.retryAfterSeconds);
+        if (res.status === 409) refusal = refusalDetails(payload);
       }
     } catch {
       /* not JSON — the raw text is the best we have */
@@ -314,7 +335,7 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
     const retryAfterHeader = Number(res.headers.get('Retry-After')) || providerRetryAfter || 0;
     const retryAfterSeconds = [403, 429].includes(res.status) && Number.isSafeInteger(retryAfterHeader)
       && retryAfterHeader > 0 && retryAfterHeader <= 86400 ? retryAfterHeader : null;
-    throw new ApiRequestError(res.status, `API Error [${res.status}]: ${detail}`, code, reconciliationRequired, retryAfterSeconds);
+    throw new ApiRequestError(res.status, `API Error [${res.status}]: ${detail}`, code, reconciliationRequired, retryAfterSeconds, refusal.actions, refusal.issues);
   }
   return res.json();
 }
@@ -888,7 +909,7 @@ export const apiService = {
       { method: 'POST', body: JSON.stringify({ expectedRevision }) }
     ),
   startPlannedOrchestration: (projectId: string, runId: string, expectedRevision: number) =>
-    fetchJson<{ runId: string; status: string; currentTaskId?: string }>(
+    fetchJson<{ runId: string; status: string; currentTaskId?: string; corrected?: { planVersion: number; reason: string; changes: string[] } }>(
       `/projects/${encodeURIComponent(projectId)}/orchestrations/${encodeURIComponent(runId)}/start`,
       { method: 'POST', body: JSON.stringify({ expectedRevision }) }
     ),
