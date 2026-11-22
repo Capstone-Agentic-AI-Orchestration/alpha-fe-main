@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { FolderKanban, House, type LucideIcon } from 'lucide-react';
-import alphaMarkUrl from '@/assets/alpha-mark.png';
+import { BRAND_MARK, BRAND_NAME } from '@/brand/brand';
 import { Button } from '@/shared/components/ui/button';
 import type { ClientPage } from './clientWorkspaceTabs';
 
@@ -16,8 +16,9 @@ export function navPageFor(page: ClientPage): ClientNavPage {
   return page === 'projects' ? 'projects' : 'overview';
 }
 
+/** The public site's mark, drawn in light strokes; light themes invert it to dark. */
 function Brand() {
-  return <span className="cx-brand"><img src={alphaMarkUrl} alt="" aria-hidden="true" className="invert dark:invert-0" />Alphaexplora</span>;
+  return <span className="cx-brand"><img src={BRAND_MARK.url} alt="" aria-hidden="true" className="invert dark:invert-0" />{BRAND_NAME}</span>;
 }
 
 function PageLinks({ page, onNavigate }: { page: ClientPage; onNavigate: (page: ClientNavPage) => void }) {

@@ -1,15 +1,14 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { Button } from '@/shared/components/ui/button';
-import { Card } from '@/shared/components/ui/card';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight, BellRing, Check, ClipboardCheck, FolderKanban, Lightbulb, MessageSquare, Monitor, Plus, Sparkles } from 'lucide-react';
+import { ArrowRight, BellRing, Check, ClipboardCheck, Clock, FolderKanban, Lightbulb, MessageSquare, Monitor, Plus, Search, Sparkles } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
-import { CxActionCard, CxBadge, CxEmpty, CxHero, CxPageHeader, CxPanel, CxQuote, CxRing, CxRow, CxSection, CxStats } from './clientKit';
+import { CxActionCard, CxBadge, CxCoverArt, CxEmpty, CxHero, CxOrbit, CxPageHeader, CxPanel, CxRow, CxSection, CxStats } from './clientKit';
 import { ClientPreviewThumb } from './ClientPreviewThumb';
 import { clientTicketProgress } from './clientTicketProgress';
-import { clientGreeting, clientNextStep, clientRequestGroup, listProgressIndex, projectProgress, relativeTime } from './clientFriendly';
+import { clientGreeting, clientNextStep, clientRequestGroup, listProgressIndex, relativeTime } from './clientFriendly';
 import { time } from './ticketUi';
 import { clientProjectKey } from './ClientProjectSections';
 
@@ -34,7 +33,7 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
   onOpenProject: (project: ClientProject) => void;
   onGoToProjects: () => void;
   onGoToRequests: () => void;
-  /** Shown as a closing "new idea" card when the client may propose projects. */
+  /** The banner's main button when the client may propose projects. */
   onProposeProject?: () => void;
   /** Project ideas where the project manager is waiting on the client's reply. */
   proposalsNeedingReply?: number;
@@ -45,12 +44,11 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
   const recent = [...items].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 6);
   const firstName = clientName?.trim().split(/\s+/)[0] ?? '';
   const shownProjects = [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 4);
-  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   const latestByProject = useLatestManagerMessages(api, shownProjects, refreshToken);
   const replyIdeas = onOpenProposals ? proposalsNeedingReply : 0;
   return <section className="cx-page" aria-labelledby="client-overview-title">
-    <HomeHero greeting={clientGreeting() + (firstName ? ', ' + firstName : '')} today={today} requests={requests ? items : null}
-      waiting={attention.length + (replyIdeas > 0 ? 1 : 0)} project={shownProjects[0] ?? null} />
+    <HomeHero greeting={clientGreeting()} firstName={firstName} requests={requests ? items : null}
+      waiting={attention.length + (replyIdeas > 0 ? 1 : 0)} onProposeProject={onProposeProject} />
 
     <section className="cx-section" aria-labelledby="client-attention-title" aria-busy={requestsLoading && !requests}>
       {requestsError && <p role="alert" className="cx-error">{requestsError}</p>}
@@ -69,39 +67,33 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
       action={<Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onGoToRequests}>All requests <ArrowRight size={14} aria-hidden="true" /></Button>}>
       <LatestUpdates loading={!requests && requestsLoading} loaded={Boolean(requests)} recent={recent} onOpenRequest={onOpenRequest} />
     </CxSection>
-
-    {onProposeProject && <CxPanel className="cx-idea">
-      <div><strong>Have a new idea?</strong><p>Tell your project manager what you’d like to build next.</p></div>
-      <Button type="button" variant="outline" onClick={onProposeProject}><Plus size={15} aria-hidden="true" />Propose a project</Button>
-    </CxPanel>}
   </section>;
 }
 
-/** Home's opening band: the greeting, one line on where things stand, and how far the main project is along. */
-function HomeHero({ greeting, today, requests, waiting, project }: {
-  greeting: string; today: string; requests: ClientProjectRequestItem[] | null; waiting: number; project: ClientProject | null;
+/**
+ * Home's opening band: the greeting with the client's name in the accent colour, the one main
+ * action (proposing a project) and one line on where things stand.
+ */
+function HomeHero({ greeting, firstName, requests, waiting, onProposeProject }: {
+  greeting: string; firstName: string; requests: ClientProjectRequestItem[] | null; waiting: number;
+  onProposeProject?: () => void;
 }) {
   const inProgress = requests?.filter(item => clientRequestGroup(item) === 'in_progress').length ?? 0;
   const done = requests?.filter(item => clientRequestGroup(item) === 'done').length ?? 0;
-  const projectRequests = project && requests
-    ? requests.filter(item => item.workspaceId === project.workspaceId && item.projectId === project.projectId) : [];
-  const progress = project ? projectProgress(projectRequests) : null;
   const rest = inProgress + ' in progress · ' + done + ' done';
   let lead: ReactNode = null;
   if (requests) lead = waiting
     ? <><b>{waiting} {waiting === 1 ? 'thing needs' : 'things need'} you</b> · {rest}</>
     : <>Nothing needs you right now · {rest}</>;
   return <CxHero>
-    <div className="cx-hero-row">
-      <div className="cx-hero-copy">
-        <p className="cx-eyebrow">{today}</p>
-        <h1 id="client-overview-title">{greeting}</h1>
+    <div className="cx-hero-copy">
+      <h1 id="client-overview-title">{greeting}{firstName && <>, <span className="cx-accent-word">{firstName}</span></>}</h1>
+      <p className="cx-hero-tagline">Build, explore, and collaborate with Alphaexplora.</p>
+      <div className="cx-hero-actions">
+        {onProposeProject && <button type="button" className="cx-button is-primary is-large" onClick={onProposeProject}>
+          <Plus size={16} aria-hidden="true" />Propose a project<ArrowRight size={16} aria-hidden="true" /></button>}
         {lead && <p className="cx-hero-lead">{lead}</p>}
       </div>
-      {project && progress !== null && <div className="cx-hero-meter">
-        <CxRing value={progress} label={project.name + ': requests are ' + progress + '% of the way along, on average'} />
-        <div><strong>{project.name}</strong><span>Requests are {progress}% of the way along, on average</span></div>
-      </div>}
     </div>
   </CxHero>;
 }
@@ -134,7 +126,7 @@ function NeedsYou({ loading, loaded, attention, proposalsNeedingReply, onOpenPro
   </>;
 }
 
-/** Home's project covers, or a loading or empty state. */
+/** Home's project cards, or a loading or empty state. */
 function HomeProjects({ loading, failed, projects, requests, latestByProject, onOpenProject, onOpenPreview }: {
   loading: boolean; failed: boolean; projects: ClientProject[]; requests: ClientProjectRequestItem[];
   latestByProject: Record<string, ClientProjectFeedbackMessage>;
@@ -142,7 +134,7 @@ function HomeProjects({ loading, failed, projects, requests, latestByProject, on
 }) {
   if (loading) return <CxPanel><LoadingRows label="Loading shared projects" rows={2} className="p-4" /></CxPanel>;
   if (!projects.length) return failed ? null : <CxPanel><CxEmpty title="No projects yet" body="No projects have been shared with your account yet. When your project manager shares one, it will appear here." /></CxPanel>;
-  return <div className="cx-project-list">{projects.map(project => <ClientProjectSpotlight key={clientProjectKey(project)}
+  return <div className="cx-card-grid">{projects.map(project => <ClientProjectCard key={clientProjectKey(project)}
     project={project} requests={requests} latest={latestByProject[clientProjectKey(project)] ?? null}
     onOpenProject={() => onOpenProject(project)} onOpenPreview={onOpenPreview ? () => onOpenPreview(project) : undefined} />)}</div>;
 }
@@ -158,58 +150,60 @@ function LatestUpdates({ loading, loaded, recent, onOpenRequest }: {
 }
 
 /**
- * A project's cover on Home: a picture of the shared preview beside its counts and the project
- * manager's latest note. Its requests live on the project's page, so the cover keeps one size
- * however many requests the project has.
+ * A project card, on Home and on the Projects page: a picture of the shared preview (or artwork until
+ * one is shared) beside the project's name, when it last changed, the project manager's latest note,
+ * its request counts and the ways in. Its requests live on the project's page, so every card keeps
+ * one size however many requests the project has.
  */
-export function ClientProjectSpotlight({ project, requests, onOpenProject, onOpenPreview, latest = null }: {
+function ClientProjectCard({ project, requests, onOpenProject, onOpenPreview, latest }: {
   project: ClientProject;
   requests: ClientProjectRequestItem[];
   onOpenProject: () => void;
   /** Opens the project's preview page (which says so when nothing is shared yet). */
   onOpenPreview?: () => void;
-  latest?: ClientProjectFeedbackMessage | null;
+  latest: ClientProjectFeedbackMessage | null;
 }) {
   const mine = requests.filter(item => item.workspaceId === project.workspaceId && item.projectId === project.projectId);
   const open = mine.filter(item => clientRequestGroup(item) !== 'done');
   const needsYou = open.filter(item => clientRequestGroup(item) === 'needs_you').length;
-  return <Card role="article" className="cx-panel cx-cover">
-    <div className={`cx-cover-top${project.preview ? '' : ' is-no-preview'}`}>
-      {project.preview && <div className="cx-cover-shot"><ClientPreviewThumb preview={project.preview} projectName={project.name} onOpen={onOpenPreview} /></div>}
-      <div className="cx-cover-body">
-        <header className="cx-cover-head">
-          <h3>{project.name}</h3>
-          <ProjectLinks project={project} onOpenProject={onOpenProject} onOpenPreview={onOpenPreview} />
-        </header>
-        <p className="cx-cover-meta">{openCount(open.length)} · updated {relativeTime(project.updatedAt)} · {project.preview ? 'preview ready' : 'no preview yet'}</p>
+  const titleId = 'client-project-card-' + clientProjectKey(project).replace(/\W/g, '-');
+  return <article className="cx-pcard" aria-labelledby={titleId}>
+    <div className="cx-pcard-picture">
+      {project.preview ? <ClientPreviewThumb preview={project.preview} projectName={project.name} onOpen={onOpenPreview} /> : <CxCoverArt seed={project.projectId} />}
+    </div>
+    <div className="cx-pcard-body">
+      <header className="cx-pcard-head">
+        <h3 id={titleId}>{project.name}</h3>
+        {needsYou > 0 && <CxBadge tone="attention">{needsYou} {needsYou === 1 ? 'needs' : 'need'} you</CxBadge>}
+      </header>
+      <p className="cx-pcard-meta"><Clock size={14} aria-hidden="true" />
+        <span>Updated <time dateTime={project.updatedAt} title={time(project.updatedAt)}>{relativeTime(project.updatedAt)}</time> · {project.preview ? 'preview ready' : 'no preview yet'}</span></p>
+      {latest && <div className="cx-pcard-note">
+        <p>{latest.body}</p>
+        <small>Your project manager · <time dateTime={latest.createdAt} title={time(latest.createdAt)}>{relativeTime(latest.createdAt)}</time></small>
+      </div>}
+      <footer className="cx-pcard-foot">
         <CxStats label={'Requests in ' + project.name} items={[
-          { label: 'Needs you', value: needsYou, tone: 'attention' },
           { label: 'Open', value: open.length },
           { label: 'Done', value: mine.length - open.length, tone: 'done' },
         ]} />
-        {latest && <CxQuote body={latest.body}
-          meta={<>Project conversation · <time dateTime={latest.createdAt} title={time(latest.createdAt)}>{relativeTime(latest.createdAt)}</time></>} />}
-      </div>
+        <ProjectLinks project={project} onOpenProject={onOpenProject} onOpenPreview={onOpenPreview} />
+      </footer>
     </div>
-  </Card>;
+  </article>;
 }
 
 /**
- * A project card's two ways in: straight to its preview page, or to its conversation. The preview page
- * opens even before anything is shared; it then says so beside the conversation.
+ * A project card's two ways in: straight to its preview page, or to the project (its conversation,
+ * requests and details). The preview page opens even before anything is shared; it then says so.
  */
 function ProjectLinks({ project, onOpenProject, onOpenPreview }: { project: ClientProject; onOpenProject: () => void; onOpenPreview?: () => void }) {
   return <div className="cx-card-links">
     {onOpenPreview && <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenPreview}
       aria-label={'Open preview for ' + project.name}><Monitor size={14} aria-hidden="true" />Open preview</Button>}
-    <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenProject}
-      aria-label={'Open conversation for ' + project.name}>Open conversation <ArrowRight size={14} aria-hidden="true" /></Button>
+    <button type="button" className="cx-button" onClick={onOpenProject}
+      aria-label={'Open project: ' + project.name}>Open project <ArrowRight size={14} aria-hidden="true" /></button>
   </div>;
-}
-
-function openCount(count: number): string {
-  if (!count) return 'No open requests';
-  return count + ' open ' + (count === 1 ? 'request' : 'requests');
 }
 
 function UpdateRow({ item, onOpen }: { item: ClientProjectRequestItem; onOpen: (item: ClientProjectRequestItem) => void }) {
@@ -242,67 +236,58 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   inspectionOnly: boolean;
   refreshToken: number;
 }) {
-  const sortedProjects = [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
-  const latestByProject = useLatestManagerMessages(api, sortedProjects, refreshToken);
-  return <section className="cx-page" aria-labelledby={idPrefix + '-projects-page-title'}>
-    <CxPageHeader titleId={idPrefix + '-projects-page-title'} title="Your projects" description="Everything your project manager has shared with you." />
+  const [query, setQuery] = useState('');
+  const [sortBy, setSortBy] = useState<ProjectSort>('updated');
+  const sortedProjects = [...projects].sort(PROJECT_SORTS[sortBy].compare);
+  const needle = query.trim().toLowerCase();
+  const shownProjects = needle ? sortedProjects.filter(project => project.name.toLowerCase().includes(needle)) : sortedProjects;
+  // Messages load for the most recently updated projects, whichever order the client picks to view them in.
+  const latestByProject = useLatestManagerMessages(api, [...projects].sort(PROJECT_SORTS.updated.compare), refreshToken);
+  const titleId = idPrefix + '-projects-page-title';
+  return <section className="cx-page" aria-labelledby={titleId}>
+    <CxPageHeader titleId={titleId} title={<>Your <span className="cx-accent-word">projects</span></>}
+      description="Everything your project manager has shared with you." />
     {proposalsNeedingReply > 0 && onOpenProposals && <CxPanel tone="attention"><div className="cx-row" role="status">
       <Lightbulb size={16} aria-hidden="true" />
       <span className="cx-row-copy"><strong>Your project manager is waiting on your reply to {proposalsNeedingReply === 1 ? 'a project idea' : proposalsNeedingReply + ' project ideas'}.</strong></span>
       <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenProposals}>Open project ideas <ArrowRight size={14} aria-hidden="true" /></Button>
     </div></CxPanel>}
     {error && <p role="alert" className="cx-error">{error}</p>}
-    <section aria-label="Shared projects">
+    <section className="cx-section" aria-label="Shared projects">
+      {/* Search and sorting only earn their place once there are more projects than fit at a glance. */}
+      {projects.length > 3 && <div className="cx-toolbar">
+        <label className="cx-search"><Search size={16} aria-hidden="true" /><span className="sr-only">Search projects</span>
+          <input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search projects…" /></label>
+        <label className="cx-sort"><span>Sort by</span>
+          <select value={sortBy} onChange={event => setSortBy(event.target.value as ProjectSort)}>
+            {Object.entries(PROJECT_SORTS).map(([id, option]) => <option key={id} value={id}>{option.label}</option>)}
+          </select></label>
+      </div>}
       {loading && <CxPanel><LoadingRows label="Loading your projects" className="p-4" /></CxPanel>}
-      {!loading && projects.length > 0 && <div className="cx-project-stack">
-        {sortedProjects.map(project => <ClientProjectOverviewCard key={clientProjectKey(project)} project={project} requests={requests}
+      {!loading && shownProjects.length > 0 && <div className="cx-card-grid">
+        {shownProjects.map(project => <ClientProjectCard key={clientProjectKey(project)} project={project} requests={requests}
           latest={latestByProject[clientProjectKey(project)] ?? null}
           onOpenProject={() => onOpenConversation(project)} onOpenPreview={() => onOpenPreview(project)} />)}
       </div>}
+      {!loading && projects.length > 0 && !shownProjects.length && <CxPanel><CxEmpty icon={<Search size={22} />} title={'No projects match “' + query.trim() + '”'}
+        body="Check the spelling, or clear the search to see every project." /></CxPanel>}
       {!loading && !projects.length && !error && <CxPanel><CxEmpty icon={<FolderKanban size={22} />} title="No projects shared yet"
         body="When your project manager gives your account access to a project, it will appear here." /></CxPanel>}
     </section>
     {!inspectionOnly && onProposeProject && <CxPanel className="cx-idea">
-      <div><strong>Have something new in mind?</strong><p>Send your project manager an idea. They review it with you before anything is set up.</p></div>
-      <Button type="button" variant="outline" onClick={onProposeProject}><Lightbulb size={15} aria-hidden="true" />Propose a project</Button>
+      <CxOrbit className="cx-idea-art" />
+      <span className="cx-idea-icon" aria-hidden="true"><Lightbulb size={26} /></span>
+      <div className="cx-idea-copy"><strong>Have something new in mind?</strong><p>Send your project manager an idea. They review it with you before anything is set up.</p></div>
+      <button type="button" className="cx-button" onClick={onProposeProject}>Propose a project <ArrowRight size={14} aria-hidden="true" /></button>
     </CxPanel>}
   </section>;
 }
 
-/**
- * A project on the Projects page: its shared preview, its counts and the project manager's latest
- * note. Its requests live on the project's page, so every card keeps the same size.
- */
-function ClientProjectOverviewCard({ project, requests, latest, onOpenProject, onOpenPreview }: {
-  project: ClientProject;
-  requests: ClientProjectRequestItem[];
-  latest: ClientProjectFeedbackMessage | null;
-  onOpenProject: () => void;
-  onOpenPreview: () => void;
-}) {
-  const mine = requests.filter(item => item.workspaceId === project.workspaceId && item.projectId === project.projectId);
-  const needsYou = mine.filter(item => clientRequestGroup(item) === 'needs_you').length;
-  const open = mine.filter(item => clientRequestGroup(item) !== 'done').length;
-  const titleId = 'client-project-card-' + project.projectId;
-  return <Card role="article" className={`cx-panel cx-project-wide${project.preview ? '' : ' is-no-preview'}`} aria-labelledby={titleId}>
-    {project.preview && <ClientPreviewThumb preview={project.preview} projectName={project.name} onOpen={onOpenPreview} />}
-    <div className="cx-project-wide-body">
-      <header className="cx-project-wide-head">
-        <h3 id={titleId}>{project.name}</h3>
-        {needsYou > 0 && <CxBadge tone="attention">{needsYou} {needsYou === 1 ? 'needs' : 'need'} you</CxBadge>}
-        <ProjectLinks project={project} onOpenProject={onOpenProject} onOpenPreview={onOpenPreview} />
-      </header>
-      <p className="cx-project-wide-meta">Updated {relativeTime(project.updatedAt)} · {project.preview ? 'preview shared' : 'no preview yet'}</p>
-      <CxStats label={'Requests in ' + project.name} items={[
-        { label: 'Needs you', value: needsYou, tone: 'attention' },
-        { label: 'Open', value: open },
-        { label: 'Done', value: mine.length - open, tone: 'done' },
-      ]} />
-      {latest && <CxQuote body={latest.body}
-        meta={<>Latest in the project conversation · <time dateTime={latest.createdAt} title={time(latest.createdAt)}>{relativeTime(latest.createdAt)}</time></>} />}
-    </div>
-  </Card>;
-}
+type ProjectSort = 'updated' | 'name';
+const PROJECT_SORTS: Record<ProjectSort, { label: string; compare: (a: ClientProject, b: ClientProject) => number }> = {
+  updated: { label: 'Last updated', compare: (a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt) },
+  name: { label: 'Name', compare: (a, b) => a.name.localeCompare(b.name) },
+};
 
 /** The project manager's latest conversation message, keyed by project. Reads at most six projects. */
 function useLatestManagerMessages(api: typeof clientTicketApi, projects: ClientProject[], refreshToken: number) {
