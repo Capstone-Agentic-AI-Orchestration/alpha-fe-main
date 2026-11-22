@@ -3,7 +3,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 
 import { useApp } from '@/app/AppContext';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type { ProjectBuildSnapshot } from '@/shared/types';
 
 import { OrchestrationDeliveryPanel } from '@/features/chat/OrchestrationDeliveryPanel';
@@ -39,7 +39,7 @@ export const ProjectBuildReviewView: React.FC<{ projectId: string }> = ({ projec
       setError('');
     } catch (failure) {
       if (request !== requestRef.current) return;
-      setError(failure instanceof Error ? failure.message : 'The project build review could not be loaded.');
+      setError(userMessage(failure, 'The project build review could not be loaded.'));
     } finally {
       if (request === requestRef.current) setLoading(false);
     }
@@ -70,7 +70,7 @@ export const ProjectBuildReviewView: React.FC<{ projectId: string }> = ({ projec
       await apiService.approveOrchestration(projectId, workflow.run.id, workflow.run.revision);
       await refresh(true);
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Publication could not be authorized. Refresh and try again.');
+      setError(userMessage(failure, 'Publication could not be authorized. Refresh and try again.'));
     } finally {
       setBusy(false);
     }

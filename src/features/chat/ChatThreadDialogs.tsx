@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '@/app/AppContext';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import { Modal } from '@/shared/components/Modal';
 
 /** Longest conversation name the engine accepts. */
@@ -51,7 +51,7 @@ export function ChatThreadDialogs({ threadPendingDelete, setThreadPendingDelete,
     apiService.getChatThreadMemory(memoryThreadId).then(memory => {
       if (!cancelled) setMemoryContent(memory.content);
     }).catch((error: any) => {
-      if (!cancelled) setMemoryError(error?.message ?? 'Could not load this chat\'s memory.');
+      if (!cancelled) setMemoryError(userMessage(error, 'Could not load this chat\'s memory.'));
     }).finally(() => {
       if (!cancelled) setMemoryLoading(false);
     });
@@ -67,7 +67,7 @@ export function ChatThreadDialogs({ threadPendingDelete, setThreadPendingDelete,
       setMemoryContent(saved.content);
       showToast('Session memory saved', 'These notes will be used only in this conversation.', 'success');
     } catch (error: any) {
-      setMemoryError(error?.message ?? 'Could not save this chat\'s memory.');
+      setMemoryError(userMessage(error, 'Could not save this chat\'s memory.'));
     } finally {
       setMemoryBusy(false);
     }
@@ -82,7 +82,7 @@ export function ChatThreadDialogs({ threadPendingDelete, setThreadPendingDelete,
       setMemoryContent('');
       showToast('Session memory cleared', 'This conversation will start with no saved notes.', 'success');
     } catch (error: any) {
-      setMemoryError(error?.message ?? 'Could not clear this chat\'s memory.');
+      setMemoryError(userMessage(error, 'Could not clear this chat\'s memory.'));
     } finally {
       setMemoryBusy(false);
     }

@@ -247,6 +247,16 @@ export function parseApiError(err: unknown): { status: number | null; message: s
   return { status: Number(code), message: text.slice(end + 2).trim() || `Request failed (${code})` };
 }
 
+/**
+ * The words to show a person for a failed request: the server's reason without the
+ * "API Error [NNN]:" prefix fetchJson adds, or the fallback when there is no message.
+ * Use this, not error.message, wherever an error reaches the screen.
+ */
+export function userMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof Error) || !error.message.trim()) return fallback;
+  return parseApiError(error).message || fallback;
+}
+
 /** Next steps the server says fit a refusal; the app shows them as buttons. */
 export type RefusalAction = 'ask_orchestrator' | 'stop_plan' | 'open_plan' | 'retry';
 const REFUSAL_ACTIONS = new Set<RefusalAction>(['ask_orchestrator', 'stop_plan', 'open_plan', 'retry']);

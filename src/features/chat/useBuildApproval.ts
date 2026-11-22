@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type { ProjectBuildOrchestration } from '@/shared/types';
 
 /** Why approval is not offered for this build right now, or null when it is. */
@@ -33,7 +33,7 @@ export function useBuildApproval(projectId: string, orchestration: ProjectBuildO
       await apiService.approveOrchestration(projectId, orchestration.run.id, orchestration.run.revision);
       await onApproved?.();
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Publication could not be authorized. Refresh and try again.');
+      setError(userMessage(failure, 'Publication could not be authorized. Refresh and try again.'));
     } finally {
       inFlight.current = false;
       setBusy(false);

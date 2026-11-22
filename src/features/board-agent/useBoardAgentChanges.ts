@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import { isDesktop } from '@/shared/desktop';
 import type { BoardAgentChange } from '@/shared/types';
 
@@ -29,7 +29,7 @@ export function useBoardAgentChanges(projectId: string | null, options: { fast?:
       if (latest.current && signature !== latest.current) onBoardChanged.current?.();
       latest.current = signature;
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(userMessage(err, 'The board changes could not be loaded.'));
     }
   }, [projectId]);
 
@@ -53,7 +53,7 @@ export function useBoardAgentChanges(projectId: string | null, options: { fast?:
       else await apiService.undoBoardAgentChange(id);
       setError(null);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(userMessage(err, 'The board changes could not be loaded.'));
     } finally {
       setBusyId(null);
       await load();

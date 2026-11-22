@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type { DeliveryAction, DeliveryResponse, OrchestrationDelivery } from '@/shared/types/delivery';
 import { Badge } from '@/shared/components/ui/badge';
 import { githubLink } from '@/shared/lib/githubLink';
@@ -69,7 +69,7 @@ export function OrchestrationDeliveryPanel({ projectId, runId, onRepairPrepared,
       setFresh(false); await refreshRef.current();
       if (next.action === 'prepare_repair') onRepairPrepared?.();
     } catch (failure) {
-      if (generation.current === current) { setFresh(false); setError(failure instanceof Error ? failure.message : 'Delivery action failed. Refresh before retrying.'); }
+      if (generation.current === current) { setFresh(false); setError(userMessage(failure, 'Delivery action failed. Refresh before retrying.')); }
     } finally { if (generation.current === current) setBusy(false); }
   };
   return <section aria-label="Delivery to UAT" className={compact ? 'pt-3 text-xs text-content-secondary' : 'mt-2 rounded-xl border border-divider bg-surface-raised px-4 py-3 text-xs text-content-secondary'}>

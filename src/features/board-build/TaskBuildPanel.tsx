@@ -10,7 +10,7 @@ import { BUILD_STEPS, buildStepFor } from '@/features/chat/buildSteps';
 import { buildAgentNodes } from '@/features/chat/useProjectLiveBuild';
 import { isDesktop } from '@/shared/desktop';
 import { githubLink } from '@/shared/lib/githubLink';
-import { apiService, type IssueBuildStatus } from '@/shared/services/apiService';
+import { apiService, type IssueBuildStatus, userMessage } from '@/shared/services/apiService';
 import type { Issue, LiveBuildOrchestrationStatus, ProjectBuildOrchestration } from '@/shared/types';
 import { changedFiles, requirementEvidence, useBuildConversation, useTaskBuild } from './useTaskBuild';
 import { BuildRequestPanel } from './BuildRequestPanel';
@@ -149,7 +149,7 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
       onBuildChanged?.();
       return true;
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'That action did not complete.');
+      setError(userMessage(failure, 'That action did not complete.'));
       await refresh();
       return false;
     } finally {

@@ -63,7 +63,7 @@ import { useApp, useTabSessionState } from '@/app/AppContext';
 import { statusLabel as taskStatusLabel, taskHandoffContext } from '@/features/issues';
 import { isDesktop } from '@/shared/desktop';
 import { BoardChangesWaiting } from '@/features/board-agent/BoardChangesWaiting';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import { runnerSocket } from '@/shared/services/runnerSocket';
 import {
   AgentCall,
@@ -326,7 +326,7 @@ function OrchestratorBuildActivityRow({
         }
       } catch (syncError: any) {
         if (cancelled) return;
-        setError(syncError?.message ?? 'Run details could not be loaded.');
+        setError(userMessage(syncError, 'Run details could not be loaded.'));
         timer = window.setTimeout(() => void sync(), expanded ? 5_000 : 15_000);
       } finally {
         if (!cancelled) setLoading(false);
@@ -402,7 +402,7 @@ function OrchestratorBuildActivityRow({
         setRetryNoticeTaskId('');
       }
     } catch (retryFailure: any) {
-      setRetryError(retryFailure?.message ?? 'The retry could not be started. Refresh the build and try again.');
+      setRetryError(userMessage(retryFailure, 'The retry could not be started. Refresh the build and try again.'));
     } finally {
       setRetryBusy(false);
     }
@@ -855,7 +855,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         showToast('Build resumed', 'The Orchestrator picked the build up where it paused.', 'success');
       }
     } catch (error: any) {
-      showToast('Build not resumed', error?.message ?? 'Open the build to see what it is waiting for.', 'error');
+      showToast('Build not resumed', userMessage(error, 'Open the build to see what it is waiting for.'), 'error');
     } finally {
       void refreshLiveBuild();
     }
@@ -1101,7 +1101,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       setCalls(prev => ({ ...prev, [call.id]: result.call }));
       if (activeThread) await refreshChatThread(activeThread.id);
     } catch (error: any) {
-      showToast('Confirmation failed', error?.message ?? 'The call could not be confirmed.', 'error');
+      showToast('Confirmation failed', userMessage(error, 'The call could not be confirmed.'), 'error');
     } finally {
       setBusyCallId(null);
     }
@@ -1117,7 +1117,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       if (activeThread) await refreshChatThread(activeThread.id);
       showToast('Patch applied', 'The working copy changed. Review the diff before committing.', 'success');
     } catch (error: any) {
-      showToast('Patch not applied', error?.message ?? 'The patch was rejected by the working copy.', 'error');
+      showToast('Patch not applied', userMessage(error, 'The patch was rejected by the working copy.'), 'error');
     } finally {
       setBusyCallId(null);
     }
@@ -1130,7 +1130,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       setCalls(prev => ({ ...prev, [call.id]: result.call }));
       if (activeThread) await refreshChatThread(activeThread.id);
     } catch (error: any) {
-      showToast('Retry failed', error?.message ?? 'The call could not be retried.', 'error');
+      showToast('Retry failed', userMessage(error, 'The call could not be retried.'), 'error');
     } finally {
       setBusyCallId(null);
     }
@@ -1145,7 +1145,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       setCalls(prev => ({ ...prev, [result.call.id]: result.call }));
       if (activeThread) await refreshChatThread(activeThread.id);
     } catch (error: any) {
-      showToast('Follow-up failed', error?.message ?? 'The follow-up could not be created.', 'error');
+      showToast('Follow-up failed', userMessage(error, 'The follow-up could not be created.'), 'error');
     } finally {
       setBusyCallId(null);
     }
@@ -1187,7 +1187,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       await apiService.stopChatTurn(activeThread.id, activeTurnMessageId);
       showToast('Stopping response', 'Alpha is waiting for the current tool to stop before ending this turn.', 'info');
     } catch (error: any) {
-      showToast('Could not stop response', error?.message ?? 'This chat turn could not be stopped.', 'error');
+      showToast('Could not stop response', userMessage(error, 'This chat turn could not be stopped.'), 'error');
     } finally {
       setChatTurnActionBusy(false);
     }
@@ -1203,7 +1203,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       openPlanTab({ projectId: project.id, runId: liveBuild.runId, planVersion: next.planVersion, auto: false });
       showToast('Security audit plan ready', 'Review the revised Markdown plan before starting work.', 'success');
     } catch (error) {
-      setBuildDecisionError(error instanceof Error ? error.message : 'The Orchestrator could not prepare the audit plan.');
+      setBuildDecisionError(userMessage(error, 'The Orchestrator could not prepare the audit plan.'));
     } finally { setBuildDecisionBusy(null); }
     return true;
   };
@@ -1220,7 +1220,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     } catch (error) {
       const refusal = buildRefusalFrom(error);
       if (refusal) setBuildRefusal(refusal);
-      else setBuildDecisionError(error instanceof Error ? error.message : 'The plan could not be started. Refresh and try again.');
+      else setBuildDecisionError(userMessage(error, 'The plan could not be started. Refresh and try again.'));
     } finally { setBuildDecisionBusy(null); }
   };
 
@@ -1275,7 +1275,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         action === 'explain_failure' ? 'info' : 'success');
       return true;
     } catch (error: any) {
-      showToast('Recovery action not completed', error?.message ?? 'Refresh the build and try again.', 'error');
+      showToast('Recovery action not completed', userMessage(error, 'Refresh the build and try again.'), 'error');
       return true;
     }
   };
@@ -1333,7 +1333,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       if (!fromQueue) setInput('');
       showToast('Direction queued', `Alpha will apply it at the next safe point in this turn (direction ${result.position}).`, 'success');
     } catch (error: any) {
-      showToast('Direction not queued', error?.message ?? 'Alpha could not accept this direction.', 'error');
+      showToast('Direction not queued', userMessage(error, 'Alpha could not accept this direction.'), 'error');
       if (fromQueue) restoreToComposer(typedMessage, files, true);
     } finally {
       setChatTurnActionBusy(false);
@@ -1378,7 +1378,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       if (activeThread?.id && uploaded.length) {
         await Promise.allSettled(uploaded.map(item => apiService.deleteChatAttachment(activeThread.id, item.id)));
       }
-      showToast('Attachments not sent', error?.message ?? 'Alpha could not save the selected files locally.', 'error');
+      showToast('Attachments not sent', userMessage(error, 'Alpha could not save the selected files locally.'), 'error');
       return null;
     }
   };
@@ -1468,7 +1468,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         showToast('Build stopped', 'The agents are stopping. Work already on the build branch remains available for review.', 'success');
       } else {
         const failure = results.find((result): result is PromiseRejectedResult => result.status === 'rejected');
-        showToast(stoppedCount ? 'Some builds could not be stopped' : 'Could not stop build', failure?.reason?.message ?? 'Check the Build review tab for current status.', 'error');
+        showToast(stoppedCount ? 'Some builds could not be stopped' : 'Could not stop build', userMessage(failure?.reason, 'Check the Build review tab for current status.'), 'error');
       }
     } finally {
       setStoppingProjectRunId(null);
@@ -1523,7 +1523,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       await apiService.answerChatDecision(activeThread.id, openDecision.id, answer, currentUser?.name);
       await refreshChatThread(activeThread.id);
     } catch (error: any) {
-      showToast('Answer not sent', error?.message ?? 'Alpha could not record that answer. Try again.', 'error');
+      showToast('Answer not sent', userMessage(error, 'Alpha could not record that answer. Try again.'), 'error');
       throw error;
     } finally {
       setAnsweringDecisionId(null);
@@ -1543,7 +1543,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
         status = (await apiService.cancelOrchestration(project.id, blocker.runId).catch(() => ({ status: 'cancelled' }))).status;
       }
     } catch (error: any) {
-      showToast('Could not stop ' + (blocker.issueIdentifier ?? 'that build'), error?.message ?? 'Open it and stop it from its build controls.', 'error');
+      showToast('Could not stop ' + (blocker.issueIdentifier ?? 'that build'), userMessage(error, 'Open it and stop it from its build controls.'), 'error');
       setBuildDecisionBusy(null);
       return;
     }
@@ -1624,7 +1624,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     } catch (error: any) {
       showToast(
         action === 'build' ? 'Build not planned' : 'Answer not started',
-        error?.message ?? 'Alpha could not update how this message is handled.',
+        userMessage(error, 'Alpha could not update how this message is handled.'),
         'error'
       );
     } finally {
@@ -2117,6 +2117,8 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 busy={stoppingProjectRunId ? 'stop' : buildDecisionBusy}
                 error={buildDecisionError}
                 refusal={buildRefusal}
+                threadId={activeThread?.id}
+                onRecoveryDone={() => void refreshLiveBuild()}
                 correction={planCorrection && liveBuild?.runId === planCorrection.runId && liveBuild.orchestration.run.planVersion === planCorrection.planVersion ? planCorrection : null}
                 onStop={() => void stopProjectBuild()}
                 onContinue={action => void continueBuild(action)}

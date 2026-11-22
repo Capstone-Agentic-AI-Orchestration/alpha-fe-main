@@ -2,7 +2,7 @@ import { LoadingRows } from '@/shared/components/ui/skeleton';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, FileCode2, RefreshCw } from 'lucide-react';
 
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type { LiveBuildChanges } from '@/shared/types';
 
 type FileChange = LiveBuildChanges['repositories'][number]['files'][number];
@@ -59,7 +59,7 @@ export const LiveChangesView: React.FC<{
         const next = await apiService.getOrchestrationLiveChanges(projectId, runId);
         if (!cancelled) { setChanges(next); setError(null); }
       } catch (caught: any) {
-        if (!cancelled) setError(caught?.message ?? 'The changes could not be read.');
+        if (!cancelled) setError(userMessage(caught, 'The changes could not be read.'));
       } finally {
         if (!cancelled) {
           setLoading(false);

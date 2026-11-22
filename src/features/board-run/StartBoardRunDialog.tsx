@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 
 import { Modal } from '@/shared/components/Modal';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type { Issue } from '@/shared/types';
 import type { BoardRun } from '@/shared/types/boardRun';
 import { dependencyNote, runCandidates } from './boardRunPresentation';
@@ -56,7 +56,7 @@ export const StartBoardRunDialog: React.FC<{
       onStarted(run);
       onClose();
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'The run could not start.');
+      setError(userMessage(failure, 'The run could not start.'));
     } finally {
       setBusy(false);
     }

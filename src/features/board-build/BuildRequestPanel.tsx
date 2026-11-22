@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '@/app/AppContext';
-import { apiService, type IssueBuildStatus } from '@/shared/services/apiService';
+import { apiService, type IssueBuildStatus, userMessage } from '@/shared/services/apiService';
 import type { Issue } from '@/shared/types';
 
 export function BuildRequestPanel({ issue, build, onChanged, onOpenTask }: {
@@ -27,14 +27,14 @@ export function BuildRequestPanel({ issue, build, onChanged, onOpenTask }: {
       <button type="button" disabled={busy} className="rounded border border-control px-3 py-1 text-link" onClick={async () => {
         setBusy(true); setError('');
         try { await apiService.requestIssueBuild(issue.projectId, issue.id, { requestId: crypto.randomUUID(), instructions, queue: true }); onChanged?.(); }
-        catch (failure) { setError(failure instanceof Error ? failure.message : 'The plan was not queued.'); }
+        catch (failure) { setError(userMessage(failure, 'The plan was not queued.')); }
         finally { setBusy(false); }
       }}>Queue plan</button>
     </>}
     {allowed && request?.status === 'waiting' && <button type="button" disabled={busy} className="text-link" onClick={async () => {
       setBusy(true); setError('');
       try { await apiService.cancelBuildRequest(issue.projectId, request.id); onChanged?.(); }
-      catch (failure) { setError(failure instanceof Error ? failure.message : 'The queued request was not removed.'); }
+      catch (failure) { setError(userMessage(failure, 'The queued request was not removed.')); }
       finally { setBusy(false); }
     }}>Remove queued request</button>}
     {error && <p role="alert" className="text-status-danger">{error}</p>}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import { useInAppDialog } from '@/shared/components/InAppDialog';
 
 export function ReviewedRecoveryPanel({ projectId, runId, canControl, onChanged }: { projectId: string; runId: string; canControl: boolean; onChanged: () => void }) {
@@ -14,7 +14,7 @@ export function ReviewedRecoveryPanel({ projectId, runId, canControl, onChanged 
     <button type="button" disabled={busy} className="text-link" onClick={async () => {
       setBusy(true); setError(''); setReviewed(false);
       try { setCandidate(await apiService.getRecoveryCandidate(projectId, runId)); }
-      catch (failure) { setError(failure instanceof Error ? failure.message : 'Saved work could not be loaded.'); }
+      catch (failure) { setError(userMessage(failure, 'Saved work could not be loaded.')); }
       finally { setBusy(false); }
     }}>Review saved work</button>
     {candidate && <>
@@ -29,7 +29,7 @@ export function ReviewedRecoveryPanel({ projectId, runId, canControl, onChanged 
           if (!await confirm('Restore this archive?', 'It is restored into the unchanged, clean candidate. It remains unverified and will not start an agent.', 'Restore')) return;
           setBusy(true); setError(''); setReviewed(false);
           try { await apiService.restoreRecoveryArchive(projectId, runId, { expectedRevision: candidate.runRevision, taskId: candidate.taskId, archiveId: archive.id, archiveHash: archive.hash, candidateHash: candidate.candidateHash }); setCandidate(await apiService.getRecoveryCandidate(projectId, runId)); onChanged(); }
-          catch (failure) { setError(failure instanceof Error ? failure.message : 'Archive restoration failed. Review the candidate before continuing.'); }
+          catch (failure) { setError(userMessage(failure, 'Archive restoration failed. Review the candidate before continuing.')); }
           finally { setBusy(false); }
         }}>Restore inspected archive</button>}
       </details>)}
@@ -41,7 +41,7 @@ export function ReviewedRecoveryPanel({ projectId, runId, canControl, onChanged 
         <button type="button" disabled={busy || !reviewed || guidance.trim().length < 20} className="rounded border border-control px-3 py-1 text-link" onClick={async () => {
           setBusy(true); setError('');
           try { await apiService.restartReviewedRecovery(projectId, runId, { expectedRevision: candidate.runRevision, taskId: candidate.taskId, taskRevision: candidate.taskRevision, candidateHash: candidate.candidateHash, guidance }); setCandidate(null); onChanged(); }
-          catch (failure) { setError(failure instanceof Error ? failure.message : 'Recovery was not started.'); setReviewed(false); }
+          catch (failure) { setError(userMessage(failure, 'Recovery was not started.')); setReviewed(false); }
           finally { setBusy(false); }
         }}>Authorize recovery restart</button>
       </>}

@@ -12,7 +12,7 @@ import {
   Square,
   Wrench
 } from 'lucide-react';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type {
   LiveBuildRecoveryAction,
   LiveBuildRecoveryProjection,
@@ -113,7 +113,7 @@ export const OrchestrationRecoveryPanel: React.FC<OrchestrationRecoveryPanelProp
       await onActionComplete?.(result.state);
       if (action === 'review_saved_changes') onOpenReview?.();
     } catch (caught: any) {
-      setError(caught?.message ?? 'Alpha could not complete this recovery action. Refresh the build and try again.');
+      setError(userMessage(caught, 'Alpha could not complete this recovery action. Refresh the build and try again.'));
     } finally {
       setBusyAction(null);
     }

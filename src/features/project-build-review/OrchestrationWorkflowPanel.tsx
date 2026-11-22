@@ -22,7 +22,7 @@ import {
   Square,
   Workflow
 } from 'lucide-react';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type { ProjectBuildDiffPreview, ProjectBuildOrchestration, LiveBuildTaskStatus } from '@/shared/types';
 
 interface OrchestrationWorkflowPanelProps {
@@ -365,7 +365,7 @@ export const ReviewDiff: React.FC<{ projectId: string; runId: string; branchName
       setPreview(await apiService.getOrchestrationDiffPreview(projectId, runId));
       onReady?.();
     } catch (caught: any) {
-      setError(caught?.message ?? 'The validated changes could not be loaded. Refresh the build and try again.');
+      setError(userMessage(caught, 'The validated changes could not be loaded. Refresh the build and try again.'));
     } finally {
       setLoading(false);
     }

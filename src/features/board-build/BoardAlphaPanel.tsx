@@ -3,7 +3,7 @@ import { Bot, ChevronRight, ListPlus, Play, Send, Sparkles } from 'lucide-react'
 import { useApp } from '@/app/AppContext';
 import { ChatSidePanel } from '@/features/chat/ChatSidePanel';
 import { MessageMarkdown } from '@/features/chat/MessageMarkdown';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type { BoardAgentChange, ChatMessage, Issue, IssueStatus, SystemProposal } from '@/shared/types';
 import { isBoardThreadId } from './useTaskBuild';
 import { AgentChangesList } from '@/features/board-agent/AgentChangesList';
@@ -112,7 +112,7 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
         const history = await apiService.getChatMessages(thread.id);
         if (!cancelled) setMessages(history.filter(message => message.senderType !== 'system'));
       })
-      .catch(failure => { if (!cancelled) setError(failure instanceof Error ? failure.message : 'Alpha could not open this conversation.'); });
+      .catch(failure => { if (!cancelled) setError(userMessage(failure, 'Alpha could not open this conversation.')); });
     return () => { cancelled = true; };
   }, [projectId]);
 
@@ -146,7 +146,7 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
       const history = await apiService.getChatMessages(id);
       setMessages(history.filter(message => message.senderType !== 'system'));
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Your question was not sent.');
+      setError(userMessage(failure, 'Your question was not sent.'));
     } finally {
       setBusy(null);
       onWorkingChange?.(false);
@@ -165,7 +165,7 @@ export const BoardAlphaPanel: React.FC<BoardAlphaPanelProps> = ({
       setKept(new Set(next.epics.map((_epic, index) => index)));
       setInput('');
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : 'Alpha could not suggest tasks.');
+      setError(userMessage(failure, 'Alpha could not suggest tasks.'));
     } finally {
       setBusy(null);
     }
