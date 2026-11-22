@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiService, parseApiError, type IssueBuildStatus } from '@/shared/services/apiService';
+import { apiService, parseApiError, type IssueBuildStatus, userMessage } from '@/shared/services/apiService';
 import type { ChatMessage, FeatureSpec, FeatureSpecRecord, Issue, ProjectBuildOrchestration, ProjectBuildSnapshot } from '@/shared/types';
 
 const RUNNING = new Set(['planning', 'executing', 'validating', 'publishing', 'cancelling']);
 const OPEN = new Set(['planning', 'awaiting_plan_approval', 'executing', 'paused', 'validating', 'awaiting_approval', 'publishing', 'cancelling', 'blocked', 'recovery_required']);
 
-const message = (error: unknown, fallback: string) => error instanceof Error ? error.message : fallback;
+const message = (error: unknown, fallback: string) => userMessage(error, fallback);
 
 /** Board threads start with this prefix; see the backend's boardThreads.ts. */
 export const isBoardThreadId = (threadId?: string) => Boolean(threadId?.startsWith('task-'));

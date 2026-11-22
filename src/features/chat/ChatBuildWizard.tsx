@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { OrchestrationPlanPreview } from '../project-build-review/OrchestrationPlanPreview';
+import { OrchestrationRecoveryPanel } from './OrchestrationRecoveryPanel';
 import { AlertTriangle, ChevronDown, ExternalLink, LoaderCircle, Square, X } from 'lucide-react';
 
 import { buildStepFor, type WizardStep } from './buildSteps';
@@ -237,6 +238,10 @@ export interface ChatBuildWizardProps {
   onStopBlocker?: () => void;
   onOpenBlocker?: () => void;
   onOpenReview?: () => void;
+  /** The conversation this build belongs to, for recovery direction sent from the card. */
+  threadId?: string;
+  /** After a recovery action from the card, so the chat catches up. */
+  onRecoveryDone?: () => void | Promise<void>;
 }
 
 /**
@@ -279,6 +284,7 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   let subtitle: string;
   let body: React.ReactNode = null;
   let options: Option[] = [];
+  let recoveryPanelShown = false;
 
   if (!build && failure?.blocker) {
     const name = failure.blocker.issueIdentifier ?? 'Another build';
@@ -339,6 +345,27 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
           {noAutomaticStep && <p className="text-[11px] leading-4 text-content-secondary">{noAutomaticStep}</p>}
           <Progress build={build} />
         </>;
+        // A saved recovery: the card shows the same actions, labels and direction box as every
+        // other place a stopped build appears, through the one recovery panel, so no action
+        // that would continue the build is missing here.
+        // Final checks keep the card's own worded steps (re-run, send to owners).
+        const activeRecovery = !auditPlan && recovery && recovery.category !== 'final_validation' && !['resolved', 'cancelled'].includes(recovery.phase) ? recovery : undefined;
+        if (activeRecovery) {
+          body = <>
+            {reason && <p className="whitespace-pre-wrap rounded-xl border border-status-warning-border bg-status-warning-subtle px-3 py-2.5 text-[11px] leading-5 text-status-warning">{reason}</p>}
+            {noAutomaticStep && <p className="text-[11px] leading-4 text-content-secondary">{noAutomaticStep}</p>}
+            <OrchestrationRecoveryPanel projectId={props.projectId} runId={build.runId} threadId={props.threadId}
+              runRevision={build.orchestration.run.revision}
+              taskRevision={activeRecovery.taskId ? build.orchestration.tasks.find(task => task.id === activeRecovery.taskId)?.revision : undefined}
+              recovery={activeRecovery} canControl={props.canStart} onOpenReview={props.onOpenReview}
+              onActionComplete={() => props.onRecoveryDone?.()} compact />
+            <Progress build={build} />
+          </>;
+          // The panel has its own stop; the card keeps one only for its folded header.
+          options = props.canStop ? [stopOption('Stop the build', 'Work saved on the build branch stays available.')] : [];
+          recoveryPanelShown = true;
+          break;
+        }
         options = [
           ...(auditPlan ? [{ label: 'Plan with Security', hint: 'The Orchestrator prepares a revised audit-and-fix plan for your review.', onSelect: auditPlan, tone: 'primary' as const, busy: busy === 'continue', disabled: !props.canStart }] : []),
           ...(choice ? [{ label: choice.label, hint: choice.hint, onSelect: () => props.onContinue(choice.action), tone: 'primary' as const, busy: busy === 'continue' }] : []),
@@ -378,6 +405,8 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
     const labels = options.map(option => option.label);
     options = [...refusalOptions(props.refusal.actions, props, stopOption).filter(option => !labels.includes(option.label)), ...options];
   }
+  // With the recovery panel open, its actions are the card's; the card's own stop stays for the folded header only.
+  if (recoveryPanelShown && !collapsed) options = [];
   const border = failed ? 'border-status-danger-border' : attention ? 'border-status-warning-border' : 'border-divider';
   const showsPlan = Boolean(build && !['planning', 'awaiting_plan_approval', 'awaiting_approval', 'publishing'].includes(build.status));
   const hasDetails = showsPlan || Boolean(body || options.length || props.error);

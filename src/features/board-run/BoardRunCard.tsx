@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { ListChecks, Loader2, Pause, Play, Square } from 'lucide-react';
 
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type { BoardRun } from '@/shared/types/boardRun';
 import { runSpend, runStatusLabel, taskStateLabel } from './boardRunPresentation';
 
@@ -29,7 +29,7 @@ export const BoardRunCard: React.FC<{
     setBusy(action);
     setError('');
     try { onChange(await apiService.boardRunAction(run.projectId, run.id, action)); }
-    catch (failure) { setError(failure instanceof Error ? failure.message : 'The run could not be changed.'); }
+    catch (failure) { setError(userMessage(failure, 'The run could not be changed.')); }
     finally { setBusy(null); }
   };
   const live = ['running', 'waiting_on_you', 'paused'].includes(run.status);

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, FolderGit2, Loader2 } from 'lucide-react';
 
 import { useApp } from '@/app/AppContext';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 
 /**
  * Which project a conversation is about.
@@ -103,7 +103,7 @@ export function ThreadProjectPicker({ threadId, projectId, buttonLabel }: Readon
       }
     } catch (err: any) {
       setSelected(previous);
-      showToast('Project not set', err?.message ?? String(err), 'error');
+      showToast('Project not set', userMessage(err, 'The project could not be set.'), 'error');
     } finally {
       setBusy(false);
     }

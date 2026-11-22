@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, FileSearch, GitBranch, LoaderCircle, ShieldAlert } from 'lucide-react';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 import type { LiveBuildPlanningRecovery, LiveBuildPlanningRecoveryPreview } from '@/shared/types';
 
 interface PlanningRecoveryPanelProps {
@@ -37,7 +37,7 @@ export const PlanningRecoveryPanel: React.FC<PlanningRecoveryPanelProps> = ({ pr
       setConfirmRunId(null);
       onChanged();
     } catch (error: any) {
-      setErrorByRunId(current => ({ ...current, [runId]: error?.message ?? 'The saved workspace could not be recovered. Refresh and try again.' }));
+      setErrorByRunId(current => ({ ...current, [runId]: userMessage(error, 'The saved workspace could not be recovered. Refresh and try again.') }));
     } finally {
       setBusyRunId(null);
     }
@@ -51,7 +51,7 @@ export const PlanningRecoveryPanel: React.FC<PlanningRecoveryPanelProps> = ({ pr
       const preview = await apiService.getOrchestrationPlanningRecoveryPreview(projectId, recovery.runId);
       setPreviewByRunId(current => ({ ...current, [recovery.runId]: preview }));
     } catch (error: any) {
-      setErrorByRunId(current => ({ ...current, [recovery.runId]: error?.message ?? 'The saved changes could not be previewed.' }));
+      setErrorByRunId(current => ({ ...current, [recovery.runId]: userMessage(error, 'The saved changes could not be previewed.') }));
     } finally {
       setBusyRunId(null);
     }

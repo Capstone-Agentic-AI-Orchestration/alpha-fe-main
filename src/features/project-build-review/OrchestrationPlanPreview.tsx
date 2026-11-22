@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Download, FileText, X } from 'lucide-react';
 import { apiService } from '../../shared/services/apiService';
+import { userMessage } from '@/shared/services/apiService';
 
 type PlanDocument = Awaited<ReturnType<typeof apiService.getOrchestrationPlans>>['documents'][number];
 
@@ -62,7 +63,7 @@ export function PlanDocumentTab({ projectId, runId, planVersion }: { projectId: 
     setError('');
     void apiService.getOrchestrationPlans(projectId, runId)
       .then(result => { if (!cancelled) setDocuments(result.documents); })
-      .catch(failure => { if (!cancelled) setError(failure instanceof Error ? failure.message : 'The plan document could not be loaded.'); });
+      .catch(failure => { if (!cancelled) setError(userMessage(failure, 'The plan document could not be loaded.')); });
     return () => { cancelled = true; };
   }, [projectId, runId, retry]);
   if (error) return <p role="alert" className="p-5 text-xs text-status-danger">{error} <button type="button" onClick={() => setRetry(value => value + 1)} className="underline">Retry</button></p>;
@@ -98,7 +99,7 @@ export function OrchestrationPlanPreview({ projectId, runId, planVersion, autoSh
         else setOpen(true);
       }
       readyCallback.current?.(planVersion);
-    }).catch(failure => { if (!cancelled) setError(failure instanceof Error ? failure.message : 'The plan document could not be loaded.'); });
+    }).catch(failure => { if (!cancelled) setError(userMessage(failure, 'The plan document could not be loaded.')); });
     return () => { cancelled = true; };
   }, [projectId, runId, planVersion, autoShow, retry]);
   useEffect(() => { if (open) closeButton.current?.focus(); }, [open]);

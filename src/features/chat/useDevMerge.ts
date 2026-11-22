@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 
 type DeliveryApi = Pick<typeof apiService, 'getOrchestrationDelivery' | 'orchestrationDeliveryAction'>;
 
@@ -23,7 +23,7 @@ export async function mergeIntoDev(projectId: string, runId: string, key: string
     const names = merged.repositories.map(repo => repoName(repo.repository)).join(', ');
     return { merged: true, message: `Merged ${names || 'the pull request'} into dev. CI runs on dev next; promotion to UAT is a separate step.` };
   } catch (error) {
-    return { merged: false, message: `Not merged: ${error instanceof Error ? error.message : 'the merge request failed. Refresh and try again.'}` };
+    return { merged: false, message: `Not merged: ${userMessage(error, 'the merge request failed. Refresh and try again.')}` };
   }
 }
 

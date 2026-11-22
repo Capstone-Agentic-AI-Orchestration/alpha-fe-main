@@ -26,6 +26,17 @@ const render = (overrides: Partial<ChatBuildWizardProps>) => renderToStaticMarku
   {...overrides} />);
 
 describe('the build panel above the message box', () => {
+  it('shows a stopped build\'s saved recovery with every action the recovery panel has', () => {
+    const blocked = build('blocked', 'The specialist reported a blocker: The scoped project file tool rejected replacement of src/App.tsx.');
+    blocked.orchestration.recovery = { id: 'rec-1', runId: 'run-1', phase: 'waiting_for_user', category: 'project_code', code: 'task_project_code',
+      summary: 'A tool stopped the task.', taskId: 't1', taskTitle: 'Add the login page', attemptsUsed: 1, repairBudget: 2, episodeNumber: 1, revision: 1,
+      createdAt: '', updatedAt: '', availableActions: ['explain_failure', 'review_saved_changes', 'repair_and_continue', 'provide_guidance', 'keep_paused', 'cancel_build'], actionReasons: {} };
+    const html = render({ build: blocked, threadId: 'thread-1' });
+    for (const label of ['Explain issue', 'Retry failed step', 'Provide direction', 'Review saved changes', 'Keep paused', 'Cancel build']) expect(html).toContain(label);
+    expect(html).not.toContain('>Tell the Orchestrator what to do<');
+    expect(html.match(/Stop the build/g) ?? []).toHaveLength(0);
+  });
+
   it('offers a reviewable Security plan instead of blindly retrying missing audit evidence', () => {
     const html = render({ build: build('blocked', 'The task has no dependency audit findings.'), onAuditPlan: noop });
     expect(html).toContain('Plan with Security');
@@ -192,7 +203,8 @@ describe('the build panel above the message box', () => {
 
   it('does not offer to continue when the server allows no automatic step', () => {
     const stopped = build('blocked', 'The agent needs the API contract.');
-    (stopped.orchestration as any).recovery = { category: 'project_code', availableActions: ['explain_failure', 'provide_guidance'], actionReasons: { repair_and_continue: 'Tell the agent where the contract is.' } };
+    (stopped.orchestration as any).recovery = { id: 'rec-2', runId: 'run-1', phase: 'waiting_for_user', code: 'task_project_code', summary: 'The agent needs the API contract.', attemptsUsed: 1, repairBudget: 2, episodeNumber: 1, revision: 1, createdAt: '', updatedAt: '',
+      category: 'project_code', availableActions: ['explain_failure', 'provide_guidance'], actionReasons: { repair_and_continue: 'Tell the agent where the contract is.' } };
     expect(continueChoice(stopped)).toBeNull();
     const html = render({ build: stopped });
     expect(html).not.toContain('Fix and continue');

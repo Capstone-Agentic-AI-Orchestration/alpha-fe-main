@@ -7,6 +7,7 @@ import { Card } from '@/shared/components/ui/card';
 import { Textarea } from '@/shared/components/ui/textarea';
 import type { Skill } from '@/shared/types';
 import { MAX_SELECTED_SKILLS } from './ChatSkillCommand';
+import { userMessage } from '@/shared/services/apiService';
 
 export interface ChatSkillToolsProps {
   skills: Skill[];
@@ -69,7 +70,7 @@ export function ChatSkillTools({
     try {
       setSuggestion(await onImprove(draft, [...selectedSkillIds]));
     } catch (error) {
-      onError(error instanceof Error ? error.message : 'The prompt could not be improved.');
+      onError(userMessage(error, 'The prompt could not be improved.'));
     } finally {
       setImproving(false);
     }

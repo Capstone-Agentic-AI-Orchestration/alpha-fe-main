@@ -7,7 +7,7 @@ import { OrchestratorReport, buildRepositoriesLabel } from './ChatBuildWizard';
 import { approvalBlocker } from './useBuildApproval';
 import type { ProjectLiveBuild } from './useProjectLiveBuild';
 import { buildAgentNodes, snapshotBelongsToThread } from './useProjectLiveBuild';
-import { apiService } from '@/shared/services/apiService';
+import { apiService, userMessage } from '@/shared/services/apiService';
 
 export interface BuildReviewTabProps {
   projectId: string;
@@ -33,7 +33,7 @@ export const SavedBuildReviewTab: React.FC<{ projectId: string; runId: string; t
       if (!orchestration || orchestration.run.id !== runId || !snapshotBelongsToThread(snapshot, threadId)) throw new Error('This review does not belong to this conversation.');
       setBuild({ runId, status: orchestration.run.status, revision: orchestration.run.revision, repository: orchestration.run.repository,
         goal: orchestration.run.goal, running: false, canControl: false, agents: buildAgentNodes(snapshot), orchestration });
-    }).catch(failure => { if (!cancelled) setError(failure instanceof Error ? failure.message : 'The saved review could not be loaded.'); });
+    }).catch(failure => { if (!cancelled) setError(userMessage(failure, 'The saved review could not be loaded.')); });
     return () => { cancelled = true; };
   }, [projectId, runId, threadId, retry]);
   if (error) return <div className="space-y-2 p-4"><p role="alert" className="text-xs text-status-danger">{error}</p><button type="button" onClick={() => setRetry(value => value + 1)} className="text-xs text-link underline">Retry</button></div>;
