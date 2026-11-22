@@ -85,6 +85,7 @@ import { BuildAgentActivityPanel } from './BuildAgentActivityPanel';
 import { ChatSidePanel, type SidePanelTab } from './ChatSidePanel';
 import { BuildReviewTab, SavedBuildReviewTab } from './BuildReviewTab';
 import { LiveChangesView } from './LiveChangesView';
+import { buildActivityAnchors } from './buildActivityAnchor';
 import { ChatBuildWizard, planningFailureReason, type BuildPlanningFailure } from './ChatBuildWizard';
 import { BuildNextStepCard } from './BuildNextStepCard';
 import { buildHandoffs, buildStatusLabel, needsSecurityAuditPlan, useProjectLiveBuild } from './useProjectLiveBuild';
@@ -265,11 +266,14 @@ function OrchestratorBuildActivityRow({
   withdrawing = false,
   canApprove = false,
   onAskChanges,
-  onApproved
+  onApproved,
+  stop
 }: {
   projectId: string;
   runId: string;
   threadId: string;
+  /** Stop this build from where its progress shows; only for the conversation's live build. */
+  stop?: { label: string; busy: boolean; onStop: () => void };
   onOpenReview: () => void;
   /** Whether this person may approve the finished build from its next-step card. */
   canApprove?: boolean;
@@ -429,6 +433,10 @@ function OrchestratorBuildActivityRow({
     {onWithdraw && (status === 'planning' || status === 'awaiting_plan_approval') && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-divider px-3 py-2 text-[10px] text-content-secondary">
       <span>No code has changed yet. Review the plan, or tell Alpha this was only a question.</span>
       <button type="button" onClick={onWithdraw} disabled={withdrawing} className="rounded-md border border-divider px-2 py-1 font-medium text-content hover:bg-surface-high disabled:opacity-50">{withdrawing ? 'Answering…' : 'This was just a question'}</button>
+    </div>}
+    {stop && status && !['completed', 'failed', 'cancelled', 'cancelling', 'publishing', 'awaiting_approval'].includes(status) && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-divider px-3 py-2 text-[10px] text-content-secondary">
+      <span>{status === 'planning' || status === 'awaiting_plan_approval' ? 'No code has changed yet.' : 'Work already on the build branch stays available if you stop.'}</span>
+      <button type="button" onClick={stop.onStop} disabled={stop.busy} className="inline-flex items-center gap-1 rounded-md border border-status-danger-border px-2 py-1 font-medium text-status-danger hover:bg-status-danger-subtle disabled:opacity-50"><Square className="h-3 w-3 fill-current" />{stop.label}</button>
     </div>}
     {activeRecovery && orchestration && snapshot && <div className="border-t border-divider p-2.5">
       <OrchestrationRecoveryPanel
@@ -1887,6 +1895,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
 
 
 
+  const activityMessageByRun = buildActivityAnchors(currentMessages);
   let stopBuildLabel: string;
   if (stoppingProjectRunId) stopBuildLabel = 'Stopping…';
   else stopBuildLabel = liveBuild?.status === 'awaiting_plan_approval' ? 'Stop plan' : 'Stop build';
@@ -2075,7 +2084,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
   }
   return setupRequired ? <button type="button" onClick={openProjectSetup} className="px-3 py-2 text-xs text-content-secondary">Review project setup</button> : null;
-})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>; })}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
+})()}</div> : <MessageMarkdown content={message.content} />}</div>{isUser && <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>}{!isUser && message.messageType === 'build' && message.orchestrationRunId && project?.id && activityMessageByRun.get(message.orchestrationRunId) === message.id && <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} stop={canStopBuild && liveBuild?.runId === message.orchestrationRunId ? { label: stopArmed ? 'Click again to stop' : stopBuildLabel, busy: Boolean(stoppingProjectRunId), onStop: () => void stopProjectBuild() } : undefined} />}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>; })}{previews.record && !previewAnchor && <WebPreviewCard record={previews.record} onOpen={openPreview} />}{boardRunCards(null)}</div></div>
 
           <div ref={composerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-20 bg-shell px-5 pb-4 pt-2 before:pointer-events-none before:absolute before:inset-x-0 before:bottom-full before:h-10 before:bg-gradient-to-t before:from-shell before:to-transparent before:content-[''] lg:px-7 lg:pb-6">
             <div className="pointer-events-auto mx-auto w-full max-w-6xl space-y-2">
