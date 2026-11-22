@@ -5,6 +5,7 @@ import { useApp } from '@/app/AppContext';
 import { BuildReviewTab } from '@/features/chat/BuildReviewTab';
 import { ReviewBody } from '@/features/chat/ChatBuildBodies';
 import { OrchestrationDeliveryPanel } from '@/features/chat/OrchestrationDeliveryPanel';
+import { startCorrectionText } from '@/features/chat/ChatBuildWizard';
 import { OrchestrationRecoveryPanel } from '@/features/chat/OrchestrationRecoveryPanel';
 import { BUILD_STEPS, buildStepFor } from '@/features/chat/buildSteps';
 import { buildAgentNodes } from '@/features/chat/useProjectLiveBuild';
@@ -139,6 +140,8 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
   const [showDiff, setShowDiff] = useState(false);
   const [question, setQuestion] = useState('');
   const [confirmStop, setConfirmStop] = useState(false);
+  // A plan the Orchestrator fixed before it could start: what changed, waiting for Start again.
+  const [correction, setCorrection] = useState('');
 
   const act = async (label: string, action: () => Promise<unknown>) => {
     setBusy(label);
@@ -230,6 +233,7 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
         )}
       </div>
 
+      {correction && <p role="status" className="whitespace-pre-wrap rounded-md border border-divider bg-selected px-3 py-2 text-[12.5px] text-content">{correction}</p>}
       {error && !lostText && <p role="alert" className="rounded-md border border-status-danger-border bg-status-danger-subtle px-3 py-2 text-[12.5px] text-status-danger">{error}</p>}
 
       {status === 'awaiting_plan_approval' && (
@@ -243,7 +247,11 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
           )}
           {canDecide && (
             <div className="flex flex-wrap gap-2">
-              <button type="button" disabled={Boolean(busy)} onClick={() => void act('start', () => apiService.startPlannedOrchestration(issue.projectId, run.id, run.revision))} className={primary}>
+              <button type="button" disabled={Boolean(busy)} onClick={() => void act('start', async () => {
+                setCorrection('');
+                const result = await apiService.startPlannedOrchestration(issue.projectId, run.id, run.revision);
+                if (result.corrected) setCorrection(startCorrectionText(result.corrected));
+              })} className={primary}>
                 <Play aria-hidden="true" className="h-3.5 w-3.5" /> Approve plan and build
               </button>
               <button type="button" disabled={Boolean(busy)} onClick={() => setChangingPlan(value => !value)} className={secondary}>Revise plan</button>
@@ -377,7 +385,7 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
           ? (
             <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
               <span className="text-content-secondary">Stop this build? Saved work is kept for review.</span>
-              <button type="button" disabled={Boolean(busy)} onClick={() => void act('stop', () => apiService.cancelOrchestration(issue.projectId, run.id, run.revision)).then(() => setConfirmStop(false))} className={`${button} bg-status-danger text-on-accent`}>
+              <button type="button" disabled={Boolean(busy)} onClick={() => void act('stop', () => apiService.cancelOrchestration(issue.projectId, run.id)).then(() => setConfirmStop(false))} className={`${button} bg-status-danger text-on-accent`}>
                 <Square aria-hidden="true" className="h-3 w-3" /> Stop build
               </button>
               <button type="button" onClick={() => setConfirmStop(false)} className={secondary}>Keep building</button>

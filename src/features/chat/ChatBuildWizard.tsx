@@ -14,6 +14,11 @@ export interface BuildRefusal { message: string; actions: RefusalAction[] }
 /** A plan the Orchestrator corrected before it could start, waiting for the person to start it. */
 export interface PlanCorrection { runId: string; planVersion: number; changes: string[] }
 
+/** The words for a plan the Orchestrator fixed before it could start, used wherever a plan is started. */
+export function startCorrectionText(corrected: { planVersion: number; changes: string[] }): string {
+  return [`The Orchestrator fixed the plan before it could start (v${corrected.planVersion}). What changed:`, ...corrected.changes.map(line => `- ${line}`), 'Read it, then start it.'].join('\n');
+}
+
 /** A failed request that carries next steps becomes a reason with buttons; anything else stays an error. */
 export function buildRefusalFrom(error: unknown): BuildRefusal | null {
   if (!(error instanceof ApiRequestError) || !error.actions.length) return null;
