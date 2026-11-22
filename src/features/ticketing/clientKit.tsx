@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { ArrowLeft, ChevronRight, FolderKanban } from 'lucide-react';
 import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
@@ -101,7 +101,7 @@ export function CxChips<T extends string>({ label, value, options, onChange, dis
 }
 
 export function CxEmpty({ icon, title, body, action }: { icon?: ReactNode; title: string; body?: string; action?: ReactNode }) {
-  return <div className="cx-empty">{icon && <span className="cx-empty-icon" aria-hidden="true">{icon}</span>}
+  return <div className="cx-empty"><CxOrbit className="cx-empty-art" />{icon && <span className="cx-empty-icon" aria-hidden="true">{icon}</span>}
     <p className="cx-empty-title">{title}</p>{body && <p>{body}</p>}{action}</div>;
 }
 
@@ -133,7 +133,7 @@ export function CxRequestRow({ item, onOpen, disabled, compact = false }: {
   </CxRow>;
 }
 
-/** A few counts side by side, such as "Needs you 2 · In progress 3 · Done 1". */
+/** A few counts side by side, shown as "2 Open · 1 Done". */
 export function CxStats({ label, items }: { label: string; items: Array<{ label: string; value: number; tone?: 'attention' | 'done' }> }) {
   return <dl className="cx-stats" aria-label={label}>
     {items.map(item => <div key={item.label} className={'cx-stat' + (item.tone && item.value ? ' is-' + item.tone : '')}>
@@ -141,17 +141,104 @@ export function CxStats({ label, items }: { label: string; items: Array<{ label:
   </dl>;
 }
 
-/** A message from the project manager, quoted with where and when it was written. */
-export function CxQuote({ body, meta, action }: { body: string; meta: ReactNode; action?: ReactNode }) {
-  return <div className="cx-quote">
-    <span className="cx-quote-avatar" aria-hidden="true">PM</span>
-    <div className="cx-quote-copy"><p>{body}</p><small>{meta}</small>{action}</div>
-  </div>;
+/** A page's opening band: open on the page (no box), large headline, with the orbit art on the right. */
+export function CxHero({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <div className={'cx-hero' + (className ? ' ' + className : '')}><CxOrbit className="cx-hero-art" />{children}</div>;
 }
 
-/** A page's opening band: large headline on a soft glow in the theme's accent colours. */
-export function CxHero({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={'cx-hero' + (className ? ' ' + className : '')}>{children}</div>;
+/** A four-point sparkle centred on (x, y), as used where the orbit rings cross. */
+function sparkle(x: number, y: number, size: number): string {
+  return `M${x} ${y - size} Q${x} ${y} ${x + size} ${y} Q${x} ${y} ${x} ${y + size} Q${x} ${y} ${x - size} ${y} Q${x} ${y} ${x} ${y - size}Z`;
+}
+
+/** SVG ids must be unique on the page, and React's ids contain colons that url(#…) references dislike. */
+function useArtId(): string {
+  return 'cx-art' + useId().replace(/:/g, '');
+}
+
+/**
+ * Alphaexplora's orbit rings, the portal's decorative motif. Drawn from the theme's accent colour
+ * (clientKit.css) so the same art reads as a glow on dark themes and as fine lines on light ones.
+ */
+export function CxOrbit({ className = '' }: { className?: string }) {
+  const id = useArtId();
+  return <svg className={'cx-orbit ' + className} viewBox="0 0 560 320" aria-hidden="true" focusable="false">
+    <defs>
+      <linearGradient id={id + '-line'} x1="0" y1="0" x2="1" y2="1">
+        <stop offset="0" className="cx-art-stop-faint" />
+        <stop offset=".45" className="cx-art-stop-strong" />
+        <stop offset="1" className="cx-art-stop-clear" />
+      </linearGradient>
+      <radialGradient id={id + '-glow'}>
+        <stop offset="0" className="cx-art-stop-glow" />
+        <stop offset="1" className="cx-art-stop-clear" />
+      </radialGradient>
+    </defs>
+    <ellipse cx="300" cy="165" rx="220" ry="130" fill={`url(#${id}-glow)`} />
+    <g fill="none" stroke={`url(#${id}-line)`}>
+      <ellipse className="cx-orbit-band" cx="300" cy="168" rx="236" ry="76" transform="rotate(-12 300 168)" />
+      <ellipse className="cx-orbit-line" cx="300" cy="168" rx="236" ry="76" transform="rotate(-12 300 168)" />
+      <ellipse className="cx-orbit-band" cx="318" cy="150" rx="150" ry="104" transform="rotate(-38 318 150)" />
+      <ellipse className="cx-orbit-line" cx="318" cy="150" rx="150" ry="104" transform="rotate(-38 318 150)" />
+      <ellipse className="cx-orbit-line is-faint" cx="292" cy="176" rx="190" ry="118" transform="rotate(8 292 176)" />
+    </g>
+    <path className="cx-orbit-spark" d={sparkle(394, 124, 14)} />
+    <path className="cx-orbit-spark is-small" d={sparkle(526, 112, 8)} />
+    <circle className="cx-orbit-star" cx="128" cy="62" r="1.6" />
+    <circle className="cx-orbit-star" cx="214" cy="286" r="1.2" />
+    <circle className="cx-orbit-star" cx="470" cy="38" r="1.4" />
+  </svg>;
+}
+
+const COVER_ART = ['orbit', 'wave', 'cubes'] as const;
+
+/** One line of the wave artwork; each step sits a little lower and flatter than the last. */
+function waveLine(step: number): string {
+  return `M-10 ${118 + step * 5}C70 ${40 + step * 9} 150 ${180 - step * 7} 330 ${58 + step * 8}`;
+}
+
+/** One isometric cube's three faces around (x, y). */
+function Cube({ x, y, size }: { x: number; y: number; size: number }) {
+  const w = size * 0.866;
+  const h = size / 2;
+  return <g className="cx-cube">
+    <path className="is-top" d={`M${x} ${y - size}L${x + w} ${y - h}L${x} ${y}L${x - w} ${y - h}Z`} />
+    <path className="is-left" d={`M${x - w} ${y - h}L${x} ${y}L${x} ${y + size}L${x - w} ${y + h}Z`} />
+    <path className="is-right" d={`M${x} ${y}L${x + w} ${y - h}L${x + w} ${y + h}L${x} ${y + size}Z`} />
+  </g>;
+}
+
+/**
+ * Artwork for a project card before a preview is shared. The same project always gets the same
+ * picture (orbit, wave or cubes, picked from `seed`), so cards stay recognisable between visits.
+ */
+export function CxCoverArt({ seed }: { seed: string }) {
+  const id = useArtId();
+  const kind = COVER_ART[[...seed].reduce((total, character) => total + character.charCodeAt(0), 0) % COVER_ART.length];
+  if (kind === 'orbit') return <div className="cx-cover-art"><CxOrbit /></div>;
+  return <div className="cx-cover-art">
+    <svg viewBox="0 0 320 200" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">
+      <defs>
+        <linearGradient id={id + '-line'} x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" className="cx-art-stop-clear" />
+          <stop offset=".5" className="cx-art-stop-strong" />
+          <stop offset="1" className="cx-art-stop-faint" />
+        </linearGradient>
+      </defs>
+      {kind === 'wave'
+        ? <g fill="none" stroke={`url(#${id}-line)`} className="cx-wave">
+          <path className="is-glow" d={waveLine(3)} />
+          {[0, 1, 2, 3, 4, 5, 6, 7].map(step => <path key={step} style={{ opacity: 1 - step * 0.1 }} d={waveLine(step)} />)}
+        </g>
+        : <g>
+          <Cube x={92} y={88} size={34} />
+          <Cube x={164} y={46} size={30} />
+          <Cube x={226} y={104} size={38} />
+          <Cube x={150} y={150} size={26} />
+          <Cube x={290} y={30} size={22} />
+        </g>}
+    </svg>
+  </div>;
 }
 
 /** A round progress meter, 0 to 100, with the number in the middle. */

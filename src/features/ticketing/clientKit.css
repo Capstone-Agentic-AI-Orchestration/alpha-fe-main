@@ -8,8 +8,9 @@
   --cx-raised: rgb(var(--ui-raised));
   --cx-line: rgb(var(--ui-divider));
   --cx-ink: rgb(var(--ui-text-primary));
-  --cx-muted: rgb(var(--ui-text-secondary));
-  --cx-faint: rgb(var(--ui-text-muted));
+  /* Secondary text one step closer to the main text colour, so it stays readable on dim screens. */
+  --cx-muted: color-mix(in srgb, rgb(var(--ui-text-secondary)) 80%, rgb(var(--ui-text-primary)));
+  --cx-faint: color-mix(in srgb, rgb(var(--ui-text-muted)) 75%, rgb(var(--ui-text-primary)));
   --cx-accent: rgb(var(--ui-link));
   --cx-accent-soft: rgb(var(--ui-selected));
   --cx-attention: rgb(var(--ui-status-warning));
@@ -35,9 +36,10 @@
   --client-control-compact: 2.25rem;
   --client-control: 2.5rem;
   --client-control-large: 2.75rem;
-  --client-radius-control: 0.375rem;
-  --client-radius-surface: 0.5rem;
-  --client-radius-panel: 0.625rem;
+  /* Three corner sizes: 12px for controls and pictures, 16px for panels and cards, and pills for buttons and badges. */
+  --client-radius-control: 0.75rem;
+  --client-radius-surface: 0.75rem;
+  --client-radius-panel: 1rem;
 }
 
 /* Shell: top bar and scrolling page at every screen size. */
@@ -49,9 +51,12 @@
 /* The development preview stacks a notice bar above the portal. */
 .ticketing-client-preview { display: flex; height: 100dvh; min-height: 0; flex-direction: column; overflow: hidden; }
 .ticketing-client-preview > .cx-shell { height: auto; min-height: 0; flex: 1 1 0%; }
-.cx-topbar { z-index: 3; display: flex; flex: none; align-items: center; gap: var(--client-space-5); height: 52px; padding: 0 var(--client-portal-gutter); border-bottom: 1px solid var(--cx-line); background: rgb(var(--ui-shell)); }
+/* The bar's contents line up with the page column below, so the logo and the page share one left edge. */
+.cx-topbar { z-index: 3; display: flex; flex: none; align-items: center; gap: var(--client-space-5); height: 60px;
+  padding: 0 max(var(--client-portal-gutter), calc((100% - var(--cx-page-width)) / 2 + var(--client-portal-gutter)));
+  border-bottom: 1px solid color-mix(in srgb, var(--cx-line) 70%, transparent); background: rgb(var(--ui-canvas)); }
 .cx-brand { display: flex; flex: none; align-items: center; gap: var(--client-space-2); color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-bold); }
-.cx-brand img { width: 26px; height: 26px; object-fit: contain; }
+.cx-brand img { width: 28px; height: 28px; object-fit: contain; }
 .cx-nav { display: flex; min-width: 0; align-items: center; gap: var(--client-space-1); }
 .cx-nav button { position: relative; display: inline-flex; min-height: 36px; align-items: center; gap: var(--client-space-2); padding: 0 var(--client-space-3); border: 0; border-radius: var(--client-radius-control); background: none; color: var(--cx-muted); font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); cursor: pointer; }
 .cx-nav button:hover { background: var(--cx-raised); color: var(--cx-ink); }
@@ -62,17 +67,24 @@
 .cx-icon-button:hover:not(:disabled) { background: var(--cx-raised); color: var(--cx-ink); }
 .cx-icon-button:disabled { opacity: .5; cursor: not-allowed; }
 .cx-avatar { display: grid; width: 32px; height: 32px; place-items: center; border: 1px solid var(--cx-line); border-radius: 50%; background: var(--cx-raised); color: var(--cx-ink); font-size: var(--cx-type-small); font-weight: var(--client-weight-semibold); cursor: pointer; }
-.cx-main { min-height: 0; flex: 1; overflow-y: auto; }
+/* A soft accent glow at the top of every page, behind the orbit art; it scrolls away with the page. */
+.cx-main { min-height: 0; flex: 1; overflow-y: auto;
+  background: radial-gradient(900px 460px at 82% -6%, color-mix(in srgb, var(--cx-accent) 14%, transparent), transparent 70%),
+    radial-gradient(760px 420px at -8% 10%, color-mix(in srgb, var(--cx-accent) 7%, transparent), transparent 70%);
+  background-attachment: local; }
 .cx-page { display: flex; width: min(var(--cx-page-width), 100%); flex-direction: column; gap: var(--client-space-6); margin: 0 auto; padding: var(--client-space-6) var(--client-portal-gutter) var(--client-space-8); }
 .cx-page.is-full { width: 100%; max-width: 1440px; height: 100%; padding-bottom: var(--client-space-4); }
-.cx-notice { width: min(var(--cx-page-width), calc(100% - 2 * var(--client-portal-gutter))); margin: var(--client-space-4) auto 0; }
+/* Notices above a page share the page column's edges. */
+.cx-main .cx-notice { width: calc(min(var(--cx-page-width), 100%) - 2 * var(--client-portal-gutter)); margin: var(--client-space-4) auto 0; }
 .cx-tabbar { display: none; }
 
 /* Buttons. */
-.cx-button { display: inline-flex; min-height: var(--client-control-compact); align-items: center; justify-content: center; gap: var(--client-space-2); padding: 0 var(--client-space-4); border: 1px solid var(--cx-line); border-radius: var(--client-radius-control); background: var(--cx-surface); color: var(--cx-ink); font-size: var(--client-type-caption); font-weight: var(--client-weight-semibold); text-decoration: none; white-space: nowrap; cursor: pointer; }
-.cx-button:hover:not(:disabled) { background: var(--cx-raised); }
-.cx-button.is-primary { border-color: transparent; background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); }
-.cx-button.is-primary:hover:not(:disabled) { background: rgb(var(--ui-action-hover)); }
+/* Pills: outlined in the accent by default, filled for the one main action on a page. */
+.cx-button { display: inline-flex; min-height: var(--client-control-compact); align-items: center; justify-content: center; gap: var(--client-space-2); padding: 0 var(--client-space-4); border: 1px solid color-mix(in srgb, var(--cx-accent) 45%, var(--cx-line)); border-radius: var(--client-radius-pill); background: color-mix(in srgb, var(--cx-surface) 60%, transparent); color: var(--cx-ink); font-size: var(--client-type-caption); font-weight: var(--client-weight-semibold); text-decoration: none; white-space: nowrap; cursor: pointer; transition: background-color .16s ease, border-color .16s ease, box-shadow .16s ease; }
+.cx-button:hover:not(:disabled) { border-color: var(--cx-accent); background: var(--cx-accent-soft); }
+.cx-button.is-primary { border-color: transparent; background: rgb(var(--ui-action)); color: rgb(var(--ui-on-action)); box-shadow: 0 10px 30px -12px rgb(var(--ui-action) / .8); }
+.cx-button.is-primary:hover:not(:disabled) { background: rgb(var(--ui-action-hover)); box-shadow: 0 14px 36px -12px rgb(var(--ui-action) / .9); }
+.cx-button.is-large { min-height: var(--client-control-large); gap: var(--client-space-3); padding: 0 var(--client-space-6); font-size: var(--client-type-compact); }
 .cx-button:disabled { opacity: .55; cursor: not-allowed; }
 .cx-back { display: inline-flex; align-self: flex-start; min-height: 36px; align-items: center; gap: var(--client-space-2); padding: 0; border: 0; background: none; color: var(--cx-muted); font-size: var(--client-type-caption); cursor: pointer; }
 .cx-back:hover { color: var(--cx-ink); }
@@ -82,6 +94,8 @@
 .cx-page-header-row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--client-space-4); flex-wrap: wrap; }
 .cx-page-header-copy { min-width: 0; }
 .cx-page-header h1 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-title); font-weight: var(--client-weight-bold); letter-spacing: -.02em; line-height: var(--client-line-heading); }
+/* A page title with an accent word ("Your projects") is a landing page: larger, like Home's greeting. */
+.cx-page-header h1:has(.cx-accent-word) { font-size: clamp(2rem, 3.4vw, 2.75rem); letter-spacing: -.035em; line-height: 1.1; }
 .cx-eyebrow { margin: 0 0 var(--client-space-1); color: var(--cx-muted); font-size: var(--cx-type-small); }
 .cx-page-description { margin: var(--client-space-1) 0 0; color: var(--cx-muted); font-size: var(--client-type-caption); }
 .cx-page-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-2); }
@@ -89,14 +103,14 @@
 /* Sections, panels and rows. */
 .cx-section { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); }
 .cx-section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--client-space-3); }
-.cx-section-head h2 { display: flex; align-items: center; gap: var(--client-space-2); margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
+.cx-section-head h2 { display: flex; align-items: center; gap: var(--client-space-2); margin: 0; color: var(--cx-ink); font-size: var(--client-type-subheading); font-weight: var(--client-weight-semibold); }
 .cx-subheading { margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
 .cx-requests-head { display: flex; flex-direction: column; gap: var(--client-space-4); width: min(var(--cx-page-width), 100%); margin: 0 auto; padding: var(--client-space-6) var(--client-portal-gutter) 0; }
 .cx-ideas { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-4); }
 .cx-count { color: var(--cx-muted); font-weight: var(--client-weight-medium); }
 .cx-link { display: inline-flex; align-items: center; gap: var(--client-space-1); padding: 0; border: 0; background: none; color: var(--cx-accent); font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); text-decoration: none; cursor: pointer; }
 .cx-link:hover { text-decoration: underline; }
-.cx-panel { overflow: hidden; border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); }
+.cx-panel { overflow: hidden; border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: color-mix(in srgb, var(--cx-surface) 86%, transparent); }
 .cx-panel.is-attention { border-color: rgb(var(--ui-status-warning-border)); background: linear-gradient(135deg, var(--cx-attention-soft), var(--cx-surface) 75%); }
 .cx-row { display: flex; width: 100%; min-width: 0; align-items: center; gap: var(--client-space-3); padding: var(--client-space-3) var(--client-space-4); border: 0; border-top: 1px solid var(--cx-line); background: none; color: var(--cx-ink); font: inherit; text-align: left; }
 .cx-row:first-child { border-top: 0; }
@@ -130,24 +144,27 @@
 .cx-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--client-space-3); }
 .cx-search { display: flex; min-width: min(320px, 100%); min-height: var(--client-control-compact); align-items: center; gap: var(--client-space-2); padding: 0 var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--client-radius-control); background: var(--cx-surface); color: var(--cx-muted); }
 .cx-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: none; color: var(--cx-ink); font-size: var(--client-type-caption); }
+.cx-search input::placeholder { color: var(--cx-faint); }
+/* The whole field shows focus, not the bare input inside it. */
+.cx-search:focus-within { border-color: var(--cx-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cx-accent) 22%, transparent); }
+.cx-shell .cx-search input:focus-visible { outline: none; }
+.cx-sort { display: inline-flex; align-items: center; gap: var(--client-space-2); color: var(--cx-muted); font-size: var(--client-type-caption); }
+.cx-sort select { min-height: var(--client-control-compact); padding: 0 var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--client-radius-control); background: var(--cx-surface); color: var(--cx-ink); font: inherit; cursor: pointer; }
 
-/* Home and project cards. */
+/* Home: the caught-up note. */
 .cx-caught-up { display: flex; align-items: flex-start; gap: var(--client-space-3); padding: var(--client-space-4); color: var(--cx-done); }
 .cx-caught-up h2 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
 .cx-caught-up p { margin: 2px 0 0; color: var(--cx-muted); font-size: var(--client-type-caption); }
-.cx-home-grid { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: var(--client-space-6); align-items: start; }
-.cx-project-list { display: flex; flex-direction: column; gap: var(--client-space-3); }
-.cx-project-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 360px), 1fr)); gap: var(--client-space-4); align-items: start; }
-.cx-project-card-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-3); padding: var(--client-space-4); }
 .cx-project-icon { display: grid; width: 36px; height: 36px; flex: none; place-items: center; border-radius: var(--client-radius-control); background: var(--cx-accent-soft); color: var(--cx-accent); }
-.cx-project-card-title { min-width: 0; flex: 1; }
-.cx-project-card-title h3 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
-.cx-project-card-title p { margin: 2px 0 0; color: var(--cx-muted); font-size: var(--client-type-meta); }
-.cx-project-card .cx-row:first-of-type { border-top: 1px solid var(--cx-line); }
-.cx-more { justify-content: center; color: var(--cx-accent); font-size: var(--client-type-caption); }
-.cx-idea { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--client-space-3); padding: var(--client-space-4); border-style: dashed; }
-.cx-idea strong { color: var(--cx-ink); font-size: var(--client-type-compact); }
+/* Projects page: the closing idea strip, with a corner of the orbit art behind it. */
+.cx-idea { position: relative; display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-4) var(--client-space-5); padding: var(--client-space-5) var(--client-space-6); }
+.cx-idea-art { position: absolute; top: -95%; right: -12%; width: 420px; height: auto; opacity: .55; pointer-events: none; }
+.cx-idea-icon { position: relative; display: grid; flex: none; place-items: center; color: var(--cx-accent); }
+.cx-idea-copy { position: relative; min-width: min(100%, 260px); flex: 1; }
+.cx-idea strong { color: var(--cx-ink); font-size: var(--client-type-body); }
 .cx-idea p { margin: 2px 0 0; color: var(--cx-muted); font-size: var(--client-type-caption); }
+.cx-idea .cx-button { position: relative; background: var(--cx-surface); }
+.cx-idea .cx-button:hover:not(:disabled) { background: var(--cx-accent-soft); }
 .cx-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--cx-accent); }
 .cx-dot.is-needs_you { background: var(--cx-attention); }
 .cx-dot.is-done { background: var(--cx-done); }
@@ -195,7 +212,7 @@ span.cx-button { pointer-events: none; }
 .cx-request-summary { display: block; max-width: 72ch; line-height: var(--client-line-copy); }
 .cx-steps-summary { display: none; margin: 0; color: var(--cx-ink); font-size: var(--client-type-caption); font-weight: var(--client-weight-semibold); }
 .cx-steps-summary.is-action { color: var(--cx-attention); }
-.cx-decision { display: flex; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-6); border-radius: calc(var(--cx-radius) + 4px); }
+.cx-decision { display: flex; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-6); border-radius: var(--cx-radius); }
 .cx-decision h2 { margin: 0; color: var(--cx-attention); font-size: var(--client-type-subheading); font-weight: var(--client-weight-bold); }
 .cx-decision .cx-request-copy { font-size: var(--client-type-body); }
 /* The shared chat uses 9-11px labels; on client pages nothing is smaller than 12px. */
@@ -222,46 +239,70 @@ span.cx-button { pointer-events: none; }
 .cx-request-files :is(.text-xs, h2, h3) { font-size: var(--cx-type-small); }
 .cx-request :is(button, a, textarea, input):focus-visible { outline: var(--client-focus-width) solid rgb(var(--ui-focus)); outline-offset: var(--client-focus-offset); }
 
-/* Counts, quotes and the shared preview picture. */
-.cx-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--client-space-3); margin: 0; }
-.cx-stat { padding: var(--client-space-3) var(--client-space-4); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); }
-.cx-stat dt { color: var(--cx-muted); font-size: var(--cx-type-small); }
-.cx-stat dd { margin: 2px 0 0; color: var(--cx-ink); font-size: var(--client-type-subheading); font-weight: var(--client-weight-bold); font-variant-numeric: tabular-nums; line-height: 1.2; }
+/* Counts as one quiet line ("2 Open · 1 Done") and the shared preview picture. */
+.cx-stats { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-1) var(--client-space-4); margin: 0; }
+.cx-stat { display: inline-flex; flex-direction: row-reverse; align-items: baseline; gap: var(--client-space-1); }
+.cx-stat + .cx-stat { padding-left: var(--client-space-4); border-left: 1px solid var(--cx-line); }
+.cx-stat dt { color: var(--cx-muted); font-size: var(--client-type-caption); }
+.cx-stat dd { margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); font-variant-numeric: tabular-nums; }
 .cx-stat.is-attention dd { color: var(--cx-attention); }
 .cx-stat.is-done dd { color: var(--cx-done); }
-.cx-quote { display: flex; gap: var(--client-space-3); padding: var(--client-space-4); border-bottom: 1px solid var(--cx-line); }
-.cx-quote:last-child { border-bottom: 0; }
-.cx-quote-avatar { display: grid; width: 32px; height: 32px; flex: none; place-items: center; border-radius: 50%; background: var(--cx-accent-soft); color: var(--cx-accent); font-size: var(--cx-type-small); font-weight: var(--client-weight-semibold); }
-.cx-quote-copy { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-1); align-items: flex-start; }
-.cx-quote-copy p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--cx-ink); font-size: var(--client-type-caption); line-height: var(--client-line-copy); overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 4; }
-.cx-quote-copy small { color: var(--cx-muted); font-size: var(--client-type-meta); }
-.cx-thumb { position: relative; display: flex; min-width: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--cx-line); border-radius: var(--client-radius-surface); background: rgb(var(--ui-canvas)); }
-.cx-thumb-bar { display: flex; align-items: center; gap: 4px; padding: 6px var(--client-space-2); border-bottom: 1px solid var(--cx-line); background: var(--cx-raised); }
+.cx-thumb { position: relative; display: flex; height: 100%; min-width: 0; flex-direction: column; overflow: hidden; border: 1px solid var(--cx-line); border-radius: var(--client-radius-surface); background: rgb(var(--ui-canvas)); }
+.cx-thumb.is-openable { cursor: pointer; }
+.cx-thumb-bar { display: flex; flex: none; align-items: center; gap: 4px; padding: 6px var(--client-space-2); border-bottom: 1px solid var(--cx-line); background: var(--cx-raised); }
 .cx-thumb-bar i { width: 6px; height: 6px; border-radius: 50%; background: var(--cx-line); }
 .cx-thumb-bar span { overflow: hidden; margin-left: var(--client-space-2); color: var(--cx-muted); font-size: var(--cx-type-small); text-overflow: ellipsis; white-space: nowrap; }
-.cx-thumb-screen { position: relative; overflow: hidden; aspect-ratio: 16 / 10; pointer-events: none; }
+.cx-thumb-screen { position: relative; flex: 1; overflow: hidden; aspect-ratio: 16 / 10; pointer-events: none; }
 .cx-thumb-screen iframe { position: absolute; top: 0; left: 0; border: 0; background: rgb(var(--ui-surface)); transform-origin: top left; }
+/* A shade over the site's lower half and a soft inner edge, so a bright site sits calmly on a dark card. */
+.cx-thumb-screen::after { position: absolute; inset: 0; background: linear-gradient(to bottom, transparent 45%, rgb(var(--ui-canvas) / .4)); box-shadow: inset 0 0 0 1px rgb(var(--ui-overlay) / .25), inset 0 -40px 60px -40px rgb(var(--ui-canvas) / .6); content: ''; transition: opacity .2s ease; }
+.cx-thumb.is-openable:hover .cx-thumb-screen::after { opacity: .35; }
+/* On dark themes the site is dimmed a touch so a white page does not glare; hovering shows it as is. */
+.dark .cx-thumb-screen iframe { filter: brightness(.86); transition: filter .2s ease; }
+.dark .cx-thumb.is-openable:hover .cx-thumb-screen iframe { filter: none; }
 .cx-thumb-empty { display: flex; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: var(--client-space-2); padding: var(--client-space-4); color: var(--cx-muted); font-size: var(--client-type-meta); text-align: center; }
 .cx-thumb-empty svg { color: var(--cx-accent); }
-.cx-thumb-open { position: absolute; right: var(--client-space-3); bottom: var(--client-space-3); box-shadow: 0 2px 10px rgb(var(--ui-overlay) / .25); }
-.cx-project-thumb { padding: 0 var(--client-space-4) var(--client-space-4); }
-.cx-project-thumb .cx-thumb-screen { aspect-ratio: 16 / 6; }
 
-/* Projects page: one wide card per project, the preview beside its requests. */
-.cx-project-stack { display: flex; flex-direction: column; gap: var(--client-space-4); }
-.cx-project-wide { display: grid; grid-template-columns: minmax(260px, 380px) minmax(0, 1fr); gap: var(--client-space-5); align-items: start; padding: var(--client-space-4); }
-.cx-project-wide-body { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); }
-.cx-project-wide-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-3); }
-.cx-project-wide-head h3 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-body); font-weight: var(--client-weight-bold); }
-.cx-project-wide-head .cx-card-links { margin-left: auto; }
-/* A project card's ways in: Open preview (once shared) beside Open conversation. */
+/* Project cards on Home and the Projects page: the picture on the left, the project on the right. */
+.cx-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: var(--client-space-5); }
+.cx-pcard { display: grid; min-width: 0; grid-template-columns: min(44%, 380px) minmax(0, 1fr); gap: var(--client-space-5); padding: var(--client-space-4); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: color-mix(in srgb, var(--cx-surface) 86%, transparent); transition: border-color .2s ease, box-shadow .2s ease; }
+.cx-pcard:hover { border-color: color-mix(in srgb, var(--cx-accent) 40%, var(--cx-line)); box-shadow: 0 18px 40px -28px color-mix(in srgb, var(--cx-accent) 60%, transparent); }
+.cx-pcard-picture { display: flex; min-width: 0; min-height: 160px; flex-direction: column; }
+.cx-pcard-body { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-2); padding: var(--client-space-1) 0; }
+.cx-pcard-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-2) var(--client-space-3); }
+.cx-pcard-head h3 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-title); font-weight: var(--client-weight-bold); letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; }
+.cx-pcard-meta { display: flex; align-items: center; gap: var(--client-space-2); margin: 0; color: var(--cx-muted); font-size: var(--client-type-caption); }
+.cx-pcard-meta svg { flex: none; }
+.cx-pcard-note { display: flex; flex-direction: column; gap: 2px; }
+.cx-pcard-note p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--cx-muted); font-size: var(--client-type-compact); line-height: var(--client-line-body); overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.cx-pcard-note small { color: var(--cx-faint); font-size: var(--client-type-meta); }
+.cx-pcard-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--client-space-3); margin-top: auto; padding-top: var(--client-space-3); }
+/* A project card's ways in: Open preview beside Open project. */
 .cx-card-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-4); }
-.cx-project-wide-meta { margin: 0; color: var(--cx-muted); font-size: var(--client-type-meta); }
-.cx-project-wide .cx-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.cx-project-wide .cx-stat { padding: var(--client-space-2) var(--client-space-3); }
-.cx-project-wide .cx-stat dd { font-size: var(--client-type-body); }
-.cx-project-wide-requests { overflow: hidden; border: 1px solid var(--cx-line); border-radius: var(--client-radius-surface); }
-.cx-project-wide .cx-quote { padding: var(--client-space-3) 0 0; border: 0; border-top: 1px solid var(--cx-line); }
+
+/* Artwork in the theme's accent: the orbit motif, and project pictures before a preview is shared. */
+.cx-orbit { display: block; overflow: visible; }
+.cx-art-stop-strong { stop-color: var(--cx-accent); stop-opacity: .95; }
+.cx-art-stop-faint { stop-color: var(--cx-accent); stop-opacity: .3; }
+.cx-art-stop-glow { stop-color: var(--cx-accent); stop-opacity: .22; }
+.cx-art-stop-clear { stop-color: var(--cx-accent); stop-opacity: 0; }
+.cx-orbit-band { stroke-width: 14; opacity: .14; }
+.cx-orbit-line { stroke-width: 1.6; }
+.cx-orbit-line.is-faint { opacity: .4; }
+.cx-orbit-spark { fill: var(--cx-ink); filter: drop-shadow(0 0 6px var(--cx-accent)); }
+.cx-orbit-spark.is-small { opacity: .8; }
+.cx-orbit-star { fill: var(--cx-ink); opacity: .55; }
+.cx-cover-art { position: relative; height: 100%; min-height: 160px; overflow: hidden; border: 1px solid var(--cx-line); border-radius: var(--client-radius-surface);
+  background: radial-gradient(120% 90% at 30% 20%, color-mix(in srgb, var(--cx-accent) 18%, transparent), transparent 70%), rgb(var(--ui-canvas)); }
+.cx-cover-art svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.cx-cover-art .cx-orbit { inset: -12% -18%; width: 136%; height: 124%; }
+.cx-wave path { stroke-width: 1.6; }
+.cx-wave path.is-glow { stroke-width: 16; opacity: .16; }
+.cx-cube path { stroke: color-mix(in srgb, var(--cx-accent) 45%, transparent); stroke-width: 1; }
+.cx-cube .is-top { fill: color-mix(in srgb, var(--cx-accent) 55%, transparent); }
+.cx-cube .is-left { fill: color-mix(in srgb, var(--cx-accent) 24%, transparent); }
+.cx-cube .is-right { fill: color-mix(in srgb, var(--cx-accent) 10%, transparent); }
+.cx-accent-word { color: var(--cx-accent); }
 
 /* Requests list: the "Next:" line, small facts, and the step guide beside the list. */
 .cx-next-label { color: var(--cx-ink); font-weight: var(--client-weight-semibold); }
@@ -278,16 +319,18 @@ span.cx-button { pointer-events: none; }
 .cx-guide p { margin: 0; color: var(--cx-muted); font-size: var(--client-type-meta); line-height: var(--client-line-copy); }
 .cx-guide strong { display: block; color: var(--cx-ink); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); }
 
-/* Opening bands, progress rings and action cards: the larger, richer pieces of each page. */
-.cx-hero { position: relative; display: flex; flex-direction: column; gap: var(--client-space-6); overflow: hidden; padding: var(--client-space-7); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 8px);
-  background: radial-gradient(680px 260px at 6% -30%, color-mix(in srgb, var(--cx-accent) 32%, transparent), transparent 70%),
-    radial-gradient(600px 260px at 100% -10%, color-mix(in srgb, rgb(var(--ui-info)) 22%, transparent), transparent 70%), var(--cx-surface); }
-.cx-hero .cx-page-header h1, .cx-hero h1 { margin: 0; color: var(--cx-ink); font-size: clamp(1.5rem, 2vw, 1.75rem); font-weight: var(--client-weight-bold); letter-spacing: -.025em; line-height: 1.2; }
-.cx-hero-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: var(--client-space-6); }
-.cx-hero-copy { min-width: 0; }
-.cx-hero-lead { margin: var(--client-space-2) 0 0; color: var(--cx-muted); font-size: var(--client-type-body); }
+/* Opening band, progress rings and action cards: the larger, richer pieces of each page. The band sits
+   open on the page glow, with the orbit art on the right and the main project's meter in front of it. */
+.cx-hero { position: relative; display: flex; min-height: 248px; align-items: center; justify-content: space-between; gap: var(--client-space-6); padding: var(--client-space-4) 0 var(--client-space-2); }
+.cx-hero-art { position: absolute; top: -48px; right: -56px; width: min(600px, 52%); height: auto; pointer-events: none; }
+.cx-hero-copy { position: relative; min-width: 0; max-width: 640px; }
+.cx-hero-pill { display: inline-flex; margin: 0 0 var(--client-space-3); padding: 6px 14px; border: 1px solid color-mix(in srgb, var(--cx-accent) 30%, transparent); border-radius: var(--client-radius-pill); background: color-mix(in srgb, var(--cx-accent) 14%, transparent); color: var(--cx-ink); font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); }
+.cx-hero h1 { margin: 0; color: var(--cx-ink); font-size: clamp(2.25rem, 4.2vw, 3.5rem); font-weight: var(--client-weight-bold); letter-spacing: -.035em; line-height: 1.05; }
+.cx-hero-tagline { margin: var(--client-space-3) 0 0; color: var(--cx-muted); font-size: var(--client-type-subheading); }
+.cx-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-3) var(--client-space-5); margin-top: var(--client-space-6); }
+.cx-hero-lead { margin: 0; color: var(--cx-muted); font-size: var(--client-type-compact); }
 .cx-hero-lead b { color: var(--cx-attention); font-weight: var(--client-weight-semibold); }
-.cx-hero-meter { display: flex; max-width: 360px; align-items: center; gap: var(--client-space-4); padding: var(--client-space-3) var(--client-space-5) var(--client-space-3) var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: color-mix(in srgb, var(--cx-surface) 70%, transparent); }
+.cx-hero-meter { position: relative; display: flex; max-width: 360px; flex: none; align-items: center; align-self: flex-end; gap: var(--client-space-4); padding: var(--client-space-3) var(--client-space-5) var(--client-space-3) var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: color-mix(in srgb, var(--cx-surface) 72%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
 .cx-hero-meter strong { display: block; color: var(--cx-ink); font-size: var(--client-type-compact); }
 .cx-hero-meter span { color: var(--cx-muted); font-size: var(--client-type-meta); }
 .cx-ring { position: relative; display: inline-grid; flex: none; place-items: center; }
@@ -297,7 +340,7 @@ span.cx-button { pointer-events: none; }
 .cx-ring b { position: relative; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-bold); font-variant-numeric: tabular-nums; }
 .cx-attention-icon { color: var(--cx-attention); }
 .cx-action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--client-space-4); }
-.cx-action-card { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: flex-start; gap: var(--client-space-2); padding: var(--client-space-5); border: 1px solid rgb(var(--ui-status-warning-border)); border-radius: calc(var(--cx-radius) + 4px);
+.cx-action-card { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: flex-start; gap: var(--client-space-2); padding: var(--client-space-5); border: 1px solid rgb(var(--ui-status-warning-border)); border-radius: var(--cx-radius);
   background: linear-gradient(135deg, var(--cx-attention-soft), var(--cx-surface) 72%); color: var(--cx-ink); font: inherit; text-align: left; cursor: pointer; transition: transform .16s ease, box-shadow .16s ease; }
 .cx-action-card:hover:not(:disabled) { box-shadow: 0 12px 30px rgb(var(--ui-overlay) / .2); transform: translateY(-2px); }
 .cx-action-card:disabled { opacity: .6; cursor: not-allowed; }
@@ -308,19 +351,10 @@ span.cx-button { pointer-events: none; }
 .cx-action-foot .cx-track { flex: 1; width: auto; margin: 0; }
 .cx-action-spacer { flex: 1; }
 .cx-action-card .cx-track span.is-current { background: var(--cx-attention); }
-@media (prefers-reduced-motion: reduce) { .cx-action-card { transition: none; } .cx-action-card:hover:not(:disabled) { transform: none; } }
-
-/* Home: each project as a cover, the preview picture beside its counts. */
-.cx-cover-top { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); }
-.cx-cover-shot { padding: var(--client-space-4); border-right: 1px solid var(--cx-line); background: var(--cx-raised); }
-.cx-cover-shot .cx-thumb-screen { aspect-ratio: 16 / 9; }
-.cx-cover-body { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-5); }
-.cx-cover-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--client-space-3); }
-.cx-cover-head h3 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-subheading); font-weight: var(--client-weight-bold); }
-.cx-cover-meta { margin: 0; color: var(--cx-muted); font-size: var(--client-type-meta); }
-.cx-cover .cx-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.cx-cover .cx-quote { padding: var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--client-radius-surface); }
-.cx-cover > .cx-row { border-top: 1px solid var(--cx-line); }
+@media (prefers-reduced-motion: reduce) {
+  .cx-action-card, .cx-button, .cx-pcard, .cx-thumb-screen::after { transition: none; }
+  .cx-action-card:hover:not(:disabled) { transform: none; }
+}
 
 .cx-preview-pending { color: var(--cx-ink); font-weight: var(--client-weight-semibold); }
 
@@ -357,7 +391,7 @@ span.cx-button { pointer-events: none; }
 .cx-reqcard-body[hidden] { display: none; }
 .cx-reqchat > .cx-back { align-self: flex-start; margin-bottom: calc(-1 * var(--client-space-2)); }
 .cx-reqrail-top, .cx-reqrail-more { display: flex; flex-direction: column; gap: var(--client-space-4); }
-.cx-reqcard { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-4) var(--client-space-5); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); outline: none; }
+.cx-reqcard { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-3); padding: var(--client-space-4) var(--client-space-5); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); outline: none; }
 .cx-reqcard > h2 { display: flex; align-items: center; gap: var(--client-space-2); margin: 0; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-semibold); }
 .cx-reqcard > h2 > span { display: inline-flex; color: var(--cx-accent); }
 .cx-reqhead { gap: var(--client-space-3); align-items: flex-start; background: radial-gradient(420px 180px at 0% 0%, color-mix(in srgb, var(--cx-accent) 22%, transparent), transparent 70%), var(--cx-surface); }
@@ -387,7 +421,7 @@ span.cx-button { pointer-events: none; }
 .cx-details-pm { display: grid; width: 22px; height: 22px; place-items: center; border-radius: 50%; background: var(--cx-accent-soft); color: var(--cx-accent); }
 .cx-reqchat { display: flex; min-width: 0; min-height: 0; flex-direction: column; gap: var(--client-space-4); padding: var(--client-space-5) var(--client-space-6) var(--client-space-5);
   background: radial-gradient(900px 420px at 100% 100%, color-mix(in srgb, var(--cx-accent) 10%, transparent), transparent 70%), rgb(var(--ui-canvas)); }
-.cx-reqchat-head { display: flex; flex: none; align-items: center; gap: var(--client-space-4); padding: var(--client-space-4) var(--client-space-5); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px);
+.cx-reqchat-head { display: flex; flex: none; align-items: center; gap: var(--client-space-4); padding: var(--client-space-4) var(--client-space-5); border: 1px solid var(--cx-line); border-radius: var(--cx-radius);
   background: radial-gradient(520px 160px at 100% 0%, color-mix(in srgb, rgb(var(--ui-info)) 14%, transparent), transparent 70%), var(--cx-surface); }
 .cx-reqchat-head > div { min-width: 0; flex: 1; }
 .cx-reqchat-head :is(h1, h2) { margin: 0; color: var(--cx-ink); font-size: var(--client-type-body); font-weight: var(--client-weight-bold); }
@@ -397,14 +431,17 @@ span.cx-button { pointer-events: none; }
 .cx-new-pill::before { width: 8px; height: 8px; border-radius: 50%; background: var(--cx-accent); content: ''; }
 .cx-reqchat .ticket-chat { min-height: 0; flex: 1; background: none; }
 .cx-reqchat .ticket-chat__feed { padding: var(--client-space-2) var(--client-space-1); background: none; }
-.cx-reqchat .ticket-chat [data-ticket-chat-composer] { margin-top: var(--client-space-2); padding: var(--client-space-3); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); }
+.cx-reqchat .ticket-chat [data-ticket-chat-composer] { margin-top: var(--client-space-2); padding: var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); }
 .cx-reqchat .ticket-chat__composer-row, .cx-reqchat .ticket-chat__composer-note { width: 100%; max-width: none; }
 .cx-reqchat .ticket-chat__bubble-content { font-size: var(--client-type-compact); }
 .cx-reqchat .ticket-chat__system-body { font-size: var(--client-type-caption); }
 
 /* Empty and error states. */
-.cx-empty { display: flex; flex-direction: column; align-items: flex-start; gap: var(--client-space-2); padding: var(--client-space-6) var(--client-space-4); color: var(--cx-muted); font-size: var(--client-type-caption); }
+.cx-empty { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: var(--client-space-2); overflow: hidden; padding: var(--client-space-6) var(--client-space-4); color: var(--cx-muted); font-size: var(--client-type-caption); }
+.cx-empty > :not(.cx-empty-art) { position: relative; }
 .cx-empty p { margin: 0; }
+/* A faint corner of the orbit art, so empty states still feel like Alphaexplora. */
+.cx-empty-art { position: absolute; top: -60%; right: -4%; width: 320px; height: auto; opacity: .35; pointer-events: none; }
 .cx-empty-title { color: var(--cx-ink); font-weight: var(--client-weight-semibold); }
 .cx-empty-icon { color: var(--cx-accent); }
 .cx-error { margin: 0; padding: var(--client-space-3) var(--client-space-4); border: 1px solid rgb(var(--ui-danger) / .45); border-radius: var(--client-radius-control); background: rgb(var(--ui-danger) / .08); color: rgb(var(--ui-danger)); font-size: var(--client-type-caption); }
@@ -416,9 +453,10 @@ span.cx-button { pointer-events: none; }
   .cx-chat { position: static; max-height: none; }
   .cx-requests-layout { grid-template-columns: minmax(0, 1fr); }
   .cx-guide { position: static; }
-  .cx-project-wide { grid-template-columns: minmax(0, 1fr); }
-  .cx-cover-top { grid-template-columns: minmax(0, 1fr); }
-  .cx-cover-shot { border-right: 0; border-bottom: 1px solid var(--cx-line); }
+  /* The band stacks: words first, the meter underneath, the orbit art fainter behind both. */
+  .cx-hero { flex-direction: column; align-items: stretch; min-height: 0; }
+  .cx-hero-art { top: -36px; right: -96px; width: min(520px, 78%); opacity: .7; }
+  .cx-hero-meter { align-self: flex-start; }
   /* Narrow screens: the way back and the conversation first, then the requests and the picked request, then its other details. */
   .cx-main:has(.cx-reqsplit) { display: block; overflow-y: auto; }
   .cx-request-page, .cx-request { display: block; }
@@ -453,18 +491,26 @@ span.cx-button { pointer-events: none; }
   .cx-jstep.is-current.is-action .cx-jstep-icon { background: var(--cx-attention); }
   .cx-jstep.is-current.is-action { background: none; }
   .cx-steps-summary { display: block; margin-top: var(--client-space-2); }
-  .cx-hero { padding: var(--client-space-5); }
-  .cx-hero .cx-page-header h1, .cx-hero h1 { font-size: 1.75rem; }
+  .cx-hero { padding-top: var(--client-space-2); }
+  .cx-hero h1 { font-size: 2.125rem; }
+  .cx-hero-tagline { font-size: var(--client-type-body); }
+  .cx-hero-actions { margin-top: var(--client-space-5); }
+  .cx-hero-art { width: 90%; right: -40%; opacity: .55; }
   .cx-hero-meter { width: 100%; max-width: none; }
+  /* Cards stack: the picture on top at a fixed shape, then the project, then its buttons. */
+  .cx-pcard { grid-template-columns: minmax(0, 1fr); gap: var(--client-space-4); }
+  .cx-pcard-picture, .cx-cover-art { min-height: 0; }
+  .cx-cover-art { aspect-ratio: 16 / 9; }
+  .cx-pcard-head h3 { font-size: var(--client-type-subheading); }
+  .cx-pcard-foot { align-items: stretch; flex-direction: column; }
+  .cx-pcard-foot .cx-card-links { justify-content: space-between; }
+  .cx-toolbar { align-items: stretch; flex-direction: column; }
+  .cx-sort select { flex: 1; }
+  .cx-idea { padding: var(--client-space-5); }
+  .cx-idea .cx-button { width: 100%; }
   .cx-decision { padding: var(--client-space-4); }
-  .cx-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--client-space-2); }
-  .cx-stat { padding: var(--client-space-2) var(--client-space-3); }
-  .cx-stat dd { font-size: var(--client-type-body); }
-  .cx-project-card-title { flex: 1 1 calc(100% - 64px); }
   /* Rows that ask for something: the words get the full width, the button goes underneath. */
   .cx-panel.is-attention .cx-row-copy { flex: 1 1 calc(100% - 32px); }
-  .cx-project-wide-head h3 { flex: 1 1 100%; }
-  .cx-project-wide-head .cx-card-links { margin-left: 0; }
 }
 
 /* Compact Shadcn top navigation; Overview and Projects stay the two primary routes. */
@@ -480,8 +526,7 @@ span.cx-button { pointer-events: none; }
 .cx-topbar-actions .cx-new-request { min-height: 38px; }
 /* Shadcn Button's default h-9 is too short for a row with a title and status line. */
 .cx-row.is-interactive { height: auto; min-height: 72px; white-space: normal; }
-.cx-cover-top.is-no-preview { grid-template-columns: minmax(0, 1fr); }
-.cx-project-wide.is-no-preview { grid-template-columns: minmax(0, 1fr); }
+.cx-topbar-actions .cx-new-request { border-radius: var(--client-radius-pill); }
 
 @media (max-width: 760px) {
   .cx-topbar { gap: 6px; height: 56px; padding-inline: 10px; }
@@ -504,7 +549,7 @@ span.cx-button { pointer-events: none; }
    the rail stays on the right. In the preview view the rail holds the same conversation, beside a Requests tab. */
 .cx-reqchat-head { flex-wrap: wrap; }
 .cx-reqchat-head > .cx-reqchat-controls { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: var(--client-space-2); margin-left: auto; }
-.cx-viewswitch { display: inline-flex; padding: 3px; border: 1px solid var(--cx-line); border-radius: calc(var(--client-radius-control) + 3px); background: var(--cx-surface); }
+.cx-viewswitch { display: inline-flex; padding: 3px; border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); }
 .cx-viewswitch button { display: inline-flex; min-height: 32px; align-items: center; gap: var(--client-space-2); padding: 0 var(--client-space-3); border: 0; border-radius: var(--client-radius-control); background: none; color: var(--cx-muted); font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); cursor: pointer; }
 .cx-viewswitch button:hover { color: var(--cx-ink); }
 .cx-viewswitch button[aria-pressed="true"] { background: var(--cx-accent-soft); color: var(--cx-accent); }
@@ -520,7 +565,7 @@ span.cx-button { pointer-events: none; }
 .cx-railchat[hidden], .cx-railrequests[hidden] { display: none; }
 .cx-railchat .ticket-chat { min-height: 0; flex: 1; background: none; }
 .cx-railchat .ticket-chat__feed { padding: var(--client-space-2) 0; background: none; }
-.cx-railchat .ticket-chat [data-ticket-chat-composer] { margin-top: var(--client-space-2); padding: var(--client-space-3); border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); background: var(--cx-surface); }
+.cx-railchat .ticket-chat [data-ticket-chat-composer] { margin-top: var(--client-space-2); padding: var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: var(--cx-surface); }
 .cx-railchat :is(.ticket-chat__composer-row, .ticket-chat__composer-note) { width: 100%; max-width: none; }
 .cx-railchat .ticket-chat__bubble-content { font-size: var(--client-type-compact); }
 .cx-railrequests { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: var(--client-space-4); overflow-y: auto; padding: var(--client-space-4) var(--client-space-5) var(--client-space-5); }
@@ -532,7 +577,7 @@ span.cx-button { pointer-events: none; }
 .cx-preview-frame.is-empty .pqa-empty .cx-link { margin-top: var(--client-space-1); font-size: var(--client-type-compact); }
 @media (max-width: 1000px) {
   /* Stacked: the header and preview first, then the conversation and requests tabs. */
-  .cx-reqrail.is-tabs { display: flex; order: 2; overflow: visible; border: 1px solid var(--cx-line); border-radius: calc(var(--cx-radius) + 2px); }
+  .cx-reqrail.is-tabs { display: flex; order: 2; overflow: visible; border: 1px solid var(--cx-line); border-radius: var(--cx-radius); }
   .cx-railchat { height: 72dvh; min-height: 440px; flex: none; }
   .cx-railrequests { overflow: visible; }
   .cx-reqpreview .cx-preview-frame { height: 62dvh; min-height: 420px; flex: none; }

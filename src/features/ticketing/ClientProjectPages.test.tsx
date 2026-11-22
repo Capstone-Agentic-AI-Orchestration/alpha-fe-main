@@ -21,7 +21,7 @@ describe('client overview loading', () => {
     expect(ready).not.toContain('Loading recent request updates');
   });
 
-  it('leads with what needs the client, then each project as a fixed-size cover with its counts, not its request list', () => {
+  it('leads with the banner and what needs the client, then each project as a fixed-size card with its counts, not its request list', () => {
     const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
     const base = { reference: 'REF-1', createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z', closedAt: null,
       readOnly: false, writesAvailable: true, workspaceId: 'w1', projectId: 'p1', projectName: 'Shop', projectLinkStatus: 'linked' as const,
@@ -37,19 +37,22 @@ describe('client overview loading', () => {
     expect(html).toContain('1 thing needs you');
     expect(html).toContain('Review plan');
     expect(html).not.toContain('all caught up');
-    expect(html).toContain('2 open requests');
     // The waiting request shows its step on its action card; the project cover only counts requests.
     expect(html).toContain('Step 2 of 5');
     expect(html).not.toContain('Step 3 of 5');
     expect(html).not.toContain('more in this project');
-    const cover = html.slice(html.indexOf('cx-cover'), html.indexOf('client-recent-title'));
-    expect(cover).toContain('aria-label="Requests in Shop"');
-    expect(cover).not.toContain('Add a gift message field');
-    expect(html).toContain('Propose a project');
+    const card = html.slice(html.indexOf('class="cx-pcard"'), html.indexOf('client-recent-title'));
+    expect(card).toContain('aria-label="Requests in Shop"');
+    expect(card).toContain('<dt>Open</dt><dd>2</dd>');
+    expect(card).toContain('1 needs you');
+    expect(card).not.toContain('Add a gift message field');
+    // Proposing is the banner's one main action; Home has no second propose card further down.
+    expect(html.match(/Propose a project/g)).toHaveLength(1);
+    expect(html.indexOf('Propose a project')).toBeLessThan(html.indexOf('client-attention-title'));
     expect(html).not.toContain('REF-1');
   });
 
-  it('always offers Open preview on a project cover, with a picture once a preview is shared', () => {
+  it('always offers Open preview on a project card, with the preview picture once shared and artwork before', () => {
     const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onOpenPreview: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
     const loaded = { items: [], nextCursor: null, counters: { kind: 'client' as const, open: 0, needsClient: 0 } };
     const shop = { workspaceId: 'w1', projectId: 'p1', name: 'Shop', updatedAt: '2026-11-01T00:00:00Z', intakeOptionId: 'o1', preview: null };
@@ -59,13 +62,16 @@ describe('client overview loading', () => {
     expect(waiting).toContain('no preview yet');
     // The preview page opens before anything is shared and says so there; only the picture waits.
     expect(waiting).toContain('aria-label="Open preview for Shop"');
-    expect(waiting).toContain('aria-label="Open conversation for Shop"');
-    expect(waiting).not.toContain('cx-cover-shot');
+    expect(waiting).toContain('aria-label="Open project: Shop"');
+    expect(waiting).toContain('cx-cover-art');
+    expect(waiting).not.toContain('cx-thumb');
     const ready = render({ branch: 'uat', url: 'https://shop-uat.vercel.app' });
     expect(ready).toContain('preview ready');
+    expect(ready).toContain('cx-thumb');
+    expect(ready).not.toContain('cx-cover-art');
     const links = ready.slice(ready.indexOf('class="cx-card-links"'));
     expect(links.indexOf('aria-label="Open preview for Shop"')).toBeGreaterThan(-1);
-    expect(links.indexOf('aria-label="Open conversation for Shop"')).toBeGreaterThan(links.indexOf('aria-label="Open preview for Shop"'));
+    expect(links.indexOf('aria-label="Open project: Shop"')).toBeGreaterThan(links.indexOf('aria-label="Open preview for Shop"'));
   });
 });
 
