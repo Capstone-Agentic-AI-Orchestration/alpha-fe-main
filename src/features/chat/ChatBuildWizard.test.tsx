@@ -254,3 +254,11 @@ describe('agents handing work to each other', () => {
     ]);
   });
 });
+
+describe('the words for a plan fixed before it could start', () => {
+  it('lists what changed and says to start it, wherever the plan is started', async () => {
+    const { startCorrectionText } = await import('./ChatBuildWizard');
+    expect(startCorrectionText({ planVersion: 3, changes: ['Removed "Check the API".'] }))
+      .toBe('The Orchestrator fixed the plan before it could start (v3). What changed:\n- Removed "Check the API".\nRead it, then start it.');
+  });
+});
