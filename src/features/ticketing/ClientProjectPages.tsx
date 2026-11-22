@@ -5,10 +5,10 @@ import { ArrowRight, BellRing, Check, ClipboardCheck, Clock, FolderKanban, Light
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
-import { CxActionCard, CxBadge, CxCoverArt, CxEmpty, CxHero, CxOrbit, CxPageHeader, CxPanel, CxRing, CxRow, CxSection, CxStats } from './clientKit';
+import { CxActionCard, CxBadge, CxCoverArt, CxEmpty, CxHero, CxOrbit, CxPageHeader, CxPanel, CxRow, CxSection, CxStats } from './clientKit';
 import { ClientPreviewThumb } from './ClientPreviewThumb';
 import { clientTicketProgress } from './clientTicketProgress';
-import { clientGreeting, clientNextStep, clientRequestGroup, listProgressIndex, projectProgress, relativeTime } from './clientFriendly';
+import { clientGreeting, clientNextStep, clientRequestGroup, listProgressIndex, relativeTime } from './clientFriendly';
 import { time } from './ticketUi';
 import { clientProjectKey } from './ClientProjectSections';
 
@@ -49,7 +49,7 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
   const replyIdeas = onOpenProposals ? proposalsNeedingReply : 0;
   return <section className="cx-page" aria-labelledby="client-overview-title">
     <HomeHero greeting={clientGreeting()} firstName={firstName} today={today} requests={requests ? items : null}
-      waiting={attention.length + (replyIdeas > 0 ? 1 : 0)} project={shownProjects[0] ?? null} onProposeProject={onProposeProject} />
+      waiting={attention.length + (replyIdeas > 0 ? 1 : 0)} onProposeProject={onProposeProject} />
 
     <section className="cx-section" aria-labelledby="client-attention-title" aria-busy={requestsLoading && !requests}>
       {requestsError && <p role="alert" className="cx-error">{requestsError}</p>}
@@ -73,17 +73,14 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
 
 /**
  * Home's opening band: the date, the greeting with the client's name in the accent colour, the one main
- * action (proposing a project), one line on where things stand, and how far the main project is along.
+ * action (proposing a project) and one line on where things stand.
  */
-function HomeHero({ greeting, firstName, today, requests, waiting, project, onProposeProject }: {
-  greeting: string; firstName: string; today: string; requests: ClientProjectRequestItem[] | null; waiting: number; project: ClientProject | null;
+function HomeHero({ greeting, firstName, today, requests, waiting, onProposeProject }: {
+  greeting: string; firstName: string; today: string; requests: ClientProjectRequestItem[] | null; waiting: number;
   onProposeProject?: () => void;
 }) {
   const inProgress = requests?.filter(item => clientRequestGroup(item) === 'in_progress').length ?? 0;
   const done = requests?.filter(item => clientRequestGroup(item) === 'done').length ?? 0;
-  const projectRequests = project && requests
-    ? requests.filter(item => item.workspaceId === project.workspaceId && item.projectId === project.projectId) : [];
-  const progress = project ? projectProgress(projectRequests) : null;
   const rest = inProgress + ' in progress · ' + done + ' done';
   let lead: ReactNode = null;
   if (requests) lead = waiting
@@ -100,10 +97,6 @@ function HomeHero({ greeting, firstName, today, requests, waiting, project, onPr
         {lead && <p className="cx-hero-lead">{lead}</p>}
       </div>
     </div>
-    {project && progress !== null && <div className="cx-hero-meter">
-      <CxRing value={progress} label={project.name + ': requests are ' + progress + '% of the way along, on average'} />
-      <div><strong>{project.name}</strong><span>Requests are {progress}% of the way along, on average</span></div>
-    </div>}
   </CxHero>;
 }
 

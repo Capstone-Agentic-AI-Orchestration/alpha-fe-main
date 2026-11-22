@@ -241,22 +241,6 @@ export function CxCoverArt({ seed }: { seed: string }) {
   </div>;
 }
 
-/** A round progress meter, 0 to 100, with the number in the middle. */
-export function CxRing({ value, size = 56, label }: { value: number; size?: number; label: string }) {
-  const stroke = 7;
-  const radius = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const clamped = Math.max(0, Math.min(100, value));
-  return <span className="cx-ring" role="img" aria-label={label} style={{ width: size, height: size }}>
-    <svg viewBox={'0 0 ' + size + ' ' + size} width={size} height={size} aria-hidden="true">
-      <circle className="cx-ring-track" cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={stroke} />
-      <circle className="cx-ring-fill" cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth={stroke} strokeLinecap="round"
-        strokeDasharray={circumference} strokeDashoffset={circumference * (1 - clamped / 100)} transform={'rotate(-90 ' + size / 2 + ' ' + size / 2 + ')'} />
-    </svg>
-    <b aria-hidden="true">{clamped}%</b>
-  </span>;
-}
-
 /** Something the client needs to do, as a large card: icon, title, context, where it is, and the action. */
 export function CxActionCard({ icon, title, meta, index, action, onClick, disabled }: {
   icon: ReactNode; title: ReactNode; meta?: ReactNode; index?: number | null; action: string; onClick: () => void; disabled?: boolean;

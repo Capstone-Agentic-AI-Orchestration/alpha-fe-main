@@ -113,22 +113,6 @@ export const CLIENT_STEP_GUIDE: Array<{ label: string; detail: string }> = [
 ];
 
 /**
- * How far a project's requests are along the five steps, on average, from 0 to 100. Finished requests
- * count as all the way; declined, cancelled and unplaceable ones are left out. Null when none can be placed.
- */
-export function projectProgress(items: RequestLike[]): number | null {
-  const values = items.flatMap(item => {
-    if (item.status === 'closed') return [1];
-    if (TERMINAL.has(item.status)) return [];
-    const index = listProgressIndex(item);
-    return index === null ? [] : [index / 4];
-  });
-  if (!values.length) return null;
-  return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length * 100);
-}
-
-
-/**
  * Which of the five client steps (0-4, see CLIENT_PROGRESS_LABELS) a listed request is on, using only
  * the fields a list row has. Mirrors clientProgressSteps; returns null where the row alone cannot tell
  * (a question from the project manager can come at several steps) or where a path would mislead.

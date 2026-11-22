@@ -319,8 +319,8 @@ span.cx-button { pointer-events: none; }
 .cx-guide p { margin: 0; color: var(--cx-muted); font-size: var(--client-type-meta); line-height: var(--client-line-copy); }
 .cx-guide strong { display: block; color: var(--cx-ink); font-size: var(--client-type-meta); font-weight: var(--client-weight-semibold); }
 
-/* Opening band, progress rings and action cards: the larger, richer pieces of each page. The band sits
-   open on the page glow, with the orbit art on the right and the main project's meter in front of it. */
+/* Opening band and action cards: the larger, richer pieces of each page. The band sits open on the
+   page glow, with the orbit art on the right. */
 .cx-hero { position: relative; display: flex; min-height: 248px; align-items: center; justify-content: space-between; gap: var(--client-space-6); padding: var(--client-space-4) 0 var(--client-space-2); }
 .cx-hero-art { position: absolute; top: -48px; right: -56px; width: min(600px, 52%); height: auto; pointer-events: none; }
 .cx-hero-copy { position: relative; min-width: 0; max-width: 640px; }
@@ -330,14 +330,6 @@ span.cx-button { pointer-events: none; }
 .cx-hero-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-3) var(--client-space-5); margin-top: var(--client-space-6); }
 .cx-hero-lead { margin: 0; color: var(--cx-muted); font-size: var(--client-type-compact); }
 .cx-hero-lead b { color: var(--cx-attention); font-weight: var(--client-weight-semibold); }
-.cx-hero-meter { position: relative; display: flex; max-width: 360px; flex: none; align-items: center; align-self: flex-end; gap: var(--client-space-4); padding: var(--client-space-3) var(--client-space-5) var(--client-space-3) var(--client-space-3); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: color-mix(in srgb, var(--cx-surface) 72%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
-.cx-hero-meter strong { display: block; color: var(--cx-ink); font-size: var(--client-type-compact); }
-.cx-hero-meter span { color: var(--cx-muted); font-size: var(--client-type-meta); }
-.cx-ring { position: relative; display: inline-grid; flex: none; place-items: center; }
-.cx-ring svg { position: absolute; inset: 0; }
-.cx-ring-track { stroke: var(--cx-raised); }
-.cx-ring-fill { stroke: var(--cx-accent); }
-.cx-ring b { position: relative; color: var(--cx-ink); font-size: var(--client-type-compact); font-weight: var(--client-weight-bold); font-variant-numeric: tabular-nums; }
 .cx-attention-icon { color: var(--cx-attention); }
 .cx-action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: var(--client-space-4); }
 .cx-action-card { display: flex; width: 100%; min-width: 0; flex-direction: column; align-items: flex-start; gap: var(--client-space-2); padding: var(--client-space-5); border: 1px solid rgb(var(--ui-status-warning-border)); border-radius: var(--cx-radius);
@@ -453,10 +445,9 @@ span.cx-button { pointer-events: none; }
   .cx-chat { position: static; max-height: none; }
   .cx-requests-layout { grid-template-columns: minmax(0, 1fr); }
   .cx-guide { position: static; }
-  /* The band stacks: words first, the meter underneath, the orbit art fainter behind both. */
+  /* The orbit art sits fainter behind the words. */
   .cx-hero { flex-direction: column; align-items: stretch; min-height: 0; }
   .cx-hero-art { top: -36px; right: -96px; width: min(520px, 78%); opacity: .7; }
-  .cx-hero-meter { align-self: flex-start; }
   /* Narrow screens: the way back and the conversation first, then the requests and the picked request, then its other details. */
   .cx-main:has(.cx-reqsplit) { display: block; overflow-y: auto; }
   .cx-request-page, .cx-request { display: block; }
@@ -496,7 +487,6 @@ span.cx-button { pointer-events: none; }
   .cx-hero-tagline { font-size: var(--client-type-body); }
   .cx-hero-actions { margin-top: var(--client-space-5); }
   .cx-hero-art { width: 90%; right: -40%; opacity: .55; }
-  .cx-hero-meter { width: 100%; max-width: none; }
   /* Cards stack: the picture on top at a fixed shape, then the project, then its buttons. */
   .cx-pcard { grid-template-columns: minmax(0, 1fr); gap: var(--client-space-4); }
   .cx-pcard-picture, .cx-cover-art { min-height: 0; }
