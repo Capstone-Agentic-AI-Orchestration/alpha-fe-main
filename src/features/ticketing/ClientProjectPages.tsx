@@ -149,6 +149,8 @@ function ClientProjectCard({ project, requests, onOpenProject, onOpenPreview, la
       <header className="cx-pcard-head">
         <h3 id={titleId}>{project.name}</h3>
         {needsYou > 0 && <CxBadge tone="attention">{needsYou} {needsYou === 1 ? 'needs' : 'need'} you</CxBadge>}
+        {project.stage && project.stage.stage !== 'unset' && <CxBadge tone={project.stage.waitingOn === 'client' ? 'attention'
+          : project.stage.stage === 'completed' ? 'done' : 'active'}>{project.stage.label}</CxBadge>}
       </header>
       <p className="cx-pcard-meta"><Clock size={14} aria-hidden="true" />
         <span>Updated <time dateTime={project.updatedAt} title={time(project.updatedAt)}>{relativeTime(project.updatedAt)}</time></span></p>

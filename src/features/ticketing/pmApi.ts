@@ -1,5 +1,6 @@
 import { ApiRequestError, apiService } from '@/shared/services/apiService';
 import { parseConversation, parseConversationRequest, parseConversationRequests } from './projectConversation';
+import { parseStageResult, parseStageSummary, type ContractClause, type PocFeature, type RevisionClassification, type StageResult, type StageSummary } from './projectStages';
 import { parseClientDeliveryFile, parseClientDeliveryManifest, readPmDeliveryFile, type ClientDeliveryFile } from './clientDelivery';
 import { parsePmDeliveryCandidates } from './pmDeliveryCandidates';
 import { parseTicketDocumentList, type TicketDocumentsReadApi } from './ticketDocuments';
@@ -308,6 +309,12 @@ export interface PmCentralIntakeClarify { intakeId: string; operationId: string;
 export type PmTicketInvitationEmailReceipt = PmTicketInvitationReceipt;
 
 function encodeId(value: string): string { return encodeURIComponent(value); }
+/** What the PM writes for a proof of concept version. */
+export interface PmPocDraft { title: string; summary: string; features: PocFeature[]; screens: string[]; outOfScope: string; note: string }
+/** What the PM may change in a contract draft; the scope and revision limit come from the approved POC. */
+export interface PmContractDraft { deliverables?: string[]; clauses?: ContractClause[]; notes?: string }
+/** How the PM labels one note of a feedback round. */
+export interface PmRoundLabel { id: string; classification: RevisionClassification; pmNote: string }
 /** What an accepted inquiry became, when the server says: its request and that request's project. */
 function acceptedOutcome(row: Record<string, unknown>): Pick<PmCentralIntakeItem, 'acceptedTicketId' | 'acceptedTicketReference' | 'acceptedProjectId' | 'acceptedProjectName'> {
   if (typeof row.acceptedTicketId !== 'string' || typeof row.acceptedTicketReference !== 'string'
@@ -667,6 +674,61 @@ export const pmTicketApi = {
     return parseConversationRequest(await apiService.ticketRequest<unknown>(
       `/tickets/projects/${encodeId(projectId)}/conversation/requests/${encodeId(ticketId)}/check${query({ clientId })}`,
       { method: 'POST', body: JSON.stringify({ done }) }));
+  },
+  /** A project's stage track for one client (POC → Contract → Development → Completed). */
+  async getProjectStage(projectId: string, clientId: string): Promise<StageSummary> {
+    return parseStageSummary(await apiService.ticketRequest<unknown>(
+      `/tickets/projects/${encodeId(projectId)}/stage${query({ clientId })}`));
+  },
+  async getStageOperation(projectId: string, clientId: string, operationId: string): Promise<StageResult> {
+    return parseStageResult(await apiService.ticketRequest<unknown>(
+      `/tickets/projects/${encodeId(projectId)}/stage/operations/${encodeId(operationId)}${query({ clientId })}`));
+  },
+  /** One stage write, recovered by its operation id when the response is lost. */
+  stageCommand(projectId: string, clientId: string, path: string, body: { operationId: string } & Record<string, unknown>) {
+    return withOperationRecovery(
+      async () => parseStageResult(await apiService.ticketRequest<unknown>(
+        `/tickets/projects/${encodeId(projectId)}/stage/${path}${query({ clientId })}`,
+        { method: 'POST', body: JSON.stringify({ schemaVersion: 1, ...body }) })),
+      () => pmTicketApi.getStageOperation(projectId, clientId, body.operationId),
+    );
+  },
+  setStartingStage(projectId: string, clientId: string, input: { operationId: string; stage: 'poc' | 'development' | 'completed'; revisionsUsed?: number; revisionLimit?: number }) {
+    return pmTicketApi.stageCommand(projectId, clientId, 'starting-stage', input);
+  },
+  async savePocDraft(projectId: string, clientId: string, draft: PmPocDraft): Promise<StageSummary> {
+    return parseStageSummary(await apiService.ticketRequest<unknown>(
+      `/tickets/projects/${encodeId(projectId)}/stage/poc/draft${query({ clientId })}`, { method: 'PUT', body: JSON.stringify(draft) }));
+  },
+  publishPoc(projectId: string, clientId: string, pocId: string, operationId: string) {
+    return pmTicketApi.stageCommand(projectId, clientId, `poc/${encodeId(pocId)}/publish`, { operationId });
+  },
+  /** Creates the contract draft from the approved POC (empty input), or edits its deliverables, clauses and notes. */
+  async saveContractDraft(projectId: string, clientId: string, input: PmContractDraft): Promise<StageSummary> {
+    return parseStageSummary(await apiService.ticketRequest<unknown>(
+      `/tickets/projects/${encodeId(projectId)}/stage/contract/draft${query({ clientId })}`, { method: 'PUT', body: JSON.stringify(input) }));
+  },
+  issueContract(projectId: string, clientId: string, contractId: string, operationId: string) {
+    return pmTicketApi.stageCommand(projectId, clientId, `contract/${encodeId(contractId)}/issue`, { operationId });
+  },
+  voidContract(projectId: string, clientId: string, contractId: string, operationId: string) {
+    return pmTicketApi.stageCommand(projectId, clientId, `contract/${encodeId(contractId)}/void`, { operationId });
+  },
+  countersignContract(projectId: string, clientId: string, contractId: string, input: { operationId: string; fullName: string }) {
+    return pmTicketApi.stageCommand(projectId, clientId, `contract/${encodeId(contractId)}/countersign`, input);
+  },
+  /** Shares the current build for feedback: opens the next round. */
+  shareBuild(projectId: string, clientId: string, input: { operationId: string; note: string }) {
+    return pmTicketApi.stageCommand(projectId, clientId, 'rounds', input);
+  },
+  classifyRound(projectId: string, clientId: string, roundId: string, input: { operationId: string; items: PmRoundLabel[] }) {
+    return pmTicketApi.stageCommand(projectId, clientId, `rounds/${encodeId(roundId)}/classify`, input);
+  },
+  markFinalDelivery(projectId: string, clientId: string, input: { operationId: string; note: string }) {
+    return pmTicketApi.stageCommand(projectId, clientId, 'final', input);
+  },
+  sendQuote(projectId: string, clientId: string, quoteId: string, input: { operationId: string; amount: number; currency: string; description: string }) {
+    return pmTicketApi.stageCommand(projectId, clientId, `quotes/${encodeId(quoteId)}/send`, input);
   },
   /** Open client requests on a project, for the New task dialog. */
   listOpenRequests(projectId: string) {

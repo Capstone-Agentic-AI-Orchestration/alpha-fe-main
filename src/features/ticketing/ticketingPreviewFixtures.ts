@@ -2,8 +2,12 @@ import { createTicketPreview, type PreviewSeedTicket } from './previewModel';
 import { PREVIEW_CONVERSATION_ITEMS, PREVIEW_CONVERSATION_PROJECT, PREVIEW_CONVERSATION_REQUESTS } from './conversationPreviewFixtures';
 import { previewDelay, withPreviewLatency } from './previewLatency';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
+import { previewStage, previewStageEvents, previewStageSummary } from './stagePreviewFixtures';
 import {
   pmTicketApi,
+  type PmContractDraft,
+  type PmPocDraft,
+  type PmRoundLabel,
   type PmTicketDetail,
   type PmTicketMessage,
   type PmTicketNote,
@@ -214,7 +218,27 @@ const localMethods: Partial<typeof pmTicketApi> = {
   async listClientProjectConversations() {
     return [{ ...PREVIEW_CONVERSATION_PROJECT, openRequests: 2, lastActivityAt: '2026-10-06T08:40:00+08:00' }];
   },
-  async getProjectConversation() { return { items: PREVIEW_CONVERSATION_ITEMS, clientId: 'preview-northstar' }; },
+  async getProjectConversation() { return { items: [...PREVIEW_CONVERSATION_ITEMS, ...previewStageEvents()], clientId: 'preview-northstar' }; },
+  async getProjectStage(_projectId: string, clientId: string) { return previewStageSummary('pm', clientId); },
+  async setStartingStage(_projectId: string, _clientId: string, input: { stage: 'poc' | 'development' | 'completed'; revisionsUsed?: number; revisionLimit?: number }) {
+    return previewStage.setStartingStage(input);
+  },
+  async savePocDraft(_projectId: string, clientId: string, draft: PmPocDraft) { return previewStage.savePocDraft(draft, clientId); },
+  async publishPoc(_projectId: string, _clientId: string, pocId: string) { return previewStage.publishPoc(pocId); },
+  async saveContractDraft(_projectId: string, clientId: string, input: PmContractDraft) { return previewStage.saveContractDraft(input, clientId); },
+  async issueContract(_projectId: string, _clientId: string, contractId: string) { return previewStage.issueContract(contractId); },
+  async voidContract(_projectId: string, _clientId: string, contractId: string) { return previewStage.voidContract(contractId); },
+  async countersignContract(_projectId: string, _clientId: string, contractId: string, input: { fullName: string }) {
+    return previewStage.countersignContract(contractId, input.fullName);
+  },
+  async shareBuild(_projectId: string, _clientId: string, input: { note: string }) { return previewStage.shareBuild(input.note); },
+  async classifyRound(_projectId: string, _clientId: string, roundId: string, input: { items: PmRoundLabel[] }) {
+    return previewStage.classifyRound(roundId, input.items);
+  },
+  async markFinalDelivery(_projectId: string, _clientId: string, input: { note: string }) { return previewStage.markFinalDelivery(input.note); },
+  async sendQuote(_projectId: string, _clientId: string, quoteId: string, input: { amount: number; currency: string; description: string }) {
+    return previewStage.sendQuote(quoteId, input.amount, input.currency, input.description);
+  },
   async getProjectConversationRequests() { return { items: PREVIEW_CONVERSATION_REQUESTS }; },
   async listOpenRequests() {
     return { items: PREVIEW_CONVERSATION_REQUESTS.map(request => ({ ticketId: request.ticketId, reference: request.reference,

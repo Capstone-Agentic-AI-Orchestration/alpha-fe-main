@@ -87,9 +87,11 @@ const CLIENT_PAGES: Record<Page, { label: string; subtitle: string; Icon: Lucide
 
 export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false,
   workflowActionsDisabled: workflowActionsDisabledOverride = false, newRequestsDisabled = true,
-  communicationEnabled = false }: {
+  communicationEnabled = false, stageActionsInInspection = false }: {
   api?: typeof clientTicketApi;
   inspectionOnly?: boolean;
+  /** The UI preview's stage stand-in keeps stage decisions in memory, so they stay clickable while inspecting. */
+  stageActionsInInspection?: boolean;
   /** Disables client-initiated lifecycle decisions while preserving scoped ticket access. */
   workflowActionsDisabled?: boolean;
   /** New Request can be enabled by AppEntry, but is rendered only inside a selected project. */
@@ -196,13 +198,17 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       timestamp: item.updatedAt,
       target: { kind: 'request', item },
     }));
-    const projectUpdates: ClientPortalUpdate[] = (projects ?? []).map(item => ({
-      id: `project:${item.workspaceId}:${item.projectId}:${item.updatedAt}`,
-      title: 'Project updated',
-      message: item.name,
+    const projectUpdates: ClientPortalUpdate[] = (projects ?? []).map(item => {
+      // A project waiting on the client at its stage (review a POC, sign, send feedback, accept a quote) says so.
+      const turn = item.stage?.waitingOn === 'client' ? item.stage : null;
+      return {
+      id: `project:${item.workspaceId}:${item.projectId}:${item.updatedAt}${turn ? ':' + turn.actionLabel : ''}`,
+      title: turn?.actionLabel ?? 'Project updated',
+      message: turn ? `${item.name} · ${turn.label}` : item.name,
       timestamp: item.updatedAt,
       target: { kind: 'project', item },
-    }));
+    };
+    });
     const proposalUpdates = (projectProposals ?? []).flatMap(item => {
       const update = projectProposalPortalUpdate(item);
       return update ? [update] : [];
@@ -824,6 +830,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
         {page === 'projects' && conversationProject && <ClientProjectConversation key={activeTabId + ':' + selectedConversationKey}
           api={api} project={conversationProject} clientName={clientName} readOnly={inspectionOnly}
+          stageReadOnly={inspectionOnly && !stageActionsInInspection}
           requestAction={newRequestAction}
           onBack={() => { cancelCreateForm(); setSelectedConversationKey(null); setSelectedConversationTicketId(null); showConversationRequest(conversationProject, null); }}
           selectedTicketId={selectedConversationTicketId} onSelectRequest={ticketId => selectConversationRequest(conversationProject, ticketId)}

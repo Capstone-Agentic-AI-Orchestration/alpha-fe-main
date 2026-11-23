@@ -6,6 +6,8 @@ import type {
 } from './clientApi';
 import { DEMO_TICKETS } from './ticketingPreviewFixtures';
 import { withPreviewLatency } from './previewLatency';
+import { previewStage, previewStageEvents, previewStageSummary } from './stagePreviewFixtures';
+import { parseStageBadge } from './projectStages';
 
 const workspace = 'client-ui-sample-workspace';
 const terminal = (status: string) => ['closed', 'declined', 'cancelled'].includes(status);
@@ -67,14 +69,39 @@ const sampleProject: ClientProject = {
 };
 
 const methods: Partial<typeof clientTicketApi> = {
-  async getProjectConversation() { return { items: PREVIEW_CONVERSATION_ITEMS }; },
+  async getProjectConversation() { return { items: [...PREVIEW_CONVERSATION_ITEMS, ...previewStageEvents()] }; },
+  async getProjectStage() { return previewStageSummary('client'); },
+  async requestPocChanges(_workspaceId: string, _projectId: string, pocId: string, input: { body: string }) {
+    return previewStage.requestPocChanges(pocId, input.body);
+  },
+  async approvePoc(_workspaceId: string, _projectId: string, pocId: string, input: { contentHash: string; fullName: string }) {
+    return previewStage.approvePoc(pocId, input.contentHash, input.fullName);
+  },
+  async signContract(_workspaceId: string, _projectId: string, contractId: string, input: { contentHash: string; fullName: string }) {
+    return previewStage.signContract(contractId, input.contentHash, input.fullName);
+  },
+  async saveRoundItems(_workspaceId: string, _projectId: string, roundId: string, items: string[]) { return previewStage.saveRoundItems(roundId, items); },
+  async submitRound(_workspaceId: string, _projectId: string, roundId: string, input: { acceptPaid: boolean }) {
+    return previewStage.submitRound(roundId, input.acceptPaid);
+  },
+  async acceptFinal(_workspaceId: string, _projectId: string, input: { fullName: string }) { return previewStage.acceptFinal(input.fullName); },
+  async requestChange(_workspaceId: string, _projectId: string, input: { title: string; description: string }) {
+    return previewStage.requestChange(input.title, input.description);
+  },
+  async decideQuote(_workspaceId: string, _projectId: string, quoteId: string, input: { decision: 'accept' | 'decline'; fullName?: string }) {
+    return previewStage.decideQuote(quoteId, input.decision, input.fullName);
+  },
   async getProjectConversationRequests() {
     return { items: PREVIEW_CONVERSATION_REQUESTS.map(request => ({ ...request, workspaceId: workspace })) };
   },
   async getWorkflowCapabilities() { return { phaseWorkflowEnabled: false }; },
   async getSession() { return { authenticated: true, fullName: 'Alex Morgan', email: 'alex.morgan@example.test' }; },
   async listWorkspaces() { return { items: [{ workspaceId: workspace, displayName: 'Northstar Demo Co. · fictional samples' }] }; },
-  async listProjects() { return { items: [sampleProject] }; },
+  async listProjects() {
+    const summary = previewStageSummary('client');
+    return { items: [{ ...sampleProject, stage: parseStageBadge({ stage: summary.stage, label: summary.stageLabel,
+      waitingOn: summary.nextAction?.who ?? null, actionLabel: summary.nextAction?.label ?? null }) }] };
+  },
   async listProjectProposals() { return { items: [] }; },
   async listRequests(options: ClientTicketQueueOptions = {}) { return requestPage(options); },
   async listProjectRequests(workspaceId: string, projectId: string, options: ClientTicketQueueOptions = {}) {

@@ -1,11 +1,13 @@
 import type { TicketChatMessage } from './TicketChat';
+import { parseStageEvent, stageEventLine, type StageEventInfo } from './projectStages';
 
 /**
  * One conversation per client and project: the project thread, each request
  * made there and its messages, an accepted proposal's clarifications, tasks
  * linked to requests, and the request checklist, in time order.
  */
-export type ConversationItemKind = 'message' | 'note' | 'request' | 'clarification' | 'task_linked' | 'request_done' | 'request_reopened';
+export type ConversationItemKind = 'message' | 'note' | 'request' | 'clarification' | 'task_linked' | 'request_done' | 'request_reopened'
+  | 'stage_event';
 export interface ConversationItem {
   id: string;
   kind: ConversationItemKind;
@@ -14,6 +16,8 @@ export interface ConversationItem {
   createdAt: string;
   request: { ticketId: string; reference: string; title: string } | null;
   task: { issueId: string; identifier: string; title: string } | null;
+  /** Only on stage events: what happened to the project's stage. */
+  stage?: StageEventInfo;
 }
 
 export type RequestChecklistStatus = 'open' | 'in_progress' | 'ready_to_check' | 'done' | 'declined' | 'cancelled';
@@ -48,7 +52,7 @@ export function canToggleRequest(request: ConversationRequest): boolean {
   return !(request.checklist === 'done' && request.ticketStatus === 'closed');
 }
 
-const KINDS = new Set<ConversationItemKind>(['message', 'note', 'request', 'clarification', 'task_linked', 'request_done', 'request_reopened']);
+const KINDS = new Set<ConversationItemKind>(['message', 'note', 'request', 'clarification', 'task_linked', 'request_done', 'request_reopened', 'stage_event']);
 const CHECKLIST = new Set<RequestChecklistStatus>(['open', 'in_progress', 'ready_to_check', 'done', 'declined', 'cancelled']);
 const record = (value: unknown): value is Record<string, unknown> => Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 const text = (value: unknown): value is string => typeof value === 'string';
@@ -74,7 +78,10 @@ export function parseConversation(value: unknown): { items: ConversationItem[]; 
       || (raw.author !== 'client' && raw.author !== 'pm') || !text(raw.body) || !nonEmpty(raw.createdAt)) invalid();
     const request = parseItemRequest(raw.request);
     const task = parseItemTask(raw.task);
-    return { id: raw.id, kind: raw.kind as ConversationItemKind, author: raw.author, body: raw.body, createdAt: raw.createdAt, request, task };
+    const stage = raw.kind === 'stage_event' ? parseStageEvent(raw.stage) : null;
+    if (raw.kind === 'stage_event' && !stage) invalid();
+    return { id: raw.id, kind: raw.kind as ConversationItemKind, author: raw.author, body: raw.body, createdAt: raw.createdAt, request, task,
+      ...(stage ? { stage } : {}) };
   });
   return nonEmpty(value.clientId) ? { items, clientId: value.clientId } : { items };
 }
@@ -148,6 +155,12 @@ export function conversationChatMessages(items: readonly ConversationItem[], rol
   const asked = new Map(items.flatMap(item => item.kind === 'request' && item.request ? [[item.request.ticketId, item.body] as const] : []));
   return items.filter(item => role === 'pm' || item.kind !== 'task_linked').map(item => {
     const actions = actionsFor?.(item);
+    if (item.kind === 'stage_event' && item.stage) {
+      const line = stageEventLine(item.stage, item.author, role);
+      // A change request keeps the client's words as a message; everything else is a line between messages.
+      if (item.body) return { id: item.id, author: item.author, body: item.body, createdAt: item.createdAt, tag: line };
+      return { id: item.id, author: item.author, kind: 'event', body: line, createdAt: item.createdAt };
+    }
     if (item.kind === 'task_linked' || item.kind === 'request_done' || item.kind === 'request_reopened') {
       return { id: item.id, author: item.author, kind: 'event', body: eventLine(item, role), createdAt: item.createdAt };
     }
