@@ -126,7 +126,6 @@ export default {
          */
         'signin-rise': 'signinRise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both',
         'signin-flash': 'signinFlash 0.48s ease-out both',
-        'signin-drift': 'signinDrift 24s ease-in-out infinite alternate',
         'signin-role-change': 'signinRoleChange 0.5s cubic-bezier(0.22, 1, 0.36, 1) both',
       },
       keyframes: {
@@ -146,10 +145,6 @@ export default {
           '0%': { opacity: '0', transform: 'scale(0.6)' },
           '30%': { opacity: '1', transform: 'scale(1.08)' },
           '100%': { opacity: '0', transform: 'scale(1.5)' },
-        },
-        signinDrift: {
-          '0%': { transform: 'translate3d(0, 0, 0)' },
-          '100%': { transform: 'translate3d(6%, 8%, 0)' },
         },
         signinRoleChange: {
           '0%': { opacity: '0', transform: 'translateY(5px)' },

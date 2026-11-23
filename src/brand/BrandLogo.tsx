@@ -1,11 +1,7 @@
-import { BRAND_LOGO, BRAND_MARK, BRAND_NAME, BRAND_NARROW_MEDIA } from './brand';
+import { BRAND_FULL_LOGO, BRAND_NAME } from './brand';
 
-const sized = (box: { width: number; height: number }, height: number) => ({ width: Math.round(box.width * height / box.height), height });
-
-/** The header logo: mark and wordmark, or the mark alone on narrow screens. Height is set by CSS; `height` only reserves space. */
+/** CSS sets the rendered size. The attributes reserve the logo's aspect ratio. */
 export function BrandLogo({ height }: { height: number }) {
-  return <picture>
-    <source media={BRAND_NARROW_MEDIA} srcSet={BRAND_MARK.url} {...sized(BRAND_MARK, height)} />
-    <img src={BRAND_LOGO.url} alt={`${BRAND_NAME} home`} {...sized(BRAND_LOGO, height)} />
-  </picture>;
+  const width = Math.round(BRAND_FULL_LOGO.width * height / BRAND_FULL_LOGO.height);
+  return <img src={BRAND_FULL_LOGO.url} alt={`${BRAND_NAME} home`} width={width} height={height} />;
 }

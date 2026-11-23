@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
 import { FolderKanban, House, type LucideIcon } from 'lucide-react';
-import { BRAND_NAME } from '@/brand/brand';
-import fullLogoUrl from '@/assets/alphaexplora-full.png';
+import { BRAND_FULL_LOGO, BRAND_NAME } from '@/brand/brand';
 import { Button } from '@/shared/components/ui/button';
 import type { ClientPage } from './clientWorkspaceTabs';
 
@@ -18,7 +17,7 @@ export function navPageFor(page: ClientPage): ClientNavPage {
 }
 
 function Brand() {
-  return <span className="cx-brand"><img src={fullLogoUrl} alt={BRAND_NAME} className="invert dark:invert-0" /></span>;
+  return <span className="cx-brand"><img src={BRAND_FULL_LOGO.url} alt={BRAND_NAME} className="invert dark:invert-0" /></span>;
 }
 
 function PageLinks({ page, onNavigate }: { page: ClientPage; onNavigate: (page: ClientNavPage) => void }) {

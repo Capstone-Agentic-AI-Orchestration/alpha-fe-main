@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ArrowUpRight, Eye, EyeOff, RefreshCw } from 'lucide-react';
 import { ClientAuthShell } from './ClientAuthShell';
 import { clientAccountApi } from './clientAccountApi';
-import { BRAND_IGNITE_EVENT } from './publicClient/brandBackdropScene';
+import { BRAND_IGNITE_EVENT } from '@/brand/brandBackdropScene';
 
 /** Let the backdrop's mark flash once before the portal replaces the page. */
 function igniteThen(next: () => void) {
