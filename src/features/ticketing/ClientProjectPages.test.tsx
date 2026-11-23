@@ -6,72 +6,83 @@ import { QaPreview, previewViewport } from './ProjectQaStudio';
 import type { QaBuild } from './projectQaApi';
 
 describe('client overview loading', () => {
-  it('shows loaded projects while requests are pending, then distinguishes a confirmed empty queue', () => {
-    const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
-    const loaded = { items: [], nextCursor: null, counters: { kind: 'client' as const, open: 0, needsClient: 0 } };
+  const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
+  const empty = { items: [], nextCursor: null, counters: { kind: 'client' as const, open: 0, needsClient: 0 } };
+
+  it('shows the project state while requests are pending, and hides Waiting on you once nothing needs the client', () => {
     const loading = renderToStaticMarkup(<ClientOverviewPage requests={null} requestsLoading requestsError=""
       projects={[]} projectsLoading={false} projectsError="" {...callbacks} />);
-    expect(loading).toContain('Loading recent request updates');
-    expect(loading).toContain('No projects have been shared');
-    expect(loading).not.toContain('all caught up');
-    const ready = renderToStaticMarkup(<ClientOverviewPage requests={loaded} requestsLoading requestsError=""
+    expect(loading).toContain('Loading requests needing attention');
+    expect(loading).toContain('No projects yet');
+    expect(loading).toContain('When your project manager shares a project, it will appear here.');
+    const ready = renderToStaticMarkup(<ClientOverviewPage requests={empty} requestsLoading requestsError=""
       projects={[]} projectsLoading projectsError="" {...callbacks} />);
-    expect(ready).toContain('all caught up');
-    expect(ready).toContain('Loading shared projects');
-    expect(ready).not.toContain('Loading recent request updates');
+    // A confirmed empty queue drops the section rather than showing an empty panel.
+    expect(ready).not.toContain('client-attention-title');
+    expect(ready).not.toContain('Loading requests needing attention');
+    expect(ready).toContain('Loading your projects');
+    expect(ready).not.toContain('No projects yet');
   });
 
-  it('leads with the banner and what needs the client, then each project as a fixed-size card with its counts, not its request list', () => {
-    const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
+  it('leads with the banner and what needs the client, then features a project with its counts and its own updates', () => {
     const base = { reference: 'REF-1', createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z', closedAt: null,
       readOnly: false, writesAvailable: true, workspaceId: 'w1', projectId: 'p1', projectName: 'Shop', projectLinkStatus: 'linked' as const,
       requestedProjectName: null };
     const items = [
       { ...base, id: 'a', title: 'Pick the checkout colours', status: 'awaiting_client' as const, requestedAction: 'agree_scope' as const },
       { ...base, id: 'b', title: 'Add a gift message field', status: 'in_progress' as const, requestedAction: null },
+      { ...base, id: 'c', title: 'Other project request', projectId: 'p2', projectName: 'Blog', status: 'in_progress' as const, requestedAction: null },
     ];
-    const html = renderToStaticMarkup(<ClientOverviewPage clientName="Alex Morgan" requestsLoading={false} requestsError=""
-      requests={{ items, nextCursor: null, counters: { kind: 'client', open: 2, needsClient: 1 } }}
-      projects={[{ workspaceId: 'w1', projectId: 'p1', name: 'Shop', updatedAt: '2026-11-01T00:00:00Z', intakeOptionId: 'o1', preview: null }]}
-      projectsLoading={false} projectsError="" onProposeProject={() => {}} {...callbacks} />);
-    expect(html).toContain('1 thing needs you');
+    const render = (extra: { onProposeProject?: () => void; newRequestAction?: JSX.Element }) => renderToStaticMarkup(<ClientOverviewPage
+      clientName="Alex Morgan" requestsLoading={false} requestsError=""
+      requests={{ items, nextCursor: null, counters: { kind: 'client', open: 3, needsClient: 1 } }}
+      projects={[{ workspaceId: 'w1', projectId: 'p1', name: 'Shop', updatedAt: '2026-11-02T00:00:00Z', intakeOptionId: 'o1', preview: null },
+        { workspaceId: 'w1', projectId: 'p2', name: 'Blog', updatedAt: '2026-11-01T00:00:00Z', intakeOptionId: 'o2', preview: null }]}
+      projectsLoading={false} projectsError="" {...extra} {...callbacks} />);
+    const html = render({ onProposeProject: () => {} });
+    expect(html).toContain('Alex');
+    expect(html).toContain('Waiting on you');
     expect(html).toContain('Review plan');
-    expect(html).not.toContain('all caught up');
-    // The waiting request shows its step on its action card; the project cover only counts requests.
     expect(html).toContain('Step 2 of 5');
-    expect(html).not.toContain('Step 3 of 5');
-    expect(html).not.toContain('more in this project');
-    const card = html.slice(html.indexOf('class="cx-pcard"'), html.indexOf('client-recent-title'));
-    expect(card).toContain('aria-label="Requests in Shop"');
-    expect(card).toContain('<dt>Open</dt><dd>2</dd>');
-    expect(card).toContain('1 needs you');
-    expect(card).not.toContain('Add a gift message field');
-    // Proposing is the banner's one main action; Home has no second propose card further down.
+    // Waiting work comes before the projects.
+    expect(html.indexOf('client-attention-title')).toBeLessThan(html.indexOf('client-projects-title'));
+    // The most recently updated project is featured, with counts for its requests only.
+    expect(html).toContain('Featured project · 1 of 2');
+    const stats = html.slice(html.indexOf('aria-label="Requests in Shop"'));
+    expect(stats).toContain('<dt>Needs you</dt><dd>1</dd>');
+    expect(stats).toContain('<dt>Open</dt><dd>2</dd>');
+    // Its updates list its own requests, not another project's.
+    const updates = html.slice(html.indexOf('cx-showcase-updates-title'));
+    expect(updates).toContain('Add a gift message field');
+    expect(updates).not.toContain('Other project request');
+    // Proposing is the banner's one main action, ahead of everything else.
     expect(html.match(/Propose a project/g)).toHaveLength(1);
     expect(html.indexOf('Propose a project')).toBeLessThan(html.indexOf('client-attention-title'));
     expect(html).not.toContain('REF-1');
+    // The new-request menu replaces the propose button when the portal passes one.
+    const withMenu = render({ onProposeProject: () => {}, newRequestAction: <button type="button">New request</button> });
+    expect(withMenu).toContain('New request');
+    expect(withMenu).not.toContain('Propose a project');
   });
 
-  it('always offers Open preview on a project card, with the preview picture once shared and artwork before', () => {
-    const callbacks = { onOpenRequest: () => {}, onOpenProject: () => {}, onOpenPreview: () => {}, onGoToProjects: () => {}, onGoToRequests: () => {} };
-    const loaded = { items: [], nextCursor: null, counters: { kind: 'client' as const, open: 0, needsClient: 0 } };
+  it('always offers Open preview on the featured project, with the preview picture once shared', () => {
     const shop = { workspaceId: 'w1', projectId: 'p1', name: 'Shop', updatedAt: '2026-11-01T00:00:00Z', intakeOptionId: 'o1', preview: null };
-    const render = (preview: typeof shop.preview | { branch: 'uat'; url: string }) => renderToStaticMarkup(<ClientOverviewPage requests={loaded}
-      requestsLoading={false} requestsError="" projects={[{ ...shop, preview }]} projectsLoading={false} projectsError="" {...callbacks} />);
+    const render = (preview: typeof shop.preview | { branch: 'uat'; url: string }) => renderToStaticMarkup(<ClientOverviewPage requests={empty}
+      requestsLoading={false} requestsError="" projects={[{ ...shop, preview }]} projectsLoading={false} projectsError=""
+      onOpenPreview={() => {}} {...callbacks} />);
     const waiting = render(null);
-    expect(waiting).toContain('no preview yet');
+    expect(waiting).toContain('Preview status: Not shared yet');
     // The preview page opens before anything is shared and says so there; only the picture waits.
-    expect(waiting).toContain('aria-label="Open preview for Shop"');
-    expect(waiting).toContain('aria-label="Open project: Shop"');
-    expect(waiting).toContain('cx-cover-art');
+    expect(waiting).toContain('There is still no preview.');
+    expect(waiting).toContain('Open preview');
     expect(waiting).not.toContain('cx-thumb');
     const ready = render({ branch: 'uat', url: 'https://shop-uat.vercel.app' });
-    expect(ready).toContain('preview ready');
+    expect(ready).toContain('Preview status: Shared · UAT');
     expect(ready).toContain('cx-thumb');
-    expect(ready).not.toContain('cx-cover-art');
-    const links = ready.slice(ready.indexOf('class="cx-card-links"'));
-    expect(links.indexOf('aria-label="Open preview for Shop"')).toBeGreaterThan(-1);
-    expect(links.indexOf('aria-label="Open project: Shop"')).toBeGreaterThan(links.indexOf('aria-label="Open preview for Shop"'));
+    expect(ready).not.toContain('There is still no preview.');
+    const actions = ready.slice(ready.indexOf('class="cx-showcase-actions"'));
+    expect(actions.indexOf('Open preview')).toBeGreaterThan(-1);
+    expect(actions.indexOf('Open project')).toBeGreaterThan(actions.indexOf('Open preview'));
   });
 });
 
