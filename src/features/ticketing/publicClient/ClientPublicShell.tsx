@@ -1,8 +1,8 @@
 import { useRef, type ReactNode } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import { BrandLogo } from '@/brand/BrandLogo';
+import { BrandBackdrop } from '@/brand/BrandBackdrop';
 import { clientLandingHref, clientPortalHref, publicInquiryHref } from '../publicIntakeApi';
-import { BrandBackdrop } from './BrandBackdrop';
 import { InteractiveBackdrop } from './InteractiveBackdrop';
 import '../clientDesignTokens.css';
 import './clientPublic.css';
@@ -37,7 +37,7 @@ export function ClientPublicShell({ children, page = 'landing', slug = '', navig
     <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
     <header className="public-header public-container">
       <a className="public-brand public-brand-logo" href={homeHref} onClick={event => { if (navigationLocked) event.preventDefault(); }} aria-disabled={navigationLocked || undefined}>
-        <BrandLogo height={44} />
+        <BrandLogo height={56} />
       </a>
       <nav className={`public-header-nav public-header-nav-${page}`} aria-label="Client navigation">
         {page === 'landing' ? <>

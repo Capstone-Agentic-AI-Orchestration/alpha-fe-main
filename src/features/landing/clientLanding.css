@@ -66,8 +66,7 @@
 .client-landing .cl-header { transition: transform 450ms var(--cl-ease), opacity 300ms ease; }
 .client-landing .cl-header.is-hidden:not(:focus-within):not(:has(.cl-menu.is-open)) { opacity: 0; transform: translateY(-110%); }
 .client-landing .cl-header.is-hidden:not(:focus-within):not(:has(.cl-menu.is-open)) > * { pointer-events: none; }
-.client-landing .cl-brand picture { display: contents; }
-.client-landing .cl-brand img { width: auto; height: clamp(56px, 8vh, 72px); }
+.client-landing .cl-brand img { width: auto; height: clamp(56px, 8vh, 80px); }
 .client-landing .cl-menu { position: relative; }
 .client-landing .cl-menu-bar { display: flex; align-items: center; gap: 10px; }
 .client-landing .cl-pill { display: inline-flex; align-items: center; gap: 10px; min-height: var(--client-control-large); padding: 0 var(--client-space-5); border: 1px solid var(--public-line); border-radius: var(--client-radius-pill); background: color-mix(in srgb, var(--public-panel) 82%, transparent); color: var(--public-ink); font-family: 'IBM Plex Mono', ui-monospace, monospace; font-size: var(--client-type-caption); font-weight: var(--client-weight-medium); letter-spacing: .08em; text-decoration: none; text-transform: uppercase; cursor: pointer; backdrop-filter: blur(10px); transition: border-color 200ms, background-color 200ms; }

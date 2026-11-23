@@ -11,7 +11,7 @@ const MIST = '224,213,255';
 const rgba = (rgb: string, alpha: number) => `rgba(${rgb},${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
 
 /**
- * Background for the client access pages: the landing's starfield with a
+ * Background for sign-in pages: the landing's starfield with a
  * large, faint Alphaexplora mark behind the headline. The A holds still while
  * its orbit turns and its dots shimmer along the strokes; it all slows while
  * the visitor types, and the apex flashes and the trails streak once when

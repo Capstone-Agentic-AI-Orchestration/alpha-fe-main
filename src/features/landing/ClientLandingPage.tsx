@@ -260,7 +260,7 @@ export default function ClientLandingPage() {
     <button className="public-skip" onClick={() => mainRef.current?.focus()}>Skip to content</button>
     <header ref={headerRef} className="cl-header">
       <a className="public-brand cl-brand" href={home}>
-        <BrandLogo height={60} />
+        <BrandLogo height={80} />
       </a>
       <LandingMenu home={home} inquiry={inquiry} clientSignIn={clientSignIn} onHowItWorks={() => scrollToSection(HOW_IT_WORKS)} />
     </header>

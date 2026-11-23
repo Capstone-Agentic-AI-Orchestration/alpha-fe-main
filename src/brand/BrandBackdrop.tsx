@@ -3,7 +3,7 @@ import { BRAND_IGNITE_EVENT, BrandBackdropScene } from './brandBackdropScene';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
-/** Decorative Alphaexplora mark behind the client access pages. Pointer input is read, never captured. */
+/** Decorative Alphaexplora mark and starfield for sign-in pages. */
 export function BrandBackdrop() {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {

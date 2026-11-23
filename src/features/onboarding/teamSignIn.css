@@ -1,0 +1,87 @@
+.team-sign-in {
+  --team-sign-in-warning: color-mix(in srgb, rgb(var(--ui-status-warning)) 65%, var(--public-ink));
+  color-scheme: dark;
+}
+
+.team-sign-in-layout {
+  --team-sign-in-gap: clamp(3.5rem, 8vw, 8rem);
+  display: grid;
+  min-height: 100dvh;
+  align-content: center;
+  align-items: center;
+  gap: 2rem;
+  padding-block: clamp(1.5rem, 6dvh, 4.5rem);
+}
+
+.team-sign-in-form {
+  position: relative;
+  min-width: 0;
+}
+
+.team-sign-in-logo {
+  display: block;
+  width: 168px;
+  height: auto;
+  margin-inline-start: -6px;
+}
+
+.team-sign-in-tagline {
+  margin: 0 0 .8rem;
+  font-size: .75rem;
+}
+
+.team-sign-in-form h1 {
+  margin: .35rem 0 0;
+  font-size: clamp(1.65rem, 3.2vw, 2.35rem);
+  font-weight: var(--client-weight-medium);
+  line-height: 1.12;
+  letter-spacing: -.04em;
+  text-wrap: balance;
+}
+
+.team-sign-in-showcase {
+  min-width: 0;
+  border-top: 1px solid var(--public-line);
+  padding-top: 2rem;
+}
+
+.team-sign-in-hero {
+  margin: .9rem 0 0;
+  font-size: clamp(2.35rem, min(6vw, 8dvh), 4.75rem);
+  font-weight: var(--client-weight-medium);
+  line-height: 1.02;
+  letter-spacing: -.05em;
+  text-shadow: 0 2px 30px var(--public-bg);
+}
+
+.team-sign-in-hero span { display: block; }
+.team-sign-in-accent { color: var(--public-accent); }
+.team-sign-in-muted { color: var(--public-muted); }
+button.team-sign-in-muted:hover { color: var(--public-ink); }
+.team-sign-in-status-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--public-muted); }
+.team-sign-in-status-dot.is-playing, .team-sign-in-glint { background: var(--public-accent); }
+.team-sign-in-glint { box-shadow: 0 0 10px color-mix(in srgb, var(--public-accent) 70%, transparent); }
+.team-sign-in-rail { background: color-mix(in srgb, var(--public-accent) 30%, transparent); }
+.team-sign-in-role { border-color: transparent; color: var(--public-muted); }
+.team-sign-in-role:hover, .team-sign-in-role[aria-selected='true'] { border-color: var(--public-line); background: color-mix(in srgb, var(--public-panel) 85%, transparent); color: var(--public-ink); }
+.team-sign-in-role-icon { border-color: var(--public-line); background: var(--public-bg); }
+.team-sign-in-role[aria-selected='true'] .team-sign-in-role-icon { border-color: color-mix(in srgb, var(--public-accent) 65%, transparent); color: var(--public-accent); }
+.team-sign-in-role-flash { background: radial-gradient(circle, color-mix(in srgb, var(--public-accent) 48%, transparent), transparent 68%); }
+.team-sign-in-role-panel { border-color: color-mix(in srgb, var(--public-accent) 40%, transparent); }
+.team-sign-in-role-panel:focus-visible { outline: var(--client-focus-width) solid var(--public-accent); outline-offset: var(--client-focus-offset); }
+
+.team-sign-in-action { background: var(--public-accent); color: var(--public-bg); }
+.team-sign-in-action:hover { background: color-mix(in srgb, var(--public-accent) 80%, var(--public-ink)); }
+.team-sign-in-notice { border-color: var(--public-line); background: var(--public-panel); overflow-wrap: anywhere; }
+.team-sign-in-notice code { background: var(--public-bg); color: var(--public-ink); }
+.team-sign-in-notice.is-warning { border-color: color-mix(in srgb, var(--team-sign-in-warning) 35%, transparent); }
+.team-sign-in-warning { color: var(--team-sign-in-warning); }
+.team-sign-in-shield { color: color-mix(in srgb, rgb(var(--ui-status-success)) 65%, var(--public-ink)); }
+
+@media (min-width: 900px) {
+  .team-sign-in-layout { grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); column-gap: var(--team-sign-in-gap); }
+  .team-sign-in-form { grid-area: 1 / 2; }
+  .team-sign-in-form::before { position: absolute; inset-block: -2rem; left: calc(var(--team-sign-in-gap) / -2); width: 1px; background: linear-gradient(transparent, var(--public-line) 20%, var(--public-line) 80%, transparent); pointer-events: none; content: ''; }
+  .team-sign-in-showcase { grid-area: 1 / 1; border-top: 0; padding-top: 0; }
+  .team-sign-in-tagline { display: none; }
+}
