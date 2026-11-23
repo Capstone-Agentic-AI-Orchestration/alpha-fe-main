@@ -309,28 +309,27 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
     const highlighted: ClientSection = unified && openSection === 'tickets' ? 'conversation' : openSection;
     const badgeSection: ClientSection = unified ? 'conversation' : 'tickets';
     return <div className="flex h-full min-h-0 flex-col bg-canvas">
-      <header className="shrink-0 border-b border-divider px-6 pb-0 pt-4">
-        <button type="button" onClick={() => onSelect(null)} className="mb-3 inline-flex items-center gap-1.5 text-xs font-medium text-content-muted hover:text-content">
-          <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" /> All clients
+      {/* One row: back icon and section tabs on the left, the client on the right. */}
+      <header className="flex shrink-0 items-center gap-4 border-b border-divider px-6">
+        <button type="button" onClick={() => onSelect(null)} aria-label="All clients" title="All clients"
+          className="-ml-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-content-muted hover:bg-surface-high hover:text-content">
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" />
         </button>
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="truncate text-lg font-semibold text-content">{selected.displayName}</h1>
-            <p className="mt-0.5 text-xs text-content-muted">
-              {[selected.company && selected.company.trim().toLowerCase() !== selected.displayName.trim().toLowerCase() ? selected.company : null, plural(selected.tickets.open, 'open request'), plural(selected.projects.length, 'project')].filter(Boolean).join(' · ')}
-            </p>
-          </div>
-          <AccessBadge access={selected.access} />
-        </div>
-        <div role="tablist" aria-label="Client sections" className="mt-4 flex gap-5">
+        <div role="tablist" aria-label="Client sections" className="no-scrollbar flex min-w-0 gap-5 overflow-x-auto">
           {sections.map(item => <button key={item.id} type="button" role="tab" aria-selected={highlighted === item.id}
             onClick={() => onSection(item.id)}
-            className={`relative inline-flex h-9 items-center gap-1.5 text-[13px] font-medium ${highlighted === item.id
+            className={`relative inline-flex h-12 shrink-0 items-center gap-1.5 whitespace-nowrap text-[13px] font-medium ${highlighted === item.id
               ? 'text-content after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-link'
               : 'text-content-muted hover:text-content-secondary'}`}>
             {item.label}
             {item.id === badgeSection && selected.tickets.needsPm > 0 && <span className="rounded-full bg-selected px-1.5 text-[10.5px] font-semibold text-selected-content">{selected.tickets.needsPm}</span>}
           </button>)}
+        </div>
+        <div className="ml-auto min-w-0 max-w-[40%] py-1.5 text-right">
+          <h1 className="truncate text-[15px] font-semibold leading-5 text-content" title={selected.displayName}>{selected.displayName}</h1>
+          <p className="truncate text-xs text-content-muted">
+            {[selected.company && selected.company.trim().toLowerCase() !== selected.displayName.trim().toLowerCase() ? selected.company : null, plural(selected.tickets.open, 'open request'), plural(selected.projects.length, 'project')].filter(Boolean).join(' · ')}
+          </p>
         </div>
       </header>
 
