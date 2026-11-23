@@ -68,3 +68,26 @@
   .ps-step + .ps-step::before { width: 10px; }
   .ps-step-label { font-size: 12px; }
 }
+
+/* Contract */
+.ps-contract { display: flex; flex-direction: column; gap: 14px; }
+.ps-contract section { display: flex; flex-direction: column; gap: 6px; }
+.ps-contract h3 { margin: 0; color: rgb(var(--ui-text-primary)); font-size: 14px; font-weight: 600; }
+.ps-contract h4 { margin: 0; color: rgb(var(--ui-text-muted)); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.ps-contract-head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 6px 12px; }
+.ps-contract-head .ps-link { display: inline-flex; align-items: center; gap: 5px; }
+.ps-clauses { display: flex; flex-direction: column; gap: 8px; margin: 0; padding-left: 20px; list-style: decimal; color: rgb(var(--ui-text-secondary));
+  font-size: 12.5px; line-height: 1.55; }
+.ps-clauses strong { color: rgb(var(--ui-text-primary)); font-weight: 600; }
+.ps-signatures { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding-top: 12px; border-top: 1px solid rgb(var(--ui-divider)); }
+.ps-signatures > div { display: flex; flex-direction: column; gap: 2px; font-size: 12.5px; color: rgb(var(--ui-text-secondary)); }
+.ps-signatures strong { color: rgb(var(--ui-text-primary)); font-family: Georgia, 'Times New Roman', serif; font-size: 15px; font-style: italic; font-weight: 400; }
+.ps-signature-role { color: rgb(var(--ui-text-muted)); font-size: 11px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+.ps-signature-waiting { color: rgb(var(--ui-text-muted)); }
+
+@media print {
+  body.ps-printing * { visibility: hidden !important; }
+  body.ps-printing .ps-contract-print, body.ps-printing .ps-contract-print * { visibility: visible !important; color: #000 !important; }
+  body.ps-printing .ps-contract-print { position: absolute; inset: 0 auto auto 0; width: 100%; padding: 24px; background: #fff; }
+  body.ps-printing .ps-no-print { display: none !important; }
+}

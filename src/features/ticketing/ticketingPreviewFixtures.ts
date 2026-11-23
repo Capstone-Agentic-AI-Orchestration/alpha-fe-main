@@ -5,6 +5,7 @@ import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { previewStage, previewStageEvents, previewStageSummary } from './stagePreviewFixtures';
 import {
   pmTicketApi,
+  type PmContractDraft,
   type PmPocDraft,
   type PmTicketDetail,
   type PmTicketMessage,
@@ -223,6 +224,12 @@ const localMethods: Partial<typeof pmTicketApi> = {
   },
   async savePocDraft(_projectId: string, clientId: string, draft: PmPocDraft) { return previewStage.savePocDraft(draft, clientId); },
   async publishPoc(_projectId: string, _clientId: string, pocId: string) { return previewStage.publishPoc(pocId); },
+  async saveContractDraft(_projectId: string, clientId: string, input: PmContractDraft) { return previewStage.saveContractDraft(input, clientId); },
+  async issueContract(_projectId: string, _clientId: string, contractId: string) { return previewStage.issueContract(contractId); },
+  async voidContract(_projectId: string, _clientId: string, contractId: string) { return previewStage.voidContract(contractId); },
+  async countersignContract(_projectId: string, _clientId: string, contractId: string, input: { fullName: string }) {
+    return previewStage.countersignContract(contractId, input.fullName);
+  },
   async getProjectConversationRequests() { return { items: PREVIEW_CONVERSATION_REQUESTS }; },
   async listOpenRequests() {
     return { items: PREVIEW_CONVERSATION_REQUESTS.map(request => ({ ticketId: request.ticketId, reference: request.reference,

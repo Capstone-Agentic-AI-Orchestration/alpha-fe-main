@@ -77,6 +77,9 @@ const methods: Partial<typeof clientTicketApi> = {
   async approvePoc(_workspaceId: string, _projectId: string, pocId: string, input: { contentHash: string; fullName: string }) {
     return previewStage.approvePoc(pocId, input.contentHash, input.fullName);
   },
+  async signContract(_workspaceId: string, _projectId: string, contractId: string, input: { contentHash: string; fullName: string }) {
+    return previewStage.signContract(contractId, input.contentHash, input.fullName);
+  },
   async getProjectConversationRequests() {
     return { items: PREVIEW_CONVERSATION_REQUESTS.map(request => ({ ...request, workspaceId: workspace })) };
   },

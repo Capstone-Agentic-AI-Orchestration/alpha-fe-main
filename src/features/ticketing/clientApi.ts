@@ -440,6 +440,9 @@ export const clientTicketApi = {
   approvePoc(workspaceId: string, projectId: string, pocId: string, input: { operationId: string; contentHash: string; fullName: string }) {
     return clientTicketApi.stageCommand(workspaceId, projectId, `poc/${pathId(pocId)}/approve`, { ...input, consent: true });
   },
+  signContract(workspaceId: string, projectId: string, contractId: string, input: { operationId: string; contentHash: string; fullName: string }) {
+    return clientTicketApi.stageCommand(workspaceId, projectId, `contract/${pathId(contractId)}/sign`, { ...input, consent: true });
+  },
   /** The project's one conversation: its thread, requests, their messages and checklist events. */
   async getProjectConversation(workspaceId: string, projectId: string) {
     return parseConversation(await requestJson<unknown>(`/projects/${pathId(workspaceId)}/${pathId(projectId)}/conversation`));

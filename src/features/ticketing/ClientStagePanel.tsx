@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { clientTicketApi, ClientProject } from './clientApi';
 import { PocScopeView, stageDay } from './PocScopeView';
 import { SignOffDialog } from './SignOffDialog';
+import { ContractView } from './ContractView';
 import type { StageResult, StageSummary } from './projectStages';
 import './projectStages.css';
 
@@ -23,9 +24,9 @@ export function ClientStagePanel(props: Readonly<ClientStagePanelProps>) {
   return <div className="ps-panel">
     {summary.stage === 'unset' && <p className="ps-note">Your project manager will set this project’s stage. Until then, keep using the conversation as usual.</p>}
     {summary.stage === 'poc' && <ClientPocStage {...props} />}
+    {summary.stage === 'contract' && <ClientContractStage {...props} />}
+    {(summary.stage === 'development' || summary.stage === 'completed') && <SignedContract summary={summary} />}
     {summary.stage !== 'poc' && summary.stage !== 'unset' && <ApprovedPoc summary={summary} />}
-    {summary.stage === 'contract' && <p className="ps-note">Your project manager is preparing the contract from the approved proof of concept.
-      You’ll be asked to sign it here.</p>}
     {props.actionError && <p role="alert" className="ps-error">{props.actionError}</p>}
   </div>;
 }
@@ -80,6 +81,49 @@ function ClientPocStage({ api, project, summary, busy, readOnly = false, run }: 
         handled as revisions during development.</p>
     </SignOffDialog>}
   </>;
+}
+
+function ClientContractStage({ api, project, summary, busy, readOnly = false, run }: Readonly<ClientStagePanelProps>) {
+  const [signing, setSigning] = useState(false);
+  const contract = summary.contract;
+  if (!contract) return <p className="ps-note">Your project manager is preparing the contract from the approved proof of concept.
+    You’ll be asked to sign it here.</p>;
+  const sign = async (fullName: string) => {
+    if (!contract.contentHash) return;
+    const done = await run(() => api.signContract(project.workspaceId, project.projectId, contract.id,
+      { operationId: newOperationId(), contentHash: contract.contentHash!, fullName }), 'Your signature was not saved. Try again.');
+    if (done) setSigning(false);
+  };
+  const waiting = contract.status === 'issued';
+  return <>
+    <p className="ps-lead">{waiting
+      ? <>Read the development contract, then sign it. It includes <strong>{contract.terms.revisionLimit} revision round{contract.terms.revisionLimit === 1 ? '' : 's'}</strong> during development.</>
+      : <>You signed the contract on {stageDay(contract.clientSignedAt)}. Development starts when your project manager countersigns.</>}</p>
+    <ContractView contract={contract} />
+    {waiting && !readOnly && <div className="ps-actions">
+      <button type="button" className="ps-button is-primary" onClick={() => setSigning(true)} disabled={busy}>Sign the contract</button>
+    </div>}
+    {signing && <SignOffDialog title="Sign the development contract" busy={busy} confirmLabel="Sign contract"
+      consent="I have read and agree to this development contract."
+      onCancel={() => setSigning(false)} onConfirm={fullName => void sign(fullName)}>
+      <p className="ps-copy"><strong>{contract.terms.projectName}</strong> · scope from POC v{contract.terms.scope.pocNumber} ·
+        {' '}{contract.terms.revisionLimit} revision round{contract.terms.revisionLimit === 1 ? '' : 's'} included</p>
+      <p className="ps-copy">Your project manager countersigns next, and development starts.</p>
+    </SignOffDialog>}
+  </>;
+}
+
+/** The signed contract, folded to one line during development and after. */
+function SignedContract({ summary }: Readonly<{ summary: StageSummary }>) {
+  const contract = summary.contract?.status === 'countersigned' ? summary.contract : null;
+  const [open, setOpen] = useState(false);
+  if (!contract) return null;
+  return <div className="ps-approved">
+    <p className="ps-lead">Contract signed by {contract.clientSignedName} and {contract.pmSignedName} on {stageDay(contract.pmSignedAt)}.</p>
+    <button type="button" className="ps-link" onClick={() => setOpen(value => !value)} aria-expanded={open}>
+      {open ? 'Hide the contract' : 'Show the contract'}</button>
+    {open && <ContractView contract={contract} />}
+  </div>;
 }
 
 /** The approved POC, folded to one line once the project has moved on. */

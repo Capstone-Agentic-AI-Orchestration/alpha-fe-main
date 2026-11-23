@@ -5,7 +5,9 @@ import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
 import type { pmTicketApi, PmPocDraft } from './pmApi';
 import { PocScopeView, stageDay } from './PocScopeView';
-import type { PocVersion, StageResult, StageSummary } from './projectStages';
+import type { Contract, ContractClause, PocVersion, StageResult, StageSummary } from './projectStages';
+import { ContractView } from './ContractView';
+import { SignOffDialog } from './SignOffDialog';
 
 const newOperationId = () => crypto.randomUUID();
 const link = 'h-auto justify-start px-0 py-0 text-[12px] font-semibold text-link hover:bg-transparent hover:text-link-hover';
@@ -27,6 +29,8 @@ export function PmStagePanel(props: Readonly<PmStagePanelProps>) {
   return <div className="space-y-5 text-[13px]">
     {summary.stage === 'unset' && <StartingStagePicker {...props} />}
     {summary.stage === 'poc' && <PmPocStage {...props} />}
+    {summary.stage === 'contract' && <PmContractStage {...props} />}
+    {(summary.stage === 'development' || summary.stage === 'completed') && summary.contract?.status === 'countersigned' && <SignedContractLine contract={summary.contract} />}
     {summary.stage !== 'poc' && summary.stage !== 'unset' && summary.poc?.status === 'approved' && <section className="space-y-2">
       <p className="text-content-secondary">POC v{summary.poc.number} approved by <strong className="text-content">{summary.poc.approvedName}</strong> on {stageDay(summary.poc.approvedAt)}.</p>
       <PocScopeView poc={summary.poc} compact />
@@ -170,5 +174,104 @@ function PocEditor({ api, projectId, clientId, busy, run, draft, start, onDone }
       {!draft && <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onDone}>Cancel</Button>}
     </div>
     {!ready && <p className="text-[12px] text-content-muted">A title, a summary and at least one feature are needed.</p>}
+  </form>;
+}
+
+function SignedContractLine({ contract }: Readonly<{ contract: Contract }>) {
+  const [open, setOpen] = useState(false);
+  return <section className="space-y-2">
+    <p className="text-content-secondary">Contract signed by <strong className="text-content">{contract.clientSignedName}</strong> and
+      {' '}<strong className="text-content">{contract.pmSignedName}</strong> on {stageDay(contract.pmSignedAt)}.</p>
+    <Button type="button" variant="ghost" size="sm" className={link} onClick={() => setOpen(value => !value)} aria-expanded={open}>
+      {open ? 'Hide the contract' : 'Show the contract'}</Button>
+    {open && <ContractView contract={contract} />}
+  </section>;
+}
+
+function PmContractStage({ api, projectId, clientId, summary, busy, run }: Readonly<PmStagePanelProps>) {
+  const [countersigning, setCountersigning] = useState(false);
+  const contract = summary.contract;
+  if (!contract) return <section className="space-y-2">
+    <h3 className="text-[13px] font-semibold text-content">Contract</h3>
+    <p className="text-content-muted">The client approved POC v{summary.poc?.number}. Prepare the contract from it: the approved scope, its features as
+      deliverables, {summary.revisionLimit} included revision rounds, and the standard terms. You can edit it before issuing.</p>
+    <Button type="button" size="sm" disabled={busy}
+      onClick={() => void run(() => api.saveContractDraft(projectId, clientId, {}), 'The contract was not prepared. Try again.')}>
+      Prepare the contract</Button>
+  </section>;
+  if (contract.status === 'draft') return <ContractEditor key={contract.id} api={api} projectId={projectId} clientId={clientId}
+    contract={contract} busy={busy} run={run} />;
+  const countersign = async (fullName: string) => {
+    const done = await run(() => api.countersignContract(projectId, clientId, contract.id, { operationId: newOperationId(), fullName }),
+      'The countersignature was not saved. Try again.');
+    if (done) setCountersigning(false);
+  };
+  return <section className="space-y-3">
+    {contract.status === 'issued' && <>
+      <p className="text-content-secondary">Issued {stageDay(contract.issuedAt)}. Waiting for the client to sign.</p>
+      <Button type="button" size="sm" variant="outline" disabled={busy}
+        onClick={() => void run(() => api.voidContract(projectId, clientId, contract.id, newOperationId()), 'The contract was not withdrawn. Try again.')}>
+        Withdraw to edit</Button>
+    </>}
+    {contract.status === 'client_signed' && <>
+      <p className="font-medium text-content">{contract.clientSignedName} signed on {stageDay(contract.clientSignedAt)}. Countersign to start development.</p>
+      <Button type="button" size="sm" disabled={busy} onClick={() => setCountersigning(true)}>Countersign</Button>
+    </>}
+    <ContractView contract={contract} />
+    {countersigning && <SignOffDialog title="Countersign the contract" busy={busy} confirmLabel="Countersign"
+      consent="I countersign this development contract on behalf of Alphaexplora."
+      onCancel={() => setCountersigning(false)} onConfirm={fullName => void countersign(fullName)}>
+      <p className="ps-copy">Signed by {contract.clientSignedName}. Countersigning moves the project to Development.</p>
+    </SignOffDialog>}
+  </section>;
+}
+
+function ContractEditor({ api, projectId, clientId, contract, busy, run }: Readonly<Pick<PmStagePanelProps, 'api' | 'projectId' | 'clientId' | 'busy' | 'run'> & {
+  contract: Contract;
+}>) {
+  const [deliverables, setDeliverables] = useState(contract.terms.deliverables.join('\n'));
+  const [clauses, setClauses] = useState<ContractClause[]>(contract.terms.clauses);
+  const [notes, setNotes] = useState(contract.terms.notes);
+  const input = () => ({ deliverables: deliverables.split('\n').map(line => line.trim()).filter(Boolean),
+    clauses: clauses.map(clause => ({ title: clause.title.trim(), body: clause.body.trim() })).filter(clause => clause.title && clause.body),
+    notes: notes.trim() });
+  const ready = input().clauses.length > 0;
+  const save = () => run(() => api.saveContractDraft(projectId, clientId, input()), 'The draft was not saved. Try again.');
+  const issue = () => void run(async () => {
+    const saved = await api.saveContractDraft(projectId, clientId, input());
+    if (!saved.contract) throw new Error('The draft was not saved. Try again.');
+    return api.issueContract(projectId, clientId, saved.contract.id, newOperationId());
+  }, 'The contract was not issued. Try again.');
+  const setClause = (index: number, patch: Partial<ContractClause>) =>
+    setClauses(current => current.map((clause, position) => position === index ? { ...clause, ...patch } : clause));
+  return <form className="space-y-4" onSubmit={event => { event.preventDefault(); issue(); }}>
+    <div>
+      <h3 className="text-[13px] font-semibold text-content">Contract draft</h3>
+      <p className="mt-1 text-[12px] text-content-muted">Scope from POC v{contract.terms.scope.pocNumber} · {contract.terms.revisionLimit} revision rounds.
+        Only you see the draft. Issuing sends it to the client to sign, and fixes its text.</p>
+    </div>
+    <label className="block space-y-1"><span className={label}>Deliverables (one per line)</span>
+      <Textarea value={deliverables} onChange={event => setDeliverables(event.target.value)} rows={4} /></label>
+    <fieldset className="space-y-3">
+      <legend className={label}>Terms</legend>
+      {clauses.map((clause, index) => <div key={index} className="space-y-1.5 border-l-2 border-divider pl-3">
+        <div className="flex items-center gap-1">
+          <Input aria-label={`Clause ${index + 1} title`} value={clause.title} onChange={event => setClause(index, { title: event.target.value })} maxLength={300} className="h-8" />
+          <Button type="button" variant="ghost" size="icon" className="h-8 w-8 shrink-0" disabled={clauses.length === 1}
+            onClick={() => setClauses(current => current.filter((_, position) => position !== index))} aria-label={`Remove clause ${index + 1}`}>
+            <Trash2 size={14} aria-hidden="true" /></Button>
+        </div>
+        <Textarea aria-label={`Clause ${index + 1} text`} value={clause.body} onChange={event => setClause(index, { body: event.target.value })} rows={3} maxLength={8000}
+          className="text-[12.5px]" />
+      </div>)}
+      <Button type="button" variant="ghost" size="sm" className={link} disabled={clauses.length >= 30}
+        onClick={() => setClauses(current => [...current, { title: '', body: '' }])}><Plus size={13} aria-hidden="true" />Add clause</Button>
+    </fieldset>
+    <label className="block space-y-1"><span className={label}>Notes (optional)</span>
+      <Textarea value={notes} onChange={event => setNotes(event.target.value)} rows={2} maxLength={8000} /></label>
+    <div className="flex flex-wrap gap-2">
+      <Button type="submit" size="sm" disabled={busy || !ready}>Issue for signing</Button>
+      <Button type="button" size="sm" variant="outline" disabled={busy || !ready} onClick={() => void save()}>Save draft</Button>
+    </div>
   </form>;
 }
