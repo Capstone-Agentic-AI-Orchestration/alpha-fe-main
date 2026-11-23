@@ -3,6 +3,7 @@ import { AlertTriangle, CheckCircle2, ExternalLink, GitMerge, Loader2, MessageSq
 
 import type { ProjectBuildOrchestration } from '@/shared/types';
 import { buildChangesCode, buildPublications, buildReviewSummary, buildReviewSummaryText } from './ChatBuildBodies';
+import { ResolvedWithoutYouSummary } from './ResolvedWithoutYou';
 import { useBuildApproval } from './useBuildApproval';
 import { useDevMerge } from './useDevMerge';
 
@@ -36,6 +37,8 @@ export const BuildNextStepCard: React.FC<BuildNextStepCardProps> = ({ projectId,
     return <section aria-label="Next step" className="mt-2 rounded-xl border border-status-success-border bg-surface-raised px-3.5 py-3 text-left">
       <div className="flex items-center gap-2 text-xs font-semibold text-content"><CheckCircle2 className="h-4 w-4 shrink-0 text-status-success" aria-hidden="true" />Build finished · ready for your review</div>
       <p className="mt-1 text-[11px] text-content-secondary">{buildReviewSummaryText(summary)}</p>
+      {/* What Alpha resolved on the person's behalf, before they approve it. */}
+      <ResolvedWithoutYouSummary items={orchestration.resolvedWithoutYou} />
       <p className="mt-2 text-[11px] text-content"><span className="font-semibold">Next:</span> review the changes, then approve to push them and open the pull request.</p>
       <div className="mt-2.5 flex flex-wrap items-center gap-2">
         <button type="button" onClick={onReview} className={secondary}><ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />Review changes</button>

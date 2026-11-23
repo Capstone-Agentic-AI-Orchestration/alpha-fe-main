@@ -1242,8 +1242,47 @@ export interface DependencyAuditSummary {
   findings: Array<{ package: string; severity: string; range: string; advisories: string[] }>;
 }
 
+/** One file or recorded product decision the Orchestrator cited for a fix; Alpha checked it exists. */
+export type ResolvedWithoutYouEvidence =
+  | { source: 'repository'; repository: string; path: string; quote: string }
+  | { source: 'product_picture'; quote: string };
+
+/**
+ * A problem the Orchestrator fixed on its own during a build, listed at approval. Team only: the
+ * build snapshot that carries it is never served to clients.
+ */
+export interface ResolvedWithoutYouItem {
+  recoveryId: string;
+  taskId?: string;
+  taskTitle?: string;
+  /** `retry_accepted`: the fix passed its checks. `retrying`: the specialist is applying it now. */
+  status: 'retry_accepted' | 'retrying';
+  /** 0: a routine problem in the task's own work. 1: the fix changed earlier accepted work. */
+  tier: number;
+  problem: string;
+  fix: string;
+  evidence: ResolvedWithoutYouEvidence[];
+  resolvedAt: string;
+}
+
+/** How far Alpha resolves a stuck build on its own. */
+export type ProjectOrchestrationAutonomy = 'off' | 'standard' | 'strict';
+
+/** A project's build settings. `autonomy` and `sensitivePaths` come only to the team, never clients. */
+export interface ProjectOrchestrationSettings {
+  enabled: boolean;
+  available: boolean;
+  localOnly: true;
+  reason?: string;
+  autonomy?: ProjectOrchestrationAutonomy;
+  /** Extra repository path patterns the project treats as sensitive, such as src/billing/**. */
+  sensitivePaths?: string[];
+}
+
 export interface ProjectBuildOrchestration {
   milestones?: Array<{ id: string; title: string; status: 'unplanned' | 'active' | 'accepted' }>;
+  /** Fixes the Orchestrator made without the person, shown at approval. */
+  resolvedWithoutYou?: ResolvedWithoutYouItem[];
   run: {
     id: string;
     originChatThreadId?: string;
@@ -1399,6 +1438,8 @@ export type LiveBuildRecoveryAction =
   | 'retry_report_format'
   | 'repair_and_continue'
   | 'provide_guidance'
+  /** Apply the Orchestrator's verified fix that it held back for the person (a sensitive area). */
+  | 'apply_proposed_fix'
   | 'recheck_prerequisite'
   | 'plan_final_validation_corrections'
   | 'resume_checkpoint'
@@ -1426,6 +1467,24 @@ export interface LiveBuildRecoveryProjection {
   updatedAt: string;
   availableActions: LiveBuildRecoveryAction[];
   actionReasons: Partial<Record<LiveBuildRecoveryAction, string>>;
+  /** The Orchestrator is looking into this stop now; the person need not act yet. */
+  resolving?: boolean;
+  /** What the Orchestrator found when it looked into this stop. Team only. */
+  orchestratorResolution?: LiveBuildOrchestratorResolution;
+}
+
+/** The Orchestrator's account of a stopped task. */
+export interface LiveBuildOrchestratorResolution {
+  outcome: string;
+  tier?: number;
+  escalation?: string;
+  diagnosis?: string;
+  /** A product decision only the person can make, with the options framed. */
+  question?: { text: string; options: Array<{ label: string; description?: string }>; why: string };
+  /** A verified fix it held back for the person; `apply_proposed_fix` applies it in one step. */
+  proposedFix?: string;
+  /** Files (repository:path) or recorded decisions the fix relies on. */
+  evidence?: string[];
 }
 
 export interface LiveBuildRecoveryState {

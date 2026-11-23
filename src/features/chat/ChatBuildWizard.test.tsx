@@ -37,6 +37,31 @@ describe('the build panel above the message box', () => {
     expect(html.match(/Stop the build/g) ?? []).toHaveLength(0);
   });
 
+  it('says Alpha is resolving a stop instead of asking the person while the Orchestrator looks into it', () => {
+    const blocked = build('blocked', 'The specialist reported a blocker.');
+    blocked.orchestration.recovery = { id: 'rec-1', runId: 'run-1', phase: 'waiting_for_user', category: 'project_code', code: 'task_project_code',
+      summary: 'A check failed.', taskId: 't1', taskTitle: 'Add the login page', attemptsUsed: 1, repairBudget: 2, episodeNumber: 1, revision: 1,
+      createdAt: '', updatedAt: '', availableActions: ['explain_failure', 'provide_guidance', 'cancel_build'], actionReasons: {},
+      resolving: true, orchestratorResolution: { outcome: 'resolving' } };
+    const html = render({ build: blocked, threadId: 'thread-1' });
+    expect(html).toContain('Alpha is resolving this');
+    expect(html).not.toContain('The build needs you');
+    expect(html).toContain('you do not need to act yet');
+  });
+
+  it('offers the Orchestrator’s held-back fix next to giving direction', () => {
+    const blocked = build('blocked', 'The specialist reported a blocker.');
+    blocked.orchestration.recovery = { id: 'rec-1', runId: 'run-1', phase: 'waiting_for_user', category: 'project_code', code: 'task_project_code',
+      summary: 'A check failed.', taskId: 't1', taskTitle: 'Add the login page', attemptsUsed: 1, repairBudget: 2, episodeNumber: 1, revision: 1,
+      createdAt: '', updatedAt: '', availableActions: ['explain_failure', 'apply_proposed_fix', 'provide_guidance', 'cancel_build'], actionReasons: {},
+      orchestratorResolution: { outcome: 'escalated', escalation: 'sensitive', tier: 2, diagnosis: 'The session cookie name is hard-coded.',
+        proposedFix: 'Read the cookie name from src/auth/session.ts.', evidence: ['acme/shop-fe:src/auth/session.ts'] } };
+    const html = render({ build: blocked, threadId: 'thread-1' });
+    expect(html).toContain('The build needs you');
+    for (const shown of ['The session cookie name is hard-coded.', 'Read the cookie name from src/auth/session.ts.', 'touches a sensitive area', 'Apply this fix', 'Provide direction']) expect(html).toContain(shown);
+    expect(html.indexOf('Apply this fix')).toBeLessThan(html.indexOf('Provide direction'));
+  });
+
   it('offers a reviewable Security plan instead of blindly retrying missing audit evidence', () => {
     const html = render({ build: build('blocked', 'The task has no dependency audit findings.'), onAuditPlan: noop });
     expect(html).toContain('Plan with Security');

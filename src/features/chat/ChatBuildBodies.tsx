@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 
 import { ReviewDiff } from '@/features/project-build-review/OrchestrationWorkflowPanel';
 import type { ProjectBuildOrchestration } from '@/shared/types';
+import { ResolvedWithoutYouList } from './ResolvedWithoutYou';
 
 type Command = { script?: string; display?: string; exitCode: number | null; signal: string | null };
 
@@ -103,6 +104,8 @@ export const PlanBody: React.FC<{ orchestration: ProjectBuildOrchestration }> = 
 export const ReviewBody: React.FC<{ projectId: string; orchestration: ProjectBuildOrchestration; expandedDiff?: boolean; readOnly?: boolean; onDiffReady?: () => void }> = ({ projectId, orchestration, expandedDiff, readOnly, onDiffReady }) => {
   const checks = finalChecks(orchestration);
   const openFindings = orchestration.findings.filter(finding => finding.status === 'open');
+  // Fixes the Orchestrator made on its own; the server sends them to the team only.
+  const resolved = orchestration.resolvedWithoutYou ?? [];
   const reportFor = (taskId: string) => {
     const attempts = orchestration.attempts.filter(attempt => attempt.taskId === taskId);
     return ([...attempts].reverse().find(item => item.status === 'accepted') ?? attempts.at(-1));
@@ -136,6 +139,9 @@ export const ReviewBody: React.FC<{ projectId: string; orchestration: ProjectBui
         {group.missingScripts.length > 0 && <p className="text-[10px] text-status-warning">Not set up in this codebase: {group.missingScripts.join(', ')}</p>}
       </div>)}</div> : <p className="text-[11px] text-content-muted">No final checks were recorded.</p>}
     </ReviewSection>
+    {resolved.length > 0 && <ReviewSection title="Resolved without you" aside={<span>{resolved.length}</span>}>
+      <ResolvedWithoutYouList items={resolved} />
+    </ReviewSection>}
     {openFindings.length > 0 && <div className="rounded-lg border border-status-warning-border bg-status-warning-subtle px-3 py-2.5 text-[11px] text-status-warning">
       <div className="flex items-center gap-1.5 font-semibold"><AlertTriangle className="h-3.5 w-3.5" />{openFindings.length} open {openFindings.length === 1 ? 'finding' : 'findings'}</div>
       <ul className="mt-1 list-disc space-y-0.5 pl-5 text-status-warning">{openFindings.map(finding => <li key={finding.id}>{finding.title ?? finding.instruction ?? finding.severity}{finding.path ? ' · ' + finding.path : ''}</li>)}</ul>
