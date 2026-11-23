@@ -57,27 +57,35 @@ function fail(message: string): never {
 
 const latestPublished = () => state.pocs.filter(poc => poc.status !== 'draft').sort((a, b) => b.number - a.number)[0] ?? null;
 
-function nextAction(): StageNextAction | null {
+function pocAction(): StageNextAction {
   const poc = latestPublished();
+  if (poc?.status === 'published') return { who: 'client', kind: 'review_poc', label: `Review POC v${poc.number}` };
+  if (poc?.status === 'changes_requested') return { who: 'pm', kind: 'publish_poc', label: `Update the POC after the change request on v${poc.number}` };
+  return { who: 'pm', kind: 'publish_poc', label: 'Share the proof of concept' };
+}
+
+function contractAction(): StageNextAction {
+  if (state.contract?.status === 'issued') return { who: 'client', kind: 'sign_contract', label: 'Sign the contract' };
+  if (state.contract?.status === 'client_signed') return { who: 'pm', kind: 'countersign_contract', label: 'Countersign the contract' };
+  return { who: 'pm', kind: 'issue_contract', label: 'Issue the contract' };
+}
+
+function developmentAction(): StageNextAction {
+  const quote = quoteAction();
+  if (quote) return quote;
+  const round = activeRound();
+  if (round?.status === 'open') return { who: 'client', kind: 'submit_round', label: `Send your feedback on build ${round.number}` };
+  if (round?.status === 'submitted') return { who: 'pm', kind: 'classify_round', label: `Review feedback round ${round.number}` };
+  if (state.final && !state.final.acceptedAt) return { who: 'client', kind: 'accept_final', label: 'Review the final delivery' };
+  return { who: 'pm', kind: 'share_build', label: 'Share the next build' };
+}
+
+function nextAction(): StageNextAction | null {
   switch (state.stage) {
     case 'unset': return { who: 'pm', kind: 'set_stage', label: 'Choose this project’s stage' };
-    case 'poc':
-      if (poc?.status === 'published') return { who: 'client', kind: 'review_poc', label: `Review POC v${poc.number}` };
-      if (poc?.status === 'changes_requested') return { who: 'pm', kind: 'publish_poc', label: `Update the POC after the change request on v${poc.number}` };
-      return { who: 'pm', kind: 'publish_poc', label: 'Share the proof of concept' };
-    case 'contract':
-      if (state.contract?.status === 'issued') return { who: 'client', kind: 'sign_contract', label: 'Sign the contract' };
-      if (state.contract?.status === 'client_signed') return { who: 'pm', kind: 'countersign_contract', label: 'Countersign the contract' };
-      return { who: 'pm', kind: 'issue_contract', label: 'Issue the contract' };
-    case 'development': {
-      const quote = quoteAction();
-      if (quote) return quote;
-      const round = activeRound();
-      if (round?.status === 'open') return { who: 'client', kind: 'submit_round', label: `Send your feedback on build ${round.number}` };
-      if (round?.status === 'submitted') return { who: 'pm', kind: 'classify_round', label: `Review feedback round ${round.number}` };
-      if (state.final && !state.final.acceptedAt) return { who: 'client', kind: 'accept_final', label: 'Review the final delivery' };
-      return { who: 'pm', kind: 'share_build', label: 'Share the next build' };
-    }
+    case 'poc': return pocAction();
+    case 'contract': return contractAction();
+    case 'development': return developmentAction();
     case 'completed': return quoteAction();
   }
 }
