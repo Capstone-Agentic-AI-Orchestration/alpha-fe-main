@@ -60,8 +60,10 @@ describe('Clients list', () => {
 describe('A client’s page', () => {
   it('shows the client’s projects and project conversation without a separate Tickets tab', () => {
     const html = render({ selectedKey: 'client:ana', section: 'conversation' });
-    for (const shown of ['All clients', 'Ana Cruz', 'Projects', 'Conversation', 'Access', 'Portal access on', 'Project conversation']) expect(html).toContain(shown);
+    for (const shown of ['aria-label="All clients"', 'Ana Cruz', 'Projects', 'Conversation', 'Access', 'Project conversation']) expect(html).toContain(shown);
     expect(html).not.toContain('>Tickets<');
+    // Portal access lives on the Access tab, not in the page header.
+    expect(html).not.toContain('Portal access on');
   });
 
   it('links only to projects in the PM’s project list, and notes unlinked requests', () => {
