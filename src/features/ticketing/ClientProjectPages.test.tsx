@@ -24,7 +24,7 @@ describe('client overview loading', () => {
     expect(ready).not.toContain('No projects yet');
   });
 
-  it('leads with the banner and what needs the client, then features a project with its counts and its own updates', () => {
+  it('leads with the banner and what needs the client, then features a project and its own updates', () => {
     const base = { reference: 'REF-1', createdAt: '2026-11-01T00:00:00Z', updatedAt: '2026-11-01T00:00:00Z', closedAt: null,
       readOnly: false, writesAvailable: true, workspaceId: 'w1', projectId: 'p1', projectName: 'Shop', projectLinkStatus: 'linked' as const,
       requestedProjectName: null };
@@ -46,11 +46,12 @@ describe('client overview loading', () => {
     expect(html).toContain('Step 2 of 5');
     // Waiting work comes before the projects.
     expect(html.indexOf('client-attention-title')).toBeLessThan(html.indexOf('client-projects-title'));
-    // The most recently updated project is featured, with counts for its requests only.
-    expect(html).toContain('Featured project · 1 of 2');
-    const stats = html.slice(html.indexOf('aria-label="Requests in Shop"'));
-    expect(stats).toContain('<dt>Needs you</dt><dd>1</dd>');
-    expect(stats).toContain('<dt>Open</dt><dd>2</dd>');
+    const stage = html.slice(html.indexOf('class="cx-showcase-stage"'), html.indexOf('class="cx-showcase-updates'));
+    expect(stage).toContain('Featured project · 1 of 2');
+    expect(stage).toContain('class="cx-showcase-project-link"><span>Shop</span>');
+    expect(stage).toContain('Show next project');
+    expect(html).not.toContain('Requests in Shop');
+    expect(html).not.toContain('Choose a featured project');
     // Its updates list its own requests, not another project's.
     const updates = html.slice(html.indexOf('cx-showcase-updates-title'));
     expect(updates).toContain('Add a gift message field');
@@ -65,24 +66,19 @@ describe('client overview loading', () => {
     expect(withMenu).not.toContain('Propose a project');
   });
 
-  it('always offers Open preview on the featured project, with the preview picture once shared', () => {
+  it('offers the preview shortcut and picture once the featured project has a shared preview', () => {
     const shop = { workspaceId: 'w1', projectId: 'p1', name: 'Shop', updatedAt: '2026-11-01T00:00:00Z', intakeOptionId: 'o1', preview: null };
     const render = (preview: typeof shop.preview | { branch: 'uat'; url: string }) => renderToStaticMarkup(<ClientOverviewPage requests={empty}
       requestsLoading={false} requestsError="" projects={[{ ...shop, preview }]} projectsLoading={false} projectsError=""
       onOpenPreview={() => {}} {...callbacks} />);
     const waiting = render(null);
-    expect(waiting).toContain('Preview status: Not shared yet');
-    // The preview page opens before anything is shared and says so there; only the picture waits.
     expect(waiting).toContain('There is still no preview.');
-    expect(waiting).toContain('Open preview');
+    expect(waiting).not.toContain('Open preview');
     expect(waiting).not.toContain('cx-thumb');
     const ready = render({ branch: 'uat', url: 'https://shop-uat.vercel.app' });
-    expect(ready).toContain('Preview status: Shared · UAT');
     expect(ready).toContain('cx-thumb');
     expect(ready).not.toContain('There is still no preview.');
-    const actions = ready.slice(ready.indexOf('class="cx-showcase-actions"'));
-    expect(actions.indexOf('Open preview')).toBeGreaterThan(-1);
-    expect(actions.indexOf('Open project')).toBeGreaterThan(actions.indexOf('Open preview'));
+    expect(ready).toContain('aria-label="Open preview"');
   });
 });
 

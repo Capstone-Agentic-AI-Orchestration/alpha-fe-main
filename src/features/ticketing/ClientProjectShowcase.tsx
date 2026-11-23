@@ -1,14 +1,14 @@
 import { useRef } from 'react';
 import { useGSAP } from '@gsap/react';
 import { gsap } from 'gsap';
-import { ArrowLeft, ArrowRight, Clock3, FolderKanban, MessageSquareText, Monitor } from 'lucide-react';
+import { ArrowLeft, ArrowRight, FolderKanban, MessageSquareText, Monitor } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { Card } from '@/shared/components/ui/card';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem } from './clientApi';
 import { ClientPreviewThumb } from './ClientPreviewThumb';
-import { CxEmpty, CxStats } from './clientKit';
-import { clientRequestGroup, relativeTime } from './clientFriendly';
+import { CxEmpty } from './clientKit';
+import { relativeTime } from './clientFriendly';
 import { clientTicketProgress } from './clientTicketProgress';
 import { time } from './ticketUi';
 import { clientProjectKey } from './ClientProjectSections';
@@ -45,9 +45,6 @@ export function ClientProjectShowcase({ project, projects, requests, latestMessa
   const projectRequests = project ? requests
     .filter(item => item.workspaceId === project.workspaceId && item.projectId === project.projectId)
     .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)) : [];
-  const openRequests = projectRequests.filter(item => clientRequestGroup(item) !== 'done');
-  const needsYou = openRequests.filter(item => clientRequestGroup(item) === 'needs_you').length;
-
   useGSAP(() => {
     if (!featureRef.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     gsap.fromTo(featureRef.current, { opacity: 0.72, y: 8, scale: 0.994 }, {
@@ -91,46 +88,29 @@ export function ClientProjectShowcase({ project, projects, requests, latestMessa
   return <section className="cx-showcase-layout" aria-label="Project showcase">
     <Card className="cx-showcase-feature" ref={featureRef}>
       <div className="cx-showcase-stage" aria-label={project.name + ' project preview'}>
-        {project.preview
-          ? <ClientPreviewThumb preview={project.preview} projectName={project.name} onOpen={() => onOpenPreview(project)} />
-          : <div className="cx-showcase-no-preview" role="status">There is still no preview.</div>}
-        {projects.length > 1 && <>
-          <Button type="button" variant="outline" size="icon" className="cx-showcase-arrow is-previous"
-            aria-label="Show previous project" onClick={() => go(-1)}><ArrowLeft size={16} aria-hidden="true" /></Button>
-          <Button type="button" variant="outline" size="icon" className="cx-showcase-arrow is-next"
-            aria-label="Show next project" onClick={() => go(1)}><ArrowRight size={16} aria-hidden="true" /></Button>
-        </>}
-      </div>
-
-      <div className="cx-showcase-project-details">
-        <div className="cx-showcase-title-row">
+        <header className="cx-showcase-stage-head">
           <div className="cx-showcase-title-copy">
             <p className="cx-showcase-eyebrow">Featured project · {selectedIndex + 1} of {projects.length}</p>
-            <h3>{project.name}</h3>
-            <p className="cx-showcase-meta"><Clock3 size={14} aria-hidden="true" />Updated {relativeTime(project.updatedAt)}</p>
-            <p className={'cx-showcase-preview-status' + (project.preview ? ' is-shared' : ' is-unshared')}>
-              <span aria-hidden="true" />Preview status: {project.preview ? 'Shared · UAT' : 'Not shared yet'}
-            </p>
+            <h3><button type="button" className="cx-showcase-project-link" onClick={() => onOpenProject(project)}>
+              <span>{project.name}</span><ArrowRight size={16} aria-hidden="true" />
+            </button></h3>
           </div>
-          <div className="cx-showcase-actions">
-            <Button type="button" variant="ghost" className="cx-link" onClick={() => onOpenPreview(project)}>
-              <Monitor size={15} aria-hidden="true" />Open preview</Button>
-            <Button type="button" variant="outline" onClick={() => onOpenProject(project)}>
-              Open project <ArrowRight size={15} aria-hidden="true" /></Button>
-          </div>
+          {project.preview && <Button type="button" variant="ghost" size="icon" className="cx-link cx-showcase-open-preview"
+            aria-label="Open preview" title="Open preview" onClick={() => onOpenPreview(project)}>
+            <Monitor size={16} aria-hidden="true" />
+          </Button>}
+        </header>
+        <div className="cx-showcase-picture">
+          {project.preview
+            ? <ClientPreviewThumb preview={project.preview} projectName={project.name} onOpen={() => onOpenPreview(project)} />
+            : <div className="cx-showcase-no-preview" role="status">There is still no preview.</div>}
+          {projects.length > 1 && <>
+            <Button type="button" variant="outline" size="icon" className="cx-showcase-arrow is-previous"
+              aria-label="Show previous project" onClick={() => go(-1)}><ArrowLeft size={16} aria-hidden="true" /></Button>
+            <Button type="button" variant="outline" size="icon" className="cx-showcase-arrow is-next"
+              aria-label="Show next project" onClick={() => go(1)}><ArrowRight size={16} aria-hidden="true" /></Button>
+          </>}
         </div>
-        <CxStats label={'Requests in ' + project.name} items={[
-          { label: 'Needs you', value: needsYou, tone: 'attention' },
-          { label: 'Open', value: openRequests.length },
-          { label: 'Done', value: projectRequests.length - openRequests.length, tone: 'done' },
-        ]} />
-        {projects.length > 1 && <div className="cx-showcase-project-picker" role="group" aria-label="Choose a featured project">
-          {projects.map((candidate, index) => <Button key={clientProjectKey(candidate)} type="button"
-            variant={clientProjectKey(candidate) === projectKey ? 'outline' : 'ghost'} size="sm"
-            aria-pressed={clientProjectKey(candidate) === projectKey} onClick={() => onSelectProject(candidate)}>
-            <span className="cx-showcase-picker-index">{String(index + 1).padStart(2, '0')}</span>{candidate.name}
-          </Button>)}
-        </div>}
       </div>
     </Card>
 
@@ -139,10 +119,10 @@ export function ClientProjectShowcase({ project, projects, requests, latestMessa
         <div><p className="cx-showcase-eyebrow">Selected project</p><h3 id="cx-showcase-updates-title">Latest updates</h3></div>
         <span className="cx-showcase-project-label">{project.name}</span>
       </header>
-      {requestsLoading && !requests.length
+      <div className="cx-showcase-update-list">{requestsLoading && !requests.length
         ? <LoadingRows label={'Loading updates for ' + project.name} layout="table" rows={2} className="px-4 py-3" />
         : updates.length > 0
-          ? <div className="cx-showcase-update-list">{updates.slice(0, 5).map(update => <button key={update.id} type="button"
+          ? updates.slice(0, 5).map(update => <button key={update.id} type="button"
             className="cx-showcase-update" onClick={update.onOpen}>
             <span className={'cx-showcase-update-icon is-' + update.kind} aria-hidden="true">
               {update.kind === 'conversation' ? <MessageSquareText size={15} /> : <FolderKanban size={15} />}
@@ -150,8 +130,8 @@ export function ClientProjectShowcase({ project, projects, requests, latestMessa
             <span className="cx-showcase-update-copy"><strong>{update.title}</strong><span>{update.body}</span>
               <time dateTime={update.createdAt} title={time(update.createdAt)}>{relativeTime(update.createdAt)}</time></span>
             <ArrowRight size={14} className="cx-showcase-update-arrow" aria-hidden="true" />
-          </button>)}</div>
-          : <CxEmpty title="No updates for this project yet" body="Conversation and request updates will appear here." />}
+          </button>)
+          : <CxEmpty title="No updates for this project yet" body="Conversation and request updates will appear here." />}</div>
       <footer className="cx-showcase-updates-footer">
         <Button type="button" variant="ghost" size="sm" className="cx-link" onClick={() => onOpenProject(project)}>
           <MessageSquareText size={14} aria-hidden="true" />Open conversation</Button>
