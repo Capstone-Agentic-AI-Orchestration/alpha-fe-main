@@ -1,0 +1,163 @@
+import { useRef } from 'react';
+import { useGSAP } from '@gsap/react';
+import { gsap } from 'gsap';
+import { ArrowLeft, ArrowRight, Clock3, FolderKanban, MessageSquareText, Monitor } from 'lucide-react';
+import { Button } from '@/shared/components/ui/button';
+import { Card } from '@/shared/components/ui/card';
+import { LoadingRows } from '@/shared/components/ui/skeleton';
+import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem } from './clientApi';
+import { ClientPreviewThumb } from './ClientPreviewThumb';
+import { CxEmpty, CxStats } from './clientKit';
+import { clientRequestGroup, relativeTime } from './clientFriendly';
+import { clientTicketProgress } from './clientTicketProgress';
+import { time } from './ticketUi';
+import { clientProjectKey } from './ClientProjectSections';
+
+gsap.registerPlugin(useGSAP);
+
+interface ShowcaseUpdate {
+  id: string;
+  kind: 'conversation' | 'request';
+  title: string;
+  body: string;
+  createdAt: string;
+  onOpen: () => void;
+}
+
+/** A project carousel paired with an activity feed scoped to the selected project. */
+export function ClientProjectShowcase({ project, projects, requests, latestMessage, projectsLoading, requestsLoading, onSelectProject,
+  onOpenRequest, onOpenProject, onOpenPreview, onGoToRequests }: {
+  project: ClientProject | null;
+  projects: ClientProject[];
+  requests: ClientProjectRequestItem[];
+  latestMessage: ClientProjectFeedbackMessage | null;
+  projectsLoading: boolean;
+  requestsLoading: boolean;
+  onSelectProject: (project: ClientProject) => void;
+  onOpenRequest: (request: ClientProjectRequestItem) => void;
+  onOpenProject: (project: ClientProject) => void;
+  onOpenPreview: (project: ClientProject) => void;
+  onGoToRequests: () => void;
+}) {
+  const featureRef = useRef<HTMLDivElement>(null);
+  const projectKey = project ? clientProjectKey(project) : '';
+  const selectedIndex = project ? projects.findIndex(candidate => clientProjectKey(candidate) === projectKey) : -1;
+  const projectRequests = project ? requests
+    .filter(item => item.workspaceId === project.workspaceId && item.projectId === project.projectId)
+    .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)) : [];
+  const openRequests = projectRequests.filter(item => clientRequestGroup(item) !== 'done');
+  const needsYou = openRequests.filter(item => clientRequestGroup(item) === 'needs_you').length;
+
+  useGSAP(() => {
+    if (!featureRef.current || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    gsap.fromTo(featureRef.current, { opacity: 0.72, y: 8, scale: 0.994 }, {
+      opacity: 1, y: 0, scale: 1, duration: 0.38, ease: 'power2.out', clearProps: 'all',
+    });
+  }, { scope: featureRef, dependencies: [projectKey], revertOnUpdate: true });
+
+  if (projectsLoading && !project) {
+    return <Card className="cx-showcase-empty"><LoadingRows label="Loading your projects" rows={2} className="p-4" /></Card>;
+  }
+  if (!projects.length && !project) {
+    return <Card className="cx-showcase-empty"><CxEmpty icon={<FolderKanban size={22} />} title="No projects yet"
+      body="When your project manager shares a project, it will appear here." /></Card>;
+  }
+  if (!project) return null;
+
+  const updates: ShowcaseUpdate[] = [];
+  if (latestMessage) updates.push({
+    id: 'conversation-' + latestMessage.id,
+    kind: 'conversation',
+    title: 'Project conversation',
+    body: latestMessage.body,
+    createdAt: latestMessage.createdAt,
+    onOpen: () => onOpenProject(project),
+  });
+  projectRequests.slice(0, 4).forEach(item => {
+    const body = item.projectLinkStatus === 'pending_review'
+      ? 'Your project manager is confirming the project' + (item.requestedProjectName ? ' for ' + item.requestedProjectName : '')
+      : clientTicketProgress(item.status, item.requestedAction).label;
+    updates.push({ id: 'request-' + item.workspaceId + '-' + item.id, kind: 'request', title: item.title,
+      body, createdAt: item.updatedAt, onOpen: () => onOpenRequest(item) });
+  });
+  updates.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+
+  const go = (direction: -1 | 1) => {
+    if (projects.length < 2) return;
+    const nextIndex = (selectedIndex + direction + projects.length) % projects.length;
+    onSelectProject(projects[nextIndex]);
+  };
+
+  return <section className="cx-showcase-layout" aria-label="Project showcase">
+    <Card className="cx-showcase-feature" ref={featureRef}>
+      <div className="cx-showcase-stage" aria-label={project.name + ' project preview'}>
+        {project.preview
+          ? <ClientPreviewThumb preview={project.preview} projectName={project.name} onOpen={() => onOpenPreview(project)} />
+          : <div className="cx-showcase-no-preview" role="status">There is still no preview.</div>}
+        {projects.length > 1 && <>
+          <Button type="button" variant="outline" size="icon" className="cx-showcase-arrow is-previous"
+            aria-label="Show previous project" onClick={() => go(-1)}><ArrowLeft size={16} aria-hidden="true" /></Button>
+          <Button type="button" variant="outline" size="icon" className="cx-showcase-arrow is-next"
+            aria-label="Show next project" onClick={() => go(1)}><ArrowRight size={16} aria-hidden="true" /></Button>
+        </>}
+      </div>
+
+      <div className="cx-showcase-project-details">
+        <div className="cx-showcase-title-row">
+          <div className="cx-showcase-title-copy">
+            <p className="cx-showcase-eyebrow">Featured project · {selectedIndex + 1} of {projects.length}</p>
+            <h3>{project.name}</h3>
+            <p className="cx-showcase-meta"><Clock3 size={14} aria-hidden="true" />Updated {relativeTime(project.updatedAt)}</p>
+            <p className={'cx-showcase-preview-status' + (project.preview ? ' is-shared' : ' is-unshared')}>
+              <span aria-hidden="true" />Preview status: {project.preview ? 'Shared · UAT' : 'Not shared yet'}
+            </p>
+          </div>
+          <div className="cx-showcase-actions">
+            <Button type="button" variant="ghost" className="cx-link" onClick={() => onOpenPreview(project)}>
+              <Monitor size={15} aria-hidden="true" />Open preview</Button>
+            <Button type="button" variant="outline" onClick={() => onOpenProject(project)}>
+              Open project <ArrowRight size={15} aria-hidden="true" /></Button>
+          </div>
+        </div>
+        <CxStats label={'Requests in ' + project.name} items={[
+          { label: 'Needs you', value: needsYou, tone: 'attention' },
+          { label: 'Open', value: openRequests.length },
+          { label: 'Done', value: projectRequests.length - openRequests.length, tone: 'done' },
+        ]} />
+        {projects.length > 1 && <div className="cx-showcase-project-picker" role="group" aria-label="Choose a featured project">
+          {projects.map((candidate, index) => <Button key={clientProjectKey(candidate)} type="button"
+            variant={clientProjectKey(candidate) === projectKey ? 'outline' : 'ghost'} size="sm"
+            aria-pressed={clientProjectKey(candidate) === projectKey} onClick={() => onSelectProject(candidate)}>
+            <span className="cx-showcase-picker-index">{String(index + 1).padStart(2, '0')}</span>{candidate.name}
+          </Button>)}
+        </div>}
+      </div>
+    </Card>
+
+    <Card className="cx-showcase-updates" aria-labelledby="cx-showcase-updates-title">
+      <header className="cx-showcase-updates-head">
+        <div><p className="cx-showcase-eyebrow">Selected project</p><h3 id="cx-showcase-updates-title">Latest updates</h3></div>
+        <span className="cx-showcase-project-label">{project.name}</span>
+      </header>
+      {requestsLoading && !requests.length
+        ? <LoadingRows label={'Loading updates for ' + project.name} layout="table" rows={2} className="px-4 py-3" />
+        : updates.length > 0
+          ? <div className="cx-showcase-update-list">{updates.slice(0, 5).map(update => <button key={update.id} type="button"
+            className="cx-showcase-update" onClick={update.onOpen}>
+            <span className={'cx-showcase-update-icon is-' + update.kind} aria-hidden="true">
+              {update.kind === 'conversation' ? <MessageSquareText size={15} /> : <FolderKanban size={15} />}
+            </span>
+            <span className="cx-showcase-update-copy"><strong>{update.title}</strong><span>{update.body}</span>
+              <time dateTime={update.createdAt} title={time(update.createdAt)}>{relativeTime(update.createdAt)}</time></span>
+            <ArrowRight size={14} className="cx-showcase-update-arrow" aria-hidden="true" />
+          </button>)}</div>
+          : <CxEmpty title="No updates for this project yet" body="Conversation and request updates will appear here." />}
+      <footer className="cx-showcase-updates-footer">
+        <Button type="button" variant="ghost" size="sm" className="cx-link" onClick={() => onOpenProject(project)}>
+          <MessageSquareText size={14} aria-hidden="true" />Open conversation</Button>
+        <Button type="button" variant="ghost" size="sm" className="cx-link" onClick={onGoToRequests}>
+          All requests <ArrowRight size={14} aria-hidden="true" /></Button>
+      </footer>
+    </Card>
+  </section>;
+}

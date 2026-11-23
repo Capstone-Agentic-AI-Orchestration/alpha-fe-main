@@ -95,6 +95,8 @@ export interface ClientProjectConversationProps {
   onSelectRequest: (ticketId: string) => void;
   /** The new request form, shown above the requests while the client writes one. */
   requestForm?: ReactNode;
+  /** Existing request action moved out of the global navigation and into the project page header. */
+  requestAction?: ReactNode;
   /** The picked request's details, loaded by the portal. */
   request: { ticket: ClientTicketRecord | null; loading: boolean; error: string };
   /** What the picked request's panel needs to act on it. */
@@ -166,9 +168,10 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
   };
   const head = <ConversationHead project={project} onBack={props.onBack} busy={busy}
     description={mode === 'preview' && shared ? PREVIEW_DESCRIPTION : CONVERSATION_DESCRIPTION}
-    controls={changeView && <>
-      <ViewSwitch mode={mode} onChange={next => changeView(next === 'preview' ? 'preview' : 'conversation')} />
-      {mode === 'preview' && shared && <FocusToggle focused={focused} onChange={next => changeView(next ? 'focus' : 'preview')} />}
+    controls={(props.requestAction || changeView) && <>
+      {props.requestAction}
+      {changeView && <ViewSwitch mode={mode} onChange={next => changeView(next === 'preview' ? 'preview' : 'conversation')} />}
+      {changeView && mode === 'preview' && shared && <FocusToggle focused={focused} onChange={next => changeView(next ? 'focus' : 'preview')} />}
     </>} />;
   const chat = <ProjectConversationChat role="client"
     items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}

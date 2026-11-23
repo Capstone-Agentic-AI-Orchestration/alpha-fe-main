@@ -32,16 +32,15 @@ function PageLinks({ page, onNavigate }: { page: ClientPage; onNavigate: (page: 
 }
 
 /** Shadcn dashboard navigation in a compact top bar, matching the existing client shell. */
-export function ClientTopBar({ page, onNavigate, newRequest, actions, account }: {
+export function ClientTopBar({ page, onNavigate, actions, account }: {
   page: ClientPage;
   onNavigate: (page: ClientNavPage) => void;
-  newRequest: ReactNode;
   actions: ReactNode;
   account: ReactNode;
 }) {
   return <header className="cx-topbar">
     <Brand />
     <PageLinks page={page} onNavigate={onNavigate} />
-    <div className="cx-topbar-actions">{newRequest}{actions}{account}</div>
+    <div className="cx-topbar-actions">{actions}{account}</div>
   </header>;
 }

@@ -28,8 +28,10 @@ import { Input } from '@/shared/components/ui/input';
 import { ClientTopBar } from './ClientTopBar';
 import { CxChips, CxEmpty, CxPageHeader, CxPanel, CxRequestRow, CxSection } from './clientKit';
 import { ClientProjectConversation } from './ClientProjectConversation';
+import { ClientPortalOrbit } from './ClientPortalOrbit';
 import { useClientWorkspaceTabs, type ClientPage as Page, type ClientProjectView } from './clientWorkspaceTabs';
 import './clientDesignTokens.css';
+import './clientPortalShowcase.css';
 import { mergeClientMessages, startClientAutoRefresh } from './clientAutoRefresh';
 
 type Filter = NonNullable<Parameters<typeof clientTicketApi.listRequests>[0]>['filter'];
@@ -737,7 +739,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
     </DropdownMenu> : null;
   const newRequestButton = <Button type="button" className="cx-new-request"><Plus size={15} aria-hidden="true" /><span className="cx-new-request-label">{createLoading ? 'Checking access…' : 'New request'}</span></Button>;
   // On a project's page, New request starts one for that project; elsewhere it asks what the request is for.
-  const newRequest = conversationProject && canStartProjectRequest
+  const newRequestAction = conversationProject && canStartProjectRequest
     ? <Button type="button" className="cx-new-request" disabled={createLoading || writing || Boolean(pending)} aria-label={'New request in ' + conversationProject.name}
       onClick={() => startRequestFor(conversationProject)}><Plus size={15} aria-hidden="true" /><span className="cx-new-request-label">{createLoading ? 'Checking access…' : 'New request'}</span></Button>
     : newRequestMenu?.(newRequestButton);
@@ -753,15 +755,16 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
   ];
   const requestsHeader = <>
     <CxPageHeader titleId={activeTabId + '-requests-title'} title="All requests"
-      description="A cross-project list for finding requests and checking their status. Open project requests in their project conversation." />
+      description="A cross-project list for finding requests and checking their status. Open project requests in their project conversation."
+      actions={newRequestAction} />
     <CxChips label="Show" value={page === 'proposals' ? 'ideas' : filter as string} options={requestViews} disabled={Boolean(pending)}
       onChange={(value: string) => { if (value === 'ideas') { goTo('proposals'); return; } if (page !== 'requests') goTo('requests');
         setFilter(value as NonNullable<Filter>); setSearchInput(''); setSearch(''); }} />
   </>;
 
   return <main ref={portalRootRef} className={'client-portal-shell cx-shell' + (inspectionOnly ? ' client-portal-shell--inspection' : '')}>
+    <ClientPortalOrbit />
     <ClientTopBar page={page} onNavigate={goTo}
-      newRequest={newRequest}
       actions={<>
         <Button type="button" variant="ghost" size="icon" aria-label="Refresh portal" title="Refresh portal"
           onClick={() => { setQueueNotice(''); setRefreshVersion(value => value + 1); }}
@@ -798,6 +801,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           api={api} refreshToken={refreshVersion}
           requestsLoading={!queue && !queueError} requestsError={queueError} projectsLoading={!projects && !projectsError} projectsError={projectsError}
           onOpenRequest={item => openClientRequest(item, true)} onOpenProject={openProject} onGoToProjects={() => navigate('projects')}
+          newRequestAction={newRequestAction}
           onOpenPreview={openPreview}
           onGoToRequests={() => navigate('requests')}
           proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')}
@@ -808,7 +812,8 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
           <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} requests={displayQueue?.items ?? []} loading={!projects && !projectsError} error={projectsError}
             onOpenConversation={project => openConversation(project)} onOpenPreview={openPreview}
             inspectionOnly={inspectionOnly} refreshToken={refreshVersion}
-            proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')} onProposeProject={proposeProject} />
+            proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')} onProposeProject={proposeProject}
+            newRequestAction={newRequestAction} />
         </div>)}
 
         {page === 'proposals' && <div className="cx-page">{requestsHeader}<ClientProposalsPage key={activeTabId} idPrefix={activeTabId} api={api} projects={projects ?? []}
@@ -819,6 +824,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
         {page === 'projects' && conversationProject && <ClientProjectConversation key={activeTabId + ':' + selectedConversationKey}
           api={api} project={conversationProject} clientName={clientName} readOnly={inspectionOnly}
+          requestAction={newRequestAction}
           onBack={() => { cancelCreateForm(); setSelectedConversationKey(null); setSelectedConversationTicketId(null); showConversationRequest(conversationProject, null); }}
           selectedTicketId={selectedConversationTicketId} onSelectRequest={ticketId => selectConversationRequest(conversationProject, ticketId)}
           requestForm={startConversationRequest ? projectRequestForm : null}
@@ -862,6 +868,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         </div>}
 
         {page === 'requests' && selectedId && !requestProject && <div className="cx-request-page">
+          {newRequestAction && <div className="cx-request-page-actions">{newRequestAction}</div>}
           {queueNotice && <p role="status" className="cx-status-note">{queueNotice}</p>}
           {!activeRequest ? <CxPanel><CxEmpty title="Request not available" body="Refresh and try again. If it is still missing, contact your project manager."
             action={<Button type="button" variant="outline" onClick={closeRequest}>Back to all requests</Button>} /></CxPanel>
