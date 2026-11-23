@@ -1,6 +1,7 @@
 import { parseClientDeliveryFile, parseClientDeliveryManifest, readClientDeliveryFile, type ClientDeliveryFile } from './clientDelivery';
 import { parseConversation, parseConversationRequest, parseConversationRequests } from './projectConversation';
 import { ClientTicketApiError } from './clientApiError';
+import { parseStageBadge, parseStageResult, parseStageSummary, type StageBadge, type StageResult, type StageSummary } from './projectStages';
 import { parseTicketDocument, parseTicketDocumentList, type TicketDocumentsApi } from './ticketDocuments';
 export { ClientTicketApiError } from './clientApiError';
 
@@ -31,6 +32,8 @@ export interface ClientProject {
   updatedAt: string;
   intakeOptionId: string;
   preview: ClientProjectPreview | null;
+  /** The project's stage chip; absent while the server has no stages. */
+  stage?: StageBadge | null;
 }
 export interface ClientProjectProposal {
   id: string;
@@ -309,7 +312,8 @@ export const clientTicketApi = {
         throw new ClientTicketApiError(null, 'Your shared projects could not be read. Reload the portal and try again.');
       }
       return { workspaceId: row.workspaceId, projectId: row.projectId, name: row.name, updatedAt: row.updatedAt,
-        intakeOptionId: row.intakeOptionId, preview: preview as ClientProjectPreview | null };
+        intakeOptionId: row.intakeOptionId, preview: preview as ClientProjectPreview | null,
+        ...('stage' in row ? { stage: parseStageBadge(row.stage) } : {}) };
     });
     return { items };
   },
@@ -413,6 +417,28 @@ export const clientTicketApi = {
     return requestJson<ClientProjectFeedbackReceipt>(
       `/projects/${pathId(workspaceId)}/${pathId(projectId)}/preview/messages/operations/${pathId(operationId)}`,
     );
+  },
+  /** The project's stage track (POC → Contract → Development → Completed). */
+  async getProjectStage(workspaceId: string, projectId: string): Promise<StageSummary> {
+    return parseStageSummary(await requestJson<unknown>(`/projects/${pathId(workspaceId)}/${pathId(projectId)}/stage`));
+  },
+  async getStageOperation(workspaceId: string, projectId: string, operationId: string): Promise<StageResult> {
+    return parseStageResult(await requestJson<unknown>(
+      `/projects/${pathId(workspaceId)}/${pathId(projectId)}/stage/operations/${pathId(operationId)}`));
+  },
+  /** One stage write, recovered by its operation id when the response is lost. */
+  stageCommand(workspaceId: string, projectId: string, path: string, body: { operationId: string } & Record<string, unknown>, method = 'POST') {
+    return withOperationRecovery(
+      async () => parseStageResult(await requestJson<unknown>(`/projects/${pathId(workspaceId)}/${pathId(projectId)}/stage/${path}`,
+        { method, body: JSON.stringify({ schemaVersion: 1, ...body }) })),
+      () => clientTicketApi.getStageOperation(workspaceId, projectId, body.operationId),
+    );
+  },
+  requestPocChanges(workspaceId: string, projectId: string, pocId: string, input: { operationId: string; body: string }) {
+    return clientTicketApi.stageCommand(workspaceId, projectId, `poc/${pathId(pocId)}/changes`, input);
+  },
+  approvePoc(workspaceId: string, projectId: string, pocId: string, input: { operationId: string; contentHash: string; fullName: string }) {
+    return clientTicketApi.stageCommand(workspaceId, projectId, `poc/${pathId(pocId)}/approve`, { ...input, consent: true });
   },
   /** The project's one conversation: its thread, requests, their messages and checklist events. */
   async getProjectConversation(workspaceId: string, projectId: string) {

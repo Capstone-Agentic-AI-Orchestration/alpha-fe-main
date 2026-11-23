@@ -87,9 +87,11 @@ const CLIENT_PAGES: Record<Page, { label: string; subtitle: string; Icon: Lucide
 
 export default function ClientPortal({ api = clientTicketApi, inspectionOnly = false,
   workflowActionsDisabled: workflowActionsDisabledOverride = false, newRequestsDisabled = true,
-  communicationEnabled = false }: {
+  communicationEnabled = false, stageActionsInInspection = false }: {
   api?: typeof clientTicketApi;
   inspectionOnly?: boolean;
+  /** The UI preview's stage stand-in keeps stage decisions in memory, so they stay clickable while inspecting. */
+  stageActionsInInspection?: boolean;
   /** Disables client-initiated lifecycle decisions while preserving scoped ticket access. */
   workflowActionsDisabled?: boolean;
   /** New Request can be enabled by AppEntry, but is rendered only inside a selected project. */
@@ -824,6 +826,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
 
         {page === 'projects' && conversationProject && <ClientProjectConversation key={activeTabId + ':' + selectedConversationKey}
           api={api} project={conversationProject} clientName={clientName} readOnly={inspectionOnly}
+          stageReadOnly={inspectionOnly && !stageActionsInInspection}
           requestAction={newRequestAction}
           onBack={() => { cancelCreateForm(); setSelectedConversationKey(null); setSelectedConversationTicketId(null); showConversationRequest(conversationProject, null); }}
           selectedTicketId={selectedConversationTicketId} onSelectRequest={ticketId => selectConversationRequest(conversationProject, ticketId)}

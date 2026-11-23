@@ -12,6 +12,9 @@ import { PmRequestContext, type PmRequestContextSection } from './PmRequestConte
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
 import { REQUEST_TASK_LINKED_EVENT, linkSavedTaskToRequest } from './requestTaskLink';
+import { useProjectStage } from './useProjectStage';
+import { ProjectStageTracker } from './ProjectStageTracker';
+import { PmStagePanel } from './PmStagePanel';
 
 const REFRESH_MS = 30_000;
 const newOperationId = () => crypto.randomUUID();
@@ -142,6 +145,10 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const [contextTicketId, setContextTicketId] = useState<string | null>(focus?.ticketId ?? null);
   const [contextVersion, setContextVersion] = useState(0);
   const { items, requests, setRequests, error, load, send } = usePmProjectConversation(api, projectId, clientId, refreshToken);
+  const loadStage = useCallback(() => api.getProjectStage(projectId!, clientId!), [api, projectId, clientId]);
+  const afterStageWrite = useCallback(() => { void load(true); }, [load]);
+  const stage = useProjectStage(projectId && clientId && typeof api.getProjectStage === 'function' ? loadStage : null, afterStageWrite);
+  const stageSummary = stage.available && projectId && stage.summary?.clientId === clientId ? stage.summary : null;
 
   useEffect(() => { if (focus?.projectId) setProjectId(focus.projectId); }, [focus?.projectId]);
   useEffect(() => { if (focus?.ticketId) setContextTicketId(focus.ticketId); }, [focus?.ticketId]);
@@ -210,7 +217,10 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
     content: <PmRequestContext section={id} api={api} documentsApi={documentsApi} requests={requests} selectedId={contextRequest?.ticketId ?? null}
       onSelect={setContextTicketId} clientName={client.displayName} refreshToken={`${refreshToken ?? 0}:${contextVersion}`}
       onChanged={() => void load(true)} /> });
-  const panelTabs = [contextTab('overview', 'Overview'), contextTab('notes', 'Private notes'),
+  const stageTab: ConversationPanelTab[] = stageSummary && projectId && clientId ? [{ id: 'stage', label: 'Stage',
+    content: <PmStagePanel api={api} projectId={projectId} clientId={clientId} summary={stageSummary} busy={stage.busy}
+      actionError={stage.actionError} run={stage.run} /> }] : [];
+  const panelTabs = [...stageTab, contextTab('overview', 'Overview'), contextTab('notes', 'Private notes'),
     contextTab('details', 'Request details'), contextTab('documents', 'Documents')];
 
   const renderRequestActions = (request: ConversationRequest) => {
@@ -276,6 +286,9 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
           </>}
         </div>
       </header>}
+      {project && stageSummary && <div className="shrink-0 border-b border-divider px-6 pb-2">
+        <ProjectStageTracker summary={stageSummary} role="pm" />
+      </div>}
       {projects ? <ProjectConversationView key={projectId ?? 'none'} role="pm" projectName={project?.projectName ?? 'Project'}
         items={items} requests={requests} error={error} actionError={actionError}
         clientName={client.displayName} clientInitial={client.displayName.trim()[0]?.toUpperCase() ?? 'C'}

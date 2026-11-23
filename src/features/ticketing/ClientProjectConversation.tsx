@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, ListChecks, MessagesSquare, Monitor, PanelRightClose, PanelRightOpen, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Flag, ListChecks, MessagesSquare, Monitor, PanelRightClose, PanelRightOpen, Plus } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { ClientTicketApiError, clientTicketApi, type ClientProject, type ClientTicketDetail as ClientTicketRecord } from './clientApi';
@@ -8,6 +8,9 @@ import { ProjectPreviewFrame } from './ClientProjectPreview';
 import { ConversationRequestList, ProjectConversationChat, openRequestCount, useConversationJump, type ConversationAbout } from './ProjectConversationView';
 import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
 import type { ClientProjectView } from './clientWorkspaceTabs';
+import { useProjectStage } from './useProjectStage';
+import { ProjectStageTracker } from './ProjectStageTracker';
+import { ClientStagePanel } from './ClientStagePanel';
 
 const REFRESH_MS = 30_000;
 const TERMINAL = new Set(['closed', 'declined', 'cancelled']);
@@ -89,6 +92,8 @@ export interface ClientProjectConversationProps {
   project: ClientProject;
   clientName: string;
   readOnly?: boolean;
+  /** Whether stage decisions (approve, request changes, sign) are off; follows `readOnly` unless given. */
+  stageReadOnly?: boolean;
   onBack: () => void;
   /** The request open in the panel; picking another one keeps this page and its conversation in place. */
   selectedTicketId: string | null;
@@ -138,6 +143,12 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
   const [railTab, setRailTab] = useState<RailTab>('chat');
   const { jump, toRequest } = useConversationJump();
   const target = useReplyTarget(request.ticket, selectedTicketId, readOnly);
+  const { workspaceId, projectId } = project;
+  const loadStage = useCallback(() => api.getProjectStage(workspaceId, projectId), [api, workspaceId, projectId]);
+  const reloadConversation = conversation.load;
+  const afterStageWrite = useCallback(() => { void reloadConversation(true); }, [reloadConversation]);
+  const stage = useProjectStage(typeof api.getProjectStage === 'function' ? loadStage : null, afterStageWrite);
+  const stageSummary = stage.available ? stage.summary : null;
   const loaded = conversation.items !== null;
   useEffect(() => { if (loaded && selectedTicketId) toRequest(selectedTicketId); }, [loaded, selectedTicketId, toRequest]);
   // A new request is written in the requests panel, so bring it forward when the form opens.
@@ -167,6 +178,7 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => document.getElementById(inputId)?.focus()));
   };
   const head = <ConversationHead project={project} onBack={props.onBack} busy={busy}
+    tracker={stageSummary && <ProjectStageTracker summary={stageSummary} role="client" />}
     description={mode === 'preview' && shared ? PREVIEW_DESCRIPTION : CONVERSATION_DESCRIPTION}
     controls={(props.requestAction || changeView) && <>
       {props.requestAction}
@@ -183,6 +195,10 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
   const requestList = <ConversationRequestList role="client" requests={conversation.requests} busy={busy} writesAvailable={!readOnly}
     onToggleDone={actions.toggle} selectedTicketId={selectedTicketId} onSelectRequest={item => pick(item.ticketId)} />;
   const newRequest = props.requestForm && <RailCard icon={<Plus size={16} />} title="New request">{props.requestForm}</RailCard>;
+  const stagePanel = stageSummary && <RailCard icon={<Flag size={16} />} title={stageSummary.stageLabel}>
+    <ClientStagePanel api={api} project={project} summary={stageSummary} busy={stage.busy} actionError={stage.actionError}
+      readOnly={props.stageReadOnly ?? readOnly} run={stage.run} />
+  </RailCard>;
   const picked = <PickedRequest selectedTicketId={selectedTicketId} request={request} rail={props.rail} />;
 
   if (mode === 'preview') {
@@ -206,6 +222,7 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
             className="cx-railchat">{chat}</section>
           <div id={tabId('requests')} role="tabpanel" aria-labelledby={tabId('requests') + '-tab'} hidden={railTab !== 'requests'}
             className="cx-railrequests">
+            {stagePanel}
             {newRequest}
             {requestList}
             {picked}
@@ -219,6 +236,7 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
       <section className="cx-reqchat" aria-labelledby="client-conversation-project-title">{head}{chat}</section>
       <aside className="cx-reqrail" aria-label={`Requests and details for ${project.name}`}>
         <div className="cx-reqrail-top">
+          {stagePanel}
           {newRequest}
           {!shared && <PreviewNotShared onAsk={askAboutPreview} />}
           <CollapsibleRailCard id="requests" icon={<ListChecks size={16} />} title={requestsTitle}>{requestList}</CollapsibleRailCard>
@@ -265,8 +283,8 @@ function PickedRequest({ selectedTicketId, request, rail }: Readonly<Pick<Client
   return <section className="cx-reqcard" aria-busy="true"><LoadingRows label="Loading request" layout="detail" rows={3} /></section>;
 }
 
-function ConversationHead({ project, onBack, busy, description, controls }: Readonly<{
-  project: ClientProject; onBack: () => void; busy: boolean; description: string; controls?: ReactNode;
+function ConversationHead({ project, onBack, busy, description, controls, tracker }: Readonly<{
+  project: ClientProject; onBack: () => void; busy: boolean; description: string; controls?: ReactNode; tracker?: ReactNode;
 }>) {
   return <>
     <button type="button" className="cx-back" onClick={onBack} disabled={busy}><ArrowLeft size={15} aria-hidden="true" />All projects</button>
@@ -275,5 +293,6 @@ function ConversationHead({ project, onBack, busy, description, controls }: Read
       <div><h1 id="client-conversation-project-title">{project.name}</h1><p>{description}</p></div>
       {controls && <div className="cx-reqchat-controls">{controls}</div>}
     </header>
+    {tracker}
   </>;
 }
