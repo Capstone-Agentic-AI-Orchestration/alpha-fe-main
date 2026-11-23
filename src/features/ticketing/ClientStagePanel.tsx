@@ -4,6 +4,7 @@ import { PocScopeView, stageDay } from './PocScopeView';
 import { SignOffDialog } from './SignOffDialog';
 import { ContractView } from './ContractView';
 import { ClientDevelopmentStage, RoundHistory } from './ClientDevelopmentStage';
+import { ClientQuotes } from './StageQuotes';
 import type { StageResult, StageSummary } from './projectStages';
 import './projectStages.css';
 
@@ -28,6 +29,7 @@ export function ClientStagePanel(props: Readonly<ClientStagePanelProps>) {
     {summary.stage === 'contract' && <ClientContractStage {...props} />}
     {summary.stage === 'development' && <ClientDevelopmentStage {...props} />}
     {summary.stage === 'completed' && <ClientCompletedStage summary={summary} />}
+    {(summary.stage === 'development' || summary.stage === 'completed') && <ClientQuotes {...props} />}
     {(summary.stage === 'development' || summary.stage === 'completed') && <SignedContract summary={summary} />}
     {summary.stage !== 'poc' && summary.stage !== 'unset' && <ApprovedPoc summary={summary} />}
     {props.actionError && <p role="alert" className="ps-error">{props.actionError}</p>}

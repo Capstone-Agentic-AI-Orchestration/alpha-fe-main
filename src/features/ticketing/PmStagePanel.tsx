@@ -9,6 +9,7 @@ import type { Contract, ContractClause, PocVersion, StageResult, StageSummary } 
 import { ContractView } from './ContractView';
 import { SignOffDialog } from './SignOffDialog';
 import { PmDevelopmentStage } from './PmDevelopmentStage';
+import { PmQuotes } from './StageQuotes';
 
 const newOperationId = () => crypto.randomUUID();
 const link = 'h-auto justify-start px-0 py-0 text-[12px] font-semibold text-link hover:bg-transparent hover:text-link-hover';
@@ -31,6 +32,7 @@ export function PmStagePanel(props: Readonly<PmStagePanelProps>) {
     {summary.stage === 'unset' && <StartingStagePicker {...props} />}
     {summary.stage === 'poc' && <PmPocStage {...props} />}
     {summary.stage === 'contract' && <PmContractStage {...props} />}
+    {(summary.stage === 'development' || summary.stage === 'completed') && <PmQuotes {...props} />}
     {summary.stage === 'development' && <PmDevelopmentStage {...props} />}
     {summary.stage === 'completed' && <p className="text-content-secondary">{summary.final?.acceptedName
       ? <>{summary.final.acceptedName} accepted the final delivery on {stageDay(summary.final.acceptedAt)}. The contract is closed.</>

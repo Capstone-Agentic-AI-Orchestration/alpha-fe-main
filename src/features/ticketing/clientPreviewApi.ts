@@ -85,6 +85,12 @@ const methods: Partial<typeof clientTicketApi> = {
     return previewStage.submitRound(roundId, input.acceptPaid);
   },
   async acceptFinal(_workspaceId: string, _projectId: string, input: { fullName: string }) { return previewStage.acceptFinal(input.fullName); },
+  async requestChange(_workspaceId: string, _projectId: string, input: { title: string; description: string }) {
+    return previewStage.requestChange(input.title, input.description);
+  },
+  async decideQuote(_workspaceId: string, _projectId: string, quoteId: string, input: { decision: 'accept' | 'decline'; fullName?: string }) {
+    return previewStage.decideQuote(quoteId, input.decision, input.fullName);
+  },
   async getProjectConversationRequests() {
     return { items: PREVIEW_CONVERSATION_REQUESTS.map(request => ({ ...request, workspaceId: workspace })) };
   },

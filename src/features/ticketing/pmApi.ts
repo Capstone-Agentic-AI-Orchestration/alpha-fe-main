@@ -727,6 +727,9 @@ export const pmTicketApi = {
   markFinalDelivery(projectId: string, clientId: string, input: { operationId: string; note: string }) {
     return pmTicketApi.stageCommand(projectId, clientId, 'final', input);
   },
+  sendQuote(projectId: string, clientId: string, quoteId: string, input: { operationId: string; amount: number; currency: string; description: string }) {
+    return pmTicketApi.stageCommand(projectId, clientId, `quotes/${encodeId(quoteId)}/send`, input);
+  },
   /** Open client requests on a project, for the New task dialog. */
   listOpenRequests(projectId: string) {
     return apiService.ticketRequest<{ items: PmOpenRequest[] }>(`/tickets/projects/${encodeId(projectId)}/open-requests`);

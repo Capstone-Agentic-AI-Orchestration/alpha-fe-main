@@ -192,6 +192,29 @@ export const previewStage = {
     replaceRound({ ...current, items, status: 'classified', classifiedAt: now(), counts: items.some(item => item.classification === 'revision') });
     return record('pm', 'round_classified', roundId, { number: current.number });
   },
+  requestChange(title: string, description: string) {
+    if (state.stage !== 'development' && state.stage !== 'completed') fail('Change requests start once development has begun.');
+    const quote = newQuote('change_request', null, title, description, 'client');
+    return record('client', 'quote_requested', quote.id, { body: description ? `${title}\n\n${description}` : title });
+  },
+  sendQuote(quoteId: string, amount: number, currency: string, description: string) {
+    const quote = state.quotes.find(item => item.id === quoteId && item.status === 'requested');
+    if (!quote) fail('This quote was already sent.');
+    state.quotes = state.quotes.map(item => item.id === quoteId
+      ? { ...item, amount: amount.toFixed(2), currency, description: description || item.description, status: 'sent' as const, sentAt: now() } : item);
+    return record('pm', 'quote_sent', quoteId);
+  },
+  decideQuote(quoteId: string, decision: 'accept' | 'decline', fullName?: string) {
+    const quote = state.quotes.find(item => item.id === quoteId && item.status === 'sent');
+    if (!quote) fail('This quote is not waiting for your decision.');
+    const accepted = decision === 'accept';
+    state.quotes = state.quotes.map(item => item.id === quoteId
+      ? { ...item, status: accepted ? 'accepted' as const : 'declined' as const, decidedName: accepted ? fullName ?? null : null, decidedAt: now() } : item);
+    const paidRound = quote.kind === 'paid_revision' ? state.rounds.find(item => item.id === quote.roundId && item.status === 'awaiting_quote') : null;
+    if (paidRound) replaceRound(accepted ? { ...paidRound, status: 'submitted' }
+      : { ...paidRound, status: 'open', submittedAt: null, paid: false, quoteId: null });
+    return record('client', accepted ? 'quote_accepted' : 'quote_declined', quoteId, accepted && fullName ? { name: fullName } : {});
+  },
   markFinalDelivery(note: string) {
     if (state.stage !== 'development' || activeRound() || state.final) fail('Finish the open feedback round first.');
     state.final = { deliveredAt: now(), note, acceptedAt: null, acceptedName: null };

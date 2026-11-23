@@ -455,6 +455,14 @@ export const clientTicketApi = {
   acceptFinal(workspaceId: string, projectId: string, input: { operationId: string; fullName: string }) {
     return clientTicketApi.stageCommand(workspaceId, projectId, 'final/accept', { ...input, consent: true });
   },
+  /** Asks for new work outside the contract; it is quoted before anything starts. */
+  requestChange(workspaceId: string, projectId: string, input: { operationId: string; title: string; description: string }) {
+    return clientTicketApi.stageCommand(workspaceId, projectId, 'quotes', input);
+  },
+  decideQuote(workspaceId: string, projectId: string, quoteId: string, input: { operationId: string; decision: 'accept' | 'decline'; fullName?: string }) {
+    const body = input.decision === 'accept' ? { ...input, consent: true } : { operationId: input.operationId, decision: input.decision };
+    return clientTicketApi.stageCommand(workspaceId, projectId, `quotes/${pathId(quoteId)}/decision`, body);
+  },
   /** The project's one conversation: its thread, requests, their messages and checklist events. */
   async getProjectConversation(workspaceId: string, projectId: string) {
     return parseConversation(await requestJson<unknown>(`/projects/${pathId(workspaceId)}/${pathId(projectId)}/conversation`));
