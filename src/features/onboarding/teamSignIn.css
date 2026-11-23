@@ -1,5 +1,5 @@
 .team-sign-in {
-  background: #07070c;
+  --team-sign-in-warning: color-mix(in srgb, rgb(var(--ui-status-warning)) 65%, var(--public-ink));
   color-scheme: dark;
 }
 
@@ -74,9 +74,9 @@ button.team-sign-in-muted:hover { color: var(--public-ink); }
 .team-sign-in-action:hover { background: color-mix(in srgb, var(--public-accent) 80%, var(--public-ink)); }
 .team-sign-in-notice { border-color: var(--public-line); background: var(--public-panel); overflow-wrap: anywhere; }
 .team-sign-in-notice code { background: var(--public-bg); color: var(--public-ink); }
-.team-sign-in-notice.is-warning { border-color: color-mix(in srgb, #edbd76 35%, transparent); }
-.team-sign-in-warning { color: #edbd76; }
-.team-sign-in-shield { color: #8de3c0; }
+.team-sign-in-notice.is-warning { border-color: color-mix(in srgb, var(--team-sign-in-warning) 35%, transparent); }
+.team-sign-in-warning { color: var(--team-sign-in-warning); }
+.team-sign-in-shield { color: color-mix(in srgb, rgb(var(--ui-status-success)) 65%, var(--public-ink)); }
 
 @media (min-width: 900px) {
   .team-sign-in-layout { grid-template-columns: minmax(0, 1fr) minmax(320px, 440px); column-gap: var(--team-sign-in-gap); }
