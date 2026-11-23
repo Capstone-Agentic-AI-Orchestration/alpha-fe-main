@@ -443,6 +443,18 @@ export const clientTicketApi = {
   signContract(workspaceId: string, projectId: string, contractId: string, input: { operationId: string; contentHash: string; fullName: string }) {
     return clientTicketApi.stageCommand(workspaceId, projectId, `contract/${pathId(contractId)}/sign`, { ...input, consent: true });
   },
+  /** Replaces the open feedback round's notes; nothing reaches the PM until the round is sent. */
+  async saveRoundItems(workspaceId: string, projectId: string, roundId: string, items: string[]): Promise<StageSummary> {
+    return parseStageSummary(await requestJson<unknown>(
+      `/projects/${pathId(workspaceId)}/${pathId(projectId)}/stage/rounds/${pathId(roundId)}/items`,
+      { method: 'PUT', body: JSON.stringify({ items }) }));
+  },
+  submitRound(workspaceId: string, projectId: string, roundId: string, input: { operationId: string; acceptPaid: boolean }) {
+    return clientTicketApi.stageCommand(workspaceId, projectId, `rounds/${pathId(roundId)}/submit`, input);
+  },
+  acceptFinal(workspaceId: string, projectId: string, input: { operationId: string; fullName: string }) {
+    return clientTicketApi.stageCommand(workspaceId, projectId, 'final/accept', { ...input, consent: true });
+  },
   /** The project's one conversation: its thread, requests, their messages and checklist events. */
   async getProjectConversation(workspaceId: string, projectId: string) {
     return parseConversation(await requestJson<unknown>(`/projects/${pathId(workspaceId)}/${pathId(projectId)}/conversation`));

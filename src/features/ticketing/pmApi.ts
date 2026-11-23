@@ -1,6 +1,6 @@
 import { ApiRequestError, apiService } from '@/shared/services/apiService';
 import { parseConversation, parseConversationRequest, parseConversationRequests } from './projectConversation';
-import { parseStageResult, parseStageSummary, type ContractClause, type PocFeature, type StageResult, type StageSummary } from './projectStages';
+import { parseStageResult, parseStageSummary, type ContractClause, type PocFeature, type RevisionClassification, type StageResult, type StageSummary } from './projectStages';
 import { parseClientDeliveryFile, parseClientDeliveryManifest, readPmDeliveryFile, type ClientDeliveryFile } from './clientDelivery';
 import { parsePmDeliveryCandidates } from './pmDeliveryCandidates';
 import { parseTicketDocumentList, type TicketDocumentsReadApi } from './ticketDocuments';
@@ -313,6 +313,8 @@ function encodeId(value: string): string { return encodeURIComponent(value); }
 export interface PmPocDraft { title: string; summary: string; features: PocFeature[]; screens: string[]; outOfScope: string; note: string }
 /** What the PM may change in a contract draft; the scope and revision limit come from the approved POC. */
 export interface PmContractDraft { deliverables?: string[]; clauses?: ContractClause[]; notes?: string }
+/** How the PM labels one note of a feedback round. */
+export interface PmRoundLabel { id: string; classification: RevisionClassification; pmNote: string }
 /** What an accepted inquiry became, when the server says: its request and that request's project. */
 function acceptedOutcome(row: Record<string, unknown>): Pick<PmCentralIntakeItem, 'acceptedTicketId' | 'acceptedTicketReference' | 'acceptedProjectId' | 'acceptedProjectName'> {
   if (typeof row.acceptedTicketId !== 'string' || typeof row.acceptedTicketReference !== 'string'
@@ -714,6 +716,16 @@ export const pmTicketApi = {
   },
   countersignContract(projectId: string, clientId: string, contractId: string, input: { operationId: string; fullName: string }) {
     return pmTicketApi.stageCommand(projectId, clientId, `contract/${encodeId(contractId)}/countersign`, input);
+  },
+  /** Shares the current build for feedback: opens the next round. */
+  shareBuild(projectId: string, clientId: string, input: { operationId: string; note: string }) {
+    return pmTicketApi.stageCommand(projectId, clientId, 'rounds', input);
+  },
+  classifyRound(projectId: string, clientId: string, roundId: string, input: { operationId: string; items: PmRoundLabel[] }) {
+    return pmTicketApi.stageCommand(projectId, clientId, `rounds/${encodeId(roundId)}/classify`, input);
+  },
+  markFinalDelivery(projectId: string, clientId: string, input: { operationId: string; note: string }) {
+    return pmTicketApi.stageCommand(projectId, clientId, 'final', input);
   },
   /** Open client requests on a project, for the New task dialog. */
   listOpenRequests(projectId: string) {

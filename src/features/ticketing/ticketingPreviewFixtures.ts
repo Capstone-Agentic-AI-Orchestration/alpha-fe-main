@@ -7,6 +7,7 @@ import {
   pmTicketApi,
   type PmContractDraft,
   type PmPocDraft,
+  type PmRoundLabel,
   type PmTicketDetail,
   type PmTicketMessage,
   type PmTicketNote,
@@ -230,6 +231,11 @@ const localMethods: Partial<typeof pmTicketApi> = {
   async countersignContract(_projectId: string, _clientId: string, contractId: string, input: { fullName: string }) {
     return previewStage.countersignContract(contractId, input.fullName);
   },
+  async shareBuild(_projectId: string, _clientId: string, input: { note: string }) { return previewStage.shareBuild(input.note); },
+  async classifyRound(_projectId: string, _clientId: string, roundId: string, input: { items: PmRoundLabel[] }) {
+    return previewStage.classifyRound(roundId, input.items);
+  },
+  async markFinalDelivery(_projectId: string, _clientId: string, input: { note: string }) { return previewStage.markFinalDelivery(input.note); },
   async getProjectConversationRequests() { return { items: PREVIEW_CONVERSATION_REQUESTS }; },
   async listOpenRequests() {
     return { items: PREVIEW_CONVERSATION_REQUESTS.map(request => ({ ticketId: request.ticketId, reference: request.reference,

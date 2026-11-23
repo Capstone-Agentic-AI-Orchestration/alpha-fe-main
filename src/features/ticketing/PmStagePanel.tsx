@@ -8,6 +8,7 @@ import { PocScopeView, stageDay } from './PocScopeView';
 import type { Contract, ContractClause, PocVersion, StageResult, StageSummary } from './projectStages';
 import { ContractView } from './ContractView';
 import { SignOffDialog } from './SignOffDialog';
+import { PmDevelopmentStage } from './PmDevelopmentStage';
 
 const newOperationId = () => crypto.randomUUID();
 const link = 'h-auto justify-start px-0 py-0 text-[12px] font-semibold text-link hover:bg-transparent hover:text-link-hover';
@@ -30,6 +31,10 @@ export function PmStagePanel(props: Readonly<PmStagePanelProps>) {
     {summary.stage === 'unset' && <StartingStagePicker {...props} />}
     {summary.stage === 'poc' && <PmPocStage {...props} />}
     {summary.stage === 'contract' && <PmContractStage {...props} />}
+    {summary.stage === 'development' && <PmDevelopmentStage {...props} />}
+    {summary.stage === 'completed' && <p className="text-content-secondary">{summary.final?.acceptedName
+      ? <>{summary.final.acceptedName} accepted the final delivery on {stageDay(summary.final.acceptedAt)}. The contract is closed.</>
+      : 'This project is complete and its contract is closed.'} New work is a quoted change request.</p>}
     {(summary.stage === 'development' || summary.stage === 'completed') && summary.contract?.status === 'countersigned' && <SignedContractLine contract={summary.contract} />}
     {summary.stage !== 'poc' && summary.stage !== 'unset' && summary.poc?.status === 'approved' && <section className="space-y-2">
       <p className="text-content-secondary">POC v{summary.poc.number} approved by <strong className="text-content">{summary.poc.approvedName}</strong> on {stageDay(summary.poc.approvedAt)}.</p>

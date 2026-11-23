@@ -1,5 +1,5 @@
 import type { ConversationItem } from './projectConversation';
-import type { Contract, ContractTerms, PocVersion, ProjectStage, StageNextAction, StageResult, StageSummary } from './projectStages';
+import type { Contract, ContractTerms, PocVersion, ProjectStage, Quote, RevisionClassification, RevisionRound, StageNextAction, StageResult, StageSummary } from './projectStages';
 import type { PmContractDraft, PmPocDraft } from './pmApi';
 
 /**
@@ -13,14 +13,39 @@ type Actor = 'client' | 'pm';
 interface PreviewState {
   stage: ProjectStage; revisionLimit: number; revisionsOffset: number; version: number; stageChangedAt: string;
   pocs: PocVersion[]; events: ConversationItem[]; contract: Contract | null;
+  rounds: RevisionRound[]; quotes: Quote[]; final: StageSummary['final'];
 }
 
 const now = () => new Date().toISOString();
 const id = () => crypto.randomUUID();
-let state: PreviewState = initial();
+let state: PreviewState;
 
+const SEED_STAGES: readonly ProjectStage[] = ['unset', 'poc', 'contract', 'development', 'completed'];
+
+/**
+ * A new project, or one already at a later stage with `?preview-stage=contract|development|completed|unset`
+ * in the preview URL, so a stage can be inspected without clicking through the ones before it.
+ */
 function initial(): PreviewState {
-  return { stage: 'poc', revisionLimit: 3, revisionsOffset: 0, version: 0, stageChangedAt: '2026-10-01T09:00:00+08:00', pocs: [], events: [], contract: null };
+  const base: PreviewState = { stage: 'poc', revisionLimit: 3, revisionsOffset: 0, version: 0, stageChangedAt: '2026-10-01T09:00:00+08:00',
+    pocs: [], events: [], contract: null, rounds: [], quotes: [], final: null };
+  const asked = typeof location === 'undefined' ? null : new URLSearchParams(location.search).get('preview-stage');
+  const stage = SEED_STAGES.find(item => item === asked);
+  if (!stage || stage === 'poc') return base;
+  if (stage === 'unset') return { ...base, stage };
+  const at = '2026-10-02T09:00:00+08:00';
+  const poc: PocVersion = { id: 'preview-poc-1', number: 1, status: 'approved', title: 'Operations dashboard',
+    summary: 'A web dashboard where the operations team tracks daily sales and stock.',
+    features: [{ title: 'Daily sales chart', detail: 'By store and by day' }, { title: 'Low-stock alerts', detail: '' }],
+    screens: ['Overview', 'Stock'], outOfScope: 'Payments', note: '', contentHash: 'a'.repeat(64), createdAt: at, updatedAt: at, publishedAt: at,
+    approvedAt: at, approvedName: 'Alex Morgan', changeRequest: null };
+  const seeded: PreviewState = { ...base, stage, pocs: [poc] };
+  if (stage === 'contract') return seeded;
+  const contract: Contract = { id: 'preview-contract-1', pocVersionId: poc.id, status: 'countersigned', terms: defaultTerms(poc, 3),
+    contentHash: 'b'.repeat(64), createdAt: at, updatedAt: at, issuedAt: at, clientSignedName: 'Alex Morgan', clientSignedAt: at,
+    pmSignedName: 'Pat Reyes', pmSignedAt: at };
+  if (stage === 'development') return { ...seeded, contract };
+  return { ...seeded, contract, final: { deliveredAt: at, note: '', acceptedAt: at, acceptedName: 'Alex Morgan' } };
 }
 
 /** Back to a project that has just started, as on page load. */
@@ -44,10 +69,26 @@ function nextAction(): StageNextAction | null {
       if (state.contract?.status === 'issued') return { who: 'client', kind: 'sign_contract', label: 'Sign the contract' };
       if (state.contract?.status === 'client_signed') return { who: 'pm', kind: 'countersign_contract', label: 'Countersign the contract' };
       return { who: 'pm', kind: 'issue_contract', label: 'Issue the contract' };
-    case 'development': return { who: 'pm', kind: 'share_build', label: 'Share the next build' };
-    case 'completed': return null;
+    case 'development': {
+      const quote = quoteAction();
+      if (quote) return quote;
+      const round = activeRound();
+      if (round?.status === 'open') return { who: 'client', kind: 'submit_round', label: `Send your feedback on build ${round.number}` };
+      if (round?.status === 'submitted') return { who: 'pm', kind: 'classify_round', label: `Review feedback round ${round.number}` };
+      if (state.final && !state.final.acceptedAt) return { who: 'client', kind: 'accept_final', label: 'Review the final delivery' };
+      return { who: 'pm', kind: 'share_build', label: 'Share the next build' };
+    }
+    case 'completed': return quoteAction();
   }
 }
+
+function quoteAction(): StageNextAction | null {
+  if (state.quotes.some(quote => quote.status === 'requested')) return { who: 'pm', kind: 'send_quote', label: 'Send a quote' };
+  if (state.quotes.some(quote => quote.status === 'sent')) return { who: 'client', kind: 'decide_quote', label: 'Review the quote' };
+  return null;
+}
+const activeRound = () => state.rounds.find(round => round.status !== 'classified') ?? null;
+const used = () => state.revisionsOffset + state.rounds.filter(round => round.counts === true && !round.paid).length;
 
 const LABEL: Record<ProjectStage, string> = {
   unset: 'Stage not set', poc: 'Proof of concept', contract: 'Contract', development: 'Development', completed: 'Completed',
@@ -56,11 +97,12 @@ const LABEL: Record<ProjectStage, string> = {
 export function previewStageSummary(audience: Actor, clientId?: string): StageSummary {
   const published = state.pocs.filter(poc => poc.status !== 'draft').sort((a, b) => b.number - a.number);
   return {
-    stage: state.stage, stageLabel: LABEL[state.stage], revisionLimit: state.revisionLimit, revisionsUsed: state.revisionsOffset,
+    stage: state.stage, stageLabel: LABEL[state.stage], revisionLimit: state.revisionLimit, revisionsUsed: used(),
     version: state.version, stageChangedAt: state.stageChangedAt, nextAction: nextAction(),
     poc: published[0] ?? null, pocDraft: audience === 'pm' ? state.pocs.find(poc => poc.status === 'draft') ?? null : null,
     pocHistory: published.map(poc => ({ id: poc.id, number: poc.number, status: poc.status, publishedAt: poc.publishedAt })),
-    contract: audience === 'client' && state.contract?.status === 'draft' ? null : state.contract, rounds: [], quotes: [], final: null,
+    contract: audience === 'client' && state.contract?.status === 'draft' ? null : state.contract, rounds: [...state.rounds].sort((a, b) => b.number - a.number),
+    quotes: state.quotes.map(quote => audience === 'client' && quote.status === 'requested' ? { ...quote, amount: null } : quote), final: state.final,
     ...(audience === 'pm' && clientId ? { clientId } : {}),
   };
 }
@@ -80,8 +122,7 @@ function move(to: ProjectStage) { state.stage = to; state.stageChangedAt = now()
 
 const hash = () => (id() + id()).replace(/-/g, '').slice(0, 64);
 
-function defaultTerms(poc: PocVersion): ContractTerms {
-  const limit = state.revisionLimit;
+function defaultTerms(poc: PocVersion, limit: number): ContractTerms {
   return {
     projectName: 'Operations Dashboard', clientName: 'Northstar Demo Co.',
     scope: { pocNumber: poc.number, title: poc.title, summary: poc.summary, features: poc.features, screens: poc.screens, outOfScope: poc.outOfScope },
@@ -101,13 +142,73 @@ function liveContract(contractId: string, status: Contract['status']): Contract 
   return state.contract;
 }
 
+function round(roundId: string, status: RevisionRound['status']): RevisionRound {
+  const found = state.rounds.find(item => item.id === roundId);
+  if (state.stage !== 'development' || !found || found.status !== status) fail('This round changed. Refresh to see the latest.');
+  return found;
+}
+const replaceRound = (next: RevisionRound) => { state.rounds = state.rounds.map(item => item.id === next.id ? next : item); };
+function newQuote(kind: Quote['kind'], roundId: string | null, title: string, description: string, requestedBy: Actor): Quote {
+  const quote: Quote = { id: id(), kind, roundId, title, description, amount: null, currency: 'PHP', status: 'requested', requestedBy,
+    requestedAt: now(), sentAt: null, decidedName: null, decidedAt: null };
+  state.quotes = [quote, ...state.quotes];
+  return quote;
+}
+
 export const previewStage = {
+  shareBuild(note: string) {
+    if (state.stage !== 'development' || activeRound()) fail('The client is still working on the last feedback round.');
+    const number = state.rounds.length + 1;
+    const opened: RevisionRound = { id: id(), number, status: 'open', buildNote: note, previewUrl: null, counts: null, paid: false, quoteId: null,
+      openedAt: now(), submittedAt: null, classifiedAt: null, items: [] };
+    state.rounds = [...state.rounds, opened];
+    if (state.final && !state.final.acceptedAt) state.final = null;
+    return record('pm', 'build_shared', opened.id, { number });
+  },
+  saveRoundItems(roundId: string, items: string[]): StageSummary {
+    const current = round(roundId, 'open');
+    replaceRound({ ...current, items: items.map((body, position) => ({ id: id(), position, body, classification: null, pmNote: '' })) });
+    state.version += 1;
+    return previewStageSummary('client');
+  },
+  submitRound(roundId: string, acceptPaid: boolean) {
+    const current = round(roundId, 'open');
+    if (!current.items.length) fail('Add at least one change before sending the round.');
+    if (used() < state.revisionLimit) {
+      replaceRound({ ...current, status: 'submitted', submittedAt: now() });
+      return record('client', 'round_submitted', roundId, { number: current.number });
+    }
+    if (!acceptPaid) fail(`Your ${state.revisionLimit} included revision rounds are used. This round needs a quote first.`);
+    const quote = newQuote('paid_revision', roundId, `Revision round ${current.number}`, current.items.map(item => '• ' + item.body).join('\n'), 'client');
+    replaceRound({ ...current, status: 'awaiting_quote', submittedAt: now(), paid: true, quoteId: quote.id });
+    return record('client', 'round_submitted', roundId, { number: current.number });
+  },
+  classifyRound(roundId: string, labels: Array<{ id: string; classification: RevisionClassification; pmNote: string }>) {
+    const current = round(roundId, 'submitted');
+    const byId = new Map(labels.map(item => [item.id, item]));
+    if (current.items.some(item => !byId.has(item.id))) fail('Label every change in the round.');
+    const items = current.items.map(item => ({ ...item, classification: byId.get(item.id)!.classification, pmNote: byId.get(item.id)!.pmNote }));
+    for (const item of items) if (item.classification === 'out_of_scope') newQuote('change_request', roundId, item.body.slice(0, 120), item.body, 'pm');
+    replaceRound({ ...current, items, status: 'classified', classifiedAt: now(), counts: items.some(item => item.classification === 'revision') });
+    return record('pm', 'round_classified', roundId, { number: current.number });
+  },
+  markFinalDelivery(note: string) {
+    if (state.stage !== 'development' || activeRound() || state.final) fail('Finish the open feedback round first.');
+    state.final = { deliveredAt: now(), note, acceptedAt: null, acceptedName: null };
+    return record('pm', 'final_delivered', null);
+  },
+  acceptFinal(fullName: string) {
+    if (state.stage !== 'development' || !state.final || state.final.acceptedAt) fail('There is no final delivery waiting for you.');
+    state.final = { ...state.final, acceptedAt: now(), acceptedName: fullName };
+    move('completed');
+    return record('client', 'final_accepted', null, { name: fullName });
+  },
   saveContractDraft(input: PmContractDraft, clientId: string): StageSummary {
     if (state.stage !== 'contract') fail('The contract can only be prepared during the contract stage.');
     if (state.contract && state.contract.status !== 'draft') fail('The contract was already issued. Withdraw it first to change it.');
     const poc = state.pocs.find(item => item.status === 'approved');
     if (!poc) fail('Approve a proof of concept first.');
-    const base = state.contract?.terms ?? defaultTerms(poc);
+    const base = state.contract?.terms ?? defaultTerms(poc, state.revisionLimit);
     const terms = { ...base, deliverables: input.deliverables ?? base.deliverables, clauses: input.clauses ?? base.clauses, notes: input.notes ?? base.notes };
     state.contract = { id: state.contract?.id ?? id(), pocVersionId: poc.id, status: 'draft', terms, contentHash: null, createdAt: state.contract?.createdAt ?? now(),
       updatedAt: now(), issuedAt: null, clientSignedName: null, clientSignedAt: null, pmSignedName: null, pmSignedAt: null };
@@ -179,3 +280,6 @@ export const previewStage = {
     return record('client', 'poc_approved', pocId, { number: poc.number, name: fullName });
   },
 };
+
+// Last, so every constant the seed reads is defined.
+state = initial();

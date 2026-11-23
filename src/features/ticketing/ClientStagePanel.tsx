@@ -3,6 +3,7 @@ import type { clientTicketApi, ClientProject } from './clientApi';
 import { PocScopeView, stageDay } from './PocScopeView';
 import { SignOffDialog } from './SignOffDialog';
 import { ContractView } from './ContractView';
+import { ClientDevelopmentStage, RoundHistory } from './ClientDevelopmentStage';
 import type { StageResult, StageSummary } from './projectStages';
 import './projectStages.css';
 
@@ -15,7 +16,7 @@ export interface ClientStagePanelProps {
   busy: boolean;
   actionError: string;
   readOnly?: boolean;
-  run: (work: () => Promise<StageResult>, fallback: string) => Promise<boolean>;
+  run: (work: () => Promise<StageResult | StageSummary>, fallback: string) => Promise<boolean>;
 }
 
 /** What the client does at the project's current stage. The tracker above says where the project is; this says what to do. */
@@ -25,6 +26,8 @@ export function ClientStagePanel(props: Readonly<ClientStagePanelProps>) {
     {summary.stage === 'unset' && <p className="ps-note">Your project manager will set this project’s stage. Until then, keep using the conversation as usual.</p>}
     {summary.stage === 'poc' && <ClientPocStage {...props} />}
     {summary.stage === 'contract' && <ClientContractStage {...props} />}
+    {summary.stage === 'development' && <ClientDevelopmentStage {...props} />}
+    {summary.stage === 'completed' && <ClientCompletedStage summary={summary} />}
     {(summary.stage === 'development' || summary.stage === 'completed') && <SignedContract summary={summary} />}
     {summary.stage !== 'poc' && summary.stage !== 'unset' && <ApprovedPoc summary={summary} />}
     {props.actionError && <p role="alert" className="ps-error">{props.actionError}</p>}
@@ -110,6 +113,18 @@ function ClientContractStage({ api, project, summary, busy, readOnly = false, ru
         {' '}{contract.terms.revisionLimit} revision round{contract.terms.revisionLimit === 1 ? '' : 's'} included</p>
       <p className="ps-copy">Your project manager countersigns next, and development starts.</p>
     </SignOffDialog>}
+  </>;
+}
+
+/** After closure: what was accepted, and how new work is handled. */
+function ClientCompletedStage({ summary }: Readonly<{ summary: StageSummary }>) {
+  const past = summary.rounds.filter(round => round.status === 'classified');
+  return <>
+    <p className="ps-lead">{summary.final?.acceptedAt
+      ? <>You accepted the final delivery on {stageDay(summary.final.acceptedAt)}. The contract is closed.</>
+      : <>This project is complete and its contract is closed.</>}</p>
+    <p className="ps-note">New features or changes outside the agreed scope are quoted separately and start once you approve the quote.</p>
+    {past.length > 0 && <RoundHistory rounds={past} />}
   </>;
 }
 

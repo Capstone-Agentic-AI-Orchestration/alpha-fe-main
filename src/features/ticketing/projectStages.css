@@ -91,3 +91,24 @@
   body.ps-printing .ps-contract-print { position: absolute; inset: 0 auto auto 0; width: 100%; padding: 24px; background: #fff; }
   body.ps-printing .ps-no-print { display: none !important; }
 }
+
+/* Development: feedback rounds */
+.ps-inline-link { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; }
+.ps-notes { display: flex; flex-direction: column; gap: 6px; margin: 0; padding-left: 20px; list-style: decimal; color: rgb(var(--ui-text-primary)); font-size: 12.5px; }
+.ps-notes li span { white-space: pre-wrap; overflow-wrap: anywhere; }
+.ps-notes li { position: relative; padding-right: 30px; }
+.ps-notes .ps-icon-button { position: absolute; top: -4px; right: 0; }
+.ps-submit { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.ps-limit { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding-left: 12px; border-left: 2px solid rgb(var(--ui-status-warning-border));
+  color: rgb(var(--ui-text-secondary)); font-size: 12.5px; line-height: 1.55; }
+.ps-limit p { margin: 0; }
+.ps-limit strong { color: rgb(var(--ui-text-primary)); }
+.ps-history { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.ps-rounds { display: flex; flex-direction: column; gap: 12px; margin: 0; padding: 0; list-style: none; }
+.ps-round-title { margin: 0 0 4px; color: rgb(var(--ui-text-primary)); font-size: 12.5px; font-weight: 600; }
+.ps-round-items { display: flex; flex-direction: column; gap: 4px; margin: 0; padding: 0; list-style: none; color: rgb(var(--ui-text-secondary)); font-size: 12.5px; }
+.ps-round-items li { display: flex; align-items: baseline; gap: 8px; }
+.ps-label { flex: none; padding: 1px 7px; border-radius: 999px; background: rgb(var(--ui-well)); color: rgb(var(--ui-text-secondary)); font-size: 11px; font-weight: 600; }
+.ps-label.is-revision { background: rgb(var(--ui-status-info-subtle)); color: rgb(var(--ui-status-info)); }
+.ps-label.is-fix { background: rgb(var(--ui-status-success-subtle)); color: rgb(var(--ui-status-success)); }
+.ps-label.is-out_of_scope { background: rgb(var(--ui-status-warning-subtle)); color: rgb(var(--ui-status-warning)); }

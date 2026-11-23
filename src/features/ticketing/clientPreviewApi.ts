@@ -80,6 +80,11 @@ const methods: Partial<typeof clientTicketApi> = {
   async signContract(_workspaceId: string, _projectId: string, contractId: string, input: { contentHash: string; fullName: string }) {
     return previewStage.signContract(contractId, input.contentHash, input.fullName);
   },
+  async saveRoundItems(_workspaceId: string, _projectId: string, roundId: string, items: string[]) { return previewStage.saveRoundItems(roundId, items); },
+  async submitRound(_workspaceId: string, _projectId: string, roundId: string, input: { acceptPaid: boolean }) {
+    return previewStage.submitRound(roundId, input.acceptPaid);
+  },
+  async acceptFinal(_workspaceId: string, _projectId: string, input: { fullName: string }) { return previewStage.acceptFinal(input.fullName); },
   async getProjectConversationRequests() {
     return { items: PREVIEW_CONVERSATION_REQUESTS.map(request => ({ ...request, workspaceId: workspace })) };
   },
