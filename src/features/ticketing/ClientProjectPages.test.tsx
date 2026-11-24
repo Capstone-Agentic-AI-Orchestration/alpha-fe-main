@@ -45,7 +45,7 @@ describe('client overview loading', () => {
     expect(html).toContain('Review plan');
     expect(html).toContain('Step 2 of 5');
     // Waiting work comes before the projects.
-    expect(html.indexOf('client-attention-title')).toBeLessThan(html.indexOf('client-projects-title'));
+    expect(html.indexOf('client-attention-title')).toBeLessThan(html.indexOf('aria-label="Project showcase"'));
     const stage = html.slice(html.indexOf('class="cx-showcase-stage"'), html.indexOf('class="cx-showcase-updates'));
     expect(stage).toContain('Featured project · 1 of 2');
     expect(stage).toContain('class="cx-showcase-project-link"><span>Shop</span>');
