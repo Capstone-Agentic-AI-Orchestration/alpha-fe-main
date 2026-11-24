@@ -7,7 +7,11 @@ import './projectStages.css';
  * POC → Contract → Development → Completed, the revision allowance, and whose
  * turn it is. A slim row, not a card.
  */
-export function ProjectStageTracker({ summary, role }: Readonly<{ summary: StageSummary; role: 'client' | 'pm' }>) {
+export function ProjectStageTracker({ summary, role, unsetPrompt = true }: Readonly<{
+  summary: StageSummary; role: 'client' | 'pm';
+  /** Whether the row says the stage isn't set; the PM's side panel says it instead, beside the stage picker. */
+  unsetPrompt?: boolean;
+}>) {
   const steps = stageSteps(summary.stage);
   const allowance = revisionAllowance(summary);
   const next = nextActionLine(summary, role);
@@ -21,7 +25,7 @@ export function ProjectStageTracker({ summary, role }: Readonly<{ summary: Stage
       </li>)}
     </ol>
     <p className="ps-meta">
-      {unset && <span>{role === 'pm' ? 'This project started before stages. Choose where it is now.' : 'Stage not set yet'}</span>}
+      {unset && unsetPrompt && <span>{role === 'pm' ? 'This project started before stages. Choose where it is now.' : 'Stage not set yet'}</span>}
       {allowance && <span className="ps-allowance">{allowance}</span>}
       {next && !(unset && role === 'pm') && <span className={next.mine ? 'ps-next is-mine' : 'ps-next'}>{next.mine ? 'Your turn: ' : ''}{next.text}</span>}
     </p>

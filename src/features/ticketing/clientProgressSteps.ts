@@ -5,7 +5,10 @@ export const CLIENT_PROGRESS_LABELS = ['Received', 'Planning', 'In progress', 'R
 export type ClientProgressState = 'done' | 'current' | 'upcoming';
 export interface ClientProgressStep { label: string; state: ClientProgressState; needsYou: boolean }
 
-type TicketForSteps = Pick<ClientTicketDetail, 'status' | 'requestedAction' | 'scope' | 'delivery'>;
+/** What the steps read from a request; the PM's ticket detail has the same fields. */
+type TicketForSteps = Pick<ClientTicketDetail, 'requestedAction'> & {
+  status: string; scope: { agreed: boolean } | null; delivery: { accepted: boolean } | null;
+};
 
 /** Where the request is on the five stages, or null when a path would mislead (paused, declined, cancelled, answered). */
 function position(ticket: TicketForSteps): number | 'complete' | null {

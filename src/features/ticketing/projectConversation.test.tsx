@@ -8,6 +8,8 @@ import { ProjectConversationChat, ProjectConversationView } from './ProjectConve
 import { PmClientsView } from './PmClientsPage';
 import type { PmClientSummary } from './pmApi';
 import { clientIdFromKey } from './PmClientConversation';
+import { PmConversationRail } from './PmConversationRail';
+import { pmTicketProgressSteps } from './PmRequestContext';
 
 const request = { ticketId: 't-1', reference: 'TKT-1', title: 'Add a contact form' };
 const timeline = { items: [
@@ -100,6 +102,32 @@ describe('ProjectConversationView', () => {
     for (const label of ['Tickets · 1 open', ...tabs.map(tab => tab.label)]) expect(html).toContain(`>${label}</button>`);
     expect(html).not.toContain('>About</button>');
     expect(view()).toContain('>About</button>');
+  });
+
+  it('lets the PM draw the side panel as one column of cards, with no tabs', () => {
+    const second: ConversationRequest = { ...openRequest, ticketId: 't-2', reference: 'TKT-2', title: 'Fix the footer', linkedTasks: [] };
+    const html = view({ role: 'pm', requests: [openRequest, second], selectedTicketId: 't-2',
+      renderRequestActions: request => <button type="button">Create task for {request.title}</button>,
+      renderRail: ({ requestList, requestsTitle }) => <PmConversationRail projectName="Website" previewShared={false}
+        stage={{ title: 'Stage not set', prompt: 'This project started before stages. Choose where it is now.', content: <p>Pick a stage</p> }}
+        ticketsTitle={requestsTitle} tickets={requestList} selected={<p>Picked ticket cards</p>} /> });
+    expect(html).not.toContain('role="tablist"');
+    for (const shown of ['Stage not set', 'This project started before stages', 'Preview', 'Not shared', 'Tickets · 2 open', 'Picked ticket cards']) {
+      expect(html).toContain(shown);
+    }
+    // Request actions only on the picked row, so the list stays calm.
+    expect(html).toContain('Create task for Fix the footer');
+    expect(html).not.toContain('Create task for Add a contact form');
+    // Rows keep the same padding whether picked or not, so picking one only tints it.
+    const rows = html.match(/<li class="-mx-2 rounded-md px-2 py-3[^"]*"/g) ?? [];
+    expect(rows).toHaveLength(2);
+  });
+
+  it('words the ticket progress for the PM, naming what the client owes', () => {
+    const steps = pmTicketProgressSteps({ status: 'awaiting_client', requestedAction: 'agree_scope',
+      scope: { id: 's', summary: '', proposedAt: '2026-11-01T00:00:00Z', agreed: false }, delivery: null });
+    expect(steps.map(step => step.label)).toEqual(['Received', 'Client approves plan', 'In progress', 'Client review', 'Done']);
+    expect(steps[1]).toMatchObject({ state: 'current', needsYou: true });
   });
 });
 
