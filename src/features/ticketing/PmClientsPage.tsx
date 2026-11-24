@@ -1,13 +1,13 @@
 import './pmTickets.css';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowUpRight, FolderKanban, RefreshCw, Search, ShieldCheck, ShieldOff, Users } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, FolderKanban, Search, ShieldCheck, ShieldOff, Users } from 'lucide-react';
 
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { SkeletonTable } from '@/shared/components/ui/skeleton';
 import { pmTicketApi, pmTicketDocumentsApi, type PmCentralIntakeItem, type PmClientConversation, type PmClientSummary, type PmTicketQueueItem } from './pmApi';
 import { PmTicketsView, type WorkflowActions } from './PmTicketsView';
-import { pmTicketsIntakeEnabled, usePmWorkflowActions } from './PmTicketsPage';
+import { pmTicketsIntakeEnabled, usePmWorkflowActions } from './pmTicketAvailability';
 import { ClientConversations, ClientDocuments, ClientOverview, ClientProjects, ClientProposals, loadClientProjects, loadClientRequests, type ClientProjectDetail } from './PmClientSections';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { OPEN_INQUIRY_KEY, type OpenInquiry } from './PmInquiriesPage';
@@ -16,6 +16,7 @@ import { LINKED_REQUEST_KEY, type LinkedRequestDraft } from './requestTaskLink';
 import { CLIENTS_CONVERSATION_FOCUS_KEY } from './TaskClientRequest';
 
 export type ClientSection = 'overview' | 'conversation' | 'tickets' | 'conversations' | 'documents' | 'proposals' | 'projects' | 'access';
+export const PM_CLIENTS_REFRESH_EVENT = 'alpha:pm-clients-refresh';
 const SECTIONS: Array<{ id: ClientSection; label: string }> = [
   { id: 'overview', label: 'Overview' },
   { id: 'projects', label: 'Projects' },
@@ -82,7 +83,6 @@ export function clientsSummary(clients: readonly PmClientSummary[]): string {
  * Clients: every client account in the workspace, those needing the PM first.
  * A client opens on its own page with three tabs: its tickets (the Tickets
  * view locked to this client), the projects it can see, and its portal access.
- * The Tickets page remains the queue across all clients.
  */
 export function PmClientsPage() {
   const { activeWorkspace, projects, setActiveTab, issues, activeTabId, setTabSessionState } = useApp();
@@ -97,6 +97,7 @@ export function PmClientsPage() {
 
   return <PmClientsWorkspace workspaceKey={activeWorkspace?.id ?? 'none'} intakeEnabled={pmTicketsIntakeEnabled}
     workflowActions={workflowActions} selectedKey={selectedKey} onSelectKey={setSelectedKey} section={section} onSection={setSection}
+    refreshTabId={activeTabId}
     knownProjectIds={knownProjectIds} onOpenProject={projectId => { setConversationFocus({ projectId }); setSection('conversation'); }}
     onOpenInquiries={inquiry => { setOpenInquiry(inquiry ?? null); setActiveTab('inquiries'); }}
     conversationFocus={conversationFocus} onConversationFocusHandled={() => setConversationFocus(null)}
@@ -120,7 +121,7 @@ export function PmClientsPage() {
  */
 export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, workspaceKey, intakeEnabled = true,
   workflowActions = 'all', selectedKey, onSelectKey, section, onSection, knownProjectIds, onOpenProject, onOpenInquiries, refreshToken,
-  conversationFocus: externalFocus = null, onConversationFocusHandled, onCreateTask, tasksForProject }: {
+  refreshTabId, conversationFocus: externalFocus = null, onConversationFocusHandled, onCreateTask, tasksForProject }: {
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   workspaceKey: string;
@@ -135,6 +136,8 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
   onOpenInquiries: (inquiry?: OpenInquiry) => void;
   /** Parent-owned refresh, as in the preview toolbar. */
   refreshToken?: number;
+  /** The workspace tab that owns the shared-toolbar refresh control. */
+  refreshTabId?: string;
   /** A project and request to open the Conversation tab on, from elsewhere in the app. */
   conversationFocus?: PmConversationFocus | null;
   onConversationFocusHandled?: () => void;
@@ -173,6 +176,17 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
   }, [api, workspaceKey, refreshVersion, refreshToken]);
 
   const refresh = useCallback(() => setRefreshVersion(value => value + 1), []);
+
+  useEffect(() => {
+    if (!refreshTabId) return;
+    const handleRefresh = (event: Event) => {
+      const target = event as CustomEvent<{ tabId?: string }>;
+      if (target.detail?.tabId === refreshTabId) refresh();
+    };
+    window.addEventListener(PM_CLIENTS_REFRESH_EVENT, handleRefresh);
+    return () => window.removeEventListener(PM_CLIENTS_REFRESH_EVENT, handleRefresh);
+  }, [refreshTabId, refresh]);
+
   const selected = clients?.find(client => client.key === selectedKey) ?? null;
 
   // A saved selection from another workspace, or a client that no longer
@@ -214,21 +228,21 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
 
   /** A request opens in its project's conversation; one not on a project yet opens its full page. */
   const openRequest = (requestId: string) => {
-    const projectId = requests?.find(item => item.id === requestId)?.internal.projectId ?? null;
+    const request = requests?.find(item => item.id === requestId);
+    const projectId = request?.internal.projectId ?? null;
     if (projectId) { setConversationFocus({ projectId, ticketId: requestId }); onSection('conversation'); return; }
     setOpenRequestId(requestId); onSection('tickets');
   };
-  const openRequestDetails = (requestId: string) => { setOpenRequestId(requestId); onSection('tickets'); };
 
   return <PmClientsView clients={clients} error={error} loading={loading} search={search} onSearch={setSearch}
     needsYouOnly={needsYouOnly} onNeedsYouOnly={setNeedsYouOnly}
-    selectedKey={selectedKey} onSelect={key => { onSelectKey(key); if (key) onSection('overview'); }}
-    section={section} onSection={next => { if (next === 'tickets') setOpenRequestId(null); onSection(next); }}
-    knownProjectIds={knownProjectIds} onRefresh={refreshToken === undefined ? refresh : undefined} onOpenProject={onOpenProject} onOpenInquiries={onOpenInquiries}
-    renderTickets={key => <div className="pm-ticket-page pm-ticket-page--nested">
+    selectedKey={selectedKey} onSelect={key => { onSelectKey(key); if (key) { setOpenRequestId(null); onSection('overview'); } }}
+    section={section} onSection={onSection}
+    knownProjectIds={knownProjectIds} onOpenProject={onOpenProject} onOpenInquiries={onOpenInquiries}
+    renderTickets={key => openRequestId ? <div className="pm-ticket-page pm-ticket-page--nested">
       <div className="pm-ticket-page__content">
-        <PmTicketsView key={`${workspaceKey}:${key}:${openRequestId ?? 'list'}`} api={api} documentsApi={documentsApi}
-          fixedClientGroupKey={key} initialSelectedId={openRequestId}
+        <PmTicketsView key={`${workspaceKey}:${key}:${openRequestId}`} api={api} documentsApi={documentsApi}
+          fixedClientGroupKey={key} initialSelectedId={openRequestId} ticketReference={requests?.find(item => item.id === openRequestId)?.reference}
           intakeEnabled={intakeEnabled} workflowActions={workflowActions} communicationEnabled
           renderRequestConversation={({ detail, replyKind, onReplyKindChange, onWritten }) => {
             // A request the client sees on a project lives in that project's one conversation.
@@ -240,9 +254,9 @@ export function PmClientsWorkspace({ api = pmTicketApi, documentsApi = pmTicketD
               writesAvailable={detail.writesAvailable} />;
           }} />
       </div>
-    </div>}
+    </div> : <p className="p-6 text-xs text-content-muted">Choose a request from the client overview.</p>}
     renderConversation={client => <PmClientConversationTab api={api} documentsApi={documentsApi} client={client} focus={conversationFocus}
-      onBackToProjects={() => onSection('projects')} onOpenRequestDetails={openRequestDetails} onCreateTask={onCreateTask}
+      onBackToProjects={() => onSection('projects')} workflowActions={workflowActions} onCreateTask={onCreateTask}
       tasksForProject={tasksForProject} refreshToken={refreshToken} />}
     renderOverview={client => <ClientOverview client={client} requests={requests} conversations={conversations} onOpenRequest={openRequest} />}
     renderConversations={client => <ClientConversations client={client} requests={requests} conversations={conversations}
@@ -267,8 +281,6 @@ export interface PmClientsViewProps {
   onSection: (section: ClientSection) => void;
   /** Projects in this PM's project list; others are named but not linked. */
   knownProjectIds: ReadonlySet<string>;
-  /** Omitted when the parent owns refreshing, so the page shows no second Refresh. */
-  onRefresh?: () => void;
   onOpenProject: (projectId: string) => void;
   onOpenInquiries: (inquiry?: OpenInquiry) => void;
   /** The Tickets tab's content for one client. */
@@ -290,7 +302,7 @@ export interface PmClientsViewProps {
 /** The Clients list and a client's page, from props alone. */
 export function PmClientsView({ clients, error, loading, search, onSearch, selectedKey, onSelect, section, onSection,
   needsYouOnly = false, onNeedsYouOnly, renderProjects, renderProposals,
-  knownProjectIds, onRefresh, onOpenProject, onOpenInquiries, renderTickets, renderOverview, renderConversation, renderConversations, renderDocuments }: PmClientsViewProps) {
+  knownProjectIds, onOpenProject, onOpenInquiries, renderTickets, renderOverview, renderConversation, renderConversations, renderDocuments }: PmClientsViewProps) {
   const selected = clients?.find(client => client.key === selectedKey) ?? null;
   const visible = useMemo(() => filterClients(clients ?? [], search, needsYouOnly), [clients, search, needsYouOnly]);
   const summary = useMemo(() => clientsSummary(clients ?? []), [clients]);
@@ -368,7 +380,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
             </ul>}
           {selected.tickets.unlinkedOpen > 0 && <p className="mt-4 text-[12.5px] text-content-secondary">
             {plural(selected.tickets.unlinkedOpen, 'open request isn’t', 'open requests aren’t')} linked to a project yet.{' '}
-            <button type="button" onClick={() => onSection('tickets')} className="font-semibold text-link hover:text-link-hover">{unified ? 'Review requests' : 'Review in Tickets'}</button>
+            <button type="button" onClick={() => onSection('overview')} className="font-semibold text-link hover:text-link-hover">Review requests</button>
           </p>}
         </div>}
 
@@ -382,7 +394,7 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
           {selected.tickets.accessRevoked > 0 && <p className="rounded-md border border-status-warning-border bg-status-warning-subtle px-3 py-2 text-status-warning">
             Access was removed on {plural(selected.tickets.accessRevoked, 'request')}. The client can’t open {selected.tickets.accessRevoked === 1 ? 'it' : 'them'}.
           </p>}
-          <p className="text-xs text-content-muted">{unified ? 'Invitations and access are managed on each request’s page (Conversation, then Open details).' : 'Invitations and access are managed on each request in the Tickets tab.'}</p>
+          <p className="text-xs text-content-muted">{unified ? 'For project tickets, expand the ticket under Conversation to manage invitations and access.' : 'Invitations and access are managed on each request in the Tickets tab.'}</p>
         </div>}
       </div>
     </div>;
@@ -405,10 +417,6 @@ export function PmClientsView({ clients, error, loading, search, onSearch, selec
           <span className="sr-only">Search clients</span>
           <input value={search} onChange={event => onSearch(event.target.value)} placeholder="Search clients or projects…" className="min-w-0 flex-1 bg-transparent text-xs text-content placeholder-content-muted focus:outline-none" />
         </label>
-        {onRefresh && <button type="button" onClick={onRefresh} disabled={loading} title="Refresh clients"
-          className="inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium text-content-secondary hover:bg-surface-high hover:text-content disabled:opacity-50">
-          <RefreshCw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" /> Refresh
-        </button>}
       </div>
     </header>
 

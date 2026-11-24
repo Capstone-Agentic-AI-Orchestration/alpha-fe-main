@@ -70,7 +70,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   /** An inquiry became a request in a project. */
   onProjectStarted?: (result: PmIntakeProjectStart) => void;
   /** Open what a handled inquiry became. */
-  onOpenTicket?: (ticketId: string) => void;
+  onOpenTicket?: (ticketId: string, reference?: string) => void;
   onOpenProject?: (projectId: string) => void;
 }) {
   const [items, setItems] = useState<PmCentralIntakeItem[]>([]);
@@ -499,7 +499,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
             {selected.handledAt && <p>Handled {formatDate(selected.handledAt)}</p>}
             <p>{handledOutcome(selected)}</p>
             {(selected.acceptedTicketId || selected.acceptedProjectId) && <p className="flex flex-wrap gap-3">
-              {selected.acceptedTicketId && onOpenTicket && <button type="button" onClick={() => onOpenTicket(selected.acceptedTicketId!)} className="font-medium text-link hover:underline">Open request</button>}
+              {selected.acceptedTicketId && onOpenTicket && <button type="button" onClick={() => onOpenTicket(selected.acceptedTicketId!, selected.acceptedTicketReference ?? undefined)} className="font-medium text-link hover:underline">Open request</button>}
               {selected.acceptedProjectId && onOpenProject && <button type="button" onClick={() => onOpenProject(selected.acceptedProjectId!)} className="font-medium text-link hover:underline">Open project</button>}
             </p>}
             {selected.status === 'declined' && selected.kind === 'public_inquiry' && <p>{selected.outcomeEmailStatus === 'delivered'

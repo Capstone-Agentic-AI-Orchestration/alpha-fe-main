@@ -535,7 +535,7 @@ export const currentIssueId = (id: string): string => savedIssueIds.get(id) ?? i
 export const TabSessionContext = createContext<{ tabId: string } | null>(null);
 
 const navigationTabs: NavigationTab[] = [
-  'portal', 'intake', 'documents', 'chat', 'issues', 'projects', 'tickets', 'agents',
+  'portal', 'intake', 'documents', 'chat', 'issues', 'projects', 'agents',
   'analytics', 'skills', 'deployments', 'operations',
   'build_room', 'settings'
 ];

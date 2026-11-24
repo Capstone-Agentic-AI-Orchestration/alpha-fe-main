@@ -1,10 +1,8 @@
-import { PmQueueSelect, type PmQueueTone } from './PmQueueSelect';
-import { LoadingRows } from '@/shared/components/ui/skeleton';
-import { TicketDetailSkeleton, TicketQueueSkeleton } from './TicketingSkeletons';
+import { TicketDetailSkeleton } from './TicketingSkeletons';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
-  AlertCircle, ArrowLeft, ArrowUpRight, Check, ChevronDown, CircleDot, FileText, Info,
-  LockKeyhole, MessageSquare, PanelLeftOpen, Paperclip, RefreshCw, Search, Send, StickyNote, X,
+  ArrowUpRight, Check, ChevronDown, CircleDot, FileText,
+  LockKeyhole, MessageSquare, Paperclip, Send, StickyNote, X,
   Ticket as TicketIcon, UserRound,
 } from 'lucide-react';
 
@@ -13,13 +11,12 @@ import { pmTicketApi, pmTicketDocumentsApi } from './pmApi';
 import { ChatContextPanel } from './ChatContextPanel';
 import type {
   PmTicketCommandInput, PmTicketDetail, PmTicketMessage, PmTicketMessageInput,
-  PmTicketNote, PmTicketNoteInput, PmTicketQueueItem, PmTicketQueueOptions,
-  PmTicketQueuePage, PmTicketReceipt, PmTicketScopeProposalInput, PmTicketProjectLinkInput, PmTicketClientGroup, TicketStatus,
+  PmTicketNote, PmTicketNoteInput, PmTicketQueueItem,
+  PmTicketQueuePage, PmTicketReceipt, PmTicketScopeProposalInput, PmTicketProjectLinkInput, TicketStatus,
 } from './pmApi';
 import { PmScopeProposalForm, type PmScopeProposalDraft } from './PmScopeProposalForm';
 import { PmWorkHandoffForm, type PmWorkHandoffDraft } from './PmWorkHandoffForm';
 import { PmProjectLinkForm, type PmProjectLinkDraft } from './PmProjectLinkForm';
-import { PmTicketQueueList } from './PmTicketQueueList';
 import { pmTicketNextAction } from './pmTicketNextAction';
 import { pmNextStep, type PmStepAction } from './pmNextStep';
 import { canAuthorizeTicketWork } from './pmWorkHandoff';
@@ -35,12 +32,9 @@ import { TicketChat } from './TicketChat';
 import { Button } from '@/shared/components/ui/button';
 import './pmTickets.css';
 
-type Filter = NonNullable<PmTicketQueueOptions['filter']>;
 type Panel = 'conversation' | 'notes';
 type TicketSection = 'conversation' | 'notes' | 'details' | 'documents';
 export type WorkflowActions = 'none' | 'triage' | 'review_scope' | 'all';
-type DateRange = 'all' | '7d' | '30d' | 'older';
-type SortOrder = 'updated_desc' | 'updated_asc' | 'created_desc' | 'created_asc';
 interface PendingOperation {
   ticketId: string;
   operationId: string;
@@ -51,43 +45,6 @@ interface PendingOperation {
   onSuccess?: (receipt: PmTicketReceipt) => void;
   /** Keep the active ticket mounted when its conversation was updated locally. */
   refresh?: boolean;
-}
-
-const filters: Array<{ id: Filter; label: string; tone?: PmQueueTone; counter?: 'needsPm' | 'inProgress' | 'waitingClient' | 'closedMonth' }> = [
-  { id: 'all', label: 'All tickets' },
-  { id: 'open', label: 'Open tickets', tone: 'active' },
-  { id: 'needs_pm', label: 'Needs you', tone: 'attention', counter: 'needsPm' },
-  { id: 'in_progress', label: 'In progress', tone: 'active', counter: 'inProgress' },
-  { id: 'waiting_client', label: 'Waiting for client', tone: 'waiting', counter: 'waitingClient' },
-  { id: 'closed_month', label: 'Closed this month', tone: 'complete', counter: 'closedMonth' },
-  { id: 'history', label: 'History', tone: 'neutral' },
-];
-
-const dateRanges: Array<{ id: DateRange; label: string }> = [
-  { id: 'all', label: 'Any date' },
-  { id: '7d', label: 'Updated in 7 days' },
-  { id: '30d', label: 'Updated in 30 days' },
-  { id: 'older', label: 'Updated earlier' },
-];
-
-const sortOrders: Array<{ id: SortOrder; label: string }> = [
-  { id: 'updated_desc', label: 'Recently updated' },
-  { id: 'updated_asc', label: 'Oldest updated' },
-  { id: 'created_desc', label: 'Recently created' },
-  { id: 'created_asc', label: 'Oldest created' },
-];
-
-function timestamp(value: string): number {
-  const parsed = Date.parse(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function matchesDateRange(updatedAt: string, range: DateRange): boolean {
-  if (range === 'all') return true;
-  const age = Date.now() - timestamp(updatedAt);
-  const thirtyDays = 30 * 24 * 60 * 60 * 1000;
-  if (range === 'older') return age >= thirtyDays;
-  return age <= (range === '7d' ? 7 * 24 * 60 * 60 * 1000 : thirtyDays);
 }
 
 function statusLabel(status: TicketStatus): string {
@@ -194,9 +151,9 @@ export function PmContactVerification({ verification }: { verification: unknown 
   return <span className="text-content-muted">Unable to verify status</span>;
 }
 
-// eslint-disable-next-line sonarjs/cognitive-complexity -- existing view; this change only adds the initialSelectedId prop
+// eslint-disable-next-line sonarjs/cognitive-complexity -- existing ticket workflow and queue view
 export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, intakeEnabled = true, workflowActions = 'all', communicationEnabled = false, refreshToken, fixedClientGroupKey, onOpenClient,
-  initialSelectedId = null, initialFilter = 'all', renderRequestConversation }: {
+  initialSelectedId: selectedId = null, ticketReference, renderRequestConversation, workflowReference, onWorkflowReply, onWorkflowChanged }: {
   api?: typeof pmTicketApi;
   /**
    * The conversation shown beside an open request instead of the request's own
@@ -216,7 +173,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   /** Enable only the conversation and document capabilities of Phase 5. */
   communicationEnabled?: boolean;
   /** Parent-owned refresh control used by the compact Tickets/Inquiries toolbar. */
-  refreshToken?: number;
+  refreshToken?: number | string;
   /**
    * Show one client's tickets only, as on that client's page. The client
    * dropdown is hidden and the attention line counts this client alone.
@@ -226,25 +183,13 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   onOpenClient?: (clientGroupKey: string) => void;
   /** Open this request once the queue has loaded it, as from a client's Overview. */
   initialSelectedId?: string | null;
-  /** The view to start on; the PM inbox starts on what needs them. */
-  initialFilter?: Filter;
+  ticketReference?: string;
+  /** Render only the selected ticket’s workflow within its project conversation. */
+  workflowReference?: string;
+  onWorkflowReply?: (kind: 'reply' | 'request_details') => void;
+  onWorkflowChanged?: () => void;
 } = {}) {
   const [queue, setQueue] = useState<PmTicketQueuePage | null>(null);
-  const [filter, setFilter] = useState<Filter>(initialSelectedId ? 'all' : initialFilter);
-  const [chosenClientGroupKey, setClientGroupKey] = useState('');
-  const clientGroupKey = fixedClientGroupKey ?? chosenClientGroupKey;
-  const [clientGroups, setClientGroups] = useState<PmTicketClientGroup[]>([]);
-  const [clientGroupsLoading, setClientGroupsLoading] = useState(intakeEnabled);
-  const [clientGroupsError, setClientGroupsError] = useState('');
-  const [searchInput, setSearchInput] = useState('');
-  const [search, setSearch] = useState('');
-  const queueScope = JSON.stringify([filter, search, clientGroupKey]);
-  const [resolvedQueueScope, setResolvedQueueScope] = useState('');
-  const lastQueueScope = useRef('');
-  const [dateRange, setDateRange] = useState<DateRange>('all');
-  const [sortOrder, setSortOrder] = useState<SortOrder>('updated_desc');
-  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
-  const [navigationCollapsed, setNavigationCollapsed] = useState(false);
   const [detail, setDetail] = useState<PmTicketDetail | null>(null);
   const [messages, setMessages] = useState<PmTicketMessage[]>([]);
   const [notes, setNotes] = useState<PmTicketNote[]>([]);
@@ -268,7 +213,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   const [messageAction, setMessageAction] = useState<'reply' | 'request_details'>('reply');
   const [drafts, setDrafts] = useState<Record<Panel, string>>({ conversation: '', notes: '' });
   const [queueLoading, setQueueLoading] = useState(intakeEnabled);
-  const [queueMoreLoading, setQueueMoreLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [writing, setWriting] = useState(false);
@@ -283,7 +227,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   const queueGeneration = useRef(0);
   const historyGeneration = useRef(0);
   const writeLock = useRef(false);
-  const queueElement = useRef<HTMLDivElement>(null);
   const detailHeading = useRef<HTMLHeadingElement>(null);
   const detailsElement = useRef<HTMLElement>(null);
 
@@ -295,15 +238,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       detailsElement.current?.querySelector('.pm-tickets__action-form')?.scrollIntoView({ block: 'nearest' });
     }
   }, [ticketSection, projectLinkOpen, declineOpen, scopeComposerOpen, handoffOpen, deliveryAssessmentOpen, deliveryReviewOpen, reviewAction, lifecycleAction]);
-
-  function backToQueue() {
-    const ticketId = selectedId;
-    setSelectedId(null);
-    window.requestAnimationFrame(() => {
-      [...(queueElement.current?.querySelectorAll<HTMLButtonElement>('[data-ticket-id]') ?? [])]
-        .find(button => button.dataset.ticketId === ticketId)?.focus({ preventScroll: true });
-    });
-  }
 
   useEffect(() => {
     // Never carry one client's text to a different ticket. Public and private
@@ -317,55 +251,36 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     setActionMenuOpen(false);
   }, [selectedId]);
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => setSearch(searchInput.trim()), 250);
-    return () => window.clearTimeout(timer);
-  }, [searchInput]);
-
-  useEffect(() => {
-    let current = true;
-    // One client's page has no client dropdown, so there is no list to load.
-    if (!intakeEnabled || fixedClientGroupKey !== undefined) {
-      setClientGroups([]); setClientGroupKey(''); setClientGroupsLoading(false); setClientGroupsError('');
-      return () => { current = false; };
-    }
-    setClientGroupsLoading(true); setClientGroupsError('');
-    void api.listClientGroups().then(groups => {
-      if (!current) return;
-      setClientGroups(groups);
-      setClientGroupKey(selected => selected && groups.some(group => group.key === selected) ? selected : '');
-    }).catch(error => {
-      if (current) setClientGroupsError(safeError(error, 'queue'));
-    }).finally(() => {
-      if (current) setClientGroupsLoading(false);
-    });
-    return () => { current = false; };
-  }, [api, intakeEnabled, refreshVersion, fixedClientGroupKey]);
-
   const loadQueue = useCallback(async () => {
     const generation = ++queueGeneration.current;
-    if (!intakeEnabled) {
-      setQueue(null); setSelectedId(null); setQueueLoading(false); setQueueMoreLoading(false); setQueueError('');
+    if (!intakeEnabled || !selectedId) {
+      setQueue(null); setQueueLoading(false); setQueueError('');
       return;
     }
     setQueueLoading(true);
-    setQueueMoreLoading(false);
     setQueueError('');
     try {
-      const result = await api.list({ limit: 50, filter, search, clientGroupKey: clientGroupKey || undefined });
-      if (generation !== queueGeneration.current) return;
-      setQueue(result); lastQueueScope.current = queueScope; setResolvedQueueScope(queueScope);
-      setSelectedId(current => current && result.items.some(item => item.id === current) ? current : null);
+      const search = workflowReference ?? ticketReference;
+      let after: string | undefined;
+      do {
+        const result = await api.list({ limit: 50, filter: 'all', search, after, clientGroupKey: fixedClientGroupKey });
+        if (generation !== queueGeneration.current) return;
+        const item = result.items.find(ticket => ticket.id === selectedId);
+        if (item || !result.nextCursor || result.nextCursor === after) {
+          setQueue({ ...result, items: item ? [item] : [] });
+          return;
+        }
+        after = result.nextCursor;
+      } while (after);
     } catch (error) {
       if (generation !== queueGeneration.current) return;
       const forbidden = error instanceof ApiRequestError && (error.status === 401 || error.status === 403 || error.status === 404);
-      if (lastQueueScope.current !== queueScope || forbidden) { setQueue(null); setSelectedId(null); }
-      lastQueueScope.current = queueScope; setResolvedQueueScope(queueScope);
+      if (forbidden) setQueue(null);
       setQueueError(safeError(error, 'queue'));
     } finally {
       if (generation === queueGeneration.current) setQueueLoading(false);
     }
-  }, [api, filter, search, clientGroupKey, queueScope, intakeEnabled]);
+  }, [api, selectedId, fixedClientGroupKey, intakeEnabled, ticketReference, workflowReference]);
 
   useEffect(() => { void loadQueue(); }, [loadQueue, refreshVersion, refreshToken]);
 
@@ -378,22 +293,11 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', refreshIfVisible); };
   }, [loadQueue, pending]);
 
-  const queuePending = intakeEnabled && (resolvedQueueScope !== queueScope || (queueLoading && !queue));
-  const visibleQueue = resolvedQueueScope === queueScope ? queue : null;
+  const queuePending = intakeEnabled && Boolean(selectedId) && queueLoading && !queue;
   const selectedQueueItem = useMemo(
     () => queue?.items.find(item => item.id === selectedId) ?? null,
     [queue, selectedId],
   );
-  const visibleQueueItems = useMemo(() => {
-    const items = (queue?.items ?? []).filter(item => matchesDateRange(item.updatedAt, dateRange));
-    const [field, direction] = sortOrder.split('_') as ['updated' | 'created', 'asc' | 'desc'];
-    return [...items].sort((left, right) => {
-      const leftValue = timestamp(field === 'created' ? left.createdAt : left.updatedAt);
-      const rightValue = timestamp(field === 'created' ? right.createdAt : right.updatedAt);
-      const difference = direction === 'asc' ? leftValue - rightValue : rightValue - leftValue;
-      return difference || left.id.localeCompare(right.id);
-    });
-  }, [dateRange, queue, sortOrder]);
   const selectedInvitation = selectedQueueItem?.internal.clientInvitation ?? null;
   const selectedNextStep = useMemo(() => {
     if (!selectedQueueItem) return null;
@@ -443,7 +347,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   }, [api, selectedId, selectedQueueItem?.internal.clientAccessActive, refreshVersion, refreshToken]);
 
   useEffect(() => {
-    if (!selectedId || panel !== 'conversation' || !selectedQueueItem) return;
+    if (workflowReference || !selectedId || panel !== 'conversation' || !selectedQueueItem) return;
     let current = true;
     if (!selectedQueueItem.internal.clientAccessActive) {
       setMessages([]); setMessageCursor(null); setHistoryError(''); setHistoryLoading(false);
@@ -458,10 +362,10 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       if (current) setHistoryLoading(false);
     });
     return () => { current = false; };
-  }, [api, selectedId, panel, selectedQueueItem?.internal.clientAccessActive, selectedQueueItem?.updatedAt, refreshVersion, refreshToken]);
+  }, [api, selectedId, panel, selectedQueueItem?.internal.clientAccessActive, selectedQueueItem?.updatedAt, refreshVersion, refreshToken, workflowReference]);
 
   useEffect(() => {
-    if (!selectedId || panel !== 'notes' || !selectedQueueItem) return;
+    if (workflowReference || !selectedId || panel !== 'notes' || !selectedQueueItem) return;
     let current = true;
     setHistoryError(''); setHistoryLoading(true);
     api.getNotes(selectedId).then(page => {
@@ -472,10 +376,11 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
       if (current) setHistoryLoading(false);
     });
     return () => { current = false; };
-  }, [api, selectedId, panel, refreshVersion, refreshToken]);
+  }, [api, selectedId, panel, refreshVersion, refreshToken, workflowReference]);
 
 
   const refreshAll = () => {
+    onWorkflowChanged?.();
     historyGeneration.current += 1;
     setHistoryLoading(false);
     setRefreshVersion(version => version + 1);
@@ -751,30 +656,6 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     if (!wasOpen) setWriteError('');
   }
 
-  const activeFilter = (value: Filter) => {
-    setSelectedId(null);
-    setFilter(value);
-  };
-
-  async function loadMoreQueue() {
-    if (!queue?.nextCursor || queueMoreLoading) return;
-    const generation = queueGeneration.current;
-    setQueueMoreLoading(true); setQueueError('');
-    try {
-      const page = await api.list({ limit: 50, after: queue.nextCursor, filter, search, clientGroupKey: clientGroupKey || undefined });
-      if (generation !== queueGeneration.current) return;
-      setQueue(current => {
-        if (!current) return page;
-        const existing = new Set(current.items.map(item => item.id));
-        return { ...page, items: [...current.items, ...page.items.filter(item => !existing.has(item.id))] };
-      });
-    } catch (error) {
-      if (generation === queueGeneration.current) setQueueError(safeError(error, 'queue'));
-    } finally {
-      if (generation === queueGeneration.current) setQueueMoreLoading(false);
-    }
-  }
-
   async function loadMoreHistory(mode: Panel = panel) {
     if (!selectedId || historyLoading) return;
     const generation = historyGeneration.current;
@@ -908,7 +789,9 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
   }
 
   function focusComposer(action: 'reply' | 'request_details' = 'reply') {
-    setMessageAction(action); setActionMenuOpen(false);
+    setActionMenuOpen(false);
+    if (onWorkflowReply) { onWorkflowReply(action); return; }
+    setMessageAction(action);
     setPanel('conversation'); setTicketSection('conversation');
     window.setTimeout(() => document.getElementById('ticket-conversation-draft')?.focus(), 0);
   }
@@ -1059,113 +942,43 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     </div>
   </section> : null;
 
-  // Collapsing narrows the side list of an open ticket. With no ticket open there is
-  // no side list, so the remembered preference must not shape the page.
-  return <div className={`pm-tickets${selectedId ? ' pm-tickets--ticket-open' : ''}${selectedId && navigationCollapsed ? ' is-navigation-collapsed' : ''}`}>
-    {selectedId && <aside className="pm-tickets__navigation" aria-label="Ticket views"
-      title="Click empty sidebar space to collapse or expand"
-      onClick={event => {
-        if (event.target instanceof Element && event.target.closest('button, a, select, input, textarea')) return;
-        setNavigationCollapsed(value => !value);
-      }}>
-      <header className="pm-tickets__navigation-heading">
-        <div className="pm-tickets__navigation-title"><TicketIcon size={17} aria-hidden="true" /><span>Tickets</span></div>
-        {navigationCollapsed && <button type="button" className="role-chat-navigation-toggle" aria-label="Show ticket navigation" title="Show ticket navigation"
-          onClick={event => { event.stopPropagation(); setNavigationCollapsed(false); }}>
-          <PanelLeftOpen size={16} aria-hidden="true" /><span className="sr-only">Show ticket navigation</span>
-        </button>}
-      </header>
-      <label className="pm-tickets__compact-filter"><span className="sr-only">Filter requests</span>
-        <select aria-label="Filter requests" value={filter} disabled={!intakeEnabled || writing || Boolean(pending)} onChange={event => activeFilter(event.target.value as Filter)}>
-          {filters.map(option => <option key={option.id} value={option.id}>{option.label}{option.counter && queue?.counters.kind === 'pm' ? ` · ${queue.counters[option.counter]}` : ''}</option>)}
-        </select>
-      </label>
-      {selectedId && <nav className="pm-tickets__chat-list" aria-label="Ticket conversations">
-        <p>Conversations</p>
-        {queuePending && <LoadingRows label="Loading ticket conversations" rows={3} />}
-        {visibleQueue?.items.map(item => <button key={item.id} type="button" aria-current={selectedId === item.id ? 'page' : undefined}
-          disabled={writing || Boolean(pending)} onClick={() => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(item.id); setPanel('conversation'); setTicketSection('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }}>
-          <MessageSquare size={15} aria-hidden="true" /><span><strong>{item.title}</strong><small>{statusLabel(item.status)}</small></span>
-        </button>)}
-        {visibleQueue?.nextCursor && <button type="button" disabled={queueMoreLoading || queueLoading} onClick={() => void loadMoreQueue()}>{queueMoreLoading ? 'Loading…' : 'Load more tickets'}</button>}
-      </nav>}
-    </aside>}
+  const pendingWrite = pending && <div className="pm-tickets__pending">
+    <span>Unconfirmed {pending.label} · operation {pending.operationId.slice(0, 8)}…</span>
+    <button onClick={async () => {
+      const operation = pending;
+      const succeeded = await performWrite(operation, operation.clearDraft);
+      if (succeeded && operation.label === 'scope proposal') setScopeComposerOpen(false);
+      if (succeeded && operation.label === 'work authorization') setHandoffOpen(false);
+      if (succeeded && ['correction authorization', 'accepted ticket closure'].includes(operation.label)) setReviewAction(null);
+    }} disabled={writing} className={secondary}>{writing ? 'Checking…' : 'Check and retry'}</button>
+  </div>;
+
+  if (workflowReference) return <section className="pm-tickets pm-tickets--embedded-workflow" ref={detailsElement} aria-label="Ticket workflow">
+    {queueError && <p role="alert" className="pm-tickets__error">{queueError} <button type="button" onClick={() => void loadQueue()}>Retry</button></p>}
+    {detailError && <p role="alert" className="pm-tickets__error">{detailError} <button type="button" onClick={() => setRefreshVersion(version => version + 1)}>Retry</button></p>}
+    {writeError && <p role="alert" className="pm-tickets__error">{writeError}</p>}
+    {invitationEmailError && <p role="alert" className="pm-tickets__error">{invitationEmailError}</p>}
+    {pendingWrite}
+    {(queuePending || detailLoading) && !detail && !queueError && !detailError && <p role="status" className="pm-rail-note">Loading ticket actions…</p>}
+    {!queuePending && !detailLoading && !queueError && !detailError && !stepBar && <p className="pm-rail-note">No ticket actions available.</p>}
+    {stepBar}
+    {renderStepForms()}
+  </section>;
+
+  return <div className="pm-tickets pm-tickets--ticket-open pm-tickets--detail-only">
     <div className="pm-tickets__main">
-    {!selectedId && <header className="pm-tickets__header">
-      <div className="pm-tickets__view-heading">
-        <h2>{filters.find(option => option.id === filter)?.label}</h2><span className="pm-tickets__view-count">{visibleQueue ? visibleQueueItems.length : '…'}</span>
-      </div>
-      <div className="pm-tickets__header-actions">
-        {!selectedId && <label className="pm-tickets__search"><Search size={15} aria-hidden="true" />
-          <span className="sr-only">Search tickets</span>
-          <input value={searchInput} disabled={!intakeEnabled} onChange={event => setSearchInput(event.target.value)} placeholder="Search tickets…" className="pm-tickets__search-input" />
-        </label>}
-        <PmQueueSelect label="Filter requests" value={filter} disabled={!intakeEnabled || writing || Boolean(pending)}
-          onChange={activeFilter} options={filters.map(option => ({
-            value: option.id,
-            tone: option.tone,
-            label: option.label + (option.counter && queue?.counters.kind === 'pm' ? ` · ${queue.counters[option.counter]}` : ''),
-          }))} />
-        {fixedClientGroupKey === undefined && <PmQueueSelect label="Filter by client" value={clientGroupKey}
-          disabled={!intakeEnabled || clientGroupsLoading || Boolean(clientGroupsError) || writing || Boolean(pending)}
-          title={clientGroupsError || undefined} onChange={value => { setSelectedId(null); setClientGroupKey(value); }}
-          options={[{ value: '', label: 'All clients' }, ...clientGroups.map(group => ({ value: group.key, label: group.displayName }))]} />}
-        <PmQueueSelect label="Filter by date" value={dateRange} disabled={!intakeEnabled || writing || Boolean(pending)}
-          onChange={setDateRange} options={dateRanges.map(option => ({ value: option.id, label: option.label }))} />
-        <PmQueueSelect label="Sort tickets" value={sortOrder} disabled={!intakeEnabled || writing || Boolean(pending)}
-          onChange={setSortOrder} options={sortOrders.map(option => ({ value: option.id, label: option.label }))} />
-        {refreshToken === undefined && <button type="button" onClick={refreshAll} disabled={!intakeEnabled || queueLoading || Boolean(pending)} className="pm-tickets__refresh" title="Refresh tickets">
-          <RefreshCw size={15} className={queueLoading ? 'animate-spin' : ''} /><span>Refresh</span>
-        </button>}
-      </div>
-    </header>}
-
-    {!intakeEnabled && <div role="status" className="pm-tickets__service-notice">
-      <Info size={15} aria-hidden="true" />
-      <p>Ticketing is coming soon. You can review the interface, but submissions are not available yet.</p>
-    </div>}
-
-    {intakeEnabled && queueError && <div role="alert" className="pm-tickets__error">
-      <AlertCircle size={15} aria-hidden="true" />{queueError}
-    </div>}
-
     <section className="pm-tickets__workspace">
-      <div ref={queueElement} className={`pm-tickets__queue${selectedId ? ' pm-tickets__queue--collapsed' : ''}`}>
-        <div className="pm-tickets__queue-toolbar">
-          <p>{search ? `Results for “${search}”` : queue?.counters.kind === 'pm' && queue.counters.needsPm > 0
-            ? `${queue.counters.needsPm} request${queue.counters.needsPm === 1 ? '' : 's'}${fixedClientGroupKey ? ' from this client' : ''} need${queue.counters.needsPm === 1 ? 's' : ''} your attention.`
-            : fixedClientGroupKey ? 'This client’s requests and their next steps.' : 'Your client requests and their next steps.'}</p>
-          <span>Open a ticket to continue</span>
-        </div>
-        <div className="pm-tickets__queue-scroll pm-table-scroll">
-          {!intakeEnabled ? <EmptyPanel title="Live tickets are not connected yet" detail="No ticket data is loaded while ticketing is disabled." />
-            : queuePending ? <TicketQueueSkeleton label="Loading tickets" className="px-4" />
-            : queue && visibleQueueItems.length > 0 ? <PmTicketQueueList items={visibleQueueItems} selectedId={selectedId}
-              disabled={Boolean(pending)}
-              onSelect={ticketId => { historyGeneration.current += 1; setHistoryLoading(false); setSelectedId(ticketId); setPanel('conversation'); setMessageAction('reply'); setDrafts(current => ({ ...current, conversation: '' })); setWriteError(''); }} />
-              : queue && <div className="pm-tickets__empty-state"><EmptyPanel title={filter === 'needs_pm' && !search ? 'Nothing needs you right now' : 'No tickets in this view'}
-                detail={filter === 'needs_pm' && !search ? 'Requests come back here when a client replies or work is ready for you.'
-                  : filter === 'all' && !search && !clientGroupKey && dateRange === 'all' ? 'Accepted inquiries will appear here.' : 'Try another view or clear your filters.'} />
-                {(search || filter !== 'all' || clientGroupKey || dateRange !== 'all') && <button type="button" className={secondary} onClick={() => { setSearchInput(''); setSearch(''); setClientGroupKey(''); setDateRange('all'); setSortOrder('updated_desc'); activeFilter('all'); }}>Show all tickets</button>}</div>}
-        </div>
-        {queue && resolvedQueueScope === queueScope && <div className="pm-tickets__queue-footer">
-          <span>Showing {visibleQueueItems.length} ticket{visibleQueueItems.length === 1 ? '' : 's'}</span>
-          {queue.nextCursor && <button onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading} className="text-link hover:text-link-hover disabled:opacity-50">{queueMoreLoading ? 'Loading…' : 'Load more'}</button>}
-        </div>}
-      </div>
-
+      {queueError && <p role="alert" className="pm-tickets__error">{queueError} <button type="button" onClick={() => void loadQueue()}>Retry</button></p>}
       <div role="region" aria-label="Ticket detail panel" className={`pm-tickets__detail${selectedId ? ' pm-tickets__detail--selected' : ''}`}>
         {!intakeEnabled ? <EmptyPanel title="Ticketing is coming soon" detail="Ticket details and conversations will be available when ticketing is connected." />
-          : !selectedId || !selectedQueueItem ? <EmptyPanel title={queueError ? 'Ticket queue unavailable' : 'Select a ticket'} detail={queueError ? 'No ticket data is shown when the service cannot be reached.' : 'Choose a request from the queue to review its details and conversation.'} />
+          : queuePending ? <TicketDetailSkeleton label="Loading ticket" />
+          : !selectedId || !selectedQueueItem ? <EmptyPanel title="Ticket unavailable" detail="Open a request from its client or inquiry to view the ticket." />
           : (detail?.id !== selectedId && (detailLoading || !detailError)) ? <TicketDetailSkeleton label="Loading ticket" />
             : detailError && detail?.id !== selectedId ? <div role="alert" className="m-4 rounded-lg border border-status-danger-border bg-status-danger-subtle p-4 text-xs text-status-danger">{detailError}</div>
               : detail && selectedQueueItem && <div className="pm-tickets__detail-shell">
                 {detailError && <div role="alert" className="pm-tickets__error">{detailError}</div>}
                 <header className="pm-tickets__detail-header">
                   <div className="pm-tickets__detail-heading">
-                    <button type="button" onClick={backToQueue} disabled={writing || Boolean(pending)} className="pm-tickets__detail-back" aria-label="Back to tickets" title="Back to tickets">
-                      <ArrowLeft size={17} aria-hidden="true" /><span className="sr-only">Back to tickets</span>
-                    </button>
                     <div className="pm-tickets__detail-heading-copy">
                       <div className="pm-tickets__detail-meta">
                         <div className="pm-tickets__detail-identity"><TicketIcon size={16} aria-hidden="true" /><span className="pm-tickets__reference" title={detail.reference}>{detail.reference.length > 20 ? `${detail.reference.slice(0, 16)}…` : detail.reference}</span><span className={`pm-tickets__status ${statusStyle(detail.status)}`}>{statusLabel(detail.status)}</span></div>
@@ -1179,16 +992,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
                   {invitationEmailError && <p role="alert" className="pm-tickets__detail-notice pm-tickets__detail-notice--error">{invitationEmailError}</p>}
                 </header>
 
-                {pending && <div className="pm-tickets__pending">
-                  <span>Unconfirmed {pending.label} · operation {pending.operationId.slice(0, 8)}…</span>
-                  <button onClick={async () => {
-                    const operation = pending;
-                    const succeeded = await performWrite(operation, operation.clearDraft);
-                    if (succeeded && operation.label === 'scope proposal') setScopeComposerOpen(false);
-                    if (succeeded && operation.label === 'work authorization') setHandoffOpen(false);
-                    if (succeeded && ['correction authorization', 'accepted ticket closure'].includes(operation.label)) setReviewAction(null);
-                  }} disabled={writing} className={secondary}>{writing ? 'Checking…' : 'Check and retry'}</button>
-                </div>}
+                {pendingWrite}
 
 
 
