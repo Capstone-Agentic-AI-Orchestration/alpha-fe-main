@@ -103,24 +103,23 @@ describe('ProjectConversationView', () => {
     expect(view()).toContain('>About</button>');
   });
 
-  it('renders a plain ticket picker followed by separate selected-ticket details', () => {
+  it('keeps ticket selection in a compact dropdown followed by separate selected-ticket details', () => {
     const second: ConversationRequest = { ...openRequest, ticketId: 't-2', reference: 'TKT-123ABC987654', title: 'Fix the footer', linkedTasks: [] };
     const html = view({ role: 'pm', requests: [openRequest, second], selectedTicketId: 't-2',
       conversationHeader: <header>Project header</header>,
       renderRail: ({ requestList, requestsTitle }) => <PmConversationRail projectName="Website" previewShared={false}
         ticketsTitle={requestsTitle} tickets={requestList} selected={<section aria-label="Selected ticket details">Details for Fix the footer</section>} /> });
     const rail = html.slice(html.indexOf('<aside'));
-    const list = rail.slice(rail.indexOf('<ul'), rail.indexOf('</ul>'));
+    const pickerStart = rail.indexOf('class="pm-ticket-picker__trigger"');
+    const detailsStart = rail.indexOf('Details for Fix the footer');
     expect(html).not.toContain('role="tablist"');
     expect(html.indexOf('Project header')).toBeLessThan(html.indexOf('<aside'));
-    expect(rail.indexOf('</ul>')).toBeLessThan(rail.indexOf('Details for Fix the footer'));
-    expect(list.match(/class="pm-rail-ticket-row"/g)).toHaveLength(2);
-    expect(list).toContain('aria-pressed="true"');
-    expect(list).toContain('aria-pressed="false"');
-    expect(list).not.toContain('aria-expanded');
-    expect(list).not.toContain('Mark done');
-    expect(list).toContain('>TKT-123ABC<');
-    expect(list).toContain('title="TKT-123ABC987654"');
+    expect(pickerStart).toBeGreaterThanOrEqual(0);
+    expect(pickerStart).toBeLessThan(detailsStart);
+    expect(rail).toContain('aria-label="Selected ticket: Fix the footer. Change ticket"');
+    expect(rail).toContain('>TKT-123ABC<');
+    expect(rail).toContain('title="TKT-123ABC987654"');
+    expect(rail).not.toContain('pm-rail-ticket-row');
     expect(rail).not.toContain('Open details');
   });
 });
