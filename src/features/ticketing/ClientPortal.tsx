@@ -816,7 +816,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {page === 'projects' && !conversationProject && tabs.filter(tab => tab.navigation.page === 'projects').map(tab => <div key={tab.id} hidden={tab.id !== activeTabId}>
           {tab.id === activeTabId && createError && <p role="alert" className="cx-error cx-notice">{createError}</p>}
           <ClientProjectsPage idPrefix={tab.id} api={api} projects={projects ?? []} requests={displayQueue?.items ?? []} loading={!projects && !projectsError} error={projectsError}
-            onOpenConversation={project => openConversation(project)} onOpenPreview={openPreview}
+            onOpenConversation={project => openConversation(project)}
             inspectionOnly={inspectionOnly} refreshToken={refreshVersion}
             proposalsNeedingReply={proposalsNeedingReply} onOpenProposals={() => navigate('proposals')} onProposeProject={proposeProject}
             newRequestAction={newRequestAction} />

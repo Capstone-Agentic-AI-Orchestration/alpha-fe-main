@@ -67,7 +67,6 @@
 .cx-showcase-updates-footer { display: flex; flex: none; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .25rem; padding: .3rem .55rem; }
 .cx-showcase-updates-footer .cx-link { color: var(--cx-accent); }
 .cx-showcase-empty { padding: 1rem; background: color-mix(in srgb, var(--cx-surface) 82%, transparent); }
-.cx-pcard-no-preview { display: grid; min-height: 160px; place-items: center; padding: 1.25rem; color: var(--cx-muted); font-size: var(--client-type-caption); text-align: center; }
 .cx-request-page-actions { display: flex; justify-content: flex-end; padding: 0 var(--client-portal-gutter); }
 
 @media (max-width: 760px) {

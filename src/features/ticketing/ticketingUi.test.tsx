@@ -173,7 +173,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
   it('keeps the Projects page to projects, pointing to proposals that need a reply', () => {
     const html = renderToStaticMarkup(<ClientProjectsPage
       projects={[]} loading={false} error=""
-      onOpenConversation={() => undefined} onOpenPreview={() => undefined}
+      onOpenConversation={() => undefined}
       inspectionOnly={false} refreshToken={0}
       proposalsNeedingReply={1} onOpenProposals={() => undefined} onProposeProject={() => undefined}
     />);
@@ -183,6 +183,19 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toContain('Open project ideas');
     expect(html).not.toContain('Project proposals');
     expect(html).not.toContain('Send reply');
+  });
+
+  it('opens each project from its card without a separate preview button', () => {
+    const project = { workspaceId: 'w1', projectId: 'p1', name: 'Shop', updatedAt: '2026-11-02T00:00:00Z', intakeOptionId: 'o1', preview: null };
+    const html = renderToStaticMarkup(<ClientProjectsPage loading={false} error="" inspectionOnly={false} refreshToken={0}
+      projects={[project, { ...project, projectId: 'p2', name: 'Blog', preview: { branch: 'uat', url: 'https://blog-uat.vercel.app' } }]}
+      onOpenConversation={() => undefined} />);
+
+    expect(html).toContain('aria-label="Open project: Shop"');
+    expect(html).toContain('aria-label="Open project: Blog"');
+    expect(html).toContain('There is still no preview.');
+    expect(html).toContain('class="cx-thumb"');
+    expect(html).not.toContain('Open preview');
   });
 
   it('checks the real inquiry link before enabling its form and preserves context on return', () => {
