@@ -117,11 +117,11 @@ function NeedsYou({ loading, loaded, attention, proposalsNeedingReply, onOpenPro
         const step = clientNextStep(item.requestedAction);
         const Icon = item.requestedAction ? ACTION_ICONS[item.requestedAction] : MessageSquare;
         return <CxActionCard key={requestKey(item)} icon={<Icon size={20} />} title={item.title}
-          meta={(step?.prompt ?? 'Your project manager needs you') + (item.projectName ? ' · ' + item.projectName : '')}
+          meta={(step?.prompt ?? 'The project manager needs you') + (item.projectName ? ' · ' + item.projectName : '')}
           index={listProgressIndex(item)} action={step?.action ?? 'Open request'} onClick={() => onOpenRequest(item)} />;
       })}
       {proposalsNeedingReply > 0 && onOpenProposals && <CxActionCard icon={<Lightbulb size={20} />}
-        title={proposalsNeedingReply === 1 ? 'Your project idea' : proposalsNeedingReply + ' project ideas'} meta="Your project manager has a question"
+        title={proposalsNeedingReply === 1 ? 'Your project idea' : proposalsNeedingReply + ' project ideas'} meta="The project manager has a question"
         action="Reply" onClick={onOpenProposals} />}
     </div>
   </>;
@@ -159,7 +159,7 @@ function ClientProjectCard({ project, requests, onOpenProject, onOpenPreview, la
       </p>
       {latest && <div className="cx-pcard-note">
         <p>{latest.body}</p>
-        <small>Your project manager · <time dateTime={latest.createdAt} title={time(latest.createdAt)}>{relativeTime(latest.createdAt)}</time></small>
+        <small>The project manager · <time dateTime={latest.createdAt} title={time(latest.createdAt)}>{relativeTime(latest.createdAt)}</time></small>
       </div>}
       <footer className="cx-pcard-foot">
         <CxStats label={'Requests in ' + project.name} items={[
@@ -218,10 +218,10 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   const titleId = idPrefix + '-projects-page-title';
   return <section className="cx-page" aria-labelledby={titleId}>
     <CxPageHeader titleId={titleId} title={<>Your <span className="cx-accent-word">projects</span></>}
-      description="Everything your project manager has shared with you." actions={newRequestAction} />
+      description="Everything the project manager has shared with you." actions={newRequestAction} />
     {proposalsNeedingReply > 0 && onOpenProposals && <CxPanel tone="attention"><div className="cx-row" role="status">
       <Lightbulb size={16} aria-hidden="true" />
-      <span className="cx-row-copy"><strong>Your project manager is waiting on your reply to {proposalsNeedingReply === 1 ? 'a project idea' : proposalsNeedingReply + ' project ideas'}.</strong></span>
+      <span className="cx-row-copy"><strong>The project manager is waiting on your reply to {proposalsNeedingReply === 1 ? 'a project idea' : proposalsNeedingReply + ' project ideas'}.</strong></span>
       <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenProposals}>Open project ideas <ArrowRight size={14} aria-hidden="true" /></Button>
     </div></CxPanel>}
     {error && <p role="alert" className="cx-error">{error}</p>}
@@ -244,12 +244,12 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
       {!loading && projects.length > 0 && !shownProjects.length && <CxPanel><CxEmpty icon={<Search size={22} />} title={'No projects match “' + query.trim() + '”'}
         body="Check the spelling, or clear the search to see every project." /></CxPanel>}
       {!loading && !projects.length && !error && <CxPanel><CxEmpty icon={<FolderKanban size={22} />} title="No projects shared yet"
-        body="When your project manager gives your account access to a project, it will appear here." /></CxPanel>}
+        body="When the project manager gives your account access to a project, it will appear here." /></CxPanel>}
     </section>
     {!inspectionOnly && onProposeProject && <CxPanel className="cx-idea">
       <CxOrbit className="cx-idea-art" />
       <span className="cx-idea-icon" aria-hidden="true"><Lightbulb size={26} /></span>
-      <div className="cx-idea-copy"><strong>Have something new in mind?</strong><p>Send your project manager an idea. They review it with you before anything is set up.</p></div>
+      <div className="cx-idea-copy"><strong>Have something new in mind?</strong><p>Send the project manager an idea. They review it with you before anything is set up.</p></div>
       <button type="button" className="cx-button" onClick={onProposeProject}>Propose a project <ArrowRight size={14} aria-hidden="true" /></button>
     </CxPanel>}
   </section>;

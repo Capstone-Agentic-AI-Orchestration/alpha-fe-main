@@ -892,7 +892,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
       window.clearInterval(timer);
     };
   }, [activeThreadId, isActiveTab, isClient]);
-  const pmName = users.find(user => user.role === 'pm')?.name ?? 'your project manager';
+  const pmName = users.find(user => user.role === 'pm')?.name ?? 'the project manager';
   const projectRepositories = snapshot?.project.repositories ?? [];
   const repositorySignature = projectRepositories.map(item => `${item.repo}:${item.connected ? '1' : '0'}`).join('|');
   const validBuildRepositories = selectedBuildRepositories.filter(repo => projectRepositories.some(item => item.repo === repo));

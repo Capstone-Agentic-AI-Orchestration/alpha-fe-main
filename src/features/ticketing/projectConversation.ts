@@ -109,7 +109,7 @@ export function parseConversationRequests(value: unknown): { items: Conversation
 function actorName(author: ConversationItem['author'], role: 'client' | 'pm'): string {
   if (author === role) return 'You';
   if (author === 'client') return 'The client';
-  return role === 'client' ? 'Your project manager' : 'A project manager';
+  return role === 'client' ? 'The project manager' : 'A project manager';
 }
 
 /** Task-link events are internal to the PM; only PMs see linked task details. */

@@ -24,7 +24,7 @@ describe('client landing and password entry', () => {
     expect(html).not.toContain('Client home');
     expect(html).not.toContain('Invite only');
     expect(html).toContain('Then see it come together.');
-    expect(html).toContain('If your project manager invites you');
+    expect(html).toContain('If the project manager invites you');
     expect(html).toContain('Sign in to your requests');
     expect(html).toContain('aria-current="page">Home</a>');
     expect(html).not.toMatch(/\bPM\b/);

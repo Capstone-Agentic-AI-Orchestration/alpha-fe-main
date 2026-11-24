@@ -41,7 +41,7 @@ export function ClientPreviewThumb({ preview, projectName, onOpen }: { preview: 
       sandbox="allow-scripts allow-same-origin" style={{ width: SITE_WIDTH, height: SITE_HEIGHT, transform: 'scale(' + scale + ')' }} />;
   } else {
     picture = <div className="cx-thumb-empty"><Monitor size={22} aria-hidden="true" />
-      <span>{preview ? 'Open the preview to see the latest version.' : 'Your project manager hasn’t shared a preview yet.'}</span></div>;
+      <span>{preview ? 'Open the preview to see the latest version.' : 'The project manager hasn’t shared a preview yet.'}</span></div>;
   }
   return <div className={'cx-thumb' + (onOpen ? ' is-openable' : '')} onClick={onOpen} role="presentation">
     <div className="cx-thumb-bar" aria-hidden="true"><i /><i /><i /><span>{preview ? hostOf(preview.url) : 'Preview'}</span></div>

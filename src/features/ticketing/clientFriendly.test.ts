@@ -57,7 +57,7 @@ describe('client friendly helpers', () => {
 
   it('says what happens next for a listed request, and nothing once it has ended', () => {
     expect(clientNextLine(item({ status: 'awaiting_client', requestedAction: 'agree_scope' }))).toBe('approve the plan so the work can start');
-    expect(clientNextLine(item({ status: 'in_progress' }))).toBe('your project manager shares the result');
+    expect(clientNextLine(item({ status: 'in_progress' }))).toBe('the project manager shares the result');
     expect(clientNextLine(item({ status: 'received', projectLinkStatus: 'pending_review' }))).toMatch(/confirms which project/);
     expect(clientNextLine(item({ status: 'closed', requestedAction: 'reply' }))).toBeNull();
   });

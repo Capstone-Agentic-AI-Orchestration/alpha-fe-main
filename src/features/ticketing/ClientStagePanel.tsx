@@ -24,7 +24,7 @@ export interface ClientStagePanelProps {
 export function ClientStagePanel(props: Readonly<ClientStagePanelProps>) {
   const { summary } = props;
   return <div className="ps-panel">
-    {summary.stage === 'unset' && <p className="ps-note">Your project manager will set this project’s stage. Until then, keep using the conversation as usual.</p>}
+    {summary.stage === 'unset' && <p className="ps-note">The project manager will set this project’s stage. Until then, keep using the conversation as usual.</p>}
     {summary.stage === 'poc' && <ClientPocStage {...props} />}
     {summary.stage === 'contract' && <ClientContractStage {...props} />}
     {summary.stage === 'development' && <ClientDevelopmentStage {...props} />}
@@ -40,7 +40,7 @@ function ClientPocStage({ api, project, summary, busy, readOnly = false, run }: 
   const [mode, setMode] = useState<'idle' | 'changes' | 'approve'>('idle');
   const [changes, setChanges] = useState('');
   const poc = summary.poc;
-  if (!poc) return <p className="ps-note">Your project manager is preparing the proof of concept: what will be built, the screens, and what isn’t included.
+  if (!poc) return <p className="ps-note">The project manager is preparing the proof of concept: what will be built, the screens, and what isn’t included.
     You can ask for as many changes as you need before approving it.</p>;
   const waiting = poc.status === 'published';
   const sendChanges = async () => {
@@ -59,7 +59,7 @@ function ClientPocStage({ api, project, summary, busy, readOnly = false, run }: 
   return <>
     <p className="ps-lead">{waiting
       ? <>Review <strong>POC v{poc.number}</strong>. Ask for changes as often as you need, then approve it to move on to the contract.</>
-      : <>You asked for changes to POC v{poc.number} on {stageDay(poc.changeRequest?.createdAt ?? poc.updatedAt)}. Your project manager will share an updated version.</>}
+      : <>You asked for changes to POC v{poc.number} on {stageDay(poc.changeRequest?.createdAt ?? poc.updatedAt)}. The project manager will share an updated version.</>}
     </p>
     <PocScopeView poc={poc} />
     {poc.changeRequest && !waiting && <blockquote className="ps-quote">{poc.changeRequest.body}</blockquote>}
@@ -82,7 +82,7 @@ function ClientPocStage({ api, project, summary, busy, readOnly = false, run }: 
       onCancel={() => setMode('idle')} onConfirm={fullName => void approve(fullName)}>
       <p className="ps-copy"><strong>{poc.title}</strong> · {poc.features.length} feature{poc.features.length === 1 ? '' : 's'}
         {poc.screens.length > 0 && <> · {poc.screens.length} screen{poc.screens.length === 1 ? '' : 's'}</>}</p>
-      <p className="ps-copy">After you approve, your project manager prepares the contract from this version. Changes after that are
+      <p className="ps-copy">After you approve, the project manager prepares the contract from this version. Changes after that are
         handled as revisions during development.</p>
     </SignOffDialog>}
   </>;
@@ -91,7 +91,7 @@ function ClientPocStage({ api, project, summary, busy, readOnly = false, run }: 
 function ClientContractStage({ api, project, summary, busy, readOnly = false, run }: Readonly<ClientStagePanelProps>) {
   const [signing, setSigning] = useState(false);
   const contract = summary.contract;
-  if (!contract) return <p className="ps-note">Your project manager is preparing the contract from the approved proof of concept.
+  if (!contract) return <p className="ps-note">The project manager is preparing the contract from the approved proof of concept.
     You’ll be asked to sign it here.</p>;
   const sign = async (fullName: string) => {
     if (!contract.contentHash) return;
@@ -103,7 +103,7 @@ function ClientContractStage({ api, project, summary, busy, readOnly = false, ru
   return <>
     <p className="ps-lead">{waiting
       ? <>Read the development contract, then sign it. It includes <strong>{contract.terms.revisionLimit} revision round{contract.terms.revisionLimit === 1 ? '' : 's'}</strong> during development.</>
-      : <>You signed the contract on {stageDay(contract.clientSignedAt)}. Development starts when your project manager countersigns.</>}</p>
+      : <>You signed the contract on {stageDay(contract.clientSignedAt)}. Development starts when the project manager countersigns.</>}</p>
     <ContractView contract={contract} />
     {waiting && !readOnly && <div className="ps-actions">
       <button type="button" className="ps-button is-primary" onClick={() => setSigning(true)} disabled={busy}>Sign the contract</button>
@@ -113,7 +113,7 @@ function ClientContractStage({ api, project, summary, busy, readOnly = false, ru
       onCancel={() => setSigning(false)} onConfirm={fullName => void sign(fullName)}>
       <p className="ps-copy"><strong>{contract.terms.projectName}</strong> · scope from POC v{contract.terms.scope.pocNumber} ·
         {' '}{contract.terms.revisionLimit} revision round{contract.terms.revisionLimit === 1 ? '' : 's'} included</p>
-      <p className="ps-copy">Your project manager countersigns next, and development starts.</p>
+      <p className="ps-copy">The project manager countersigns next, and development starts.</p>
     </SignOffDialog>}
   </>;
 }

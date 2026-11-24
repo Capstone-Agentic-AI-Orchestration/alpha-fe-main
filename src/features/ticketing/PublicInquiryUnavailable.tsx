@@ -60,7 +60,7 @@ export default function PublicInquiryUnavailable() {
     : configuration === 'checking'
       ? 'Checking this link…'
       : context.kind === 'invalid'
-        ? 'This link is invalid. Ask your project manager for a new one.'
+        ? 'This link is invalid. Ask the project manager for a new one.'
         : 'This link isn’t available right now. Nothing was sent.';
 
   const unavailable = configuration === 'unavailable';

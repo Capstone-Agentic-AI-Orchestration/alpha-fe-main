@@ -7,7 +7,7 @@ export interface ClientDeliveryFile {
 export interface ClientDeliveryManifest { deliveryId: string; scopeVersionId: string; files: ClientDeliveryFile[] }
 const mediaTypes = new Set(['text/plain', 'application/pdf', 'image/png', 'image/jpeg']);
 const maxFileBytes = 32 * 1024 * 1024;
-function failed(): ClientTicketApiError { return new ClientTicketApiError(null, 'The shared file could not be verified. Refresh or contact your project manager.'); }
+function failed(): ClientTicketApiError { return new ClientTicketApiError(null, 'The shared file could not be verified. Refresh or contact the project manager.'); }
 function opaque(value: unknown): value is string { return typeof value === 'string' && value.length > 0 && value.length <= 200 && value.trim() === value; }
 function record(value: unknown): value is Record<string, unknown> { return Boolean(value && typeof value === 'object' && !Array.isArray(value)); }
 

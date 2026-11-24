@@ -89,7 +89,7 @@ export const ClientPortalView: React.FC = () => {
         </section>
 
         <div className="pt-2">
-          <button onClick={() => setActiveTab('chat')} className="flex items-center gap-2.5 text-sm text-content-secondary transition-colors hover:text-content"><MessageSquare className="h-4 w-4" />Message your project manager</button>
+          <button onClick={() => setActiveTab('chat')} className="flex items-center gap-2.5 text-sm text-content-secondary transition-colors hover:text-content"><MessageSquare className="h-4 w-4" />Message the project manager</button>
         </div>
       </div>
     </div>

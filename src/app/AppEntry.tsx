@@ -28,7 +28,7 @@ export default function AppEntry({ entry }: { entry: Entry }) {
       <section className="w-full max-w-md rounded-2xl border border-divider bg-surface p-7 space-y-4">
         <img src={alphaMarkUrl} alt="Alpha" className="h-10 w-10 object-contain" />
         <h1 className="text-xl font-semibold text-content">Client access is not available yet</h1>
-        <p className="text-sm text-content-secondary">Ticketing is being prepared. Your project manager will send an invitation when secure client access is ready.</p>
+        <p className="text-sm text-content-secondary">Ticketing is being prepared. The project manager will send an invitation when secure client access is ready.</p>
         <p className="text-xs text-content-muted">No GitHub account or desktop download will be needed. No client sign-in or submission is enabled on this page.</p>
       </section>
     </main>

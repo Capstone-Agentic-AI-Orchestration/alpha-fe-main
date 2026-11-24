@@ -8,7 +8,7 @@ describe('client link recovery and onboarding copy', () => {
     const html = renderToStaticMarkup(<ClientFreshLinkRequest />);
     expect(html).toContain('Email me a fresh link');
     expect(html).toContain('type="email"');
-    expect(html).toContain('Ask your project manager to send a new invitation');
+    expect(html).toContain('Ask the project manager to send a new invitation');
     expect(html).not.toContain('exists');
   });
   it('describes the real sign-in flow, a password, instead of an email sign-in link', () => {

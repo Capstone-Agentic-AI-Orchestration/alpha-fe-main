@@ -645,7 +645,7 @@ export class ZoomScene {
       this.dot(ctx, p[0], p[1], size, on > 0 ? col : VIOLET, (0.3 + 0.7 * on) * dim, w, h);
       const shown = !asking || focus;
       if (on > 0.5 && shown) labels.push({ x: p[0], y: p[1], text: work.name + '  ·  ' + KIND_LABEL[work.kind], col, a: (on - 0.5) * 2 * labelFade, r: size });
-      if (focus) labels.push({ x: p[0], y: p[1], text: 'New message from your project manager', col: VIOLET, a: clamp((u - B.ask) / 0.03) * labelFade, r: size, up: true });
+      if (focus) labels.push({ x: p[0], y: p[1], text: 'New message from the project manager', col: VIOLET, a: clamp((u - B.ask) / 0.03) * labelFade, r: size, up: true });
     });
 
     if (asking) this.message(ctx, place, C, w, h);

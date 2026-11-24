@@ -52,13 +52,13 @@ const highlighted = new Set(['Tell', 'there.']);
 
 const steps = [
   { title: 'Tell us', short: 'Start with what you want.', description: 'Describe your idea in your own words. No account is needed to send an inquiry, and a project manager reads every one.' },
-  { title: 'Get your invitation', short: 'Access, when it is ready.', description: 'Your project manager follows up, then sends an email invitation. Follow it to verify your access and finish setup, or keep using your existing password.' },
+  { title: 'Get your invitation', short: 'Access, when it is ready.', description: 'The project manager follows up, then sends an email invitation. Follow it to verify your access and finish setup, or keep using your existing password.' },
   { title: 'See your project', short: 'Watch it come together.', description: 'Sign in to follow your project, see updates as they happen, and share your feedback in one place.' },
 ];
 
 const captions = [
   { title: 'Then see it come together.', description: 'Every piece of your project, lighting up as it moves forward.' },
-  { title: 'Your say, when it matters.', description: 'See what is waiting on you and reply to your project manager right there.' },
+  { title: 'Your say, when it matters.', description: 'See what is waiting on you and reply to the project manager right there.' },
   { title: 'All in one place.', description: 'From the first message to the finished work.' },
 ];
 
@@ -357,7 +357,7 @@ export default function ClientLandingPage() {
             <a className="cl-door" href={clientSignIn}>
               <span className="cl-mono">Already invited</span>
               <span className="cl-door-title">Sign in to your requests <span className="cl-door-arrow"><ArrowRight size={18} /></span></span>
-              <span className="cl-door-copy">An inquiry does not create an account or grant access. If your project manager invites you, follow the email to verify your access or continue with your existing password.</span>
+              <span className="cl-door-copy">An inquiry does not create an account or grant access. If the project manager invites you, follow the email to verify your access or continue with your existing password.</span>
             </a>
           </div>
         </section>
@@ -366,7 +366,7 @@ export default function ClientLandingPage() {
       <footer className="public-footer public-container">
         <span className="public-footer-brand">Alphaexplora <span>AI work, orchestrated.</span></span>
         <div className="cl-footer-end">
-          <p>Only requests your project manager shares with you appear in your account.</p>
+          <p>Only requests the project manager shares with you appear in your account.</p>
           <a className="public-text-link" href="/#/team">Team sign in <ArrowUpRight size={14} /></a>
         </div>
       </footer>

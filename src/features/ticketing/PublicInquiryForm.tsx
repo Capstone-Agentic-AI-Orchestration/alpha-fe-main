@@ -119,7 +119,7 @@ export function PublicInquiryForm({ onSubmit, onCancel, submissionEnabled = fals
       {error && <p role="alert" className="ca-error iq-wide">{error}</p>}
       {validationError && <p role="alert" className="ca-error is-warning iq-wide">{validationError}</p>}
       {outcomeUnknown && <p role="status" className="ca-error is-warning iq-wide">We couldn’t confirm it was received. Use “Check inquiry status” before trying again.</p>}
-      {submitted && <p role="status" className="ca-error is-success iq-wide">Inquiry received{publicReference ? <> · reference <span className="font-mono">{publicReference}</span></> : ''}. Your project manager will be in touch.</p>}
+      {submitted && <p role="status" className="ca-error is-success iq-wide">Inquiry received{publicReference ? <> · reference <span className="font-mono">{publicReference}</span></> : ''}. The project manager will be in touch.</p>}
       <div className="iq-actions iq-wide">
         <p>{!submitted && !submissionEnabled && unavailableMessage ? unavailableMessage : null}</p>
         <div><button type="button" onClick={cancel} className="ca-link iq-cancel min-h-[44px]" disabled={locked}>Cancel</button><button className="ca-submit min-h-[44px]" type="submit" disabled={!submissionEnabled || isSubmitting || submitted}><span className="ca-submit-text">{isSubmitting ? 'Submitting…' : submitted ? 'Inquiry received' : outcomeUnknown ? 'Check inquiry status' : 'Submit inquiry'}</span><span className="ca-submit-icon"><Send size={15} /></span></button></div>

@@ -3136,7 +3136,7 @@ ${e.detail}`;
     // author would immediately lose sight of it.
     const newThread: ChatThread = {
       id: newThreadId,
-      title: isClientThread ? 'Message your project manager' : title,
+      title: isClientThread ? 'Message the project manager' : title,
       lastMessageSnippet: isClientThread ? 'Ask us anything about your request.' : 'Ready for instructions...',
       lastMessageAt: new Date().toISOString(),
       pinned: false,

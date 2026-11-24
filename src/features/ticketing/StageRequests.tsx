@@ -18,7 +18,7 @@ const newOperationId = () => crypto.randomUUID();
 function origin(request: ChangeRequest, rounds: StageSummary['rounds'], role: 'client' | 'pm'): string {
   if (request.requestedBy === 'client') return role === 'client' ? 'You asked' : 'Asked by the client';
   const round = rounds.find(item => item.id === request.roundId);
-  return round ? `From feedback round ${round.number}` : 'Raised by your project manager';
+  return round ? `From feedback round ${round.number}` : 'Raised by the project manager';
 }
 
 /** The client's change requests, and the way to ask for new work outside the contract. */
@@ -46,7 +46,7 @@ export function ClientRequests({ api, project, summary, busy, readOnly = false, 
           <input value={title} onChange={event => setTitle(event.target.value)} maxLength={300} disabled={busy} autoFocus /></label>
         <label className="ps-field"><span>Details (optional)</span>
           <textarea value={description} onChange={event => setDescription(event.target.value)} rows={3} maxLength={8000} disabled={busy} /></label>
-        <p className="ps-note">Work outside your contract costs additional and is billed separately. Your project manager will tell you whether they can take it on.</p>
+        <p className="ps-note">Work outside your contract costs additional and is billed separately. The project manager will tell you whether they can take it on.</p>
         <div className="ps-actions">
           <button type="submit" className="ps-button is-primary" disabled={busy || !title.trim()}>Send request</button>
           <button type="button" className="ps-button" disabled={busy} onClick={() => setAsking(false)}>Cancel</button>

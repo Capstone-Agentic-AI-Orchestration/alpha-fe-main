@@ -182,6 +182,27 @@
 .ticket-chat__about-chip button:hover { background: rgb(var(--ui-raised)); }
 .ticket-chat__about > button { color: rgb(var(--ui-link)); font-weight: 600; }
 
+/* A searchable project ticket picker shared by the PM and client rails. */
+.project-ticket-picker { min-width: 0; }
+.project-ticket-picker__trigger { display: flex; width: 100%; min-width: 0; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid rgb(var(--ui-divider)); border-radius: 8px; background: rgb(var(--ui-surface)); color: rgb(var(--ui-text-primary)); text-align: left; }
+.project-ticket-picker__trigger:hover { border-color: rgb(var(--ui-control)); background: rgb(var(--ui-raised)); }
+.project-ticket-picker__trigger:focus-visible, .project-ticket-picker__option:focus-visible { outline: 2px solid rgb(var(--ui-focus)); outline-offset: 1px; }
+.project-ticket-picker__title { display: block; min-width: 0; overflow: hidden; color: rgb(var(--ui-text-primary)); font-size: 12.5px; font-weight: 550; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.project-ticket-picker__meta { display: flex; min-width: 0; flex-wrap: wrap; align-items: center; gap: 4px 9px; margin-top: 5px; }
+.project-ticket-picker__meta code { color: rgb(var(--ui-text-muted)); font-size: 10.5px; font-weight: 400; }
+.project-ticket-picker__placeholder { color: rgb(var(--ui-text-muted)); font-size: 12.5px; }
+.project-ticket-picker__chevron { flex: none; color: rgb(var(--ui-text-muted)); transition: transform .15s ease; }
+.project-ticket-picker__chevron.is-open { transform: rotate(180deg); }
+.project-ticket-picker__popover { width: var(--radix-popover-trigger-width); min-width: min(16rem, calc(100vw - 2rem)); max-height: min(28rem, calc(100dvh - 2rem)); overflow: hidden; padding: 8px; }
+.project-ticket-picker__search { display: flex; height: 36px; align-items: center; gap: 8px; padding: 0 9px; border: 1px solid rgb(var(--ui-control)); border-radius: 6px; color: rgb(var(--ui-text-muted)); }
+.project-ticket-picker__search:focus-within { outline: 2px solid rgb(var(--ui-focus)); outline-offset: 1px; }
+.project-ticket-picker__search svg { flex: none; }
+.project-ticket-picker__count { margin: 9px 3px 6px; color: rgb(var(--ui-text-muted)); font-size: 10.5px; }
+.project-ticket-picker__options { max-height: min(20rem, calc(100dvh - 9rem)); margin: 0; padding: 0; overflow-y: auto; list-style: none; }
+.project-ticket-picker__option { display: flex; width: 100%; min-width: 0; align-items: center; gap: 10px; padding: 9px 8px; border: 0; border-radius: 6px; background: transparent; color: rgb(var(--ui-text-primary)); text-align: left; }
+.project-ticket-picker__option:hover, .project-ticket-picker__option[aria-pressed="true"] { background: rgb(var(--ui-selected) / .48); }
+.project-ticket-picker__empty { margin: 0; padding: 12px 8px; color: rgb(var(--ui-text-muted)); font-size: 12px; }
+
 /* A reply about a request quotes it above the bubble, on the reply's side, like a messaging app. */
 .ticket-chat__reply { display: flex; max-width: min(420px, 100%); flex-direction: column; gap: 3px; margin: 0 4px 4px; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; }
 .ticket-chat__message--mine .ticket-chat__reply { margin-left: auto; align-items: flex-end; text-align: right; }

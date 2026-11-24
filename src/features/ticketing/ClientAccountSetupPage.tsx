@@ -9,10 +9,10 @@ import { ClientFreshLinkRequest } from './ClientFreshLinkRequest';
 interface LinkLocation { hash: string; search: string; pathname: string }
 const defaultFailureMessage = (error: unknown) => {
   if (error instanceof ClientTicketApiError && (error.status === null || error.status >= 500)) {
-    return 'We could not verify this link. Check your connection and reload. If the problem continues, ask your project manager for help.';
+    return 'We could not verify this link. Check your connection and reload. If the problem continues, ask the project manager for help.';
   }
   if (error instanceof ClientTicketApiError && error.status === 429) return 'Too many attempts. Wait a little, then try again.';
-  return 'This link is incomplete, expired, or already used. Use password recovery if you already have client access, or ask your project manager for a fresh invitation.';
+  return 'This link is incomplete, expired, or already used. Use password recovery if you already have client access, or ask the project manager for a fresh invitation.';
 };
 
 export function ClientAccountSetupPage({ readLink, cleanUrl, failureMessage = defaultFailureMessage }: {
@@ -56,7 +56,7 @@ export function ClientAccountSetupPage({ readLink, cleanUrl, failureMessage = de
       <label className="ca-field"><span>{existing ? 'Your password' : 'Choose a password'}</span><div className="ca-password"><input type={visible ? 'text' : 'password'} autoComplete={existing ? 'current-password' : 'new-password'} required minLength={existing ? 1 : 8} maxLength={128} value={password} disabled={busy} onChange={event => { setPassword(event.target.value); setError(''); }} /><button type="button" onClick={() => setVisible(!visible)} aria-label={visible ? 'Hide password' : 'Show password'}>{visible ? <EyeOff size={16} /> : <Eye size={16} />}</button></div></label>
       {!existing && <label className="ca-field"><span>Confirm password</span><input type={visible ? 'text' : 'password'} required minLength={8} maxLength={128} autoComplete="new-password" disabled={busy} value={confirm} onChange={event => { setConfirm(event.target.value); setError(''); }} /></label>}
       <button className="ca-submit" type="submit" disabled={busy}><span className="ca-submit-text">{busy ? 'Finishing setup…' : existing ? 'Sign in and continue' : 'Save password and open portal'}</span><span className="ca-submit-icon"><ArrowUpRight size={16} /></span></button>
-      <p className="ca-notice">{existing ? 'Your password stays the same. This invitation adds only the request your project manager shared.' : 'Use 8–128 characters. You will only see requests your project manager shares with you.'}</p>
+      <p className="ca-notice">{existing ? 'Your password stays the same. This invitation adds only the request the project manager shared.' : 'Use 8–128 characters. You will only see requests the project manager shares with you.'}</p>
     </form>}
     {error && <p className="ca-error" role="alert">{error}</p>}
     {error && !setup && !checking && !complete && <ClientFreshLinkRequest />}

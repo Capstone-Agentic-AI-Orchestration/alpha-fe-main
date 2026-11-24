@@ -47,6 +47,8 @@ export interface ClientRequestRailProps {
   lead?: ReactNode;
   /** Changes when Files should open and come into view, as from the conversation's paperclip. */
   revealFiles?: number;
+  /** Use the flatter single-panel hierarchy shown beside a project conversation. */
+  projectPanel?: boolean;
 }
 
 /** Whether the client can write about this request right now. */
@@ -61,42 +63,68 @@ export function clientCanReply(ticket: ClientTicketRecord, options: { readOnlyPr
  */
 export function ClientRequestRail(props: Readonly<ClientRequestRailProps>) {
   const { ticket, workflowActionsDisabled = false, busy, lead } = props;
+  const projectPanel = props.projectPanel ?? false;
   const decisions = useRequestDecisions(ticket, workflowActionsDisabled, props.onDecision);
   const canReply = clientCanReply(ticket, props);
   const requestedAction = workflowActionsDisabled ? null : ticket.requestedAction;
   const progress = clientTicketProgress(ticket.status, requestedAction);
-  return <>
+  const content = <>
     <div className="cx-reqrail-top">
       {lead}
       <RequestHead ticket={ticket} statusLabel={progress.statusLabel} description={progress.description}
-        tone={requestTone(ticket.status, requestedAction)} extraAction={<AdditionalWork {...props} />} />
+        tone={requestTone(ticket.status, requestedAction)} extraAction={<AdditionalWork {...props} />} compact={projectPanel} />
       {decisions.owed && <section className="client-decision-slot cx-panel is-attention cx-decision" aria-labelledby="client-decision-title">
         <h2 id="client-decision-title">{'Action needed: ' + progress.label}</h2>
         {decisions.owed === 'plan'
           ? <PlanBody ticket={ticket} scopeDecision={decisions.scopeDecision} canReply={canReply} busy={busy} onAsk={decisions.setConfirming} onReply={props.onReply} />
           : <ResultBody {...props} decisions={decisions} />}
       </section>}
-      <RequestStanding ticket={ticket} requestedAction={requestedAction} />
+      <RequestStanding ticket={ticket} requestedAction={requestedAction} compact={projectPanel} />
     </div>
-    <RailMore {...props} decisions={decisions} canReply={canReply} />
+    <RailMore {...props} decisions={decisions} canReply={canReply} compact={projectPanel} />
     {decisions.confirming && <ConfirmDecision confirming={decisions.confirming} busy={busy} canAccept={decisions.canReview && decisions.reviewAcknowledged}
       onCancel={() => decisions.setConfirming(null)} onConfirm={decisions.confirm} />}
   </>;
+  return projectPanel ? <div className="cx-project-ticket-detail">{content}</div> : content;
+}
+
+/** Progress for the selected request, placed with the project ticket picker. */
+export function ClientRequestProgress({ ticket, workflowActionsDisabled = false }: Readonly<{
+  ticket: ClientTicketRecord;
+  workflowActionsDisabled?: boolean;
+}>) {
+  const requestedAction = workflowActionsDisabled ? null : ticket.requestedAction;
+  const steps = clientProgressSteps({ ...ticket, requestedAction });
+  if (steps.length === 0) return null;
+  return <section className="cx-project-request-progress" aria-label="Request progress">
+    <p>Request progress</p>
+    <ClientProgressStrip steps={steps} />
+  </section>;
 }
 
 /** Below the request's standing: the plan and result when nothing is owed on them, what was asked, files and details. */
-function RailMore({ decisions, canReply, ...props }: Readonly<ClientRequestRailProps & { decisions: RequestDecisions; canReply: boolean }>) {
+function RailMore({ decisions, canReply, compact, ...props }: Readonly<ClientRequestRailProps & { decisions: RequestDecisions; canReply: boolean; compact: boolean }>) {
   const { ticket, workflowActionsDisabled = false, busy } = props;
   const showPlan = !workflowActionsDisabled && Boolean(ticket.scope) && decisions.owed !== 'plan';
   const showResult = !workflowActionsDisabled && Boolean(ticket.delivery) && decisions.owed !== 'result';
   return <div className="cx-reqrail-more">
-    {showPlan && <RailCard icon={<ShieldCheck size={16} />} title="The plan">
-      <PlanBody ticket={ticket} scopeDecision={decisions.scopeDecision} canReply={canReply} busy={busy} onAsk={decisions.setConfirming} onReply={props.onReply} />
-    </RailCard>}
-    {showResult && <RailCard icon={<CheckCircle2 size={16} />} title="Your result"><ResultBody {...props} decisions={decisions} /></RailCard>}
-    <RailCard icon={<MessageSquareText size={16} />} title="What you asked for"><p className="cx-request-copy">{ticket.description}</p></RailCard>
-    {props.communicationEnabled && <FilesCard {...props} />}
-    <CollapsibleRailCard id="details" icon={<Info size={16} />} title="Request details"><RequestDetails ticket={ticket} /></CollapsibleRailCard>
+    {showPlan && (compact
+      ? <CollapsibleRailCard id={ticket.id + '-project-plan'} icon={<ShieldCheck size={16} />} title="The plan" initiallyOpen={false}>
+        <PlanBody ticket={ticket} scopeDecision={decisions.scopeDecision} canReply={canReply} busy={busy} onAsk={decisions.setConfirming} onReply={props.onReply} />
+      </CollapsibleRailCard>
+      : <RailCard icon={<ShieldCheck size={16} />} title="The plan">
+        <PlanBody ticket={ticket} scopeDecision={decisions.scopeDecision} canReply={canReply} busy={busy} onAsk={decisions.setConfirming} onReply={props.onReply} />
+      </RailCard>)}
+    {showResult && (compact
+      ? <CollapsibleRailCard id={ticket.id + '-project-result'} icon={<CheckCircle2 size={16} />} title="Your result" initiallyOpen={false}>
+        <ResultBody {...props} decisions={decisions} />
+      </CollapsibleRailCard>
+      : <RailCard icon={<CheckCircle2 size={16} />} title="Your result"><ResultBody {...props} decisions={decisions} /></RailCard>)}
+    {!compact && <RailCard icon={<MessageSquareText size={16} />} title="What you asked for"><p className="cx-request-copy">{ticket.description}</p></RailCard>}
+    {props.communicationEnabled && <FilesCard {...props} initiallyOpen={!compact} />}
+    <CollapsibleRailCard id={compact ? ticket.id + '-project-details' : 'details'} icon={<Info size={16} />} title="Request details" initiallyOpen={!compact}>
+      <RequestDetails ticket={ticket} includeDescription={compact} />
+    </CollapsibleRailCard>
   </div>;
 }
 
@@ -170,7 +198,7 @@ function PlanBody({ ticket, scopeDecision, canReply, busy, onAsk, onReply }: Rea
     {offer && open && <form className="cx-request-form" onSubmit={submit}>
       <label htmlFor="client-scope-change">What would you like changed in this plan?</label>
       <textarea id="client-scope-change" rows={3} maxLength={SCOPE_CHANGE_MAX_LENGTH} disabled={busy} value={body} onChange={event => setBody(event.target.value)} className={input} />
-      <p className="cx-request-note">This goes to your project manager in the conversation. They can reply or send you an updated plan.</p>
+      <p className="cx-request-note">This goes to the project manager in the conversation. They can reply or send you an updated plan.</p>
       <button type="submit" disabled={busy || !text} className={primary + ' min-h-[44px]'}><Send size={13} />Send to my project manager</button>
     </form>}
   </>;
@@ -178,7 +206,7 @@ function PlanBody({ ticket, scopeDecision, canReply, busy, onAsk, onReply }: Rea
 
 function planNote(scope: NonNullable<ClientTicketRecord['scope']>): string {
   if (!scope.agreed) return 'Waiting for your approval.';
-  return scope.approvedBy === 'pm' ? 'Your project manager approved this plan and is going ahead with it.' : 'You approved this plan.';
+  return scope.approvedBy === 'pm' ? 'The project manager approved this plan and is going ahead with it.' : 'You approved this plan.';
 }
 
 function ResultBody({ ticket, workspaceId, api = clientTicketApi, busy, onCorrection, decisions }: Readonly<ClientRequestRailProps & { decisions: RequestDecisions }>) {
@@ -210,7 +238,7 @@ function ResultBody({ ticket, workspaceId, api = clientTicketApi, busy, onCorrec
       {open && <form className="cx-request-form" onSubmit={submit}>
         <label htmlFor="client-result-feedback">What does not match the plan?</label>
         <textarea id="client-result-feedback" rows={3} maxLength={4000} disabled={busy} value={body} onChange={event => setBody(event.target.value)} className={input} />
-        <p className="cx-request-note">Your project manager will look at your note and tell you the next step.</p>
+        <p className="cx-request-note">The project manager will look at your note and tell you the next step.</p>
         <button type="submit" disabled={busy || !body.trim()} className={primary + ' min-h-[44px]'}>Send fix request</button></form>}
     </div>}
     {delivery.accepted && <p className="cx-request-note">{clientAcceptedResultNote(ticket.status === 'closed')}</p>}
@@ -224,44 +252,48 @@ function ConfirmDecision({ confirming, busy, canAccept, onCancel, onConfirm }: R
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay/70 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) onCancel(); }}>
     <section role="dialog" aria-modal="true" aria-labelledby="client-ticket-confirm-title" className="w-full max-w-md rounded-xl border border-divider bg-surface p-5 shadow-2xl">
       <h2 id="client-ticket-confirm-title" className="text-base font-semibold text-content">{accept ? 'Accept this result?' : 'Approve this plan?'}</h2>
-      <p className="mt-2 text-sm leading-relaxed text-content-secondary">{accept ? 'This finishes the request. Nothing more is needed from you.' : 'Your project manager will then start the work.'}</p>
+      <p className="mt-2 text-sm leading-relaxed text-content-secondary">{accept ? 'This finishes the request. Nothing more is needed from you.' : 'The project manager will then start the work.'}</p>
       <div className="mt-5 flex justify-end gap-2"><button onClick={onCancel} disabled={busy} className={secondary + ' min-h-[44px]'}>Cancel</button>
         <button onClick={() => onConfirm(confirming)} disabled={busy || (accept && !canAccept)} className={primary + ' min-h-[44px]'}>{accept ? 'Accept result' : 'Approve plan'}</button></div>
     </section>
   </div>;
 }
 
-function RequestHead({ ticket, statusLabel, description, tone, extraAction }: Readonly<{
-  ticket: ClientTicketRecord; statusLabel: string; description: string; tone: CxTone; extraAction: ReactNode;
+function RequestHead({ ticket, statusLabel, description, tone, extraAction, compact = false }: Readonly<{
+  ticket: ClientTicketRecord; statusLabel: string; description: string; tone: CxTone; extraAction: ReactNode; compact?: boolean;
 }>) {
-  return <section className="cx-reqcard cx-reqhead">
+  return <section className={'cx-reqcard cx-reqhead' + (compact ? ' is-compact' : '')}>
     <div className="cx-reqhead-top">
-      <span className="cx-reqhead-icon" aria-hidden="true"><FileText size={24} /></span>
+      {!compact && <span className="cx-reqhead-icon" aria-hidden="true"><FileText size={24} /></span>}
       <div className="cx-reqhead-copy">
-        <h1 id="client-request-title">{ticket.title}</h1>
-        <p>{ticket.sharedProjectName ?? 'Not linked to a project yet'}</p>
-        <p>Created {calendarDayOf(ticket.createdAt)}</p>
+        {compact ? <h2 id="client-request-title">{ticket.title}</h2> : <h1 id="client-request-title">{ticket.title}</h1>}
+        <p>{ticket.sharedProjectName ?? 'Not linked to a project yet'} · Created {calendarDayOf(ticket.createdAt)}</p>
       </div>
+      {compact && <CxBadge tone={tone}>{statusLabel}</CxBadge>}
     </div>
-    <CxBadge tone={tone}>{statusLabel}</CxBadge>
-    <p className="cx-request-summary">{description}</p>
+    {!compact && <>
+      <CxBadge tone={tone}>{statusLabel}</CxBadge>
+      <p className="cx-request-summary">{description}</p>
+    </>}
     {extraAction}
   </section>;
 }
 
 /** Where the request is on the five steps, and what happens next. */
-function RequestStanding({ ticket, requestedAction }: Readonly<{ ticket: ClientTicketRecord; requestedAction: ClientTicketRecord['requestedAction'] }>) {
+function RequestStanding({ ticket, requestedAction, compact = false }: Readonly<{ ticket: ClientTicketRecord; requestedAction: ClientTicketRecord['requestedAction']; compact?: boolean }>) {
   const steps = clientProgressSteps({ ...ticket, requestedAction });
   const whatNext = clientWhatNext({ status: ticket.status, requestedAction });
   return <>
-    {steps.length > 0 && <RailCard icon={<Activity size={16} />} title="Request progress"><ClientProgressStrip steps={steps} /></RailCard>}
-    {whatNext && <RailCard icon={<CornerDownRight size={16} />} title="What happens next"><p className="cx-request-copy">{whatNext}</p></RailCard>}
+    {!compact && steps.length > 0 && <RailCard icon={<Activity size={16} />} title="Request progress"><ClientProgressStrip steps={steps} /></RailCard>}
+    {whatNext && (compact
+      ? <section className="cx-project-request-next"><h3><CornerDownRight size={15} aria-hidden="true" />What happens next</h3><p className="cx-request-copy">{whatNext}</p></section>
+      : <RailCard icon={<CornerDownRight size={16} />} title="What happens next"><p className="cx-request-copy">{whatNext}</p></RailCard>)}
   </>;
 }
 
 /** The request's files, folded away when not needed; the conversation's paperclip opens and shows it. */
-function FilesCard({ ticket, workspaceId, documentsApi = clientTicketDocumentsApi, readOnlyPreview, revealFiles = 0 }: Readonly<ClientRequestRailProps>) {
-  const state = useCollapsible('files');
+function FilesCard({ ticket, workspaceId, documentsApi = clientTicketDocumentsApi, readOnlyPreview, revealFiles = 0, initiallyOpen = true }: Readonly<ClientRequestRailProps & { initiallyOpen?: boolean }>) {
+  const state = useCollapsible(ticket.id + '-files', initiallyOpen);
   const [, setOpen] = state;
   const card = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -270,13 +302,13 @@ function FilesCard({ ticket, workspaceId, documentsApi = clientTicketDocumentsAp
     card.current?.scrollIntoView({ block: 'start' });
     card.current?.focus({ preventScroll: true });
   }, [revealFiles, setOpen]);
-  return <CollapsibleRailCard id="files" icon={<Paperclip size={16} />} title="Files" state={state} cardRef={card} bodyClassName="cx-request-files">
+  return <CollapsibleRailCard id={ticket.id + '-files'} icon={<Paperclip size={16} />} title="Files" state={state} cardRef={card} bodyClassName="cx-request-files" initiallyOpen={initiallyOpen}>
     <TicketDocumentsPanel api={documentsApi} scope={workspaceId} ticketId={ticket.id} canUpload={!readOnlyPreview && !TERMINAL.has(ticket.status)} heading="Files" showTitle={false} />
   </CollapsibleRailCard>;
 }
 
 /** Project, dates, the project manager and the reference, as a short list. */
-function RequestDetails({ ticket }: Readonly<{ ticket: ClientTicketRecord }>) {
+function RequestDetails({ ticket, includeDescription = false }: Readonly<{ ticket: ClientTicketRecord; includeDescription?: boolean }>) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -286,12 +318,13 @@ function RequestDetails({ ticket }: Readonly<{ ticket: ClientTicketRecord }>) {
   const copy = () => { void navigator.clipboard?.writeText(ticket.reference).then(() => setCopied(true)).catch(() => undefined); };
   const deadline = ticket.request?.requestedDeadline;
   return <>
+    {includeDescription && <p className="cx-request-copy cx-project-request-description">{ticket.description}</p>}
     <dl className="cx-details">
       <div><dt>Project</dt><dd>{ticket.sharedProjectName ?? 'Not linked yet'}</dd></div>
       <div><dt>Created on</dt><dd>{calendarDayOf(ticket.createdAt)}</dd></div>
       {deadline && <div><dt>Hoped-for date</dt><dd>{calendarDay(deadline)} · not guaranteed</dd></div>}
       <div><dt>Last update</dt><dd>{time(ticket.updatedAt)}</dd></div>
-      <div><dt>Project manager</dt><dd><span className="cx-details-pm" aria-hidden="true"><UserRound size={12} /></span>Your project manager</dd></div>
+      <div><dt>Project manager</dt><dd><span className="cx-details-pm" aria-hidden="true"><UserRound size={12} /></span>The project manager</dd></div>
       <div><dt>Reference</dt><dd className="cx-request-reference"><code>{ticket.reference}</code>
         <button type="button" onClick={copy} aria-label="Copy request reference" className="cx-icon-button">{copied ? <Check size={14} /> : <Copy size={14} />}</button>
         {copied && <output className="cx-request-note">Copied</output>}</dd></div>
@@ -307,9 +340,12 @@ export function RailCard({ icon, title, children }: Readonly<{ icon: ReactNode; 
 const RAIL_STORAGE = 'alpha.client.rail.';
 
 /** Whether a folding panel section is open, remembered on this device; open the first time. */
-export function useCollapsible(id: string): [boolean, (open: boolean) => void] {
+export function useCollapsible(id: string, initiallyOpen = true): [boolean, (open: boolean) => void] {
   const [open, setOpenState] = useState(() => {
-    try { return window.localStorage.getItem(RAIL_STORAGE + id) !== '0'; } catch { return true; }
+    try {
+      const saved = window.localStorage.getItem(RAIL_STORAGE + id);
+      return saved === null ? initiallyOpen : saved === '1';
+    } catch { return initiallyOpen; }
   });
   const setOpen = useCallback((next: boolean) => {
     setOpenState(next);
@@ -319,11 +355,11 @@ export function useCollapsible(id: string): [boolean, (open: boolean) => void] {
 }
 
 /** A side panel section the client can fold away; its title is the toggle. */
-export function CollapsibleRailCard({ id, icon, title, children, state, cardRef, bodyClassName = '' }: Readonly<{
+export function CollapsibleRailCard({ id, icon, title, children, state, cardRef, bodyClassName = '', initiallyOpen = true }: Readonly<{
   id: string; icon: ReactNode; title: ReactNode; children: ReactNode;
-  state?: [boolean, (open: boolean) => void]; cardRef?: React.Ref<HTMLElement>; bodyClassName?: string;
+  state?: [boolean, (open: boolean) => void]; cardRef?: React.Ref<HTMLElement>; bodyClassName?: string; initiallyOpen?: boolean;
 }>) {
-  const own = useCollapsible(id);
+  const own = useCollapsible(id, initiallyOpen);
   const [open, setOpen] = state ?? own;
   const bodyId = useId();
   return <section ref={cardRef} tabIndex={-1} className={'cx-reqcard is-collapsible' + (open ? ' is-open' : '')}>
@@ -381,10 +417,10 @@ export function ClientTicketDetail({
     role: 'client', clientInitial: (ticket.companyLabel?.trim()[0] ?? 'Y').toUpperCase(), showHeader: false,
     historyError, messageCursor, historyLoading, onLoadMore, showFeed: readOnlyPreview || !(workflowActionsDisabled && !communicationEnabled),
     unavailableTitle: 'About this conversation',
-    unavailableDescription: 'The conversation and result review are not available for this request yet. Try again later or contact your project manager.',
+    unavailableDescription: 'The conversation and result review are not available for this request yet. Try again later or contact the project manager.',
     emptyTitle: 'No messages yet', emptyDescription: 'Send a note below if you have a question or an update.',
     draft: body, onDraftChange: setBody, onSubmit: submitReply, canCompose: canReply, busy, writesAvailable: canReply,
-    inputId: 'client-ticket-reply', placeholder: 'Message your project manager…', sendAriaLabel: 'Send reply', composerClassName: 'client-reply-form',
+    inputId: 'client-ticket-reply', placeholder: 'Message the project manager…', sendAriaLabel: 'Send reply', composerClassName: 'client-reply-form',
     composerNote: 'Enter sends · Shift + Enter starts a new line.', submitOnEnter: true,
     readOnlyLabel: terminal ? 'This request is closed. You can still read its history.' : 'This request is view-only right now.',
     leadingAction: communicationEnabled && !terminal ? <span className="ticket-chat__leading"><Button type="button" variant="outline" size="icon" onClick={() => setRevealFiles(value => value + 1)} aria-label="Go to files"><Paperclip size={17} /></Button></span> : undefined,
@@ -418,7 +454,7 @@ function RequestConversation({ ticketId, messages, history, error, chat, back }:
     {back}
     <header className="cx-reqchat-head">
       <span className="cx-reqchat-icon" aria-hidden="true"><MessagesSquare size={22} /></span>
-      <div><h2 id="client-conversation-title">Request conversation</h2><p>Private messages between you and your project manager.</p></div>
+      <div><h2 id="client-conversation-title">Request conversation</h2><p>Private messages between you and the project manager.</p></div>
       {unread > 0 && <output className="cx-new-pill">{unread === 1 ? '1 new message' : unread + ' new messages'}</output>}
     </header>
     {error && <p role="alert" className="cx-error">{error}</p>}

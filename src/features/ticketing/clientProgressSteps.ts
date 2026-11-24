@@ -38,7 +38,7 @@ export function clientProgressSteps(ticket: TicketForSteps): ClientProgressStep[
     const state = stateAt(index, at);
     const needsYou = index === at && ticket.requestedAction !== null;
     const label = needsYou
-      ? ticket.requestedAction === 'reply' ? 'Reply to your project manager'
+      ? ticket.requestedAction === 'reply' ? 'Reply to the project manager'
         : ticket.requestedAction === 'agree_scope' ? 'Approve the plan'
           : ticket.requestedAction === 'review_result' ? 'Check your result' : defaultLabel
       : defaultLabel;

@@ -32,7 +32,7 @@ const PREVIEW_TEXT={
   client:{name:'project',label:'Project preview',reload:'Reload project preview',frame:'Project application',section:'Project application preview',
     none:'No preview shared yet',noneDetail:'Your preview will appear here when it is shared.'},
   pm:{name:'UAT',label:'UAT preview',reload:'Reload UAT preview',frame:'Project UAT application',section:'UAT application preview',
-    none:'No UAT preview shared yet',noneDetail:'Your project manager reviews the UAT build before sharing it here.'},
+    none:'No UAT preview shared yet',noneDetail:'The project manager reviews the UAT build before sharing it here.'},
 } as const;
 type PreviewText=typeof PREVIEW_TEXT[keyof typeof PREVIEW_TEXT];
 

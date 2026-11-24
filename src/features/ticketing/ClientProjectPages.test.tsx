@@ -14,7 +14,7 @@ describe('client overview loading', () => {
       projects={[]} projectsLoading={false} projectsError="" {...callbacks} />);
     expect(loading).toContain('Loading requests needing attention');
     expect(loading).toContain('No projects yet');
-    expect(loading).toContain('When your project manager shares a project, it will appear here.');
+    expect(loading).toContain('When the project manager shares a project, it will appear here.');
     const ready = renderToStaticMarkup(<ClientOverviewPage requests={empty} requestsLoading requestsError=""
       projects={[]} projectsLoading projectsError="" {...callbacks} />);
     // A confirmed empty queue drops the section rather than showing an empty panel.
@@ -93,7 +93,7 @@ describe('client project review presentation', () => {
     const pm = renderToStaticMarkup(<QaPreview preview={null} />);
     expect(pm).toContain('UAT preview');
     expect(pm).toContain('Reload UAT preview');
-    expect(pm).toContain('Your project manager reviews the UAT build before sharing it here.');
+    expect(pm).toContain('The project manager reviews the UAT build before sharing it here.');
   });
 
   it('previews devices at their real CSS width and only shrinks when the stage is narrower', () => {

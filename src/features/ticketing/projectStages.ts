@@ -101,7 +101,7 @@ export function nextActionLine(summary: Pick<StageSummary, 'nextAction'>, role: 
   const action = summary.nextAction;
   if (!action) return null;
   if (action.who === role) return { mine: true, text: action.label };
-  return { mine: false, text: role === 'client' ? 'Waiting for your project manager' : 'Waiting for the client' };
+  return { mine: false, text: role === 'client' ? 'Waiting for the project manager' : 'Waiting for the client' };
 }
 
 /** A stage event in the conversation, from the reader's side. */
@@ -115,7 +115,7 @@ function answerLine(event: StageEventInfo, who: string): string {
   return event.decision === 'wont_do' ? `${who} won’t do ${what}` : `${who} will do ${what} · ${COSTS_EXTRA}`;
 }
 export function stageEventLine(event: StageEventInfo, author: 'client' | 'pm', role: 'client' | 'pm'): string {
-  const who = author === role ? 'You' : author === 'client' ? 'The client' : role === 'client' ? 'Your project manager' : 'A project manager';
+  const who = author === role ? 'You' : author === 'client' ? 'The client' : role === 'client' ? 'The project manager' : 'A project manager';
   const poc = event.number ? `POC v${event.number}` : 'the proof of concept';
   const named = event.name ? ` (signed as ${event.name})` : '';
   switch (event.action) {
