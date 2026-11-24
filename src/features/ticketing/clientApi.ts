@@ -449,19 +449,16 @@ export const clientTicketApi = {
       `/projects/${pathId(workspaceId)}/${pathId(projectId)}/stage/rounds/${pathId(roundId)}/items`,
       { method: 'PUT', body: JSON.stringify({ items }) }));
   },
-  submitRound(workspaceId: string, projectId: string, roundId: string, input: { operationId: string; acceptPaid: boolean }) {
+  /** Sends the round. Past the included rounds, `acknowledgeExtra` confirms the client knows it costs additional. */
+  submitRound(workspaceId: string, projectId: string, roundId: string, input: { operationId: string; acknowledgeExtra: boolean }) {
     return clientTicketApi.stageCommand(workspaceId, projectId, `rounds/${pathId(roundId)}/submit`, input);
   },
   acceptFinal(workspaceId: string, projectId: string, input: { operationId: string; fullName: string }) {
     return clientTicketApi.stageCommand(workspaceId, projectId, 'final/accept', { ...input, consent: true });
   },
-  /** Asks for new work outside the contract; it is quoted before anything starts. */
+  /** Asks for new work outside the contract. It costs additional; the PM answers whether they will do it. */
   requestChange(workspaceId: string, projectId: string, input: { operationId: string; title: string; description: string }) {
-    return clientTicketApi.stageCommand(workspaceId, projectId, 'quotes', input);
-  },
-  decideQuote(workspaceId: string, projectId: string, quoteId: string, input: { operationId: string; decision: 'accept' | 'decline'; fullName?: string }) {
-    const body = input.decision === 'accept' ? { ...input, consent: true } : { operationId: input.operationId, decision: input.decision };
-    return clientTicketApi.stageCommand(workspaceId, projectId, `quotes/${pathId(quoteId)}/decision`, body);
+    return clientTicketApi.stageCommand(workspaceId, projectId, 'requests', input);
   },
   /** The project's one conversation: its thread, requests, their messages and checklist events. */
   async getProjectConversation(workspaceId: string, projectId: string) {

@@ -5,7 +5,7 @@ import { Textarea } from '@/shared/components/ui/textarea';
 import { CLASSIFICATION_LABEL, RoundHistory } from './ClientDevelopmentStage';
 import { stageDay } from './PocScopeView';
 import type { PmStagePanelProps } from './PmStagePanel';
-import type { RevisionClassification, RevisionRound } from './projectStages';
+import { extraRounds, revisionAllowance, type RevisionClassification, type RevisionRound } from './projectStages';
 
 const newOperationId = () => crypto.randomUUID();
 const label = 'text-[11.5px] font-medium text-content-secondary';
@@ -13,7 +13,7 @@ const CHOICES: RevisionClassification[] = ['revision', 'fix', 'out_of_scope'];
 const CHOICE_HINT: Record<RevisionClassification, string> = {
   revision: 'A change to agreed work. Counts the round.',
   fix: 'Doesn’t work, or doesn’t match the approved POC. Never counts.',
-  out_of_scope: 'New work outside the contract. Becomes a quoted change request.',
+  out_of_scope: 'New work outside the contract. Becomes a change request for you to answer.',
 };
 
 /** Development on the PM side: share builds, label each round's notes, and hand over the final delivery. */
@@ -23,11 +23,9 @@ export function PmDevelopmentStage(props: Readonly<PmStagePanelProps>) {
   const past = summary.rounds.filter(round => round.status === 'classified');
   const finalWaiting = summary.final && !summary.final.acceptedAt ? summary.final : null;
   return <div className="space-y-5">
-    <p className="text-content-secondary">{summary.revisionsUsed} of {summary.revisionLimit} included revision rounds used.</p>
+    <p className="text-content-secondary">{revisionAllowance(summary)}{extraRounds(summary) ? ' (each extra round costs the client additional)' : ''}.</p>
     {active?.status === 'open' && <p className="text-content-secondary">Build {active.number} is with the client for feedback
       ({active.items.length} note{active.items.length === 1 ? '' : 's'} so far).</p>}
-    {active?.status === 'awaiting_quote' && <p className="font-medium text-content">Round {active.number} is past the included rounds. Send its quote
-      under Quotes; the round reaches you once the client accepts.</p>}
     {active?.status === 'submitted' && <RoundClassifier key={active.id} {...props} round={active} />}
     {!active && finalWaiting && <p className="text-content-secondary">Final delivery marked {stageDay(finalWaiting.deliveredAt)}. Waiting for the client
       to accept it. Sharing another build takes it back.</p>}
@@ -87,7 +85,8 @@ function RoundClassifier({ api, projectId, clientId, busy, run, round }: Readonl
   return <form className="space-y-4" onSubmit={event => { event.preventDefault(); save(); }}>
     <div>
       <h3 className="text-[13px] font-semibold text-content">Feedback round {round.number}</h3>
-      <p className="mt-1 text-[12px] text-content-muted">Sent {stageDay(round.submittedAt)}. Label each change. The round counts only if one is a revision.</p>
+      <p className="mt-1 text-[12px] text-content-muted">Sent {stageDay(round.submittedAt)}. Label each change. The round counts only if one is a revision.
+        {round.extra ? ' This is an extra round: the client confirmed it costs additional.' : ''}</p>
     </div>
     <ol className="space-y-4">
       {round.items.map((item, index) => <li key={item.id} className="space-y-2 border-l-2 border-divider pl-3">

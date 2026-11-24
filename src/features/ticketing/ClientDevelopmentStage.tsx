@@ -18,9 +18,8 @@ export function ClientDevelopmentStage(props: Readonly<ClientStagePanelProps>) {
   return <>
     {finalWaiting && <FinalDelivery {...props} note={finalWaiting.note} deliveredAt={finalWaiting.deliveredAt} />}
     {!finalWaiting && active?.status === 'open' && <OpenRound {...props} round={active} />}
-    {!finalWaiting && active && active.status !== 'open' && <p className="ps-lead">{active.status === 'submitted'
-      ? <>You sent feedback round {active.number} on {stageDay(active.submittedAt)}. Your project manager is reviewing it.</>
-      : <>Feedback round {active.number} is waiting for a quote, because your included revisions are used.</>}</p>}
+    {!finalWaiting && active?.status === 'submitted' && <p className="ps-lead">
+      You sent feedback round {active.number} on {stageDay(active.submittedAt)}{active.extra ? ' as an extra round' : ''}. Your project manager is reviewing it.</p>}
     {!finalWaiting && !active && <p className="ps-note">Your project manager will share the next build here for your feedback.
       Send all your notes on a build together: each round counts once, and fixes don’t count.</p>}
     {past.length > 0 && <RoundHistory rounds={past} />}
@@ -29,9 +28,9 @@ export function ClientDevelopmentStage(props: Readonly<ClientStagePanelProps>) {
 
 function OpenRound({ api, project, summary, busy, readOnly = false, run, round }: Readonly<ClientStagePanelProps & { round: RevisionRound }>) {
   const [note, setNote] = useState('');
-  const [confirmPaid, setConfirmPaid] = useState(false);
+  const [understood, setUnderstood] = useState(false);
   const notes = round.items.map(item => item.body);
-  const atLimit = summary.revisionsUsed >= summary.revisionLimit;
+  const extra = summary.revisionsUsed >= summary.revisionLimit;
   const save = (items: string[]) => run(() => api.saveRoundItems(project.workspaceId, project.projectId, round.id, items),
     'Your notes were not saved. Try again.');
   const add = async () => {
@@ -39,8 +38,8 @@ function OpenRound({ api, project, summary, busy, readOnly = false, run, round }
     if (!body) return;
     if (await save([...notes, body])) setNote('');
   };
-  const submit = (acceptPaid: boolean) => void run(() => api.submitRound(project.workspaceId, project.projectId, round.id,
-    { operationId: newOperationId(), acceptPaid }), 'Your feedback was not sent. Try again.');
+  const submit = () => void run(() => api.submitRound(project.workspaceId, project.projectId, round.id,
+    { operationId: newOperationId(), acknowledgeExtra: extra && understood }), 'Your feedback was not sent. Try again.');
   return <>
     <p className="ps-lead">Build {round.number} is ready for your feedback{round.openedAt ? ` (shared ${stageDay(round.openedAt)})` : ''}.</p>
     {round.buildNote && <p className="ps-copy">{round.buildNote}</p>}
@@ -60,20 +59,21 @@ function OpenRound({ api, project, summary, busy, readOnly = false, run, round }
       </label>
       <div className="ps-actions"><button type="submit" className="ps-button" disabled={busy || !note.trim()}>Add change</button></div>
     </form>}
-    {!readOnly && notes.length > 0 && !atLimit && <div className="ps-submit">
-      <button type="button" className="ps-button is-primary" disabled={busy} onClick={() => submit(false)}>
+    {!readOnly && notes.length > 0 && !extra && <div className="ps-submit">
+      <button type="button" className="ps-button is-primary" disabled={busy} onClick={submit}>
         Send round {summary.revisionsUsed + 1} of {summary.revisionLimit}</button>
       <p className="ps-hint">Sends every change above together. It counts as one revision round; fixes for things that don’t work as agreed don’t count.</p>
     </div>}
-    {!readOnly && notes.length > 0 && atLimit && <div className="ps-limit" role="note">
-      <p><strong>Your {summary.revisionLimit} included revision rounds are used.</strong> Further rounds are billed: your project manager will send a quote
-        for this one, and work starts once you accept it.</p>
-      {confirmPaid
-        ? <div className="ps-actions">
-          <button type="button" className="ps-button is-primary" disabled={busy} onClick={() => submit(true)}>Send and request a quote</button>
-          <button type="button" className="ps-button" disabled={busy} onClick={() => setConfirmPaid(false)}>Cancel</button>
-        </div>
-        : <button type="button" className="ps-button" disabled={busy} onClick={() => setConfirmPaid(true)}>Send as a paid round</button>}
+    {!readOnly && notes.length > 0 && extra && <div className="ps-limit" role="note">
+      <p><strong>Your {summary.revisionLimit} included revision rounds are used.</strong> This round is extra and costs additional, billed separately from your contract.
+        {' '}Fixes for things that don’t work as agreed still don’t count.</p>
+      <label className="ps-consent">
+        <input type="checkbox" checked={understood} onChange={event => setUnderstood(event.target.checked)} disabled={busy} />
+        <span>I understand this extra round costs additional.</span>
+      </label>
+      <div className="ps-actions">
+        <button type="button" className="ps-button is-primary" disabled={busy || !understood} onClick={submit}>Send extra round</button>
+      </div>
     </div>}
   </>;
 }
@@ -95,7 +95,7 @@ function FinalDelivery({ api, project, busy, readOnly = false, run, note, delive
     {accepting && <SignOffDialog title="Accept the final delivery" busy={busy} confirmLabel="Accept and close"
       consent="I accept the final delivery of the agreed deliverables. This closes the contract."
       onCancel={() => setAccepting(false)} onConfirm={fullName => void accept(fullName)}>
-      <p className="ps-copy">After closing, new features or changes outside the agreed scope are quoted separately.</p>
+      <p className="ps-copy">After closing, new features or changes outside the agreed scope cost additional and are billed separately.</p>
     </SignOffDialog>}
   </>;
 }
@@ -108,7 +108,7 @@ export function RoundHistory({ rounds }: Readonly<{ rounds: RevisionRound[] }>) 
       {open ? 'Hide earlier rounds' : `Earlier rounds (${rounds.length})`}</button>
     {open && <ul className="ps-rounds">
       {rounds.map(round => <li key={round.id}>
-        <p className="ps-round-title">Round {round.number} · {round.paid ? 'Paid round' : round.counts ? 'Counted as a revision' : 'Not counted'}</p>
+        <p className="ps-round-title">Round {round.number} · {roundCount(round)}</p>
         <ul className="ps-round-items">
           {round.items.map(item => <li key={item.id}>
             <span className={'ps-label is-' + (item.classification ?? 'none')}>{item.classification ? CLASSIFICATION_LABEL[item.classification] : '—'}</span>
@@ -118,4 +118,10 @@ export function RoundHistory({ rounds }: Readonly<{ rounds: RevisionRound[] }>) 
       </li>)}
     </ul>}
   </div>;
+}
+
+/** How a reviewed round counted against the included rounds. */
+export function roundCount(round: Pick<RevisionRound, 'counts' | 'extra'>): string {
+  if (!round.counts) return 'Not counted';
+  return round.extra ? 'Extra round, billed separately' : 'Counted as a revision';
 }

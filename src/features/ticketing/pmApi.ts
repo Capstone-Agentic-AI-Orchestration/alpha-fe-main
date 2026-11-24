@@ -727,8 +727,9 @@ export const pmTicketApi = {
   markFinalDelivery(projectId: string, clientId: string, input: { operationId: string; note: string }) {
     return pmTicketApi.stageCommand(projectId, clientId, 'final', input);
   },
-  sendQuote(projectId: string, clientId: string, quoteId: string, input: { operationId: string; amount: number; currency: string; description: string }) {
-    return pmTicketApi.stageCommand(projectId, clientId, `quotes/${encodeId(quoteId)}/send`, input);
+  /** Answers a change request: will do or won't do, with an optional reply the client sees. */
+  answerRequest(projectId: string, clientId: string, requestId: string, input: { operationId: string; decision: 'will_do' | 'wont_do'; reply: string }) {
+    return pmTicketApi.stageCommand(projectId, clientId, `requests/${encodeId(requestId)}/answer`, input);
   },
   /** Open client requests on a project, for the New task dialog. */
   listOpenRequests(projectId: string) {

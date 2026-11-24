@@ -7,9 +7,10 @@
 export type ProjectStage = 'unset' | 'poc' | 'contract' | 'development' | 'completed';
 export type PocStatus = 'draft' | 'published' | 'changes_requested' | 'superseded' | 'approved';
 export type ContractStatus = 'draft' | 'issued' | 'client_signed' | 'countersigned' | 'void';
-export type RoundStatus = 'open' | 'awaiting_quote' | 'submitted' | 'classified';
+export type RoundStatus = 'open' | 'submitted' | 'classified';
 export type RevisionClassification = 'revision' | 'fix' | 'out_of_scope';
-export type QuoteStatus = 'requested' | 'sent' | 'accepted' | 'declined' | 'withdrawn';
+/** A change request outside the contract. Alpha takes no payments: the client is reminded it costs extra, and the PM answers. */
+export type RequestStatus = 'open' | 'will_do' | 'wont_do';
 
 export interface PocFeature { title: string; detail: string }
 export interface PocVersion {
@@ -31,23 +32,22 @@ export interface Contract {
 export interface RevisionItem { id: string; position: number; body: string; classification: RevisionClassification | null; pmNote: string }
 export interface RevisionRound {
   id: string; number: number; status: RoundStatus; buildNote: string; previewUrl: string | null; counts: boolean | null;
-  paid: boolean; quoteId: string | null; openedAt: string; submittedAt: string | null; classifiedAt: string | null; items: RevisionItem[];
+  extra: boolean; openedAt: string; submittedAt: string | null; classifiedAt: string | null; items: RevisionItem[];
 }
-export interface Quote {
-  id: string; kind: 'paid_revision' | 'change_request'; roundId: string | null; title: string; description: string;
-  amount: string | null; currency: string; status: QuoteStatus; requestedBy: 'pm' | 'client'; requestedAt: string;
-  sentAt: string | null; decidedName: string | null; decidedAt: string | null;
+export interface ChangeRequest {
+  id: string; roundId: string | null; title: string; description: string; status: RequestStatus;
+  requestedBy: 'pm' | 'client'; requestedAt: string; reply: string; answeredAt: string | null;
 }
 export type NextActionKind =
   | 'set_stage' | 'publish_poc' | 'review_poc' | 'issue_contract' | 'sign_contract' | 'countersign_contract'
-  | 'send_quote' | 'decide_quote' | 'share_build' | 'submit_round' | 'classify_round' | 'accept_final';
+  | 'answer_request' | 'share_build' | 'submit_round' | 'classify_round' | 'accept_final';
 export interface StageNextAction { who: 'client' | 'pm'; kind: NextActionKind; label: string }
 export interface StageSummary {
   stage: ProjectStage; stageLabel: string; revisionLimit: number; revisionsUsed: number; version: number; stageChangedAt: string;
   nextAction: StageNextAction | null;
   poc: PocVersion | null; pocDraft: PocVersion | null;
   pocHistory: Array<{ id: string; number: number; status: PocStatus; publishedAt: string | null }>;
-  contract: Contract | null; rounds: RevisionRound[]; quotes: Quote[];
+  contract: Contract | null; rounds: RevisionRound[]; requests: ChangeRequest[];
   final: { deliveredAt: string; note: string; acceptedAt: string | null; acceptedName: string | null } | null;
   clientId?: string;
 }
@@ -78,8 +78,23 @@ export function stageSteps(stage: ProjectStage): Array<(typeof STAGE_STEPS)[numb
 export function revisionAllowance(summary: Pick<StageSummary, 'stage' | 'revisionLimit' | 'revisionsUsed'>): string | null {
   if (summary.stage === 'poc') return 'Unlimited changes';
   if (summary.stage !== 'development') return null;
-  return `Revisions: ${Math.min(summary.revisionsUsed, summary.revisionLimit)} of ${summary.revisionLimit} used`;
+  const extra = extraRounds(summary);
+  return `Revisions: ${Math.min(summary.revisionsUsed, summary.revisionLimit)} of ${summary.revisionLimit} used`
+    + (extra ? ` · ${extra} extra` : '');
 }
+
+/** Rounds past the included ones. Each one costs additional; nothing is charged in Alpha. */
+export function extraRounds(summary: Pick<StageSummary, 'revisionLimit' | 'revisionsUsed'>): number {
+  return Math.max(0, summary.revisionsUsed - summary.revisionLimit);
+}
+
+/** The reminder shown wherever the client asks for work beyond the contract. */
+export const COSTS_EXTRA = 'This costs additional, billed separately from your contract.';
+
+/** A change request's answer, as both sides read it. */
+export const REQUEST_STATUS_LABEL: Record<RequestStatus, string> = {
+  open: 'Waiting for an answer', will_do: 'Will do', wont_do: 'Won’t do',
+};
 
 /** The next step from the reader's side: their own turn, or who they are waiting for. */
 export function nextActionLine(summary: Pick<StageSummary, 'nextAction'>, role: 'client' | 'pm'): { mine: boolean; text: string } | null {
@@ -90,7 +105,15 @@ export function nextActionLine(summary: Pick<StageSummary, 'nextAction'>, role: 
 }
 
 /** A stage event in the conversation, from the reader's side. */
-export interface StageEventInfo { action: string; refId: string | null; number: number | null; name: string | null; stage: string | null }
+export interface StageEventInfo {
+  action: string; refId: string | null; number: number | null; name: string | null; stage: string | null;
+  /** Change-request answers and extra rounds; older servers leave them out. */
+  decision?: string | null; title?: string | null; extra?: boolean;
+}
+function answerLine(event: StageEventInfo, who: string): string {
+  const what = event.title ? `“${event.title}”` : 'a change request';
+  return event.decision === 'wont_do' ? `${who} won’t do ${what}` : `${who} will do ${what} · ${COSTS_EXTRA}`;
+}
 export function stageEventLine(event: StageEventInfo, author: 'client' | 'pm', role: 'client' | 'pm'): string {
   const who = author === role ? 'You' : author === 'client' ? 'The client' : role === 'client' ? 'Your project manager' : 'A project manager';
   const poc = event.number ? `POC v${event.number}` : 'the proof of concept';
@@ -105,12 +128,10 @@ export function stageEventLine(event: StageEventInfo, author: 'client' | 'pm', r
     case 'contract_signed': return `${who} signed the contract${named}`;
     case 'contract_countersigned': return `${who} countersigned the contract · Development has started`;
     case 'build_shared': return `${who} shared build ${event.number ?? ''} for feedback`.replace('  ', ' ');
-    case 'round_submitted': return `${who} sent feedback round ${event.number ?? ''}`.trimEnd();
+    case 'round_submitted': return `${who} sent feedback round ${event.number ?? ''}`.trimEnd() + (event.extra ? ' · An extra round, billed separately' : '');
     case 'round_classified': return `${who} reviewed feedback round ${event.number ?? ''}`.trimEnd();
-    case 'quote_requested': return `${who} asked for a quote`;
-    case 'quote_sent': return `${who} sent a quote`;
-    case 'quote_accepted': return `${who} accepted a quote${named}`;
-    case 'quote_declined': return `${who} declined a quote`;
+    case 'request_made': return `${who} asked for new work · ${COSTS_EXTRA}`;
+    case 'request_answered': return answerLine(event, who);
     case 'final_delivered': return `${who} marked the final delivery ready for acceptance`;
     case 'final_accepted': return `${who} accepted the final delivery${named} · The contract is closed`;
     default: return `${who} updated the project’s stage`;
@@ -130,11 +151,11 @@ const oneOf = <T extends string>(values: readonly T[]) => (value: unknown): valu
 const STAGES = oneOf<ProjectStage>(['unset', 'poc', 'contract', 'development', 'completed']);
 const POC_STATUSES = oneOf<PocStatus>(['draft', 'published', 'changes_requested', 'superseded', 'approved']);
 const CONTRACT_STATUSES = oneOf<ContractStatus>(['draft', 'issued', 'client_signed', 'countersigned', 'void']);
-const ROUND_STATUSES = oneOf<RoundStatus>(['open', 'awaiting_quote', 'submitted', 'classified']);
+const ROUND_STATUSES = oneOf<RoundStatus>(['open', 'submitted', 'classified']);
 const CLASSIFICATIONS = oneOf<RevisionClassification>(['revision', 'fix', 'out_of_scope']);
-const QUOTE_STATUSES = oneOf<QuoteStatus>(['requested', 'sent', 'accepted', 'declined', 'withdrawn']);
+const REQUEST_STATUSES = oneOf<RequestStatus>(['open', 'will_do', 'wont_do']);
 const ACTIONS = oneOf<NextActionKind>(['set_stage', 'publish_poc', 'review_poc', 'issue_contract', 'sign_contract', 'countersign_contract',
-  'send_quote', 'decide_quote', 'share_build', 'submit_round', 'classify_round', 'accept_final']);
+  'answer_request', 'share_build', 'submit_round', 'classify_round', 'accept_final']);
 
 function features(value: unknown): PocFeature[] {
   if (!Array.isArray(value)) invalid();
@@ -195,8 +216,8 @@ function parseContract(value: unknown): Contract | null {
 
 function parseRound(value: unknown): RevisionRound {
   if (!record(value) || !nonEmpty(value.id) || !int(value.number) || !ROUND_STATUSES(value.status) || !str(value.buildNote)
-    || !strOrNull(value.previewUrl) || !(value.counts === null || typeof value.counts === 'boolean') || typeof value.paid !== 'boolean'
-    || !strOrNull(value.quoteId) || !nonEmpty(value.openedAt) || !strOrNull(value.submittedAt) || !strOrNull(value.classifiedAt)
+    || !strOrNull(value.previewUrl) || !(value.counts === null || typeof value.counts === 'boolean') || typeof value.extra !== 'boolean'
+    || !nonEmpty(value.openedAt) || !strOrNull(value.submittedAt) || !strOrNull(value.classifiedAt)
     || !Array.isArray(value.items)) invalid();
   const items = value.items.map(item => {
     if (!record(item) || !nonEmpty(item.id) || !int(item.position) || !str(item.body)
@@ -205,27 +226,25 @@ function parseRound(value: unknown): RevisionRound {
   });
   return {
     id: value.id, number: value.number, status: value.status, buildNote: value.buildNote, previewUrl: value.previewUrl,
-    counts: value.counts as boolean | null, paid: value.paid, quoteId: value.quoteId, openedAt: value.openedAt,
+    counts: value.counts as boolean | null, extra: value.extra, openedAt: value.openedAt,
     submittedAt: value.submittedAt, classifiedAt: value.classifiedAt, items,
   };
 }
 
-function parseQuote(value: unknown): Quote {
-  if (!record(value) || !nonEmpty(value.id) || !(value.kind === 'paid_revision' || value.kind === 'change_request') || !strOrNull(value.roundId)
-    || !str(value.title) || !str(value.description) || !strOrNull(value.amount) || !str(value.currency) || !QUOTE_STATUSES(value.status)
-    || !(value.requestedBy === 'pm' || value.requestedBy === 'client') || !nonEmpty(value.requestedAt) || !strOrNull(value.sentAt)
-    || !strOrNull(value.decidedName) || !strOrNull(value.decidedAt)) invalid();
+function parseRequest(value: unknown): ChangeRequest {
+  if (!record(value) || !nonEmpty(value.id) || !strOrNull(value.roundId) || !str(value.title) || !str(value.description)
+    || !REQUEST_STATUSES(value.status) || !(value.requestedBy === 'pm' || value.requestedBy === 'client') || !nonEmpty(value.requestedAt)
+    || !str(value.reply) || !strOrNull(value.answeredAt)) invalid();
   return {
-    id: value.id, kind: value.kind, roundId: value.roundId, title: value.title, description: value.description, amount: value.amount,
-    currency: value.currency, status: value.status, requestedBy: value.requestedBy, requestedAt: value.requestedAt,
-    sentAt: value.sentAt, decidedName: value.decidedName, decidedAt: value.decidedAt,
+    id: value.id, roundId: value.roundId, title: value.title, description: value.description, status: value.status,
+    requestedBy: value.requestedBy, requestedAt: value.requestedAt, reply: value.reply, answeredAt: value.answeredAt,
   };
 }
 
 export function parseStageSummary(value: unknown): StageSummary {
   if (!record(value) || !STAGES(value.stage) || !str(value.stageLabel) || !int(value.revisionLimit) || !int(value.revisionsUsed)
     || !int(value.version) || !nonEmpty(value.stageChangedAt) || !Array.isArray(value.pocHistory) || !Array.isArray(value.rounds)
-    || !Array.isArray(value.quotes)) invalid();
+    || !Array.isArray(value.requests)) invalid();
   const action = value.nextAction;
   if (action !== null && !(record(action) && (action.who === 'client' || action.who === 'pm') && ACTIONS(action.kind) && str(action.label))) invalid();
   const final = value.final;
@@ -239,7 +258,7 @@ export function parseStageSummary(value: unknown): StageSummary {
     version: value.version, stageChangedAt: value.stageChangedAt,
     nextAction: action ? { who: action.who as 'client' | 'pm', kind: action.kind as NextActionKind, label: action.label as string } : null,
     poc: parsePoc(value.poc ?? null), pocDraft: parsePoc(value.pocDraft ?? null), pocHistory,
-    contract: parseContract(value.contract ?? null), rounds: value.rounds.map(parseRound), quotes: value.quotes.map(parseQuote),
+    contract: parseContract(value.contract ?? null), rounds: value.rounds.map(parseRound), requests: value.requests.map(parseRequest),
     final: final ? { deliveredAt: final.deliveredAt as string, note: final.note as string,
       acceptedAt: final.acceptedAt as string | null, acceptedName: final.acceptedName as string | null } : null,
     ...(nonEmpty(value.clientId) ? { clientId: value.clientId } : {}),
@@ -265,5 +284,6 @@ export function parseStageBadge(value: unknown): StageBadge | null {
 export function parseStageEvent(value: unknown): StageEventInfo | null {
   if (!record(value) || !str(value.action) || !strOrNull(value.refId)) return null;
   return { action: value.action, refId: value.refId, number: int(value.number) ? value.number : null,
-    name: str(value.name) ? value.name : null, stage: str(value.stage) ? value.stage : null };
+    name: str(value.name) ? value.name : null, stage: str(value.stage) ? value.stage : null,
+    decision: str(value.decision) ? value.decision : null, title: str(value.title) ? value.title : null, extra: value.extra === true };
 }
