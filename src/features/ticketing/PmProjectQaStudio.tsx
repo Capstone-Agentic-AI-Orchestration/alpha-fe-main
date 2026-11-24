@@ -1,6 +1,6 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ExternalLink, ShieldCheck } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { pmTicketApi, type PmProjectClientPreview } from './pmApi';
 import { pmProjectQaApi } from './pmProjectQaApi';
 import { qaError, type QaBuild } from './projectQaApi';
@@ -64,9 +64,8 @@ export function PmProjectQaStudio({projectId,projectName,feedback}:{projectId:st
       <div className="pqa-workspace"><QaPreview preview={preview} version={state==='current'?'Shared with client':'Internal PM preview'} pending={buildPending}
         onRefresh={()=>setRefresh(value=>value+1)} refreshDisabled={busy||loading}/>
         <aside className="pqa-review" aria-label="Project review controls">
-          <div className="pqa-handoff"><ShieldCheck size={20}/><h3>Client preview</h3>
-            {shared?<p>Shared with this project’s clients: <a href={shared.url} target="_blank" rel="noopener noreferrer">{shared.repository} · {shared.branch} <ExternalLink size={12}/></a></p>
-              :<p>Nothing shared yet. Clients see the preview only after you share it.</p>}
+          {(shared||build)&&<div className="pqa-handoff">
+            {shared&&<p>Shared with this project’s clients: <a href={shared.url} target="_blank" rel="noopener noreferrer">{shared.repository} · {shared.branch} <ExternalLink size={12}/></a></p>}
             {state==='current'&&<p className="pqa-success">Clients are seeing this UAT build.</p>}
             {(state==='unshared'||state==='newer')&&build&&<>
               {state==='newer'&&<p>A newer UAT build is ready. Clients still see the one shared earlier.</p>}
@@ -74,7 +73,7 @@ export function PmProjectQaStudio({projectId,projectName,feedback}:{projectId:st
               <button type="button" className="pqa-primary" disabled={busy||!ack}
                 onClick={()=>void save({repository:build.frontend.repository,branch:'uat',url:build.frontend.url})}>{busy?'Sharing…':state==='newer'?'Share newer build':'Share with client'}</button></>}
             {shared&&<button type="button" disabled={busy} onClick={()=>void save(null)}>Stop sharing</button>}
-          </div>
+          </div>}
           {feedback(clientId)}
         </aside>
       </div>
