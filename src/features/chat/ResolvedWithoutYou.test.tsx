@@ -7,7 +7,7 @@ vi.mock('@/features/project-build-review/OrchestrationWorkflowPanel', () => ({ R
 import type { ProjectBuildOrchestration, ResolvedWithoutYouItem } from '@/shared/types';
 import { ReviewBody } from './ChatBuildBodies';
 import { BuildNextStepCard } from './BuildNextStepCard';
-import { ResolvedWithoutYouList, resolutionKindLabel, resolvedWithoutYouSummary } from './ResolvedWithoutYou';
+import { ResolvedWithoutYouList, evidenceLink, resolutionKindLabel, resolvedWithoutYouSummary } from './ResolvedWithoutYou';
 
 /**
  * What Alpha fixed on the person's behalf, shown when they review the build, so nothing resolved
@@ -18,7 +18,7 @@ const items: ResolvedWithoutYouItem[] = [
   { recoveryId: 'r1', taskId: 't1', taskTitle: 'Show bookings', status: 'retry_accepted', tier: 0,
     problem: 'formatDate is defined twice, so lint fails.', fix: 'Import formatDate from src/lib/date.ts.',
     evidence: [
-      { source: 'repository', repository: 'acme/shop-fe', path: 'src/lib/date.ts', quote: 'export function formatDate(' },
+      { source: 'repository', repository: 'acme/shop-fe', path: 'src/lib/date.ts', quote: 'export function formatDate(', commit: 'c'.repeat(40) },
       { source: 'product_picture', quote: 'Bookings show the local date.' }
     ], resolvedAt: '2026-11-24T10:04:00.000Z' },
   { recoveryId: 'r2', taskId: 't2', taskTitle: 'Bookings API', status: 'retrying', tier: 1,
@@ -35,8 +35,19 @@ describe('resolved without you', () => {
     const html = renderToStaticMarkup(<ResolvedWithoutYouList items={items} />);
     for (const shown of ['Show bookings', 'formatDate is defined twice, so lint fails.', 'Import formatDate from src/lib/date.ts.',
       'Routine fix', 'Changed earlier finished work', 'Still being checked', 'shop-fe · src/lib/date.ts', 'export function formatDate(',
-      'Your product decision:', 'Bookings show the local date.']) expect(html).toContain(shown);
-    expect(html).toContain('href="https://github.com/acme/shop-fe/blob/HEAD/src/lib/date.ts"');
+      'Product record:', 'Bookings show the local date.']) expect(html).toContain(shown);
+    expect(html).not.toContain('Your product decision');
+    expect(html).toContain(`href="https://github.com/acme/shop-fe/blob/${'c'.repeat(40)}/src/lib/date.ts"`);
+  });
+
+  it('links a cited file at the commit Alpha checked, with each path segment encoded', () => {
+    const commit = 'a'.repeat(40);
+    expect(evidenceLink({ source: 'repository', repository: 'acme/shop-fe', path: 'src/50% off/#new?.ts', quote: 'q', commit }))
+      .toBe(`https://github.com/acme/shop-fe/blob/${commit}/src/50%25%20off/%23new%3F.ts`);
+    // No checked commit (or not a commit id): no link, rather than one to a different version.
+    expect(evidenceLink({ source: 'repository', repository: 'acme/shop-fe', path: 'src/a.ts', quote: 'q' })).toBeUndefined();
+    expect(evidenceLink({ source: 'repository', repository: 'acme/shop-fe', path: 'src/a.ts', quote: 'q', commit: 'HEAD' })).toBeUndefined();
+    expect(evidenceLink({ source: 'product_picture', quote: 'q' })).toBeUndefined();
   });
 
   it('summarises the list for the approval card', () => {

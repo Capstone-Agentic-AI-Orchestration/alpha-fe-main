@@ -1242,9 +1242,12 @@ export interface DependencyAuditSummary {
   findings: Array<{ package: string; severity: string; range: string; advisories: string[] }>;
 }
 
-/** One file or recorded product decision the Orchestrator cited for a fix; Alpha checked it exists. */
+/**
+ * One file or product record (the project brief or a recorded decision) the Orchestrator cited for
+ * a fix; Alpha checked it exists. `commit` is where the quote was found.
+ */
 export type ResolvedWithoutYouEvidence =
-  | { source: 'repository'; repository: string; path: string; quote: string }
+  | { source: 'repository'; repository: string; path: string; quote: string; commit?: string }
   | { source: 'product_picture'; quote: string };
 
 /**
@@ -1483,7 +1486,7 @@ export interface LiveBuildOrchestratorResolution {
   question?: { text: string; options: Array<{ label: string; description?: string }>; why: string };
   /** A verified fix it held back for the person; `apply_proposed_fix` applies it in one step. */
   proposedFix?: string;
-  /** Files (repository:path) or recorded decisions the fix relies on. */
+  /** Files (repository:path) the fix relies on, or "Product record" for the brief or a recorded decision. */
   evidence?: string[];
 }
 

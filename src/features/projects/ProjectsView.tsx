@@ -61,6 +61,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const canProvisionRepositories = can('provision_repositories');
   const canManageIssues = can('manage_issues');
   const showAi = aiFeaturesEnabled(role);
+  /** Build settings and whether builds run here are the team's; a client is told nothing about them. */
+  const showBuildSettings = showAi && can('view_runs');
 
   // Selected Project for dedicated Workspace Kanban View
   const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string | null>('projects.selectedProject', null);
@@ -103,7 +105,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
   useEffect(() => {
     let current = true;
-    if (!selectedProject || !showAi) {
+    if (!selectedProject || !showBuildSettings) {
       setOrchestrationSettings(null);
       return () => { current = false; };
     }
@@ -116,7 +118,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
         }
       })
     return () => { current = false; };
-  }, [selectedProject?.id, showAi]);
+  }, [selectedProject?.id, showBuildSettings]);
 
   // GitHub repositories the API can read for this project. Given the attached
   // repositories so one created a moment ago shows up without a reload.
@@ -330,11 +332,11 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 {/* What every agent reads first; for the project team, never clients. */}
                 {role !== 'client' && <ProjectMemorySection key={selectedProject.id} projectId={selectedProject.id} />}
                 {/* How far Alpha fixes a stuck build on its own: the team's setting, never shown to clients. */}
-                {showAi && role !== 'client' && orchestrationSettings?.autonomy && (
+                {showBuildSettings && orchestrationSettings?.autonomy && (
                   <ProjectAutonomySection key={selectedProject.id} projectId={selectedProject.id} settings={orchestrationSettings}
                     canEdit={canEditProjects} onSaved={setOrchestrationSettings} />
                 )}
-                {showAi && orchestrationSettings && !orchestrationSettings.available && (
+                {showBuildSettings && orchestrationSettings && !orchestrationSettings.available && (
                   <p role="status" className="rounded-xl border border-status-warning-border bg-status-warning-subtle p-3 text-status-warning">
                     Builds cannot run on this desktop: {orchestrationSettings.reason ?? 'the build service is unavailable.'}
                   </p>

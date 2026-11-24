@@ -23,11 +23,22 @@ export function resolvedWithoutYouSummary(items: readonly ResolvedWithoutYouItem
   return pending ? `${fixed} (${pending} still being checked)` : fixed;
 }
 
+const encodePath = (value: string) => value.split('/').map(encodeURIComponent).join('/');
+
+/**
+ * The cited file on GitHub at the commit Alpha checked the quote against, or nothing when that
+ * commit is unknown: a link to another version could show different text than Alpha relied on.
+ */
+export function evidenceLink(evidence: ResolvedWithoutYouEvidence): string | undefined {
+  if (evidence.source !== 'repository' || !evidence.commit || !/^[0-9a-f]{40,64}$/i.test(evidence.commit)) return undefined;
+  return githubLink(`https://github.com/${encodePath(evidence.repository)}/blob/${evidence.commit}/${encodePath(evidence.path)}`);
+}
+
 function EvidenceLine({ evidence }: { evidence: ResolvedWithoutYouEvidence }) {
   if (evidence.source === 'product_picture') {
-    return <li className="break-words"><span className="font-medium text-content-secondary">Your product decision:</span> “{evidence.quote}”</li>;
+    return <li className="break-words"><span className="font-medium text-content-secondary">Product record:</span> “{evidence.quote}”</li>;
   }
-  const url = githubLink(`https://github.com/${evidence.repository}/blob/HEAD/${evidence.path}`);
+  const url = evidenceLink(evidence);
   return <li className="break-words">
     <span className="font-mono text-[10px] text-link">{evidence.repository.split('/').pop()} · {evidence.path}</span>
     {url && <a href={url} target="_blank" rel="noopener noreferrer" className="ml-1.5 inline-flex items-center gap-0.5 text-[10px] font-medium text-link hover:text-link-hover">
