@@ -21,6 +21,7 @@ import {
 import { CreateProjectModal } from '@/features/projects/CreateProjectModal';
 import { ProjectResourcesPanel } from '@/features/projects/ProjectResourcesPanel';
 import { ProjectMemorySection } from '@/features/projects/ProjectMemorySection';
+import { ProjectAutonomySection } from '@/features/projects/ProjectAutonomySection';
 import { IssuesView } from '@/features/issues/IssuesView';
 import { ProjectRepositoryView } from '@/features/projects/repository/ProjectRepositoryView';
 import { ProjectClientPreviewPanel } from '@/features/projects/ProjectClientPreviewPanel';
@@ -28,17 +29,10 @@ import { ProjectBuildReviewView } from '@/features/project-build-review/ProjectB
 import { PmProjectQaStudio } from '@/features/ticketing/PmProjectQaStudio';
 import { useProjectRepos } from '@/features/projects/repository/useProjectRepos';
 import { deriveProjectKey } from '@/features/projects/useProjectsViewModel';
-import { Project, ProjectStatus, ProjectPriority } from '@/shared/types';
+import { Project, ProjectStatus, ProjectPriority, type ProjectOrchestrationSettings } from '@/shared/types';
 import { Modal } from '@/shared/components/Modal';
 import { apiService } from '@/shared/services/apiService';
 import { aiFeaturesEnabled } from '@/config/features';
-
-type ProjectOrchestrationSettings = {
-  enabled: boolean;
-  available: boolean;
-  localOnly: true;
-  reason?: string;
-};
 
 interface ProjectsViewProps {
   /** Opens the full create-issue dialog, which App owns. */
@@ -67,6 +61,8 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
   const canProvisionRepositories = can('provision_repositories');
   const canManageIssues = can('manage_issues');
   const showAi = aiFeaturesEnabled(role);
+  /** Build settings and whether builds run here are the team's; a client is told nothing about them. */
+  const showBuildSettings = showAi && can('view_runs');
 
   // Selected Project for dedicated Workspace Kanban View
   const [selectedProjectId, setSelectedProjectId] = useTabSessionState<string | null>('projects.selectedProject', null);
@@ -109,7 +105,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
 
   useEffect(() => {
     let current = true;
-    if (!selectedProject || !showAi) {
+    if (!selectedProject || !showBuildSettings) {
       setOrchestrationSettings(null);
       return () => { current = false; };
     }
@@ -122,7 +118,7 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
         }
       })
     return () => { current = false; };
-  }, [selectedProject?.id, showAi]);
+  }, [selectedProject?.id, showBuildSettings]);
 
   // GitHub repositories the API can read for this project. Given the attached
   // repositories so one created a moment ago shows up without a reload.
@@ -335,7 +331,12 @@ export const ProjectsView: React.FC<ProjectsViewProps> = ({ onOpenNewIssue }) =>
                 </section>
                 {/* What every agent reads first; for the project team, never clients. */}
                 {role !== 'client' && <ProjectMemorySection key={selectedProject.id} projectId={selectedProject.id} />}
-                {showAi && orchestrationSettings && !orchestrationSettings.available && (
+                {/* How far Alpha fixes a stuck build on its own: the team's setting, never shown to clients. */}
+                {showBuildSettings && orchestrationSettings?.autonomy && (
+                  <ProjectAutonomySection key={selectedProject.id} projectId={selectedProject.id} settings={orchestrationSettings}
+                    canEdit={canEditProjects} onSaved={setOrchestrationSettings} />
+                )}
+                {showBuildSettings && orchestrationSettings && !orchestrationSettings.available && (
                   <p role="status" className="rounded-xl border border-status-warning-border bg-status-warning-subtle p-3 text-status-warning">
                     Builds cannot run on this desktop: {orchestrationSettings.reason ?? 'the build service is unavailable.'}
                   </p>

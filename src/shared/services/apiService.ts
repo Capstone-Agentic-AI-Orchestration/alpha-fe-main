@@ -79,7 +79,9 @@ import {
   HealthResult,
   HostingEnvList,
   EnvChangeResult,
-  RepoDeletionResult
+  RepoDeletionResult,
+  ProjectOrchestrationAutonomy,
+  ProjectOrchestrationSettings
 } from '@/shared/types';
 
 import { API_BASE, LOCAL_TOKEN } from '@/shared/config';
@@ -668,15 +670,24 @@ export const apiService = {
     return fetchJson<Project[]>('/projects');
   },
 
-  /** Local executor capability and always-on desktop project orchestration. */
+  /**
+   * Local executor capability and always-on desktop project orchestration, plus (for the team only)
+   * how far Alpha resolves a stuck build on its own.
+   */
   getProjectOrchestrationSettings: (projectId: string) =>
-    fetchJson<{ enabled: boolean; available: boolean; localOnly: true; reason?: string }>(
+    fetchJson<ProjectOrchestrationSettings>(
       `/projects/${encodeURIComponent(projectId)}/orchestration-settings`
     ),
   setProjectOrchestrationEnabled: (projectId: string, enabled: boolean) =>
-    fetchJson<{ enabled: boolean; available: boolean; localOnly: true; reason?: string }>(
+    fetchJson<ProjectOrchestrationSettings>(
       `/projects/${encodeURIComponent(projectId)}/orchestration-settings`,
       { method: 'PUT', body: JSON.stringify({ enabled }) }
+    ),
+  /** Change how far Alpha resolves a stuck build on its own, and the project's extra sensitive paths. */
+  setProjectOrchestrationAutonomy: (projectId: string, change: { autonomy?: ProjectOrchestrationAutonomy; sensitivePaths?: string[] }) =>
+    fetchJson<ProjectOrchestrationSettings>(
+      `/projects/${encodeURIComponent(projectId)}/orchestration-settings`,
+      { method: 'PUT', body: JSON.stringify(change) }
     ),
 
   createProject: async (project: Partial<Project>): Promise<Project> => {

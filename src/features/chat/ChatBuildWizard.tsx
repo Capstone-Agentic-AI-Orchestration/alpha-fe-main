@@ -336,11 +336,13 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
       case 'blocked':
       case 'recovery_required':
       {
-        title = build.status === 'paused' ? 'Build paused' : 'The build needs you';
+        const recovery = build.orchestration.recovery;
+        // While the Orchestrator looks into the stop, the build does not need the person yet.
+        if (build.status === 'paused') title = 'Build paused';
+        else title = recovery?.resolving ? 'Alpha is resolving this' : 'The build needs you';
         subtitle = buildRepositoriesLabel(build);
         const auditPlan = needsSecurityAuditPlan(build) && props.onAuditPlan;
         const choice = auditPlan ? null : continueChoice(build);
-        const recovery = build.orchestration.recovery;
         // Why "continue" is not offered, in the server's words, when no automatic step is safe.
         const noAutomaticStep = !choice && recovery
           ? recovery.actionReasons.provide_guidance ?? Object.values(recovery.actionReasons).find(Boolean)

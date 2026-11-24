@@ -204,6 +204,16 @@ describe('always-on desktop project orchestration', () => {
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('PUT');
     expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({ enabled: true });
   });
+
+  it('sends only the autonomy change, so the always-on switch is untouched', async () => {
+    const settings = { enabled: true, available: true, localOnly: true as const, autonomy: 'strict' as const, sensitivePaths: ['src/billing/**'] };
+    const fetchMock = vi.fn().mockResolvedValue(json(settings));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(apiService.setProjectOrchestrationAutonomy('project-1', { autonomy: 'strict', sensitivePaths: ['src/billing/**'] })).resolves.toEqual(settings);
+    expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe('PUT');
+    expect(JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string)).toEqual({ autonomy: 'strict', sensitivePaths: ['src/billing/**'] });
+  });
 });
 
 describe('task workflow controls', () => {
