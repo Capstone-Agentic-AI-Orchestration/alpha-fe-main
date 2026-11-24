@@ -32,7 +32,7 @@
 .pqa-device .pqa-screen { border-radius:16px; }
 .pqa-empty { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; width:100%; max-width:460px; padding:34px; margin:auto; text-align:center; color:rgb(var(--ui-text-secondary)); }
 .pqa-empty :is(h3,p) { margin:0; line-height:1.6; }.pqa-empty h3 { color:rgb(var(--ui-text-primary)); font-size:15px; }
-.pqa-review { overflow-y:auto; overflow-x:hidden; padding:0 16px 20px; min-width:0; min-height:0; border-left:1px solid rgb(var(--ui-divider)); background:rgb(var(--ui-canvas)); }
+.pqa-review { overflow-y:auto; overflow-x:hidden; padding:14px 16px 20px; min-width:0; min-height:0; border-left:1px solid rgb(var(--ui-divider)); background:rgb(var(--ui-canvas)); }
 .pqa-panel-tabs { display:flex; position:sticky; top:0; z-index:1; gap:4px; padding:9px 0; margin-bottom:12px; border-bottom:1px solid rgb(var(--ui-divider)); background:rgb(var(--ui-canvas)); }
 .pqa-panel-tabs button { border:0; border-radius:0; flex:1; border-bottom:2px solid transparent; font-size:12px; }
 .pqa-panel-tabs button[aria-selected=true] { border-bottom-color:rgb(var(--ui-link)); color:rgb(var(--ui-link)); }
@@ -45,8 +45,10 @@
 .project-qa-studio fieldset { border:0; min-width:0; padding:0; margin:0; display:flex; flex-direction:column; gap:11px; }
 .pqa-draft { display:flex; flex-direction:column; gap:14px; }.pqa-draft fieldset { border-top:1px solid rgb(var(--ui-divider)); padding:12px 0; }.pqa-draft legend { padding-top:12px; font-weight:600; }
 .project-qa-studio label.pqa-checkbox { flex-direction:row; align-items:start; line-height:1.6; }.pqa-checkbox input { margin-top:4px; accent-color:rgb(var(--ui-link)); }
-.pqa-handoff,.pqa-submit { display:flex; flex-direction:column; gap:10px; margin:14px 0; padding:16px 0; border-top:1px solid rgb(var(--ui-divider)); }
-.pqa-handoff :is(h3,p),.pqa-submit p { margin:0; line-height:1.6; font-size:12px; }.pqa-submit span { color:rgb(var(--ui-text-muted)); font-size:11px; }
+.pqa-handoff,.pqa-submit { display:flex; flex-direction:column; gap:10px; }
+.pqa-handoff { margin-bottom:16px; }
+.pqa-submit { margin:14px 0; padding:16px 0; border-top:1px solid rgb(var(--ui-divider)); }
+.pqa-handoff p,.pqa-submit p { margin:0; line-height:1.6; font-size:12px; }.pqa-submit span { color:rgb(var(--ui-text-muted)); font-size:11px; }
 .pqa-success,.pqa-saved { color:rgb(var(--ui-link)); font-size:11px; }.pqa-saved { display:block; margin-top:8px; }
 .pqa-error { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:10px; padding:12px; border:1px solid rgb(var(--ui-status-danger-border)); border-radius:6px; color:rgb(var(--ui-status-danger)); font-size:12px; }
 .pqa-history li { display:flex; flex-direction:column; gap:5px; padding:12px 0; border-bottom:1px solid rgb(var(--ui-divider)); }.pqa-history span { color:rgb(var(--ui-text-muted)); font-size:11px; }
@@ -54,7 +56,12 @@
 .pqa-evidence { display:flex; flex-direction:column; gap:8px; margin-top:10px; }.pqa-evidence img { display:block; width:100%; height:auto; max-height:440px; object-fit:contain; }
 .pqa-upload,.pqa-triage { display:flex; flex-direction:column; gap:10px; padding-top:14px; margin-top:10px; border-top:1px solid rgb(var(--ui-divider)); }
 .pqa-triage h4 { margin:0; font-size:12px; }
-.project-qa-studio .project-client-preview-panel { min-width:0; }.project-qa-studio .project-client-feedback-heading h3 { font-size:14px; }.project-qa-studio .project-client-feedback-heading p { color:rgb(var(--ui-text-secondary)); font-size:12px; }
+.project-qa-studio .project-client-preview-panel { min-width:0; }
+.project-qa-studio .project-client-feedback-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.project-qa-studio .project-client-feedback-heading > div { min-width:0; overflow-wrap:anywhere; }
+.project-qa-studio .project-client-feedback-heading > button { flex:none; }
+.project-qa-studio .project-client-feedback-heading h3 { font-size:14px; }
+.project-qa-studio .project-client-feedback-heading p { color:rgb(var(--ui-text-secondary)); font-size:12px; }
 .project-qa-studio .project-client-message { padding:10px; border-bottom:1px solid rgb(var(--ui-divider)); font-size:12px; }.project-qa-studio .project-client-message p { white-space:pre-wrap; overflow-wrap:anywhere; }.project-qa-studio .project-client-message time { color:rgb(var(--ui-text-muted)); font-size:10px; }
 .project-qa-studio .project-client-composer { display:flex; flex-direction:column; gap:10px; padding-top:15px; }.project-qa-studio .project-client-composer label { display:none; }
 .project-qa-studio .client-feedback { min-width:0; }.project-qa-studio .client-section-heading { flex-wrap:wrap; }.project-qa-studio .client-feedback-composer > div { flex-wrap:wrap; }
