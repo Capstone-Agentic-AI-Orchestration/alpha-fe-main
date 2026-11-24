@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
-  Download, ExternalLink, FileCode2, GitBranch, GitPullRequest, Info, KeyRound,
-  LayoutDashboard, MonitorPlay, PlayCircle, ScrollText, ShieldCheck, type LucideIcon
+  Download, ExternalLink, FileCode2, GitBranch, GitPullRequest, KeyRound,
+  LayoutDashboard, PlayCircle, ScrollText, Settings, ShieldCheck, type LucideIcon
 } from 'lucide-react';
 
 import { useApp, useTabSessionState } from '@/app/AppContext';
@@ -10,13 +10,12 @@ import { RepoBranch, RepoPullRequest } from '@/shared/types';
 import { BranchSwitcher } from './BranchSwitcher';
 import { CloneToComputerDialog, canCloneToComputer } from './CloneToComputerDialog';
 import { RepoFileBrowser } from './RepoFileBrowser';
-import { RepoHostingPanel } from './RepoHostingPanel';
-import { RepoLogsTab, RepoPreviews } from './RepoPreviews';
+import { RepoLogsTab } from './RepoLogsTab';
 import { RepoEnvEditor } from './RepoEnvEditor';
 import { RepoPullsList } from './RepoPullsList';
 import { ProjectActionsView } from './ProjectActionsView';
 import { defaultBranch } from './repoFormat';
-import { REPO_TABS, isRepoTab, tabForKey, type RepoTab } from './repoTabs';
+import { REPO_TABS, resolveRepoTab, tabForKey, type RepoTab } from './repoTabs';
 import { SectionError, SectionLoading } from './SectionState';
 import { useRepoResource, type RepoResource } from './useRepoResource';
 
@@ -29,29 +28,30 @@ interface ProjectRepositoryViewProps {
   overview: React.ReactNode;
   /** Place the existing tab controls alongside the project's title and actions. */
   renderHeader?: (tabs: React.ReactNode) => React.ReactNode;
-  /** The project's properties, ground rules and repositories, in their own tab. */
-  details?: React.ReactNode;
+  /** The project's properties, ground rules and repositories. */
+  settings?: React.ReactNode;
   qaStudio?: React.ReactNode;
   onManageRepositories?: () => void;
 }
 
-type RepositoryTab = Exclude<RepoTab, 'overview'|'qa'|'details'>;
+type RepositoryTab = Exclude<RepoTab, 'overview' | 'runs' | 'qa' | 'settings'>;
 const shortName = (repo: string) => repo.split('/').pop() ?? repo;
 const TAB_ICONS: Record<RepoTab, LucideIcon> = {
-  overview: LayoutDashboard, details: Info, code: FileCode2, pulls: GitPullRequest,
-  runs: PlayCircle, previews: MonitorPlay, qa:ShieldCheck, logs: ScrollText, environment: KeyRound
+  overview: LayoutDashboard, code: FileCode2, pulls: GitPullRequest, runs: PlayCircle,
+  qa: ShieldCheck, logs: ScrollText, environment: KeyRound, settings: Settings
 };
 
 /** Project tasks and repository tools share one navigation row and the full page width. */
 export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
-  projectId, repositories, repositoriesLoading = false, overview, details, qaStudio, onManageRepositories, initialRepository, onInitialRepositoryApplied, renderHeader
+  projectId, repositories, repositoriesLoading = false, overview, settings, qaStudio, onManageRepositories, initialRepository, onInitialRepositoryApplied, renderHeader
 }) => {
   const { role, can, isActiveTab, activeWorkspaceId, identity } = useApp();
   const [storedTab, setStoredTab] = useTabSessionState<RepoTab>(`projects.workspaceTab:${projectId}`, 'overview');
-  const tab = isRepoTab(storedTab) && (storedTab!=='qa'||qaStudio) && (storedTab!=='details'||details) ? storedTab : 'overview';
-  const visibleTabs=REPO_TABS.filter(item=>(item.id!=='qa'||qaStudio)&&(item.id!=='details'||details));
+  const storedSection = resolveRepoTab(storedTab);
+  const visibleTabs = REPO_TABS.filter(item => (item.id !== 'qa' || qaStudio) && (item.id !== 'settings' || settings));
+  const tab = visibleTabs.some(item => item.id === storedSection) ? storedSection : 'overview';
   /** Tabs that show one repository's tools, with the repository picker above them. */
-  const repoSection = tab !== 'overview' && tab !== 'qa' && tab !== 'details';
+  const repoSection = tab !== 'overview' && tab !== 'qa' && tab !== 'settings';
   const [qaOpened,setQaOpened]=useState(tab==='qa');
   useEffect(()=>{if(tab==='qa')setQaOpened(true);},[tab]);
   const [selectedRepo, setSelectedRepo] = useState<string | null>(repositories[0] ?? null);
@@ -65,7 +65,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
   const repo = requestedRepository ?? (selectedRepo && repositories.includes(selectedRepo) ? selectedRepo : repositories[0] ?? null);
   useEffect(() => {
     if (!initialRepository) return;
-    setStoredTab('previews');
+    setStoredTab('environment');
     if (!requestedRepository) return;
     setSelectedRepo(requestedRepository);
     onInitialRepositoryApplied?.();
@@ -148,9 +148,9 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
         hidden={tab !== 'overview'} className={tab === 'overview' ? 'min-h-0 flex-1' : 'hidden'}>
         {overview}
       </div>
-      {details && <div id={panelId('details')} role="tabpanel" aria-labelledby={tabId('details')}
-        hidden={tab !== 'details'} className={tab === 'details' ? 'min-h-0 flex-1 overflow-y-auto p-4 sm:p-5' : 'hidden'}>
-        {details}
+      {settings && <div id={panelId('settings')} role="tabpanel" aria-labelledby={tabId('settings')}
+        hidden={tab !== 'settings'} className={tab === 'settings' ? 'min-h-0 flex-1 overflow-y-auto p-4 sm:p-5' : 'hidden'}>
+        {settings}
       </div>}
       {qaStudio&&<div id={panelId('qa')} role="tabpanel" aria-labelledby={tabId('qa')}
         hidden={tab!=='qa'} className={tab==='qa'?'min-h-0 flex-1 overflow-auto p-4 sm:p-5':'hidden'}>
@@ -166,7 +166,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
 
       {repoSection && (!repo || repositoryPending) && (
         <div id={panelId(tab)} role="tabpanel" aria-labelledby={tabId(tab)} className="min-h-0 flex-1 overflow-y-auto p-5" tabIndex={0}>
-          {repositoriesLoading || repositoryPending ? <SectionLoading label={repositoryPending ? "Connecting the new repository and opening its preview…" : "Loading repositories…"} /> : (
+          {repositoriesLoading || repositoryPending ? <SectionLoading label={repositoryPending ? 'Connecting the new repository…' : 'Loading repositories…'} /> : (
             <div className="rounded-xl border border-divider p-8 text-center">
               <GitBranch className="mx-auto h-6 w-6 text-content-muted" aria-hidden />
               <h2 className="mt-3 text-sm font-semibold text-content">No accessible repositories</h2>
@@ -192,7 +192,7 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
           </a>
           <RepoPanel
             key={`${projectId}|${repo}`} projectId={projectId} repo={repo}
-            tab={tab === 'overview' || tab === 'runs' || tab === 'qa' || tab === 'details' ? null : tab} idBase={idBase}
+            tab={repoSection && tab !== 'runs' ? tab : null} idBase={idBase}
             canSetUpHosting={can('manage_deployments')}
             canManagePreviewEnv={can('manage_preview_env')}
           />
@@ -228,7 +228,6 @@ const RepoPanel: React.FC<{
   useEffect(() => {
     if (tab) setVisited(current => current.has(tab) ? current : new Set(current).add(tab));
   }, [tab]);
-  const hostingRef = useRef<HTMLDivElement>(null);
   const branchPicker = (section: RepositoryTab) => (
     <BranchSwitcher id={`${idBase}-branch-${section}`} branches={branchList} value={branch}
       onChange={setBranch} disabled={branches.loading && !branches.data} />
@@ -241,20 +240,12 @@ const RepoPanel: React.FC<{
       </BranchGate>
     ),
     pulls: () => <RepoPullsList repo={repo} pulls={pulls} />,
-    runs: () => null,
-    previews: () => (
-      <>
-        <div ref={hostingRef}><RepoHostingPanel projectId={projectId} repo={repo} canManage={canSetUpHosting} /></div>
-        <RepoPreviews projectId={projectId} repo={repo} active={tab === 'previews'}
-          onOpenHosting={() => hostingRef.current?.scrollIntoView({ block: 'start' })} />
-      </>
-    ),
     logs: () => <RepoLogsTab projectId={projectId} repo={repo} active={tab === 'logs'} />,
     environment: () => <RepoEnvEditor projectId={projectId} repo={repo} canManageMain={canSetUpHosting} canManagePreview={canManagePreviewEnv} />
   };
   return (
     <>
-      {REPO_TABS.map(({ id }) => id !== 'overview' && id!=='qa' && id !== 'details' && (visited.has(id) || tab === id) ? (
+      {REPO_TABS.map(({ id }) => id !== 'overview' && id !== 'runs' && id !== 'qa' && id !== 'settings' && (visited.has(id) || tab === id) ? (
         <div key={id} id={`${idBase}-panel-${id}`} role="tabpanel" aria-labelledby={`${idBase}-tab-${id}`}
           hidden={id !== tab} tabIndex={0} className={id === tab ? 'space-y-4 focus:outline-none' : 'hidden'}>
           {content[id]()}

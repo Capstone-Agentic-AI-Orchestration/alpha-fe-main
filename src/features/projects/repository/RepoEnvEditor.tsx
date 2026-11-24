@@ -3,6 +3,7 @@ import { ClipboardPaste, KeyRound, Loader2, Lock, Plus, Trash2, X } from 'lucide
 
 import { apiService } from '@/shared/services/apiService';
 import type { EnvChangeResult, HostingEnvList, PipelineBranch } from '@/shared/types';
+import { RepoHostingPanel } from './RepoHostingPanel';
 import { envKeyProblem, envRowsProblem, parseEnvText, type EnvRow } from './envRules';
 import { describeRepoError } from './repoFormat';
 import { RefreshButton, RepoSection, SectionEmpty, SectionError, SectionLoading } from './SectionState';
@@ -15,7 +16,7 @@ const inputClass =
   'min-w-0 rounded-md border border-divider bg-well px-2 py-1 font-mono text-[11px] text-content placeholder:text-content-muted focus:border-control focus:outline-none';
 
 /**
- * A hosted repository's environment variables, per environment.
+ * Hosting and environment variables for one repository.
  *
  * Values are write-only: typed or pasted here, sent once to the server in a
  * request body, stored by the platform as secret, and never shown again --
@@ -34,7 +35,8 @@ export const RepoEnvEditor: React.FC<{
   const environment = data?.environments.includes(selected) ? selected : data?.environments[0] ?? 'main';
   const canWrite = environment === 'main' ? canManageMain : canManagePreview;
 
-  return (
+  return <>
+    <RepoHostingPanel projectId={projectId} repo={repo} canManage={canManageMain} onHostingChanged={env.reload} />
     <RepoSection
       id={`repo-env-${repo}`}
       title="Variables"
@@ -78,7 +80,7 @@ export const RepoEnvEditor: React.FC<{
         </>
       )}
     </RepoSection>
-  );
+  </>;
 };
 
 const EnvironmentPanel: React.FC<{

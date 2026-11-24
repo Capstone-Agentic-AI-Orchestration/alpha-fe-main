@@ -1,14 +1,13 @@
 /** The sections of a project's workspace, one per tab, in the order they are shown. */
 export const REPO_TABS = [
   { id: 'overview', label: 'Board' },
-  { id: 'details', label: 'Details' },
   { id: 'code', label: 'Code' },
   { id: 'pulls', label: 'Pull requests' },
   { id: 'runs', label: 'Pipeline runs' },
-  { id: 'previews', label: 'Previews' },
   { id: 'qa', label: 'Review' },
   { id: 'logs', label: 'Logs' },
-  { id: 'environment', label: 'Environment' }
+  { id: 'environment', label: 'Environment' },
+  { id: 'settings', label: 'Settings' }
 ] as const;
 
 export type RepoTab = (typeof REPO_TABS)[number]['id'];
@@ -17,6 +16,13 @@ const IDS: readonly RepoTab[] = REPO_TABS.map(tab => tab.id);
 
 export function isRepoTab(value: unknown): value is RepoTab {
   return typeof value === 'string' && (IDS as readonly string[]).includes(value);
+}
+
+/** Keep open project tabs useful after the navigation changes. */
+export function resolveRepoTab(value: unknown): RepoTab {
+  if (value === 'details') return 'settings';
+  if (value === 'previews') return 'environment';
+  return isRepoTab(value) ? value : 'overview';
 }
 
 /**

@@ -70,7 +70,7 @@ const HostingSummary: React.FC<{ hosting: HostingStatus }> = ({ hosting }) => {
         </p>
       )}
 
-      <p className="text-[11px] text-content-muted">See the Hosting panel in the project’s Previews tab.</p>
+      <p className="text-[11px] text-content-muted">See the Hosting panel under Environment in the project.</p>
     </div>
   );
 };
