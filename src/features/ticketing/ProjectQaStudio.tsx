@@ -37,7 +37,10 @@ const PREVIEW_TEXT={
 type PreviewText=typeof PREVIEW_TEXT[keyof typeof PREVIEW_TEXT];
 
 /** `emptyAction` shows beneath the "nothing shared yet" message, such as a way to ask for a preview. */
-export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=false,emptyAction}:{preview:Preview|null;version?:string;audience?:'pm'|'client';toolbarEnd?:ReactNode;pending?:boolean;emptyAction?:ReactNode}) {
+export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=false,emptyAction,onRefresh,refreshDisabled=false}:Readonly<{
+  preview:Preview|null;version?:string;audience?:'pm'|'client';toolbarEnd?:ReactNode;pending?:boolean;emptyAction?:ReactNode;
+  onRefresh?:()=>void;refreshDisabled?:boolean;
+}>) {
   const client=audience==='client';
   const text=client?PREVIEW_TEXT.client:PREVIEW_TEXT.pm;
   const [device,setDevice]=useState<Device>(()=>initialDevice(client));
@@ -48,15 +51,21 @@ export function QaPreview({preview,version,audience='pm',toolbarEnd,pending=fals
   const safe=preview&&isEmbeddablePreviewUrl(preview.url)?preview:null;
   const frameKey=safe?safe.url+':'+reload+':'+(device==='desktop'?'desktop':'device'):'';
   const screen=safe?.embeddable?<PreviewFrame key={frameKey} url={safe.url} title={text.frame} viewport={viewport}/>:null;
+  const refreshButton=<button type="button" className={onRefresh?'pqa-refresh-review':undefined}
+    disabled={onRefresh?refreshDisabled:!safe} aria-label={onRefresh?'Refresh project review':text.reload}
+    onClick={()=>{setReload(value=>value+1);onRefresh?.();}}>
+    <RefreshCw size={15} aria-hidden="true"/>{onRefresh&&'Refresh'}
+  </button>;
   return <section className="pqa-preview" aria-label={text.section}>
     <div className="pqa-toolbar">{!client&&<><span className="pqa-env">{text.label}</span>{version&&<span>{version}</span>}</>}
       <div className="pqa-devices" role="group" aria-label="Preview device">
         {DEVICES.map(([value,Icon])=><button key={value} type="button" disabled={!safe}
           aria-label={label(value)+' preview'} aria-pressed={device===value} onClick={()=>setDevice(value)}><Icon size={15}/></button>)}
       </div>
-      <button type="button" disabled={!safe} aria-label={text.reload} onClick={()=>setReload(value=>value+1)}><RefreshCw size={15}/></button>
+      {!onRefresh&&refreshButton}
       {safe&&<a href={safe.url} target="_blank" rel="noopener noreferrer">Open preview <ExternalLink size={13}/></a>}
       {screen&&<span className="pqa-size">{sizeLabel(viewport)}</span>}
+      {onRefresh&&refreshButton}
       {toolbarEnd&&<div className="pqa-toolbar-end">{toolbarEnd}</div>}
     </div>
     <div ref={stage} className="pqa-stage" data-device={device}>

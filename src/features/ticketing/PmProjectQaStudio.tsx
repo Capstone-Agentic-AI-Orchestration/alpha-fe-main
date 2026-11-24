@@ -1,6 +1,6 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react';
+import { ExternalLink, ShieldCheck } from 'lucide-react';
 import { pmTicketApi, type PmProjectClientPreview } from './pmApi';
 import { pmProjectQaApi } from './pmProjectQaApi';
 import { qaError, type QaBuild } from './projectQaApi';
@@ -53,18 +53,16 @@ export function PmProjectQaStudio({projectId,projectName,feedback}:{projectId:st
     :shared&&!repository?{branch:'uat' as const,url:shared.url,embeddable:true,reason:null}:null;
 
   return <section className="project-qa-studio" aria-label={`${projectName} Project Review`}>
-    <header className="pqa-heading"><div><p>PROJECT REVIEW</p><h2>{projectName}</h2><span>Test the UAT build, share it with your client, then talk it through.</span></div>
-      <button type="button" disabled={busy} onClick={()=>setRefresh(value=>value+1)}><RefreshCw size={14}/> Refresh</button></header>
     <Notice error={error}/>
-    {loading&&!targets.length&&!clients.length?<LoadingRows label="Loading this project’s review" layout="detail" />:<>
+    {loading&&refresh===0&&!targets.length&&!clients.length?<LoadingRows label="Loading this project’s review" layout="detail" />:<>
       <div className="pqa-setup"><label>UAT frontend<select value={repository} disabled={busy} onChange={event=>{setRepository(event.target.value);setError('');}}>
         <option value="">Choose this project’s frontend</option>{targets.map(item=><option key={item.repository}>{item.repository}</option>)}</select></label>
         <label>Client conversation<select value={clientId} disabled={busy} onChange={event=>setClientId(event.target.value)}><option value="">Choose a client</option>
           {clients.map(client=><option key={client.clientId} value={client.clientId}>{client.displayName}</option>)}</select></label>
       </div>
       {!loading&&!error&&!targets.length&&<p className="pqa-hint">Attach a hosted frontend repository to this project to preview its UAT build.</p>}
-      {!loading&&!error&&!clients.length&&<p className="pqa-hint">No client has access to this project yet. Link one of their requests to it to start a conversation.</p>}
-      <div className="pqa-workspace"><QaPreview preview={preview} version={state==='current'?'Shared with client':'Internal PM preview'} pending={buildPending}/>
+      <div className="pqa-workspace"><QaPreview preview={preview} version={state==='current'?'Shared with client':'Internal PM preview'} pending={buildPending}
+        onRefresh={()=>setRefresh(value=>value+1)} refreshDisabled={busy||loading}/>
         <aside className="pqa-review" aria-label="Project review controls">
           <div className="pqa-handoff"><ShieldCheck size={20}/><h3>Client preview</h3>
             {shared?<p>Shared with this project’s clients: <a href={shared.url} target="_blank" rel="noopener noreferrer">{shared.repository} · {shared.branch} <ExternalLink size={12}/></a></p>

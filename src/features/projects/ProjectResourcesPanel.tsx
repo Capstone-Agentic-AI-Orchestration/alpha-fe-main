@@ -58,8 +58,8 @@ interface ProjectResourcesPanelProps {
    * remains available to callers that can edit project resources.
    */
   canCreateRepository?: boolean;
-  /** Called after provisioning so the project can open the new repository's preview. */
-  onRepositoryCreated?: (repositories: string[], previewRepository: string) => void;
+  /** Called after provisioning so the project can open the new repository's hosting settings. */
+  onRepositoryCreated?: (repositories: string[], hostingRepository: string) => void;
   /** Lets an owning modal prevent dismissal while GitHub is creating a repo. */
   onProvisioningChange?: (busy: boolean) => void;
 }
@@ -186,24 +186,22 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
       if (!orgLocked) onOrgChange?.(org);
       setGhRepoName('');
       setGhResults(created);
-      const previewRepo = isPaired
+      const hostingRepo = isPaired
         ? created.find((repo, index) => ['react', 'nextjs'].includes(pairedStack(repo, index))) ?? created[1] ?? created[0]
         : created[0];
-      if (previewRepo) {
-        onRepositoryCreated?.(created.map(repo => repo.nameWithOwner), previewRepo.nameWithOwner);
+      if (hostingRepo) {
+        onRepositoryCreated?.(created.map(repo => repo.nameWithOwner), hostingRepo.nameWithOwner);
       }
-      const previewHosting = previewRepo?.hosting;
-      const toastDescription = !ghDeploy
-        ? 'Open Hosting in the repository overview to set up a live preview.'
-        : previewHosting?.state === 'unavailable' || previewHosting?.state === 'failed'
-          ? `${previewHosting.error ?? 'Hosting needs attention.'} Open the repository overview to review hosting.`
-          : onRepositoryCreated
-            ? 'Opening the Preview tab. The first deployment may take a few minutes to become live.'
-            : 'Open the project to review the new repository and its preview setup.';
+      const hosting = hostingRepo?.hosting;
+      const hostingFailed = hosting?.state === 'unavailable' || hosting?.state === 'failed';
+      const hostingNextStep = ghDeploy ? 'Check the first deployment under Environment → Hosting.' : 'Set up hosting under Environment → Hosting.';
+      const toastDescription = hostingFailed
+        ? `${hosting.error ?? 'Hosting needs attention.'} Review Hosting under Environment.`
+        : hostingNextStep;
       showToast(
-        created.length > 1 ? 'Repositories created — opening preview' : 'Repository created — opening preview',
+        created.length > 1 ? 'Repositories created' : 'Repository created',
         toastDescription,
-        previewHosting?.state === 'unavailable' || previewHosting?.state === 'failed' ? 'info' : 'success'
+        hostingFailed ? 'info' : 'success'
       );
     } catch (err) {
       // Surface the real reason — a name collision is the common case and the

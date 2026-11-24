@@ -109,6 +109,14 @@ describe('client project review presentation', () => {
 });
 
 describe('project review shared build', () => {
+  it('keeps a single review refresh in the preview toolbar, even before a build exists', () => {
+    const render = (refreshDisabled: boolean) => renderToStaticMarkup(<QaPreview preview={null}
+      onRefresh={() => undefined} refreshDisabled={refreshDisabled} />);
+    expect(render(false)).toMatch(/class="pqa-toolbar".*<button[^>]*class="pqa-refresh-review" aria-label="Refresh project review"/);
+    expect(render(false)).not.toContain('Reload UAT preview');
+    expect(render(true)).toContain('class="pqa-refresh-review" disabled="" aria-label="Refresh project review"');
+  });
+
   it('tells the PM whether clients see the current UAT build', () => {
     const build = { frontend: { repository: 'org/shop', branch: 'uat', deploymentId: 'd', commitSha: 'c', url: 'https://shop-new.vercel.app' } } as QaBuild;
     const shared = { repository: 'org/shop', branch: 'uat' as const, url: 'https://shop-old.vercel.app' };
