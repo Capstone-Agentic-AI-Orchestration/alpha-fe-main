@@ -11,7 +11,7 @@ import type { OpenInquiry } from './PmInquiriesPage';
 
 /**
  * A client's Overview, Conversations and Documents tabs. Display only: replies,
- * files and every decision still happen inside the request, in the Tickets tab.
+ * files and decisions stay with the individual request.
  */
 
 const TERMINAL = new Set(['closed', 'declined', 'cancelled']);
@@ -101,10 +101,11 @@ function OverviewSkeleton() {
 interface ActivityEntry { at: string; requestId: string; message: boolean; text: string }
 
 /** Open requests first (or all when none are open), those needing the PM on top, newest next. */
-function listedRequests(requests: PmTicketQueueItem[]): PmTicketQueueItem[] {
+function listedRequests(requests: PmTicketQueueItem[], includeOlder: boolean): PmTicketQueueItem[] {
   const open = requests.filter(isOpenRequest);
-  return (open.length ? open : requests).slice().sort((a, b) => Number(needsAttention(b)) - Number(needsAttention(a))
-    || Date.parse(b.internal.updatedAt) - Date.parse(a.internal.updatedAt)).slice(0, 6);
+  return (includeOlder || !open.length ? requests : open).slice().sort((a, b) => Number(isOpenRequest(b)) - Number(isOpenRequest(a))
+    || Number(needsAttention(b)) - Number(needsAttention(a))
+    || Date.parse(b.internal.updatedAt) - Date.parse(a.internal.updatedAt));
 }
 
 /** One line per request: its newest event, a message if that came last, otherwise its status. */
@@ -132,9 +133,11 @@ export function ClientOverview({ client, requests, conversations, onOpenRequest 
   conversations: PmClientConversation[] | null;
   onOpenRequest: (requestId: string) => void;
 }) {
+  const [showOlder, setShowOlder] = useState(false);
   if (!requests) return <OverviewSkeleton />;
   const open = requests.filter(isOpenRequest);
-  const listed = listedRequests(requests);
+  const ordered = listedRequests(requests, showOlder);
+  const listed = showOlder ? ordered : ordered.slice(0, 6);
   const activity = recentActivity(client, requests, conversations);
   const stats = [
     { label: 'Need you', value: client.tickets.needsPm, attention: client.tickets.needsPm > 0 },
@@ -152,7 +155,7 @@ export function ClientOverview({ client, requests, conversations, onOpenRequest 
       </div>)}
     </dl>
     <div className="grid items-start gap-x-10 gap-y-8 lg:grid-cols-[1.3fr_1fr]">
-      <Panel title={open.length ? 'Open requests' : 'Recent requests'}
+      <Panel title={showOlder ? 'Client requests' : open.length ? 'Open requests' : 'Recent requests'}
         caption={attentionCount ? `${attentionCount} ${attentionCount === 1 ? 'needs' : 'need'} you` : open.length ? 'Nothing needs you right now' : undefined}>
         {listed.length ? <ul>{listed.map(item => {
           const step = pmTicketNextAction(item.internal.nextAction);
@@ -166,6 +169,10 @@ export function ClientOverview({ client, requests, conversations, onOpenRequest 
             <time dateTime={item.internal.updatedAt} title={time(item.internal.updatedAt)} className="text-[11.5px] tabular-nums text-content-muted">{shortWhen(item.internal.updatedAt)}</time>
           </button></li>;
         })}</ul> : <Empty>This client has no requests yet.</Empty>}
+        {requests.length > listed.length || showOlder ? <Button type="button" variant="ghost" size="sm"
+          className="mt-2 px-0 text-link" onClick={() => setShowOlder(value => !value)}>
+          {showOlder ? 'Show fewer requests' : 'Show more requests'}
+        </Button> : null}
       </Panel>
       <Panel title="Recent activity">
         {activity.length ? <ul>{activity.map(entry => <li key={entry.requestId}>

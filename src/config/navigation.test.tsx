@@ -50,10 +50,10 @@ describe('existing navigation compatibility', () => {
     for (const role of ['client', 'dev', 'pm'] as const) expect(ROLE_NAV[role]).not.toContain('operations');
   });
   it.each(Object.keys(existing) as UserRole[])('preserves every existing %s destination and landing page', role => {
-    expect(ROLE_NAV[role].filter(tab => tab !== 'tickets')).toEqual(withoutHiddenChat(existing[role]));
+    expect(ROLE_NAV[role]).toEqual(withoutHiddenChat(existing[role]));
     expect(landingTab(role)).toBe(landing(role));
     const visible = sectionsFor(role).flatMap(group => group.items.map(item => item.id));
-    expect(visible.filter(tab => tab !== 'tickets')).toEqual(withoutHiddenChat(existingVisible[role]));
+    expect(visible).toEqual(withoutHiddenChat(existingVisible[role]));
     expect(visible.every(tab => ROLE_NAV[role].includes(tab))).toBe(true);
     expect(visible.length).toBe(new Set(visible).size);
   });

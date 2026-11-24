@@ -28,7 +28,7 @@ const ben: PmClientSummary = {
 const render = (props: Partial<PmClientsViewProps> = {}) => renderToStaticMarkup(<PmClientsView
   clients={[ana, ben]} error="" loading={false} search="" onSearch={() => undefined}
   selectedKey={null} onSelect={() => undefined} section="tickets" onSection={() => undefined}
-  knownProjectIds={new Set(['gh-repo-1'])} onRefresh={() => undefined} onOpenProject={() => undefined}
+  knownProjectIds={new Set(['gh-repo-1'])} onOpenProject={() => undefined}
   onOpenInquiries={() => undefined} renderTickets={key => <p>Tickets for {key}</p>}
   renderConversation={() => <p>Project conversation</p>} {...props} />);
 
@@ -203,8 +203,7 @@ describe('Polish', () => {
     expect(html).toContain('>Site<');
     expect(html).not.toContain('resort co');
   });
-  it('shows Refresh only when the page owns refreshing', () => {
-    expect(render()).toContain('Refresh clients');
-    expect(render({ onRefresh: undefined })).not.toContain('Refresh clients');
+  it('keeps client refresh in the workspace toolbar instead of the page header', () => {
+    expect(render()).not.toContain('Refresh clients');
   });
 });

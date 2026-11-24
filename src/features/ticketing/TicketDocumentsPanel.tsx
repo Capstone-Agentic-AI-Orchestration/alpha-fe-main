@@ -15,7 +15,7 @@ const primary = 'inline-flex items-center gap-1.5 rounded-lg bg-action px-3 py-2
 interface PendingUpload { file: File; replacesDocumentId: string | null; operationId: string }
 
 export function TicketDocumentsPanel({
-  api, scope, ticketId, canUpload, heading = 'Ticket documents', showTitle = true, showRefresh = true,
+  api, scope, ticketId, canUpload, heading = 'Ticket documents', showTitle = true, showRefresh = true, layout = 'card',
   refreshToken, emptyMessage = 'No documents have been added to this ticket.',
   readOnlyMessage = 'This ticket is closed or document changes are unavailable.',
 }: {
@@ -27,6 +27,7 @@ export function TicketDocumentsPanel({
   /** False inside a section that already shows the heading; it still names the panel for screen readers. */
   showTitle?: boolean;
   showRefresh?: boolean;
+  layout?: 'card' | 'inline';
   refreshToken?: string | number;
   emptyMessage?: string;
   readOnlyMessage?: string;
@@ -119,18 +120,19 @@ export function TicketDocumentsPanel({
     fileInput.current?.click();
   }
 
-  return <section className="ticket-documents-panel mt-4 min-w-0 max-w-full rounded-xl border border-divider bg-surface" aria-label={heading}>
-    <header className={`flex items-center gap-3 border-b border-divider px-4 py-3 ${showTitle ? 'justify-between' : 'justify-end'}`}>
+  const inline = layout === 'inline';
+  return <section className={`ticket-documents-panel min-w-0 max-w-full ${inline ? 'space-y-3' : 'mt-4 rounded-xl border border-divider bg-surface'}`} aria-label={heading}>
+    {(showTitle || showRefresh) && <header className={`flex items-center gap-3 ${inline ? '' : 'border-b border-divider px-4 py-3'} ${showTitle ? 'justify-between' : 'justify-end'}`}>
       {showTitle && <div className="flex items-center gap-2"><FileText size={15} className="text-link" /><h3 className="text-sm font-medium text-content">{heading}</h3></div>}
       {showRefresh && <button type="button" onClick={() => void refresh()} disabled={loading || busy} className={secondary} aria-label="Refresh ticket documents"><RefreshCw size={12} />Refresh</button>}
-    </header>
+    </header>}
 
-    {error && <p role="alert" className="mx-4 mt-3 rounded-md border border-status-danger-border bg-status-danger-subtle p-2.5 text-xs text-status-danger">{error}</p>}
-    {loading ? <LoadingRows label="Loading documents" rows={2} className="px-5" />
-      : groups.length === 0 ? <p className="p-5 text-center text-xs text-content-muted">{emptyMessage}</p>
+    {error && <p role="alert" className={inline ? 'text-xs text-status-danger' : 'mx-4 mt-3 rounded-md border border-status-danger-border bg-status-danger-subtle p-2.5 text-xs text-status-danger'}>{error}</p>}
+    {loading ? <LoadingRows label="Loading documents" rows={2} className={inline ? undefined : 'px-5'} />
+      : groups.length === 0 ? <p className={inline ? 'text-[13px] text-content-secondary' : 'p-5 text-center text-xs text-content-muted'}>{emptyMessage}</p>
         : <div className="divide-y divide-divider">
-          {groups.map(group => <div key={group.groupId} className="space-y-2 p-3">
-            {group.versions.map((document, index) => <article key={document.id} className="ticket-document-item flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 rounded-lg border border-divider bg-surface-raised p-3">
+          {groups.map(group => <div key={group.groupId} className={inline ? 'divide-y divide-divider' : 'space-y-2 p-3'}>
+            {group.versions.map((document, index) => <article key={document.id} className={`ticket-document-item flex min-w-0 max-w-full flex-wrap items-center justify-between gap-2 ${inline ? 'py-2' : 'rounded-lg border border-divider bg-surface-raised p-3'}`}>
               <div className="ticket-document-copy min-w-0 max-w-full flex-1">
                 <p title={document.filename} className="ticket-document-name truncate text-xs font-medium text-content">{document.filename}<span className="ml-2 text-xs font-normal text-content-muted">v{document.version}</span></p>
                 <p className="ticket-document-meta mt-1 text-xs text-content-muted">{document.author === 'pm' ? 'Project Manager' : 'Client'} · {new Date(document.createdAt).toLocaleString()}</p>
@@ -154,6 +156,6 @@ export function TicketDocumentsPanel({
       {file && <p className="ticket-document-selected-file break-all text-xs text-content-secondary">Selected: {file.name} · {(file.size / 1024).toFixed(1)} KB</p>}
       <div className="flex justify-end"><button type="submit" disabled={!file || busy || file.size < 1 || file.size > MAX_BYTES} className={primary}><Upload size={12} />{busy ? 'Working…' : pending ? 'Retry same upload' : replacementId ? 'Propose replacement' : 'Upload document'}</button></div>
     </form>}
-    {(!canUpload || !api.upload) && <p className="border-t border-divider px-4 py-3 text-center text-xs text-content-muted">{readOnlyMessage}</p>}
+    {(!canUpload || !api.upload) && <p className={inline ? 'text-xs text-content-muted' : 'border-t border-divider px-4 py-3 text-center text-xs text-content-muted'}>{readOnlyMessage}</p>}
   </section>;
 }

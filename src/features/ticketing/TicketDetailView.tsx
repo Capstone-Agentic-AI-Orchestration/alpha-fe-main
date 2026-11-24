@@ -34,7 +34,7 @@ export function TicketDetailView({ ticket, role, model, refresh, onBack, onExtra
   const inquiryAction = ticket.status === 'Received' ? 'Mark under review'
     : ticket.status === 'Under review' ? 'Issue client invitation' : null;
   return <section className="min-w-0 flex-1 overflow-y-auto p-5 md:p-7">
-    <button onClick={onBack} className="mb-5 inline-flex items-center gap-1.5 text-xs text-content-secondary hover:text-content"><ArrowLeft size={14} />{role === 'pm' ? 'All tickets' : 'My Tickets'}</button>
+    <button onClick={onBack} className="mb-5 inline-flex items-center gap-1.5 text-xs text-content-secondary hover:text-content"><ArrowLeft size={14} />{role === 'pm' ? 'Back' : 'My Tickets'}</button>
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div className="min-w-0"><div className="mb-2 flex flex-wrap items-center gap-2"><span className="font-mono text-xs text-content-muted">{ticket.reference}</span><TicketStatusBadge ticket={ticket} /></div>
         <h2 className="break-words text-xl font-semibold text-content">{ticket.title}</h2>

@@ -1,13 +1,10 @@
 import { useCallback, useId, useState, type ReactNode } from 'react';
-import { Check, ChevronDown, ClipboardCheck, Flag, Hammer, Inbox, ListChecks, Monitor, Sparkles } from 'lucide-react';
-import type { ClientProgressStep } from './clientProgressSteps';
+import { ChevronDown, Flag, ListChecks, Minus, Monitor, Plus } from 'lucide-react';
 import './pmTickets.css';
 
 /**
- * The PM's side panel beside a project conversation, laid out like the client's:
- * one scrolling column of cards (stage, preview, tickets, then the picked ticket),
- * with no tab strip. The client panel's classes and tokens stay on client pages; this
- * uses the staff theme with the same structure and spacing.
+ * The PM's scrollable side panel beside a project conversation.
+ * Ticket context comes first, followed by the project stage and preview.
  */
 
 const RAIL_STORAGE = 'alpha.pm.rail.';
@@ -42,41 +39,25 @@ export function PmRailCard({ icon, title, aside, children, label }: Readonly<{
 }
 
 /** A card the PM can fold away; its title is the toggle. */
-export function PmCollapsibleRailCard({ id, icon, title, aside, children, initiallyOpen = true }: Readonly<{
-  id: string; icon: ReactNode; title: ReactNode; aside?: ReactNode; children: ReactNode; initiallyOpen?: boolean;
+export function PmCollapsibleRailCard({ id, icon, title, aside, children, initiallyOpen = true, nested = false }: Readonly<{
+  id: string; icon: ReactNode; title: ReactNode; aside?: ReactNode; children: ReactNode; initiallyOpen?: boolean; nested?: boolean;
 }>) {
   const [open, setOpen] = usePmRailCollapsible(id, initiallyOpen);
   const bodyId = useId();
-  return <section className={'pm-rail-card is-collapsible' + (open ? ' is-open' : '')}>
-    <h2 className="pm-rail-card__head">
-      <button type="button" className="pm-rail-card__toggle" aria-expanded={open} aria-controls={bodyId} onClick={() => setOpen(!open)}>
+  const [mounted, setMounted] = useState(open);
+  const Heading = nested ? 'h3' : 'h2';
+  return <section className={'pm-rail-card is-collapsible' + (open ? ' is-open' : '') + (nested ? ' is-nested' : '')}>
+    <Heading className="pm-rail-card__head">
+      <button type="button" className="pm-rail-card__toggle" aria-expanded={open} aria-controls={bodyId} onClick={() => { if (!open) setMounted(true); setOpen(!open); }}>
         <span className="pm-rail-card__icon" aria-hidden="true">{icon}</span>
         <span className="pm-rail-card__title">{title}</span>
         {aside}
-        <ChevronDown size={16} aria-hidden="true" className="pm-rail-card__chevron" />
+        {nested ? <ChevronDown size={14} aria-hidden="true" className="pm-rail-card__chevron" />
+          : open ? <Minus size={16} aria-hidden="true" /> : <Plus size={16} aria-hidden="true" />}
       </button>
-    </h2>
-    <div id={bodyId} hidden={!open} className="pm-rail-card__body">{children}</div>
+    </Heading>
+    <div id={bodyId} hidden={!open} className="pm-rail-card__body">{mounted && children}</div>
   </section>;
-}
-
-const STEP_ICONS = [Inbox, ClipboardCheck, Hammer, Sparkles, Flag];
-const STATE_TEXT = { done: 'Complete', current: 'Now', upcoming: 'Not started' } as const;
-
-/** The ticket's five steps, drawn like the client's request progress; the client's turn is called out. */
-export function PmTicketProgress({ steps }: Readonly<{ steps: ClientProgressStep[] }>) {
-  if (steps.length === 0) return null;
-  return <ol aria-label="Ticket progress" className="pm-rail-steps">
-    {steps.map((step, index) => {
-      const Icon = step.state === 'done' ? Check : STEP_ICONS[index] ?? Flag;
-      return <li key={step.label} aria-current={step.state === 'current' ? 'step' : undefined}
-        className={'pm-rail-step is-' + step.state + (step.needsYou ? ' is-client' : '')}>
-        <span className="pm-rail-step__icon" aria-hidden="true"><Icon size={15} /></span>
-        <span className="pm-rail-step__label">{step.label}</span>
-        <span className="pm-rail-step__state">{step.needsYou ? 'Client’s turn' : STATE_TEXT[step.state]}</span>
-      </li>;
-    })}
-  </ol>;
 }
 
 export interface PmConversationRailProps {
@@ -86,15 +67,24 @@ export interface PmConversationRailProps {
   /** Whether a preview is shared with the client; undefined hides the card. */
   previewShared?: boolean;
   ticketsTitle: string;
-  /** The tickets checklist. */
+  /** Progress for the selected ticket, shown between the Tickets heading and its list. */
+  progress?: ReactNode;
   tickets: ReactNode;
-  /** The picked ticket's cards, or a hint to pick one. */
-  selected: ReactNode;
+  selected?: ReactNode;
 }
 
-/** Stage, preview, tickets, then the picked ticket, in one column. */
-export function PmConversationRail({ projectName, stage, previewShared, ticketsTitle, tickets, selected }: Readonly<PmConversationRailProps>) {
+/** Tickets first, followed by project-level context. */
+export function PmConversationRail({ projectName, stage, previewShared, ticketsTitle, progress, tickets, selected }: Readonly<PmConversationRailProps>) {
   return <aside className="pm-rail" aria-label={`Project tickets and details for ${projectName}`}>
+    <section className="pm-rail-tickets" aria-label="Tickets">
+      <h2 className="pm-rail-card__head">
+        <ListChecks size={16} className="pm-rail-card__icon" aria-hidden="true" />
+        <span>{ticketsTitle}</span>
+      </h2>
+      {progress}
+      {tickets}
+    </section>
+    {selected}
     {stage && <PmCollapsibleRailCard id="stage" icon={<Flag size={16} />} title={stage.title}>
       {stage.prompt && <p className="pm-rail-note is-attention">{stage.prompt}</p>}
       {stage.content}
@@ -105,7 +95,5 @@ export function PmConversationRail({ projectName, stage, previewShared, ticketsT
         ? 'The client can try the latest version you shared, beside this conversation.'
         : 'Nothing shared yet. Once you share a version, the client sees it beside this conversation.'}</p>
     </PmRailCard>}
-    <PmCollapsibleRailCard id="tickets" icon={<ListChecks size={16} />} title={ticketsTitle}>{tickets}</PmCollapsibleRailCard>
-    {selected}
   </aside>;
 }

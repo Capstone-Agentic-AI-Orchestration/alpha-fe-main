@@ -6,10 +6,11 @@ import { Select } from '@/shared/components/ui/select';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, pmTicketDocumentsApi, type PmClientProjectConversation, type PmClientSummary } from './pmApi';
 import { ProjectConversationChat, ProjectConversationView, useConversationJump, type ConversationAbout } from './ProjectConversationView';
-import { PmSelectedTicket } from './PmRequestContext';
+import { PmTicketsView, type WorkflowActions } from './PmTicketsView';
+import { PmSelectedTicket, PmTicketProgress, usePmRequestDetail } from './PmRequestContext';
 import { PmConversationRail } from './PmConversationRail';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
-import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
+import { canToggleRequest, withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
 import { REQUEST_TASK_LINKED_EVENT, linkSavedTaskToRequest } from './requestTaskLink';
 import { useProjectStage } from './useProjectStage';
 import { ProjectStageTracker } from './ProjectStageTracker';
@@ -89,7 +90,7 @@ function usePmProjectConversation(api: typeof pmTicketApi, projectId: string | n
 /** Why there is no conversation to show: no portal account yet, a load error, or no shared projects. */
 function conversationNotice(clientId: string | null, projectsError: string, projects: readonly PmClientProjectConversation[] | null): ReactNode {
   if (!clientId) return <p className="px-6 py-5 text-[13px] text-content-muted">
-    This client hasn’t set up a portal account yet, so there is no conversation. Their requests are in Tickets.</p>;
+    This client hasn’t set up a portal account yet, so there is no conversation. Open a request from the client overview.</p>;
   if (projectsError) return <p role="alert" className="px-6 py-5 text-[13px] text-status-danger">{projectsError}</p>;
   if (projects?.length === 0) return <div className="px-6 py-5 text-[13px] text-content-secondary">
     <p className="font-medium text-content">No project conversations yet</p>
@@ -135,18 +136,16 @@ function useAboutTarget(selected: ConversationAbout | null) {
 
 /**
  * A client's Conversation tab: one conversation per project the client can see.
- * The side panel keeps the request context tabs (overview, private notes,
- * details, documents) for the selected request and adds a Requests checklist,
- * where the PM creates a task for a request (or links an existing one); the
- * request's plan and result steps open from each request, beside the same conversation.
+ * The side panel expands the selected ticket beside the same project conversation,
+ * including task links, workflow actions, request details, private notes and documents.
  */
-export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, client, focus = null, onOpenRequestDetails,
+export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTicketDocumentsApi, client, focus = null, workflowActions,
   onBackToProjects, onCreateTask, tasksForProject, refreshToken }: Readonly<{
   api?: typeof pmTicketApi;
   documentsApi?: TicketDocumentsReadApi;
   client: PmClientSummary;
   focus?: PmConversationFocus | null;
-  onOpenRequestDetails: (ticketId: string) => void;
+  workflowActions: WorkflowActions;
   onBackToProjects?: () => void;
   /** Opens the New task dialog; absent where tasks cannot be made, as in the UI preview. */
   onCreateTask?: (draft: ConversationTaskDraft) => void;
@@ -164,6 +163,7 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const [linking, setLinking] = useState<string | null>(null);
   const [contextTicketId, setContextTicketId] = useState<string | null>(focus?.ticketId ?? null);
   const [contextVersion, setContextVersion] = useState(0);
+  const [replyKind, setReplyKind] = useState<PmReplyKind>('reply');
   const { items, requests, setRequests, error, load, send } = usePmProjectConversation(api, projectId, clientId, refreshToken);
   const loadStage = useCallback(() => api.getProjectStage(projectId!, clientId!), [api, projectId, clientId]);
   const afterStageWrite = useCallback(() => { void load(true); }, [load]);
@@ -185,7 +185,7 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
       if (!current) return;
       // An older server has no conversation routes yet.
       setProjectsError(error_ instanceof ApiRequestError && error_.status === 404
-        ? 'Conversations aren’t available on the server yet. They appear once the server is updated; until then use Tickets.'
+        ? 'Conversations aren’t available on the server yet. Open a request from the client overview.'
         : errorText(error_, 'This client’s projects could not be loaded.'));
     });
     return () => { current = false; };
@@ -194,11 +194,14 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const project = projects?.find(item => item.projectId === projectId) ?? null;
   const projectTasks = projectId && tasksForProject ? tasksForProject(projectId) : [];
 
-  // The request the context tabs describe and replies go to: the one picked, else the first open one, else the newest.
+  // The selected request receives replies by default.
   const contextRequest = requests?.find(request => request.ticketId === contextTicketId)
     ?? requests?.find(request => !['done', 'declined', 'cancelled'].includes(request.checklist)) ?? requests?.[0] ?? null;
+  const { detail: contextTicketDetail, error: contextTicketError } = usePmRequestDetail(api, contextRequest?.ticketId ?? null,
+    `${refreshToken ?? 0}:${contextVersion}`);
   const target = useAboutTarget(contextRequest ? { ticketId: contextRequest.ticketId, title: contextRequest.title } : null);
   const selectedTicketId = contextRequest?.ticketId ?? null;
+  useEffect(() => { setReplyKind('reply'); }, [selectedTicketId]);
 
   /** Open the New task dialog for this project, filled from a request and linked to it. */
   const createTask = (request: { ticketId: string; title: string }, description: string) => {
@@ -229,16 +232,13 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
 
   const linkedIds = new Set((requests ?? []).flatMap(request => request.linkedTasks.map(task => task.issueId)));
   const linkable = projectTasks.filter(task => !linkedIds.has(task.id));
-  // The side panel, laid out like the client's: stage, preview, tickets, then the picked ticket.
+  // Keep stage and preview context below the ticket accordion.
   const stageCard = stageSummary && projectId && clientId ? { ...stageCardText(stageSummary),
     content: <PmStagePanel api={api} projectId={projectId} clientId={clientId} summary={stageSummary} busy={stage.busy}
       actionError={stage.actionError} run={stage.run} /> } : null;
   const previewShared = client.projects.find(item => item.projectId === projectId)?.previewPublished;
-  const renderRail = ({ requestList, requestsTitle }: { requestList: ReactNode; requestsTitle: string }) =>
-    <PmConversationRail projectName={project?.projectName ?? 'Project'} stage={stageCard} previewShared={previewShared}
-      ticketsTitle={requestsTitle} tickets={requestList}
-      selected={<PmSelectedTicket key={String(selectedTicketId)} api={api} documentsApi={documentsApi} ticketId={selectedTicketId}
-        clientName={client.displayName} refreshToken={`${refreshToken ?? 0}:${contextVersion}`} onChanged={() => void load(true)} />} />;
+  const inputId = `pm-conversation-${client.key}`;
+  const refreshTicket = () => { setContextVersion(value => value + 1); void load(true); };
 
   const renderRequestActions = (request: ConversationRequest) => {
     if (request.checklist === 'declined' || request.checklist === 'cancelled') return null;
@@ -264,9 +264,39 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
     </>;
   };
 
-  return <div className="flex h-full min-h-0 flex-col md:flex-row">
-    {projects && projects.length > 1 && <nav aria-label="Projects" className="shrink-0 border-b border-divider md:w-56 md:border-b-0 md:border-r">
-      <ul className="flex gap-1 overflow-x-auto px-3 py-2 md:flex-col md:px-2 md:py-3">
+  const conversationHeader = <>
+    {project && <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-divider px-6 py-3">
+      <div className="min-w-0">
+        <nav aria-label="Breadcrumb" className="mb-1 flex min-w-0 flex-wrap items-center gap-1 text-[11.5px] text-content-muted">
+          <span>Clients</span><ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span className="max-w-40 truncate">{client.displayName}</span><ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+          {onBackToProjects ? <Button type="button" variant="ghost" size="sm" onClick={onBackToProjects}
+            className="h-auto px-0 py-0 text-[11.5px] font-normal text-content-muted hover:bg-transparent hover:text-content">Projects</Button>
+            : <span>Projects</span>}
+          <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
+          <span aria-current="page" className="max-w-48 truncate font-medium text-content">{project.projectName}</span>
+        </nav>
+        <h2 className="truncate text-[14px] font-semibold text-content">{project.projectName}</h2>
+        <p className="text-[12px] text-content-muted">Project conversation</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        {onCreateTask && <>
+          <Badge variant="outline" className="hidden sm:inline-flex">Internal</Badge>
+          <Button type="button" variant="outline" size="sm" disabled={busy}
+            onClick={() => onCreateTask({ projectId: project.projectId, title: '', description: '', request: null })}>
+            <Plus size={14} aria-hidden="true" />New task
+          </Button>
+        </>}
+      </div>
+    </header>}
+    {project && stageSummary && <div className="shrink-0 border-b border-divider px-6 pb-2">
+      <ProjectStageTracker summary={stageSummary} role="pm" unsetPrompt={false} />
+    </div>}
+  </>;
+  return <div className="flex h-full min-h-0 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+    {projects && projects.length > 0 && <nav aria-label="Projects" className="shrink-0 border-b border-divider lg:w-52 lg:border-b-0 lg:border-r">
+      <h2 className="px-4 pt-3 text-xs font-semibold text-content-secondary">Projects</h2>
+      <ul className="flex gap-1 overflow-x-auto px-3 py-2 lg:flex-col lg:px-2 lg:py-3">
         {projects.map(item => <li key={item.projectId}>
           <Button type="button" variant="ghost" onClick={() => setProjectId(item.projectId)} aria-current={item.projectId === projectId ? 'page' : undefined}
             className={`h-auto w-full justify-start rounded-md px-2.5 py-2 text-left text-[13px] ${item.projectId === projectId
@@ -278,51 +308,47 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
         </li>)}
       </ul>
     </nav>}
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-      {project && <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-divider px-6 py-3">
-        <div className="min-w-0">
-          <nav aria-label="Breadcrumb" className="mb-1 flex min-w-0 flex-wrap items-center gap-1 text-[11.5px] text-content-muted">
-            <span>Clients</span><ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-            <span className="max-w-40 truncate">{client.displayName}</span><ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-            {onBackToProjects ? <Button type="button" variant="ghost" size="sm" onClick={onBackToProjects}
-              className="h-auto px-0 py-0 text-[11.5px] font-normal text-content-muted hover:bg-transparent hover:text-content">Projects</Button>
-              : <span>Projects</span>}
-            <ChevronRight className="h-3 w-3 shrink-0" aria-hidden="true" />
-            <span aria-current="page" className="max-w-48 truncate font-medium text-content">{project.projectName}</span>
-          </nav>
-          <h2 className="truncate text-[14px] font-semibold text-content">{project.projectName}</h2>
-          <p className="text-[12px] text-content-muted">Project conversation</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {onCreateTask && <>
-            <Badge variant="outline" className="hidden sm:inline-flex">Internal</Badge>
-            <Button type="button" variant="outline" size="sm" disabled={busy}
-              onClick={() => onCreateTask({ projectId: project.projectId, title: '', description: '', request: null })}>
-              <Plus size={14} aria-hidden="true" />New task
-            </Button>
+    {projects ? <ProjectConversationView key={projectId ?? 'none'} role="pm" projectName={project?.projectName ?? 'Project'}
+      items={items} requests={requests} error={error} actionError={actionError}
+      clientName={client.displayName} clientInitial={client.displayName.trim()[0]?.toUpperCase() ?? 'C'}
+      draft={draft} onDraftChange={setDraft} busy={busy}
+      onSend={body => void run(async () => { await send(body, target.about, replyKind); setDraft(''); setReplyKind('reply'); }, 'The message was not sent.')}
+      about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore}
+      onToggleDone={toggle}
+      conversationHeader={conversationHeader}
+      renderRail={({ requestList, requestsTitle }) => <PmConversationRail
+        projectName={project?.projectName ?? 'Project'} stage={stageCard} previewShared={previewShared}
+        ticketsTitle={requestsTitle}
+        progress={contextRequest ? <PmTicketProgress detail={contextTicketDetail}
+          loading={!contextTicketDetail && !contextTicketError} /> : null}
+        tickets={requestList}
+        selected={contextRequest && <PmSelectedTicket key={contextRequest.ticketId} api={api} documentsApi={documentsApi}
+          request={contextRequest} clientName={client.displayName} detail={contextTicketDetail} error={contextTicketError}
+          refreshToken={`${refreshToken ?? 0}:${contextVersion}`}
+          onChanged={refreshTicket}
+          actions={<>
+            {canToggleRequest(contextRequest) && <Button type="button" variant="outline" size="sm" disabled={busy}
+              onClick={() => toggle(contextRequest, contextRequest.checklist !== 'done')}>
+              {contextRequest.checklist === 'done' ? 'Reopen ticket' : 'Mark done'}
+            </Button>}
+            {renderRequestActions(contextRequest)}
           </>}
-        </div>
-      </header>}
-      {project && stageSummary && <div className="shrink-0 border-b border-divider px-6 pb-2">
-        <ProjectStageTracker summary={stageSummary} role="pm" unsetPrompt={false} />
-      </div>}
-      {projects ? <ProjectConversationView key={projectId ?? 'none'} role="pm" projectName={project?.projectName ?? 'Project'}
-        items={items} requests={requests} error={error} actionError={actionError}
-        clientName={client.displayName} clientInitial={client.displayName.trim()[0]?.toUpperCase() ?? 'C'}
-        draft={draft} onDraftChange={setDraft} busy={busy}
-        onSend={body => void run(async () => { await send(body, target.about); setDraft(''); }, 'The message was not sent.')}
-        about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore}
-        onToggleDone={toggle}
-        onOpenRequest={request => onOpenRequestDetails(request.ticketId)}
-        focusTicketId={focus?.ticketId ?? null}
-        selectedTicketId={selectedTicketId}
-        onSelectRequest={request => setContextTicketId(request.ticketId)}
-        renderRail={renderRail}
-        inputId={`pm-conversation-${client.key}`}
-        messageActions={requestCardActions(onCreateTask ? createTask : undefined)}
-        renderRequestActions={renderRequestActions}
-      /> : <p className="px-6 py-5 text-[13px] text-content-muted">Loading conversations…</p>}
-    </div>
+          workflow={workflowActions !== 'none' ? <PmTicketsView api={api} documentsApi={documentsApi}
+            fixedClientGroupKey={client.key} initialSelectedId={contextRequest.ticketId} workflowReference={contextRequest.reference} workflowActions={workflowActions}
+            communicationEnabled refreshToken={`${refreshToken ?? 0}:${contextVersion}`} onWorkflowChanged={refreshTicket}
+            onWorkflowReply={kind => {
+              target.restore();
+              setReplyKind(kind);
+              document.getElementById(inputId)?.focus();
+            }} /> : undefined} />} />}
+      composerExtra={target.about && replyKind === 'request_details' ? <Button type="button" variant="ghost" size="sm"
+        onClick={() => setReplyKind('reply')}>Ask & wait for reply · Cancel</Button> : undefined}
+      focusTicketId={focus?.ticketId ?? null}
+      selectedTicketId={selectedTicketId}
+      onSelectRequest={request => setContextTicketId(request.ticketId)}
+      inputId={inputId}
+      messageActions={requestCardActions(onCreateTask ? createTask : undefined)}
+    /> : <p className="px-6 py-5 text-[13px] text-content-muted">Loading conversations…</p>}
   </div>;
 }
 

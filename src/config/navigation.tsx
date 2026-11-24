@@ -3,7 +3,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   LayoutDashboard, PenLine, FileText, MessageSquare, Activity,
   CheckSquare, FolderKanban, Rocket, Bot, BarChart3, BookOpen, Settings,
-  Inbox, Ticket, Users
+  Inbox, Users
 } from 'lucide-react';
 
 import { NavigationTab, UserRole } from '@/shared/types';
@@ -139,7 +139,6 @@ export const NAV_ITEMS: NavItem[] = [
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
 
   // Inquiries are pre-project intake; tickets are requests that belong to a client's project conversation.
-  { id: 'tickets', label: 'Tickets', title: 'Tickets', subtitle: 'Review client requests, respond in the project conversation, and track delivery', group: 'workspace', section: 'requests', icon: Ticket },
   { id: 'inquiries', label: 'Inquiries', title: 'Inquiries', subtitle: 'Review requests that have not yet become a client project', group: 'workspace', section: 'requests', icon: Inbox },
   { id: 'clients', label: 'Clients', title: 'Clients', subtitle: 'Clients, their projects and requests', group: 'workspace', section: 'clients', icon: Users },
   { id: 'issues', label: 'Tasks', labels: { pm: 'All Tasks', admin: 'All Tasks' }, title: 'Tasks', subtitle: 'Assigned work across your projects', group: 'workspace', section: 'my_work', sectionByRole: { pm: 'projects', admin: 'projects' }, icon: CheckSquare },

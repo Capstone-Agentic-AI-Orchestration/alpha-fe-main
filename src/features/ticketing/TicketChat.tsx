@@ -6,6 +6,7 @@ import { Bubble, BubbleContent } from '@/shared/components/ui/bubble';
 import { Message, MessageAvatar, MessageContent, MessageFooter, MessageGroup, MessageHeader, MessageScroller } from '@/shared/components/ui/message';
 import { Skeleton } from '@/shared/components/ui/skeleton';
 import { Textarea } from '@/shared/components/ui/textarea';
+import { compactTicketReference } from './ticketUi';
 import './ticketChat.css';
 
 const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
@@ -154,7 +155,7 @@ function RequestCard({ message, author, highlighted }: Readonly<{ message: Ticke
       <header className="ticket-chat__request-head">
         <span className="ticket-chat__request-icon" aria-hidden="true"><ClipboardList size={15} /></span>
         <span className="ticket-chat__request-label">Request</span>
-        {message.reference && <code className="ticket-chat__request-ref">{message.reference}</code>}
+        {message.reference && <code className="ticket-chat__request-ref" title={message.reference}>{compactTicketReference(message.reference)}</code>}
         {message.badge && <span className="ticket-chat__request-badge">{message.badge}</span>}
       </header>
       {message.heading && <h3 className="ticket-chat__request-title">{message.heading}</h3>}

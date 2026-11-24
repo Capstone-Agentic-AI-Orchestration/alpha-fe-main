@@ -4,6 +4,7 @@ import { Badge } from '@/shared/components/ui/badge';
 import { Button } from '@/shared/components/ui/button';
 import { Input } from '@/shared/components/ui/input';
 import { Textarea } from '@/shared/components/ui/textarea';
+import { compactTicketReference } from './ticketUi';
 import { TicketChat, type ChatReplyTo, type TicketChatMessage } from './TicketChat';
 import {
   CHECKLIST_LABEL, canToggleRequest, conversationChatMessages, requestCardId, requestIdOfCard,
@@ -183,8 +184,7 @@ export interface ProjectConversationViewProps extends Omit<ProjectConversationCh
   onToggleDone: (request: ConversationRequest, done: boolean) => void;
   /** Client: make a new request inside this conversation. */
   onCreateRequest?: (input: { title: string; description: string }) => Promise<boolean>;
-  /** Opens the request's full page (plan, result, files). */
-  onOpenRequest?: (request: ConversationRequest) => void;
+  conversationHeader?: ReactNode;
   /** PM: extra request actions, such as Create task and Link task. */
   renderRequestActions?: (request: ConversationRequest) => ReactNode;
   /** A request to show first in the panel, as when opened from elsewhere. */
@@ -200,8 +200,7 @@ export interface ProjectConversationViewProps extends Omit<ProjectConversationCh
   /** Select a conversation panel after entering a workflow. */
   initialPanelId?: string;
   /**
-   * PM: draws the whole side panel instead of tabs, given the tickets checklist and its title.
-   * The checklist keeps jumping the conversation to the picked request.
+   * PM: renders the ticket picker and the selected ticket context beside the chat.
    */
   renderRail?: (parts: { requestList: ReactNode; requestsTitle: string }) => ReactNode;
 }
@@ -211,7 +210,7 @@ export interface ProjectConversationViewProps extends Omit<ProjectConversationCh
  * checklist beside it. Picking a request scrolls the conversation to it.
  */
 export function ProjectConversationView(props: Readonly<ProjectConversationViewProps>) {
-  const { role, projectName, requests, busy = false, writesAvailable = true, onToggleDone, onCreateRequest, onOpenRequest,
+  const { role, projectName, requests, busy = false, writesAvailable = true, onToggleDone, onCreateRequest, conversationHeader,
     renderRequestActions, focusTicketId = null, selectedTicketId = null, onSelectRequest, panelTabs, requestForm, initialPanelId = 'requests', renderRail } = props;
   const [panel, setPanel] = useState(initialPanelId);
   useEffect(() => { setPanel(initialPanelId); }, [initialPanelId]);
@@ -235,17 +234,40 @@ export function ProjectConversationView(props: Readonly<ProjectConversationViewP
   </div> };
   const requestLabel = role === 'pm' ? 'Tickets' : 'Requests';
   const requestsTitle = requests ? `${requestLabel} · ${openRequestCount(requests)} open` : requestLabel;
-  const requestList = <ConversationRequestList role={role} requests={requests} busy={busy} writesAvailable={writesAvailable} onToggleDone={onToggleDone}
-    onCreateRequest={onCreateRequest} onOpenRequest={onOpenRequest} renderRequestActions={renderRequestActions} focusTicketId={focusTicketId}
-    selectedTicketId={selectedTicketId} actionsOnSelectedOnly={Boolean(renderRail)}
-    onSelectRequest={request => { onSelectRequest?.(request); toRequest(request.ticketId); }} />;
+  const selectRequest = (request: ConversationRequest) => {
+    onSelectRequest?.(request);
+    toRequest(request.ticketId);
+  };
   const chat = <section className="flex h-[70dvh] min-h-[420px] min-w-0 flex-col lg:h-auto lg:min-h-0" aria-label={`Conversation about ${projectName}`}>
-    <ProjectConversationChat {...props} jump={jump} />
+    {conversationHeader}
+    <ProjectConversationChat {...props} jump={jump} onOpenQuotedRequest={ticketId => {
+      props.onOpenQuotedRequest?.(ticketId);
+      const request = requests?.find(item => item.ticketId === ticketId);
+      if (request && renderRail) onSelectRequest?.(request);
+    }} />
   </section>;
-  if (renderRail) return <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
-    {chat}
-    {renderRail({ requestList, requestsTitle })}
-  </div>;
+  if (renderRail) {
+    let requestList: ReactNode = <p role="status" className="pm-rail-note">Loading tickets…</p>;
+    if (requests) requestList = requests.length > 0 ? <ul className="pm-rail-ticket-list">
+      {orderRequests(requests, focusTicketId).map(request => <li key={request.ticketId}>
+        <button type="button" className="pm-rail-ticket-row" aria-pressed={request.ticketId === (selectedTicketId ?? focusTicketId)}
+          onClick={() => selectRequest(request)}>
+          <span className="pm-rail-ticket-row__title">{request.title}</span>
+          <span className="pm-rail-ticket-row__meta">
+            <code title={request.reference}>{compactTicketReference(request.reference)}</code>
+            <ChecklistChip status={request.checklist} />
+          </span>
+        </button>
+      </li>)}
+    </ul> : <p className="pm-rail-note">No tickets for this project yet.</p>;
+    return <div className="grid min-h-0 min-w-0 flex-none grid-cols-1 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_clamp(320px,31vw,450px)]">
+      {chat}
+      {renderRail({ requestList, requestsTitle })}
+    </div>;
+  }
+  const requestList = <ConversationRequestList role={role} requests={requests} busy={busy} writesAvailable={writesAvailable} onToggleDone={onToggleDone}
+    onCreateRequest={onCreateRequest} renderRequestActions={renderRequestActions} focusTicketId={focusTicketId}
+    selectedTicketId={selectedTicketId} onSelectRequest={selectRequest} />;
   const tabs: ConversationPanelTab[] = [{ id: 'requests', label: requestsTitle, content: null },
     ...(panelTabs ?? [about]), ...(requestForm ? [{ id: 'new-request', label: 'New request', content: requestForm }] : [])];
 
@@ -275,14 +297,19 @@ export interface ConversationRequestListProps {
   writesAvailable: boolean;
   onToggleDone: (request: ConversationRequest, done: boolean) => void;
   onCreateRequest?: (input: { title: string; description: string }) => Promise<boolean>;
-  onOpenRequest?: (request: ConversationRequest) => void;
   renderRequestActions?: (request: ConversationRequest) => ReactNode;
   focusTicketId?: string | null;
   selectedTicketId?: string | null;
   /** Clicking a request's title picks it and jumps to where it was made. */
   onSelectRequest?: (request: ConversationRequest) => void;
-  /** PM rail: request actions (Create task, Link task, Open details) only on the picked row, so the list stays calm. */
-  actionsOnSelectedOnly?: boolean;
+}
+
+function orderRequests(requests: readonly ConversationRequest[], focusTicketId: string | null) {
+  const rank = (request: ConversationRequest) => {
+    if (request.ticketId === focusTicketId) return -1;
+    return OPEN_CHECKLIST.has(request.checklist) ? 0 : 1;
+  };
+  return [...requests].sort((a, b) => rank(a) - rank(b));
 }
 
 function doneByText(doneBy: ConversationRequest['doneBy'], role: 'client' | 'pm'): string {
@@ -296,19 +323,13 @@ function toggleTitle(request: ConversationRequest, done: boolean): string {
 }
 
 /** The requests made in the conversation, as a checklist. */
-export function ConversationRequestList({ role, requests, busy, writesAvailable, onToggleDone, onCreateRequest, onOpenRequest,
-  renderRequestActions, focusTicketId = null, selectedTicketId = null, onSelectRequest, actionsOnSelectedOnly = false }: Readonly<ConversationRequestListProps>) {
+export function ConversationRequestList({ role, requests, busy, writesAvailable, onToggleDone, onCreateRequest,
+  renderRequestActions, focusTicketId = null, selectedTicketId = null, onSelectRequest }: Readonly<ConversationRequestListProps>) {
   const [formOpen, setFormOpen] = useState(false);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const ids = useId();
-  const ordered = useMemo(() => {
-    const rank = (request: ConversationRequest) => {
-      if (request.ticketId === focusTicketId) return -1;
-      return OPEN_CHECKLIST.has(request.checklist) ? 0 : 1;
-    };
-    return [...(requests ?? [])].sort((a, b) => rank(a) - rank(b));
-  }, [requests, focusTicketId]);
+  const ordered = useMemo(() => orderRequests(requests ?? [], focusTicketId), [requests, focusTicketId]);
 
   const create = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -330,7 +351,6 @@ export function ConversationRequestList({ role, requests, busy, writesAvailable,
       const toggleable = canToggleRequest(request) && writesAvailable;
       const highlighted = request.ticketId === (selectedTicketId ?? focusTicketId);
       const titleClass = `text-left text-[13px] font-medium ${done ? 'text-content-secondary line-through decoration-content-muted' : 'text-content'}`;
-      const showActions = !actionsOnSelectedOnly || highlighted;
       // Every row keeps the same padding, so picking one only tints it and nothing shifts.
       return <li key={request.ticketId} className={`-mx-2 rounded-md px-2 py-3 ${highlighted ? 'bg-selected/40' : ''}`}>
         <div className="flex items-start gap-2.5">
@@ -360,11 +380,8 @@ export function ConversationRequestList({ role, requests, busy, writesAvailable,
                 <span className="text-[11px] text-content-muted">{task.status === 'done' ? 'Done' : task.status.replace('_', ' ')}</span>
               </li>)}
             </ul>}
-            {showActions && (renderRequestActions || onOpenRequest) && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
+            {renderRequestActions && <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px]">
               {renderRequestActions?.(request)}
-              {onOpenRequest && <Button type="button" variant="ghost" size="sm" onClick={() => onOpenRequest(request)}
-                className="h-auto justify-start px-0 py-0 text-[12px] font-semibold text-link hover:bg-transparent hover:text-link-hover">
-                Open details</Button>}
             </div>}
           </div>
         </div>

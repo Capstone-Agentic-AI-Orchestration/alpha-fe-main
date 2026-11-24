@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { NAV_ITEMS, navIcon, navLabel } from '@/config/navigation';
 import { NoTeamAccess } from '@/features/onboarding/NoTeamAccess';
 import { GitHubSetup } from '@/features/onboarding/GitHubSetup';
@@ -32,8 +33,7 @@ import { SettingsView } from '@/features/settings/SettingsView';
 import { ClientPortalView } from '@/features/delivery/ClientPortalView';
 import { IntakeWizardView } from '@/features/delivery/IntakeWizardView';
 import { DocumentsView } from '@/features/delivery/DocumentsView';
-import { PmTicketsPage } from '@/features/ticketing/PmTicketsPage';
-import { PmClientsPage } from '@/features/ticketing/PmClientsPage';
+import { PM_CLIENTS_REFRESH_EVENT, PmClientsPage } from '@/features/ticketing/PmClientsPage';
 import { PmInquiriesPage } from '@/features/ticketing/PmInquiriesPage';
 import { NavigationTab } from '@/shared/types';
 // Whether this is the packaged desktop app rather than a browser tab, read from
@@ -61,7 +61,6 @@ const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
     case 'intake': content = <IntakeWizardView />; break;
     case 'documents': content = <DocumentsView />; break;
     case 'clients': content = <PmClientsPage />; break;
-    case 'tickets': content = <PmTicketsPage />; break;
     case 'inquiries': content = <PmInquiriesPage />; break;
     case 'chat': content = unifiedChat && chatHistory ? <ChatHistory /> : <ChatView unifiedNavigation={unifiedChat} />; break;
     case 'issues': content = <IssuesView onOpenNewIssue={onOpenNewIssue} />; break;
@@ -144,6 +143,7 @@ export const App: React.FC = () => {
   // strip; resolve it the same way the context resolves the rendered view.
   const resolveView = (view: NavigationTab): NavigationTab =>
     visibleTabs.includes(view) ? view : visibleTabs[0];
+  const activeView = tabs.find(tab => tab.id === activeTabId)?.view;
   const getTabContextTitle = (tab: (typeof tabs)[number]) => {
     const view = resolveView(tab.view);
     const session = tab.sessionState ?? {};
@@ -340,7 +340,13 @@ export const App: React.FC = () => {
             sidebar's workspace switcher uses the same row. Pixel units on
             purpose: the root font is 15px, so rem-based sizes would drift. */}
         <div className={`pointer-events-none absolute inset-x-0 top-0 z-30 pt-[6px] pl-5 ${nativeWindowControls ? 'pr-[9.5rem]' : 'pr-5'}`}>
-          <WorkspaceToolbar draggable={nativeWindowControls} actions={<>{isDesktop && <RunningIndicator />}<NotificationPopover /></>}>
+          <WorkspaceToolbar draggable={nativeWindowControls} actions={<>{isDesktop && <RunningIndicator />}
+            {activeView && resolveView(activeView) === 'clients' && <button type="button" title="Refresh clients" aria-label="Refresh clients"
+              onClick={() => window.dispatchEvent(new CustomEvent(PM_CLIENTS_REFRESH_EVENT, { detail: { tabId: activeTabId } }))}
+              className="flex h-[28px] w-[28px] flex-shrink-0 items-center justify-center rounded-lg text-content-secondary transition-colors hover:bg-surface-high hover:text-content focus:outline-none focus:ring-2 focus:ring-focus">
+              <RefreshCw className="h-4 w-4" aria-hidden="true" />
+            </button>}
+            <NotificationPopover /></>}>
             {/* Scrollable Open Tabs List */}
             <WorkspaceTabStrip label="Open workspace tabs">
             {tabs.map((tab) => {

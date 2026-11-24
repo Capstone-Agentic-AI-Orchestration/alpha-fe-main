@@ -53,7 +53,7 @@ export function handledOutcome(item: Pick<PmCentralIntakeItem, 'kind' | 'status'
     return proposal ? `Accepted into ${item.acceptedProjectName}. The client follows it from their projects.` : `Accepted into ${item.acceptedProjectName}.`;
   }
   if (item.status === 'accepted') {
-    return proposal ? 'Accepted. Its request is in Tickets, where the client follows it and you start or link the project.' : 'Accepted. Its request is in Tickets.';
+    return proposal ? 'Accepted. Open the request to start or link the project.' : 'Accepted. The request is available here.';
   }
   return proposal ? 'Declined. No request or project was created.' : 'Declined. No request or client access was created.';
 }

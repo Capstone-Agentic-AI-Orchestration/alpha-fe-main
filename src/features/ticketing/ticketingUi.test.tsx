@@ -60,9 +60,12 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).not.toContain('Workspace inquiry code');
     expect(html).not.toContain('workspace-intake');
   });
-  it('hides the client dropdown when the view is locked to one client', () => {
-    expect(renderToStaticMarkup(<PmTicketsView intakeEnabled />)).toContain('aria-label="Filter by client"');
-    expect(renderToStaticMarkup(<PmTicketsView intakeEnabled fixedClientGroupKey="client:ana" />)).not.toContain('aria-label="Filter by client"');
+  it('renders only the selected ticket surface', () => {
+    const html = renderToStaticMarkup(<PmTicketsView intakeEnabled initialSelectedId="ticket-1" ticketReference="TKT-123456" />);
+    expect(html).toContain('Ticket detail panel');
+    expect(html).not.toContain('Filter by client');
+    expect(html).not.toContain('Ticket conversations');
+    expect(html).not.toContain('All tickets');
   });
   it('lets an enabled inquiry form submit without an external verification widget', () => {
     const html = renderToStaticMarkup(<PublicInquiryForm submissionEnabled onSubmit={() => undefined} onCancel={() => undefined} />);
@@ -86,17 +89,11 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toContain('Client sign in');
     expect(html).toContain('Start an inquiry');
   });
-  it('shows a neutral planned-unavailable Tickets interface with controls disabled', () => {
+  it('shows a neutral unavailable state while ticketing is disabled', () => {
     const html = renderToStaticMarkup(<PmTicketsView intakeEnabled={false} />);
-    expect(html).toContain('Ticketing is coming soon.');
-    expect(html).toContain('Live tickets are not connected yet');
-    expect(html).toContain('role="status"');
+    expect(html).toContain('Ticketing is coming soon');
     expect(html).not.toContain('role="alert"');
-    expect(html).not.toContain('No tickets in this view');
-    expect(html).not.toContain('Ticket counters');
-    expect(html).not.toContain('Client-provided documents');
-    expect(html).toMatch(/<input[^>]*disabled=""[^>]*placeholder="Search tickets…"/);
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*class="pm-tickets__refresh"[^>]*>/);
+    expect(html).not.toContain('Search tickets');
   });
   it('opens the shared inquiry form directly without workspace selection or New Request', () => {
     const html = renderToStaticMarkup(<PublicInquiryUnavailable />);

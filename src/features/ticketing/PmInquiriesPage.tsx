@@ -1,17 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
-import { RefreshCw } from 'lucide-react';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useApp, useTabSessionState } from '@/app/AppContext';
 import { Button } from '@/shared/components/ui/button';
 import { CreateProjectModal, type NewProjectInput } from '@/features/projects/CreateProjectModal';
 import type { Project } from '@/shared/types';
 import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
+import { PmTicketsView } from './PmTicketsView';
+import { pmTicketsIntakeEnabled, usePmWorkflowActions } from './pmTicketAvailability';
 import { pmTicketApi, type PmCentralIntakeItem, type PmIntakeProjectStart } from './pmApi';
 
 /** Tab state another page sets to open one inquiry here (a client's Proposals tab). */
 export const OPEN_INQUIRY_KEY = 'inquiries.open';
-/** Tab state this page sets so Tickets opens the request an inquiry just became. */
-export const OPEN_TICKET_KEY = 'tickets.open';
-
 export type OpenInquiry = { id: string; view: 'pending' | 'handled' };
 
 /** The new-project form, filled in from what the client asked for. */
@@ -30,7 +29,8 @@ export function PmInquiriesPage() {
   const [refreshToken, setRefreshToken] = useState(0);
   const { activeWorkspace, setActiveTab, showToast, projects, refreshBoardState } = useApp();
   const [openInquiry, setOpenInquiry] = useTabSessionState<OpenInquiry | null>(OPEN_INQUIRY_KEY, null);
-  const [, setOpenTicket] = useTabSessionState<string | null>(OPEN_TICKET_KEY, null);
+  const [openRequest, setOpenRequest] = useState<{ ticketId: string; reference?: string } | null>(null);
+  const workflowActions = usePmWorkflowActions();
   const [, setSelectedProject] = useTabSessionState<string | null>('projects.selectedProject', null);
   // Read once on arrival: the inbox keeps it as its starting selection, and coming back later starts fresh.
   const [initialSelection] = useState(openInquiry);
@@ -41,7 +41,7 @@ export function PmInquiriesPage() {
   const startOperations = useRef(new Map<string, string>());
   const started = useRef<PmIntakeProjectStart | null>(null);
 
-  const openTicket = (ticketId: string) => { setOpenTicket(ticketId); setActiveTab('tickets'); };
+  const openTicket = (ticketId: string, reference?: string) => setOpenRequest({ ticketId, reference });
   const openProject = (projectId: string) => { setSelectedProject(projectId); setActiveTab('projects'); };
   const announce = (result: PmIntakeProjectStart, item?: PmCentralIntakeItem | null) => {
     const client = item?.kind === 'project_proposal' && result.clientVisible ? ' The client can see it in their projects.' : '';
@@ -62,6 +62,16 @@ export function PmInquiriesPage() {
     await refreshBoardState();
     return { id: result.projectId, name: result.projectName, key: result.projectKey, resources: [] } as unknown as Project;
   };
+
+  if (openRequest) return <div className="pm-ticket-page pm-ticket-page--nested">
+    <nav aria-label="Request navigation" className="pm-ticket-page__tabs">
+      <Button variant="ghost" size="sm" onClick={() => setOpenRequest(null)}><ArrowLeft size={14} aria-hidden="true" />Back to inquiries</Button>
+    </nav>
+    <div className="pm-ticket-page__content">
+      <PmTicketsView key={openRequest.ticketId} initialSelectedId={openRequest.ticketId} ticketReference={openRequest.reference}
+        intakeEnabled={pmTicketsIntakeEnabled} workflowActions={workflowActions} communicationEnabled />
+    </div>
+  </div>;
 
   return <div className="pm-ticket-page pm-ticket-page--nested">
     <nav aria-label="Inquiries actions" className="pm-ticket-page__tabs">
@@ -84,9 +94,8 @@ export function PmInquiriesPage() {
         onOpenTicket={openTicket}
         onOpenProject={openProject}
         onAccepted={(reference, ticketId) => {
-          showToast('Inquiry accepted', `${reference} is open in Tickets. Link its project from there.`, 'success');
-          // Open the request itself, not just the Tickets list.
-          openTicket(ticketId);
+          showToast('Inquiry accepted', `Opened request ${reference}.`, 'success');
+          openTicket(ticketId, reference);
         }}
         refreshToken={refreshToken}
       />
