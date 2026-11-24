@@ -1,17 +1,18 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { parseStageSummary, type RevisionRound, type StageSummary } from './projectStages';
+import { parseStageSummary, revisionAllowance, type RevisionRound, type StageSummary } from './projectStages';
+import { roundCount } from './ClientDevelopmentStage';
 import { ClientStagePanel } from './ClientStagePanel';
 import { PmStagePanel } from './PmStagePanel';
 import type { ClientProject } from './clientApi';
 
 const base = parseStageSummary({
   stage: 'development', stageLabel: 'Development', revisionLimit: 3, revisionsUsed: 0, version: 1, stageChangedAt: '2026-11-21T10:00:00Z',
-  nextAction: null, poc: null, pocDraft: null, pocHistory: [], contract: null, rounds: [], quotes: [], final: null,
+  nextAction: null, poc: null, pocDraft: null, pocHistory: [], contract: null, rounds: [], requests: [], final: null,
 });
 const summary = (patch: Partial<StageSummary>): StageSummary => ({ ...base, ...patch });
 const round = (patch: Partial<RevisionRound>): RevisionRound => ({
-  id: 'round-1', number: 1, status: 'open', buildNote: 'New charts', previewUrl: 'https://demo.vercel.app', counts: null, paid: false, quoteId: null,
+  id: 'round-1', number: 1, status: 'open', buildNote: 'New charts', previewUrl: 'https://demo.vercel.app', counts: null, extra: false,
   openedAt: '2026-11-22T10:00:00Z', submittedAt: null, classifiedAt: null,
   items: [{ id: 'item-1', position: 0, body: 'Make the header blue', classification: null, pmNote: '' }], ...patch,
 });
@@ -29,11 +30,24 @@ describe('development stage UI', () => {
     expect(renderToStaticMarkup(<ClientStagePanel {...client} summary={summary({})} />)).toContain('will share the next build');
   });
 
-  it('tells the client when the included rounds are used, and asks before sending a paid round', () => {
+  it('reminds the client that a round past the included ones costs additional, and asks them to confirm', () => {
     const html = renderToStaticMarkup(<ClientStagePanel {...client} summary={summary({ revisionsUsed: 3, rounds: [round({ number: 4 })] })} />);
     expect(html).toContain('Your 3 included revision rounds are used.');
-    expect(html).toContain('Send as a paid round');
+    expect(html).toContain('costs additional, billed separately');
+    expect(html).toContain('I understand this extra round costs additional.');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Send extra round<\/button>/);
     expect(html).not.toContain('Send round 4 of 3');
+    expect(html).not.toMatch(/quote|paid/i);
+  });
+
+  it('counts extra rounds past the limit', () => {
+    expect(revisionAllowance({ stage: 'development', revisionLimit: 3, revisionsUsed: 5 })).toBe('Revisions: 3 of 3 used · 2 extra');
+    expect(roundCount({ counts: true, extra: true })).toBe('Extra round, billed separately');
+    expect(roundCount({ counts: true, extra: false })).toBe('Counted as a revision');
+    expect(roundCount({ counts: false, extra: true })).toBe('Not counted');
+    const sent = renderToStaticMarkup(<PmStagePanel {...pm} summary={summary({ revisionsUsed: 3,
+      rounds: [round({ number: 4, status: 'submitted', extra: true, submittedAt: '2026-11-22T11:00:00Z' })] })} />);
+    expect(sent).toContain('the client confirmed it costs additional');
   });
 
   it('shows what each earlier note counted as', () => {

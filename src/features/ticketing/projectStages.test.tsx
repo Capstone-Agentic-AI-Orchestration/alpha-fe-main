@@ -18,7 +18,7 @@ const raw = {
   stage: 'poc', stageLabel: 'Proof of concept', revisionLimit: 3, revisionsUsed: 0, version: 4, stageChangedAt: '2026-11-20T10:00:00Z',
   nextAction: { who: 'client', kind: 'review_poc', label: 'Review POC v2' },
   poc, pocDraft: null, pocHistory: [{ id: 'poc-1', number: 2, status: 'published', publishedAt: '2026-11-20T10:00:00Z' }],
-  contract: null, rounds: [], quotes: [], final: null,
+  contract: null, rounds: [], requests: [], final: null,
 };
 const summary = (patch: Partial<StageSummary> = {}): StageSummary => ({ ...parseStageSummary(raw), ...patch });
 const project: ClientProject = { workspaceId: 'w', projectId: 'p', name: 'Project', updatedAt: '2026-11-20T10:00:00Z', intakeOptionId: 'o', preview: null };
@@ -42,7 +42,7 @@ describe('project stage model', () => {
     expect(stageSteps('completed').map(step => step.state)).toEqual(['done', 'done', 'done', 'done']);
     expect(stageSteps('unset').every(step => step.state === 'upcoming')).toBe(true);
     expect(revisionAllowance({ stage: 'poc', revisionLimit: 3, revisionsUsed: 0 })).toBe('Unlimited changes');
-    expect(revisionAllowance({ stage: 'development', revisionLimit: 3, revisionsUsed: 4 })).toBe('Revisions: 3 of 3 used');
+    expect(revisionAllowance({ stage: 'development', revisionLimit: 3, revisionsUsed: 4 })).toBe('Revisions: 3 of 3 used · 1 extra');
     expect(revisionAllowance({ stage: 'contract', revisionLimit: 3, revisionsUsed: 0 })).toBeNull();
     expect(nextActionLine(summary(), 'client')).toEqual({ mine: true, text: 'Review POC v2' });
     expect(nextActionLine(summary(), 'pm')).toEqual({ mine: false, text: 'Waiting for the client' });

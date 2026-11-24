@@ -22,7 +22,7 @@ const contract: Contract = {
 };
 const base = parseStageSummary({
   stage: 'contract', stageLabel: 'Contract', revisionLimit: 3, revisionsUsed: 0, version: 1, stageChangedAt: '2026-11-21T10:00:00Z',
-  nextAction: null, poc, pocDraft: null, pocHistory: [], contract: null, rounds: [], quotes: [], final: null,
+  nextAction: null, poc, pocDraft: null, pocHistory: [], contract: null, rounds: [], requests: [], final: null,
 });
 const summary = (patch: Partial<StageSummary>): StageSummary => ({ ...base, ...patch });
 const project: ClientProject = { workspaceId: 'w', projectId: 'p', name: 'Project', updatedAt: '2026-11-20T10:00:00Z', intakeOptionId: 'o', preview: null };

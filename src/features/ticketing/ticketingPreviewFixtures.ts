@@ -236,8 +236,8 @@ const localMethods: Partial<typeof pmTicketApi> = {
     return previewStage.classifyRound(roundId, input.items);
   },
   async markFinalDelivery(_projectId: string, _clientId: string, input: { note: string }) { return previewStage.markFinalDelivery(input.note); },
-  async sendQuote(_projectId: string, _clientId: string, quoteId: string, input: { amount: number; currency: string; description: string }) {
-    return previewStage.sendQuote(quoteId, input.amount, input.currency, input.description);
+  async answerRequest(_projectId: string, _clientId: string, requestId: string, input: { decision: 'will_do' | 'wont_do'; reply: string }) {
+    return previewStage.answerRequest(requestId, input.decision, input.reply);
   },
   async getProjectConversationRequests() { return { items: PREVIEW_CONVERSATION_REQUESTS }; },
   async listOpenRequests() {
