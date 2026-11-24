@@ -262,11 +262,15 @@ span.cx-button { pointer-events: none; }
 .cx-thumb-empty { display: flex; height: 100%; flex-direction: column; align-items: center; justify-content: center; gap: var(--client-space-2); padding: var(--client-space-4); color: var(--cx-muted); font-size: var(--client-type-meta); text-align: center; }
 .cx-thumb-empty svg { color: var(--cx-accent); }
 
-/* Project cards on Home and the Projects page: the picture on the left, the project on the right. */
+/* The Projects page follows the top bar's horizontal spacing. */
+.cx-main:has(.cx-projects) { scrollbar-gutter: auto; }
+.cx-main:has(.cx-projects) .cx-notice { width: calc(100% - 2 * var(--client-space-5)); }
+.cx-page.cx-projects { width: 100%; padding-inline: var(--client-space-5); }
 .cx-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr)); gap: var(--client-space-5); }
-.cx-pcard { display: grid; min-width: 0; grid-template-columns: min(44%, 380px) minmax(0, 1fr); gap: var(--client-space-5); padding: var(--client-space-4); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: color-mix(in srgb, var(--cx-surface) 86%, transparent); transition: border-color .2s ease, box-shadow .2s ease; }
+.cx-pcard { display: grid; min-width: 0; grid-template-columns: min(55%, 42rem) minmax(0, 1fr); gap: var(--client-space-5); padding: var(--client-space-4); border: 1px solid var(--cx-line); border-radius: var(--cx-radius); background: color-mix(in srgb, var(--cx-surface) 86%, transparent); transition: border-color .2s ease, box-shadow .2s ease; }
 .cx-pcard:hover { border-color: color-mix(in srgb, var(--cx-accent) 40%, var(--cx-line)); box-shadow: 0 18px 40px -28px color-mix(in srgb, var(--cx-accent) 60%, transparent); }
 .cx-pcard-picture { display: flex; min-width: 0; min-height: 160px; flex-direction: column; }
+.cx-pcard-no-preview { display: grid; min-height: 160px; flex: 1; aspect-ratio: 16 / 10; place-items: center; padding: 1.25rem; color: var(--cx-muted); font-size: var(--client-type-caption); text-align: center; }
 .cx-pcard-body { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-2); padding: var(--client-space-1) 0; }
 .cx-pcard-head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-2) var(--client-space-3); }
 .cx-pcard-head h3 { margin: 0; color: var(--cx-ink); font-size: var(--client-type-title); font-weight: var(--client-weight-bold); letter-spacing: -.02em; line-height: 1.2; overflow-wrap: anywhere; }
@@ -276,8 +280,6 @@ span.cx-button { pointer-events: none; }
 .cx-pcard-note p { display: -webkit-box; margin: 0; overflow: hidden; color: var(--cx-muted); font-size: var(--client-type-compact); line-height: var(--client-line-body); overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .cx-pcard-note small { color: var(--cx-faint); font-size: var(--client-type-meta); }
 .cx-pcard-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--client-space-3); margin-top: auto; padding-top: var(--client-space-3); }
-/* A project card's ways in: Open preview beside Open project. */
-.cx-card-links { display: flex; flex-wrap: wrap; align-items: center; gap: var(--client-space-4); }
 
 /* Artwork in the theme's accent: the orbit motif, and project pictures before a preview is shared. */
 .cx-orbit { display: block; overflow: visible; }
@@ -492,7 +494,6 @@ span.cx-button { pointer-events: none; }
   .cx-cover-art { aspect-ratio: 16 / 9; }
   .cx-pcard-head h3 { font-size: var(--client-type-subheading); }
   .cx-pcard-foot { align-items: stretch; flex-direction: column; }
-  .cx-pcard-foot .cx-card-links { justify-content: space-between; }
   .cx-toolbar { align-items: stretch; flex-direction: column; }
   .cx-sort select { flex: 1; }
   .cx-idea { padding: var(--client-space-5); }

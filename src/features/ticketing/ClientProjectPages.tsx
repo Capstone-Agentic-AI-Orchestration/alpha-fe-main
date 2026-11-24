@@ -1,7 +1,7 @@
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { Button } from '@/shared/components/ui/button';
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowRight, BellRing, ClipboardCheck, Clock, FolderKanban, Lightbulb, MessageSquare, Monitor, Plus, Search, Sparkles } from 'lucide-react';
+import { ArrowRight, BellRing, ClipboardCheck, Clock, FolderKanban, Lightbulb, MessageSquare, Plus, Search, Sparkles } from 'lucide-react';
 
 import type { ClientProject, ClientProjectFeedbackMessage, ClientProjectRequestItem, ClientProjectRequestQueue } from './clientApi';
 import { clientTicketApi } from './clientApi';
@@ -123,12 +123,10 @@ function NeedsYou({ loading, loaded, attention, proposalsNeedingReply, onOpenPro
 }
 
 /** A project card on the Projects page, with a real shared preview when one exists. */
-function ClientProjectCard({ project, requests, onOpenProject, onOpenPreview, latest }: {
+function ClientProjectCard({ project, requests, onOpenProject, latest }: {
   project: ClientProject;
   requests: ClientProjectRequestItem[];
   onOpenProject: () => void;
-  /** Opens the project's preview page (which says so when nothing is shared yet). */
-  onOpenPreview?: () => void;
   latest: ClientProjectFeedbackMessage | null;
 }) {
   const mine = requests.filter(item => item.workspaceId === project.workspaceId && item.projectId === project.projectId);
@@ -137,7 +135,7 @@ function ClientProjectCard({ project, requests, onOpenProject, onOpenPreview, la
   const titleId = 'client-project-card-' + clientProjectKey(project).replace(/\W/g, '-');
   return <article className="cx-pcard" aria-labelledby={titleId}>
     <div className="cx-pcard-picture">
-      {project.preview ? <ClientPreviewThumb preview={project.preview} projectName={project.name} onOpen={onOpenPreview} />
+      {project.preview ? <ClientPreviewThumb preview={project.preview} projectName={project.name} />
         : <div className="cx-pcard-no-preview" role="status">There is still no preview.</div>}
     </div>
     <div className="cx-pcard-body">
@@ -161,26 +159,14 @@ function ClientProjectCard({ project, requests, onOpenProject, onOpenPreview, la
           { label: 'Open', value: open.length },
           { label: 'Done', value: mine.length - open.length, tone: 'done' },
         ]} />
-        <ProjectLinks project={project} onOpenProject={onOpenProject} onOpenPreview={onOpenPreview} />
+        <button type="button" className="cx-button" onClick={onOpenProject}
+          aria-label={'Open project: ' + project.name}>Open project <ArrowRight size={14} aria-hidden="true" /></button>
       </footer>
     </div>
   </article>;
 }
 
-/**
- * A project card's two ways in: straight to its preview page, or to the project (its conversation,
- * requests and details). The preview page opens even before anything is shared; it then says so.
- */
-function ProjectLinks({ project, onOpenProject, onOpenPreview }: { project: ClientProject; onOpenProject: () => void; onOpenPreview?: () => void }) {
-  return <div className="cx-card-links">
-    {onOpenPreview && <Button type="button" variant="ghost" size="sm" className="cx-link h-auto px-0" onClick={onOpenPreview}
-      aria-label={'Open preview for ' + project.name}><Monitor size={14} aria-hidden="true" />Open preview</Button>}
-    <button type="button" className="cx-button" onClick={onOpenProject}
-      aria-label={'Open project: ' + project.name}>Open project <ArrowRight size={14} aria-hidden="true" /></button>
-  </div>;
-}
-
-export function ClientProjectsPage({ api = clientTicketApi, projects, loading, error, onOpenConversation, onOpenPreview, inspectionOnly, refreshToken,
+export function ClientProjectsPage({ api = clientTicketApi, projects, loading, error, onOpenConversation, inspectionOnly, refreshToken,
   proposalsNeedingReply = 0, onOpenProposals, onProposeProject, newRequestAction, idPrefix = 'client', requests = [] }: {
   idPrefix?: string;
   /** Proposals the project manager is waiting on the client for; they live on their own page. */
@@ -198,8 +184,6 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   error: string;
   /** Opens the project's page: its conversation, requests and details. */
   onOpenConversation: (project: ClientProject) => void;
-  /** Opens the project's preview page (which says so when nothing is shared yet). */
-  onOpenPreview: (project: ClientProject) => void;
   inspectionOnly: boolean;
   refreshToken: number;
 }) {
@@ -211,7 +195,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
   // Messages load for the most recently updated projects, whichever order the client picks to view them in.
   const latestByProject = useLatestManagerMessages(api, [...projects].sort(PROJECT_SORTS.updated.compare), refreshToken);
   const titleId = idPrefix + '-projects-page-title';
-  return <section className="cx-page" aria-labelledby={titleId}>
+  return <section className="cx-page cx-projects" aria-labelledby={titleId}>
     <CxPageHeader titleId={titleId} title={<>Your <span className="cx-accent-word">projects</span></>}
       description="Everything the project manager has shared with you." actions={newRequestAction} />
     {proposalsNeedingReply > 0 && onOpenProposals && <CxPanel tone="attention"><div className="cx-row" role="status">
@@ -234,7 +218,7 @@ export function ClientProjectsPage({ api = clientTicketApi, projects, loading, e
       {!loading && shownProjects.length > 0 && <div className="cx-card-grid">
         {shownProjects.map(project => <ClientProjectCard key={clientProjectKey(project)} project={project} requests={requests}
           latest={latestByProject[clientProjectKey(project)] ?? null}
-          onOpenProject={() => onOpenConversation(project)} onOpenPreview={() => onOpenPreview(project)} />)}
+          onOpenProject={() => onOpenConversation(project)} />)}
       </div>}
       {!loading && projects.length > 0 && !shownProjects.length && <CxPanel><CxEmpty icon={<Search size={22} />} title={'No projects match “' + query.trim() + '”'}
         body="Check the spelling, or clear the search to see every project." /></CxPanel>}
