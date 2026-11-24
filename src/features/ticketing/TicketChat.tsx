@@ -211,7 +211,7 @@ export function TicketChat({
   lockedDescription = 'The client needs to activate access before messages can be shared.',
   showFeed = true,
   unavailableTitle = 'About this conversation',
-  unavailableDescription = 'The conversation is not available for this request yet. Try again later or contact your project manager.',
+  unavailableDescription = 'The conversation is not available for this request yet. Try again later or contact the project manager.',
   draft,
   onDraftChange,
   onSubmit,

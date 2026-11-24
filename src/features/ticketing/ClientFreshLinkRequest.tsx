@@ -27,6 +27,6 @@ export function ClientFreshLinkRequest() {
         <button type="submit" className="ca-submit" disabled={busy || !email.trim()}><span className="ca-submit-text">{busy ? 'Requesting link…' : 'Email me a fresh link'}</span></button>
       </form>}
     {error && <p className="ca-error" role="alert">{error}</p>}
-    <p className="ca-notice">Opening your very first invitation after it expired? Ask your project manager to send a new invitation. They can do it with one click, and your inquiry stays as it is.</p>
+    <p className="ca-notice">Opening your very first invitation after it expired? Ask the project manager to send a new invitation. They can do it with one click, and your inquiry stays as it is.</p>
   </section>;
 }

@@ -5,9 +5,9 @@ import { useGSAP } from '@gsap/react';
 
 const stages: { title: string; short: string; description: string; icon: LucideIcon }[] = [
   { title: 'Share your idea', short: 'Start with the outcome.', description: 'Describe what you want to build, who it is for, and what needs to change. An Alphaexplora account is not needed to send an inquiry.', icon: FileText },
-  { title: 'Talk with your project manager', short: 'Make the next step clear.', description: 'A project manager reviews your inquiry and follows up to understand your goals, constraints, and timing before any work is scheduled.', icon: MessageSquare },
-  { title: 'Receive an invitation', short: 'Access, when it is ready.', description: 'When your project manager invites you, follow the email to verify your access and finish setup. If you already have a password, keep using it. You will see only the requests shared with you.', icon: Mail },
-  { title: 'Follow your requests', short: 'Keep the conversation together.', description: 'Sign in with your email and password to follow your requests, message your project manager, attach documents, and review the shared result. Forgot your password? You can request a password link any time.', icon: Check },
+  { title: 'Talk with the project manager', short: 'Make the next step clear.', description: 'A project manager reviews your inquiry and follows up to understand your goals, constraints, and timing before any work is scheduled.', icon: MessageSquare },
+  { title: 'Receive an invitation', short: 'Access, when it is ready.', description: 'When the project manager invites you, follow the email to verify your access and finish setup. If you already have a password, keep using it. You will see only the requests shared with you.', icon: Mail },
+  { title: 'Follow your requests', short: 'Keep the conversation together.', description: 'Sign in with your email and password to follow your requests, message the project manager, attach documents, and review the shared result. Forgot your password? You can request a password link any time.', icon: Check },
 ];
 
 export function InquiryWorkflow() {

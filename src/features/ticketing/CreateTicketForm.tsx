@@ -14,7 +14,7 @@ export function CreateTicketForm({ related, onCreate, onCancel }: {
     <div className="mb-7 flex items-start gap-3">
       <span className="rounded-xl border border-divider bg-selected p-3 text-selected-content"><Ticket size={22} /></span>
       <div><h1 className="text-2xl font-semibold text-content">{related ? 'Request additional work' : 'New ticket'}</h1>
-        <p className="mt-1 text-sm text-content-secondary">Tell your project manager what you need. You can discuss the details on the ticket.</p></div>
+        <p className="mt-1 text-sm text-content-secondary">Tell the project manager what you need. You can discuss the details on the ticket.</p></div>
     </div>
     <form className="space-y-5 rounded-xl border border-divider bg-surface p-5 md:p-7" onSubmit={event => {
       event.preventDefault();

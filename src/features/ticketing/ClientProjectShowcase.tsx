@@ -57,7 +57,7 @@ export function ClientProjectShowcase({ project, projects, requests, latestMessa
   }
   if (!projects.length && !project) {
     return <Card className="cx-showcase-empty"><CxEmpty icon={<FolderKanban size={22} />} title="No projects yet"
-      body="When your project manager shares a project, it will appear here." /></Card>;
+      body="When the project manager shares a project, it will appear here." /></Card>;
   }
   if (!project) return null;
 
@@ -72,7 +72,7 @@ export function ClientProjectShowcase({ project, projects, requests, latestMessa
   });
   projectRequests.slice(0, 4).forEach(item => {
     const body = item.projectLinkStatus === 'pending_review'
-      ? 'Your project manager is confirming the project' + (item.requestedProjectName ? ' for ' + item.requestedProjectName : '')
+      ? 'The project manager is confirming the project' + (item.requestedProjectName ? ' for ' + item.requestedProjectName : '')
       : clientTicketProgress(item.status, item.requestedAction).label;
     updates.push({ id: 'request-' + item.workspaceId + '-' + item.id, kind: 'request', title: item.title,
       body, createdAt: item.updatedAt, onOpen: () => onOpenRequest(item) });

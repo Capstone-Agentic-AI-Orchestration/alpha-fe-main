@@ -19,8 +19,8 @@ export function ClientDevelopmentStage(props: Readonly<ClientStagePanelProps>) {
     {finalWaiting && <FinalDelivery {...props} note={finalWaiting.note} deliveredAt={finalWaiting.deliveredAt} />}
     {!finalWaiting && active?.status === 'open' && <OpenRound {...props} round={active} />}
     {!finalWaiting && active?.status === 'submitted' && <p className="ps-lead">
-      You sent feedback round {active.number} on {stageDay(active.submittedAt)}{active.extra ? ' as an extra round' : ''}. Your project manager is reviewing it.</p>}
-    {!finalWaiting && !active && <p className="ps-note">Your project manager will share the next build here for your feedback.
+      You sent feedback round {active.number} on {stageDay(active.submittedAt)}{active.extra ? ' as an extra round' : ''}. The project manager is reviewing it.</p>}
+    {!finalWaiting && !active && <p className="ps-note">The project manager will share the next build here for your feedback.
       Send all your notes on a build together: each round counts once, and fixes don’t count.</p>}
     {past.length > 0 && <RoundHistory rounds={past} />}
   </>;
@@ -86,7 +86,7 @@ function FinalDelivery({ api, project, busy, readOnly = false, run, note, delive
     if (done) setAccepting(false);
   };
   return <>
-    <p className="ps-lead">Your project manager marked the project <strong>ready for final acceptance</strong> on {stageDay(deliveredAt)}.</p>
+    <p className="ps-lead">The project manager marked the project <strong>ready for final acceptance</strong> on {stageDay(deliveredAt)}.</p>
     {note && <p className="ps-copy">{note}</p>}
     <p className="ps-note">Accepting closes the contract. If something still isn’t as agreed, say so in the conversation instead.</p>
     {!readOnly && <div className="ps-actions">

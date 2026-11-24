@@ -32,7 +32,7 @@ export function ClientDeliveryFiles({ workspaceId, ticketId, deliveryId, scopeVe
       // Nothing to download: the written result summary is all there is to review.
       if (value.files.length === 0) inspectionCallback.current?.(true);
     }).catch(() => {
-      if (!controller.signal.aborted) setError('Protected result files are unavailable. Refresh or ask your project manager.');
+      if (!controller.signal.aborted) setError('Protected result files are unavailable. Refresh or ask the project manager.');
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => { controller.abort(); request.current = null; inspectionCallback.current?.(false); };
   }, [workspaceId, ticketId, deliveryId, scopeVersionId, retry, api]);
@@ -57,7 +57,7 @@ export function ClientDeliveryFiles({ workspaceId, ticketId, deliveryId, scopeVe
       inspectionCallback.current?.(true);
     } catch {
       inspectionCallback.current?.(false);
-      if (!controller.signal.aborted) setError('The download could not be verified. No file was opened. Refresh or contact your project manager.');
+      if (!controller.signal.aborted) setError('The download could not be verified. No file was opened. Refresh or contact the project manager.');
     } finally {
       downloadLock.current = false;
       if (!controller.signal.aborted) setDownloading(null);

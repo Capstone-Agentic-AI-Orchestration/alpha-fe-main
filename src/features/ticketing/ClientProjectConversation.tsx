@@ -1,23 +1,20 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Flag, ListChecks, MessagesSquare, Monitor, PanelRightClose, PanelRightOpen, Plus } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Flag, ListChecks, MessagesSquare, Monitor, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import { Button } from '@/shared/components/ui/button';
 import { LoadingRows } from '@/shared/components/ui/skeleton';
 import { ClientTicketApiError, clientTicketApi, type ClientProject, type ClientTicketDetail as ClientTicketRecord } from './clientApi';
-import { ClientRequestRail, CollapsibleRailCard, RailCard, type ClientRequestRailProps } from './ClientTicketDetail';
+import { ClientRequestProgress, ClientRequestRail, CollapsibleRailCard, type ClientRequestRailProps } from './ClientTicketDetail';
 import { ProjectPreviewFrame } from './ClientProjectPreview';
-import { ConversationRequestList, ProjectConversationChat, openRequestCount, useConversationJump, type ConversationAbout } from './ProjectConversationView';
+import { ConversationTicketPicker, ProjectConversationChat, openRequestCount, useConversationJump, type ConversationAbout } from './ProjectConversationView';
 import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
 import type { ClientProjectView } from './clientWorkspaceTabs';
 import { useProjectStage } from './useProjectStage';
-import { ProjectStageTracker } from './ProjectStageTracker';
 import { ClientStagePanel } from './ClientStagePanel';
 
 const REFRESH_MS = 30_000;
 const TERMINAL = new Set(['closed', 'declined', 'cancelled']);
 const newOperationId = () => crypto.randomUUID();
 const errorText = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback;
-const CONVERSATION_DESCRIPTION = 'One conversation with your project manager: questions, your requests and their progress.';
-const PREVIEW_DESCRIPTION = 'Try the latest version your project manager shared, and tell them what you notice in the conversation beside it.';
 const PREVIEW_QUESTION = 'Is there a preview I can try yet?';
 
 /** The project's one conversation and its requests, refreshed every 30 seconds while the page is visible. */
@@ -177,13 +174,10 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
     // A second frame lets the conversation come back first when it was folded away.
     window.requestAnimationFrame(() => window.requestAnimationFrame(() => document.getElementById(inputId)?.focus()));
   };
-  const head = <ConversationHead project={project} onBack={props.onBack} busy={busy}
-    tracker={stageSummary && <ProjectStageTracker summary={stageSummary} role="client" />}
-    description={mode === 'preview' && shared ? PREVIEW_DESCRIPTION : CONVERSATION_DESCRIPTION}
-    controls={(props.requestAction || changeView) && <>
-      {props.requestAction}
-      {changeView && <ViewSwitch mode={mode} onChange={next => changeView(next === 'preview' ? 'preview' : 'conversation')} />}
-      {changeView && mode === 'preview' && shared && <FocusToggle focused={focused} onChange={next => changeView(next ? 'focus' : 'preview')} />}
+  const head = <ConversationHead project={project} onBack={props.onBack} busy={busy} requestAction={props.requestAction}
+    controls={changeView && <>
+      <ViewSwitch mode={mode} onChange={next => changeView(next === 'preview' ? 'preview' : 'conversation')} />
+      {mode === 'preview' && shared && <FocusToggle focused={focused} onChange={next => changeView(next ? 'focus' : 'preview')} />}
     </>} />;
   const chat = <ProjectConversationChat role="client"
     items={conversation.items} requests={conversation.requests} error={conversation.error} actionError={actions.actionError}
@@ -192,14 +186,35 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
     about={target.about} onClearAbout={target.clear} restoreAbout={target.restoreAbout} onRestoreAbout={target.restore}
     inputId={inputId} />;
   const requestsTitle = conversation.requests ? `Requests · ${openRequestCount(conversation.requests)} open` : 'Requests';
-  const requestList = <ConversationRequestList role="client" requests={conversation.requests} busy={busy} writesAvailable={!readOnly}
-    onToggleDone={actions.toggle} selectedTicketId={selectedTicketId} onSelectRequest={item => pick(item.ticketId)} />;
-  const newRequest = props.requestForm && <RailCard icon={<Plus size={16} />} title="New request">{props.requestForm}</RailCard>;
-  const stagePanel = stageSummary && <RailCard icon={<Flag size={16} />} title={stageSummary.stageLabel}>
+  const requestPicker = conversation.requests === null
+    ? <p role="status" className="cx-project-rail-note">Loading requests…</p>
+    : conversation.requests.length > 0
+      ? <ConversationTicketPicker noun="request" requests={conversation.requests} selectedTicketId={selectedTicketId} focusTicketId={selectedTicketId}
+        onSelect={item => pick(item.ticketId)} />
+      : <p className="cx-project-rail-note">No requests for this project yet.</p>;
+  const selectedProgress = request.ticket && request.ticket.id === selectedTicketId
+    ? <ClientRequestProgress ticket={request.ticket} workflowActionsDisabled={props.rail.workflowActionsDisabled} /> : null;
+  const newRequest = props.requestForm && <section className="cx-project-new-request">
+    <h2>New request</h2>{props.requestForm}
+  </section>;
+  const stagePanel = stageSummary && <CollapsibleRailCard id={`project-stage-${project.projectId}`} icon={<Flag size={16} />} title="Project stage" initiallyOpen={false}>
     <ClientStagePanel api={api} project={project} summary={stageSummary} busy={stage.busy} actionError={stage.actionError}
       readOnly={props.stageReadOnly ?? readOnly} run={stage.run} />
-  </RailCard>;
+  </CollapsibleRailCard>;
   const picked = <PickedRequest selectedTicketId={selectedTicketId} request={request} rail={props.rail} />;
+  const requestsPanel = <div className="cx-project-rail-content">
+    <section className="cx-project-ticket-list" aria-label="Requests">
+      <h2><ListChecks size={16} aria-hidden="true" /><span>{requestsTitle}</span></h2>
+      {selectedProgress}
+      {requestPicker}
+    </section>
+    {newRequest}
+    {picked}
+    {(stagePanel || !shared) && <div className="cx-project-rail-context">
+      {stagePanel}
+      {!shared && <PreviewNotShared projectId={project.projectId} onAsk={askAboutPreview} />}
+    </div>}
+  </div>;
 
   if (mode === 'preview') {
     const emptyAction = askAboutPreview && <button type="button" className="cx-link" onClick={askAboutPreview}>
@@ -221,12 +236,7 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
           <section id={tabId('chat')} role="tabpanel" aria-labelledby={tabId('chat') + '-tab'} hidden={railTab !== 'chat'}
             className="cx-railchat">{chat}</section>
           <div id={tabId('requests')} role="tabpanel" aria-labelledby={tabId('requests') + '-tab'} hidden={railTab !== 'requests'}
-            className="cx-railrequests">
-            {stagePanel}
-            {newRequest}
-            {requestList}
-            {picked}
-          </div>
+            className="cx-railrequests">{requestsPanel}</div>
         </aside>}
       </div>
     </section>;
@@ -234,15 +244,7 @@ export function ClientProjectConversation(props: Readonly<ClientProjectConversat
   return <section className="cx-request" aria-labelledby="client-conversation-project-title">
     <div className="cx-reqsplit">
       <section className="cx-reqchat" aria-labelledby="client-conversation-project-title">{head}{chat}</section>
-      <aside className="cx-reqrail" aria-label={`Requests and details for ${project.name}`}>
-        <div className="cx-reqrail-top">
-          {stagePanel}
-          {newRequest}
-          {!shared && <PreviewNotShared onAsk={askAboutPreview} />}
-          <CollapsibleRailCard id="requests" icon={<ListChecks size={16} />} title={requestsTitle}>{requestList}</CollapsibleRailCard>
-        </div>
-        {picked}
-      </aside>
+      <aside className="cx-reqrail" aria-label={`Requests and details for ${project.name}`}>{requestsPanel}</aside>
     </div>
   </section>;
 }
@@ -267,32 +269,33 @@ function FocusToggle({ focused, onChange }: Readonly<{ focused: boolean; onChang
 }
 
 /** Where the shared preview will be, while the project manager hasn't shared one yet. */
-function PreviewNotShared({ onAsk }: Readonly<{ onAsk?: () => void }>) {
-  return <RailCard icon={<Monitor size={16} />} title="Preview">
-    <p className="cx-request-note"><strong className="cx-preview-pending">Not shared yet.</strong> When your project manager
+function PreviewNotShared({ projectId, onAsk }: Readonly<{ projectId: string; onAsk?: () => void }>) {
+  return <CollapsibleRailCard id={`project-preview-${projectId}`} icon={<Monitor size={16} />} title="Preview" initiallyOpen={false}>
+    <p className="cx-request-note"><strong className="cx-preview-pending">Not shared yet.</strong> When the project manager
       shares a version to try, it opens under Preview at the top of this page, beside your conversation.</p>
     {onAsk && <button type="button" className="cx-link" onClick={onAsk}>Ask about a preview <ArrowRight size={14} aria-hidden="true" /></button>}
-  </RailCard>;
+  </CollapsibleRailCard>;
 }
 
 /** The picked request's panel, a loading state while it arrives, or a hint to pick one. */
 function PickedRequest({ selectedTicketId, request, rail }: Readonly<Pick<ClientProjectConversationProps, 'selectedTicketId' | 'request' | 'rail'>>) {
-  if (request.ticket && request.ticket.id === selectedTicketId) return <ClientRequestRail {...rail} ticket={request.ticket} />;
+  if (request.ticket && request.ticket.id === selectedTicketId) return <ClientRequestRail {...rail} ticket={request.ticket} projectPanel />;
   if (!selectedTicketId) return <p className="cx-request-note cx-reqrail-hint">Pick a request to see its progress, plan or result, files and details.</p>;
   if (request.error) return <p role="alert" className="cx-error">{request.error}</p>;
-  return <section className="cx-reqcard" aria-busy="true"><LoadingRows label="Loading request" layout="detail" rows={3} /></section>;
+  return <section className="cx-project-ticket-detail" aria-busy="true"><LoadingRows label="Loading request" layout="detail" rows={3} /></section>;
 }
 
-function ConversationHead({ project, onBack, busy, description, controls, tracker }: Readonly<{
-  project: ClientProject; onBack: () => void; busy: boolean; description: string; controls?: ReactNode; tracker?: ReactNode;
+function ConversationHead({ project, onBack, busy, requestAction, controls }: Readonly<{
+  project: ClientProject; onBack: () => void; busy: boolean; requestAction?: ReactNode; controls?: ReactNode;
 }>) {
-  return <>
-    <button type="button" className="cx-back" onClick={onBack} disabled={busy}><ArrowLeft size={15} aria-hidden="true" />All projects</button>
-    <header className="cx-reqchat-head">
-      <span className="cx-reqchat-icon" aria-hidden="true"><MessagesSquare size={22} /></span>
-      <div><h1 id="client-conversation-project-title">{project.name}</h1><p>{description}</p></div>
-      {controls && <div className="cx-reqchat-controls">{controls}</div>}
-    </header>
-    {tracker}
-  </>;
+  return <header className="cx-reqchat-head">
+    <button type="button" className="cx-back" onClick={onBack} disabled={busy}>
+      <ArrowLeft size={15} aria-hidden="true" /><span>All projects</span>
+    </button>
+    <div className="cx-project-head-copy">
+      <h1 id="client-conversation-project-title">{project.name}</h1>
+      <p>Project conversation</p>
+    </div>
+    {(requestAction || controls) && <div className="cx-reqchat-controls">{requestAction}{controls}</div>}
+  </header>;
 }

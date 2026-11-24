@@ -52,7 +52,7 @@ describe('project stage model', () => {
     const event = { action: 'poc_approved', refId: 'poc-1', number: 2, name: 'Juan Dela Cruz', stage: null };
     expect(stageEventLine(event, 'client', 'client')).toBe('You approved POC v2 (signed as Juan Dela Cruz) · Next: the contract');
     expect(stageEventLine(event, 'client', 'pm')).toBe('The client approved POC v2 (signed as Juan Dela Cruz) · Next: the contract');
-    expect(stageEventLine({ ...event, action: 'poc_published', name: null }, 'pm', 'client')).toBe('Your project manager shared POC v2 for review');
+    expect(stageEventLine({ ...event, action: 'poc_published', name: null }, 'pm', 'client')).toBe('The project manager shared POC v2 for review');
   });
 
   it('shows stage events in the conversation: a line, or the client’s words for a change request', () => {
@@ -63,7 +63,7 @@ describe('project stage model', () => {
         stage: { action: 'poc_changes_requested', refId: 'poc-1', number: 1, name: null, stage: null } },
     ] });
     const messages = conversationChatMessages(items, 'client');
-    expect(messages[0]).toMatchObject({ kind: 'event', body: 'Your project manager shared POC v1 for review' });
+    expect(messages[0]).toMatchObject({ kind: 'event', body: 'The project manager shared POC v1 for review' });
     expect(messages[1]).toMatchObject({ author: 'client', body: 'Add a menu page', tag: 'You asked for changes to POC v1' });
     expect(() => parseConversation({ items: [{ ...items[0], stage: null }] })).toThrow();
   });

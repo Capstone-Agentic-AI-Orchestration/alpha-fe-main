@@ -46,7 +46,7 @@ export function ClientCreateTicketForm({
     <Button type="button" variant="ghost" onClick={onCancel} className="mb-6 px-0 text-xs"><ArrowLeft size={14} />My Projects</Button>
     <div className="rounded-xl border border-divider bg-surface p-6">
       <h1 className="text-lg font-semibold text-content">New request unavailable</h1>
-      <p className="mt-2 text-sm text-content-secondary">You cannot submit a new request in this workspace right now. Contact your project manager if you think this is a mistake.</p>
+      <p className="mt-2 text-sm text-content-secondary">You cannot submit a new request in this workspace right now. Contact the project manager if you think this is a mistake.</p>
     </div>
   </section>;
 
@@ -55,7 +55,7 @@ export function ClientCreateTicketForm({
     {!embedded && <div className="mb-7 flex items-start gap-3">
       <span className="rounded-xl border border-divider bg-selected p-3 text-selected-content"><Ticket size={22} /></span>
       <div><h1 className="text-2xl font-semibold text-content">{relatedTicket ? 'Request additional work' : 'New request'}</h1>
-        <p className="mt-1 text-sm text-content-secondary">Your project manager will review it before any work is scheduled.</p></div>
+        <p className="mt-1 text-sm text-content-secondary">The project manager will review it before any work is scheduled.</p></div>
     </div>}
     <form className="space-y-5 rounded-xl border border-divider bg-surface p-5 md:p-7" onSubmit={event => {
       event.preventDefault();

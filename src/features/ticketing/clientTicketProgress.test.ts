@@ -3,12 +3,12 @@ import { clientTicketProgress } from './clientTicketProgress';
 
 describe('client ticket status guidance', () => {
   it.each([
-    ['received', 'Received', 'Waiting for your project manager to review'],
-    ['under_review', 'Planning', 'Your project manager is planning the work'],
-    ['awaiting_client', 'Planning', 'Waiting for your project manager’s update'],
+    ['received', 'Received', 'Waiting for the project manager to review'],
+    ['under_review', 'Planning', 'The project manager is planning the work'],
+    ['awaiting_client', 'Planning', 'Waiting for the project manager’s update'],
     ['in_progress', 'In progress', 'The work is underway'],
     ['ready_for_review', 'Ready for you', 'Your result has been shared'],
-    ['on_hold', 'Paused', 'Your project manager has paused this request'],
+    ['on_hold', 'Paused', 'The project manager has paused this request'],
     ['closed', 'Done', 'Request done'],
     ['declined', 'Not proceeding', 'Request not proceeding'],
     ['cancelled', 'Cancelled', 'Request cancelled'],

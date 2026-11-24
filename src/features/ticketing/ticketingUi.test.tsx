@@ -100,7 +100,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
     expect(html).toContain('Tell us what you need');
     expect(html).not.toContain('What happens next');
     expect(html).not.toContain('No account or team selection');
-    expect(html).not.toContain('Inquiry code from your project manager');
+    expect(html).not.toContain('Inquiry code from the project manager');
     expect(html).not.toContain('New request');
     expect(html).toContain('href="/#/client"');
     expect(html).toContain('Submit inquiry');
@@ -147,11 +147,11 @@ describe('real ticketing interfaces in the Alpha app', () => {
     const html = proposalsPage(null);
     expect(html).toContain('Propose a project');
     for (const title of ['Customer dashboard', 'Client portal refresh', 'Archived data export']) expect(html).toContain(title);
-    expect(html).toContain('With your project manager');
+    expect(html).toContain('With the project manager');
     expect(html).toContain('Not moving forward');
     // Waiting on the client sorts first and is the one shown.
     expect(html.indexOf('Customer dashboard')).toBeLessThan(html.indexOf('Client portal refresh'));
-    expect(html).toContain('Your project manager needs a little more information to review this proposal.');
+    expect(html).toContain('The project manager needs a little more information to review this proposal.');
     expect(html).toContain('Which customer group should we support first?');
     expect(html).toContain('Your reply');
     expect(html).toContain('Send reply');
@@ -164,7 +164,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
     const html = proposalsPage('proposal-declined');
     expect(html).toContain('has-selected-proposal');
     expect(html).toContain('An older reporting request');
-    expect(html).toContain('Your project manager decided not to move forward. No project was created.');
+    expect(html).toContain('The project manager decided not to move forward. No project was created.');
     expect(html).not.toContain('Which customer group should we support first?');
     expect(html).not.toContain('Send reply');
     expect(html).not.toContain('decline note');
@@ -179,7 +179,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
     />);
     expect(html).toContain('No projects shared yet');
     expect(html).toContain('Propose a project');
-    expect(html).toContain('Your project manager is waiting on your reply to a project idea.');
+    expect(html).toContain('The project manager is waiting on your reply to a project idea.');
     expect(html).toContain('Open project ideas');
     expect(html).not.toContain('Project proposals');
     expect(html).not.toContain('Send reply');
@@ -254,7 +254,7 @@ describe('real ticketing interfaces in the Alpha app', () => {
     const html = renderToStaticMarkup(<ClientPasswordSignIn unavailable={false} error="" onRetry={() => undefined} onSignedIn={() => undefined} />);
     expect(html).toContain('<h2>Sign in</h2>');
     expect(html).toContain('Forgot or need a password?');
-    expect(html).not.toContain('Use the email your project manager invited');
+    expect(html).not.toContain('Use the email the project manager invited');
   });
 
   it('parses invitation links but rejects standalone passwordless sign-in links', () => {

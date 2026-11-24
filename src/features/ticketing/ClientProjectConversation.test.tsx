@@ -113,8 +113,8 @@ describe('client project page', () => {
     expect(rail).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>.*?Conversation<\/button>/);
     expect(rail).toContain('Requests');
     // One conversation, now in the rail, with its composer.
-    expect(html.match(/Message your project manager/g)).toHaveLength(1);
-    expect(between(rail, 'class="cx-railchat"')).toContain('Message your project manager');
+    expect(html.match(/Message the project manager/g)).toHaveLength(1);
+    expect(between(rail, 'class="cx-railchat"')).toContain('Message the project manager');
     expect(page({ projectView: 'preview', readOnly: true, ...switchable })).not.toContain('Ask about a preview');
   });
 
@@ -141,7 +141,7 @@ describe('client project page', () => {
     const html = page({ project: shared, projectView: 'focus', ...switchable });
     expect(html).toContain('class="cx-reqsplit is-preview is-focus"');
     expect(html).not.toContain('<aside');
-    expect(html).not.toContain('Message your project manager');
+    expect(html).not.toContain('Message the project manager');
     expect(between(html, 'class="cx-reqchat-head"', '</header>')).toContain('Show conversation');
     expect(html.match(/Show conversation|Hide conversation/g)).toHaveLength(1);
     // Nothing shared means nothing to look at alone: the preview view keeps the conversation beside it.

@@ -116,7 +116,7 @@ export function CxRequestRow({ item, onOpen, disabled, compact = false }: {
   const index = pendingLink ? null : listProgressIndex(item);
   const next = compact ? null : clientNextLine(item);
   const sentence = pendingLink
-    ? 'Your project manager is confirming the project' + (item.requestedProjectName ? ' · ' + item.requestedProjectName : '')
+    ? 'The project manager is confirming the project' + (item.requestedProjectName ? ' · ' + item.requestedProjectName : '')
     : clientTicketProgress(item.status, item.requestedAction).label;
   const project = item.projectName ?? item.requestedProjectName;
   const meta = next

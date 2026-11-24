@@ -55,8 +55,8 @@ describe('change requests', () => {
 
   it('tells each side in the conversation what was asked and answered', () => {
     const event = { action: 'request_answered', refId: 'request-1', number: null, name: null, stage: null, decision: 'will_do', title: 'Gift cards' };
-    expect(stageEventLine(event, 'pm', 'client')).toBe('Your project manager will do “Gift cards” · This costs additional, billed separately from your contract.');
-    expect(stageEventLine({ ...event, decision: 'wont_do' }, 'pm', 'client')).toBe('Your project manager won’t do “Gift cards”');
+    expect(stageEventLine(event, 'pm', 'client')).toBe('The project manager will do “Gift cards” · This costs additional, billed separately from your contract.');
+    expect(stageEventLine({ ...event, decision: 'wont_do' }, 'pm', 'client')).toBe('The project manager won’t do “Gift cards”');
     expect(stageEventLine({ ...event, action: 'request_made' }, 'client', 'pm')).toContain('The client asked for new work');
     expect(stageEventLine({ ...event, action: 'round_submitted', number: 4, extra: true }, 'client', 'client'))
       .toBe('You sent feedback round 4 · An extra round, billed separately');

@@ -6,7 +6,7 @@ const shared = { workspaceId: 'ws-1', projectId: 'proj-1', name: 'Info site', up
 
 describe('how a proposal reads to the client', () => {
   it('keeps the open states clear', () => {
-    expect(clientProposalView({ status: 'pending' }, []).badge).toBe('With your project manager');
+    expect(clientProposalView({ status: 'pending' }, []).badge).toBe('With the project manager');
     expect(clientProposalView({ status: 'awaiting_client' }, []).badge).toBe('Needs your reply');
     expect(clientProposalView({ status: 'declined' }, [])).toMatchObject({ badge: 'Not moving forward', tone: 'declined' });
   });

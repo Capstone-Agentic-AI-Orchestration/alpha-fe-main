@@ -156,7 +156,7 @@ export function ProjectConversationChat({ role, items, requests, error = '', act
       onOpenReply={openQuote}
       emptyTitle="No messages yet"
       emptyDescription={role === 'client'
-        ? 'Ask a question, or make a request. Your project manager sees everything here.'
+        ? 'Ask a question, or make a request. The project manager sees everything here.'
         : 'Messages, requests and proposal questions for this project will appear here.'}
       draft={draft}
       onDraftChange={onDraftChange}
@@ -165,13 +165,13 @@ export function ProjectConversationChat({ role, items, requests, error = '', act
       busy={busy}
       writesAvailable={writesAvailable}
       inputId={inputId}
-      placeholder={role === 'client' ? 'Message your project manager…' : 'Message the client…'}
+      placeholder={role === 'client' ? 'Message the project manager…' : 'Message the client…'}
       sendAriaLabel="Send message"
       submitSuffix={null}
       composerToolbar={toolbar}
       composerNote={<>{actionError && <span role="alert" className="mr-2 text-status-danger">{actionError}</span>}
         <LockKeyhole size={11} aria-hidden="true" className="mr-1 inline" />
-        {role === 'client' ? 'Only you and your project manager can see this.' : 'The client sees this conversation.'} Enter sends · Shift + Enter starts a new line.</>}
+        {role === 'client' ? 'Only you and the project manager can see this.' : 'The client sees this conversation.'} Enter sends · Shift + Enter starts a new line.</>}
       submitOnEnter
     />
   </div>;
@@ -250,7 +250,7 @@ export function ProjectConversationView(props: Readonly<ProjectConversationViewP
   if (renderRail) {
     let requestList: ReactNode = <p role="status" className="pm-rail-note">Loading tickets…</p>;
     if (requests) requestList = requests.length > 0
-      ? <PmTicketPicker requests={requests} selectedTicketId={selectedTicketId} focusTicketId={focusTicketId} onSelect={selectRequest} />
+      ? <ConversationTicketPicker requests={requests} selectedTicketId={selectedTicketId} focusTicketId={focusTicketId} onSelect={selectRequest} />
       : <p className="pm-rail-note">No tickets for this project yet.</p>;
     return <div className="grid min-h-0 min-w-0 flex-none grid-cols-1 lg:flex-1 lg:grid-cols-[minmax(0,1fr)_clamp(320px,31vw,450px)]">
       {chat}
@@ -283,62 +283,65 @@ export function ProjectConversationView(props: Readonly<ProjectConversationViewP
 }
 
 /** A compact, searchable selector keeps long ticket histories from pushing details out of view. */
-function PmTicketPicker({ requests, selectedTicketId, focusTicketId, onSelect }: Readonly<{
+export function ConversationTicketPicker({ requests, selectedTicketId, focusTicketId, onSelect, noun = 'ticket' }: Readonly<{
   requests: readonly ConversationRequest[];
   selectedTicketId: string | null;
   focusTicketId: string | null;
   onSelect: (request: ConversationRequest) => void;
+  noun?: 'ticket' | 'request';
 }>) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const ordered = useMemo(() => orderRequests(requests, focusTicketId), [requests, focusTicketId]);
   const selected = requests.find(request => request.ticketId === selectedTicketId)
     ?? requests.find(request => request.ticketId === focusTicketId)
-    ?? ordered[0];
+    ?? null;
   const normalizedQuery = query.trim().toLocaleLowerCase();
   const matches = normalizedQuery ? ordered.filter(request => [request.title, request.reference, compactTicketReference(request.reference), CHECKLIST_LABEL[request.checklist]]
     .some(value => value.toLocaleLowerCase().includes(normalizedQuery))) : ordered;
 
-  if (!selected) return null;
+  if (requests.length === 0) return null;
   const choose = (request: ConversationRequest) => {
     onSelect(request);
     setQuery('');
     setOpen(false);
   };
 
-  return <div className="pm-ticket-picker">
+  return <div className="project-ticket-picker">
     <Popover open={open} onOpenChange={next => { setOpen(next); if (!next) setQuery(''); }}>
       <PopoverTrigger asChild>
-        <button type="button" aria-label={`Selected ticket: ${selected.title}. Change ticket`}
-          className="pm-ticket-picker__trigger">
+        <button type="button" aria-label={selected ? `Selected ${noun}: ${selected.title}. Change ${noun}` : `Select a ${noun}`}
+          className="project-ticket-picker__trigger">
           <span className="min-w-0 flex-1">
-            <span className="pm-ticket-picker__title">{selected.title}</span>
-            <span className="pm-ticket-picker__meta">
-              <code title={selected.reference}>{compactTicketReference(selected.reference)}</code>
-              <ChecklistChip status={selected.checklist} />
-            </span>
+            {selected ? <>
+              <span className="project-ticket-picker__title">{selected.title}</span>
+              <span className="project-ticket-picker__meta">
+                <code title={selected.reference}>{compactTicketReference(selected.reference)}</code>
+                <ChecklistChip status={selected.checklist} />
+              </span>
+            </> : <span className="project-ticket-picker__placeholder">Select a {noun}</span>}
           </span>
-          <ChevronDown size={16} aria-hidden="true" className={`pm-ticket-picker__chevron${open ? ' is-open' : ''}`} />
+          <ChevronDown size={16} aria-hidden="true" className={`project-ticket-picker__chevron${open ? ' is-open' : ''}`} />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="pm-ticket-picker__popover">
-        <label className="pm-ticket-picker__search">
+      <PopoverContent align="start" className="project-ticket-picker__popover">
+        <label className="project-ticket-picker__search">
           <Search size={15} aria-hidden="true" />
           <span className="sr-only">Search tickets</span>
-          <Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Search tickets…"
+          <Input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder={`Search ${noun}s…`}
             className="h-8 border-0 bg-transparent px-0 text-xs shadow-none focus-visible:ring-0" />
         </label>
-        <p className="pm-ticket-picker__count" aria-live="polite">
-          {matches.length === requests.length ? `${requests.length} ${requests.length === 1 ? 'ticket' : 'tickets'}` : `${matches.length} of ${requests.length} tickets`}
+        <p className="project-ticket-picker__count" aria-live="polite">
+          {matches.length === requests.length ? `${requests.length} ${requests.length === 1 ? noun : noun + 's'}` : `${matches.length} of ${requests.length} ${noun}s`}
         </p>
-        {matches.length > 0 ? <ul className="pm-ticket-picker__options" aria-label="Ticket choices">
+        {matches.length > 0 ? <ul className="project-ticket-picker__options" aria-label={`${noun[0].toUpperCase() + noun.slice(1)} choices`}>
           {matches.map(request => {
-            const isSelected = request.ticketId === selected.ticketId;
+            const isSelected = request.ticketId === selected?.ticketId;
             return <li key={request.ticketId}>
-              <button type="button" aria-pressed={isSelected} onClick={() => choose(request)} className="pm-ticket-picker__option">
+              <button type="button" aria-pressed={isSelected} onClick={() => choose(request)} className="project-ticket-picker__option">
                 <span className="min-w-0 flex-1">
-                  <span className="pm-ticket-picker__title">{request.title}</span>
-                  <span className="pm-ticket-picker__meta">
+                  <span className="project-ticket-picker__title">{request.title}</span>
+                  <span className="project-ticket-picker__meta">
                     <code title={request.reference}>{compactTicketReference(request.reference)}</code>
                     <ChecklistChip status={request.checklist} />
                   </span>
@@ -347,7 +350,7 @@ function PmTicketPicker({ requests, selectedTicketId, focusTicketId, onSelect }:
               </button>
             </li>;
           })}
-        </ul> : <p className="pm-ticket-picker__empty" role="status">No tickets match “{query.trim()}”.</p>}
+        </ul> : <p className="project-ticket-picker__empty" role="status">No {noun}s match “{query.trim()}”.</p>}
       </PopoverContent>
     </Popover>
   </div>;
@@ -377,7 +380,7 @@ function orderRequests(requests: readonly ConversationRequest[], focusTicketId: 
 
 function doneByText(doneBy: ConversationRequest['doneBy'], role: 'client' | 'pm'): string {
   if (doneBy === role) return 'you';
-  return doneBy === 'pm' ? 'your project manager' : 'the client';
+  return doneBy === 'pm' ? 'the project manager' : 'the client';
 }
 
 function toggleTitle(request: ConversationRequest, done: boolean): string {

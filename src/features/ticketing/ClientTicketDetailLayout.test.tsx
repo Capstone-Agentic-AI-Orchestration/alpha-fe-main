@@ -24,7 +24,7 @@ describe('client ticket detail layout', () => {
     expect(html).not.toContain('role="tablist"');
     expect(html).toContain('Action needed: Approve the plan');
     expect(html).toContain('Approve plan');
-    expect(html).toContain('Message your project manager…');
+    expect(html).toContain('Message the project manager…');
     expect(html).not.toContain('ticket-chat__header');
     expect(html).toContain('class="client-reply-form"');
     expect(html).toContain('aria-label="Send reply"');
@@ -45,7 +45,7 @@ describe('client ticket detail layout', () => {
     expect(side).toContain('Update the report filters.');
     expect(side).toContain('Approve the plan · you');
     expect(side).toContain('What happens next');
-    expect(side).toContain('Once you approve, your project manager starts the work.');
+    expect(side).toContain('Once you approve, the project manager starts the work.');
     // The plan is shown once, as the decision, and not repeated as its own section.
     expect(side.match(/Update the report filters\./g)).toHaveLength(1);
     expect(conversation).not.toContain('client-decision-slot');
@@ -59,7 +59,7 @@ describe('client ticket detail layout', () => {
     expect(side).toMatch(/aria-expanded="true"[^>]*>.*?Request details/);
     expect(side).toContain('TKT-1');
     expect(side).toContain('Copy request reference');
-    expect(side).toContain('Your project manager');
+    expect(side).toContain('The project manager');
   });
 
   it('keeps an agreed plan in the side column once nothing is asked of the client', () => {

@@ -54,7 +54,7 @@ export function ClientProposalsPage({ api = clientTicketApi, proposals, projects
   let body: ReactNode;
   if (loading && !proposals.length) body = <LoadingRows label="Loading project proposals" rows={3} />;
   else if (!ordered.length) body = error ? null : <CxEmpty icon={<Lightbulb size={22} />} title="No proposals yet"
-    body="Have an idea for something new? Propose a project and your project manager will review it with you." />;
+    body="Have an idea for something new? Propose a project and the project manager will review it with you." />;
   else body = <div className="client-proposals-layout">
     <ul className="client-proposal-index" aria-label="Your proposals">
       {ordered.map(proposal => {
@@ -79,7 +79,7 @@ export function ClientProposalsPage({ api = clientTicketApi, proposals, projects
   return <section className={`cx-ideas client-proposals-page${chosen ? ' has-selected-proposal' : ''}`} aria-labelledby={`${idPrefix}-proposals-title`}>
     <div className="cx-toolbar">
       <div><h2 id={`${idPrefix}-proposals-title`} className="cx-subheading">Project ideas</h2>
-        <p className="cx-page-description">Ideas you’ve sent to your project manager. They review each one and reply here.</p></div>
+        <p className="cx-page-description">Ideas you’ve sent to the project manager. They review each one and reply here.</p></div>
       {actions}
     </div>
     {success && <p role="status" className="client-proposal-success">{success}</p>}
@@ -88,7 +88,7 @@ export function ClientProposalsPage({ api = clientTicketApi, proposals, projects
     {body}
 
     <ProposalForm api={api} open={formOpen} onClose={() => setFormOpen(false)} inspectionOnly={inspectionOnly}
-      onSent={id => { setFormOpen(false); setSuccess('Proposal sent. Your project manager will review it; it does not create a project automatically.');
+      onSent={id => { setFormOpen(false); setSuccess('Proposal sent. The project manager will review it; it does not create a project automatically.');
         onSelectedProposalIdChange(id); onSubmitted(); }} />
   </section>;
 }
@@ -148,7 +148,7 @@ function ProposalDetail({ api, proposal, projects, inspectionOnly, onBack, onRep
       <h3>What you asked for</h3>
       <p className="client-proposal-description">{proposal.description}</p>
     </section>
-    {(messages.length > 0 || proposal.status === 'awaiting_client') && <section className="client-proposal-section" aria-label="Conversation with your project manager">
+    {(messages.length > 0 || proposal.status === 'awaiting_client') && <section className="client-proposal-section" aria-label="Conversation with the project manager">
       <h3>Conversation</h3>
       {messages.length > 0 && <div className="client-proposal-conversation">
         {messages.map(message => <article key={message.id} className={`client-proposal-message${message.author === 'client' ? ' is-client' : ''}`}>
@@ -161,7 +161,7 @@ function ProposalDetail({ api, proposal, projects, inspectionOnly, onBack, onRep
         <textarea id={`proposal-reply-${proposal.id}`} maxLength={4000} rows={3} value={draft} disabled={inspectionOnly || replying}
           onChange={event => setDraft(event.target.value)} placeholder="Type your response…" />
         {replyError && <p role="alert" className="cx-error">{replyError}</p>}
-        <div><small>Your reply goes back to your project manager.</small><button type="submit" className="cx-button is-primary"
+        <div><small>Your reply goes back to the project manager.</small><button type="submit" className="cx-button is-primary"
           disabled={inspectionOnly || replying || !draft.trim()}>
           <Send size={14} />{replying ? 'Sending…' : 'Send reply'}
         </button></div>
@@ -216,7 +216,7 @@ function ProposalForm({ api, open, onClose, onSent, inspectionOnly }: {
   }
 
   return <Modal isOpen={open} onClose={onClose} closeDisabled={submitting}
-    title="Propose a project" subtitle="Describe the outcome you want. Your project manager will review it and choose the right workspace."
+    title="Propose a project" subtitle="Describe the outcome you want. The project manager will review it and choose the right workspace."
     dialogClassName="client-proposal-modal cx-scope" maxWidth="max-w-xl">
     <form id="client-proposal-form" className="client-proposal-form" onSubmit={event => void submit(event)}>
       <label htmlFor="client-proposal-title">Project title<input id="client-proposal-title" value={title} onChange={event => setTitle(event.target.value)} maxLength={160} required disabled={submitting || needsRetry} /></label>

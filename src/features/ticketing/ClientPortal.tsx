@@ -80,8 +80,8 @@ function appendClientMessage(messages: ClientTicketMessage[], message: ClientTic
 
 const CLIENT_PAGES: Record<Page, { label: string; subtitle: string; Icon: LucideIcon }> = {
   overview: { label: 'Home', subtitle: 'What needs you and your latest updates', Icon: House },
-  projects: { label: 'Projects', subtitle: 'Projects shared by your project manager', Icon: FolderKanban },
-  proposals: { label: 'Project ideas', subtitle: 'New project ideas you have sent to your project manager', Icon: Lightbulb },
+  projects: { label: 'Projects', subtitle: 'Projects shared by the project manager', Icon: FolderKanban },
+  proposals: { label: 'Project ideas', subtitle: 'New project ideas you have sent to the project manager', Icon: Lightbulb },
   requests: { label: 'All requests', subtitle: 'A cross-project summary of request status', Icon: ListChecks },
 };
 
@@ -508,7 +508,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
       const context = await api.getIntakeContext(project.workspaceId);
       if (!context.canCreate) {
         setCreateContext(null); setCreateProject(null);
-        setCreateError('New requests are unavailable in this workspace right now. Contact your project manager.');
+        setCreateError('New requests are unavailable in this workspace right now. Contact the project manager.');
         return;
       }
       if (!context.sharedProjects.some(option => option.optionId === project.intakeOptionId)) {
@@ -863,7 +863,7 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
               </CxSection>;
             })}</div>
               : !queueError && <CxPanel><CxEmpty title={search ? 'No requests match your search' : 'No requests here yet'}
-                body={search ? 'Try a shorter search or clear the search field.' : 'Requests you send, and the ones your project manager opens for you, appear here.'} /></CxPanel>}
+                body={search ? 'Try a shorter search or clear the search field.' : 'Requests you send, and the ones the project manager opens for you, appear here.'} /></CxPanel>}
           {queue && <div className="cx-list-footer"><span>{queue.items.length} shown</span>{queue.nextCursor && <Button type="button" variant="outline" size="sm" onClick={() => void loadMoreQueue()} disabled={queueMoreLoading || queueLoading}>
             {queueMoreLoading ? 'Loading…' : 'Load more'}</Button>}</div>}
           </div>
@@ -877,13 +877,13 @@ export default function ClientPortal({ api = clientTicketApi, inspectionOnly = f
         {page === 'requests' && selectedId && !requestProject && <div className="cx-request-page">
           {newRequestAction && <div className="cx-request-page-actions">{newRequestAction}</div>}
           {queueNotice && <p role="status" className="cx-status-note">{queueNotice}</p>}
-          {!activeRequest ? <CxPanel><CxEmpty title="Request not available" body="Refresh and try again. If it is still missing, contact your project manager."
+          {!activeRequest ? <CxPanel><CxEmpty title="Request not available" body="Refresh and try again. If it is still missing, contact the project manager."
             action={<Button type="button" variant="outline" onClick={closeRequest}>Back to all requests</Button>} /></CxPanel>
             : (detailLoading || (!detail && !detailError)) ? <TicketDetailSkeleton label="Loading request" stepper />
               : detailError ? <p role="alert" className="cx-error">{detailError}</p>
                 : detail && <>
-                  {showPendingLinkNotice && <p role="status" className="cx-status-note"><strong>Waiting for your project manager</strong>
-                    This request is not linked to a project yet. Your project manager will confirm the project before it shows there.</p>}
+                  {showPendingLinkNotice && <p role="status" className="cx-status-note"><strong>Waiting for the project manager</strong>
+                    This request is not linked to a project yet. The project manager will confirm the project before it shows there.</p>}
                   <ClientTicketDetail workspaceId={activeRequest.workspaceId} api={api} key={activeTabId + ':' + activeRequest.workspaceId + ':' + detail.id}
                     replyDraft={replyDrafts[activeRequest.workspaceId + ':' + detail.id] ?? ''}
                     onReplyDraftChange={value => setReplyDrafts(previous => ({ ...previous, [activeRequest.workspaceId + ':' + detail.id]: value }))}

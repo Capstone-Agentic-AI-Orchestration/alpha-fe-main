@@ -47,10 +47,10 @@ export function scrubbedActivationUrl(location: { pathname: string; search: stri
 
 export function activationFailureMessage(error: unknown): string {
   if (error instanceof ClientTicketApiError && (error.status === null || error.status >= 500)) {
-    return 'We could not verify this link. Check your connection and reload. If the problem continues, use password recovery or ask your project manager for a new invitation.';
+    return 'We could not verify this link. Check your connection and reload. If the problem continues, use password recovery or ask the project manager for a new invitation.';
   }
   if (error instanceof ClientTicketApiError && error.status === 429) return 'Too many attempts. Wait a little, then try again.';
-  return 'This link may have expired or already been used. If you already have an account, use password recovery. Otherwise, ask your project manager for a new invitation.';
+  return 'This link may have expired or already been used. If you already have an account, use password recovery. Otherwise, ask the project manager for a new invitation.';
 }
 
 /** Existing invitation URLs now enter the resumable password setup flow. */
