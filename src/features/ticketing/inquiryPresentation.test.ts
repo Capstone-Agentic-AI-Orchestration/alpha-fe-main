@@ -40,7 +40,7 @@ describe('how an inquiry reads on the Inquiries page', () => {
   it('says what starting a project does', () => {
     expect(acceptOutcome(proposal, 'Alpha Workspace')).toContain('creates it in Alpha Workspace');
     expect(acceptOutcome(proposal, 'Alpha Workspace')).toContain('lets this client see the project');
-    expect(acceptOutcome(inquiry, null)).toContain('no portal access until you invite them');
+    expect(acceptOutcome(inquiry, null)).toContain('an invitation to the client portal');
   });
 
   it('names the project an accepted inquiry went into, and says when it has none yet', () => {

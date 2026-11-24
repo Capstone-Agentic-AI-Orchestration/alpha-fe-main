@@ -4,7 +4,7 @@ import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { Button } from '@/shared/components/ui/button';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import type { PreviewRole } from './previewModel';
-import { pmPreviewApi, pmPreviewDocumentsApi, pmPreviewIntakeApi } from './ticketingPreviewFixtures';
+import { pmPreviewApi, pmPreviewDocumentsApi, pmPreviewIntakeApi, pmPreviewProjects } from './ticketingPreviewFixtures';
 import { clientPreviewApi } from './clientPreviewApi';
 import ClientPortal from './ClientPortal';
 import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
@@ -128,7 +128,7 @@ function AlphaPmPreviewShell({ onViewAsClient, onReset }: { onViewAsClient: () =
                 knownProjectIds={PREVIEW_PROJECT_IDS} onOpenProject={projectId => { setPreviewConversationFocus({ projectId }); setPreviewClientSection('conversation'); }}
                 conversationFocus={previewConversationFocus} onConversationFocusHandled={() => setPreviewConversationFocus(null)}
                 onOpenInquiries={() => setPreviewSection('inquiries')} refreshToken={previewRefreshToken} />
-                : <PmCentralIntakeInbox workspaceId="preview-workspace" workspaceName="Northstar Demo" workspaceCanReview onAccepted={() => setPreviewSection('clients')} api={pmPreviewIntakeApi} refreshToken={previewRefreshToken} />}
+                : <PmCentralIntakeInbox workspaceId="preview-workspace" workspaceName="Northstar Demo" workspaceCanReview onAccepted={() => setPreviewSection('clients')} api={pmPreviewIntakeApi} projects={pmPreviewProjects} refreshToken={previewRefreshToken} />}
               </div>
             </div>
           </div>

@@ -25,12 +25,14 @@ interface CreateProjectModalProps {
   title?: string;
   subtitle?: string;
   submitLabel?: string;
+  /** More choices for the caller's flow, shown below the project fields (e.g. inviting an inquiry's client). */
+  extraFields?: React.ReactNode;
 }
 
 const ICONS = ['⚡', '🎨', '🚀', '🛡️', '💳', '🧠', '📦', '🌐', '⚙️', '🎯', '📱', '🔒'];
 const inputClass = 'w-full min-w-0 rounded-xl border border-control bg-surface px-3.5 py-2.5 text-sm text-content placeholder-content-muted outline-none transition-colors focus:border-control';
 
-export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose, onCreated, initial, create, title, subtitle, submitLabel }) => {
+export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, onClose, onCreated, initial, create, title, subtitle, submitLabel, extraFields }) => {
   const { createProject, updateProject, projects, can, role } = useApp();
   // Orchestrator and planning are AI tooling, hidden for roles without it (config/features.ts).
   const showBuildSetup = aiFeaturesEnabled(role);
@@ -154,6 +156,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({ isOpen, 
           <input ref={folderRef} type="file" className="hidden" {...{ webkitdirectory: '', directory: '' } as any} onChange={event => { const file = event.target.files?.[0] as (File & { path?: string }) | undefined; if (file) addFolder(file.path || file.webkitRelativePath.split('/')[0]); event.target.value = ''; }} />
           </>}
         </section>}
+        {extraFields && <section className="space-y-3 border-t border-divider pt-5">{extraFields}</section>}
       </fieldset>
       {error && <div role="alert" className="flex items-start gap-2 rounded-xl border border-status-danger-border bg-status-danger-subtle p-3 text-xs leading-relaxed text-status-danger"><AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />{error}</div>}
     </form>

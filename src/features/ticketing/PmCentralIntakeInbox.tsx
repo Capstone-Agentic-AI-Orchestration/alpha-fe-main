@@ -7,6 +7,7 @@ import { Skeleton, SkeletonRegion } from '@/shared/components/ui/skeleton';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, type PmCentralIntakeItem, type PmIntakeProjectChoice, type PmIntakeProjectStart } from './pmApi';
 import { secondary } from './ticketUi';
+import { InviteClientOption } from './InviteClientOption';
 
 interface CentralIntakeApi {
   listCentralIntakes(after?: string | null, filter?: 'pending' | 'handled'): ReturnType<typeof pmTicketApi.listCentralIntakes>;
@@ -67,8 +68,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   onStartNewProject?: (item: PmCentralIntakeItem) => void;
   /** This workspace's projects, to add an inquiry to one. */
   projects?: readonly { id: string; name: string; key: string }[];
-  /** An inquiry became a request in a project. */
-  onProjectStarted?: (result: PmIntakeProjectStart) => void;
+  /** An inquiry became a request in a project; `invite` asks the page to invite its sender to the client portal. */
+  onProjectStarted?: (result: PmIntakeProjectStart, item: PmCentralIntakeItem, invite: boolean) => void;
   /** Open what a handled inquiry became. */
   onOpenTicket?: (ticketId: string, reference?: string) => void;
   onOpenProject?: (projectId: string) => void;
@@ -90,6 +91,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
   const [confirmingDecline, setConfirmingDecline] = useState(false);
   const [choosingExisting, setChoosingExisting] = useState(false);
   const [existingChoice, setExistingChoice] = useState('');
+  const [inviteClient, setInviteClient] = useState(true);
   const startOperations = useRef(new Map<string, string>());
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
@@ -271,7 +273,7 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     setSelectedId(id);
     setNavigationCollapsed(false);
     setNewIds(current => { const next = new Set(current); next.delete(id); return next; });
-    setDeclineReason(''); setConfirmingDecline(false); setChoosingExisting(false); setExistingChoice('');
+    setDeclineReason(''); setConfirmingDecline(false); setChoosingExisting(false); setExistingChoice(''); setInviteClient(true);
     setClarifying(false); setClarificationDraft('');
   };
 
@@ -282,12 +284,13 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
     // One operation per inquiry until it succeeds, so a retry finishes instead of repeating.
     let operationId = startOperations.current.get(selected.id);
     if (!operationId) { operationId = crypto.randomUUID(); startOperations.current.set(selected.id, operationId); }
+    const invite = selected.kind !== 'project_proposal' && inviteClient;
     setAccepting(true); setError('');
     try {
-      const result = await api.startProjectFromIntake(selected.id, operationId, { existingProjectId: existingChoice }, selected.kind === 'project_proposal');
+      const result = await api.startProjectFromIntake(selected.id, operationId, { existingProjectId: existingChoice }, selected.kind === 'project_proposal' || invite);
       startOperations.current.delete(selected.id);
       setChoosingExisting(false); setExistingChoice('');
-      onProjectStarted?.(result);
+      onProjectStarted?.(result, selected, invite);
       void load();
     } catch (startError) {
       if (!(startError instanceof ApiRequestError) || (startError.status !== null && startError.status < 500)) startOperations.current.delete(selected.id);
@@ -488,6 +491,8 @@ export function PmCentralIntakeInbox({ workspaceName, workspaceId, workspaceCanR
                   {projects.map(project => <option key={project.id} value={project.id}>{project.name} ({project.key})</option>)}
                   <option value={REQUEST_ONLY}>No project yet: open the request only</option>
                 </select></label>
+              {selected.kind !== 'project_proposal' && existingChoice && existingChoice !== REQUEST_ONLY
+                && <InviteClientOption email={selected.email} checked={inviteClient} onChange={setInviteClient} disabled={accepting} />}
               <div className="pm-inquiries__decision-actions"><button type="button" onClick={() => { setChoosingExisting(false); setExistingChoice(''); }} disabled={accepting}
                 className="pm-inquiries__clarification-action">Cancel</button>
                 <button type="button" onClick={() => void addToExisting()} disabled={accepting || !existingChoice}

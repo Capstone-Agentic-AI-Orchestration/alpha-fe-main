@@ -8,6 +8,7 @@ import {
 
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, pmTicketDocumentsApi } from './pmApi';
+import { inviteClientToPortal } from './clientInvite';
 import { ChatContextPanel } from './ChatContextPanel';
 import type {
   PmTicketCommandInput, PmTicketDetail, PmTicketMessage, PmTicketMessageInput,
@@ -549,13 +550,7 @@ export function PmTicketsView({ api = pmTicketApi, documentsApi = pmTicketDocume
     setInvitationEmailError('');
     setWriteError('');
     try {
-      // Inviting the client is the PM's review of a new inquiry; record that first.
-      if (detail.status === 'received') {
-        await api.execute(ticketId, { schemaVersion: 1, operationId: crypto.randomUUID(), expectedVersion: detail.version, command: { type: 'review' } });
-      }
-      const receipt = await api.sendInvitationEmail(ticketId);
-      if (receipt.ticketId !== ticketId || !receipt.invitationId || !Number.isFinite(Date.parse(receipt.expiresAt))
-        || receipt.status !== 'pending' || typeof receipt.alreadyPending !== 'boolean') throw new Error('Invalid client invitation receipt.');
+      await inviteClientToPortal(api, ticketId, { status: detail.status, version: detail.version });
       refreshAll();
     } catch (error) {
       setInvitationEmailError(safeError(error, 'write'));

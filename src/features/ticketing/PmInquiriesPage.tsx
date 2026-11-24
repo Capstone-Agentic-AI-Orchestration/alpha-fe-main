@@ -5,7 +5,9 @@ import { Button } from '@/shared/components/ui/button';
 import { CreateProjectModal, type NewProjectInput } from '@/features/projects/CreateProjectModal';
 import type { Project } from '@/shared/types';
 import { PmCentralIntakeInbox } from './PmCentralIntakeInbox';
-import { PmTicketsView } from './PmTicketsView';
+import { PmTicketsView, safeError } from './PmTicketsView';
+import { InviteClientOption } from './InviteClientOption';
+import { inviteClientToPortal, inviteOutcomeText, type ClientInviteOutcome } from './clientInvite';
 import { pmTicketsIntakeEnabled, usePmWorkflowActions } from './pmTicketAvailability';
 import { pmTicketApi, type PmCentralIntakeItem, type PmIntakeProjectStart } from './pmApi';
 
@@ -41,23 +43,37 @@ export function PmInquiriesPage() {
   const startOperations = useRef(new Map<string, string>());
   const started = useRef<PmIntakeProjectStart | null>(null);
 
+  // Whether starting a project from a public inquiry also invites its sender to the client portal.
+  const [inviteClient, setInviteClient] = useState(true);
+  const invited = useRef<ClientInviteOutcome | null>(null);
+
   const openTicket = (ticketId: string, reference?: string) => setOpenRequest({ ticketId, reference });
   const openProject = (projectId: string) => { setSelectedProject(projectId); setActiveTab('projects'); };
-  const announce = (result: PmIntakeProjectStart, item?: PmCentralIntakeItem | null) => {
+  const announce = (result: PmIntakeProjectStart, item?: Pick<PmCentralIntakeItem, 'kind' | 'email'> | null, invitation: ClientInviteOutcome | null = null) => {
     const client = item?.kind === 'project_proposal' && result.clientVisible ? ' The client can see it in their projects.' : '';
-    showToast(result.created ? 'Project started' : 'Added to project', `${result.projectName} (${result.projectKey}) now has the request ${result.reference}.${client}`, 'success');
+    const invite = item ? inviteOutcomeText(item.email, invitation) : '';
+    showToast(result.created ? 'Project started' : 'Added to project',
+      [`${result.projectName} (${result.projectKey}) now has the request ${result.reference}.${client}`, invite].filter(Boolean).join(' '),
+      invitation && 'failed' in invitation ? 'error' : 'success');
+  };
+  /** Invite the inquiry's sender, after the project exists: a failure leaves the project in place. */
+  const sendInvite = async (ticketId: string): Promise<ClientInviteOutcome> => {
+    try { return { sent: await inviteClientToPortal(pmTicketApi, ticketId) }; }
+    catch (error) { return { failed: safeError(error, 'write') }; }
   };
 
   const createFromInquiry = async (input: NewProjectInput): Promise<Project> => {
     const item = startFor;
     if (!item) throw new Error('This inquiry is no longer selected.');
+    const invite = item.kind !== 'project_proposal' && inviteClient;
     let operationId = startOperations.current.get(item.id);
     if (!operationId) { operationId = crypto.randomUUID(); startOperations.current.set(item.id, operationId); }
     const result = await pmTicketApi.startProjectFromIntake(item.id, operationId,
       { name: input.name, key: input.key, description: input.description, ...(input.targetDate ? { targetDate: input.targetDate.slice(0, 10) } : {}) },
-      item.kind === 'project_proposal');
+      item.kind === 'project_proposal' || invite);
     startOperations.current.delete(item.id);
     started.current = result;
+    invited.current = invite ? await sendInvite(result.ticketId) : null;
     // The project was made on the server: load it, so the repository step can save to it.
     await refreshBoardState();
     return { id: result.projectId, name: result.projectName, key: result.projectKey, resources: [] } as unknown as Project;
@@ -89,8 +105,11 @@ export function PmInquiriesPage() {
         workspaceCanReview={activeWorkspace?.role === 'pm'}
         initialSelection={initialSelection}
         projects={projects}
-        onStartNewProject={item => { started.current = null; setStartFor(item); }}
-        onProjectStarted={result => announce(result)}
+        onStartNewProject={item => { started.current = null; invited.current = null; setInviteClient(true); setStartFor(item); }}
+        onProjectStarted={(result, item, invite) => {
+          if (!invite) { announce(result, item); return; }
+          void sendInvite(result.ticketId).then(invitation => { announce(result, item, invitation); setRefreshToken(value => value + 1); });
+        }}
         onOpenTicket={openTicket}
         onOpenProject={openProject}
         onAccepted={(reference, ticketId) => {
@@ -108,10 +127,16 @@ export function PmInquiriesPage() {
         ? 'Alpha creates the project, opens the request and lets this client see it. Set up repositories next.'
         : 'Alpha creates the project and opens the request. Set up repositories next.'}
       submitLabel="Start project"
+      extraFields={startFor && startFor.kind !== 'project_proposal'
+        ? <InviteClientOption email={startFor.email} checked={inviteClient} onChange={setInviteClient} />
+        : undefined}
       create={createFromInquiry}
       onClose={() => {
         // Closing after the project was made still counts: say so, and show the inquiry as handled.
-        if (started.current) { announce(started.current, startFor); setRefreshToken(value => value + 1); started.current = null; }
+        if (started.current) {
+          announce(started.current, startFor, invited.current);
+          setRefreshToken(value => value + 1); started.current = null; invited.current = null;
+        }
         setStartFor(null);
       }}
     />
