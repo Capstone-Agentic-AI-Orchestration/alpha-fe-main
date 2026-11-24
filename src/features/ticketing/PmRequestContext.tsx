@@ -1,18 +1,17 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { CircleDot, StickyNote, UserRound } from 'lucide-react';
+import { CircleDot, Info, MessageSquareText, Paperclip, Route, StickyNote, Ticket } from 'lucide-react';
 import { pmTicketApi, type PmTicketDetail, type PmTicketNote } from './pmApi';
 import { PmContactVerification, pmStatusLabel, pmStatusStyle } from './PmTicketsView';
 import { pmTicketNextAction } from './pmTicketNextAction';
 import { TicketDocumentsPanel } from './TicketDocumentsPanel';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
-import type { ConversationRequest } from './projectConversation';
+import { clientProgressSteps, type ClientProgressStep } from './clientProgressSteps';
+import { PmCollapsibleRailCard, PmRailCard, PmTicketProgress } from './PmConversationRail';
 import { time } from './ticketUi';
 import './pmTickets.css';
 
-/** The ticket-context tabs the PM had beside a request's chat, kept beside the project conversation. */
-export type PmRequestContextSection = 'overview' | 'notes' | 'details' | 'documents';
-
 const errorText = (error: unknown, fallback: string) => error instanceof Error && error.message ? error.message : fallback;
+const day = (value: string) => new Date(value).toLocaleDateString(undefined, { dateStyle: 'medium' });
 
 /** Loads one request's PM detail, again whenever `version` changes. */
 export function usePmRequestDetail(api: typeof pmTicketApi, ticketId: string | null, version: unknown) {
@@ -40,91 +39,51 @@ function nextStepText(detail: PmTicketDetail): string {
 
 function projectNote(detail: PmTicketDetail): string {
   if (!detail.internal.projectId) return 'Link a project when you start the work.';
-  return detail.internal.projectClientVisible ? 'Client-visible project name' : 'PM-only project link';
+  return detail.internal.projectClientVisible ? 'The client can see this project' : 'PM-only project link';
 }
 
-/** Which request the context tabs describe. */
-function RequestPicker({ requests, selectedId, onSelect, id }: Readonly<{
-  requests: readonly ConversationRequest[]; selectedId: string | null; onSelect: (ticketId: string) => void; id: string;
-}>) {
-  if (requests.length < 2) return null;
-  return <div className="mb-4 flex items-center gap-2 text-[12px]">
-    <label htmlFor={id} className="shrink-0 text-content-muted">Request</label>
-    <select id={id} value={selectedId ?? ''} onChange={event => onSelect(event.target.value)}
-      className="h-8 min-w-0 flex-1 rounded-md border border-control bg-well px-2 text-[12.5px] text-content">
-      {requests.map(request => <option key={request.ticketId} value={request.ticketId}>{request.title}</option>)}
-    </select>
-  </div>;
+/** The client's five steps, worded for the PM: a step waiting on the client says what they owe. */
+const PM_STEP_LABELS = ['Received', 'Planning', 'In progress', 'Client review', 'Done'] as const;
+const CLIENT_OWES = { reply: 'Client replies', agree_scope: 'Client approves plan', review_result: 'Client checks result' } as const;
+export function pmTicketProgressSteps(detail: Pick<PmTicketDetail, 'status' | 'requestedAction' | 'scope' | 'delivery'>): ClientProgressStep[] {
+  return clientProgressSteps(detail).map((step, index) => ({
+    ...step,
+    label: step.needsYou && detail.requestedAction ? CLIENT_OWES[detail.requestedAction] : PM_STEP_LABELS[index] ?? step.label,
+  }));
 }
 
-function Overview({ detail, clientName }: Readonly<{ detail: PmTicketDetail; clientName: string }>) {
-  const contact = detail.internal.request?.contact ?? null;
-  const name = contact?.fullName ?? clientName;
-  return <div>
-    <div className="pm-tickets__context-heading">
-      <div>
-        <p className="pm-tickets__eyebrow">Request context</p>
-        <span className="pm-tickets__reference">{detail.reference}</span>
-      </div>
-      <span className={`pm-tickets__status ${pmStatusStyle(detail.status)}`}>{pmStatusLabel(detail.status)}</span>
-    </div>
-    <section className="pm-tickets__context-section">
-      <p className="pm-tickets__context-label">Client</p>
-      <p className="pm-tickets__context-value">{name}</p>
-      {contact && <p className="pm-tickets__context-detail">{contact.email}</p>}
-      {detail.companyLabel !== name && <p className="pm-tickets__context-detail">{detail.companyLabel}</p>}
-      {contact && <p className="pm-tickets__context-detail"><PmContactVerification verification={contact.verification} /></p>}
-    </section>
-    <section className="pm-tickets__context-section">
-      <p className="pm-tickets__context-label">Project</p>
-      <p className="pm-tickets__context-value">{detail.internal.projectName ?? detail.request?.projectLabel ?? 'No project linked'}</p>
-      <p className="pm-tickets__context-detail">{projectNote(detail)}</p>
-    </section>
-    {detail.internal.requiredIssueIds.length > 0 && <section className="pm-tickets__context-section" aria-label="Tasks authorized for this request">
-      <p className="pm-tickets__context-label">Authorized task IDs</p>
-      <ul className="space-y-1">
-        {detail.internal.requiredIssueIds.map(issueId => <li key={issueId} className="break-all font-mono text-[11px] text-content-secondary">{issueId}</li>)}
-      </ul>
-      <p className="pm-tickets__context-detail">These existing project Tasks are the approved work linked to this request.</p>
-    </section>}
-    <section className="pm-tickets__context-section">
-      <p className="pm-tickets__context-label">Next step</p>
-      <p className="pm-tickets__context-value pm-tickets__context-value--accent"><CircleDot size={14} aria-hidden="true" />{nextStepText(detail)}</p>
-    </section>
-    <section className="pm-tickets__context-section">
-      <p className="pm-tickets__context-label">Request summary</p>
-      <p className="pm-tickets__context-detail whitespace-pre-wrap">{detail.description}</p>
-      {detail.request?.requestedDeadline && <p className="pm-tickets__context-detail">Requested by {detail.request.requestedDeadline}</p>}
-    </section>
-  </div>;
+/** A label and its value, one row of a details card. */
+function Row({ label, children }: Readonly<{ label: string; children: ReactNode }>) {
+  return <div className="pm-rail-row"><dt>{label}</dt><dd>{children}</dd></div>;
 }
 
 function Details({ detail, clientName }: Readonly<{ detail: PmTicketDetail; clientName: string }>) {
   const contact = detail.internal.request?.contact ?? null;
-  return <div className="space-y-6">
-    <section>
-      <p className="pm-tickets__eyebrow">Request</p>
-      <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-content">{detail.description}</p>
-      {detail.request?.requestedDeadline && <p className="mt-2 text-[12px] text-content-muted">Requested date: {detail.request.requestedDeadline} · not guaranteed</p>}
-    </section>
-    {detail.scope && <section>
-      <p className="pm-tickets__eyebrow">Proposed scope <span>· {detail.scope.agreed ? 'Agreed' : 'Awaiting client'}</span></p>
+  return <div className="space-y-4">
+    <dl className="pm-rail-rows">
+      <Row label="Client">{detail.companyLabel || clientName}</Row>
+      {contact && <Row label="Contact">{contact.fullName}</Row>}
+      {contact && <Row label="Email"><span className="break-all">{contact.email}</span><br /><PmContactVerification verification={contact.verification} /></Row>}
+      <Row label="Project">{detail.internal.projectName ?? detail.request?.projectLabel ?? 'No project linked'}
+        <span className="pm-rail-row__hint">{projectNote(detail)}</span></Row>
+      {detail.request?.requestedDeadline && <Row label="Hoped-for date">{detail.request.requestedDeadline} · not guaranteed</Row>}
+      <Row label="Created">{day(detail.createdAt)}</Row>
+      <Row label="Reference"><span className="font-mono text-[11.5px]">{detail.reference}</span></Row>
+    </dl>
+    {detail.scope && <section className="pm-rail-sub">
+      <p className="pm-rail-sub__label">Proposed scope · {detail.scope.agreed ? 'Agreed' : 'Awaiting client'}</p>
       <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-content">{detail.scope.summary}</p>
     </section>}
     {detail.internal.scopeVersion && <details className="pm-tickets__internal-brief">
       <summary>Internal developer brief</summary>
       <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-content">{detail.internal.scopeVersion.developerBrief ?? 'No internal brief is available for this older scope record.'}</p>
     </details>}
-    <section>
-      <p className="pm-tickets__eyebrow">Client & project</p>
-      <p className="text-[13px] text-content">{detail.companyLabel || clientName}</p>
-      {contact && <div className="mt-1 space-y-0.5 text-[12px] text-content-secondary">
-        <p className="flex items-center gap-1.5"><UserRound size={12} aria-hidden="true" />{contact.fullName}</p>
-        <p className="break-all">{contact.email} · <PmContactVerification verification={contact.verification} /></p>
-      </div>}
-      <p className="mt-2 text-[12px] text-content-secondary">{detail.internal.projectId
-        ? 'Project: ' + (detail.internal.projectName ?? 'linked') : 'No project linked yet'}</p>
-    </section>
+    {detail.internal.requiredIssueIds.length > 0 && <section className="pm-rail-sub" aria-label="Tasks authorized for this request">
+      <p className="pm-rail-sub__label">Authorized task IDs</p>
+      <ul className="space-y-1">
+        {detail.internal.requiredIssueIds.map(issueId => <li key={issueId} className="break-all font-mono text-[11px] text-content-secondary">{issueId}</li>)}
+      </ul>
+    </section>}
   </div>;
 }
 
@@ -155,7 +114,7 @@ function Notes({ api, detail, onSaved }: Readonly<{ api: typeof pmTicketApi; det
   };
 
   return <div className="space-y-4">
-    <p className="text-[12px] text-content-muted">Only authorized project managers can see these notes.</p>
+    <p className="text-[12px] text-content-muted">Only your team sees these notes. The client never does.</p>
     {error && <p role="alert" className="text-[12.5px] text-status-danger">{error}</p>}
     {notes === null && !error && <p className="text-[12.5px] text-content-muted">Loading notes…</p>}
     {notes?.length === 0 && <p className="text-[12.5px] text-content-muted">No private notes yet. Keep internal context here for the project team.</p>}
@@ -179,35 +138,49 @@ function Notes({ api, detail, onSaved }: Readonly<{ api: typeof pmTicketApi; det
 }
 
 /**
- * One tab of the request context beside the conversation: the request picker,
- * then that request's overview, private notes, details or documents.
+ * The picked ticket in the PM's side panel, laid out like the client's picked request:
+ * its head, progress, what happens next and what the client asked for, then
+ * details, private notes and documents as cards that fold.
  */
-export function PmRequestContext({ section, api = pmTicketApi, documentsApi, requests, selectedId, onSelect, clientName, refreshToken = '', onChanged }: Readonly<{
-  section: PmRequestContextSection;
+export function PmSelectedTicket({ api = pmTicketApi, documentsApi, ticketId, clientName, refreshToken = '', onChanged }: Readonly<{
   api?: typeof pmTicketApi;
   documentsApi: TicketDocumentsReadApi;
-  requests: readonly ConversationRequest[] | null;
-  selectedId: string | null;
-  onSelect: (ticketId: string) => void;
+  /** The picked ticket; null when the project has none, which shows a hint instead. */
+  ticketId: string | null;
   clientName: string;
   refreshToken?: string;
   /** After a private note is saved, so the conversation shows it too. */
   onChanged?: () => void;
 }>) {
   const [version, setVersion] = useState(0);
-  const { detail, error } = usePmRequestDetail(api, selectedId, `${version}:${refreshToken}`);
-  let body: ReactNode;
-  if (requests !== null && requests.length === 0) body = <p className="text-[12.5px] text-content-muted">No requests from this client on this project yet.</p>;
-  else if (error) body = <p role="alert" className="text-[12.5px] text-status-danger">{error}</p>;
-  else if (!detail) body = <p className="text-[12.5px] text-content-muted">Loading request…</p>;
-  else if (section === 'overview') body = <Overview detail={detail} clientName={clientName} />;
-  else if (section === 'details') body = <Details detail={detail} clientName={clientName} />;
-  else if (section === 'notes') body = <Notes api={api} detail={detail} onSaved={() => { setVersion(value => value + 1); onChanged?.(); }} />;
-  else body = <TicketDocumentsPanel api={documentsApi} ticketId={detail.id} heading="Shared files" canUpload={false} showRefresh={false}
-    refreshToken={refreshToken} emptyMessage="No client files have been uploaded to this request yet."
-    readOnlyMessage="Only the client can upload files. You can download the files they share here." />;
-  return <div className="pm-request-context">
-    <RequestPicker requests={requests ?? []} selectedId={selectedId} onSelect={onSelect} id={`pm-request-context-${section}`} />
-    {body}
-  </div>;
+  const { detail, error } = usePmRequestDetail(api, ticketId, `${version}:${refreshToken}`);
+  if (!ticketId) return <p className="pm-rail-note pm-rail-hint">Pick a ticket to see its next step, details, private notes and documents.</p>;
+  if (error) return <p role="alert" className="pm-rail-note is-danger">{error}</p>;
+  if (!detail) return <section className="pm-rail-card" aria-busy="true"><p className="pm-rail-note">Loading ticket…</p></section>;
+  const steps = pmTicketProgressSteps(detail);
+  return <>
+    <PmRailCard icon={<Ticket size={16} />} title={detail.title} label="Selected ticket">
+      <p className="pm-rail-meta">{detail.internal.projectName ?? 'No project linked'} · Created {day(detail.createdAt)}</p>
+      <span className={`pm-tickets__status ${pmStatusStyle(detail.status)}`}>{pmStatusLabel(detail.status)}</span>
+    </PmRailCard>
+    {steps.length > 0 && <PmRailCard icon={<Route size={16} />} title="Ticket progress"><PmTicketProgress steps={steps} /></PmRailCard>}
+    <PmRailCard icon={<CircleDot size={16} />} title="What happens next">
+      <p className="pm-rail-note is-strong">{nextStepText(detail)}</p>
+    </PmRailCard>
+    <PmRailCard icon={<MessageSquareText size={16} />} title="What the client asked for">
+      <p className="whitespace-pre-wrap text-[13px] leading-relaxed text-content">{detail.description}</p>
+    </PmRailCard>
+    <PmCollapsibleRailCard id="details" icon={<Info size={16} />} title="Request details">
+      <Details detail={detail} clientName={clientName} />
+    </PmCollapsibleRailCard>
+    <PmCollapsibleRailCard id="notes" icon={<StickyNote size={16} />} title="Private notes"
+      aside={<span className="pm-rail-pill is-internal">Internal</span>}>
+      <Notes api={api} detail={detail} onSaved={() => { setVersion(value => value + 1); onChanged?.(); }} />
+    </PmCollapsibleRailCard>
+    <PmCollapsibleRailCard id="documents" icon={<Paperclip size={16} />} title="Documents" initiallyOpen={false}>
+      <TicketDocumentsPanel api={documentsApi} ticketId={detail.id} heading="Shared files" canUpload={false} showRefresh={false}
+        refreshToken={refreshToken} emptyMessage="No client files have been uploaded to this request yet."
+        readOnlyMessage="Only the client can upload files. You can download the files they share here." />
+    </PmCollapsibleRailCard>
+  </>;
 }

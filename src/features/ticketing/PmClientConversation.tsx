@@ -5,16 +5,16 @@ import { Button } from '@/shared/components/ui/button';
 import { Select } from '@/shared/components/ui/select';
 import { ApiRequestError } from '@/shared/services/apiService';
 import { pmTicketApi, pmTicketDocumentsApi, type PmClientProjectConversation, type PmClientSummary } from './pmApi';
-import {
-  ProjectConversationChat, ProjectConversationView, useConversationJump, type ConversationAbout, type ConversationPanelTab,
-} from './ProjectConversationView';
-import { PmRequestContext, type PmRequestContextSection } from './PmRequestContext';
+import { ProjectConversationChat, ProjectConversationView, useConversationJump, type ConversationAbout } from './ProjectConversationView';
+import { PmSelectedTicket } from './PmRequestContext';
+import { PmConversationRail } from './PmConversationRail';
 import type { TicketDocumentsReadApi } from './ticketDocuments';
 import { withUpdatedRequest, type ConversationItem, type ConversationRequest } from './projectConversation';
 import { REQUEST_TASK_LINKED_EVENT, linkSavedTaskToRequest } from './requestTaskLink';
 import { useProjectStage } from './useProjectStage';
 import { ProjectStageTracker } from './ProjectStageTracker';
 import { PmStagePanel } from './PmStagePanel';
+import type { StageSummary } from './projectStages';
 
 const REFRESH_MS = 30_000;
 const newOperationId = () => crypto.randomUUID();
@@ -84,6 +84,26 @@ function usePmProjectConversation(api: typeof pmTicketApi, projectId: string | n
   }, [api, clientId, projectId, load]);
 
   return { items, requests, setRequests, error, load, send };
+}
+
+/** Why there is no conversation to show: no portal account yet, a load error, or no shared projects. */
+function conversationNotice(clientId: string | null, projectsError: string, projects: readonly PmClientProjectConversation[] | null): ReactNode {
+  if (!clientId) return <p className="px-6 py-5 text-[13px] text-content-muted">
+    This client hasn’t set up a portal account yet, so there is no conversation. Their requests are in Tickets.</p>;
+  if (projectsError) return <p role="alert" className="px-6 py-5 text-[13px] text-status-danger">{projectsError}</p>;
+  if (projects?.length === 0) return <div className="px-6 py-5 text-[13px] text-content-secondary">
+    <p className="font-medium text-content">No project conversations yet</p>
+    <p className="mt-1 text-content-muted">A conversation starts once one of this client’s requests or proposals is linked to a project and shared with them.</p>
+  </div>;
+  return null;
+}
+
+/**
+ * The stage card's title and prompt. Each stage's panel already heads itself (Proof of concept, Contract…),
+ * so the card is just "Stage"; a project from before stages says so beside the stage picker.
+ */
+function stageCardText(summary: StageSummary): { title: string; prompt: string | null } {
+  return { title: 'Stage', prompt: summary.stage === 'unset' ? 'This project started before stages. Choose where it is now.' : null };
 }
 
 /** Only a client's request gets "Create task"; ordinary messages do not. */
@@ -178,6 +198,7 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
   const contextRequest = requests?.find(request => request.ticketId === contextTicketId)
     ?? requests?.find(request => !['done', 'declined', 'cancelled'].includes(request.checklist)) ?? requests?.[0] ?? null;
   const target = useAboutTarget(contextRequest ? { ticketId: contextRequest.ticketId, title: contextRequest.title } : null);
+  const selectedTicketId = contextRequest?.ticketId ?? null;
 
   /** Open the New task dialog for this project, filled from a request and linked to it. */
   const createTask = (request: { ticketId: string; title: string }, description: string) => {
@@ -203,25 +224,21 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
     void run(async () => { await linkSavedTaskToRequest(request.ticketId, issueId, 'conversation', api, []); await load(true); }, 'The task was not linked.');
   };
 
-  if (!clientId) return <p className="px-6 py-5 text-[13px] text-content-muted">
-    This client hasn’t set up a portal account yet, so there is no conversation. Their requests are in Tickets.</p>;
-  if (projectsError) return <p role="alert" className="px-6 py-5 text-[13px] text-status-danger">{projectsError}</p>;
-  if (projects?.length === 0) return <div className="px-6 py-5 text-[13px] text-content-secondary">
-    <p className="font-medium text-content">No project conversations yet</p>
-    <p className="mt-1 text-content-muted">A conversation starts once one of this client’s requests or proposals is linked to a project and shared with them.</p>
-  </div>;
+  const notice = conversationNotice(clientId, projectsError, projects);
+  if (notice) return notice;
 
   const linkedIds = new Set((requests ?? []).flatMap(request => request.linkedTasks.map(task => task.issueId)));
   const linkable = projectTasks.filter(task => !linkedIds.has(task.id));
-  const contextTab = (id: PmRequestContextSection, label: string): ConversationPanelTab => ({ id, label,
-    content: <PmRequestContext section={id} api={api} documentsApi={documentsApi} requests={requests} selectedId={contextRequest?.ticketId ?? null}
-      onSelect={setContextTicketId} clientName={client.displayName} refreshToken={`${refreshToken ?? 0}:${contextVersion}`}
-      onChanged={() => void load(true)} /> });
-  const stageTab: ConversationPanelTab[] = stageSummary && projectId && clientId ? [{ id: 'stage', label: 'Stage',
+  // The side panel, laid out like the client's: stage, preview, tickets, then the picked ticket.
+  const stageCard = stageSummary && projectId && clientId ? { ...stageCardText(stageSummary),
     content: <PmStagePanel api={api} projectId={projectId} clientId={clientId} summary={stageSummary} busy={stage.busy}
-      actionError={stage.actionError} run={stage.run} /> }] : [];
-  const panelTabs = [...stageTab, contextTab('overview', 'Overview'), contextTab('notes', 'Private notes'),
-    contextTab('details', 'Request details'), contextTab('documents', 'Documents')];
+      actionError={stage.actionError} run={stage.run} /> } : null;
+  const previewShared = client.projects.find(item => item.projectId === projectId)?.previewPublished;
+  const renderRail = ({ requestList, requestsTitle }: { requestList: ReactNode; requestsTitle: string }) =>
+    <PmConversationRail projectName={project?.projectName ?? 'Project'} stage={stageCard} previewShared={previewShared}
+      ticketsTitle={requestsTitle} tickets={requestList}
+      selected={<PmSelectedTicket key={String(selectedTicketId)} api={api} documentsApi={documentsApi} ticketId={selectedTicketId}
+        clientName={client.displayName} refreshToken={`${refreshToken ?? 0}:${contextVersion}`} onChanged={() => void load(true)} />} />;
 
   const renderRequestActions = (request: ConversationRequest) => {
     if (request.checklist === 'declined' || request.checklist === 'cancelled') return null;
@@ -287,7 +304,7 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
         </div>
       </header>}
       {project && stageSummary && <div className="shrink-0 border-b border-divider px-6 pb-2">
-        <ProjectStageTracker summary={stageSummary} role="pm" />
+        <ProjectStageTracker summary={stageSummary} role="pm" unsetPrompt={false} />
       </div>}
       {projects ? <ProjectConversationView key={projectId ?? 'none'} role="pm" projectName={project?.projectName ?? 'Project'}
         items={items} requests={requests} error={error} actionError={actionError}
@@ -298,9 +315,9 @@ export function PmClientConversationTab({ api = pmTicketApi, documentsApi = pmTi
         onToggleDone={toggle}
         onOpenRequest={request => onOpenRequestDetails(request.ticketId)}
         focusTicketId={focus?.ticketId ?? null}
-        selectedTicketId={contextRequest?.ticketId ?? null}
+        selectedTicketId={selectedTicketId}
         onSelectRequest={request => setContextTicketId(request.ticketId)}
-        panelTabs={panelTabs}
+        renderRail={renderRail}
         inputId={`pm-conversation-${client.key}`}
         messageActions={requestCardActions(onCreateTask ? createTask : undefined)}
         renderRequestActions={renderRequestActions}
