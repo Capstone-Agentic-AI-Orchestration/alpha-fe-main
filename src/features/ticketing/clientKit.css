@@ -51,9 +51,8 @@
 /* The development preview stacks a notice bar above the portal. */
 .ticketing-client-preview { display: flex; height: 100dvh; min-height: 0; flex-direction: column; overflow: hidden; }
 .ticketing-client-preview > .cx-shell { height: auto; min-height: 0; flex: 1 1 0%; }
-/* The bar's contents line up with the page column below, so the logo and the page share one left edge. */
 .cx-topbar { z-index: 3; display: flex; flex: none; align-items: center; gap: var(--client-space-5); height: 60px;
-  padding: 0 max(var(--client-portal-gutter), calc((100% - var(--cx-page-width)) / 2 + var(--client-portal-gutter)));
+  padding: 0 var(--client-space-5);
   border-bottom: 1px solid color-mix(in srgb, var(--cx-line) 70%, transparent); background: rgb(var(--ui-canvas)); }
 .cx-brand { display: flex; flex: none; align-items: center; }
 .cx-brand img { width: 132px; height: 44px; object-fit: contain; }

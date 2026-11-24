@@ -29,26 +29,25 @@ describe('client project page', () => {
     expect(chat).toBeGreaterThan(-1);
     expect(rail).toBeGreaterThan(chat);
     expect(html).toContain('All projects');
-    expect(html).toMatch(/aria-expanded="true"[^>]*>.*?Requests/);
+    expect(html.slice(rail)).toContain('class="cx-project-ticket-list" aria-label="Requests"');
     expect(html).toContain('Pick a request to see its progress');
-    // New request lives in the top bar only; the old badge and per-request "Open details" are gone.
+    // The project header owns the New request action when it is provided.
     expect(html).not.toContain('New request');
-    expect(html).not.toContain('Project conversation');
+    expect(html).toContain('Project conversation');
     expect(html).not.toContain('Open details');
   });
 
-  it('shows the picked request in the panel with its four open sections and folding files and details', () => {
+  it('shows progress above the picked request and keeps files and request details folded', () => {
     const html = page({ selectedTicketId: 't-1', request: { ticket, loading: false, error: '' } });
     const side = html.slice(html.indexOf('aria-label="Requests and details for Resort Website"'));
-    for (const shown of ['id="client-request-title"', 'Request progress', 'What happens next', 'What you asked for', 'example 2']) {
-      expect(side).toContain(shown);
-    }
-    // Requests, Files and Request details fold; the request's four core sections are always open.
-    for (const folding of ['Requests', 'Files', 'Request details']) expect(side).toMatch(new RegExp('class="cx-reqcard-title">' + folding));
-    for (const open of ['Request progress', 'What happens next', 'What you asked for']) {
-      expect(side).toContain('</span>' + open + '</h2>');
-      expect(side).not.toContain('class="cx-reqcard-title">' + open);
-    }
+    const progress = side.indexOf('class="cx-project-request-progress" aria-label="Request progress"');
+    expect(progress).toBeGreaterThan(-1);
+    expect(side.indexOf('id="client-request-title"')).toBeGreaterThan(progress);
+    expect(side).toContain('What happens next</h3>');
+    expect(side).toContain('class="cx-reqcard-title">Files');
+    expect(side).toContain('class="cx-reqcard-title">Request details');
+    expect(side).toContain('hidden="" class="cx-reqcard-body cx-request-files"');
+    expect(side).toContain('hidden="" class="cx-reqcard-body "><p class="cx-request-copy cx-project-request-description">example 2');
   });
 
   it('waits for the picked request inside the panel instead of reloading the page', () => {
@@ -84,12 +83,14 @@ describe('client project page', () => {
     expect(head(page())).not.toContain('aria-label="Project view"');
   });
 
-  it('says in the panel that no preview is shared yet, above the requests, with a way to ask about one', () => {
+  it('puts availability and the option to ask in a collapsed Preview section below Requests', () => {
     const html = page(switchable);
     const rail = between(html, 'aria-label="Requests and details for Resort Website"');
-    const preview = rail.indexOf('</span>Preview</h2>');
-    expect(preview).toBeGreaterThan(-1);
-    expect(rail.indexOf('class="cx-reqcard-title">Requests')).toBeGreaterThan(preview);
+    const requests = rail.indexOf('class="cx-project-ticket-list"');
+    expect(requests).toBeGreaterThan(-1);
+    expect(rail.indexOf('class="cx-reqcard-title">Preview')).toBeGreaterThan(requests);
+    const toggle = between(between(rail, 'class="cx-project-rail-context"'), 'class="cx-reqcard-toggle"', '</button>');
+    expect(toggle).toContain('aria-expanded="false"');
     expect(rail).toContain('Not shared yet.');
     expect(rail).toContain('Ask about a preview');
     // A read-only inspection still says so, but cannot write to the project manager.
@@ -109,7 +110,9 @@ describe('client project page', () => {
     expect(html).not.toContain('Hide conversation');
     expect(html).not.toContain('Full screen');
     const rail = between(html, '<aside');
-    expect(rail).not.toContain('Not shared yet.');
+    const chatPanel = between(rail, 'class="cx-railchat"', 'class="cx-railrequests"');
+    expect(chatPanel).not.toContain('Not shared yet.');
+    expect(rail).toContain('hidden="" class="cx-railrequests"');
     expect(rail).toMatch(/role="tab"[^>]*aria-selected="true"[^>]*>.*?Conversation<\/button>/);
     expect(rail).toContain('Requests');
     // One conversation, now in the rail, with its composer.

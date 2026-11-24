@@ -110,13 +110,12 @@ describe('ProjectConversationView', () => {
       renderRail: ({ requestList, requestsTitle }) => <PmConversationRail projectName="Website" previewShared={false}
         ticketsTitle={requestsTitle} tickets={requestList} selected={<section aria-label="Selected ticket details">Details for Fix the footer</section>} /> });
     const rail = html.slice(html.indexOf('<aside'));
-    const pickerStart = rail.indexOf('class="pm-ticket-picker__trigger"');
+    const pickerStart = rail.indexOf('aria-label="Selected ticket: Fix the footer. Change ticket"');
     const detailsStart = rail.indexOf('Details for Fix the footer');
     expect(html).not.toContain('role="tablist"');
     expect(html.indexOf('Project header')).toBeLessThan(html.indexOf('<aside'));
     expect(pickerStart).toBeGreaterThanOrEqual(0);
     expect(pickerStart).toBeLessThan(detailsStart);
-    expect(rail).toContain('aria-label="Selected ticket: Fix the footer. Change ticket"');
     expect(rail).toContain('>TKT-123ABC<');
     expect(rail).toContain('title="TKT-123ABC987654"');
     expect(rail).not.toContain('pm-rail-ticket-row');

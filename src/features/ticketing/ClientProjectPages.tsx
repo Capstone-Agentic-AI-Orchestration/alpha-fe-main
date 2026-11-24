@@ -47,11 +47,10 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
   const shownProjects = [...projects].sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt)).slice(0, 4);
   const [selectedProjectKey, setSelectedProjectKey] = useState('');
   const selectedProject = shownProjects.find(project => clientProjectKey(project) === selectedProjectKey) ?? shownProjects[0] ?? null;
-  const today = new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
   const latestByProject = useLatestManagerMessages(api, shownProjects, refreshToken);
   const replyIdeas = onOpenProposals ? proposalsNeedingReply : 0;
   return <section className="cx-page cx-overview" aria-labelledby="client-overview-title">
-    <HomeHero greeting={clientGreeting()} firstName={firstName} today={today}
+    <HomeHero greeting={clientGreeting()} firstName={firstName}
       requestAction={newRequestAction} onProposeProject={!newRequestAction ? onProposeProject : undefined} />
 
     {(requestsError || projectsError) && <div className="cx-overview-alerts">
@@ -65,19 +64,16 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
         proposalsNeedingReply={replyIdeas} onOpenProposals={onOpenProposals} />
     </section>}
 
-    <section className="cx-showcase-section" aria-labelledby="client-projects-title">
-      <header className="cx-showcase-section-head">
-        <div><h2 id="client-projects-title">Your projects</h2><p>Choose a project to see its latest updates.</p></div>
-        {projects.length > shownProjects.length && <Button type="button" variant="ghost" size="sm" className="cx-link" onClick={onGoToProjects}>
-          All projects <ArrowRight size={14} aria-hidden="true" /></Button>}
-      </header>
+    <div className="cx-showcase-section">
+      {projects.length > shownProjects.length && <Button type="button" variant="ghost" size="sm" className="cx-link shrink-0 self-end" onClick={onGoToProjects}>
+        All projects <ArrowRight size={14} aria-hidden="true" /></Button>}
       <ClientProjectShowcase project={selectedProject} projects={shownProjects} requests={items}
         latestMessage={selectedProject ? latestByProject[clientProjectKey(selectedProject)] ?? null : null}
         projectsLoading={projectsLoading && !projects.length} requestsLoading={!requests && requestsLoading}
         onSelectProject={project => setSelectedProjectKey(clientProjectKey(project))}
         onOpenRequest={onOpenRequest} onOpenProject={onOpenProject}
         onOpenPreview={onOpenPreview ?? onOpenProject} onGoToRequests={onGoToRequests} />
-    </section>
+    </div>
   </section>;
 }
 
@@ -85,12 +81,11 @@ export function ClientOverviewPage({ clientName, requests, projects, requestsLoa
  * Home's opening band: the greeting with the client's name in the accent colour, the one main
  * action (proposing a project) and one line on where things stand.
  */
-function HomeHero({ greeting, firstName, today, requestAction, onProposeProject }: {
-  greeting: string; firstName: string; today: string; requestAction?: ReactNode; onProposeProject?: () => void;
+function HomeHero({ greeting, firstName, requestAction, onProposeProject }: {
+  greeting: string; firstName: string; requestAction?: ReactNode; onProposeProject?: () => void;
 }) {
   return <header className="cx-home-hero">
     <div className="cx-home-hero-copy">
-      <p className="cx-eyebrow">{today}</p>
       <h1 id="client-overview-title">{greeting}{firstName && <>, <span className="cx-accent-word">{firstName}</span></>}</h1>
       <p className="cx-home-hero-description">Build, explore, and collaborate with Alphaexplora.</p>
     </div>
