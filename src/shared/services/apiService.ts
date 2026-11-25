@@ -27,6 +27,7 @@ import {
   Skill,
   RuntimeEngine,
   CodexAlphaSignInState,
+  ClaudeSignInState,
   BoardAgentChange,
   PrototypeRun,
   SquadRun,
@@ -1018,6 +1019,13 @@ export const apiService = {
   startCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-in', { method: 'POST' }),
   cancelCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-in', { method: 'DELETE' }),
   signOutCodexAlphaSignIn: () => fetchJson<CodexAlphaSignInState>('/runtimes/codex/alpha-sign-out', { method: 'POST' }),
+  /** Claude Code sign-in with a Claude subscription; Claude Code keeps the credentials. */
+  getClaudeSignIn: () => fetchJson<ClaudeSignInState>('/runtimes/claude/sign-in'),
+  startClaudeSignIn: () => fetchJson<ClaudeSignInState>('/runtimes/claude/sign-in', { method: 'POST' }),
+  submitClaudeSignInCode: (code: string) => fetchJson<ClaudeSignInState>('/runtimes/claude/sign-in/code', { method: 'POST', body: JSON.stringify({ code }) }),
+  cancelClaudeSignIn: () => fetchJson<ClaudeSignInState>('/runtimes/claude/sign-in', { method: 'DELETE' }),
+  /** Open an interactive CLI sign-in (Antigravity, OpenCode) in a terminal window on this desktop. */
+  openRuntimeSignInWindow: (runtimeId: string) => fetchJson<{ opened: boolean }>(`/runtimes/${encodeURIComponent(runtimeId)}/sign-in-window`, { method: 'POST' }),
 
   // Runs
   /** 'summary' omits stage logs and activity; open one run with getRun for those. */

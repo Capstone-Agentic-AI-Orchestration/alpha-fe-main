@@ -8,6 +8,7 @@ import { Card } from '@/shared/components/ui/card';
 import { Input } from '@/shared/components/ui/input';
 import { Progress } from '@/shared/components/ui/progress';
 import { RuntimeIsolationPanel } from '@/features/runtimes/RuntimeIsolationPanel';
+import { ProviderSignIn, offersInAppSignIn } from '@/features/runtimes/ProviderSignIn';
 import { apiService } from '@/shared/services/apiService';
 import { isDesktop } from '@/shared/desktop';
 import { providerUsageUrl } from '@/shared/lib/providerUsageUrl';
@@ -84,12 +85,14 @@ const ProvidersPanelContent: React.FC = () => {
 
   useEffect(() => { void loadProviderLimits(); }, [loadProviderLimits]);
 
+  // Claude, Antigravity and OpenCode sign in from Alpha (ProviderSignIn); Codex keeps its terminal command.
+  const loginCommand = selected?.id === 'codex' ? 'codex login' : null;
+  const inAppSignIn = Boolean(selected && canManageRuntimes && offersInAppSignIn(selected.id));
+
   const copyLoginCommand = async () => {
-    if (!selected) return;
-    const command = selected.id === 'codex' ? 'codex login' : selected.id === 'claude' ? 'claude auth login' : null;
-    if (!command) return;
+    if (!loginCommand) return;
     try {
-      await navigator.clipboard.writeText(command);
+      await navigator.clipboard.writeText(loginCommand);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1500);
     } catch { /* The command remains visible for manual copying. */ }
@@ -103,8 +106,6 @@ const ProvidersPanelContent: React.FC = () => {
       window.setTimeout(() => setCopiedEndpoint(false), 1500);
     } catch { /* Endpoint remains visible for manual copying. */ }
   };
-
-  const loginCommand = selected?.id === 'codex' ? 'codex login' : selected?.id === 'claude' ? 'claude auth login' : null;
 
   if (!isDesktop) return <Card className="p-5">
     <div className="flex items-start gap-3">
@@ -207,6 +208,7 @@ const ProvidersPanelContent: React.FC = () => {
             <p className="mt-1 text-xs leading-relaxed text-content-secondary">Sign in through the provider on this desktop.</p>
           </div>
           {selected.isolation && <RuntimeIsolationPanel runtime={selected} allowSignIn={canManageRuntimes} onSignedIn={() => void scanLocalRuntimes()} />}
+          {inAppSignIn && <ProviderSignIn key={selected.id} runtimeId={selected.id} onSignedIn={() => void scanLocalRuntimes()} />}
           {loginCommand && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-divider bg-surface-raised/40 px-3 py-2.5">
             <code className="flex-1 font-mono text-xs text-content">{loginCommand}</code>
             <Button variant="outline" size="sm" onClick={() => void copyLoginCommand()} disabled={!canManageRuntimes}>
@@ -214,7 +216,7 @@ const ProvidersPanelContent: React.FC = () => {
             </Button>
             {selected.status !== 'online' && <span className="w-full text-[11px] text-content-muted">Run this in a terminal on the Alpha desktop, then check providers again.</span>}
           </div>}
-          {!selected.isolation && !loginCommand && <div className="flex items-start gap-2 rounded-lg border border-divider bg-surface-raised/40 px-3 py-2.5 text-xs text-content-secondary">
+          {!selected.isolation && !loginCommand && !inAppSignIn && <div className="flex items-start gap-2 rounded-lg border border-divider bg-surface-raised/40 px-3 py-2.5 text-xs text-content-secondary">
             <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-content-muted" />Manage sign-in in this provider’s own app or CLI. Alpha reads runtime status and does not copy provider credentials.
           </div>}
           {selected.id === 'codex' && <a href="https://developers.openai.com/codex/cli" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-link hover:underline">Codex CLI setup <ExternalLink className="h-3.5 w-3.5" /></a>}

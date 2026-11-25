@@ -1609,6 +1609,15 @@ export interface CodexAlphaSignInState {
   error?: string;
 }
 
+/** Claude Code sign-in with a Claude subscription (desktop only). */
+export interface ClaudeSignInState {
+  status: 'signed_out' | 'waiting' | 'signed_in' | 'failed' | 'expired';
+  /** Claude Code's sign-in link, for when its browser tab did not open. */
+  verificationUrl?: string;
+  expiresAt?: string;
+  error?: string;
+}
+
 /** A board change an agent made, or asked a developer to confirm, on that developer's behalf. */
 export interface BoardAgentChange {
   id: string;
