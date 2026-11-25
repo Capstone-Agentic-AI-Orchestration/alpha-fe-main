@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 
 import { AgentCall, AgentCallActivity, ProjectChatAgent } from '@/shared/types';
+import { stripAnsi } from '@/shared/lib/ansi';
 
 interface AgentActivityPanelProps {
   call: AgentCall;
@@ -117,10 +118,10 @@ export const AgentActivityPanel: React.FC<AgentActivityPanelProps> = ({ call, ag
               return <li key={activity.id} className="relative">
                 <span className={'absolute -left-[29px] top-0 grid h-[17px] w-[17px] place-items-center rounded-full border bg-shell ' + (activity.kind === 'error' ? 'border-status-danger-border text-status-danger' : latest && live ? 'border-divider text-link shadow-[0_0_10px_rgb(var(--ui-link)/0.5)]' : 'border-divider text-content-secondary')}>{activityIcon(activity.kind)}</span>
                 <div className="flex items-baseline justify-between gap-3">
-                  <p className={'text-xs leading-relaxed ' + (latest ? 'text-content' : 'text-content-secondary')}>{activity.toolName ? <span className="mr-1 font-mono text-[10px] text-link">{activity.toolName}</span> : null}{activity.message}</p>
+                  <p className={'text-xs leading-relaxed ' + (latest ? 'text-content' : 'text-content-secondary')}>{activity.toolName ? <span className="mr-1 font-mono text-[10px] text-link">{activity.toolName}</span> : null}{stripAnsi(activity.message)}</p>
                   <span className="shrink-0 text-[10px] text-content-muted">{clock(activity.createdAt)}</span>
                 </div>
-                {activity.detail && <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-[11px] text-content-muted">{activity.detail}</p>}
+                {activity.detail && <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words text-[11px] text-content-muted">{stripAnsi(activity.detail)}</p>}
                 {activity.paths && activity.paths.length > 0 && <div className="mt-1.5 flex flex-wrap gap-1">{activity.paths.slice(0, 6).map(path => <span key={path} className="max-w-full truncate rounded-md bg-surface-raised px-1.5 py-0.5 font-mono text-[10px] text-content-secondary">{path}</span>)}{activity.paths.length > 6 && <span className="text-[10px] text-content-muted">+{activity.paths.length - 6} more</span>}</div>}
               </li>;
             })}

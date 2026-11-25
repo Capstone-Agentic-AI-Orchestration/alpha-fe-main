@@ -11,9 +11,9 @@ import {
   instanceTag,
   LOG_RANGE_OPTIONS,
   rangeWindow,
-  stripAnsi,
   type LogRangePreset
 } from './logFormat';
+import { stripAnsi } from '@/shared/lib/ansi';
 import type { DeploymentLogLine, LogQueryFilters } from './logTypes';
 import { useHostingLogs, type DeploymentLogsViewModel } from './useHostingLogs';
 
