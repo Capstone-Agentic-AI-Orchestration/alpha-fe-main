@@ -20,19 +20,19 @@ const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB
  */
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
-  pm: ['clients', 'inquiries', 'projects', 'issues', 'chat', 'agents', 'skills', 'analytics', 'settings'],
-  admin: ['issues', 'projects', 'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'],
+  dev: ['issues', 'attention', 'projects', 'agents', 'skills', 'chat', 'settings'],
+  pm: ['clients', 'attention', 'inquiries', 'projects', 'issues', 'chat', 'agents', 'skills', 'analytics', 'settings'],
+  admin: ['issues', 'attention', 'projects', 'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
  * Existing sidebar ordering differs from ROLE_NAV; preserve it independently.
- * Chat leads the Build section for every role that builds with agents.
+ * Needs your attention comes first, then Chat leads the Build section for every role that builds with agents.
  */
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
-  dev: ['chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
-  pm: ['chat', 'clients', 'issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
-  admin: ['chat', 'issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
+  dev: ['attention', 'chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
+  pm: ['attention', 'chat', 'clients', 'issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
+  admin: ['attention', 'chat', 'issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /** PMs start with their clients; the project conversation owns each project's tickets. */
 const landing = (role: UserRole) => withoutHiddenChat(existing[role])[0];

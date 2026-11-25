@@ -4,6 +4,7 @@ import alphaMarkUrl from '@/assets/alpha-mark.png';
 import { navIcon, navLabel, sectionsFor } from '@/config/navigation';
 import { aiFeaturesEnabled } from '@/config/features';
 import { useApp } from '@/app/AppContext';
+import { useAttention } from '@/features/attention/AttentionContext';
 import { NavigationTab, UserRole } from '@/shared/types';
 import { CreateWorkspaceModal } from '@/features/settings/CreateWorkspaceModal';
 import { SidebarFrame } from './SidebarFrame';
@@ -78,6 +79,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     openNewTab,
     setTabSessionState,
   } = useApp();
+  const attention = useAttention();
 
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const workspaceMenuRef = useRef<HTMLDivElement>(null);
@@ -176,18 +178,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navButton = (tab: NavigationTab, compact: boolean, closeIfFloating: () => void) => {
     const active = activeTab === tab;
     const label = labelFor(tab);
+    const count = tab === 'attention' ? attention.items.length : 0;
     const button = (
       <button
         key={tab}
         type="button"
         onClick={() => { setActiveTab(tab); closeIfFloating(); }}
-        aria-label={label}
+        aria-label={count ? label + ', ' + count + ' waiting' : label}
         aria-current={active ? 'page' : undefined}
-        className={(compact ? 'grid h-9 w-9 place-items-center rounded-lg transition-colors ' : sidebarRow + ' w-full gap-2.5 ')
+        className={(compact ? 'relative grid h-9 w-9 place-items-center rounded-lg transition-colors ' : sidebarRow + ' w-full gap-2.5 ')
           + (active ? 'bg-selected font-medium text-selected-content hover:bg-selected' : 'text-content-secondary hover:bg-surface-high hover:text-content')}
       >
         <span className={active ? 'text-link' : 'text-content-muted'}>{navIcon(tab)}</span>
         {!compact && <span className="truncate">{label}</span>}
+        {count > 0 && <span aria-hidden className={(compact ? 'absolute -right-0.5 -top-0.5 ' : 'ml-auto ')
+          + 'min-w-[18px] rounded-full bg-action px-1.5 text-center text-[10.5px] font-semibold leading-[18px] text-on-action'}>{count > 99 ? '99+' : count}</span>}
       </button>
     );
     if (!compact) return button;
