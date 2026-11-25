@@ -9,7 +9,6 @@ import { apiService } from '@/shared/services/apiService';
 import { RepoBranch, RepoPullRequest } from '@/shared/types';
 import { BranchSwitcher } from './BranchSwitcher';
 import { CloneToComputerDialog, canCloneToComputer } from './CloneToComputerDialog';
-import { offersComputerCopy } from '../ProjectWorkspaceCard';
 import { RepoFileBrowser } from './RepoFileBrowser';
 import { RepoLogsTab } from './RepoLogsTab';
 import { RepoEnvEditor } from './RepoEnvEditor';
@@ -73,8 +72,8 @@ export const ProjectRepositoryView: React.FC<ProjectRepositoryViewProps> = ({
   }, [initialRepository, requestedRepository, onInitialRepositoryApplied, setStoredTab]);
   const [repositoryOpened, setRepositoryOpened] = useState(repoSection);
   const [cloneOpen, setCloneOpen] = useState(false);
-  // Only people who open the code themselves are offered a copy; builds download what they need.
-  const canClone = offersComputerCopy(role) && repositories.length > 0 && canCloneToComputer();
+  // Clients never get code; everyone else may clone onto their own computer in the desktop app.
+  const canClone = role !== 'client' && repositories.length > 0 && canCloneToComputer();
   useEffect(() => {
     if (repoSection) setRepositoryOpened(true);
   }, [repoSection]);

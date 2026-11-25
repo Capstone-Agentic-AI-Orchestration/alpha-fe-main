@@ -12,7 +12,7 @@ import {
 import { useApp } from '@/app/AppContext';
 import { aiFeaturesEnabled } from '@/config/features';
 import { GitBranch, Folder, FolderOpen, Network, Plus, Trash2, Unlink } from 'lucide-react';
-import { CheckoutSummary, RepoCheckoutLine, offersComputerCopy, useRepositoryCheckouts } from './ProjectWorkspaceCard';
+import { CheckoutSummary, RepoCheckoutLine, useRepositoryCheckouts } from './ProjectWorkspaceCard';
 import { ScaffoldResultCard } from './ScaffoldResultCard';
 import { DeleteRepositoryConfirm, repoNameWithOwner } from './DeleteRepositoryConfirm';
 import type { RepoDeletionResult } from '@/shared/types';
@@ -88,7 +88,6 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
   const { showToast, can, role } = useApp();
   // Attaching working copies is agent setup, hidden for roles without AI features (config/features.ts).
   const showAgentSetup = aiFeaturesEnabled(role);
-  const showComputerCopies = offersComputerCopy(role);
   const canBind = can('bind_workspace');
   const [architectureRepo, setArchitectureRepo] = useState<string | null>(null);
   // Re-read whenever the repositories change: one created, attached or deleted.
@@ -578,7 +577,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         not a project resource -- the project is the team's and the folder
         this machine's -- so those read and write the per-machine binding.
       */}
-      {variant === 'full' && showComputerCopies && <CheckoutSummary projectId={projectId} checkouts={checkouts} canBind={canBind} />}
+      {variant === 'full' && <CheckoutSummary projectId={projectId} checkouts={checkouts} canBind={canBind} />}
 
       {/* Attached resources */}
       <div className={`space-y-2 overflow-y-auto ${deletingId ? 'max-h-[28rem]' : 'max-h-72'}`}>
@@ -659,7 +658,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
                       </button>
                     </div>
                   )}
-                  {repo && isFull && showComputerCopies && (
+                  {repo && isFull && (
                     <RepoCheckoutLine projectId={projectId} repo={repo} checkouts={checkouts} canBind={canBind} />
                   )}
                 </div>
