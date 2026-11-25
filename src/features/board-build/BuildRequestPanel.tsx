@@ -7,14 +7,14 @@ export function BuildRequestPanel({ issue, build, onChanged, onOpenTask }: {
   issue: Issue; build?: IssueBuildStatus; onChanged?: () => void;
   onOpenTask?: (id: string, projectId: string) => void;
 }) {
-  const { can, role } = useApp();
+  const { can } = useApp();
   const [instructions, setInstructions] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const blocker = build?.blocker;
   const request = build?.request;
   const pending = request && ['waiting', 'planning'].includes(request.status);
-  const allowed = role === 'dev' && can('run_builds') && can('manage_chat') && build?.fresh !== false;
+  const allowed = can('run_builds') && can('manage_chat') && build?.fresh !== false;
   if (!blocker && !request && build?.fresh !== false) return null;
   return <section aria-label="Planning request" className="space-y-2 rounded-md border border-divider bg-well p-3 text-[12.5px] text-content-secondary">
     <h3 className="font-semibold">{build?.fresh === false ? 'Build status unavailable' : request?.status === 'planning' ? 'Preparing plan' : pending ? 'Plan queued' : blocker ? `Waiting for ${blocker.identifier ?? 'another build'}` : 'Planning needs review'}</h3>

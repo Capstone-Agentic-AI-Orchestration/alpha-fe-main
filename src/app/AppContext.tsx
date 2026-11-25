@@ -414,11 +414,19 @@ const ROLE_CAPABILITIES_ALL: Record<UserRole, Capability[]> = {
     'provision_repositories',
     'view_issues',
     'manage_issues',
-    // PMs can inspect the agent roster and build evidence, but execution and
-    // runtime configuration belong to developers and admins.
+    // In the desktop app a PM works with agents as a developer does: chat, run
+    // builds, and configure agents, skills, runtimes and MCP servers. On the
+    // hosted web app AI_CAPABILITIES below takes all of it away again.
     'view_agents',
+    'manage_agents',
+    'run_agents',
+    'run_builds',
+    'manage_chat',
     'view_skills',
+    'manage_skills',
     'view_runtimes',
+    'manage_runtimes',
+    'manage_mcp',
     'view_runs',
     'publish_build',
     'control_uat_delivery',
@@ -446,6 +454,7 @@ const ROLE_CAPABILITIES_ALL: Record<UserRole, Capability[]> = {
     'view_agents',
     'manage_agents',
     'run_builds',
+    'manage_chat',
     'view_skills',
     'manage_skills',
     'view_runtimes',
@@ -473,20 +482,29 @@ const ROLE_CAPABILITIES_ALL: Record<UserRole, Capability[]> = {
   ]
 };
 
-/** Capabilities that only look at AI tooling; withheld wherever the role's AI features are off. */
-const AI_VIEW_CAPABILITIES: readonly Capability[] = ['view_agents', 'view_skills', 'view_runtimes'];
+/**
+ * Every capability that exists only to work with AI agents; withheld wherever the role's AI
+ * features are off (a PM or admin on the hosted web app). GitHub Connected Accounts
+ * (`*_integrations`) and publishing a reviewed build to UAT are delivery work, so they stay.
+ */
+const AI_CAPABILITIES: readonly Capability[] = [
+  'view_agents', 'manage_agents', 'run_agents', 'run_builds', 'manage_chat',
+  'view_skills', 'manage_skills', 'view_runtimes', 'manage_runtimes', 'manage_mcp', 'approve_runs'
+];
 
 /**
- * What each role may do in this runtime. Hiding a tab is not a permission, so a role
- * whose AI features are off here (a project manager on the hosted web app) also
- * loses the capabilities that only exist to look at agents, skills and runtimes.
+ * What a role may do in a runtime. Hiding a tab is not a permission, so a role
+ * whose AI features are off there (a project manager or admin on the hosted web app)
+ * also loses every capability that only exists to work with agents. `desktopApp`
+ * is a parameter so tests can ask about either runtime.
  */
-const ROLE_CAPABILITIES: Record<UserRole, Capability[]> = Object.fromEntries(
-  (Object.entries(ROLE_CAPABILITIES_ALL) as Array<[UserRole, Capability[]]>).map(([role, capabilities]) => [
-    role,
-    aiFeaturesEnabled(role) ? capabilities : capabilities.filter(capability => !AI_VIEW_CAPABILITIES.includes(capability)),
-  ])
-) as Record<UserRole, Capability[]>;
+export function roleCapabilities(role: UserRole, desktopApp: boolean = isDesktop): Capability[] {
+  const capabilities = ROLE_CAPABILITIES_ALL[role];
+  return aiFeaturesEnabled(role, desktopApp) ? capabilities : capabilities.filter(capability => !AI_CAPABILITIES.includes(capability));
+}
+
+/** The running app's capabilities: desktop or hosted is fixed for the life of the page. */
+const ROLE_CAPABILITIES = Object.fromEntries(KNOWN_ROLES.map(role => [role, roleCapabilities(role)])) as Record<UserRole, Capability[]>;
 
 /**
  * Which destinations each role may reach.
@@ -3943,7 +3961,7 @@ ${e.detail}`;
     return chatThreads.filter(t => t.audience !== 'client');
   }, [chatThreads, role, currentUser]);
 
-  const canOpenProjectChat = role === 'dev' && can('manage_chat') && visibleTabs.includes('chat') && !workspaceLoading && !workspaceSwitching;
+  const canOpenProjectChat = can('manage_chat') && visibleTabs.includes('chat') && !workspaceLoading && !workspaceSwitching;
   const openChatThread = (id: string) => {
     if (!canOpenProjectChat || !scopedChatThreads.some(thread => thread.id === id)) return;
     const existing = tabs.find(tab => tab.view === 'chat' && !tab.sessionState?.['chat.history'] && tab.sessionState?.activeThreadId === id);

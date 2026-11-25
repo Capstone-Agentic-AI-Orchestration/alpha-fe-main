@@ -51,9 +51,9 @@ const ALL_TABS = NAV_ITEMS;
 
 const WorkspaceTabView: React.FC<{ view: NavigationTab }> = ({ view }) => {
   const [createIssueOpen, setCreateIssueOpen] = useTabSessionState<boolean>('issueModal.open', false);
-  const { isActiveTab, runSetupIssueId, role, can } = useApp();
+  const { isActiveTab, runSetupIssueId, can } = useApp();
   const [chatHistory] = useTabSessionState('chat.history', false);
-  const unifiedChat = role === 'dev' && can('manage_chat');
+  const unifiedChat = can('manage_chat');
   const onOpenNewIssue = () => setCreateIssueOpen(true);
   let content: React.ReactNode;
   switch (view) {

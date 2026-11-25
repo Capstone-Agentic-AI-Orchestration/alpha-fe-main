@@ -286,7 +286,8 @@ const ProvidersPanelContent: React.FC = () => {
 };
 
 export const ProvidersPanel: React.FC = () => {
-  const { role } = useApp();
-  if (role !== 'dev') return null;
+  const { can } = useApp();
+  // Agents run with this person's own CLI sign-ins; Alpha stores no provider credentials.
+  if (!can('run_agents')) return null;
   return <ProvidersPanelContent />;
 };

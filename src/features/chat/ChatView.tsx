@@ -2148,8 +2148,8 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 </div>
                 <p className="mt-1.5 px-1 text-[11px] text-content-muted">Task attached. Its description and open subtasks are sent with your message.</p>
               </div>}
-              {/* Agents are for developers: what the Manager Agent is waiting for them to confirm. */}
-              {isDesktop && role === 'dev' && activeThread?.projectId && (
+              {/* What the Manager Agent is waiting for this person to confirm. */}
+              {isDesktop && can('run_agents') && activeThread?.projectId && (
                 <BoardChangesWaiting projectId={activeThread.projectId} working={Boolean(activeTurnMessageId)} />
               )}
               {!forcedBuild && targetRuntime && targetQuota && targetQuota.remainingPercent <= 25 && <p role="status" className="px-4 text-xs text-status-warning">

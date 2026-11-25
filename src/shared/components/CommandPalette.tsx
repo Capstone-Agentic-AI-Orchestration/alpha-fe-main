@@ -77,7 +77,7 @@ export const CommandPalette: React.FC = () => {
       }
     });
 
-    if (!workspaceLoading && !workspaceSwitching && role === 'dev' && visibleTabs.includes('chat') && can('manage_chat')) {
+    if (!workspaceLoading && !workspaceSwitching && visibleTabs.includes('chat') && can('manage_chat')) {
       const projectsById = new Map(projects.map(project => [project.id, project]));
       const chats = chatThreads.filter(thread => chatMatches(thread, projectsById.get(thread.projectId ?? ''), q)).sort(byChatActivity);
       chats.slice(0, 12).forEach(thread => results.push({
@@ -222,7 +222,7 @@ export const CommandPalette: React.FC = () => {
               setQuery(e.target.value);
               setSelectedIndex(0);
             }}
-            placeholder={role === 'dev' ? "Search tasks, projects, chats, or commands…" : "Type a command or search the workspace…"}
+            placeholder={can('manage_chat') ? "Search tasks, projects, chats, or commands…" : "Type a command or search the workspace…"}
             className="w-full bg-transparent text-content placeholder-content-muted text-sm focus:outline-none font-medium"
             autoFocus
           />

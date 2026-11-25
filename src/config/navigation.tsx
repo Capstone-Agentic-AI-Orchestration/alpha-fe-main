@@ -132,8 +132,8 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { id: 'portal', label: 'Overview', labels: { client: 'My Projects' }, title: 'Overview', subtitle: 'Your requests, progress, and project status', group: 'primary', section: 'portal', icon: LayoutDashboard },
-  // Chat is the developer-only build workspace. PMs and admins review and publish
-  // from Projects, while client communication stays in the client portal.
+  // Chat is where developers, project managers and admins build with Alpha and the
+  // agents, in the desktop app only (AI_NAV_TABS). Clients talk to the team in the portal.
   { id: 'chat', label: 'Chat', clientLabel: 'Messages', title: 'Agent Chat Canvas', subtitle: 'Plan and build with Alpha and your agents', group: 'primary', section: 'build', sectionByRole: { client: 'communication' }, icon: MessageSquare },
 
   { id: 'intake', label: 'New request', title: 'New Request', subtitle: 'Describe what you need in plain language', group: 'primary', section: 'requests', icon: PenLine },
@@ -206,11 +206,11 @@ const ROLE_NAV_ALL: Record<UserRole, NavigationTab[]> = {
   // Client work starts with the client and project conversation; inquiries remain separate pre-project intake.
   pm: [
     'clients', 'inquiries', 'projects', 'issues',
-    'agents', 'skills', 'analytics', 'settings'
+    'chat', 'agents', 'skills', 'analytics', 'settings'
   ],
   admin: [
     'issues', 'projects',
-    'agents', 'skills', 'analytics', 'operations', 'settings'
+    'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'
   ]
 };
 

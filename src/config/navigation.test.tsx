@@ -16,23 +16,23 @@ const withoutHiddenChat = (tabs: NavigationTab[]) => tabs.filter(tab => CHAT_TAB
 
 /**
  * Navigation destinations retained after archiving standalone specifications.
- * Project managers see the AI destinations in review-only mode (config/features.ts).
+ * Project managers and admins see the AI destinations, Chat included, in the desktop app (config/features.ts).
  */
 const existing: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['issues', 'projects', 'agents', 'skills', 'chat', 'settings'],
-  pm: ['clients', 'inquiries', 'projects', 'issues', 'agents', 'skills', 'analytics', 'settings'],
-  admin: ['issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
+  pm: ['clients', 'inquiries', 'projects', 'issues', 'chat', 'agents', 'skills', 'analytics', 'settings'],
+  admin: ['issues', 'projects', 'chat', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /**
  * Existing sidebar ordering differs from ROLE_NAV; preserve it independently.
- * Developer chat is the build workspace; PMs and admins review and publish from Projects.
+ * Chat leads the Build section for every role that builds with agents.
  */
 const existingVisible: Record<UserRole, NavigationTab[]> = {
   client: ['portal', 'intake', 'settings'],
   dev: ['chat', 'issues', 'projects', 'agents', 'skills', 'settings'],
-  pm: ['clients', 'issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
-  admin: ['issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
+  pm: ['chat', 'clients', 'issues', 'projects', 'inquiries', 'agents', 'skills', 'analytics', 'settings'],
+  admin: ['chat', 'issues', 'projects', 'agents', 'skills', 'analytics', 'operations', 'settings'],
 };
 /** PMs start with their clients; the project conversation owns each project's tickets. */
 const landing = (role: UserRole) => withoutHiddenChat(existing[role])[0];
@@ -69,14 +69,14 @@ describe('existing navigation compatibility', () => {
       expect(ROLE_NAV[role]).not.toContain('inquiries');
     }
   });
-  it('shows the Chat tab to developers only', () => {
+  it('shows the Chat tab to developers, project managers and admins in the desktop app', () => {
     expect(CHAT_TAB_ENABLED).toBe(true);
-    expect(ROLE_NAV.dev).toContain('chat');
-    for (const role of ['client', 'pm', 'admin'] as const) expect(ROLE_NAV[role]).not.toContain('chat');
+    for (const role of ['dev', 'pm', 'admin'] as const) expect(ROLE_NAV[role]).toContain('chat');
+    expect(ROLE_NAV.client).not.toContain('chat');
     expect(NAV_ITEMS.some(item => item.id === 'chat')).toBe(true);
   });
 
-  it('restores build chat for developers only, exactly as before, when the flag is turned back on', async () => {
+  it('restores build chat for every building role, exactly as before, when the flag is turned back on', async () => {
     vi.resetModules();
     vi.doMock('./features', async importOriginal => ({ ...(await importOriginal<typeof import('./features')>()), CHAT_TAB_ENABLED: true }));
     try {
@@ -84,7 +84,8 @@ describe('existing navigation compatibility', () => {
       expect(restored.roleNav(true).dev).toEqual(existing.dev);
       expect(restored.sectionsFor('dev', true).flatMap(group => group.items.map(item => item.id))).toEqual(existingVisible.dev);
       expect(restored.landingTab('dev', true)).toBe('issues');
-      for (const role of ['client', 'pm', 'admin'] as const) expect(restored.roleNav(true)[role]).not.toContain('chat');
+      for (const role of ['pm', 'admin'] as const) expect(restored.roleNav(true)[role]).toEqual(existing[role]);
+      expect(restored.roleNav(true).client).not.toContain('chat');
     } finally {
       vi.doUnmock('./features');
       vi.resetModules();
@@ -98,10 +99,10 @@ describe('existing navigation compatibility', () => {
   it('has no squads page; the Orchestrator assigns agents per task', () => {
     expect(NAV_ITEMS.some(item => (item.id as string) === 'squads')).toBe(false);
   });
-  it('shows PM AI destinations while keeping their actions capability-gated', () => {
+  it('shows PM AI destinations in the desktop app, the same as a developer and an admin', () => {
     expect(AI_FEATURES_BY_ROLE.pm).toBe('desktop');
     for (const tab of AI_NAV_TABS) {
-      if (tab === 'chat' || tab === 'runtimes') {
+      if (tab === 'runtimes') {
         expect(ROLE_NAV.pm).not.toContain(tab);
         continue;
       }
@@ -133,33 +134,36 @@ describe('existing navigation compatibility', () => {
   });
 });
 
-describe('AI tooling for project managers is desktop-only', () => {
+describe('AI tooling for project managers and admins is desktop-only', () => {
   const web = roleNav(false);
   const desktopNav = roleNav(true);
 
   it('turns AI features on per role and runtime', () => {
-    expect(aiFeaturesEnabled('pm', true)).toBe(true);
-    expect(aiFeaturesEnabled('pm', false)).toBe(false);
-    for (const role of ['client', 'dev', 'admin'] as const) {
+    for (const role of ['pm', 'admin'] as const) {
+      expect(aiFeaturesEnabled(role, true)).toBe(true);
+      expect(aiFeaturesEnabled(role, false)).toBe(false);
+    }
+    for (const role of ['client', 'dev'] as const) {
       expect(aiFeaturesEnabled(role, true)).toBe(true);
       expect(aiFeaturesEnabled(role, false)).toBe(true);
     }
   });
-  it('hides every AI destination from a PM on the hosted web app', () => {
-    for (const tab of AI_NAV_TABS) expect(web.pm).not.toContain(tab);
-    const sections = runtimeSectionsFor('pm', false).map(group => group.section.id);
+  it.each(['pm', 'admin'] as const)('hides every AI destination from a %s on the hosted web app', role => {
+    for (const tab of AI_NAV_TABS) expect(web[role]).not.toContain(tab);
+    const sections = runtimeSectionsFor(role, false).map(group => group.section.id);
+    expect(sections).not.toContain('build');
     expect(sections).not.toContain('resources');
     expect(sections).not.toContain('operations');
-    // Everything else a PM works with stays.
-    expect(web.pm).toEqual(desktopNav.pm.filter(tab => !AI_NAV_TABS.includes(tab)));
-    expect(runtimeLandingTab('pm', false)).toBe(runtimeLandingTab('pm', true));
+    // Everything else they work with stays, and they land on the same page.
+    expect(web[role]).toEqual(desktopNav[role].filter(tab => !AI_NAV_TABS.includes(tab)));
+    expect(web[role].length).toBeGreaterThan(0);
+    expect(runtimeLandingTab(role, false)).toBe(runtimeLandingTab(role, true));
   });
-  it('keeps Agents and Integrations for a PM in the desktop app', () => {
-    expect(desktopNav.pm).toContain('agents');
-    expect(desktopNav.pm).toContain('skills');
+  it.each(['pm', 'admin'] as const)('gives a %s Chat, Agents and Integrations in the desktop app', role => {
+    for (const tab of ['chat', 'agents', 'skills'] as const) expect(desktopNav[role]).toContain(tab);
   });
   it('leaves every other role the same on the web and the desktop', () => {
-    for (const role of ['client', 'dev', 'admin'] as const) expect(web[role]).toEqual(desktopNav[role]);
+    for (const role of ['client', 'dev'] as const) expect(web[role]).toEqual(desktopNav[role]);
   });
 });
 

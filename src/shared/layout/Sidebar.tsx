@@ -99,7 +99,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const creatorRole = identity?.role ?? role;
   const canCreateWorkspace = creatorRole === 'pm' || creatorRole === 'admin';
   const workspaceName = activeWorkspace?.name || settings.workspaceName?.trim() || identity?.workspaceOrg || 'Alpha';
-  const unifiedChat = role === 'dev' && can('manage_chat') && visibleTabs.includes('chat');
+  const unifiedChat = can('manage_chat') && visibleTabs.includes('chat');
   const shortcutModifier = navigator.platform.startsWith('Mac') ? '⌘' : 'Ctrl+';
   const chatStorageKey = projectChatStorageKey(identity?.login ?? currentUser.id, activeWorkspaceId);
   const canManageIssues = can('manage_issues');

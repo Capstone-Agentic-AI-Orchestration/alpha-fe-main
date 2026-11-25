@@ -218,9 +218,8 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   /** A developer's own ready task gets a one-click build; the confirmation still applies. */
   const canQuickBuild = (issue: Issue) => isDesktop && issue.status === 'todo' && isMine(issue) && canStartBuild(issue);
 
-  /** The developer's Alpha panel. Only people who run agents get it; PMs plan with New task. */
-  // Agents are for developers only. What they changed shows on the cards, in each task and in this panel.
-  const canUseAlpha = isDesktop && role === 'dev' && canRunBuilds && can('manage_chat') && selectedProject !== 'all';
+  /** The Alpha panel, for anyone who runs agents in the desktop app. What agents changed shows on the cards, in each task and in this panel. */
+  const canUseAlpha = isDesktop && canRunBuilds && can('manage_chat') && selectedProject !== 'all';
   const [alphaOpen, setAlphaOpen] = useTabSessionState<boolean>(`${sessionPrefix}.alphaPanel`, false);
 
   // Collapsed status sections state (Jira style)
@@ -493,7 +492,7 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
   const openBuildChat = (issue: Issue) => {
     const thread = buildChatFor(issue);
     if (!thread) return;
-    if (role === 'dev') openChatThread(thread.id);
+    if (can('manage_chat')) openChatThread(thread.id);
     else { setActiveThreadId(thread.id); setActiveTab('chat'); }
   };
 
@@ -525,8 +524,10 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
     setCheckedTaskIds(prev => withTasks(prev, tasks.map(task => task.id), false));
   };
 
-  // Developers own implementation hand-offs; PMs review the resulting work.
-  const canHandOff = chatAvailable && can('manage_chat') && (role === 'dev' || role === 'admin');
+  /** Developers see their own two-tab scope; managers also filter by member. Layout only, not access. */
+  const developerScope = role === 'dev';
+  // Whoever builds with agents can hand tasks off to them.
+  const canHandOff = chatAvailable && can('manage_chat');
   const renderFilterToolbar = () => (
     <div className="flex flex-wrap items-center gap-3 pt-2 text-xs">
       <div className="relative min-w-[200px] flex-1">
@@ -588,33 +589,33 @@ export const IssuesView: React.FC<IssuesViewProps> = ({
             )}
 
             {/* Scope is a compact text control, not a second container inside the header. */}
-            <div className={`flex items-center gap-1 text-xs ${role === 'dev' ? 'rounded-lg border border-divider p-1' : ''}`} role={role === 'dev' ? 'tablist' : undefined} aria-label={role === 'dev' ? 'Task scope' : undefined}>
+            <div className={`flex items-center gap-1 text-xs ${developerScope ? 'rounded-lg border border-divider p-1' : ''}`} role={developerScope ? 'tablist' : undefined} aria-label={developerScope ? 'Task scope' : undefined}>
               <button
                 onClick={() => setFilterCategory('all')}
-                role={role === 'dev' ? 'tab' : undefined}
-                aria-selected={role === 'dev' ? filterCategory === 'all' : undefined}
-                className={`${role === 'dev' ? 'rounded-md px-3 py-1.5' : 'px-2 py-1 border-b'} font-medium transition-colors ${
+                role={developerScope ? 'tab' : undefined}
+                aria-selected={developerScope ? filterCategory === 'all' : undefined}
+                className={`${developerScope ? 'rounded-md px-3 py-1.5' : 'px-2 py-1 border-b'} font-medium transition-colors ${
                   filterCategory === 'all'
                     ? 'border-divider bg-selected text-selected-content'
                     : 'border-transparent text-content-muted hover:text-content'
                 }`}
               >
-                {role === 'dev' ? 'Project tasks' : 'All'}
+                {developerScope ? 'Project tasks' : 'All'}
               </button>
               <button
                 onClick={() => setFilterCategory('mine')}
                 title={identity ? `Tasks assigned to ${identity.login}` : 'Waiting for your identity'}
-                role={role === 'dev' ? 'tab' : undefined}
-                aria-selected={role === 'dev' ? filterCategory === 'mine' : undefined}
-                className={`${role === 'dev' ? 'rounded-md px-3 py-1.5' : 'px-2 py-1 border-b'} font-medium transition-colors ${
+                role={developerScope ? 'tab' : undefined}
+                aria-selected={developerScope ? filterCategory === 'mine' : undefined}
+                className={`${developerScope ? 'rounded-md px-3 py-1.5' : 'px-2 py-1 border-b'} font-medium transition-colors ${
                   filterCategory === 'mine'
                     ? 'border-divider bg-selected text-selected-content'
                     : 'border-transparent text-content-muted hover:text-content'
                 }`}
               >
-                {role === 'dev' ? 'Assigned to me' : 'Mine'}
+                {developerScope ? 'Assigned to me' : 'Mine'}
               </button>
-              {role !== 'dev' && <>
+              {!developerScope && <>
                 <button
                   onClick={() => setFilterCategory('members')}
                   className={`px-2 py-1 border-b font-medium transition-colors ${
