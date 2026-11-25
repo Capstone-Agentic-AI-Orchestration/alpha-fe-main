@@ -195,7 +195,7 @@ export const RepoCheckoutLine: React.FC<{
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-status-warning">Not on this machine</span>
+          <span className="text-content-secondary">Not on this computer yet. Alpha downloads it on the first build.</span>
           {canBind && (
             <>
               <button

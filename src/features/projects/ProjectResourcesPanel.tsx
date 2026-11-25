@@ -584,7 +584,7 @@ export const ProjectResourcesPanel: React.FC<ProjectResourcesPanelProps> = ({
         {resources.length === 0 ? (
           <p className="p-3 text-content-muted italic bg-well rounded-xl border border-divider">
             {showAgentSetup
-              ? 'Nothing attached yet. Agents need a working copy before they can run — attach a folder below.'
+              ? 'No repositories yet. Add one below. Alpha downloads it to this computer the first time agents build.'
               : 'No repositories yet.'}
           </p>
         ) : (
