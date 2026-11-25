@@ -36,6 +36,9 @@ interface TaskDetailDrawerProps {
   onHandOff?: (issue: Issue) => void;
   /** A build decision was made on this task; the board re-reads build statuses. */
   onBuildChanged?: () => void;
+  /** Build with Alpha chose "a written spec first": open the overview and draft the spec once. */
+  draftSpec?: boolean;
+  onSpecDraftStarted?: () => void;
   /** Changes agents made or proposed on this card, with before and after values. */
   agentChanges?: BoardAgentChange[];
   agentDecidingId?: string | null;
@@ -105,6 +108,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
   onHandOff,
   onBuildChanged,
   onOpenTask,
+  draftSpec = false,
+  onSpecDraftStarted,
   agentChanges = [],
   agentDecidingId,
   onAgentDecide,
@@ -163,6 +168,8 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
     updateIssue(issue.id, patch);
   };
   const autoOpenedFor = useRef<string | null>(null);
+  // The spec panel lives on the overview, so a requested draft opens it there.
+  useEffect(() => { if (draftSpec) setTab('overview'); }, [draftSpec, setTab]);
   // A build waiting on a person opens on the Build tab, where the decision is, once per task.
   useEffect(() => {
     if (!buildsHere || !stage.needsYou || autoOpenedFor.current === issue.id) return;
@@ -522,7 +529,7 @@ export const TaskDetailDrawer: React.FC<TaskDetailDrawerProps> = ({
               </div>
 
               {/* Writing a spec is an agent step, so only developers start one; anyone sees a spec that exists. */}
-              {isDesktop && (spec.record || (can('run_builds') && can('manage_chat'))) && <FeatureSpecPanel issue={issue} spec={spec} />}
+              {isDesktop && (spec.record || (can('run_builds') && can('manage_chat'))) && <FeatureSpecPanel issue={issue} spec={spec} autoDraft={draftSpec} onAutoDrafted={onSpecDraftStarted} />}
 
               <section aria-labelledby={`${ids}-subtasks`}>
                 <div className="mb-2 flex items-center gap-2.5">

@@ -175,12 +175,12 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
       <div className="space-y-3">
         <BuildRequestPanel issue={issue} build={build} onChanged={onBuildChanged} onOpenTask={onOpenTask} />
         <p className="text-[13px] text-content-muted">
-          No build yet. {canStartBuild ? 'Plan one to have the Orchestrator do this task.' : role === 'pm' ? 'A developer can plan and run this task.' : ''}
+          No build yet. {canStartBuild ? 'Build with Alpha to have agents do this task.' : role === 'pm' ? 'A developer can plan and run this task.' : ''}
         </p>
         {specNote && <p className={`text-[12.5px] ${specState === 'approved' ? 'text-content-secondary' : 'text-status-warning'}`}>{specNote}</p>}
         {canStartBuild && (
           <button type="button" disabled={specState === 'stale'} onClick={() => onPlanBuild(issue)} className={secondary}>
-            <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-link" /> Plan build
+            <Sparkles aria-hidden="true" className="h-3.5 w-3.5 text-link" /> Build with Alpha
           </button>
         )}
       </div>
