@@ -29,6 +29,16 @@ export function clientNextStep(action: ClientProjectRequestItem['requestedAction
   return null;
 }
 
+/**
+ * The client's name as they gave it, or '' when the account has none. An email address is never
+ * a name: older portal proposals stored the account email where the name belongs.
+ */
+export function clientDisplayName(name?: string | null, email?: string | null): string {
+  const trimmed = name?.trim().replace(/\s+/g, ' ') ?? '';
+  if (!trimmed || /^[^\s@]+@[^\s@]+$/.test(trimmed)) return '';
+  return email && trimmed.toLowerCase() === email.trim().toLowerCase() ? '' : trimmed;
+}
+
 export function clientGreeting(now = new Date()): string {
   const hour = now.getHours();
   return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
