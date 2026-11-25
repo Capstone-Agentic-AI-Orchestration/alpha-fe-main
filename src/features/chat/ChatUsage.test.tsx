@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { entriesAtMessage, usageTotal, workDuration, WorkUsageRow, type UsageEntry } from './ChatUsage';
+import { usageTotal, workDuration, WorkUsageRow, type UsageEntry } from './ChatUsage';
 
 const entry = (id: string, start: number, end?: number, totalTokens?: number): UsageEntry => ({ id, messageId: 'request', agentId: 'backend', provider: 'codex', model: 'model',
   startedAt: new Date(start).toISOString(), updatedAt: new Date(end ?? start).toISOString(), endedAt: end === undefined ? undefined : new Date(end).toISOString(),
@@ -20,14 +20,6 @@ describe('work and session usage', () => {
     expect(html).toContain('10 tokens'); expect(html).toContain('partial');
     expect(renderToStaticMarkup(<WorkUsageRow entries={[entry('unknown', 0, 3_000)]} now={100_000} />)).toContain('Worked for');
     expect(renderToStaticMarkup(<WorkUsageRow entries={[entry('unknown', 0, 3_000)]} now={100_000} />)).toContain('Tokens not reported');
-  });
-  it('puts the work row after the final assistant reply, without borrowing another request’s tokens', () => {
-    const messages = [{ id: 'request', senderType: 'user' }, { id: 'analysis', senderType: 'agent' }, { id: 'reply', senderType: 'agent', orchestrationRunId: 'build' }, { id: 'next', senderType: 'user' }];
-    const rows = [entry('one', 0, 10, 100), { ...entry('plan', 0, 10, 50), messageId: undefined, orchestrationRunId: 'build' }, { ...entry('other', 0, 10, 9), messageId: 'next' }];
-    expect(entriesAtMessage(messages, 'request', rows)).toEqual([]);
-    expect(entriesAtMessage(messages, 'analysis', rows)).toEqual([]);
-    expect(entriesAtMessage(messages, 'reply', rows).map(row => row.id)).toEqual(['one', 'plan']);
-    expect(entriesAtMessage(messages, 'next', rows).map(row => row.id)).toEqual(['other']);
   });
   it('uses a plain expandable work row and never fabricates a cost or subscription balance', () => {
     const html = renderToStaticMarkup(<WorkUsageRow entries={[entry('one', 0, undefined, 123)]} now={202_000} />);

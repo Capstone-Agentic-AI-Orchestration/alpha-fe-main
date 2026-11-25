@@ -14,12 +14,13 @@ import { asksForBoardRun, runAnchorId } from '@/features/board-run/boardRunPrese
 import { useBoardRuns } from '@/features/board-run/useBoardRuns';
 import type { BoardRun } from '@/shared/types/boardRun';
 import { reconcileCallSnapshot } from './chatCallSnapshot';
-import { WorkUsageRow, useChatUsage, entriesAtMessage } from './ChatUsage';
+import { WorkUsageRow, useChatUsage, type UsageEntry } from './ChatUsage';
+import { BuildWork, TurnWork, WorkingStatusLine } from './TranscriptWork';
+import { buildWorkStart, isWorkingBuildStatus } from './transcript';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { OrchestrationPlanPreview, PlanDocumentTab, PlanPanelContext, planFileName, type PlanPanelRequest } from '../project-build-review/OrchestrationPlanPreview';
 import {
   AlertTriangle,
-  Activity,
   Brain,
   Bot,
   Check,
@@ -204,60 +205,6 @@ function getMentionQueryAtCursor(value: string, cursor: number): ChatMentionQuer
   return { start: mentionStart, end: cursor, query: match[1] };
 }
 
-function ChatTurnActivityRow({
-  calls,
-  agents,
-  handoff
-}: {
-  calls: AgentCall[];
-  agents: ProjectChatAgent[];
-  /** Alpha's note on who it handed the request to; shown with the activity instead of in the transcript. */
-  handoff?: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  if (!calls.length) return null;
-  const ordered = [...calls].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const current = ordered.find(call => call.status === 'running' || call.status === 'queued') ?? ordered.at(-1)!;
-  const currentAgent = agents.find(agent => agent.id === current.agentId);
-  const latestActivity = current.activities.at(-1);
-  const working = current.status === 'running' || current.status === 'queued';
-  const name = currentAgent?.name ?? (current.squadId === 'alpha-chat' ? 'Alpha' : current.agentId);
-  const summary = working
-    ? name + ' is working in the background' + (latestActivity?.message ? ' · ' + latestActivity.message : '')
-    : current.status === 'completed' ? name + ' worked in the background' : name + ' · ' + statusLabel(current.status);
-  return (
-    <div className="mt-2 overflow-hidden rounded-xl border border-divider bg-surface-raised/75 text-left">
-      <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-surface-high">
-        {working ? <span className="h-2 w-2 shrink-0 rounded-full bg-violet-300 animate-pulse" /> : <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-status-success" />}
-        <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-link">{summary}</span>
-        <span className="shrink-0 text-[10px] text-link">{expanded ? 'Hide activity' : 'View activity'}</span>
-        {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-content-muted" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-content-muted" />}
-      </button>
-      {expanded && <div className="space-y-3 border-t border-divider px-3 py-3">
-        {handoff && <div className="text-[11px] leading-5 text-content-secondary"><MessageMarkdown content={handoff} /></div>}
-        {ordered.map(call => {
-          const agent = agents.find(item => item.id === call.agentId);
-          return <section key={call.id} className="space-y-2">
-            <div className="flex items-center justify-between gap-2 text-[10px]">
-              <span className="font-semibold text-content">{agent?.name ?? (call.squadId === 'alpha-chat' ? 'Alpha' : call.agentId)}</span>
-              <span className={call.status === 'running' ? 'text-link' : call.status === 'completed' ? 'text-status-success' : call.status === 'failed' ? 'text-status-danger' : 'text-content-muted'}>{statusLabel(call.status)}</span>
-            </div>
-            {call.activities.length ? <ol className="space-y-2 border-l border-divider pl-3">
-              {[...call.activities].reverse().map(activity => <li key={activity.id} className="relative text-[10px] leading-4 text-content-secondary">
-                <span className={`absolute -left-[17px] top-1.5 h-1.5 w-1.5 rounded-full ${activity.kind === 'error' ? 'bg-rose-400' : activity.kind === 'file_change' ? 'bg-emerald-400' : activity.kind === 'handoff' ? 'bg-amber-300' : 'bg-violet-300'}`} />
-                <span>{activity.toolName ? `${activity.toolName} · ` : ''}{stripAnsi(activity.message)}</span>
-                {activity.detail && <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-well px-2 py-1.5 font-mono text-[9px] text-content-secondary">{stripAnsi(activity.detail)}</pre>}
-                {!!activity.paths?.length && <div className="mt-1 flex flex-wrap gap-1.5">{activity.paths.map(file => <span key={file} className="inline-flex items-center gap-1 rounded bg-surface-raised px-1.5 py-1 text-left font-mono text-[9px] text-status-success hover:bg-surface-high"><FileCode2 className="h-3 w-3" />{file}</span>)}</div>}
-              </li>)}
-            </ol> : <p className="text-[10px] text-content-muted">Waiting for the first visible work update.</p>}
-          </section>;
-        })}
-
-      </div>}
-    </div>
-  );
-}
-
 function OrchestratorBuildActivityRow({
   projectId,
   runId,
@@ -269,13 +216,13 @@ function OrchestratorBuildActivityRow({
   canApprove = false,
   onAskChanges,
   onApproved,
-  stop
+  usageEntries,
+  now,
+  names
 }: {
   projectId: string;
   runId: string;
   threadId: string;
-  /** Stop this build from where its progress shows; only for the conversation's live build. */
-  stop?: { label: string; busy: boolean; onStop: () => void };
   onOpenReview: () => void;
   /** Whether this person may approve the finished build from its next-step card. */
   canApprove?: boolean;
@@ -288,9 +235,11 @@ function OrchestratorBuildActivityRow({
   /** Turn an unstarted plan back into a question for Alpha to answer. */
   onWithdraw?: () => void;
   withdrawing?: boolean;
+  /** Usage recorded for this build, for its "Worked for" line. */
+  usageEntries: UsageEntry[];
+  now: number;
+  names?: Record<string, string>;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [autoExpanded, setAutoExpanded] = useState(false);
   const [snapshot, setSnapshot] = useState<ProjectBuildSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -314,22 +263,15 @@ function OrchestratorBuildActivityRow({
         }
         setError('');
         const status = next.orchestration?.run.status;
-        const shouldSurface = Boolean(status && [
-          'planning', 'executing', 'validating', 'publishing', 'cancelling',
-          'awaiting_plan_approval', 'awaiting_approval', 'paused', 'blocked', 'recovery_required', 'failed'
-        ].includes(status));
-        if (shouldSurface && !autoExpanded) {
-          setAutoExpanded(true);
-          setExpanded(true);
-        }
         if (status && !['completed', 'failed', 'cancelled'].includes(status)) {
-          const active = ['planning', 'executing', 'validating', 'publishing', 'cancelling'].includes(status);
-          timer = window.setTimeout(() => void sync(), active ? 2_500 : expanded ? 6_000 : 15_000);
+          // A working build refreshes often so its steps keep up; a waiting one now and then.
+          const active = isWorkingBuildStatus(status) || status === 'publishing';
+          timer = window.setTimeout(() => void sync(), active ? 2_500 : 15_000);
         }
       } catch (syncError: any) {
         if (cancelled) return;
         setError(userMessage(syncError, 'Run details could not be loaded.'));
-        timer = window.setTimeout(() => void sync(), expanded ? 5_000 : 15_000);
+        timer = window.setTimeout(() => void sync(), 15_000);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -339,7 +281,7 @@ function OrchestratorBuildActivityRow({
       cancelled = true;
       if (timer !== undefined) window.clearTimeout(timer);
     };
-  }, [autoExpanded, expanded, projectId, runId]);
+  }, [projectId, runId]);
 
   const orchestration = snapshot?.orchestration;
   const tasks = orchestration?.tasks ?? [];
@@ -355,7 +297,6 @@ function OrchestratorBuildActivityRow({
     ])
   ])].sort((a, b) => a.localeCompare(b));
   const status = orchestration?.run.status;
-  const working = Boolean(status && ['planning', 'executing', 'validating', 'publishing', 'cancelling'].includes(status));
   // Line counts come from the build's worktrees; without them the card still lists the paths.
   const [countedFiles, setCountedFiles] = useState<ChangedFile[] | null>(null);
   const changedKey = changedFiles.join('|');
@@ -370,13 +311,6 @@ function OrchestratorBuildActivityRow({
   // What the build's worktrees actually contain wins once read: agents' reports and planned
   // paths can name files that were never changed.
   const shownFiles = countedFiles ?? changedFiles.map(path => ({ path }));
-  const currentTask = tasks.find(task => task.id === orchestration?.run.currentTaskId)
-    ?? tasks.find(task => ['running', 'submitted'].includes(task.status));
-  const currentAttempt = currentTask
-    ? [...attempts].reverse().find(attempt => attempt.taskId === currentTask.id)
-    : undefined;
-  const currentAgent = snapshot?.agentCards.find(card => card.runId === currentAttempt?.prototypeRunId)
-    ?? snapshot?.agentCards.find(card => card.status === 'running');
   const failedAttempt = [...attempts].reverse().find(attempt =>
     ['failed', 'recovery_required', 'rejected'].includes(attempt.status) &&
     tasks.some(task => task.id === attempt.taskId && ['failed', 'blocked'].includes(task.status)));
@@ -417,34 +351,30 @@ function OrchestratorBuildActivityRow({
     .map(item => ({ ...item, agentName: card.agentName })))
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, 8);
-  const statusLabel = status?.replace(/_/g, ' ') ?? (loading ? 'connecting' : 'activity unavailable');
+  const stopReason = failedAttempt?.failureReason || orchestration?.run.stoppedReason;
+  const settledRecovery = !recovery || ['resolved', 'cancelled'].includes(recovery.phase);
+  const showStopReason = Boolean(activeRecovery || (settledRecovery && ['blocked', 'failed', 'recovery_required'].includes(status ?? '') && stopReason));
+  const planStage = status === 'planning' || status === 'awaiting_plan_approval';
+  // The plan file and the latest raw log lines, one click away behind "Technical details".
+  const technicalDetails = orchestration && <>
+    <OrchestrationPlanPreview projectId={projectId} runId={runId} planVersion={orchestration.run.planVersion} autoShow={false} />
+    {activity.length > 0 && <ol aria-label="Recent log" className="space-y-2 border-l border-divider pl-3">{activity.map(item => <li key={`${item.id}-${item.agentName}`} className="text-[11px] leading-4 text-content-secondary">
+      <div className="flex flex-wrap items-center gap-x-1.5 text-content-muted"><span className="text-content-secondary">{item.agentName}</span><span>·</span><span>{item.toolName ?? item.kind.replace(/_/g, ' ')}</span><time>{new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></div>
+      <div className="mt-0.5 whitespace-pre-wrap break-words">{stripAnsi(item.message)}</div>
+      {item.detail && <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-well px-2 py-1.5 font-mono text-[10px]">{stripAnsi(item.detail)}</pre>}
+    </li>)}</ol>}
+  </>;
 
-  return <><div className="mt-2 overflow-hidden rounded-xl border border-divider bg-surface-raised/75 text-left">
-    <button type="button" aria-expanded={expanded} onClick={() => setExpanded(value => !value)} className="flex w-full items-center gap-2.5 px-3 py-2.5 text-left hover:bg-surface-high">
-      {working ? <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-violet-300" />
-        : status === 'completed' ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-status-success" />
-          : status === 'awaiting_approval' || status === 'awaiting_plan_approval' ? <Circle className="h-3 w-3 shrink-0 text-status-warning" />
-            : status ? <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-warning" />
-              : <Activity className="h-3.5 w-3.5 shrink-0 text-link" />}
-      <span className="min-w-0 flex-1 truncate text-[11px] font-medium text-link">{currentAgent?.agentName ?? currentTask?.ownerName ?? 'Orchestrator activity'}{currentTask ? ` · ${currentTask.title}` : ` · ${statusLabel}`}</span>
-      <span className="shrink-0 text-[10px] text-link">{expanded ? 'Hide details' : 'View details'}</span>
-      {expanded ? <ChevronDown className="h-3.5 w-3.5 shrink-0 text-content-muted" /> : <ChevronRight className="h-3.5 w-3.5 shrink-0 text-content-muted" />}
-    </button>
-    {!expanded && <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-t border-divider px-3 py-2 text-[10px] text-content-secondary">
-      <span className="capitalize text-link">{statusLabel}</span>
-      {activity[0] && <><span className="text-content-muted">·</span><span className="min-w-0 truncate">{activity[0].toolName ? `${activity[0].toolName}: ` : ''}{activity[0].message}</span></>}
-      {!activity.length && <span>{currentTask ? `${currentTask.ownerName} is assigned and activity will appear here.` : 'Open to see task assignments and live work.'}</span>}
-    </div>}
-    {onWithdraw && (status === 'planning' || status === 'awaiting_plan_approval') && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-divider px-3 py-2 text-[10px] text-content-secondary">
-      <span>No code has changed yet. Review the plan, or tell Alpha this was only a question.</span>
-      <button type="button" onClick={onWithdraw} disabled={withdrawing} className="rounded-md border border-divider px-2 py-1 font-medium text-content hover:bg-surface-high disabled:opacity-50">{withdrawing ? 'Answering…' : 'This was just a question'}</button>
-    </div>}
-    {stop && status && !['completed', 'failed', 'cancelled', 'cancelling', 'publishing', 'awaiting_approval'].includes(status) && <div className="flex flex-wrap items-center justify-between gap-2 border-t border-divider px-3 py-2 text-[10px] text-content-secondary">
-      <span>{status === 'planning' || status === 'awaiting_plan_approval' ? 'No code has changed yet.' : 'Work already on the build branch stays available if you stop.'}</span>
-      <button type="button" onClick={stop.onStop} disabled={stop.busy} className="inline-flex items-center gap-1 rounded-md border border-status-danger-border px-2 py-1 font-medium text-status-danger hover:bg-status-danger-subtle disabled:opacity-50"><Square className="h-3 w-3 fill-current" />{stop.label}</button>
-    </div>}
-    {activeRecovery && orchestration && snapshot && <div className="border-t border-divider p-2.5">
-      <OrchestrationRecoveryPanel
+  return <>
+    <div className="mt-3 space-y-3 text-left">
+      {loading && !snapshot && <LoadingRows label="Loading the build" layout="detail" rows={1} />}
+      {error && <p role="alert" className="text-xs text-status-danger">{error}</p>}
+      {orchestration && snapshot && <BuildWork orchestration={orchestration} agentCards={snapshot.agentCards} entries={usageEntries} now={now} names={names} details={technicalDetails} />}
+      {onWithdraw && planStage && <p className="flex flex-wrap items-center gap-x-2 text-xs text-content-muted">
+        No code has changed yet.
+        <button type="button" onClick={onWithdraw} disabled={withdrawing} className="text-link hover:underline disabled:opacity-50">{withdrawing ? 'Answering…' : 'This was just a question'}</button>
+      </p>}
+      {activeRecovery && orchestration && snapshot && <OrchestrationRecoveryPanel
         projectId={projectId}
         runId={runId}
         threadId={threadId}
@@ -455,60 +385,33 @@ function OrchestratorBuildActivityRow({
         onOpenReview={onOpenReview}
         onActionComplete={refreshAfterRecovery}
         compact
-      />
-    </div>}
-    {orchestration && <div className="px-3 py-2"><OrchestrationPlanPreview projectId={projectId} runId={runId} planVersion={orchestration.run.planVersion} autoShow={false} /></div>}
-    {expanded && <div className="space-y-4 border-t border-divider px-3 py-3">
-      {loading && !snapshot && <LoadingRows label="Loading run details" layout="detail" rows={1} />}
-      {error && <p role="alert" className="text-[10px] text-status-danger">{error}</p>}
-      {currentTask && <section className="rounded-lg border border-divider bg-selected px-3 py-2.5">
-        <div className="flex flex-wrap items-center gap-1.5 text-[9px] font-semibold uppercase tracking-wider text-link"><Activity className="h-3 w-3" />{working ? 'Working now' : 'Current assignment'}<span className="normal-case tracking-normal text-content-muted">· {currentAgent?.agentName ?? currentTask.ownerName}</span>{currentAgent?.status === 'running' && <span className="inline-flex items-center gap-1 rounded border border-divider px-1.5 py-0.5 normal-case tracking-normal text-link"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}</div>
-        <div className="mt-1 text-[11px] font-medium text-content">{currentTask.title}</div>
-        {currentAgent?.currentStage && <div className="mt-1 text-[10px] text-content-secondary">{currentAgent.currentStage}</div>}
-      </section>}
-      {tasks.length > 0 && <section className="space-y-2">
-        <div className="text-[9px] font-semibold uppercase tracking-wider text-content-muted">Orchestrator assignments</div>
-        {tasks.map(task => <div key={task.id} className="flex items-start justify-between gap-3 rounded-lg bg-well px-2.5 py-2">
-          <div className="min-w-0"><div className="text-[10px] font-medium text-content">{task.title}</div><div className="mt-0.5 text-[9px] text-content-muted">{task.ownerName}{task.assignmentReason ? ` · ${task.assignmentReason}` : ''}</div></div>
-          <span className="shrink-0 text-[9px] capitalize text-link">{task.status.replace(/_/g, ' ')}</span>
-        </div>)}
-      </section>}
-      {(activeRecovery || ((!recovery || ['resolved', 'cancelled'].includes(recovery.phase)) && ['blocked', 'failed', 'recovery_required'].includes(status ?? '') && (failedAttempt?.failureReason || orchestration?.run.stoppedReason))) && <section role="alert" className="rounded-lg border border-status-warning-border bg-status-warning-subtle px-3 py-2.5">
-        <div className="text-[9px] font-semibold uppercase tracking-wider text-status-warning">Why the build stopped</div>
-        <p className="mt-1 whitespace-pre-wrap break-words text-[10px] leading-4 text-content-secondary">{failedAttempt?.failureReason || orchestration?.run.stoppedReason}</p>
-        {failedAttempt?.verification?.commands?.length ? <ul className="mt-2 space-y-1 border-t border-status-warning-border pt-2">{failedAttempt.verification.commands.map((command, index) => <li key={`${command.script ?? command.display ?? 'check'}-${index}`} className="flex flex-wrap items-center gap-x-1.5 text-[9px] text-content-secondary"><code>{command.display ?? command.script ?? 'Verification check'}</code><span>·</span><span className={command.exitCode === 0 ? 'text-status-success' : command.exitCode === null ? 'text-status-warning' : 'text-status-danger'}>{command.exitCode === 0 ? 'passed' : command.exitCode === null ? command.signal ?? 'stopped' : `failed (exit ${command.exitCode})`}</span></li>)}</ul> : null}
+      />}
+      {showStopReason && <section role="alert" className="rounded-lg border border-status-warning-border bg-status-warning-subtle px-3 py-2.5">
+        <div className="text-xs font-medium text-status-warning">Why the build stopped</div>
+        <p className="mt-1 whitespace-pre-wrap break-words text-xs leading-5 text-content-secondary">{stopReason}</p>
+        {failedAttempt?.verification?.commands?.length ? <ul className="mt-2 space-y-1 border-t border-status-warning-border pt-2">{failedAttempt.verification.commands.map((command, index) => <li key={`${command.script ?? command.display ?? 'check'}-${index}`} className="flex flex-wrap items-center gap-x-1.5 text-[11px] text-content-secondary"><code>{command.display ?? command.script ?? 'Verification check'}</code><span>·</span><VerificationResult exitCode={command.exitCode} signal={command.signal} /></li>)}</ul> : null}
         {retryAvailable && failedTask && <div className="mt-2 flex flex-wrap items-center justify-between gap-2 border-t border-status-warning-border pt-2">
-          <span className="text-[9px] leading-4 text-content-secondary">Retry {failedTask.title} with {failedTask.ownerName}; Alpha checks the result before continuing.</span>
-          <button type="button" onClick={() => void retryFailedTask()} disabled={retryBusy} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-status-warning-border bg-status-warning-subtle px-2.5 text-[10px] font-semibold text-status-warning hover:bg-status-warning-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-50">
+          <span className="text-[11px] leading-4 text-content-secondary">Retry {failedTask.title} with {failedTask.ownerName}; Alpha checks the result before continuing.</span>
+          <button type="button" onClick={() => void retryFailedTask()} disabled={retryBusy} className="inline-flex min-h-8 items-center gap-1.5 rounded-lg border border-status-warning-border bg-status-warning-subtle px-2.5 text-[11px] font-semibold text-status-warning hover:bg-status-warning-subtle focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-wait disabled:opacity-50">
             {retryBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}{retryBusy ? 'Starting retry…' : 'Retry and continue'}
           </button>
         </div>}
-        {retryNotice && orchestration?.run.currentTaskId === retryNoticeTaskId && <p role="status" className="mt-2 text-[10px] leading-4 text-status-success">{retryNotice}</p>}
-        {retryError && <p role="alert" className="mt-2 text-[10px] leading-4 text-status-danger">{retryError}</p>}
+        {retryNotice && orchestration?.run.currentTaskId === retryNoticeTaskId && <p role="status" className="mt-2 text-[11px] leading-4 text-status-success">{retryNotice}</p>}
+        {retryError && <p role="alert" className="mt-2 text-[11px] leading-4 text-status-danger">{retryError}</p>}
       </section>}
-      <section className="space-y-2">
-        <div className="text-[9px] font-semibold uppercase tracking-wider text-content-muted">Files changed</div>
-        {shownFiles.length ? <div className="flex flex-wrap gap-1.5">{shownFiles.map(file => <code key={file.path} className="max-w-full truncate rounded-md bg-well px-2 py-1 font-mono text-[9px] text-status-success">{file.path}</code>)}</div>
-          : <p className="text-[10px] text-content-muted">No files changed yet. File updates will appear here as specialists work.</p>}
-      </section>
-      <section className="space-y-2">
-        <div className="flex items-center justify-between gap-2"><div className="text-[9px] font-semibold uppercase tracking-wider text-content-muted">Agent actions and updates</div>{working && <span className="inline-flex items-center gap-1 text-[9px] text-link"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-violet-300" />Refreshing live</span>}</div>
-        {activity.length > 0 ? <ol className="space-y-2 border-l border-divider pl-3">{activity.map(item => <li key={`${item.id}-${item.agentName}`} className="relative text-[10px] leading-4 text-content-secondary">
-          <span className={`absolute -left-[17px] top-1.5 h-1.5 w-1.5 rounded-full ${item.kind === 'error' ? 'bg-rose-400' : item.kind === 'file_change' ? 'bg-emerald-400' : 'bg-violet-300'}`} />
-          <div className="flex flex-wrap items-center gap-x-1.5"><span className="font-medium text-content">{item.agentName}</span><span className="text-content-muted">·</span><span className="text-content-muted">{item.toolName ?? item.kind.replace(/_/g, ' ')}</span>{item.isStreaming && <span className="inline-flex items-center gap-1 rounded border border-divider px-1 py-0.5 text-[8px] text-link"><span className="h-1 w-1 animate-pulse rounded-full bg-violet-200" />Live</span>}<time className="text-content-muted">{new Date(item.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time></div>
-          <div className="mt-0.5 whitespace-pre-wrap break-words text-content-secondary">{stripAnsi(item.message)}</div>
-          {item.detail && <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md bg-well px-2 py-1.5 font-mono text-[9px] text-content-secondary">{stripAnsi(item.detail)}</pre>}
-          {!!item.paths?.length && <div className="mt-1 flex flex-wrap gap-1">{item.paths.map(file => <code key={file} className="max-w-full truncate rounded bg-surface-raised px-1.5 py-1 font-mono text-[9px] text-status-success">{file}</code>)}</div>}
-        </li>)}</ol> : <p className="text-[10px] text-content-muted">{working ? 'The agent is starting. Its conversation, tool calls, and file edits will appear here.' : 'No agent actions were recorded for this build.'}</p>}
-      </section>
-
-    </div>}
-  </div>
-  <ChangedFilesCard files={shownFiles} onView={onViewChanges} />
-  {orchestration && orchestration.run.id === runId && <BuildNextStepCard projectId={projectId} orchestration={orchestration} canApprove={canApprove}
-    onReview={onOpenReview} onAskChanges={onAskChanges ?? onOpenReview}
-    onApproved={async () => { await refreshAfterRecovery(); await onApproved?.(); }} />}
+    </div>
+    <ChangedFilesCard files={shownFiles} onView={onViewChanges} />
+    {orchestration && orchestration.run.id === runId && <BuildNextStepCard projectId={projectId} orchestration={orchestration} canApprove={canApprove}
+      onReview={onOpenReview} onAskChanges={onAskChanges ?? onOpenReview}
+      onApproved={async () => { await refreshAfterRecovery(); await onApproved?.(); }} />}
   </>;
+}
+
+/** How one check ended: passed, stopped, or failed with its exit code. */
+function VerificationResult({ exitCode, signal }: { exitCode: number | null; signal: string | null }) {
+  if (exitCode === 0) return <span className="text-status-success">passed</span>;
+  if (exitCode === null) return <span className="text-status-warning">{signal ?? 'stopped'}</span>;
+  return <span className="text-status-danger">failed (exit {exitCode})</span>;
 }
 
 type ChangedFile = { path: string; additions?: number; deletions?: number };
@@ -584,6 +487,9 @@ type SideTab =
   | { id: string; kind: 'review'; projectId: string; runId: string }
   | { id: string; kind: 'preview' }
   | { id: string; kind: 'changes'; projectId: string; runId: string };
+
+/** The status line's word for a working build. */
+const BUILD_WORKING_WORDS: Partial<Record<string, string>> = { planning: 'Planning', validating: 'Checking', cancelling: 'Stopping' };
 
 /** How a message sits in the transcript: the user's on the right in a bubble, Alpha's across the column. */
 const USER_MESSAGE_LAYOUT = {
@@ -754,6 +660,20 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   const [stoppingProjectRunId, setStoppingProjectRunId] = useState<string | null>(null);
   // "Stop" takes a second click within a few seconds instead of a native confirm, which froze typing on Windows.
   const [stopArmed, setStopArmed] = useState(false);
+  // What Esc stops right now (the response or the working build); set each render below.
+  const escStopRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!isActiveTab) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented || !escStopRef.current) return;
+      // Esc closes an open dialog or menu first.
+      if (document.querySelector('[role="dialog"], [role="menu"], [role="listbox"]')) return;
+      event.preventDefault();
+      escStopRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isActiveTab]);
   useEffect(() => {
     if (!stopArmed) return undefined;
     const timer = window.setTimeout(() => setStopArmed(false), 4000);
@@ -1937,6 +1857,20 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
   let stopButton = { label: stopBuildLabel, title: stopBuildLabel + ' · work already on the build branch stays available. Type to send a message instead.' };
   if (composerStop === 'turn') stopButton = { label: 'Stop this response', title: 'Stop this response. Type to queue a direction instead.' };
   else if (stopArmed) stopButton = { label: 'Click again to stop the build', title: 'Click again to stop. Work already on the build branch stays available.' };
+  // While Alpha or a build works: one line over the message box, and Esc stops it.
+  const workingBuild = liveBuild && isWorkingBuildStatus(liveBuild.status) ? liveBuild : null;
+  let escStop: 'turn' | 'build' | null = null;
+  if (activeTurnMessageId) escStop = 'turn';
+  else if (workingBuild && canStopBuild) escStop = 'build';
+  let workingStatus: { label: string; since?: string } | null = null;
+  if (activeTurnMessageId) workingStatus = { label: 'Working', since: activeChatTurnCall?.startedAt ?? activeChatTurnCall?.createdAt ?? latestUserMessage?.timestamp };
+  else if (workingBuild) workingStatus = { label: BUILD_WORKING_WORDS[workingBuild.status] ?? 'Working', since: buildWorkStart(workingBuild.orchestration) };
+  let escHint = escStop ? 'Esc to stop' : '';
+  if (stoppingProjectRunId || chatTurnActionBusy) escHint = 'Stopping…';
+  else if (escStop === 'build' && stopArmed) escHint = 'Press Esc again to stop the build';
+  escStopRef.current = escStop && !stoppingProjectRunId && !chatTurnActionBusy
+    ? () => void (escStop === 'turn' ? stopChatTurn() : stopProjectBuild())
+    : null;
   let composerPlaceholder = 'Ask Alpha anything, type @ for agents or / for skills…';
   if (activeTurnMessageId) composerPlaceholder = 'Add a direction for the current agent…';
   else if (openDecision) composerPlaceholder = 'Type your answer, or choose one above…';
@@ -2039,8 +1973,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     if (message.isStreaming) return liveReplyText ? <div aria-busy="true"><MessageMarkdown content={liveReplyText} /><span aria-hidden="true" className="mt-1 inline-block h-2 w-2 rounded-full bg-content-muted motion-safe:animate-pulse" /></div> : <span className="flex items-center gap-2 text-xs text-link"><Circle className="h-2.5 w-2.5 fill-current animate-pulse" /> Responding…</span>;
     if (isUser) return <div className="whitespace-pre-wrap break-words">{message.content}</div>;
     if (message.messageType === 'build_proposal' || message.messageType === 'project_needed') return renderRouteProposal(message);
-    if (message.messageType === 'build_milestone') return <div className="flex items-start gap-2.5 py-2 text-xs text-content"><Sparkles className="mt-0.5 h-3.5 w-3.5 shrink-0 text-link" /><div className="min-w-0"><div className="mb-1 text-[9px] font-semibold uppercase tracking-wider text-link">Build update</div><MessageMarkdown content={message.content} /></div></div>;
-    if (message.messageType === 'build') return <div className="space-y-3"><div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wider text-link"><Activity className="h-3.5 w-3.5" /> Orchestrator update</div><MessageMarkdown content={message.content} />{(() => {
+    if (message.messageType === 'build') return <div className="space-y-3"><MessageMarkdown content={message.content} />{(() => {
   const setupRequired = /review the project setup|project needs setup|configured model|available model|workspace identity|reconnect (?:this )?repository/i.test(message.content);
   if (message.content.includes('Choose a codebase') || message.content.includes('Choose one repository')) {
     return <button type="button" onClick={() => setRepositoryMenuOpen(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-xs text-status-warning"><FolderGit2 className="h-3.5 w-3.5" /> Choose codebases</button>;
@@ -2056,17 +1989,39 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     return isClient ? <div className="mb-1 flex flex-wrap items-baseline gap-2"><span className="font-semibold text-content">{message.senderName || 'Alpha'}</span><time dateTime={message.timestamp} className="text-[10px] text-content-muted">{formatMessageTime(message.timestamp)}</time></div> : null;
   };
 
-  /** Under the user's message: skills, attachments, and the work Alpha did for it. */
-  const renderUserMessageExtras = (message: ChatMessage) => {
+  /** Under the user's message: skills, attachments, and a way to run the request on the board. */
+  const renderUserMessageExtras = (message: ChatMessage) => <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} /></>;
+
+  /** The work behind the user's message, in Alpha's column: its steps, then "Worked for …", and the files it changed. */
+  const renderTurnWork = (message: ChatMessage) => {
     const turnCalls = callList.filter(item => item.origin === 'chat_turn' && item.messageId === message.id);
-    const turnIsActive = activeTurnMessageId === message.id;
-    return <>{canBoardRun && !boardRuns.active && asksForBoardRun(message.content) && <button type="button" onClick={() => setBoardRunDialogOpen(true)} className="mt-1 inline-flex items-center gap-1.5 rounded-lg border border-divider bg-surface-raised px-2.5 py-1 text-[11px] font-medium text-link hover:bg-surface-high">Start a board run for this…</button>}<ChatSkillTags skillIds={message.skillIds} skills={skills} /><MessageAttachments attachments={message.attachments} />{turnCalls.length ? <><ChatTurnActivityRow calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content} /><ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={() => { const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change')); if (edited) selectCall(edited.id); }} /></> : turnIsActive ? <div className="mt-2 rounded-xl border border-divider bg-surface-raised/75 px-3 py-2 text-[11px] text-link"><span className="mr-2 inline-block h-2 w-2 animate-pulse rounded-full bg-violet-300" />Working in the background</div> : null}</>;
+    const entries = (usage.snapshot?.entries ?? []).filter(entry => entry.messageId === message.id && !entry.orchestrationRunId);
+    const working = activeTurnMessageId === message.id;
+    if (!turnCalls.length && !entries.length && !working) return null;
+    const openEdits = () => {
+      const edited = [...turnCalls].reverse().find(item => item.activities.some(activity => activity.kind === 'file_change'));
+      if (edited) selectCall(edited.id);
+    };
+    return <div className="w-full space-y-2">
+      <TurnWork calls={turnCalls} agents={snapshot?.agents ?? []} handoff={currentMessages.find(item => item.id === message.id + '-handoff')?.content}
+        entries={entries} now={usage.now} names={usageNames} working={working} />
+      <ChangedFilesCard files={turnChangedFiles(turnCalls)} onView={openEdits} />
+    </div>;
   };
 
-  /** The live build card, once per build, under the message that started it. */
+  /** A build's plan, steps and next step, once per build, under the message that started it. */
   const renderBuildActivityRow = (message: ChatMessage) => {
     if (message.messageType !== 'build' || !message.orchestrationRunId || !project?.id || !activeThread || activityMessageByRun.get(message.orchestrationRunId) !== message.id) return null;
-    return <OrchestratorBuildActivityRow projectId={project.id} runId={message.orchestrationRunId} threadId={activeThread.id} onOpenReview={() => openSavedBuildReview(message.orchestrationRunId!)} onViewChanges={() => openSideTab({ id: 'changes:' + message.orchestrationRunId, kind: 'changes', projectId: project.id, runId: message.orchestrationRunId! })} onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(message.id.slice(0, -'-build'.length), 'answer') : undefined} withdrawing={routingMessageId === message.id.slice(0, -'-build'.length)} canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild} stop={canStopBuild && liveBuild?.runId === message.orchestrationRunId ? { label: stopArmed ? 'Click again to stop' : stopBuildLabel, busy: Boolean(stoppingProjectRunId), onStop: () => void stopProjectBuild() } : undefined} />;
+    const runId = message.orchestrationRunId;
+    const projectId = project.id;
+    const requestId = message.id.slice(0, -'-build'.length);
+    return <OrchestratorBuildActivityRow projectId={projectId} runId={runId} threadId={activeThread.id}
+      onOpenReview={() => openSavedBuildReview(runId)}
+      onViewChanges={() => openSideTab({ id: 'changes:' + runId, kind: 'changes', projectId, runId })}
+      onWithdraw={canRouteBuild && message.id.endsWith('-build') ? () => void routeChatMessage(requestId, 'answer') : undefined}
+      withdrawing={routingMessageId === requestId}
+      canApprove={can('publish_build')} onAskChanges={() => replyInComposer('Please change: ')} onApproved={refreshLiveBuild}
+      usageEntries={(usage.snapshot?.entries ?? []).filter(entry => entry.orchestrationRunId === runId)} now={usage.now} names={usageNames} />;
   };
 
   const renderTranscriptMessage = (message: ChatMessage) => {
@@ -2074,10 +2029,10 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
     if (!isClient && message.id.endsWith('-handoff') && callList.some(item => item.origin === 'chat_turn' && item.messageId === message.id.slice(0, -'-handoff'.length))) return null;
     if (message.isStreaming && !isAgentTyping && !activeChatTurnCall) return null;
     const call = message.agentCallId ? calls[message.agentCallId] : undefined;
-    if (message.agentCallId && !isUser) return call ? <div key={message.id} className="w-full">{renderCallCard(call, message)}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} /></div> : <div key={message.id} className="w-full rounded-xl border border-divider bg-surface-raised p-4 text-xs text-content-secondary">Loading agent call details…</div>;
+    if (message.agentCallId && !isUser) return call ? <div key={message.id} className="w-full">{renderCallCard(call, message)}</div> : <div key={message.id} className="w-full rounded-xl border border-divider bg-surface-raised p-4 text-xs text-content-secondary">Loading agent call details…</div>;
     if (message.senderType === 'system') return <div key={message.id} className="flex justify-center"><div className="max-w-2xl rounded-xl border border-divider bg-surface-raised px-4 py-2 text-xs text-content-secondary flex items-center gap-2"><Sparkles className="h-3.5 w-3.5 text-link" />{message.content}</div></div>;
     const layout = isUser ? USER_MESSAGE_LAYOUT : AGENT_MESSAGE_LAYOUT;
-    return <div key={message.id} className={layout.row}><div className={layout.column}><div className={layout.bubble}>{renderMessageHeader(message, isUser)}{renderMessageBody(message, isUser)}</div>{isUser && renderUserMessageExtras(message)}{!isUser && renderBuildActivityRow(message)}<WorkUsageRow entries={entriesAtMessage(currentMessages, message.id, usage.snapshot?.entries ?? [])} now={usage.now} names={usageNames} />{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>;
+    return <React.Fragment key={message.id}><div className={layout.row}><div className={layout.column}><div className={layout.bubble}>{renderMessageHeader(message, isUser)}{renderMessageBody(message, isUser)}</div>{isUser && renderUserMessageExtras(message)}{!isUser && renderBuildActivityRow(message)}{previews.record && previewAnchor === message.id && <div className="mt-2"><WebPreviewCard record={previews.record} onOpen={openPreview} /></div>}{boardRunCards(message.id)}</div></div>{isUser && renderTurnWork(message)}</React.Fragment>;
   };
 
   return (
@@ -2214,6 +2169,7 @@ export const ChatView: React.FC<{ unifiedNavigation?: boolean }> = ({ unifiedNav
                 {targetRuntime.name}: {targetQuota.remainingPercent === 0 ? 'quota exhausted' : targetQuota.remainingPercent + '% remaining'} ({targetQuota.label})
                 {targetQuota.resetsAt ? ' · Resets ' + new Date(targetQuota.resetsAt).toLocaleString() : ''}
               </p>}
+              {workingStatus && <WorkingStatusLine label={workingStatus.label} since={workingStatus.since} now={usage.now} hint={escHint} />}
               <form onSubmit={handleSend} onDragOver={event => { event.preventDefault(); if (!activeTurnMessageId) setIsDraggingFiles(true); }} onDragLeave={event => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setIsDraggingFiles(false); }} onDrop={event => { event.preventDefault(); setIsDraggingFiles(false); if (!activeTurnMessageId) addFiles(event.dataTransfer.files); }} className={`relative flex items-end gap-1.5 rounded-[1.75rem] border border-divider bg-surface-raised/95 p-1.5 shadow-2xl shadow-black/50 transition-colors focus-within:border-control ${isDraggingFiles ? 'ring-2 ring-selected-content/70' : ''}`}>
                 <input ref={fileInputRef} type="file" multiple className="hidden" onChange={event => { if (event.target.files) addFiles(event.target.files); event.currentTarget.value = ''; }} />
                 <div ref={repositoryMenuRef} className="relative shrink-0">

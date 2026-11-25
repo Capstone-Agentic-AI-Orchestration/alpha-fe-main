@@ -5,6 +5,7 @@ import { AlertTriangle, ChevronDown, ExternalLink, LoaderCircle, Square, X } fro
 
 import { buildStepFor, type WizardStep } from './buildSteps';
 import { needsSecurityAuditPlan, type ProjectLiveBuild } from './useProjectLiveBuild';
+import { isWorkingBuildStatus } from './transcript';
 import type { ChatBuildBlocker, LiveBuildRecoveryAction } from '@/shared/types';
 import { ApiRequestError, parseApiError, type RefusalAction } from '@/shared/services/apiService';
 
@@ -272,7 +273,8 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   const failed = !build && Boolean(failure);
   const { attention } = wizardStepFor(build);
   // Only a step that needs the person opens by itself; a working build is just its one-line header.
-  const needsYou = failed || attention;
+  // An error or a refusal is also something to read, so it opens the card too.
+  const needsYou = failed || attention || Boolean(props.error || props.refusal);
   const [collapsed, setCollapsed] = useState(!needsYou);
   // Opens when a step needs the person, and folds back to its header once it no longer does
   // (a started plan): the work then shows in the conversation, not in this pinned card.
@@ -284,6 +286,9 @@ export const ChatBuildWizard: React.FC<ChatBuildWizardProps> = props => {
   // A finished build's next step is a card under its message in the conversation, with
   // its own buttons; repeating it over the message box only covered the chat.
   if (build && (build.status === 'awaiting_approval' || build.status === 'publishing')) return null;
+  // A working build is a status line over the message box and steps in the conversation;
+  // the card returns when there is something to decide or a problem to show.
+  if (build && isWorkingBuildStatus(build.status) && !props.refusal && !props.error) return null;
 
   let title: string;
   let subtitle: string;
