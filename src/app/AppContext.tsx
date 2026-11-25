@@ -414,19 +414,19 @@ const ROLE_CAPABILITIES_ALL: Record<UserRole, Capability[]> = {
     'provision_repositories',
     'view_issues',
     'manage_issues',
-    // In the desktop app a PM works with agents as a developer does: chat, run
-    // builds, and configure agents, skills, runtimes and MCP servers. On the
-    // hosted web app AI_CAPABILITIES below takes all of it away again.
+    // In the desktop app a PM works with agents exactly as a developer does:
+    // chat, run builds, and configure agents and runtimes. Skills and the
+    // workspace MCP catalog stay admin-only, as for developers: an MCP server is
+    // a command every member's desktop launches. On the hosted web app
+    // AI_CAPABILITIES below takes all of it away again.
     'view_agents',
     'manage_agents',
     'run_agents',
     'run_builds',
     'manage_chat',
     'view_skills',
-    'manage_skills',
     'view_runtimes',
     'manage_runtimes',
-    'manage_mcp',
     'view_runs',
     'publish_build',
     'control_uat_delivery',

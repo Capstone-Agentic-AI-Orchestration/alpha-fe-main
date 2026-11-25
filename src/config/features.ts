@@ -16,8 +16,9 @@ export type AiAccess = 'always' | 'desktop' | 'never';
  * backend runs no agents (every route that starts agent work is desktop-only),
  * so on the web these screens would only describe work that cannot happen
  * there. In the desktop app they work with agents exactly as a developer does:
- * chat, run and steer Orchestrator builds, and configure agents, runtimes and
- * MCP servers. (Developers on the web are sent to the desktop download.)
+ * chat, run and steer Orchestrator builds, and configure agents and runtimes
+ * (admins also manage skills and the MCP catalog). Developers on the web are
+ * sent to the desktop download.
  */
 export const AI_FEATURES_BY_ROLE: Record<UserRole, AiAccess> = {
   client: 'always',

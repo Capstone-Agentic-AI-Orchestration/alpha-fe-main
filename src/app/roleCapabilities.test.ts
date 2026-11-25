@@ -10,8 +10,18 @@ const AI: Capability[] = [
 describe('what each role may do, per runtime', () => {
   it.each(['pm', 'admin'] as const)('gives a %s chat, builds and agent configuration in the desktop app', role => {
     const desktop = roleCapabilities(role, true);
-    for (const capability of ['manage_chat', 'run_builds', 'run_agents', 'manage_agents', 'manage_skills', 'manage_runtimes', 'manage_mcp'] as const) {
+    for (const capability of ['manage_chat', 'run_builds', 'run_agents', 'manage_agents', 'manage_runtimes'] as const) {
       expect(desktop).toContain(capability);
+    }
+  });
+
+  it('gives a desktop PM exactly the AI capabilities a developer has', () => {
+    // Skills and the workspace MCP catalog are admin-only: an MCP server is a command every member's desktop launches.
+    expect(roleCapabilities('pm', true).filter(capability => AI.includes(capability)).sort())
+      .toEqual(roleCapabilities('dev', true).filter(capability => AI.includes(capability)).sort());
+    for (const role of ['dev', 'pm'] as const) {
+      expect(roleCapabilities(role, true)).not.toContain('manage_mcp');
+      expect(roleCapabilities(role, true)).not.toContain('manage_skills');
     }
   });
 
