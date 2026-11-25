@@ -119,6 +119,12 @@ const BuildProgressTrack: React.FC<{ orchestration: ProjectBuildOrchestration; p
   );
 };
 
+/** What a task with no build says about starting one. */
+function noBuildHint(canStartBuild: boolean, role: string): string {
+  if (canStartBuild) return 'Build with Alpha to have agents do this task.';
+  return role === 'pm' ? 'A developer can plan and run this task.' : '';
+}
+
 /**
  * A task's build, on the task.
  *
@@ -175,7 +181,7 @@ export const TaskBuildPanel: React.FC<TaskBuildPanelProps> = ({ issue, build, ca
       <div className="space-y-3">
         <BuildRequestPanel issue={issue} build={build} onChanged={onBuildChanged} onOpenTask={onOpenTask} />
         <p className="text-[13px] text-content-muted">
-          No build yet. {canStartBuild ? 'Build with Alpha to have agents do this task.' : role === 'pm' ? 'A developer can plan and run this task.' : ''}
+          No build yet. {noBuildHint(canStartBuild, role)}
         </p>
         {specNote && <p className={`text-[12.5px] ${specState === 'approved' ? 'text-content-secondary' : 'text-status-warning'}`}>{specNote}</p>}
         {canStartBuild && (

@@ -42,6 +42,22 @@ interface BuildWithAlphaDialogProps {
   onClose: () => void;
 }
 
+type SpecRecord = ReturnType<typeof useFeatureSpec>['record'];
+
+/** What the task's existing spec means for a plan, or nothing when it has none. */
+function specNoteFor(record: SpecRecord): { text: string; warn: boolean } | null {
+  if (!record) return null;
+  if (record.status !== 'approved') return { text: 'This task has a draft spec. Approve it in the task so the plan follows it.', warn: true };
+  if (record.stale) return { text: 'The task changed after its spec was approved. Approve the spec again before building.', warn: true };
+  return { text: 'The plan will follow this task\'s approved spec.', warn: false };
+}
+
+function primaryLabelFor(worker: BuildWorker, start: BuildStart, submitting: boolean): string {
+  if (worker === 'agent') return 'Set up the run';
+  if (start === 'spec') return 'Write the spec';
+  return submitting ? 'Requesting plan…' : 'Plan build';
+}
+
 /**
  * The one way to start agent work on a task.
  *
@@ -63,15 +79,12 @@ export const BuildWithAlphaDialog: React.FC<BuildWithAlphaDialogProps> = ({ issu
 
   const record = spec.record;
   const specStale = Boolean(record && record.status === 'approved' && record.stale);
-  const specNote = !record ? ''
-    : record.status !== 'approved' ? 'This task has a draft spec. Approve it in the task so the plan follows it.'
-      : specStale ? 'The task changed after its spec was approved. Approve the spec again before building.'
-        : 'The plan will follow this task\'s approved spec.';
+  const specNote = specNoteFor(record);
   // A task with a spec already has its "spec first" step; it shows in the task instead.
   const offersSpec = canWriteSpec && spec.loaded && !record;
   const shownStart: BuildStart = worker === 'alpha' && offersSpec ? start : 'plan';
   const blocked = worker === 'agent' ? !agentId : shownStart === 'plan' && specStale;
-  const primaryLabel = worker === 'agent' ? 'Set up the run' : shownStart === 'spec' ? 'Write the spec' : submitting ? 'Requesting plan…' : 'Plan build';
+  const primaryLabel = primaryLabelFor(worker, shownStart, submitting);
 
   const submit = () => {
     if (blocked || submitting) return;
@@ -114,7 +127,7 @@ export const BuildWithAlphaDialog: React.FC<BuildWithAlphaDialogProps> = ({ issu
             <legend className="mb-1 text-[12px] font-semibold text-content-secondary">Start with</legend>
             {option('start', 'plan', shownStart === 'plan', () => setStart('plan'), 'A plan you approve', 'Alpha proposes the work; nothing changes until you approve it.')}
             {offersSpec && option('start', 'spec', shownStart === 'spec', () => setStart('spec'), 'A written spec first', 'For bigger or unclear tasks: agree on requirements before planning.')}
-            {specNote && <p className={'text-[12px] ' + (specStale || record?.status !== 'approved' ? 'text-status-warning' : 'text-content-secondary')}>{specNote}</p>}
+            {specNote && <p className={'text-[12px] ' + (specNote.warn ? 'text-status-warning' : 'text-content-secondary')}>{specNote.text}</p>}
           </fieldset>
         )}
 
