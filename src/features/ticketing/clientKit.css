@@ -41,7 +41,6 @@
   --client-radius-surface: 0.75rem;
   --client-radius-panel: 1rem;
 }
-
 /* Shell: top bar and scrolling page at every screen size. */
 .cx-shell { display: flex; width: 100%; height: 100dvh; min-height: 0; flex-direction: column; overflow: hidden; background: rgb(var(--ui-canvas)); color: var(--cx-ink); font-size: var(--client-type-compact); line-height: var(--client-line-body); -webkit-font-smoothing: antialiased; }
 :is(.cx-shell, .cx-scope) { font-family: var(--client-font-family); }
@@ -543,6 +542,15 @@ span.cx-button { pointer-events: none; }
 .cx-viewswitch button[aria-pressed="true"] { background: var(--cx-accent-soft); color: var(--cx-accent); }
 .cx-viewswitch button:focus-visible { outline: 2px solid rgb(var(--ui-focus)); outline-offset: 2px; }
 .cx-focus-toggle { display: inline-flex; align-items: center; gap: var(--client-space-2); }
+.cx-main-chat-pane { display: flex; min-height: 0; flex: 1; flex-direction: column; }
+.cx-reqrail.is-tabs:has(> .is-docking) { overflow: visible; }
+:is(.cx-main-chat-pane, .cx-railchat).is-docking {
+  position: relative;
+  z-index: 2;
+  align-self: flex-start;
+  flex: none;
+  background: rgb(var(--ui-shell));
+}
 .cx-reqsplit.is-focus { grid-template-columns: minmax(0, 1fr); }
 .cx-reqpreview .cx-preview-frame { height: auto; min-height: 0; flex: 1; }
 .cx-project-rail-content { display: flex; min-width: 0; flex-direction: column; gap: var(--client-space-4); }
